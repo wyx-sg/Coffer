@@ -1,20 +1,22 @@
 """The knowledge layer's one built-in MCP tool.
 
-``coffer__write`` — and nothing else (spec knowledge FR-033). ``list``,
-``grep``, ``read``, ``search`` and ``delete`` are gone.
+``coffer__write`` — and nothing else (spec knowledge "Expose exactly one knowledge
+tool"). ``list``, ``grep``, ``read``, ``search`` and ``delete`` are gone.
 
-**Why reading has no tool.** Across 448 Claude Code sessions after the corpus
-was built, the delivered skill was never loaded once and no knowledge tool was
-ever called. The question was never which retrieval mechanism to expose: a
-tool an agent does not remember to call is not retrieval. Every agent Coffer
-supports already has `Read` and `Grep`, which need no remembering, so the
-layer's job narrows to putting the right absolute paths in front of the model —
-which the delivered skill does, catalogue and all (FR-037).
+**Why reading has no tool.** Across 448 Claude Code sessions after the corpus was built,
+the delivered skill was never loaded once and no knowledge tool was ever called. The
+question was never which retrieval mechanism to expose: a tool an agent does not
+remember to call is not retrieval. Every agent Coffer supports already has `Read` and
+`Grep`, which need no remembering, so the layer's job narrows to putting the right
+absolute paths in front of the model — which the delivered skill does, catalogue and all
+(see "Merge the manual and the catalogue in the skill body").
 
-**Why writing keeps one.** A write is the one operation where the agent
-genuinely needs Coffer rather than a filesystem: which collections exist, which
-lane the file belongs in, what frontmatter it carries, and the audit entry
-naming who wrote it are all this layer's to decide. It is also the only
+**Why writing keeps one.** A write is the one operation where the agent genuinely needs
+Coffer rather than a filesystem: which collections exist, how new material is merged
+into what the collection already says, and the audit entry naming who wrote it are all
+this layer's to decide. An agent that wants to *edit* a document it has read does so
+with its own file tools, as a person does in their editor; the next sweep carries that
+edit through (see "Run curation on a sweep and on demand"). It is also the only
 remaining place an invocation is recorded.
 
 The tool's description is one of exactly two places this layer is always in a
@@ -27,7 +29,7 @@ from __future__ import annotations
 from typing import Any
 
 from coffer.application.builtin_tools import BuiltinTool, BuiltinToolRegistry
-from coffer.application.knowledge.service import KnowledgeService
+from coffer.application.knowledge.service import KnowledgeService, Submission
 from coffer.domain.knowledge.entry import KnowledgeFile
 from coffer.domain.knowledge.errors import CollectionNotFound
 
@@ -50,12 +52,12 @@ def _required(args: dict[str, Any], name: str) -> str:
 def _agent(args: dict[str, Any]) -> str | None:
     """The session's agent identity, or ``None`` when it reported none.
 
-    Set by the gateway, never by the caller: it is absent from the tool's input
-    schema and overwritten on every call (spec mcp-gateway FR-013). It narrows
-    nothing — every enabled collection is writable by every agent — and is read
-    for exactly one reason: the audit entry naming who wrote the file. ``None``
-    becomes :data:`_ANONYMOUS_ACTOR` there, because an unattributed write is
-    still worth recording.
+    Set by the gateway, never by the caller: it is absent from the tool's input schema
+    and overwritten on every call (spec mcp-gateway "Take the agent identity from the
+    handshake"). It narrows nothing — every enabled collection is writable by every
+    agent — and is read for exactly one reason: the audit entry naming who wrote the
+    file. ``None`` becomes :data:`_ANONYMOUS_ACTOR` there, because an unattributed write
+    is still worth recording.
     """
     return _text(args.get("agent")) or None
 
@@ -67,6 +69,24 @@ def _payload(file: KnowledgeFile) -> dict[str, Any]:
         "description": file.description,
         "file_path": file.file_path,
         "folder_path": file.folder_path,
+    }
+
+
+def _submitted(submission: Submission) -> dict[str, Any]:
+    if submission.document is not None:
+        return {
+            **_payload(submission.document),
+            "status": "written",
+            "note": "Filed as a document of its own: no internal model is configured to merge it.",
+        }
+    return {
+        "collection": submission.collection,
+        "title": submission.title,
+        "status": "pending",
+        "note": (
+            "Queued as new material. Coffer's curation pass merges it into this "
+            "collection's documents shortly."
+        ),
     }
 
 
@@ -82,16 +102,16 @@ def register_knowledge_builtin_tools(
     async def write(args: dict[str, Any]) -> dict[str, Any]:
         agent = _agent(args)
         try:
-            written = await svc.write_source(
+            submitted = await svc.submit(
                 title=_required(args, "title"),
                 description=_required(args, "description"),
-                # Optional, matching the REST surface and FR-014: a file whose
+                # Optional, matching the REST surface and "Submit material through
+                # coffer__write": a file whose
                 # whole content is its title and description is a legitimate
                 # thing to write, and rejecting it would be a rule only one of
                 # the two write surfaces had.
                 body=_text(args.get("body")),
                 collection=_required(args, "collection"),
-                folder=_text(args.get("folder")) or None,
                 actor=agent or _ANONYMOUS_ACTOR,
             )
         except CollectionNotFound as exc:
@@ -104,15 +124,7 @@ def register_knowledge_builtin_tools(
                 f"no collection named {exc.name!r} is available to you. "
                 + (f"You may write to: {', '.join(enabled)}." if enabled else "You have none.")
             ) from exc
-        return {
-            **_payload(written),
-            "status": "written",
-            "note": (
-                "Filed as source material. Coffer's curation pass folds it into this "
-                "collection's topic documents shortly; it will not stay at this path "
-                "verbatim."
-            ),
-        }
+        return _submitted(submitted)
 
     registry.register(
         BuiltinTool(
@@ -121,8 +133,8 @@ def register_knowledge_builtin_tools(
                 "Record something durable about this user's working environment "
                 "into Coffer's knowledge — a fact about a service, a convention "
                 "they follow, a decision and its reason, a trap and how to avoid "
-                "it. What you write is filed as source material: Coffer's own "
-                "model then merges it into the collection's topic documents, "
+                "it. What you write is new material: Coffer's own model merges "
+                "it into the collection's documents, "
                 "deduplicating against what is already there, so write the fact "
                 "plainly and do not worry about where it belongs or whether it "
                 "repeats something. Not for what is already in the repository in "
@@ -154,12 +166,6 @@ def register_knowledge_builtin_tools(
                         ),
                     },
                     "body": {"type": "string", "description": "The Markdown content."},
-                    "folder": {
-                        "type": "string",
-                        "description": (
-                            "Optional folder inside the collection's sources to file it under."
-                        ),
-                    },
                 },
                 "required": ["collection", "title", "description"],
             },

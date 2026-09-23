@@ -9,7 +9,7 @@ the test, because the hook is the whole of what rename costs this kind and a
 test of anything else would not notice it going missing.
 
 They assert against the FILES, not against a return value: what makes a rename
-correct here is that the sources a person wrote are still readable afterwards,
+correct here is that the documents a person wrote are still readable afterwards,
 at the new name.
 """
 
@@ -66,23 +66,24 @@ def knowledge_root(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
 
 @pytest.fixture
 def collection() -> Resource:
-    """One collection on disk with a source, a topic and a README."""
+    """One collection on disk with two documents, a pending item and a README."""
     row = _row("shopee")
     fs.create_collection_dir(row.name)
     paths.readme_path(row.name).write_text("# shopee\n\nThe account system.\n", encoding="utf-8")
     fs.write_file(
-        directory="shopee/sources",
+        directory="shopee",
         title="Session facts",
         description="Who owns login state.",
         body="`account.session` owns it.",
         actor="user",
     )
     fs.write_file(
-        directory="shopee/topics",
+        directory="shopee/account",
         title="session — who owns login state",
         description="Which service issues a login token.",
         body="account.session.",
     )
+    fs.submit_material(row.name, title="Waiting", description="d", body="not merged yet")
     return row
 
 
@@ -121,17 +122,11 @@ async def test_the_files_inside_are_still_readable_under_the_new_name(
 ) -> None:
     """The point of moving the directory rather than recreating it.
 
-    Both lanes and the README travel, with their bytes intact — a rename is a
+    The documents, the inbox and the README travel, with their bytes intact — a rename is a
     relabelling, and a person who renames a collection has not asked for any of
     their writing to change.
     """
-    before = {
-        entry.path: fs.read_file(entry.path).body
-        for entry in (
-            *_walk("shopee/sources"),
-            *_walk("shopee/topics"),
-        )
-    }
+    before = {entry.path: fs.read_file(entry.path).body for entry in _walk("shopee")}
     assert before, "the fixture must have written something to move"
 
     await _rename(collection, "account")
@@ -140,6 +135,7 @@ async def test_the_files_inside_are_still_readable_under_the_new_name(
         moved = old_path.replace("shopee/", "account/", 1)
         assert fs.read_file(moved).body == body
     assert paths.readme_path("account").read_text(encoding="utf-8").startswith("# shopee")
+    assert fs.read_material("account", "waiting.md").body.strip() == "not merged yet"
 
 
 def _walk(relpath: str) -> tuple:
@@ -164,8 +160,8 @@ async def test_a_collection_the_service_can_reach_is_the_renamed_one(
     await _rename(collection, "account")
 
     assert await service.enabled_collections() == ["account"]
-    [level] = [await service.list_level("account/sources")]
-    assert [f.path for f in level.files] == ["account/sources/session-facts.md"]
+    [level] = [await service.list_level("account")]
+    assert [f.path for f in level.files] == ["account/session-facts.md"]
 
 
 @pytest.mark.asyncio

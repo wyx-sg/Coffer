@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-20 (page removed 2026-09-10, restored 2026-09-12; see Revision history)
 **Deciders**: Yuxing Wu
-**Related**: spec [`channels`](../../specs/channels/spec.md) — the turn platform (spec chat FR-001…spec chat FR-012) and the web Chat page (spec chat FR-029…spec chat FR-041);
+**Related**: spec [`chat`](../../openspec/specs/chat/spec.md) (the turn platform and the web Chat page), spec [`channels`](../../openspec/specs/channels/spec.md);
 [Built-in Agent Is Internal](builtin-agent-is-internal-capability.md) (chat talks to managed agents only),
 [Remove Tool Approval](remove-tool-approval.md) (full permissions, no approval seat),
 [Channel Adapter Framework](channel-adapter-framework.md) (the channel turn seams)
@@ -123,9 +123,9 @@ Telegram/SeaTalk" badge when one exists.
 
 ## Consequences
 
-- The page and its routes are described in spec [`channels`](../../specs/channels/spec.md)
-  section G (spec chat FR-029…spec chat FR-041), on top of the turn platform (spec chat FR-001…spec chat FR-012); the
-  contract lives in that spec's OpenAPI file.
+- The page and its routes are described in spec [`chat`](../../openspec/specs/chat/spec.md),
+  on top of the turn platform the same spec describes; the contract lives in that
+  spec's OpenAPI file.
 - The conversation schema carries no `origin` and no peer display name; the
   channel name and peer chat id remain as the channel binding.
 - The frontend holds one persistent subscription per open conversation rather
@@ -170,3 +170,29 @@ reason this record was gone for two days — see below.
   wants, and no channel can do it. The decision is unchanged from 2026-06-20 —
   only the routes are spelled out here now that they live in the channels spec
   rather than in a spec of their own.
+
+## Implementation notes
+
+- **Two seams carry the design.** A new *agent* is one `AgentProvider` /
+  `AgentAdapter` pair registered in `surfaces/http/chat_provider_wiring.py`;
+  every surface resolves agents through `AgentProviderRegistry` and never names
+  a provider. A new *client* is one more subscriber to the per-conversation
+  event bus (`application/chat/bus.py`): a turn is a detached task publishing
+  to subscribers, so the turn the page started and the turn a phone started are
+  the same code path.
+- **Chat stays inside its own kind.** The import-linter contract "Cross-kind
+  imports forbidden (chat)" in `backend/pyproject.toml` carries no
+  `ignore_imports` exceptions. The model catalogue belongs to the agent kind, so
+  chat never imports it: the composition root publishes it into chat's
+  dependencies as `ModelCatalogPort`, and the models route reads only what the
+  port promises.
+- **Failure is contained and visible.** Upstream drift in an agent's CLI breaks
+  one provider and its event-mapping module. A wedged turn is cancelled by the
+  idle watchdog through the adapter's own path, and the startup sweep marks rows
+  a crash left `streaming` as failed, so the lost pending queue on restart is
+  never silent: an uncommitted message was never a row, and an in-flight turn
+  becomes a visibly failed one (spec [chat](../../openspec/specs/chat/spec.md),
+  "Sweep streaming rows left by a crashed daemon").
+- **There is no `coffer chat` command group.** The page and the HTTP routes are
+  the only ways to drive a conversation, so a daemon without the built frontend
+  can be driven only over HTTP — a known gap, not a design choice.

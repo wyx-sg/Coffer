@@ -209,7 +209,8 @@ async def test_owner_sender_id_none_for_unknown_resource(env: ChannelEnv) -> Non
 
 
 # ---------------------------------------------------------------------------
-# ChannelThreadConversationRepo (per-thread conversation identity, FR-033)
+# ChannelThreadConversationRepo (per-thread conversation identity, "Key
+# conversation identity by channel, chat and thread")
 # ---------------------------------------------------------------------------
 
 
@@ -332,7 +333,7 @@ def test_migration_0015_creates_channel_peers(tmp_path, monkeypatch):  # type: i
 
 
 def test_migration_0041_creates_thread_table_and_backfills_dm(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
-    """0041 (FR-033) creates ``channel_thread_conversations`` and backfills each
+    """0041 creates ``channel_thread_conversations`` and backfills each
     existing peer as its ``thread_id=""`` row, carrying the peer's active
     conversation + sticky agent so no in-flight DM conversation is lost."""
     db_path = tmp_path / "migrate_threads.db"

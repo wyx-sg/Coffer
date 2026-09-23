@@ -115,13 +115,13 @@ The daemon's **port** is a deliberate non-entry here. It is process configuratio
 
 | Event                 | Trigger                                             |
 | --------------------- | --------------------------------------------------- |
-| `knowledge_written`   | When a file is created or replaced in a collection   |
-| `knowledge_deleted`   | When a knowledge file is deleted                     |
-| `knowledge_tidied`    | When a tidy pass rewrote or archived at least one file |
+| `knowledge_written`   | When new material is submitted to a collection — queued in its inbox, or promoted straight to a document when no internal model is configured |
+| `knowledge_deleted`   | When a person deletes a document                     |
+| `knowledge_curated`   | When a curation pass completed over one pending item |
 
 The `kb_*` prefix that once appeared here is gone entirely, not merely deprecated: those values were the wire form before the `knowledge_base` and `memory` kinds merged into `knowledge`, and revisions `0055` and `0077` purged the rows along with the enum members. An event type nothing can label costs more in `coffer__diagnose` than the record is worth.
 
-`knowledge_tidied` is the exception to the rule that recomputation is not audited (below). The tidy pass runs unattended, on a timer, and an LLM rewrites text the user and their agents wrote — that is a change to content, not a recomputation of a derived index, and the prior revision it archived into `.history/` is the only way back. Its `details` carry the note counts before and after, how many notes were written and archived, and the model that did it. A pass that wrote and archived nothing records nothing, so the interval sweep does not bury the passes that mattered.
+`knowledge_curated` is the exception to the rule that recomputation is not audited (below). The curation pass runs unattended, on a timer, and an LLM rewrites documents the user and their agents also edit — that is a change to content, not a recomputation of a derived index, and with no review step the audit log is the only place a person sees it happened. Its `details` carry the item the pass took, the document counts before and after, how many documents were written and retired, and the model that did it. It is recorded for every completed pass, including one that decided to change nothing.
 
 **Memory** — the derived tree, and the hook Coffer installs in someone else's settings file:
 

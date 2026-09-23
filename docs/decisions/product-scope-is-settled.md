@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-14
 **Deciders**: Yuxing Wu (project owner)
-**Related**: [`constitution.md`](../../.specify/memory/constitution.md) amendments 0.4.0 → 0.5.0 → 0.6.0; [`roadmap.md`](../../.specify/memory/roadmap.md) `## Revision log`; [The Desktop Shell Returns](desktop-shell-over-a-shared-frontend.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), [Vault Sync](vault-sync.md), [Knowledge Is Plain Files](knowledge-is-plain-files.md), [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md); specs [mcp-gateway](../../specs/mcp-gateway/spec.md), [channels](../../specs/channels/spec.md), [vault-sync](../../specs/vault-sync/spec.md), [web-ui](../../specs/web-ui/spec.md), [knowledge](../../specs/knowledge/spec.md), [memory](../../specs/memory/spec.md)
+**Related**: [`docs/principles.md`](../principles.md) (Principle I's user-owned sync remote exception); [The Desktop Shell Returns](desktop-shell-over-a-shared-frontend.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), [Vault Sync](vault-sync.md), [Knowledge Is Plain Files](knowledge-is-plain-files.md), [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md); specs [mcp-gateway](../../openspec/specs/mcp-gateway/spec.md), [channels](../../openspec/specs/channels/spec.md), [vault-sync](../../openspec/specs/vault-sync/spec.md), [web-ui](../../openspec/specs/web-ui/spec.md), [knowledge](../../openspec/specs/knowledge/spec.md), [memory](../../openspec/specs/memory/spec.md)
 
 ## Context
 
@@ -22,9 +22,9 @@ Retrieval followed the same arc inside one day: ranked semantic search over an
 embedding sidecar was removed with the knowledge reduction (#368, 2026-09-12),
 restored the same day, and removed again (#382, 2026-09-14).
 
-Each reversal was paid for twice. The constitution was amended three times in
-five days (0.4.0 removed the sync exception, 0.5.0 added a narrower one, 0.6.0
-replaced it). Migrations rewrote user data on the way out and on the way back
+Each reversal was paid for twice. The project principles were amended three times in
+five days (the first amendment removed the sync exception, the second added a
+narrower one, the third replaced it). Migrations rewrote user data on the way out and on the way back
 (`0066` dropped eleven knowledge tables, `0076` and `0077` cleaned up after the
 reach and embedding changes). ADRs were deleted and re-created, spec sections
 were cut and rewritten, and the roadmap's status cells grew into
@@ -51,12 +51,13 @@ carefully that a reader could take the removal as final.
 removal, and a proposal to remove one is a proposal to amend this ADR, decided
 by the project owner:
 
-1. **The desktop shell** — spec desktop-app FR-001 – FR-014,
+1. **The desktop shell** — spec [desktop-app](../../openspec/specs/desktop-app/spec.md),
    [The Desktop Shell Returns](desktop-shell-over-a-shared-frontend.md).
-2. **The web Chat page** — spec chat FR-029 – FR-041,
+2. **The web Chat page** — the Chat page requirements of spec [chat](../../openspec/specs/chat/spec.md),
    [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md).
 3. **Bidirectional vault sync with a user-owned remote** — spec vault-sync,
-   [Vault Sync](vault-sync.md), constitution 0.6.0.
+   [Vault Sync](vault-sync.md), Principle I's user-owned sync remote exception
+   in `docs/principles.md`.
 4. **The Activity page** — the audit log, the MCP invocation log and the
    daemon log, each with its own tab (spec web-ui; the records themselves
    are spec mcp-gateway's).
@@ -78,7 +79,7 @@ repository is to be read as "we decided against semantic search".
 capability — the five above by amendment, any other by ordinary review — MUST
 state in its description what a reversal would cost: the code it deletes, the
 migrations it runs against user data and whether they can be undone, and the
-documents it rewrites (specs, ADRs, constitution, roadmap). It MUST remove the
+documents it rewrites (specs, ADRs, `docs/principles.md`, OpenSpec changes). It MUST remove the
 dead code and every documentation reference in the same PR, so the tree never
 carries a half-removed capability that the next reader has to reconstruct.
 
@@ -104,7 +105,7 @@ carries a half-removed capability that the next reader has to reconstruct.
 - **Keep deciding per PR.** Rejected: that is the process that produced six
   reversals in six days. Each PR argued well from the cost it could see.
 - **Feature flags for contested capabilities.** Rejected, and already rejected
-  by constitution 0.4.0 for the same reason: a flagged-off path still has to be
+  by the first of those principles amendments for the same reason: a flagged-off path still has to be
   maintained and tested, and a capability nobody can reach is not product
   scope, it is dead code with a switch.
 - **Declare semantic retrieval permanently out.** Rejected: the 2026-09-14

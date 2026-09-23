@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-05-29
 **Deciders**: Yuxing Wu
-**Related**: spec `skill-manager` (FR-008, FR-011, SC-007), spec `agent-registry` (`AgentConfig.skill_dir`), [Everything Is a Resource Kind](everything-is-a-resource-kind.md)
+**Related**: [skill-manager](../../openspec/specs/skill-manager/spec.md) "Deliver a skill as a directory link" and "Fall back to copying where links are unavailable", spec `agent-registry` (`AgentConfig.skill_dir`), [Everything Is a Resource Kind](everything-is-a-resource-kind.md)
 
 ## Context
 
@@ -11,7 +11,7 @@ Spec `skill-manager` introduces a canonical store at
 `~/.coffer/skills/<name>/` and requires each registered agent's skill
 directory to "see" the managed skills under its own normal layout — i.e.
 `~/.claude/skills/<name>/`, `~/.codex/skills/<name>/`, etc. The store must
-be the **single editable source of truth** (FR-003) while every agent reads
+be the **single editable source of truth** ("Keep one master folder per skill and carry it through a rename") while every agent reads
 through its own pre-existing path conventions.
 
 Three obvious mechanisms were on the table:
@@ -65,7 +65,7 @@ The mode is determined per binding (not per OS) because a single user
 machine can mix filesystems (e.g. NTFS C: drive plus a SMB-mounted skill
 dir). `SyncEngine.classify_target` re-reads the on-disk shape on `verify`
 and is the basis for drift categorisation — see
-`specs/skill-manager/data-model.md` `DriftKind` table.
+`openspec/specs/skill-manager/data-model.md` `DriftKind` table.
 
 Removal mirrors creation: `SyncEngine.remove_directory_link` inspects the
 on-disk type before removing (`os.unlink` for symlinks, `os.rmdir` for
@@ -123,7 +123,7 @@ Rejected.
   is not stable across versions; touching it is brittle.
 - Some agents do not allow overriding the path at all.
 - Even when feasible, mutating a third-party tool's config is a
-  trust-boundary violation we explicitly avoid in the constitution.
+  trust-boundary violation we explicitly avoid.
 
 **Hard links instead of symlinks/junctions.** Rejected.
 
@@ -143,3 +143,37 @@ creation.** Considered, deferred.
   pairing and keeps the dependency footprint minimal.
 - Revisit if Windows junction edge cases force us to embed a richer
   filesystem helper.
+
+## Implementation notes
+
+How delivery settled around the link (spec
+[skill-manager](../../openspec/specs/skill-manager/spec.md)):
+
+- **One predicate decides delivery**: `skill.enabled and is_active(skill.scope,
+  agent.uid)` (`application/skill/delivery_ops.py`). There is no per-agent
+  delivery policy and no per-`(skill, agent)` switch — that toggle was removed,
+  because two controls that could each hide a skill was one too many. Both
+  inputs are machine-local reach, so the predicate takes no machine argument.
+- **Sources are local import only.** Git sources and a marketplace were
+  deferred, and a browse-and-install catalogue was prototyped and withdrawn
+  for lack of a content ecosystem. An import is a deliberate act in a
+  single-user vault, so a new skill starts enabled and unscoped.
+- **Bookkeeping is one row per delivered `(skill, agent)`** in
+  `skill_agent_bindings`, recording what is delivered, where and how — not an
+  array inside the resource's config. The row records; the predicate decides.
+- **Delivery reports, never overwrites.** A target holding something Coffer did
+  not put there is a reported conflict left byte-identical. The only place a
+  target is moved aside is repair, and only for a tampered link Coffer owns.
+  Repair fixes just the drift safe to fix unattended (missing and tampered
+  links), and runs both on demand and once at every daemon boot.
+- **Cross-kind wiring lives in a surface.** `surfaces/http/agent_skill_wiring.py`
+  builds the agent and skill kinds together and wraps the agent kind's
+  `on_delete`, so removing an agent reclaims its links and bindings first; the
+  per-agent-type scan locations live in `domain/agent/scan.py` and are passed
+  in, so `domain/skill` never imports the agent kind.
+- **The master folder has two writers** — Coffer's in-app editor and the user's
+  own editor, directly or through any agent's link. Every file read returns a
+  fingerprint of the raw bytes and the in-app write is conditional on it, so
+  the losing writer gets a `409`, never a silent overwrite. The fingerprint is
+  the whole of that defence: a read path that forgot to return one would
+  reintroduce lost updates.

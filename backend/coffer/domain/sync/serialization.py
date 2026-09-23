@@ -6,7 +6,7 @@ it is identity plus description plus config — nothing else. The path is keyed
 on the **uid** and the name lives inside the document, which is what makes a
 rename a modification of one file rather than a deletion beside an addition
 (ADR resource-identity-is-an-immutable-uid). Determinism is
-load-bearing (spec vault-sync "Determinism"): machine-local, churn-prone
+load-bearing (spec vault-sync "Serialize deterministically"): machine-local, churn-prone
 fields (``id``, ``created_at``, ``updated_at``) are excluded and the encoder
 (infrastructure) dumps with sorted keys — so an unchanged vault serializes to
 byte-identical files on every machine and on every round, and the user can
@@ -15,7 +15,7 @@ read the remote's history with their own git tools.
 **A resource's reach is not part of the document.** ``enabled`` and ``scope``
 read like two fields but they are one thing: the resource's *reach*, set by one
 control in the UI — whether this resource is live, and for which agents. Reach
-is machine-local (spec vault-sync ``## What does not sync``). It is set on the
+is machine-local (spec vault-sync "Keep reach machine-local"). It is set on the
 machine it applies to and each machine sets its own, so publishing it would let
 one machine silently re-answer a question another machine had already answered
 locally: the laptop that deliberately left a server dark would find it live

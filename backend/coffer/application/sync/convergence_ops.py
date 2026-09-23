@@ -47,6 +47,60 @@ def is_inapplicable(error: Exception) -> bool:
     return getattr(error, "code", "") in _INAPPLICABLE_CODES
 
 
+async def apply_diff(
+    appliers: Mapping[str, VaultApplyPort],
+    state: ConvergenceStatePort,
+    diff: DiffSummary,
+    not_applicable: list[str] | None,
+) -> list[tuple[str, str]]:
+    """Step 5's body: each path independently, holding what does not apply.
+
+    A path that can never apply here is held as not applicable and appended to
+    ``not_applicable`` — it is not a failure, so it is not returned as one.
+    """
+    failures: list[tuple[str, str]] = []
+    for change in diff.vault_changes:
+        applier = applier_for(appliers, change.path)
+        if applier is None:
+            continue
+        try:
+            if change.status is ChangeStatus.DELETED:
+                await applier.remove(change.path)
+            else:
+                await applier.upsert(change.path)
+        except CofferError as e:
+            if is_inapplicable(e):
+                if not_applicable is not None:
+                    not_applicable.append(change.path)
+            else:
+                failures.append((change.path, str(e)))
+            await state.hold(change.path, applicable=not is_inapplicable(e))
+        else:
+            await state.release(change.path)
+    return failures
+
+
+async def readmit_applicable(
+    appliers: Mapping[str, VaultApplyPort], state: ConvergenceStatePort
+) -> None:
+    """Move not-applicable paths whose precondition now holds to the retry set.
+
+    A not-applicable path is not retried — but "the agent is not installed
+    here" can stop being true, and nothing else would ever bring the document
+    back. So each round re-checks the cheap precondition an applier exposes
+    (``still_inapplicable``) and hands a path that now passes to the retry set,
+    which applies it this round.
+    """
+    _retry, not_applicable = await state.held_paths()
+    for path in sorted(not_applicable):
+        applier = applier_for(appliers, path)
+        check = getattr(applier, "still_inapplicable", None)
+        if check is None or await check(path):
+            continue
+        await state.release(path)
+        await state.hold(path, applicable=True)
+
+
 def commit_message(summary: ExportSummary) -> str:
     """A message naming the counts per area.
 
@@ -100,13 +154,13 @@ async def hold_round(
 ) -> ConvergeRun:
     """Step 4's refusal: record what the guard stopped and wait on the user.
 
-    A round re-derives its diff every time (spec vault-sync FR-091), so a
-    question the user has not answered yet arrives here again on every tick —
-    and the second arrival is not news. Whatever hold this vault is already
-    carrying is read back here and compared: the same question is stored as the
-    same hold, keeping the moment the user was asked, and the run is marked as
-    already reported so the recording coalesces onto the one row and the log
-    says it once (FR-092).
+    A round re-derives its diff every time (spec vault-sync "Release a hold whose diff
+    no longer breaches"), so a question the user has not answered yet arrives here again
+    on every tick — and the second arrival is not news. Whatever hold this vault is
+    already carrying is read back here and compared: the same question is stored as the
+    same hold, keeping the moment the user was asked, and the run is marked as already
+    reported so the recording coalesces onto the one row and the log says it once (see
+    "Record one outstanding confirmation once").
 
     The commit *is* refreshed, because it is the revision a confirmation would
     resume from and the vault may have moved under a question that did not.
@@ -172,7 +226,7 @@ async def reconcile(hooks: Sequence[PostImportHook], diff: DiffSummary) -> list[
     config file, a shim, a delivered skill — things that live outside the vault,
     differ per machine, and therefore cannot travel. The applier writes the row;
     the hook makes this machine's side of it match again (spec vault-sync
-    ``## Applying a diff``).
+    "Re-run post-import hooks after applying").
 
     It runs from **current state**, not from the diff, which is why it runs once
     for the whole round rather than per path, and why it is safe to run after
@@ -198,7 +252,7 @@ async def reconcile(hooks: Sequence[PostImportHook], diff: DiffSummary) -> list[
 
 #: Pre-apply snapshot tags. The tree of the commit a round tags here is by
 #: construction the vault's state immediately before its apply, so a rollback is
-#: the round's own machinery run backwards (spec vault-sync ``## Safety``).
+#: the round's own machinery run backwards ("Snapshot before applying and roll back from it").
 SNAPSHOT_PREFIX = "coffer/pre-apply/"
 SNAPSHOTS_KEPT = 10
 
@@ -225,7 +279,8 @@ async def diff_between(mirror: GitMirrorPort, base: str, head: str) -> DiffSumma
     ``renames`` is the **guard's** reading of the same diff, and it is what
     keeps a layout migration — a rename that also rewrites the document — from
     being counted as the loss of everything it touched (spec vault-sync
-    FR-090, FR-095).
+    "Count losses, not deletions", "Ask git about renames separately from the applied
+    diff").
     """
     if base == head:
         return DiffSummary()

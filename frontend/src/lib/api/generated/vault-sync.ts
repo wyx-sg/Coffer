@@ -13,8 +13,41 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Run one converge round now. */
+        /**
+         * Run one converge round now.
+         * @description Never joins. On a machine that has not joined the remote the round
+         *     still detects the join — new, or returning with its recovered base —
+         *     and reports it in `join` and `join_report`, applying and pushing
+         *     nothing, with status `awaiting_join`; `POST /adopt` joins.
+         */
         post: operations["runSyncRound"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * State the join `/adopt` would make, applying nothing.
+         * @description Joining is explicit and reported: before anything is applied, the
+         *     surfaces state which case it is, when this machine last converged, how
+         *     many documents the remote has changed since, and how many this vault
+         *     has. This fetches and reads the remote's registry the way the round's
+         *     step 0 does, and stops there — the vault and the pointer are
+         *     untouched. `joining: false` means this machine already converged here
+         *     and `/adopt` is an ordinary round. `case: ambiguous` is a returning
+         *     machine whose recorded base is gone; it still needs `choice`.
+         */
+        get: operations["previewSyncJoin"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -32,7 +65,8 @@ export interface paths {
         put?: never;
         /**
          * Join the configured remote.
-         * @description The same round as any other. `choice` is only for a returning machine
+         * @description The same round as any other. The surfaces call `GET /join` first and
+         *     show its answer before calling this. `choice` is only for a returning machine
          *     whose recorded base is gone from the remote's history: `keep-local`
          *     joins as new and publishes this vault's documents as additions. Absent,
          *     that case is refused rather than guessed.
@@ -362,6 +396,37 @@ export interface components {
             /** Format: date-time */
             raised_at: string;
         };
+        JoinPreviewOut: {
+            /** @description False when this machine already converged with the remote. */
+            joining: boolean;
+            /**
+             * @default null
+             * @enum {string|null}
+             */
+            case: "new" | "returning" | "ambiguous" | null;
+            /**
+             * @description The commit a returning machine recovered from its own descriptor.
+             * @default null
+             */
+            base: string | null;
+            /**
+             * Format: date
+             * @description The day this machine last converged here; null for a new machine.
+             * @default null
+             */
+            last_converged_on: string | null;
+            /**
+             * @description Documents the remote changed since this machine's base — everything
+             *     it holds, for a new machine. Null when the base is gone.
+             * @default null
+             */
+            remote_changed: number | null;
+            /**
+             * @description Documents this vault holds.
+             * @default null
+             */
+            vault_documents: number | null;
+        };
         /** @description One converge round's outcome. */
         RoundOut: {
             /**
@@ -373,9 +438,12 @@ export interface components {
              *     untouched and the pointer unmoved; `awaiting_confirmation` is held at
              *     the deletion guard and `pending` says which way; `push_failed`
              *     applied everything locally and kept the commit for the next round.
+             *     `awaiting_join` is a machine that has not joined the remote: joining
+             *     is explicit, so an ordinary round applied and pushed nothing, and
+             *     only `POST /adopt` joins.
              * @enum {string}
              */
-            status: "ok" | "no_change" | "conflict" | "awaiting_confirmation" | "push_failed" | "failed" | "disabled";
+            status: "ok" | "no_change" | "conflict" | "awaiting_confirmation" | "push_failed" | "failed" | "disabled" | "awaiting_join";
             /**
              * @description `new` or `returning` when this round joined a remote; null otherwise.
              * @default null
@@ -397,10 +465,24 @@ export interface components {
             /** @default [] */
             failures: components["schemas"]["FailureOut"][];
             /**
+             * @description Paths this round met that can never apply on this machine (an agent
+             *     whose config directory does not exist here). Held and not retried,
+             *     and not failures.
+             * @default []
+             */
+            not_applicable: string[];
+            /**
              * @description Credential refs whose ciphertext this machine cannot decrypt.
              * @default []
              */
             locked_refs: string[];
+            /**
+             * @description On an `awaiting_join` round: the join the round detected — detection
+             *     runs on every round without a pointer — and did not apply. `join`
+             *     names its kind.
+             * @default null
+             */
+            join_report: components["schemas"]["JoinPreviewOut"] | null;
             /** @default null */
             pending: components["schemas"]["PendingConfirmationOut"] | null;
             /** @default null */
@@ -491,6 +573,17 @@ export interface components {
              *     file. `true` means it does not survive deleting `~/.coffer`.
              */
             machine_id_is_derived: boolean;
+            /**
+             * @description Whether this machine has joined the remote. Until it has, a round
+             *     reports `awaiting_join` and only `POST /adopt` joins.
+             * @default false
+             */
+            joined: boolean;
+            /**
+             * @description Every path recorded as not applicable on this machine, sorted.
+             * @default []
+             */
+            not_applicable: string[];
         };
         MachineOut: {
             machine_id: string;
@@ -591,6 +684,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+        };
+    };
+    previewSyncJoin: {
+        parameters: {
+            query?: {
+                /** @description Preview the join as `/adopt` would make it with this choice. */
+                choice?: "keep-local";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The join, stated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoinPreviewOut"];
                 };
             };
         };

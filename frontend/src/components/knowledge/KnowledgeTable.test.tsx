@@ -3,9 +3,9 @@
 // The collections list. It had drifted from the other tables in three ways the
 // user could see: no status control in that column, a delete that was a bare
 // icon with no label, and a count header narrow enough to wrap one character
-// per line. All three are asserted here — and the count is now two counts,
-// because a collection is two lanes and one total would hide a collection
-// curation has not reached yet.
+// per line. All three are asserted here — and the count is two counts,
+// documents and pending material, because one total would hide a collection
+// curation has not caught up with.
 //
 // The load-bearing assertion added since: this kind offers NO PER-AGENT REACH.
 // Every enabled collection is served to every agent, so the control must not
@@ -82,10 +82,10 @@ const ITEMS: CollectionOut[] = [
     uid: "kn-8c1f",
     name: "shopee",
     description: "internal notes",
-    source_count: 23,
-    topic_count: 9,
+    document_count: 23,
+    pending_count: 9,
   },
-  { uid: "kn-3e70", name: "personal", description: null, source_count: 4, topic_count: 0 },
+  { uid: "kn-3e70", name: "personal", description: null, document_count: 4, pending_count: 0 },
 ];
 
 const rowFor = (name: string) => screen.getByText(name).closest("tr") as HTMLElement;
@@ -99,7 +99,7 @@ const reachIn = (name: string) =>
 describe("KnowledgeTable", () => {
   afterEach(() => vi.clearAllMocks());
 
-  test("a row shows the collection, its lane counts and its description", () => {
+  test("a row shows the collection, its counts and its description", () => {
     render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
     expect(screen.getByText("shopee")).toBeInTheDocument();
     expect(screen.getByText("23")).toBeInTheDocument();
@@ -153,9 +153,9 @@ describe("KnowledgeTable", () => {
     expect(screen.getByRole("combobox", { name: /^status$/i })).toBeInTheDocument();
   });
 
-  test("each lane is counted in its own column", () => {
-    // Two counts, not one total: a collection with sources and no topics is one
-    // curation has not reached yet, and a single number would hide exactly that.
+  test("documents and pending material are counted in their own columns", () => {
+    // Two counts, not one total: material still in the inbox is what no agent
+    // can read yet, and a single number would hide exactly that.
     render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
 
     expect(within(rowFor("shopee")).getByText("23")).toBeInTheDocument();
@@ -165,7 +165,7 @@ describe("KnowledgeTable", () => {
 
   test("the count headers cannot wrap — they were breaking one character per line", () => {
     render(<KnowledgeTable items={ITEMS} />, { wrapper: wrap(null) });
-    for (const name of [/^sources$/i, /^topics$/i]) {
+    for (const name of [/^documents$/i, /^pending$/i]) {
       expect(screen.getByRole("columnheader", { name }).className).toContain("whitespace-nowrap");
     }
     // The description column is the flexible one, which is what stops the

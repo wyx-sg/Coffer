@@ -1,6 +1,8 @@
-"""Per-agent adapters for Coffer's own session-start-like hook (spec memory FR-021/FR-022): which
-config-file key holds it, which event it sits on, and
-how to build/find/remove the installed entry.
+"""Per-agent adapters for Coffer's own session-start-like hook.
+
+See spec memory "Install delivery hooks explicitly and removably". Which
+config-file key holds it, which event it sits on, and how to build/find/remove
+the installed entry.
 
 `application.memory.delivery.DeliveryService` composes against these two
 singletons by `AgentType`, through the `domain.memory.delivery.DeliveryAdapter`

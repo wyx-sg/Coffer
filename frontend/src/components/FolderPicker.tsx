@@ -1,4 +1,5 @@
-// frontend/src/components/FolderPicker.tsx — spec agent-registry v2, FR-050.
+// frontend/src/components/FolderPicker.tsx — spec agent-registry "Offer a
+// folder picker for a custom config directory".
 // Skill-directory picker. The browser can't read absolute paths, so Browse asks
 // the loopback daemon to open the host's OS-native directory dialog, and falls
 // back to a daemon-backed in-app folder browser when this host has no native

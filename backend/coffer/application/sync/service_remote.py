@@ -26,6 +26,7 @@ from coffer.domain.sync.backup import DEFAULT_WORKTREE, BackupRemote, worktree_c
 from coffer.domain.sync.errors import BackupRemoteInvalid
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
+    from coffer.application.sync.convergence import ConvergeRound
     from coffer.application.sync.ports import (
         ConvergenceStatePort,
         GitMirrorPort,
@@ -49,6 +50,7 @@ class RemoteMixin:
     _mirror_factory: Callable[[Path], GitMirrorPort]
     _protected_roots: list[Path]
     _coffer_dir: Path | None
+    _round_factory: Callable[[GitMirrorPort, str], ConvergeRound]
 
     async def _token(self, remote: BackupRemote) -> str | None:
         raise NotImplementedError  # pragma: no cover - provided by ConvergeService
@@ -126,3 +128,13 @@ class RemoteMixin:
 
     async def last_run(self) -> ConvergeRun | None:
         return await self._remotes.last_run()
+
+    async def joined(self) -> bool:
+        """Whether this machine has joined the remote — by the round's own
+        predicate (``ConvergeRound.is_joining``), so the status surface and
+        the next round can never disagree."""
+        remote = await self._remotes.get()
+        if remote is None or await self._state.pointer() is None:
+            return False
+        mirror = self._mirror_factory(Path(remote.worktree_path).expanduser())
+        return not await self._round_factory(mirror, remote.branch).is_joining()

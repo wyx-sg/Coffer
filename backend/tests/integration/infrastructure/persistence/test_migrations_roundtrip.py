@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0101"
+HEAD_REVISION = "0103"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -77,8 +77,8 @@ HEAD_REVISION = "0101"
 # reappears one step down (until 0038's own downgrade drops it at 0037).
 # 0039 ADDs the ``internal_engine_config`` singleton (spec provider-switching amendment) —
 # present at head; its downgrade drops it. 0041 ADDs
-# ``channel_thread_conversations`` (spec channels FR-032: per-thread conversation
-# identity) and backfills each peer's DM row — present at head; its downgrade
+# ``channel_thread_conversations`` (spec channels "Key conversation identity by
+# channel, chat and thread") and backfills each peer's DM row — present at head; its downgrade
 # drops it (asserted stepwise just below head). 0042 ADDs the
 # ``machine_identity`` singleton (spec vault-sync amendment, continuous sync) — present at
 # head; its downgrade drops it. 0043 ADDs the ``sync_tombstones`` ledger and the
@@ -126,11 +126,12 @@ HEAD_REVISION = "0101"
 # opens a conversation and ``/model`` offers that agent's whole catalogue) — no
 # 0070 CREATEs ``memory_overrides`` — the developer's hide/pin/supersede/settle
 # decisions about a fact, the one table that revision adds for memory (spec
-# memory FR-034 now forbids the layer any table of its own);
+# memory "Add no table of its own" now forbids the layer any table of its own);
 # present at head, dropped by its own downgrade, and absent from every revision
 # below it. 0072 is DATA-only: it wraps every ``resources.scope_json`` agent
 # list in the two-axis object (``["a"]`` -> ``{"agents": ["a"], "machines":
-# null}``, spec vault-sync "Scope gains a machine axis") — no DDL, table/column
+# null}``, a machine axis spec vault-sync has since
+# removed) — no DDL, table/column
 # set unchanged at head. 0073 CREATEs ``sync_convergence_state`` (the single-row
 # pointer naming what this vault has provably absorbed) and ``sync_held_paths``
 # (the paths it could not apply) — both machine-local, both present at head and
@@ -185,6 +186,11 @@ HEAD_REVISION = "0101"
 # ``workflow_runs.template_ref``, which held the ``<kind>:<name>`` string form
 # this release deletes; no DDL, and its downgrade puts the prefix back because
 # the kind is constant for that column.
+# 0101 changes no table (the knowledge lanes live on disk). 0102 rebuilds
+# ``conversations`` to drop ``agent_key``'s ``'builtin'`` server default — a
+# column-default change only, so the table/column set is unchanged at head.
+# 0103 is DATA-only: it strips ``edges`` from every stored workflow template
+# and every run's frozen template snapshot; no DDL.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",
@@ -632,7 +638,8 @@ def test_0036_migrates_chat_models_to_provider_resources(tmp_path, monkeypatch):
 def test_0036_normalises_multiple_legacy_defaults(tmp_path, monkeypatch):
     """The legacy registry had no UNIQUE guard on is_default. If a divergent DB
     holds >1 is_default row, 0036 keeps only the most-recently-updated one as
-    internal_default (spec provider-switching FR-024, normalise-on-import),
+    internal_default (spec provider-switching "Keep at most one internal-engine
+    default", normalise-on-import),
     preserving the global
     single-internal-default invariant."""
     db_path = tmp_path / "multi_default.db"
@@ -872,7 +879,8 @@ def test_0047_migrates_channel_runs_on_to_scope(tmp_path, monkeypatch):
 
 
 def test_0072_wraps_the_agent_list_in_the_two_axis_object(tmp_path, monkeypatch):
-    """0072 is a data migration (spec vault-sync, "Scope gains a machine axis"):
+    """0072 is a data migration adding the scope's machine axis,
+    which spec vault-sync has since removed:
     every ``resources.scope_json`` agent list becomes the two-axis object with
     ``machines: null`` (unrestricted), so no resource's effective activation
     changes. ``NULL`` (unscoped) stays ``NULL``, a row already carrying the
@@ -991,7 +999,7 @@ def test_0074_adds_the_tidy_owner_machine_column(tmp_path, monkeypatch):
     migration test asserts the shape of ITS OWN revision, not today's.
 
     0074 names the one machine allowed to run the unattended tidy pass
-    (spec vault-sync "## Unattended rewriters"). Every existing row gets
+    (spec vault-sync "Run an unattended rewriter on one owner machine"). Every existing row gets
     ``NULL`` — enabling tidy before there was a fleet cannot retroactively
     become a choice the user never made — and the downgrade drops the column."""
     db_path = tmp_path / "tidy_owner.db"
@@ -1027,7 +1035,8 @@ def test_migration_stepwise_downgrade_drops_per_revision_tables(tmp_path, monkey
     cfg = _alembic_config()
     command.upgrade(cfg, "head")
     assert _user_tables(db_path) == EXPECTED_TABLES
-    # 0041 adds channel_thread_conversations (spec channels FR-032); present at head,
+    # 0041 adds channel_thread_conversations (spec channels "Key conversation
+    # identity by channel, chat and thread"); present at head,
     # dropped by its downgrade just below head.
     assert "channel_thread_conversations" in _user_tables(db_path)
     # 0039 adds internal_engine_config — present at head, dropped by its

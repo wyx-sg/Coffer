@@ -4,7 +4,8 @@ One rule, and it exists because of a specific past failure: per-project stores
 were once keyed as ``project-<ULID>`` and nobody could tell which project a
 store belonged to, which is the first reason the projection layer was removed.
 So a partition is named from its repository, readably, and the absolute root is
-recorded in the partition's own ``MEMORY.md`` (spec memory FR-014).
+recorded in the partition's own ``MEMORY.md`` (spec memory "Identify a
+partition by its repository").
 
 *Which* repository a directory belongs to — and whether it is inside one at
 all — is :mod:`coffer.domain.memory.repository`'s question, not this module's.
@@ -16,7 +17,7 @@ from __future__ import annotations
 import re
 
 #: The one partition that is not a repository: notes about the person,
-#: delivered wherever they are working (FR-011).
+#: delivered wherever they are working ("File personal entries into global").
 GLOBAL_PARTITION = "global"
 
 _UNSAFE = re.compile(r"[^A-Za-z0-9._\- 一-鿿]+")

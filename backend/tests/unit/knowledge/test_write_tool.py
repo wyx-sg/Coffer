@@ -1,4 +1,5 @@
-"""``coffer__write`` — the layer's only MCP tool (spec knowledge FR-033).
+"""``coffer__write`` — the layer's only MCP tool (spec knowledge "Expose
+exactly one knowledge tool").
 
 Three things are worth pinning about it. It writes into ``sources/`` and never
 into the curated lane, so an agent cannot reach past curation by naming a path.
@@ -22,7 +23,7 @@ from coffer.application.knowledge.builtin_tools import register_knowledge_builti
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource
-from coffer.infrastructure.knowledge import fs, paths
+from coffer.infrastructure.knowledge import fs
 
 
 class _Resources:
@@ -77,9 +78,14 @@ def handler(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     fs.create_collection_dir("shopee")
     fs.create_collection_dir("personal")
     audit = _Audit()
+
+    async def can_merge() -> bool:
+        return True
+
     service = KnowledgeService(
         resources=_Resources(["shopee", "personal"]),
         audit=audit,
+        merge_available=can_merge,
     )
     registry = BuiltinToolRegistry()
     register_knowledge_builtin_tools(registry, knowledge_service=service)
@@ -88,8 +94,12 @@ def handler(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     return tools["write"].handler, audit
 
 
+@pytest.mark.acceptance(
+    spec="knowledge",
+    scenario="written material waits in the inbox, or becomes a document with no model",
+)
 @pytest.mark.anyio
-async def test_a_write_lands_in_sources_and_is_audited(handler) -> None:  # type: ignore[no-untyped-def]
+async def test_a_write_waits_in_the_inbox_and_is_audited(handler) -> None:  # type: ignore[no-untyped-def]
     write, audit = handler
     answer = await write(
         {
@@ -100,12 +110,33 @@ async def test_a_write_lands_in_sources_and_is_audited(handler) -> None:  # type
             "body": "account.session owns it.",
         }
     )
-    assert answer["path"] == "shopee/sources/session-ownership.md"
-    assert paths.lane_of(answer["path"]) == "sources"
-    # The answer says plainly that the file will not stay where it landed —
-    # otherwise an agent would report the path back to the user as an address.
+    assert answer["status"] == "pending"
+    # No path is handed back while it waits: the material becomes part of
+    # whichever document curation merges it into, and an agent that reported
+    # an inbox path to the user would be reporting an address that vanishes.
+    assert "path" not in answer
     assert "curation" in answer["note"]
+    assert fs.inbox_items("shopee") == ("session-ownership.md",)
     assert audit.events == ["knowledge_written"]
+
+
+@pytest.mark.anyio
+async def test_with_no_model_a_write_is_a_document_at_once(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
+    fs.create_collection_dir("shopee")
+    registry = BuiltinToolRegistry()
+    register_knowledge_builtin_tools(
+        registry,
+        knowledge_service=KnowledgeService(resources=_Resources(["shopee"]), audit=_Audit()),
+    )
+    write = {t.name: t for t in registry.list()}["write"].handler
+    answer = await write(
+        {"collection": "shopee", "title": "Session ownership", "description": "d", "body": "b"}
+    )
+    assert answer["status"] == "written"
+    assert answer["path"] == "shopee/session-ownership.md"
+    assert fs.inbox_items("shopee") == ()
+    assert fs.read_file(answer["path"]).body.strip() == "b"
 
 
 @pytest.mark.anyio
@@ -143,7 +174,8 @@ async def test_every_agent_may_write_every_collection(handler) -> None:  # type:
                     "description": "d",
                 }
             )
-            assert answer["path"].startswith(f"{collection}/sources/")
+            assert answer["status"] == "pending"
+            assert answer["collection"] == collection
 
 
 @pytest.mark.anyio

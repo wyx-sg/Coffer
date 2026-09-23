@@ -1,4 +1,8 @@
-"""HTTP coverage for /api/v1/fs/* (spec daemon FR-019/FR-020/FR-021)."""
+"""HTTP coverage for /api/v1/fs/*.
+
+See spec daemon "Browse folders without reading files", "Open the host's native folder
+picker" and "Open and reveal existing absolute paths".
+"""
 
 from __future__ import annotations
 

@@ -5,15 +5,20 @@ catalogue is built from — is ``catalogue.py``. This module is the half that
 changes bytes.
 
 Every operation here is a filesystem operation and nothing else: no index is
-updated, because there is none (spec knowledge FR-001). That is what lets a
-person's edit in their own editor and an agent's ``coffer__write`` reach the
-same bytes with nothing in between.
+updated, because there is none (spec knowledge "Store each collection as one
+tree of Markdown files"). That is what lets a person's edit in their own
+editor and a curation pass reach the same bytes with nothing in between.
 
-What this module does *not* do is decide which lane a caller may touch. It
-takes lane-qualified paths and resolves them through
-``paths.require_lane``; the rule that curation writes only ``topics/`` and
-everyone else only ``sources/`` is enforced by the callers that name the lane
-(``application.knowledge.service`` and ``application.knowledge.curate_tools``).
+Two kinds of file live under a collection, and this module is where they meet:
+
+* **Documents** — the visible tree. A person edits them in their own editor;
+  a curation pass writes them through :func:`write_file`. Each carries
+  ``coffer_curated_at``, the moment curation last had it in front of it, and an
+  edit made since is what the sweep comes back for.
+* **Material** — the hidden ``.inbox/``. New knowledge waits here until a pass
+  folds it into the documents, and is deleted when that pass completes; with no
+  model to fold it, :func:`promote` makes it a document of its own (see
+  "Promote material directly when no model is configured").
 """
 
 from __future__ import annotations
@@ -35,16 +40,18 @@ from coffer.infrastructure.knowledge.frontmatter import (
 )
 from coffer.infrastructure.knowledge.naming import slugify, unique_name
 
-#: Frontmatter key carrying when curation last consumed a source (FR-028).
-#: Written by Coffer into a file a person owns, deliberately: it is feedback
-#: the person can see in their own editor, and it means the watermark needs no
-#: state file, no table and nothing to keep level with the disk.
-INGESTED_AT_KEY = "coffer_ingested_at"
+#: Frontmatter key carrying when curation last had a document in front of it
+#: (see "Settle an item only after its pass completes"). Written into a file a
+#: person also edits, deliberately: it is feedback the person can see in their
+#: own editor, and it means the watermark needs no state file, no table and
+#: nothing to keep level with the disk.
+CURATED_AT_KEY = "coffer_curated_at"
 
-#: The frontmatter keys this layer writes, in render order (FR-003). Anything
-#: else a person put in the file is kept and rendered after them: FR-003 says
-#: what Coffer writes, not what a person may not.
-_ORDERED_KEYS = ("title", "description", "actor", "created_at", "updated_at", INGESTED_AT_KEY)
+#: The frontmatter keys this layer writes, in render order (see "Carry title,
+#: description and actor in frontmatter"). Anything else a person put in the
+#: file is kept and rendered after them: that requirement says what Coffer
+#: writes, not what a person may not.
+_ORDERED_KEYS = ("title", "description", "actor", "created_at", "updated_at", CURATED_AT_KEY)
 
 
 def _now() -> str:
@@ -68,7 +75,7 @@ def read_file(relpath: str) -> KnowledgeFile:
         body=body,
         file_path=str(path),
         folder_path=str(path.parent),
-        ingested_at=str(fm.get(INGESTED_AT_KEY) or ""),
+        curated_at=str(fm.get(CURATED_AT_KEY) or ""),
     )
 
 
@@ -80,7 +87,7 @@ def _atomic_write(path: pathlib.Path, text: str) -> None:
     caller named it, and nothing between then and now may have redirected the
     directory out of the root. The temp file is opened ``O_NOFOLLOW`` and
     ``O_EXCL`` so a planted symlink under its name cannot carry the bytes
-    elsewhere, and the final rename never follows a link (FR-006).
+    elsewhere, and the final rename never follows a link.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     paths.assert_inside_root(path, paths.relative_of(path))
@@ -101,10 +108,9 @@ def _atomic_write(path: pathlib.Path, text: str) -> None:
 def _render(frontmatter: dict[str, Any], body: str) -> str:
     """The known keys in their fixed order, then anything else, unharmed.
 
-    The tail matters. ``mark_ingested`` rewrites a file a *person* owns to add
-    one stamp, unattended, every time curation consumes it — so dropping a key
-    it does not recognise would quietly delete their own `tags:` or
-    `reviewed_by:` from the lane this design promises is theirs.
+    The tail matters. ``mark_curated`` rewrites a file a *person* also edits to
+    add one stamp, unattended — so dropping a key it does not recognise would
+    quietly delete their own `tags:` or `reviewed_by:` from a document.
     """
     ordered = {k: frontmatter[k] for k in _ORDERED_KEYS if frontmatter.get(k)}
     extra = {k: v for k, v in frontmatter.items() if k not in _ORDERED_KEYS and v}
@@ -119,86 +125,80 @@ def write_file(
     body: str,
     actor: str = ACTOR_AGENT,
     relpath: str | None = None,
+    curated: bool = False,
 ) -> KnowledgeFile:
-    """Create a file under ``directory``, or replace the one at ``relpath``.
+    """Create a document under ``directory``, or replace the one at ``relpath``.
 
-    Both are knowledge-root-relative and lane-qualified; the caller decides
-    which lane, and ``paths.require_lane`` refuses anything outside one.
+    Both are knowledge-root-relative. ``directory`` is a collection or a folder
+    inside one; ``relpath`` must name a document (``paths.require_document``).
     Replacing preserves ``created_at`` so the file keeps its own history even
-    though nothing but the file records it, and drops any prior
-    ``coffer_ingested_at``: new bytes are material curation has not seen.
+    though nothing but the file records it.
+
+    ``curated`` is the curation pass's own write: it stamps
+    ``coffer_curated_at`` so the sweep does not hand the pass its own output
+    back. Any other write leaves the stamp off, which is exactly what makes the
+    sweep look at it.
     """
     now = _now()
     created = now
     if relpath is not None:
-        paths.require_lane(relpath)
+        paths.require_document(relpath)
         target = paths.resolve(relpath)
         if target.is_file():
             existing, _ = split_frontmatter(target.read_text(encoding="utf-8", errors="replace"))
             created = str(existing.get("created_at") or now)
     else:
-        paths.require_lane(f"{directory.strip('/')}/placeholder.md")
         parent = paths.resolve(directory)
         parent.mkdir(parents=True, exist_ok=True)
         name = unique_name(parent, slugify(title))
         target = parent / name
-    _atomic_write(
-        target,
-        _render(
-            {
-                "title": title,
-                "description": description,
-                "actor": actor,
-                "created_at": created,
-                "updated_at": now,
-            },
-            body,
-        ),
-    )
+        paths.require_document(paths.relative_of(target))
+    frontmatter: dict[str, Any] = {
+        "title": title,
+        "description": description,
+        "actor": actor,
+        "created_at": created,
+        "updated_at": now,
+    }
+    if curated:
+        frontmatter[CURATED_AT_KEY] = now
+    _atomic_write(target, _render(frontmatter, body))
+    if curated:
+        _align_mtime(target, now)
     return read_file(paths.relative_of(target))
 
 
-def write_original(collection: str, filename: str, data: bytes) -> str:
-    """Keep an uploaded document's own bytes in ``sources/``, visibly (FR-016).
-
-    Unlike the ``.raw/`` directory this replaces, the original is an ordinary
-    file beside the text extracted from it: there is no retrieval surface it
-    could pollute, so there is nothing for hiding it to buy, and a person
-    scrolling their own ``sources/`` should see what they actually sent.
-    """
-    directory = paths.sources_dir(collection)
-    directory.mkdir(parents=True, exist_ok=True)
-    suffix = pathlib.Path(filename).suffix
-    stem = slugify(pathlib.Path(filename).stem)
-    name = stem + suffix
-    if (directory / name).exists():
-        for n in range(2, 1000):
-            candidate = f"{stem}-{n}{suffix}"
-            if not (directory / candidate).exists():
-                name = candidate
-                break
-    target = directory / name
-    paths.assert_inside_root(target, paths.relative_of(target))
-    target.write_bytes(data)
-    return paths.relative_of(target)
-
-
 def delete_file(relpath: str) -> None:
-    paths.require_lane(relpath)
+    paths.require_document(relpath)
     path = paths.resolve(relpath)
     if not path.is_file():
         raise KnowledgeFileNotFound(relpath)
     path.unlink()
 
 
-def mark_ingested(relpath: str, *, when: str | None = None) -> None:
-    """Stamp a source as consumed by curation, changing nothing else (FR-028).
+def _align_mtime(path: pathlib.Path, stamp: str) -> None:
+    """Make the file's mtime the stamp it now carries.
 
-    Called only after a pass completes. A pass that fails leaves the stamp
-    unset, so the material is curated by a later sweep rather than lost to one
-    that half-ran.
+    Writing a stamp is itself a modification, so without this the file's mtime
+    would land just after the stamp and the sweep would hand the same document
+    back forever. Setting it to the stamp makes the file say the true thing —
+    its last modification *was* curation — and any later edit by a person moves
+    mtime past it again, which is the whole comparison.
     """
-    paths.require_lane(relpath, expected=paths.SOURCES_DIR_NAME)
+    with contextlib.suppress(OSError):
+        seconds = _parse(stamp)
+        if seconds:
+            os.utime(path, (seconds, seconds))
+
+
+def mark_curated(relpath: str, *, when: str | None = None) -> None:
+    """Stamp a document as seen by curation, changing nothing else.
+
+    Called only after a pass over that document completes. A pass that fails
+    leaves the stamp as it was, so the document comes back on a later sweep
+    rather than being lost to one that half-ran.
+    """
+    paths.require_document(relpath)
     path = paths.resolve(relpath)
     if not path.is_file():
         raise KnowledgeFileNotFound(relpath)
@@ -208,44 +208,37 @@ def mark_ingested(relpath: str, *, when: str | None = None) -> None:
     # damaged their file — just more quietly than deleting the key would.
     merged: dict[str, Any] = {k: v for k, v in fm.items() if v not in (None, "")}
     stamp = when or _now()
-    merged[INGESTED_AT_KEY] = stamp
+    merged[CURATED_AT_KEY] = stamp
     _atomic_write(path, _render(merged, body))
-    # Writing the stamp is itself a modification, so without this the file's
-    # mtime would land just after the stamp it carries and `pending_sources`
-    # would hand the same source back on every sweep, forever. Setting the
-    # mtime to the stamp makes the file say the true thing — its last
-    # modification *was* this stamping — and any later edit by a person moves
-    # mtime past it again, which is the whole comparison.
-    with contextlib.suppress(OSError):
-        seconds = _parse(stamp)
-        if seconds:
-            os.utime(path, (seconds, seconds))
+    _align_mtime(path, stamp)
 
 
-def pending_sources(collection: str) -> tuple[str, ...]:
-    """Sources changed since curation last consumed them, oldest first.
+def edited_documents(collection: str) -> tuple[str, ...]:
+    """Documents changed since curation last saw them, oldest first.
 
     The comparison is the file's own modification time against its own
-    ``coffer_ingested_at``: no state file, no table, and nothing that can
-    disagree with the disk. A file a person has just edited is newer than its
-    stamp and comes back; one nothing has touched does not.
+    ``coffer_curated_at``: no state file, no table, and nothing that can
+    disagree with the disk. A document a person has just edited — or written
+    from scratch, with no stamp at all — is newer than its stamp and comes
+    back; one nothing has touched does not.
     """
-    directory = paths.sources_dir(collection)
+    directory = paths.collection_dir(collection)
     if not directory.is_dir():
         return ()
     pending: list[tuple[float, str]] = []
     for root, dirnames, filenames in os.walk(directory):
         dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
+        at_root = pathlib.Path(root) == directory
         for name in sorted(filenames):
-            if not is_markdown(name):
+            if not is_markdown(name) or (at_root and name == paths.README_NAME):
                 continue
             # One read and one stat per file: this runs on every sweep, so it
             # is deliberately not built on `walk_files` + `read_file`, which
-            # would open each source three times a minute for nothing.
+            # would open each document three times a minute for nothing.
             path = pathlib.Path(root) / name
             fm, _ = split_frontmatter(path.read_text(encoding="utf-8", errors="replace"))
             mtime = path.stat().st_mtime
-            stamp = str(fm.get(INGESTED_AT_KEY) or "")
+            stamp = str(fm.get(CURATED_AT_KEY) or "")
             if stamp and _parse(stamp) >= mtime:
                 continue
             pending.append((mtime, paths.relative_of(path)))
@@ -259,12 +252,113 @@ def _parse(stamp: str) -> float:
         return 0.0
 
 
+# ----- the inbox ----------------------------------------------------------
+
+
+def _inbox_item(collection: str, name: str) -> pathlib.Path:
+    """One inbox item by its file name, guarded like any other segment."""
+    paths.check_segment(name, f"{collection}/{paths.INBOX_DIR_NAME}/{name}")
+    return paths.inbox_dir(collection) / name
+
+
+def submit_material(
+    collection: str,
+    *,
+    title: str,
+    description: str,
+    body: str,
+    actor: str = ACTOR_AGENT,
+) -> str:
+    """Put new material in the collection's inbox. Returns the item's name.
+
+    The item is ordinary frontmatter and Markdown, so the pass that merges it
+    reads it exactly as it reads a document. It is written under a name of its
+    own — never onto an existing item — because two submissions of the same
+    title are two pieces of material.
+    """
+    directory = paths.inbox_dir(collection)
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / unique_name(directory, slugify(title))
+    now = _now()
+    _atomic_write(
+        target,
+        _render(
+            {
+                "title": title,
+                "description": description,
+                "actor": actor,
+                "created_at": now,
+                "updated_at": now,
+            },
+            body,
+        ),
+    )
+    return target.name
+
+
+def inbox_items(collection: str) -> tuple[str, ...]:
+    """The names of a collection's unmerged items, oldest first."""
+    directory = paths.inbox_dir(collection)
+    if not directory.is_dir():
+        return ()
+    found = [
+        (entry.stat().st_mtime, entry.name)
+        for entry in directory.iterdir()
+        if entry.is_file() and is_markdown(entry.name)
+    ]
+    return tuple(name for _, name in sorted(found))
+
+
+def read_material(collection: str, name: str) -> KnowledgeFile:
+    """One inbox item, read the way a document is."""
+    path = _inbox_item(collection, name)
+    if not path.is_file():
+        raise KnowledgeFileNotFound(f"{collection}/{paths.INBOX_DIR_NAME}/{name}")
+    fm, body = split_frontmatter(path.read_text(encoding="utf-8", errors="replace"))
+    return KnowledgeFile(
+        path=f"{collection}/{paths.INBOX_DIR_NAME}/{name}",
+        title=str(fm.get("title") or path.stem),
+        description=str(fm.get("description") or ""),
+        actor=str(fm.get("actor") or ACTOR_AGENT),
+        created_at=str(fm.get("created_at") or ""),
+        updated_at=str(fm.get("updated_at") or ""),
+        body=body,
+        file_path=str(path),
+        folder_path=str(path.parent),
+    )
+
+
+def discard_material(collection: str, name: str) -> None:
+    """Delete an inbox item a pass has folded in."""
+    _inbox_item(collection, name).unlink(missing_ok=True)
+
+
+def promote(collection: str, name: str) -> KnowledgeFile:
+    """Make an inbox item a document of its own, as it stands.
+
+    The path with no model to merge it: the material is knowledge the moment it
+    arrives, so it must not wait in a hidden directory for a connection that
+    may never be configured. It lands at the collection root, stamped as
+    curated — nothing is going to curate it, and an unstamped document would
+    only be handed back by every sweep.
+    """
+    material = read_material(collection, name)
+    written = write_file(
+        directory=collection,
+        title=material.title,
+        description=material.description,
+        body=material.body,
+        actor=material.actor,
+        curated=True,
+    )
+    discard_material(collection, name)
+    return written
+
+
 def create_collection_dir(name: str) -> pathlib.Path:
-    """Create a collection and both of its lanes (FR-008)."""
+    """Create a collection's directory (see "Create collections only deliberately")."""
     directory = paths.collection_dir(name)
     directory.mkdir(parents=True, exist_ok=True)
-    for lane in paths.LANES:
-        paths.lane_dir(name, lane).mkdir(parents=True, exist_ok=True)
     return directory
 
 

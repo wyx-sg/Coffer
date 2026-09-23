@@ -176,7 +176,8 @@ def test_skill_list_json_holds_only_coffers_own_on_a_fresh_vault(skill_cli_daemo
     """`skill list --json` before the user imports anything.
 
     Exactly one row, and it is Coffer's: the manual it seeds for itself (spec
-    knowledge FR-034). It is an ordinary skill Resource, which is precisely why
+    knowledge "Deliver the catalogue through the coffer-guide skill"). It is an
+    ordinary skill Resource, which is precisely why
     it appears here — the rendering it replaced was written straight into each
     agent's own directory and this listing never knew about it.
     """
@@ -582,3 +583,39 @@ def test_skill_verify_fix_remaining_exits_2(skill_cli_daemon):
     assert "Still drifted" in r.output or "foreign-1" in r.output, r.output
     # Exit 2 because manual drift remains.
     assert r.exit_code == 2, r.output
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="manage unmanaged skills from the skill command group"
+)
+def test_unmanaged_skill_operations_live_under_coffer_skill(skill_cli_daemon):
+    """List, adopt and delete unmanaged skills through `coffer skill`, never `coffer agent`."""
+    import typer.main
+
+    skills_dir = _register_agent(skill_cli_daemon, "cur")
+    _write_skill_folder(skills_dir / "keep-me", name="keep-me")
+    junk = _write_skill_folder(skills_dir / "drop-me", name="drop-me")
+
+    r = _runner.invoke(cli_app, ["skill", "unmanaged", "cur", "--json"])
+    assert r.exit_code == 0, r.output
+    assert sorted(i["name"] for i in json.loads(_extract_json(r.output))) == [
+        "drop-me",
+        "keep-me",
+    ]
+
+    r = _runner.invoke(cli_app, ["skill", "adopt", "cur", "keep-me"])
+    assert r.exit_code == 0, r.output
+    assert (skills_dir / "keep-me").is_symlink()
+    assert _runner.invoke(cli_app, ["skill", "show", "keep-me"]).exit_code == 0
+
+    r = _runner.invoke(cli_app, ["skill", "rm-unmanaged", "cur", "drop-me", "--force"])
+    assert r.exit_code == 0, r.output
+    assert not junk.exists()
+
+    r = _runner.invoke(cli_app, ["skill", "unmanaged", "cur", "--json"])
+    assert json.loads(_extract_json(r.output)) == []
+
+    # The agent is an argument to these operations, not their subject.
+    agent_group = typer.main.get_command(cli_app).commands["agent"]  # type: ignore[attr-defined]
+    assert "config" in agent_group.commands
+    assert not {"unmanaged", "adopt", "rm-unmanaged"} & set(agent_group.commands)

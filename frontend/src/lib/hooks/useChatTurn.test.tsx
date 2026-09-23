@@ -299,7 +299,7 @@ describe("useChatTurn", () => {
     const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
 
     // Both deltas accumulate into the one live bubble while the turn streams.
-    await waitFor(() => expect(result.current.liveMessage?.text).toBe("Hello world"));
+    await waitFor(() => expect(result.current.liveMessage?.blocks[0]?.text).toBe("Hello world"));
     expect(result.current.isStreaming).toBe(true);
 
     // The reply is persisted server-side; the post-turn refetch now carries it
@@ -372,7 +372,7 @@ describe("useChatTurn", () => {
     const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
 
     // The streamed answer is shown in the live bubble and KEPT during the turn.
-    await waitFor(() => expect(result.current.liveMessage?.text).toBe("The answer"));
+    await waitFor(() => expect(result.current.liveMessage?.blocks[0]?.text).toBe("The answer"));
 
     // The persisted reply lands; the turn_done refetch carries it (count 0 → 1).
     qc.setQueryData(
@@ -437,7 +437,7 @@ describe("useChatTurn", () => {
     );
     const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
 
-    await waitFor(() => expect(result.current.liveMessage?.text).toBe("The answer"));
+    await waitFor(() => expect(result.current.liveMessage?.blocks[0]?.text).toBe("The answer"));
     expect(result.current.liveMessage).not.toBeNull();
   });
 
@@ -478,7 +478,7 @@ describe("useChatTurn", () => {
     const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper });
 
     // While the stream is open the live bubble spins on the partial text.
-    await waitFor(() => expect(result.current.liveMessage?.text).toBe("partial"));
+    await waitFor(() => expect(result.current.liveMessage?.blocks[0]?.text).toBe("partial"));
     expect(result.current.isStreaming).toBe(true);
 
     // The stream then ends with no turn_done; reconcile sees the persisted
@@ -752,7 +752,7 @@ describe("useChatTurn", () => {
       initialProps: { id: "conv-A" },
     });
 
-    await waitFor(() => expect(result.current.liveMessage?.text).toBe("partial A"));
+    await waitFor(() => expect(result.current.liveMessage?.blocks[0]?.text).toBe("partial A"));
     expect(result.current.isStreaming).toBe(true);
 
     act(() => {

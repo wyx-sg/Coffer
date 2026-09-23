@@ -78,8 +78,9 @@ _STATUS: dict[str, int] = {
     # gets its own code because 413 is the honest status for it.
     "INGEST_REJECTED": 400,
     # ripgrep's two failures. No surface calls it any more — the layer offers
-    # no retrieval (FR-050) — but curation still matches literally to pick its
-    # candidates (FR-032), so a missing binary or a bad pattern can still
+    # no retrieval ("Expose exactly one knowledge tool") — but curation still
+    # matches literally to pick its candidates ("Assemble a pass from a bounded
+    # context"), so a missing binary or a bad pattern can still
     # surface through a pass.
     "ENGINE_UNAVAILABLE": 503,
     "GREP_PATTERN_INVALID": 400,
@@ -123,6 +124,8 @@ _STATUS: dict[str, int] = {
     # Not 422: the patch is well-formed, and the same patch succeeds once the
     # connection is no longer projected — a state conflict, not a bad body.
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": 409,
+    # An ollama connection is internal-only and never switched on for an agent.
+    "PROVIDER_INTERNAL_ONLY": 409,
     "NO_ACTIVE_PROVIDER": 404,
     # knowledge (spec knowledge). A collection an agent is not authorized for
     # is NOT FOUND rather than FORBIDDEN: telling an unauthorized caller that
@@ -131,14 +134,16 @@ _STATUS: dict[str, int] = {
     "KNOWLEDGE_COLLECTION_NOT_FOUND": 404,
     "KNOWLEDGE_COLLECTION_EXISTS": 409,
     "KNOWLEDGE_FILE_NOT_FOUND": 404,
-    # Also the answer for a write aimed at the wrong lane: ``sources/`` and
-    # ``topics/`` have different writers (spec knowledge FR-013, FR-021), and
-    # which lane a path names is a property of the path.
+    # Also the answer for a path that cannot name a document — the
+    # collection itself, its README, or anything hidden (spec knowledge "Guard
+    # every path through one module").
     "KNOWLEDGE_PATH_UNSAFE": 400,
-    # Ingestion (spec knowledge FR-016..FR-019): named the limit, refused
+    # Ingestion (spec knowledge "Bound uploads and leave nothing behind on
+    # failure"): named the limit, refused
     # before any conversion or write.
     "KNOWLEDGE_UPLOAD_TOO_LARGE": 413,
-    # Curation's two refusals (spec knowledge FR-027, FR-025). Both are the
+    # Curation's two refusals (spec knowledge "Refuse file-name references in
+    # documents", "Bound a pass to eight writes"). Both are the
     # request being wrong rather than Coffer failing, so both are 400-class
     # like KNOWLEDGE_PATH_UNSAFE above: a topic naming another knowledge file
     # is a link that rots, and a pass past its write bound is one source trying
@@ -152,7 +157,7 @@ _STATUS: dict[str, int] = {
     # (``application.upkeep_runs``).
     "UPKEEP_ALREADY_RUNNING": 409,
     # spec workflow. The four 409s are exactly the codes the contract's
-    # ``Conflict`` response names (specs/workflow/contracts/api.openapi.yaml):
+    # ``Conflict`` response names (openspec/specs/workflow/contracts/api.openapi.yaml):
     # a stale version, a terminal run, a run this machine does not own, and an
     # illegal transition. ``WORKFLOW_ATTEMPT_CEILING`` joins them because it is
     # the same kind of answer — the loop has ended and no retry will be

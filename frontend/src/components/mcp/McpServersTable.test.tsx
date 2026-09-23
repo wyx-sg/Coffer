@@ -20,6 +20,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import type { PropsWithChildren } from "react";
 import { McpServersTable } from "./McpServersTable";
+import { McpServerDetailHeader } from "./McpServerDetailHeader";
+import { acceptance } from "@/test/acceptance";
 import { ApiError } from "@/lib/api/errors";
 import type { ResourceOut } from "@/lib/api/resources";
 
@@ -276,5 +278,84 @@ describe("McpServersTable", () => {
 
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByRole("alert")).toHaveTextContent("server is in use");
+  });
+});
+
+describe("list and detail conventions (web-ui)", () => {
+  afterEach(() => vi.clearAllMocks());
+
+  acceptance("web-ui", "a row click opens the item's detail page", () => {
+    render(<McpServersTable resources={SAMPLE} />, { wrapper: wrap(null) });
+
+    fireEvent.click(screen.getByText("Remote fetch"));
+    expect(navigateMock).toHaveBeenLastCalledWith("/mcp-servers/u-remote-web");
+
+    // The row is keyboard-operable the same way.
+    const row = screen.getByText("Scoped to one agent").closest("tr") as HTMLElement;
+    fireEvent.keyDown(row, { key: "Enter" });
+    expect(navigateMock).toHaveBeenLastCalledWith("/mcp-servers/u-notes-store");
+  });
+
+  acceptance("web-ui", "a row action shows its label beside its icon", () => {
+    render(<McpServersTable resources={SAMPLE} />, { wrapper: wrap(null) });
+
+    const del = rowFor("files").getByRole("button", { name: /delete/i });
+    expect(del).toHaveTextContent(/^delete$/i); // visible text, not only an aria-label
+    expect(del.querySelector("svg")).not.toBeNull(); // and its icon
+  });
+
+  acceptance("web-ui", "row, header and selection bar mount the same reach control", () => {
+    const files = SAMPLE[0];
+    render(
+      <>
+        <McpServersTable resources={SAMPLE} />
+        <McpServerDetailHeader
+          resource={files}
+          back={{ to: "/mcp-servers", label: "MCP servers" }}
+          healthState="healthy"
+          testResult={null}
+          isTestPending={false}
+          onTestConnection={vi.fn()}
+          onDeleteClick={vi.fn()}
+        />
+      </>,
+      { wrapper: wrap(null) },
+    );
+
+    /** Open a mount's reach button, read the panel it opens, then close it. */
+    const panelOf = (button: HTMLElement) => {
+      fireEvent.click(button);
+      const radios = screen.getAllByRole("radio").map((r) => r.closest("label")?.textContent);
+      const machineLine = screen.getByTestId("reach-machine-local").textContent;
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+      return { radios, machineLine };
+    };
+
+    const filesRow = screen
+      .getAllByText("Local filesystem access")
+      .map((el) => el.closest("tr"))
+      .find((tr): tr is HTMLTableRowElement => tr !== null)!;
+    const rowButton = within(within(filesRow).getByTestId("scope-control")).getByRole("button");
+    const headerMounts = screen.getAllByTestId("scope-control").filter((el) => !el.closest("tr"));
+    expect(headerMounts).toHaveLength(1);
+    const headerButton = within(headerMounts[0]).getByRole("button");
+    // The header states the same reach the row does.
+    expect(rowButton).toHaveTextContent(/^every agent$/i);
+    expect(headerButton).toHaveTextContent(/^every agent$/i);
+
+    const fromRow = panelOf(rowButton);
+    const fromHeader = panelOf(headerButton);
+    fireEvent.click(within(filesRow).getByRole("checkbox"));
+    const bulkButton = within(screen.getByTestId("bulk-reach-control")).getByRole("button");
+    const fromBulk = panelOf(bulkButton);
+
+    expect(fromRow.radios).toEqual([
+      expect.stringMatching(/^disabled$/i),
+      expect.stringMatching(/every agent/i),
+      expect.stringMatching(/only selected agents/i),
+    ]);
+    expect(fromRow.machineLine).toBeTruthy();
+    expect(fromHeader).toEqual(fromRow);
+    expect(fromBulk).toEqual(fromRow);
   });
 });

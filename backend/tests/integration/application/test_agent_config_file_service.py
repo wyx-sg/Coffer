@@ -51,7 +51,7 @@ async def test_list_files_reports_existence(agent_bundle, tmp_path, monkeypatch)
     assert by_key["settings"].modified_at is not None
     assert by_key["settings"].kind == "file"
     # Absolute path + containing folder for the read-only open/reveal
-    # affordances (FR-047).
+    # affordances (see "Open config files in an external editor or reveal them").
     assert by_key["settings"].path == str(settings)
     assert by_key["settings"].folder_path == str(tmp_path / ".claude")
     assert by_key["instructions"].exists is False
@@ -95,7 +95,8 @@ async def test_read_existing(agent_bundle, tmp_path, monkeypatch):
     assert out.fingerprint != ""
     assert out.memory_block is False
     # The content view carries the file's absolute path + containing folder so
-    # the read-only viewer can open/reveal (FR-047).
+    # the read-only viewer can open/reveal (see "Open config files in an external
+    # editor or reveal them").
     assert out.path == str(tmp_path / ".claude" / "settings.json")
     assert out.folder_path == str(tmp_path / ".claude")
 

@@ -17,9 +17,9 @@ ACTOR_USER = "user"
 class CollectionEntry:
     """One collection, as the top level of the catalogue shows it.
 
-    The two lanes are counted apart because they answer different questions:
-    how much material a person has contributed, and how much of it an agent
-    can currently read (spec knowledge FR-001).
+    ``pending_count`` is the material still waiting in the collection's inbox
+    to be merged — what an agent cannot read yet (spec knowledge "Hide
+    dot-prefixed entries except the inbox").
     """
 
     #: The collection resource's identity. Every route that addresses this
@@ -34,13 +34,13 @@ class CollectionEntry:
     name: str
     #: First paragraph of the collection's ``README.md``; empty when absent.
     description: str
-    source_count: int = 0
-    topic_count: int = 0
+    document_count: int = 0
+    pending_count: int = 0
 
 
 @dataclass(frozen=True)
 class DirectoryEntry:
-    """A subdirectory inside a lane — the person's filing, or curation's."""
+    """A subdirectory inside a collection — filed by a person or by curation."""
 
     #: Path relative to the knowledge root, e.g. ``shopee/account``.
     path: str
@@ -62,7 +62,7 @@ class FileEntry:
 
 @dataclass(frozen=True)
 class CatalogueLevel:
-    """One level of one lane — what a human surface pages through."""
+    """One level of one collection — what a human surface pages through."""
 
     path: str
     directories: tuple[DirectoryEntry, ...] = field(default_factory=tuple)
@@ -80,12 +80,14 @@ class KnowledgeFile:
     created_at: str
     updated_at: str
     body: str
-    #: Absolute path of the ``.md`` file (spec knowledge FR-041).
+    #: Absolute path of the ``.md`` file (spec knowledge "Return absolute paths
+    #: on reads").
     file_path: str
     #: Absolute path of its containing folder.
     folder_path: str
-    #: When curation last consumed this source; empty for a topic (FR-028).
-    ingested_at: str = ""
+    #: When curation last had this document in front of it; empty when it
+    #: never has ("Settle an item only after its pass completes").
+    curated_at: str = ""
 
 
 @dataclass(frozen=True)
@@ -99,3 +101,17 @@ class GrepMatch:
 class GrepOutcome:
     matches: tuple[GrepMatch, ...] = field(default_factory=tuple)
     truncated: bool = False
+
+
+@dataclass(frozen=True)
+class Pending:
+    """One item a pass can take: inbox material, or an edited document.
+
+    Exactly one field is set. ``material`` is the inbox item's file name —
+    never a path a caller could aim elsewhere, since the inbox is not
+    addressable from outside this layer; ``document`` is a
+    knowledge-root-relative document path.
+    """
+
+    material: str | None = None
+    document: str | None = None

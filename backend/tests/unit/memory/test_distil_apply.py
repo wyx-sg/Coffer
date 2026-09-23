@@ -5,13 +5,14 @@ writing stage could not produce is skipped and the note stays: taking a
 subject out of the partition and putting nothing back is the one outcome worse
 than an unrefreshed note.
 
-**A retirement is two halves and they never come apart** (FR-025). The note's
-file leaves ``notes/`` and a record goes into ``RETIRED.md`` in the same loop,
-because in a store whose sources live outside it a deletion with no record is
-undone by the next aggregation.
+**A retirement is two halves and they never come apart** (see "Record
+retirements so they stick"). The note's file leaves ``notes/`` and a record
+goes into ``RETIRED.md`` in the same loop, because in a store whose sources
+live outside it a deletion with no record is undone by the next aggregation.
 
 **Provenance accumulates.** A merge that forgot a note's earlier origins would
-erase half of what answers "which of my agents already knows this" (FR-018).
+erase half of what answers "which of my agents already knows this" (see "Record
+provenance and merge by meaning").
 """
 
 from __future__ import annotations
@@ -186,8 +187,9 @@ async def test_a_merge_counts_the_entries_it_folded_in() -> None:
 
 @pytest.mark.asyncio
 async def test_a_note_the_writing_stage_could_not_produce_is_left_alone() -> None:
-    """Degrades to nothing (FR-027): the entries routed there are still in
-    ``.raw/`` and still unaccounted for, so the next pass sees them again."""
+    """Degrades to nothing (see "Record what each distil pass did"): the
+    entries routed there are still in ``.raw/`` and still unaccounted for, so
+    the next pass sees them again."""
     existing = _existing()
     plan = Plan(
         targets={
@@ -284,15 +286,15 @@ async def test_an_entry_the_pass_kept_nothing_from_is_recorded_by_its_id() -> No
     assert record.slug == ""  # no note ever existed, so no file is named
     assert record.entry_ids == (entry.entry_id,)
     assert record.reason.startswith(applying.DROPPED_REASON_PREFIX)
-    # FR-026: the entry itself stays in ``.raw/``.
+    # Distil stays out of ``.raw/``: the entry itself stays there.
     assert [e.entry_id for e in list_raw_entries(_PARTITION)] == [entry.entry_id]
 
 
 @pytest.mark.asyncio
 async def test_earlier_retirements_go_back_down_with_the_new_ones() -> None:
-    """``write_retired`` rewrites the whole file, so a lossy round-trip here
-    is a note re-opened on the next pass — the failure FR-025 exists to
-    prevent."""
+    """``write_retired`` rewrites the whole file, so a lossy round-trip here is
+    a note re-opened on the next pass — the failure "Record retirements so they
+    stick" exists to prevent."""
     entry = _entry("one")
     earlier = RetiredNote(slug="ancient", title="Ancient", reason="long gone", retired_at="2025")
     plan = Plan(drops=[(entry, "transient")])

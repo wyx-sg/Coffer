@@ -75,8 +75,8 @@ interface Props {
   children: string;
   /**
    * Where an image's `src` should really point. Used where the bytes are not
-   * publicly addressable — a run's own directory is behind the daemon's token
-   * (FR-069), so the page fetches each image and hands this map of object URLs
+   * publicly addressable — a run's own directory is behind the daemon's token,
+   * so the page fetches each image and hands this map of object URLs
    * in.
    *
    * Returning undefined means DO NOT RENDER IT, and the name is shown instead.

@@ -1,0 +1,387 @@
+openapi: 3.0.3
+info:
+  title: Coffer — Channels API
+  version: 0.1.0
+  description: >
+    REST surface for messaging channels (spec channels). Channel CRUD rides the
+    generic /resources endpoints (spec resource-framework); this contract adds the
+    channel-specific operations: pairing, status, notify, the webhook
+    callback probe, and the SeaTalk
+    event ingest the callback listener forwards to. The callback listener's
+    own public path (POST /seatalk/{channel}) is served by a separate process
+    and is not part of the daemon's API surface.
+
+    The conversation, message, pending-queue and SSE routes a channel turn runs
+    on belong to the turn platform and are contracted in spec chat; the agent
+    listing and per-agent model catalogue are contracted in spec agent-registry.
+    A channel consumes both and adds no route of its own to either.
+
+servers:
+  - url: http://127.0.0.1:8000
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/channels/{uid}/pairing-code:
+    post:
+      summary: Issue a single-use pairing code for a channel
+      operationId: issuePairingCode
+      tags: [channels]
+      parameters:
+        - $ref: '#/components/parameters/ChannelUid'
+      responses:
+        '200':
+          description: Code issued (replaces any previous pending code)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PairingCodeOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/channels/{uid}/status:
+    get:
+      summary: Runtime, pairing, and callback status of a channel
+      operationId: getChannelStatus
+      tags: [channels]
+      parameters:
+        - $ref: '#/components/parameters/ChannelUid'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelStatusOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/channels/{uid}/notify:
+    post:
+      summary: Push a text message to the channel's paired peer
+      operationId: notifyChannel
+      tags: [channels]
+      parameters:
+        - $ref: '#/components/parameters/ChannelUid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotifyIn'
+      responses:
+        '200':
+          description: Delivered to the IM platform
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotifyOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Channel has no paired peer or is disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /api/v1/channels/{uid}/callback-test:
+    post:
+      summary: Probe a SeaTalk channel's public callback path end to end
+      description: >
+        Sends the platform's own verification handshake at the channel's
+        configured public URL and reports whether the echo came back — so the
+        whole webhook chain (public URL → tunnel → loopback listener →
+        signature → handshake) is confirmed from one button instead of by
+        watching for a real event. It does NOT confirm the stored signing
+        secret matches SeaTalk's, since both sides of the probe sign with the
+        same stored secret; only a real event shows that.
+
+
+        A failure is reported as `ok: false` with a `detail` the owner can act
+        on, never as an HTTP error: the probe ran, and what it found is the
+        answer. A Telegram channel, and a SeaTalk channel on **websocket**
+        delivery, are refused the same way — a websocket channel has no public
+        URL to probe at all, and its `websocket_state` is the health answer
+        there (spec channels/seatalk "Keep status truthful per transport").
+      operationId: testChannelCallback
+      tags: [channels]
+      parameters:
+        - $ref: '#/components/parameters/ChannelUid'
+      responses:
+        '200':
+          description: The probe ran; `ok` says what it found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CallbackTestOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/channels/{uid}/events:
+    post:
+      summary: Ingest a verified SeaTalk callback event (listener-internal)
+      description: >
+        Called by the callback listener over loopback after signature
+        verification. Requires the daemon token like every other route;
+        the body is the raw SeaTalk event envelope.
+      operationId: ingestChannelEvent
+      tags: [channels]
+      parameters:
+        - $ref: '#/components/parameters/ChannelUid'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SeaTalkEventIn'
+      responses:
+        '200':
+          description: Accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventAcceptedOut'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: The channel's adapter is not running (channel disabled)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    ChannelUid:
+      name: uid
+      in: path
+      required: true
+      schema: { type: string }
+      description: >-
+        The channel resource's immutable uid, as `ResourceOut.uid` reports it.
+        Not the channel's name: a name is a label its owner may edit, and the
+        callback listener and the tunnel supervisor hold this value across
+        restarts — a path built from a label stops resolving the moment the
+        label changes.
+
+  responses:
+    NotFound:
+      description: No channel with this uid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+
+  schemas:
+    PairingCodeOut:
+      type: object
+      required: [code, expires_at]
+      properties:
+        pair_url:
+          type: string
+          description: >-
+            A link carrying the code, so the owner pairs by opening it rather
+            than transcribing it. Empty when the platform has no such link or
+            the bot's username is unknown; the typed code always works.
+        code:
+          type: string
+          description: 8-character code from an unambiguous alphabet
+        expires_at:
+          type: string
+          format: date-time
+
+    ChannelStatusOut:
+      type: object
+      required: [uid, name, channel_type, enabled, running, peer, callback]
+      properties:
+        uid:
+          type: string
+          description: >-
+            The channel resource's immutable identity — the same value the
+            path takes, echoed back so a client that reached this status from
+            a list can key its state on it without re-deriving anything.
+          example: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+        name:
+          type: string
+          description: >-
+            A mutable label, unique among channels. For display only; anything
+            that must keep pointing at this channel holds the uid.
+        channel_type:
+          type: string
+          enum: [telegram, seatalk]
+        enabled: { type: boolean }
+        running:
+          type: boolean
+          description: Whether the adapter task is currently live
+        pending_pairing:
+          type: boolean
+          description: Whether an unexpired pairing code is outstanding
+        peer:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ChannelPeerOut'
+        callback:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/CallbackInfoOut'
+          description: Present for seatalk channels only
+        diagnostics:
+          type: array
+          description: >-
+            Contradictions between the channel's configuration and what the
+            platform actually permits. Empty is the healthy case.
+          items:
+            $ref: '#/components/schemas/ChannelDiagnosticOut'
+        runs_on:
+          type: string
+          nullable: true
+          description: >-
+            The machine_id of the one machine whose daemon runs this channel's
+            adapter. Null means unbound, which runs nowhere.
+        runs_here:
+          type: boolean
+          description: >-
+            Whether the bound machine is the one answering this request. It
+            separates the two facts `running: false` collapses — a channel that
+            failed to start here, and a channel that was never this machine's
+            to start.
+
+    ChannelDiagnosticOut:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Stable identifier, so a UI can style or link the finding
+        message:
+          type: string
+          description: What is wrong and what to do about it
+
+    ChannelPeerOut:
+      type: object
+      required: [chat_id, display_name, paired_at, active_conversation_id]
+      properties:
+        chat_id: { type: string }
+        display_name: { type: string }
+        paired_at:
+          type: string
+          format: date-time
+        active_conversation_id:
+          type: string
+          nullable: true
+
+    CallbackInfoOut:
+      type: object
+      description: >-
+        How a SeaTalk channel receives events. Covers both delivery methods; on
+        websocket delivery the webhook-only fields report their absent/false
+        values (there is no port, path, public URL, listener or tunnel on that
+        path) and websocket_state carries the health answer.
+      required: [port, path, listener_running, delivery]
+      properties:
+        port: { type: integer }
+        path:
+          type: string
+          description: The path to append to the tunnel URL
+        listener_running: { type: boolean }
+        delivery:
+          type: string
+          enum: [webhook, websocket]
+          description: >-
+            Which inbound transport this channel uses. webhook = SeaTalk POSTs to
+            a public callback URL; websocket = the bot holds one outbound
+            connection and needs no public URL.
+        public_base_url:
+          type: string
+          nullable: true
+        public_callback_url:
+          type: string
+          nullable: true
+        tunnel_managed:
+          type: boolean
+          description: Coffer supervises a cloudflared child for this channel
+        tunnel_running: { type: boolean }
+        websocket_state:
+          type: string
+          nullable: true
+          enum: [connecting, connected, kicked, sdk_missing, error]
+          description: >-
+            State of the held WebSocket connection; null on webhook delivery and
+            on a websocket channel with no connection yet.
+        websocket_error:
+          type: string
+          nullable: true
+          description: The last connection error, verbatim, so the owner can act on it
+
+    NotifyIn:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        chat_id:
+          type: [string, "null"]
+          default: null
+          description: >-
+            Which paired chat to push to. Omitted, the channel's owner chat —
+            its earliest pairing, the owner's DM. A chat this channel is not
+            paired to is refused, so a caller cannot address an arbitrary
+            group.
+
+    NotifyOut:
+      type: object
+      required: [sent]
+      properties:
+        sent: { type: boolean }
+
+    CallbackTestOut:
+      type: object
+      required: [ok, detail]
+      properties:
+        ok: { type: boolean }
+        detail:
+          type: string
+          description: >
+            What the probe found, in words the owner can act on — empty on a
+            clean pass.
+
+    SeaTalkEventIn:
+      type: object
+      required: [event_type, event]
+      properties:
+        event_id: { type: string }
+        event_type: { type: string }
+        timestamp: { type: integer }
+        app_id: { type: string }
+        event:
+          type: object
+          additionalProperties: true
+
+    EventAcceptedOut:
+      type: object
+      required: [accepted]
+      properties:
+        accepted: { type: boolean }
+
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details:
+              type: object
+              additionalProperties: true

@@ -203,16 +203,17 @@ e2e/                  Playwright suites — the web UI and the MCP gateway
 evals/                AI eval harness — tool-search and tool-routing suites
 scripts/              repo gates (file sizes, doc naming, acceptance audit) and maintenance
 docs-site/            VitePress source for the published documentation site
-specs/                Speckit specs (one per feature; a spec may nest a child)
+specs/                capability specs (one per feature; a spec may nest a child)
+openspec/             OpenSpec config, changes in flight, and the archive of shipped changes
 docs/decisions/       Architectural Decision Records (ADRs)
-.agents/              Guides: workflow, SDD, stack, frontend, visual language, testing, harness
+.agents/              Guides: workflow, OpenSpec, stack, frontend, visual language, testing, harness
 ```
 
 The `surfaces/callback/` process is the `coffer-callback` binary above: a standalone
 listener a tunnel points at, which verifies a SeaTalk signature and forwards the event
 to the daemon over loopback.
 
-Architecture deep-dive: [.specify/memory/architecture.md](.specify/memory/architecture.md).
+Architecture deep-dive: [docs/architecture.md](docs/architecture.md). Principles: [docs/principles.md](docs/principles.md).
 ADRs: [docs/decisions/](docs/decisions/).
 
 ---
@@ -236,7 +237,7 @@ ADRs: [docs/decisions/](docs/decisions/).
 ## Contributing
 
 - **Conventional Commits** required — see [.agents/workflow.md](.agents/workflow.md)
-- **Spec-driven development** — every feature starts with a spec under `specs/<short-name>/` — see [.agents/sdd.md](.agents/sdd.md)
+- **[OpenSpec](https://github.com/Fission-AI/OpenSpec)** — every behaviour change starts with an OpenSpec change (`/opsx:propose`) that is archived in the same PR — see [.agents/openspec.md](.agents/openspec.md)
 - **Architecture contracts** — 20 importlinter contracts must stay green (defined in [backend/pyproject.toml](backend/pyproject.toml))
 - **Credentials** — secrets are stored only as Fernet ciphertext in the `credentials` table via `coffer.infrastructure.credentials`; plaintext never reaches the DB, logs, or audit
 

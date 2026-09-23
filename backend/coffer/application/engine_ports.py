@@ -29,9 +29,10 @@ class LlmCompletionPort(Protocol):
     """One shot of a model, for the small jobs that are not an agentic loop.
 
     Ingestion uses it to write a document's one-line ``description``, which the
-    catalogue then lives or dies by. Like every other use of the internal
-    connection in this layer it is optional: with none configured the caller
-    falls back to the document's own opening prose (spec knowledge FR-017).
+    catalogue then lives or dies by. Like every other use of the internal connection in
+    this layer it is optional: with none configured the caller falls back to the
+    document's own opening prose (spec knowledge "Fill frontmatter on converted
+    material").
     """
 
     async def complete(

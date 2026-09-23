@@ -1,4 +1,6 @@
-"""Unmanaged-skill scan / adopt / delete integration coverage (FR-016).
+"""Unmanaged-skill scan / adopt / delete integration coverage.
+
+See "List unmanaged skills in an agent's skill locations".
 
 Same construction style as ``test_skill_service.py`` (real sqlite + real
 MasterStore / SyncEngine / WorkspaceScan over tmp_path); the agent scan-

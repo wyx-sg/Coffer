@@ -537,6 +537,36 @@ def test_create_ollama_without_credential(tmp_path, monkeypatch):
 
 
 @pytest.mark.acceptance(
+    spec="provider-switching", scenario="activating an ollama connection writes no native config"
+)
+def test_activating_an_ollama_connection_is_refused_and_writes_nothing(tmp_path, monkeypatch):
+    """An ollama connection is internal-only: even scoped to a registered
+    Claude Code agent, activating it writes no native config, never makes it
+    ``is_active``, and says so rather than reporting a switch that did not
+    happen."""
+    app = _app(tmp_path, monkeypatch, 59855)
+    cfg = _agent_dir(tmp_path)
+    with _client(app) as c:
+        cc = _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        uid = _new(
+            c,
+            {"name": "local-llama", "protocol": "ollama", "base_url": "http://localhost:11434"},
+        )
+        scoped = c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": [cc]}})
+        assert scoped.status_code == 200, scoped.text
+
+        act = c.post(f"/api/v1/providers/{uid}/activate")
+        assert act.status_code == 409, act.text
+        assert act.json()["error"]["code"] == "PROVIDER_INTERNAL_ONLY"
+        assert "local-llama" in act.json()["error"]["message"]
+
+        row = c.get(f"/api/v1/providers/{uid}").json()
+        assert row["is_active"] is False
+        assert row["compatible_agents"] == []
+        assert not (cfg / "settings.json").exists()
+
+
+@pytest.mark.acceptance(
     spec="provider-switching",
     scenario="set a connection as the internal engine default",
 )

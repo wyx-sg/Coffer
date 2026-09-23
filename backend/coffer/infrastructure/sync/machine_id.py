@@ -1,4 +1,4 @@
-"""Find this host's stable identifier (spec vault-sync "Identity is derived").
+"""Find this host's stable identifier (spec vault-sync "Derive machine identity from the host").
 
 The id must survive reinstalling and uninstalling Coffer, so it cannot be
 something Coffer generates and stores. It is read from the operating system,

@@ -8,7 +8,8 @@ ADR knowledge-is-plain-files; spec knowledge records this migration under
 ``## Migration history`` rather than as a requirement. The knowledge layer
 stops being an index over files and becomes the files. Eleven tables go, and
 none of them is replaced: a collection is a row in the kind-agnostic
-``resources`` table like every other Resource (spec knowledge FR-029).
+``resources`` table like every other Resource (spec knowledge "Add no table
+and no directory outside the knowledge root").
 
 **The order is the whole point.** A document's title lives ONLY in
 ``documents.title`` today — the file on disk is named by a ULID and its
@@ -112,7 +113,8 @@ def upgrade() -> None:
     # The tidy pass survives the cut, and its background worker needs somewhere
     # to be switched on. It goes on the internal-engine singleton rather than in
     # a table of its own: it governs what Coffer's own model may do unattended,
-    # and spec knowledge FR-029 forbids the knowledge layer adding a table.
+    # and spec knowledge "Add no table and no directory outside the knowledge
+    # root" forbids the knowledge layer adding a table.
     if _has_table("internal_engine_config") and not _has_column(
         "internal_engine_config", "auto_tidy_enabled"
     ):

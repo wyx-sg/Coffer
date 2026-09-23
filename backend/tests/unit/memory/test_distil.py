@@ -1,17 +1,19 @@
 """The distil pass, and the two rules that hold on **every** path.
 
-``MEMORY.md`` is always written — even when nothing changed, even when no
-model was available — because the index *is* the delivery (FR-028), and a
-partition with notes and no index delivers nothing.
+``MEMORY.md`` is always written — even when nothing changed, even when no model
+was available — because the index *is* the delivery (see "Deliver the index and
+the notes path at session start"), and a partition with notes and no index
+delivers nothing.
 
-``.raw/`` is never written here (FR-026). The pass reads entries and writes
-``notes/``, ``MEMORY.md`` and ``RETIRED.md``; that separation is what lets a
-bad distillation be re-run without going back to the agents, so it is asserted
-by comparing the bytes **and** the modification times of every file under
-``.raw/`` across a pass.
+``.raw/`` is never written here (see "Keep distil out of the raw directory").
+The pass reads entries and writes ``notes/``, ``MEMORY.md`` and ``RETIRED.md``;
+that separation is what lets a bad distillation be re-run without going back to
+the agents, so it is asserted by comparing the bytes **and** the modification
+times of every file under ``.raw/`` across a pass.
 
-The mechanical path (FR-024) is exercised with a completion port rigged to
-raise, so "no model is called" is a structural fact rather than a hopeful one.
+The mechanical path (see "Distil mechanically with no internal connection") is
+exercised with a completion port rigged to raise, so "no model is called" is a
+structural fact rather than a hopeful one.
 """
 
 from __future__ import annotations
@@ -91,7 +93,7 @@ async def test_with_no_internal_connection_no_model_is_called_and_each_entry_bec
     notes = store.list_notes(_PARTITION)
     assert {n.title for n in notes} == {"Worktree trap", "Daemon restart"}
     assert {n.body for n in notes} == {"Worktrees have no .venv.", "coffer daemon stop/start."}
-    # The source's own search terms survive the mechanical path too (FR-004).
+    # The source's own search terms survive the mechanical path too.
     assert next(n for n in notes if n.title == "Worktree trap").search_terms == ("venv",)
 
 
@@ -236,9 +238,9 @@ def test_an_entry_named_in_a_notes_provenance_is_not_offered_again() -> None:
 
 
 def test_an_entry_a_pass_kept_nothing_from_is_not_offered_again() -> None:
-    """``.raw/`` may not be pruned to express a drop (FR-026), so without the
-    record the same entry is routed to the model on every pass for the rest of
-    the vault's life."""
+    """``.raw/`` may not be pruned to express a drop (see "Keep distil out of
+    the raw directory"), so without the record the same entry is routed to the
+    model on every pass for the rest of the vault's life."""
     stored = _entry("Transient", "an incidental observation")
     record = RetiredNote(
         slug="", title="Transient", reason="kept nothing", entry_ids=(stored.entry_id,)

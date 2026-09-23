@@ -144,12 +144,12 @@ class InboundProcessor:
                 continue
             if session.render_task is not None:
                 session.render_task.cancel()
-            # Cancelling the renderer only stops delivery; the orchestrator
-            # turn keeps running and would deliver its reply to the web UI
-            # alone, leaving the bot silent. Interrupt the live turn so its
-            # partial reply is the contract — not a turn that completes
-            # undelivered. (The interrupt also pauses the conversation's queue,
-            # spec chat FR-019, so nothing queued behind it runs into a bot that is gone.)
+            # Cancelling the renderer only stops delivery; the orchestrator turn keeps
+            # running and would deliver its reply to the web UI alone, leaving the bot
+            # silent. Interrupt the live turn so its partial reply is the contract — not
+            # a turn that completes undelivered. (The interrupt also pauses the
+            # conversation's queue, spec chat "Pause the pending queue on interrupt", so
+            # nothing queued behind it runs into a bot that is gone.)
             if session.running_conversation_id is not None:
                 with contextlib.suppress(Exception):
                     self._turns.interrupt_turn(session.running_conversation_id)
@@ -178,10 +178,10 @@ class InboundProcessor:
                 # owner-gated by the sender_id checks below).
                 return
             if binding.ignore_other_mentions and msg.mentions_others:
-                # FR-037: a group message that @mentions another user is aimed
-                # at a human — drop it silently (no reply), before the owner
-                # gate, so a bot in a busy group never butts in regardless of
-                # who sent it.
+                # "Configure when the bot answers in a group": a group message that
+                # @mentions another user is aimed at a human — drop it silently (no
+                # reply), before the owner gate, so a bot in a busy group never butts in
+                # regardless of who sent it.
                 return
             owner = await self._peers.owner_sender_id(binding.resource.id)
             if owner is None:
@@ -234,15 +234,17 @@ class InboundProcessor:
         attachments = tuple(
             Attachment(path=a.path, mime=a.mime, filename=a.filename) for a in msg.attachments
         )
-        # spec chat FR-011: taken where the person's own message is still intact — before
-        # the context blocks below fold in, and from this message's own files.
+        # spec chat "Persist conversations and messages in SQLite": taken where the
+        # person's own message is still intact — before the context blocks below fold
+        # in, and from this message's own files.
         title_hint = conversation_title_hint(text, attachments)
         if attachments:
-            # Remember it (owner-gated already) for a `/save` that follows
-            # (spec channels FR-014) — never the thread-history attachments
-            # folded in below. The turn below still runs unchanged; `/save`
-            # only ALSO makes this saveable. One slot, first file only: the
-            # ingest service takes one file per call (FR-039).
+            # Remember it (owner-gated already) for a `/save` that follows (spec
+            # channels "Save a sent document into a collection") — never the
+            # thread-history attachments folded in below. The turn below still runs
+            # unchanged; `/save` only ALSO makes this saveable. One slot, first file
+            # only: the ingest service takes one file per call (spec knowledge "Bound
+            # uploads and leave nothing behind on failure").
             session = self._session(binding.resource.name, peer.chat_id, msg.thread_id)
             session.pending_document = attachments[0]
         # A slash command is text-only; a caption starting with "/" alongside an
@@ -256,19 +258,18 @@ class InboundProcessor:
             and msg.thread_id != msg.platform_message_id
             and binding.adapter.capabilities.supports_history_fetch
         ):
-            # Ground the turn in the thread's own conversation — in a DM just as
-            # much as in a group: a thread is a thread, and SeaTalk exposes a DM
-            # thread endpoint too (app v3.62.1+), so ``chat_kind`` only picks
-            # which one the adapter calls. What stays group-only is what is NOT
-            # fetched: reading all group-MAIN chatter is undesirable and that
-            # permission is not granted anyway, so only the thread a message
-            # actually landed in is ever read. A message that roots a fresh
-            # thread at itself (thread_id == this message's id) holds nothing
-            # else yet — skip the fetch rather than echo it back into its own
-            # context. Platforms with no history-fetch API (Telegram) never
-            # reach here at all. The thread's own images/files download
-            # alongside its text (FR-030) so a picture in the thread reaches the
-            # vision agent, not a dead file link.
+            # Ground the turn in the thread's own conversation — in a DM just as much as
+            # in a group: a thread is a thread, and SeaTalk exposes a DM thread endpoint
+            # too (app v3.62.1+), so ``chat_kind`` only picks which one the adapter
+            # calls. What stays group-only is what is NOT fetched: reading all
+            # group-MAIN chatter is undesirable and that permission is not granted
+            # anyway, so only the thread a message actually landed in is ever read. A
+            # message that roots a fresh thread at itself (thread_id == this message's
+            # id) holds nothing else yet — skip the fetch rather than echo it back into
+            # its own context. Platforms with no history-fetch API (Telegram) never
+            # reach here at all. The thread's own images/files download alongside its
+            # text (see "Download the media a thread's messages carry") so a picture in
+            # the thread reaches the vision agent, not a dead file link.
             fetcher = cast(ContextFetchPort, binding.adapter)
             items, thread_atts = await fetcher.fetch_thread(
                 msg.chat_id, msg.thread_id, chat_kind=msg.chat_kind
@@ -298,24 +299,26 @@ class InboundProcessor:
                 peer,
                 text,
                 self._session(binding.resource.name, peer.chat_id, msg.thread_id),
-                # FR-049: a command answer is the asker's business, not the room's.
+                # A command answer is the asker's business, not the room's (see
+                # "Keep non-answer chatter private in a group").
                 private_send(safe_send, target_for_command(msg, text)),
                 chat_kind=msg.chat_kind,
                 thread_id=msg.thread_id,
             )
             return
-        # A media message with no caption still needs non-blank text to persist.
-        # FR-035: the turn opens with its own provenance (platform, chat kind +
-        # title + id, thread, sender) so the agent knows which group/thread it is
-        # answering in instead of inferring it from the bot's group list. Folded
-        # in AFTER command detection (a prefixed "/help" would stop being a
-        # command) and after the empty-envelope check (a header is not content).
-        # It rides on EVERY turn, not just the first: ``/agent`` can swap the
-        # agent mid-conversation and a resumed session would otherwise lose it.
-        # The inbound platform_message_id rides along so the turn can react on it
-        # (FR-038 receipt/completion ack) where the transport supports reactions,
-        # and the sender's mention id so a group reply opens by @mentioning
-        # whoever asked (FR-055).
+        # A media message with no caption still needs non-blank text to persist. "Open
+        # every turn with its message origin": the turn opens with its own provenance
+        # (platform, chat kind + title + id, thread, sender) so the agent knows which
+        # group/thread it is answering in instead of inferring it from the bot's group
+        # list. Folded in AFTER command detection (a prefixed "/help" would stop being a
+        # command) and after the empty-envelope check (a header is not content). It
+        # rides on EVERY turn, not just the first: ``/agent`` can swap the agent
+        # mid-conversation and a resumed session would otherwise lose it. The inbound
+        # platform_message_id rides along so the turn can react on it (the
+        # receipt/completion ack of "Acknowledge receipt and completion by capability")
+        # where the transport supports reactions, and the sender's mention id so a group
+        # reply opens by @mentioning whoever asked (see "Mention the asker in a group
+        # answer").
         origin = format_origin(msg, platform=binding.channel_type)
         await self._turn_driver.submit(
             binding,
@@ -348,7 +351,8 @@ class InboundProcessor:
         await self._events.on_lifecycle(binding, event)
 
     async def on_stop(self, event: InboundStop) -> None:
-        """The user pressed the platform's own stop control (FR-048)."""
+        """The user pressed the platform's own stop control (see
+        "Stop the turn from the platform's own stop control")."""
         binding = self._bindings.get(event.channel)
         if binding is None:
             return

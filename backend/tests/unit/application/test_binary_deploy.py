@@ -1,4 +1,5 @@
-"""The frozen daemon's sidecar deployment (spec daemon FR-027).
+"""The frozen daemon's sidecar deployment (spec daemon "Deploy frozen sibling
+binaries and back up the vault before migrating").
 
 The desktop shell used to place these binaries in ``~/.coffer/bin``; the daemon
 does it now. Each build lands in its own ``<version>/`` directory and the public
@@ -207,7 +208,8 @@ def _frozen_at(monkeypatch: pytest.MonkeyPatch, bundle: Path, home: Path) -> Non
 
 
 def test_no_op_when_not_frozen() -> None:
-    """A source install already has these on PATH via pip (spec daemon FR-024)."""
+    """A source install already has these on PATH via pip (spec daemon "Install
+    the console scripts from source")."""
     assert deploy_frozen_sidecars() == []
 
 

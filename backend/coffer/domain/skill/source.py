@@ -13,7 +13,7 @@ recorded where nothing reads it.
 This discriminator is also what tells the resource framework the row is derived
 output: the skill kind reads it (``domain.skill.builtin.is_builtin``) to refuse
 a delete, and to declare that this one row does not converge while every other
-skill's does (spec vault-sync FR-093).
+skill's does (spec vault-sync "Withhold derived output in both halves").
 """
 
 from __future__ import annotations

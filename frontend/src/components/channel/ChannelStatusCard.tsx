@@ -47,9 +47,9 @@ export function ChannelStatusCard({
     runsHere: status?.runs_here,
   });
   // The two binding states that are somebody's mistake rather than somebody's
-  // choice (FR-027): bound to nobody, and bound to a machine the registry no
-  // longer knows. Both run nowhere here, and they must be told apart — "not
-  // running" alone sends the reader hunting for a crash that never happened.
+  // choice (see "Bind each channel to the one machine that runs it"): bound to nobody, and bound to
+  // a machine the registry no longer knows. Both run nowhere here, and they must be told apart —
+  // "not running" alone sends the reader hunting for a crash that never happened.
   const machineFault =
     binding === "unbound"
       ? t("channels.machine.unboundBody")
@@ -134,7 +134,8 @@ export function ChannelStatusCard({
               </p>
             ) : null}
             {(status.diagnostics ?? []).map((diagnostic) => (
-              // spec channels/telegram FR-004: a setting that reads correctly here and does nothing in
+              // spec channels/telegram "Report privacy mode that defeats the group
+              // configuration": a setting that reads correctly here and does nothing in
               // the chat — the one case worth interrupting the status list for.
               <p
                 key={diagnostic.code}

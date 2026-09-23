@@ -42,6 +42,28 @@ describe("getCofferBaseUrl", () => {
   it("falls back to this page's own origin — the daemon serves it", () => {
     expect(getCofferBaseUrl()).toBe(`${window.location.origin}/api/v1`);
   });
+
+  it("returns null when nobody served this page and nobody has supplied one", () => {
+    // The desktop shell's window: a `tauri://` asset origin. Answering with
+    // that origin produced `tauri://localhost/api/v1`, a URL the webview
+    // refuses to build a request from — so every query in the app failed with
+    // a transport error and the offline banner called a healthy daemon dead.
+    const original = window.location.origin;
+    Object.defineProperty(window, "location", {
+      value: { ...window.location, origin: "tauri://localhost" },
+      writable: true,
+      configurable: true,
+    });
+    try {
+      expect(getCofferBaseUrl()).toBeNull();
+    } finally {
+      Object.defineProperty(window, "location", {
+        value: { ...window.location, origin: original },
+        writable: true,
+        configurable: true,
+      });
+    }
+  });
 });
 
 describe("setDaemonConnection", () => {

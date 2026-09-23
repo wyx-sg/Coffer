@@ -7,8 +7,8 @@ anywhere near it, and this file stays about *policy* — when a round may run,
 what a held round means, what gets recorded.
 
 One lock guards everything that writes the vault or the working tree. The
-knowledge tidy pass takes the same one (spec vault-sync ``## Unattended
-rewriters``): both rewrite vault content, and an export taken half-way through
+knowledge tidy pass takes the same one (spec vault-sync "Never overlap a
+tidy pass and a round"): both rewrite vault content, and an export taken half-way through
 a rewrite is a torn snapshot that git would read as a deliberate change.
 """
 
@@ -24,6 +24,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.sync.convergence import ConvergeRound
 from coffer.application.sync.convergence_ops import refuse_newer_layout
+from coffer.application.sync.joining import JoinPreview
 from coffer.application.sync.ports import (
     BundlePort,
     ConvergenceStatePort,
@@ -93,12 +94,18 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
     # --- rounds -------------------------------------------------------------
 
     async def run_once(
-        self, *, join_choice: str | None = None, confirmed: PendingConfirmation | None = None
+        self,
+        *,
+        join_choice: str | None = None,
+        confirmed: PendingConfirmation | None = None,
+        adopt: bool = False,
     ) -> ConvergeRun:
         """One converge round. Never raises for something the user can be told.
 
         The worker calls this on a timer and a surface calls it on demand; both
         get a ``ConvergeRun`` back, so neither has to decide what is survivable.
+        Only ``adopt`` may join: on a machine with no pointer any other round
+        reports ``awaiting_join`` and does nothing else.
         """
         started = datetime.now(tz=UTC)
         remote = await self._remotes.get()
@@ -108,7 +115,9 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
             )
         async with self._lock:
             try:
-                run = await self._run(remote, join_choice=join_choice, confirmed=confirmed)
+                run = await self._run(
+                    remote, join_choice=join_choice, confirmed=confirmed, adopt=adopt
+                )
             except CofferError as e:
                 run = ConvergeRun(
                     status=ConvergeStatus.FAILED,
@@ -119,12 +128,26 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
         await self._record(run)
         return run
 
+    async def preview_join(self, *, choice: str | None = None) -> JoinPreview:
+        """State the join a round would make, applying nothing (spec vault-sync
+        "Report a join before applying it"). Under the lock: it fetches and
+        serializes into the working tree, as a round does."""
+        remote = await self._remotes.get()
+        if remote is None or not remote.enabled:
+            return JoinPreview(joining=False)
+        async with self._lock:
+            mirror = self._mirror_factory(Path(remote.worktree_path).expanduser())
+            await mirror.ensure_repo(remote_url=remote.url, branch=remote.branch)
+            round_ = self._round_factory(mirror, remote.branch)
+            return await round_.preview_join(token=await self._token(remote), choice=choice)
+
     async def _run(
         self,
         remote: BackupRemote,
         *,
         join_choice: str | None,
         confirmed: PendingConfirmation | None,
+        adopt: bool,
     ) -> ConvergeRun:
         mirror = self._mirror_factory(Path(remote.worktree_path).expanduser())
         await mirror.ensure_repo(remote_url=remote.url, branch=remote.branch)
@@ -133,6 +156,7 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
             token=await self._token(remote),
             join_choice=join_choice,
             confirmed=confirmed,
+            adopt=adopt,
         )
 
     async def confirm(self) -> ConvergeRun:
@@ -324,12 +348,13 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
     # --- recording ----------------------------------------------------------
 
     async def _record(self, run: ConvergeRun) -> None:
-        if run.hold_already_reported and await self._remotes.refresh_run(run):
-            # The same confirmation the user has not answered yet. It is one
-            # situation, and the timer re-deriving it every interval is not a
-            # new one: the row that first reported it is re-stamped, and no
-            # audit event is written either, so a vault waiting a week is a
-            # single entry everywhere a person might read it (FR-092).
+        waiting = run.hold_already_reported or run.status is ConvergeStatus.AWAITING_JOIN
+        if waiting and await self._remotes.refresh_run(run):
+            # The same confirmation the user has not answered yet. It is one situation,
+            # and the timer re-deriving it every interval is not a new one: the row that
+            # first reported it is re-stamped, and no audit event is written either, so
+            # a vault waiting a week is a single entry everywhere a person might read it
+            # (see "Record one outstanding confirmation once").
             return
         await self._remotes.record_run(run)
         if run.status is ConvergeStatus.DISABLED:

@@ -68,7 +68,7 @@ def _row_converges(config: dict[str, object]) -> bool:
     Every skill a person imported does. Coffer's own does not: its master
     folder is rendered locally from the running build, the knowledge files
     (which converge on their own) and **this machine's own switches** — which
-    collections are enabled is machine-local reach (spec vault-sync FR-014) and
+    collections are enabled is machine-local reach (spec vault-sync "Keep reach machine-local") and
     deliberately stays home.
 
     So two machines holding identical knowledge but a different set of
@@ -129,7 +129,7 @@ def make_skill_kind(
         # ...and for the same reason its row does not travel, while every
         # other skill's does. ``converges`` stays True for the kind; this
         # withholds the one row that is derived output (spec vault-sync
-        # FR-093).
+        # "Withhold derived output in both halves").
         converges_row=_row_converges,
         # A skill row must be backed by an imported master folder under
         # ~/.coffer/skills/. Only SkillService (which creates that folder) may

@@ -292,7 +292,8 @@ async def test_management_surface_reports_status_owner_agent_and_health(ctx: _Ct
     # A registered + running Coffer-hosted channel, bound to an agent and paired
     # with an owner. The management surface = the resource list (kind=channel,
     # carrying enabled + the routed agent) plus the per-channel status endpoint
-    # (live health + paired owner). FR-029: it must report all four.
+    # (live health + paired owner). "List every Coffer-hosted channel on one
+    # management surface": it must report all four.
     mg = await ctx.resources.register(
         "channel",
         "mg",

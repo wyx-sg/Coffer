@@ -1,4 +1,4 @@
-"""Per-channel agent routing from chat (FR-010)."""
+"""Per-channel agent routing from chat ("Switch the conversation's agent from chat")."""
 
 from __future__ import annotations
 

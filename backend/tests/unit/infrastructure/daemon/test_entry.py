@@ -1,13 +1,14 @@
 """Unit tests for the daemon entry module.
 
-TEST-011 — spec daemon FR-012 requires the daemon to bind only to 127.0.0.1. Since
-CODE-041 the daemon binds the socket itself (via ``bind_free_socket``, which
-always binds ``127.0.0.1``) and hands uvicorn the fd, so the loopback
-guarantee is structural rather than a uvicorn ``host`` kwarg. These tests pin
-that entry serves on a pre-bound socket fd (never a host/port that could be
-overridden); the companion integration test ``test_port_alloc`` pins that
-``bind_free_socket`` actually binds loopback (asserting the bound address
-needs the ``socket`` module, which is banned in the pure unit tier).
+TEST-011 — spec daemon "Bind every endpoint to loopback only" requires the
+daemon to bind only to 127.0.0.1. Since CODE-041 the daemon binds the socket
+itself (via ``bind_free_socket``, which always binds ``127.0.0.1``) and hands
+uvicorn the fd, so the loopback guarantee is structural rather than a uvicorn
+``host`` kwarg. These tests pin that entry serves on a pre-bound socket fd
+(never a host/port that could be overridden); the companion integration test
+``test_port_alloc`` pins that ``bind_free_socket`` actually binds loopback
+(asserting the bound address needs the ``socket`` module, which is banned in
+the pure unit tier).
 
 They also pin the detect-or-spawn boot-window fix: the spawn lock is released only
 the ``on_started`` callback, which fires once uvicorn reports it is serving —
@@ -16,6 +17,7 @@ not when daemon.json is written.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 import pytest
@@ -285,3 +287,54 @@ def test_main_raises_fd_soft_limit_before_serving(
 
     assert order and order[0] == "fd", "fd soft limit must be raised before serving"
     assert "serve" in order
+
+
+# --- standing down when nothing wants the daemon ----------------------------
+# (spec daemon "Stand down after an idle window")
+
+
+class _FakeServer:
+    """Just the one flag ``_stand_down_when_idle`` is allowed to touch."""
+
+    def __init__(self) -> None:
+        self.should_exit = False
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="daemon",
+    scenario="a daemon nothing has wanted stands down",
+)
+async def test_the_watcher_stands_the_daemon_down_once_the_window_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(entry.activity, "idle_seconds", lambda: 99_999.0)
+    server = _FakeServer()
+
+    await entry._stand_down_when_idle(server, idle_window_seconds=1.0, interval=0.0)
+
+    # `should_exit` is uvicorn's own clean-shutdown flag, which is what makes
+    # this a SUCCESSFUL exit — the half of the launchd contract that stops the
+    # service restarting a deliberate stand-down.
+    assert server.should_exit is True
+
+
+@pytest.mark.asyncio
+async def test_the_watcher_keeps_serving_while_something_still_wants_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+
+    idle = iter([0.0, 10.0, 20.0])
+    monkeypatch.setattr(entry.activity, "idle_seconds", lambda: next(idle, 0.0))
+    server = _FakeServer()
+
+    task = asyncio.ensure_future(
+        entry._stand_down_when_idle(server, idle_window_seconds=1_000_000.0, interval=0.0)
+    )
+    await asyncio.sleep(0)
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+    assert server.should_exit is False

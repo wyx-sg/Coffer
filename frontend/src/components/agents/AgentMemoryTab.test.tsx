@@ -139,7 +139,7 @@ describe("AgentMemoryTab", () => {
     // Delivery installs a hook into THIS agent's settings file, so it belongs
     // here rather than on the Memory resource page. It says whether the hook
     // is installed and nothing else — whether it has fired is read as events
-    // on the Activity page (spec memory FR-033).
+    // on the Activity page (spec memory "Audit every delivery fire").
     stubMcp(true);
     stubNative();
     render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });

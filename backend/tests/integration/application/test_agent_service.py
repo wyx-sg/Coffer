@@ -287,7 +287,8 @@ def test_privileged_path_rejected(privileged):
 def test_privileged_path_symlink_traversal_rejected(tmp_path):
     """A symlink pointing at /etc is rejected because resolve() is privileged.
 
-    SC-005: even if the user-supplied path is harmless-looking, the *resolved*
+    Spec agent-registry "Validate the config directory at registration": even
+    if the user-supplied path is harmless-looking, the *resolved*
     path is what we host the skill files at — and that must not be /etc.
     """
     link = tmp_path / "skills"
@@ -312,9 +313,9 @@ def test_privileged_path_symlink_traversal_rejected(tmp_path):
 def test_assert_skill_dir_usable_directory_missing(tmp_path):
     """A non-existent skill_dir is rejected with `directory_missing`.
 
-    FR-007 requires the skill_dir to exist before registration — we don't
-    silently accept a parent-writable + missing-dir case because skill loading
-    would later fail in obscure ways.
+    "Validate the config directory at registration" requires the skill_dir to
+    exist before registration — we don't silently accept a parent-writable +
+    missing-dir case because skill loading would later fail in obscure ways.
     """
     target = tmp_path / "no-such-dir"
     with pytest.raises(SkillDirNotWritable) as ei:

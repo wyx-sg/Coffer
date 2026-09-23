@@ -19,7 +19,8 @@ export type UpkeepUpdate = components["schemas"]["UpkeepUpdate"];
  *
  * `curate` was `tidy` until the knowledge layer became two lanes: the pass no
  * longer rewrites the files the user wrote, it reads them and derives the
- * documents agents read (spec knowledge FR-021). Read off the contract rather
+ * documents agents read (spec knowledge "Curate through a
+ * fenced four-tool pass"). Read off the contract rather
  * than spelled here, so the two cannot drift.
  */
 export type UpkeepPass = UpkeepUpdate["pass"];

@@ -1,4 +1,6 @@
-"""Coffer's own generated skill stays home (spec vault-sync FR-093).
+"""Coffer's own generated skill stays home.
+
+See spec vault-sync "Withhold derived output in both halves".
 
 Two whole vaults and one real bare git repository, exactly as the rest of this
 directory: nothing below the git binary is faked, because the claim under test
@@ -7,7 +9,7 @@ is about what two machines end up holding after they have actually talked.
 The defect this file pins down is a loop, not a wrong value. `coffer-guide` is
 rendered locally from the running build, the knowledge files (which converge)
 and **which collections this machine has enabled** — and reach is deliberately
-machine-local (FR-014). So two machines that agree about every file still
+machine-local ("Keep reach machine-local"). So two machines that agree about every file still
 render different bytes. While both halves of a skill converged, each round had
 one machine overwrite the other's master folder and resource row, the
 overwritten machine re-rendered on its next boot or curation tick, and the
@@ -46,8 +48,8 @@ GUIDE_SKILL_MD = f"{GUIDE_TREE_PREFIX}SKILL.md"
 # module-level constant for it. Ask the machine — ``_guide_doc`` below.
 
 _COLLECTIONS = {
-    "notes": ("Day-to-day working notes.", "notes/topics/standup.md", "Standup"),
-    "archive": ("Things kept for later.", "archive/topics/old-runbook.md", "Old runbook"),
+    "notes": ("Day-to-day working notes.", "notes/standup.md", "Standup"),
+    "archive": ("Things kept for later.", "archive/old-runbook.md", "Old runbook"),
 }
 
 
@@ -70,13 +72,12 @@ def _guide_text(*enabled: str) -> str:
             uid=f"rsc_{name}",
             name=name,
             description=description,
-            source_count=1,
-            topic_count=1,
+            document_count=1,
         )
-        topic = FileEntry(
+        document = FileEntry(
             path=path, title=title, description=description, actor="agent", updated_at=""
         )
-        catalogue.append((entry, [topic]))
+        catalogue.append((entry, [document]))
     return render("~/.coffer/knowledge", catalogue)
 
 
@@ -181,7 +182,7 @@ async def test_two_machines_keep_their_own_guide_and_stop_talking_about_it(pair)
     #    machine, forever.
     commits = await a.remote_commit_count()
     for machine in (a, b):
-        run = await machine.converge()
+        run = await machine.adopt()
         assert run.status is ConvergeStatus.NO_CHANGE, (run.status, run.error)
         assert not run.published.changes
         assert not run.applied.changes
@@ -241,6 +242,9 @@ def _older_build_publishes(remote_url: str, files: dict[str, str]) -> None:
         subprocess.run(["git", "-C", str(clone), *args], check=True, capture_output=True)
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a derived document an older build published is left in place"
+)
 async def test_a_guide_an_older_build_published_is_ignored_and_left_alone(pair) -> None:
     """The mid-upgrade fleet, which is where this could still have gone wrong.
 

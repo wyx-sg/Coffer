@@ -7,11 +7,11 @@ states an owner can be in are only visible against the machine REGISTRY, which
 is a derived view of the sync working tree rather than DB state, so this
 command is the only one in the group that talks to two surfaces.
 
-Curation rewrites a collection's ``topics/`` lane unattended. Once a vault
-spans machines exactly one may run it — two machines fold the same sources into
-two DIFFERENT topic documents, git merges that cleanly because they are
+Curation rewrites a collection's documents unattended. Once a vault spans
+machines exactly one may run it — two machines fold the same material into
+two DIFFERENT documents, git merges that cleanly because they are
 additions at different paths, and the vault silently holds the same knowledge
-twice (spec vault-sync ``## Unattended rewriters``). Hence an owner, and hence
+twice (spec vault-sync "Run an unattended rewriter on one owner machine"). Hence an owner, and hence
 these three commands: a binding nobody can see, diagnose or change is a
 single-machine outage with no way out short of editing SQLite.
 """

@@ -1,5 +1,7 @@
 """``POST /knowledge/collections/{uid}/curate`` refuses a concurrent pass, and
-``GET /api/v1/upkeep/runs`` says what is in flight (spec knowledge FR-030).
+``GET /api/v1/upkeep/runs`` says what is in flight.
+
+See spec knowledge "Run one pass per collection at a time".
 
 The bug both exist for: the Tidy button's disabled state used to live in a
 browser component, so leaving the page mid-pass and coming back showed an idle
@@ -58,7 +60,8 @@ def test_a_second_curation_over_the_same_collection_is_refused(client) -> None:
 
         # Per collection, not vault-wide: a different collection is unaffected.
         # No internal connection is configured here, so the pass is the clean
-        # no-op spec knowledge FR-029 promises rather than a model call.
+        # no-op spec knowledge "Promote material directly when no model is configured"
+        # promises rather than a model call.
         other = client.post(f"/api/v1/knowledge/collections/{other_uid}/curate")
         assert other.status_code == 200, other.text
         assert other.json()["status"] == "no_model"

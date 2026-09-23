@@ -15,7 +15,7 @@ const msg = (over: Partial<Message>): Message => ({
   ...over,
 });
 
-const live = { text: "", toolBlocks: [], streaming: true };
+const live = { blocks: [], streaming: true };
 
 describe("textOf", () => {
   test("joins text blocks and ignores the rest", () => {

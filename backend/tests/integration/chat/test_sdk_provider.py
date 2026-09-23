@@ -478,9 +478,10 @@ async def test_a_channel_whose_name_will_not_resolve_still_gets_the_channel_note
 async def test_channel_conversation_appends_memory_context(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """A channel-driven turn gets the memory index through this same
     system-prompt append — no session-start hook, no install (spec memory
-    FR-053). The provider never builds the payload itself: it calls the
-    injected composer, the same seam ``list_models`` already uses, so the
-    chat/provider layer never reaches into the memory kind directly."""
+    "Deliver to channel turns through the system prompt"). The provider never
+    builds the payload itself: it calls the injected composer, the same seam
+    ``list_models`` already uses, so the chat/provider layer never reaches into
+    the memory kind directly."""
     repo, engine = await _repo(tmp_path)
     conv = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
     factory, captured = _make_factory(_simple_messages())
@@ -543,8 +544,10 @@ async def test_no_memory_to_deliver_appends_no_header(tmp_path) -> None:  # type
 @pytest.mark.asyncio
 async def test_web_conversation_never_gets_memory_context(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """A non-channel (web UI) turn is not the "channel-driven turn" spec memory
-    FR-053 names — even a wired composer must not be consulted for it (the
-    agent's own hook, FR-054, is the delivery path there instead)."""
+    "Deliver to channel turns through the system prompt" names — even a wired
+    composer must not be consulted for it (the agent's own hook, "Deliver the
+    index and the notes path at session start", is the delivery path there
+    instead)."""
     repo, engine = await _repo(tmp_path)
     conv = await repo.create(_conv())  # no channel binding
     factory, captured = _make_factory(_simple_messages())

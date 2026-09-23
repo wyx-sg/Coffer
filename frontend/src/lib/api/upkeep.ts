@@ -1,7 +1,7 @@
 // frontend/src/lib/api/upkeep.ts
 //
 // The one read for "what is this daemon rewriting right now" (`/api/v1/upkeep/
-// runs`, contract `specs/resource-framework`).
+// runs`, contract `openspec/specs/resource-framework`).
 //
 // An *upkeep pass* is one of the long, model-driven rewrites the vault does to
 // itself: memory's organise over a partition, knowledge's curation over a

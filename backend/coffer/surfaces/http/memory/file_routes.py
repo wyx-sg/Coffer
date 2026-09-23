@@ -1,7 +1,8 @@
 """``/api/v1/memory/partitions/{uid}/files`` — the partition's own directory.
 
 **Read-only, and that is the design.** Everything under ``~/.coffer/memory/``
-is derived (FR-019): an edit would survive exactly until the next aggregation
+is derived ("Keep the memory tree derived and local"): an edit would survive
+exactly until the next aggregation
 pass, so offering one would be offering a lie. It does not route through
 ``/api/v1/fs`` either — that family browses directories and deliberately never
 serves file contents — so the shape here follows ``knowledge/routes.py``'s own
@@ -74,7 +75,7 @@ async def list_partition_files(
     uid: str,
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> FileTreeOut:
-    """The partition's own directory, as a read-only tree (FR-037)."""
+    """The partition's own directory, as a read-only tree."""
     partition = await require_partition(uid, resources)
     # The directory is named by the label, which is why the row is resolved
     # rather than the uid used directly: identity addresses the partition, the

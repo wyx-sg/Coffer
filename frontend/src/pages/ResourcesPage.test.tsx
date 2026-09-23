@@ -9,6 +9,7 @@
 // that it requests only mcp_server resources.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { acceptance } from "@/test/acceptance";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -87,6 +88,16 @@ describe("ResourcesPage", () => {
     render(wrap(<ResourcesPage />));
     expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
     expect(screen.getByText(/kaboom/i)).toBeInTheDocument();
+  });
+
+  acceptance("web-ui", "a server error never reads as an unexpected error", () => {
+    stubQuery({ error: new ApiError("INTERNAL_ERROR", "internal error") });
+    const { container } = render(wrap(<ResourcesPage />));
+    expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
+    // A readable message that says where to look, not a shrug.
+    expect(screen.getByText(/activity/i)).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/unexpected error/i);
+    expect(container.textContent).not.toContain("INTERNAL_ERROR");
   });
 
   test("shows the welcome panel (and no table) when there are no servers", () => {

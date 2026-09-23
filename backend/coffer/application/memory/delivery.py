@@ -1,5 +1,6 @@
 """DeliveryService — install / status / remove Coffer's own session-start-like
-hook for an agent the developer drives themselves (spec memory FR-032/FR-033).
+hook for an agent the developer drives themselves (spec memory "Install
+delivery hooks explicitly and removably", "Audit every delivery fire").
 
 **Explicit only.** Nothing installs this as a side effect of registering an
 agent, moving its config dir, or aggregating memory — only a direct call to
@@ -23,7 +24,7 @@ The actual JSON edit is delegated to `coffer.domain.memory.delivery` (the
 marker and the pure text transform) through one `DeliveryAdapter` per agent
 type in `coffer.infrastructure.memory.delivery` — which event, which config
 key, and, for Codex, the once-per-session guard. `record_fired` is the other
-half of FR-033: it is called by whatever actually serves the context (the
+half of "Audit every delivery fire": it is called by whatever actually serves the context (the
 `coffer memory context` CLI), never by this service itself, so each audited
 fire is a real one.
 """
@@ -49,8 +50,9 @@ from coffer.domain.resource import Resource
 from coffer.infrastructure.memory.delivery import CLAUDE_CODE_ADAPTER, CODEX_ADAPTER
 
 #: One adapter per agent type Coffer knows how to deliver into (spec memory
-#: FR-032 covers exactly the two agents Coffer already reads native memory
-#: from). A type with no entry here raises `DeliveryUnsupported`.
+#: "Install delivery hooks explicitly and removably" covers exactly the two agents
+#: Coffer already reads native memory from). A type with no entry here raises
+#: `DeliveryUnsupported`.
 _ADAPTERS: dict[AgentType, DeliveryAdapter] = {
     AgentType.CLAUDE_CODE: CLAUDE_CODE_ADAPTER,
     AgentType.CODEX: CODEX_ADAPTER,
@@ -130,10 +132,10 @@ class DeliveryService:
 
     @staticmethod
     def _with_path(spec: ConfigFileSpec, fn: Callable[..., str | None], *args: str) -> str | None:
-        """Call `fn(*args)`, re-raising `MalformedDeliveryConfig` with the
-        file's path attached — a domain function only ever sees text, never
-        a path, so this is the one place that can say WHERE parsing failed.
-        FR-032 makes an install an explicit, removable act, and neither is
+        """Call `fn(*args)`, re-raising `MalformedDeliveryConfig` with the file's path
+        attached — a domain function only ever sees text, never a path, so this is the
+        one place that can say WHERE parsing failed. "Install delivery hooks explicitly
+        and removably" makes an install an explicit, removable act, and neither is
         actionable when a refusal cannot name the file that is malformed."""
         try:
             return fn(*args)
@@ -198,6 +200,48 @@ class DeliveryService:
         )
         return await self._status_for(agent, cfg)
 
+    async def heal_drift(self, *, actor: str = "system") -> tuple[str, ...]:
+        """Rewrite every installed hook whose command is no longer the one
+        Coffer would write. Returns a note per agent repaired.
+
+        An installed hook is a string sitting in somebody else's settings file
+        for months, and the CLI it invokes ships in a binary that keeps
+        moving. When `coffer memory context` dropped `--agent` for
+        `--agent-uid` (ADR resource-identity-is-an-immutable-uid), every hook
+        already on disk kept passing the option that no longer existed — so
+        the agent printed a usage error at the start of every session and
+        Coffer's memory reached it never again. Nothing noticed: detection
+        matches the marker and never reads the arguments, which is what makes
+        a reinstall able to replace an entry in place, and is also why a
+        stale entry looked perfectly installed to `status`.
+
+        So the repair is the same act as the install, decided by comparing
+        what is there with what `command_for` says now. Best-effort per agent:
+        one unreadable settings file must not stop the others from being
+        fixed.
+        """
+        notes: list[str] = []
+        for resource in await self._agents.list():
+            try:
+                cfg = AgentConfig.model_validate(resource.config)
+            except Exception:
+                continue
+            if cfg.type not in _ADAPTERS:
+                continue
+            try:
+                status = await self._status_for(resource, cfg)
+                if not status.installed:
+                    continue
+                wanted = self._adapter(cfg.type).command_for(resource.uid)
+                if status.command == wanted:
+                    continue
+                await self.install(resource.uid, actor=actor)
+            except Exception as exc:
+                notes.append(f"{resource.name}: could not repair the delivery hook ({exc!r})")
+                continue
+            notes.append(f"{resource.name}: delivery hook rewritten to the current command")
+        return tuple(notes)
+
     async def remove(self, agent_uid: str, *, actor: str) -> DeliveryStatus:
         """Remove Coffer's hook for one agent. A clean no-op — no write, no
         audit entry — when nothing is installed."""
@@ -219,7 +263,7 @@ class DeliveryService:
         return await self._status_for(agent, cfg)
 
     async def record_fired(self, agent_uid: str) -> None:
-        """Record that an agent's hook just fired (spec memory FR-033).
+        """Record that an agent's hook just fired (spec memory "Audit every delivery fire").
 
         Called by whatever actually serves the context — never by
         `install()`, `status()`, or anything else in this class — so every

@@ -1,7 +1,8 @@
 """Shared fixtures for the channel-core integration tests (spec channels).
 
 ``FakeChannelAdapter`` implements ``ChannelAdapter`` structurally and is the
-SC-003 proof: a new channel needs a transport adapter and nothing else —
+proof of the channels spec's N + M promise (its Purpose): a new channel needs
+a transport adapter and nothing else —
 pairing, queueing, conversation mapping, turn driving, and the approval
 bridge are all exercised here through the real shared core.
 
@@ -177,8 +178,8 @@ ORIGIN_HEADER = "[Message origin]"
 
 
 def turn_body(text: str) -> str:
-    """The user's own text from a turn prompt, with the FR-035 origin block
-    stripped.
+    """The user's own text from a turn prompt, with the origin block ("Open every
+    turn with its message origin") stripped.
 
     Every turn now opens with a provenance block; tests about queueing,
     ordering, threading and history assert on what the user actually typed, not
@@ -278,7 +279,8 @@ class FakeChannelAdapter:
             supports_groups=supports_groups,
             supports_history_fetch=supports_history_fetch,
             supports_reactions=supports_reactions,
-            # FR-055: how this transport spells an @mention, if it can at all.
+            # How this transport spells an @mention, if it can at all ("Mention
+            # the asker in a group answer").
             # Shaped like SeaTalk's tag in the tests that set it; "" is the
             # Telegram-shaped default, where a reply carries no mention.
             mention_template=mention_template,
@@ -290,7 +292,8 @@ class FakeChannelAdapter:
             # a transport that never gained the group call.
         )
         # When True, ``set_reaction`` raises — proves the best-effort suppression
-        # at the call sites (a failed ack must never break the turn) (FR-038).
+        # at the call sites (a failed ack must never break the turn) (see
+        # "Acknowledge receipt and completion by capability").
         self._set_reaction_fails = set_reaction_fails
         self.started = False
         self.stopped = False
@@ -300,13 +303,14 @@ class FakeChannelAdapter:
         # full routing detail, kept separate so every existing ``.sent``/
         # ``.texts()`` assertion above stays a plain 2-tuple.
         self.sent_routed: list[tuple[str, str, str, str]] = []
-        # FR-053: the reply target of each send_text, positionally aligned with
+        # "Attach a group reply to the message it answers": the reply target of
+        # each send_text, positionally aligned with
         # ``sent`` ("" when the send answered nothing in particular).
         self.sent_reply_targets: list[str] = []
         #: The EphemeralTarget of each send_text, positionally aligned with
         #: ``sent`` (None when the answer was said out loud).
         self.sent_ephemeral: list[Any] = []
-        # spec channels/telegram FR-014/chat action: what each send_typing claimed to be doing.
+        # Telegram's chat action: what each send_typing claimed to be doing.
         self.typing_actions: list[str] = []
         # (chat_id, text, buttons) for sends that carried a selection card.
         self.cards: list[tuple[str, str, list[ChoiceButton]]] = []
@@ -322,7 +326,8 @@ class FakeChannelAdapter:
         # routing detail, kept separate so existing ``.typing`` assertions stay
         # a plain list of chat ids (mirrors ``sent_routed``).
         self.typing_routed: list[tuple[str, str, str]] = []
-        # (chat_id, message_id, emoji) for every set_reaction call (FR-038).
+        # (chat_id, message_id, emoji) for every set_reaction call (see
+        # "Acknowledge receipt and completion by capability").
         self.reactions: list[tuple[str, str, str]] = []
         # (chat_id, path, caption, as_photo) for each uploaded file.
         self.media: list[tuple[str, str, str | None, bool]] = []
@@ -333,7 +338,8 @@ class FakeChannelAdapter:
         # Scriptable ``fetch_thread`` result (Task 7b) — a test sets this to a
         # list of ``ForwardedItem`` for its scenario; unset yields ``[]``.
         self.thread_items: list[ForwardedItem] = []
-        # Scriptable thread-history attachments (FR-030) — the images/files the
+        # Scriptable thread-history attachments ("Download the media a thread's
+        # messages carry") — the images/files the
         # thread's own messages carry, already downloaded; unset yields ``()``.
         self.thread_attachments: tuple[InboundAttachment, ...] = ()
         # (chat_id, thread_id) for every ``fetch_thread`` call the core made,
@@ -344,7 +350,8 @@ class FakeChannelAdapter:
         # with ``fetch_thread_calls`` — a DM thread reads a different endpoint
         # from a group one, so the kind the core passed is worth asserting.
         self.fetch_thread_kinds: list[str] = []
-        # FR-039: every live-text handle the core opened this session, and the
+        # "Grow a reply in place on one live surface": every live-text handle the
+        # core opened this session, and the
         # switch that makes the transport refuse to open one.
         self.live_handles: list[FakeLiveText] = []
         self.live_text_unavailable = False
@@ -385,11 +392,13 @@ class FakeChannelAdapter:
         reply_to_message_id: str = "",
         ephemeral: Any = None,
     ) -> SentMessage:
-        # FR-049: which sends were addressed to one member of the group only.
+        # "Keep non-answer chatter private in a group": which sends were
+        # addressed to one member of the group only.
         self.sent_ephemeral.append(ephemeral)
         self.sent.append((chat_id, markdown))
         self.sent_routed.append((chat_id, markdown, thread_id, chat_kind))
-        # FR-053: what each send pointed back at, so a test can assert a group
+        # "Attach a group reply to the message it answers": what each send
+        # pointed back at, so a test can assert a group
         # reply is attached to the message it answers.
         self.sent_reply_targets.append(reply_to_message_id)
         if buttons:
@@ -473,7 +482,8 @@ class FakeChannelAdapter:
 
 
 class FakeLiveText:
-    """The fake's live surface (FR-039), shaped like Telegram's: the first
+    """The fake's live surface ("Grow a reply in place on one live surface"),
+    shaped like Telegram's: the first
     update sends a message, later ones edit it, and closing deletes it and hands
     the whole final text back for the ordinary send path."""
 
@@ -545,10 +555,13 @@ class FakeModelSuggestions:
 
 @dataclass
 class FakeIngestedDocument:
-    """Duck-typed stand-in for the real ``IngestedDocument`` (spec channels FR-014) — only the two
-    attributes `/save`'s confirmation message reads."""
+    """Duck-typed stand-in for the real ``IngestedDocument`` (spec channels "Save a
+    sent document into a collection") — only the two
+    attributes `/save`'s confirmation message reads. ``path`` is ``None`` while
+    the upload waits in the collection's inbox to be merged (spec knowledge
+    "Submit every entrance's input as material")."""
 
-    path: str
+    path: str | None
     title: str
 
 
@@ -578,6 +591,9 @@ class FakeIngestService:
         self.calls: list[dict[str, Any]] = []
         #: Set by a test to make the next ``ingest`` raise instead of succeed.
         self.fails_with: Exception | None = None
+        #: Set by a test to answer as a knowledge layer with a model would: the
+        #: upload waits in the inbox, so there is no document path yet.
+        self.pending = False
 
     async def ingest(
         self,
@@ -585,7 +601,6 @@ class FakeIngestService:
         collection: str,
         filename: str,
         data: bytes,
-        directory: str | None = None,
         actor: str,
     ) -> FakeIngestedDocument:
         self.calls.append(
@@ -593,13 +608,13 @@ class FakeIngestService:
                 "collection": collection,
                 "filename": filename,
                 "data": data,
-                "directory": directory,
                 "actor": actor,
             }
         )
         if self.fails_with is not None:
             raise self.fails_with
-        return FakeIngestedDocument(path=f"{collection}/{filename}.md", title=filename)
+        path = None if self.pending else f"{collection}/{filename}.md"
+        return FakeIngestedDocument(path=path, title=filename)
 
 
 class StubListenerController:
@@ -887,7 +902,8 @@ class ChannelEnv:
         self, resource: Resource, chat_id: str = "owner", thread_id: str = ""
     ) -> str | None:
         """The conversation a turn drives for this ``(chat, thread)`` — the
-        per-thread binding (FR-033), which replaced ``peer.active_conversation_id``
+        per-thread binding ("Key conversation identity by channel, chat and
+        thread"), which replaced ``peer.active_conversation_id``
         as the source of truth."""
         row = await self.threads.get(resource.id, chat_id, thread_id)
         return row.active_conversation_id if row is not None else None

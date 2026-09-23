@@ -12,29 +12,32 @@ Two files matter, both under `<config_dir>/memories/`:
 - `memory_summary.md` — a `## User Profile` prose block and its own
   `## User preferences` bullet list, both about the person rather than any
   project, plus `## What's in Memory`, which is read for one thing only: the
-  **search terms** Codex states per task group (see below). `## General
-  Tips` restates what `MEMORY.md` already holds — the same kind of index
-  Claude Code's own `MEMORY.md` is, and skipped for the same reason (FR-004).
+  **search terms** Codex states per task group (see below). `## General Tips`
+  restates what `MEMORY.md` already holds — the same kind of index Claude Code's
+  own `MEMORY.md` is, and skipped for the same reason (see "Read Claude Code and
+  Codex memory with their search terms").
 
 What a reader produces is a `RawEntry`, and a raw entry is **the input layer,
-not the product** (FR-008). It is written verbatim under the partition's
-`.raw/`, and the distil pass is what turns entries into Coffer's own notes
-(FR-020). That is why nothing here tries to write something a person will
-read: a title derived from a bullet's first clause would be a poor note
-title, and is a perfectly good handle for a pass that is going to rewrite the
-material anyway. The verbatim rule that used to govern what Coffer *stored*
-now governs only this layer, which is exactly where it earns its keep — a
-note's claim stays checkable against the agent's own words.
+not the product** (see "Keep raw entries verbatim and hidden"). It is written
+verbatim under the partition's `.raw/`, and the distil pass is what turns
+entries into Coffer's own notes (see "Write notes in Coffer's own words"). That
+is why nothing here tries to write something a person will read: a title derived
+from a bullet's first clause would be a poor note title, and is a perfectly good
+handle for a pass that is going to rewrite the material anyway. The verbatim
+rule that used to govern what Coffer *stored* now governs only this layer, which
+is exactly where it earns its keep — a note's claim stays checkable against the
+agent's own words.
 
 ## The search terms, and why they are matched rather than read off
 
-FR-004 requires that where a source states its own search terms, the reader
-carries them: Codex has already answered "what would you look this up by"
-better than any later guess, and discarding that answer is what left the
-previous design's retrieval to guesswork. Codex states them in
-`memory_summary.md`, one bullet per task group; the material they belong to
-is in `MEMORY.md`. So `_read_groups` reads the sibling summary alongside the
-groups (`_sibling_summary`) and joins the two on the group's title.
+"Read Claude Code and Codex memory with their search terms" requires that where
+a source states its own search terms, the reader carries them: Codex has already
+answered "what would you look this up by" better than any later guess, and
+discarding that answer is what left the previous design's retrieval to
+guesswork. Codex states them in `memory_summary.md`, one bullet per task group;
+the material they belong to is in `MEMORY.md`. So `_read_groups` reads the
+sibling summary alongside the groups (`_sibling_summary`) and joins the two on
+the group's title.
 
 **That join is fuzzy, and deliberately conservative.** Codex does not repeat
 a group's title verbatim in its summary — it re-words it. On the maintainer's
@@ -57,21 +60,24 @@ into one line, and two that score identically against two groups apiece
 Those four groups get no terms, which is the intended outcome, not a gap to
 be closed by lowering the bar.
 
-`## What's in Memory` also carries a `desc:` and a `learnings:` line per
-topic, and `learnings:` in particular is Codex's sharpest prose — a distilled
-conclusion where the group's own bullets are working notes. Neither becomes
-an entry, for two reasons. FR-004 names which sections become entries and
-those are not among them; and `.raw/` is the layer that must stay *faithful*
-(FR-008) while Coffer's own distillation happens later and in one place
-(FR-023). Feeding the pass Codex's pre-compressed summary instead of the
-material it was compressed from would distil a distillation — the same
-mistake, one level up, that this layer's rewrite was built to stop making.
-The terms are different: they are metadata about where material is findable,
-not a second telling of it, and nothing else in either file records them.
+`## What's in Memory` also carries a `desc:` and a `learnings:` line per topic,
+and `learnings:` in particular is Codex's sharpest prose — a distilled
+conclusion where the group's own bullets are working notes. Neither becomes an
+entry, for two reasons. The spec (see "Read Claude Code and Codex memory with
+their search terms") names which sections become entries and those are not among
+them; and `.raw/` is the layer that must stay *faithful* (see "Keep raw entries
+verbatim and hidden") while Coffer's own distillation happens later and in one
+place (see "Distil incrementally in two stages"). Feeding the pass Codex's
+pre-compressed summary instead of the material it was compressed from would
+distil a distillation — the same mistake, one level up, that this layer's
+rewrite was built to stop making. The terms are different: they are metadata
+about where material is findable, not a second telling of it, and nothing else
+in either file records them.
 
 `raw_memories.md` and `rollout_summaries/` are never read: they are the raw
-transcripts Codex already distilled into the two files above, and FR-003
-forbids this layer from reading transcripts a second time.
+transcripts Codex already distilled into the two files above, and "Read no
+transcripts or rollouts" forbids this layer from reading transcripts a second
+time.
 
 Codex's file *format* — splitting `MEMORY.md` into groups and extracting each
 group's routed cwd(s), and parsing the summary's topic bullets into titles
@@ -152,8 +158,9 @@ class CodexMemoryReader:
             try:
                 digest = hashlib.sha256(file.read_bytes()).hexdigest()
             except OSError:
-                # Missing or unreadable — skip it, the other file (and the
-                # other agent) still gets aggregated (FR-005's isolation).
+                # Missing or unreadable — skip it, the other file (and the other
+                # agent) still gets aggregated ("Fail a broken reader loudly and
+                # in isolation").
                 continue
             out.append(SourceFile(path=str(file), digest=digest))
         return tuple(out)
@@ -175,19 +182,21 @@ class CodexMemoryReader:
 def _sibling_summary(memory_path: pathlib.Path) -> str:
     """The summary text beside a `MEMORY.md`, or "" when there is none.
 
-    The search terms belong to `MEMORY.md`'s groups but are written in the
-    file next door, so reading the groups means opening both (the acceptance
-    scenario says as much: "when the Codex reader reads both files"). The
-    path is derived from the source's own parent, never from anything inside
-    a file, so FR-044's traversal guard has nothing to catch here.
+    The search terms belong to `MEMORY.md`'s groups but are written in the file
+    next door, so reading the groups means opening both (the acceptance scenario
+    says as much: "when the Codex reader reads both files"). The path is derived
+    from the source's own parent, never from anything inside a file, so the
+    traversal guard of "Confine reads to registered agents' memory paths" has
+    nothing to catch here.
 
     A missing or unreadable sibling degrades to no terms rather than raising:
-    the group material itself parsed fine, and FR-005's loud failure is for a
-    source Coffer cannot read at all, not for an absent optional one. The
-    cost of the degradation is that a pass in which only the summary changed
-    leaves `MEMORY.md` hash-unchanged and therefore unre-read (FR-006), so
-    newly stated terms arrive with the group's next edit. Codex regenerates
-    both files in one pass, so in practice they move together.
+    the group material itself parsed fine, and the loud failure of "Fail a
+    broken reader loudly and in isolation" is for a source Coffer cannot read at
+    all, not for an absent optional one. The cost of the degradation is that a
+    pass in which only the summary changed leaves `MEMORY.md` hash-unchanged and
+    therefore unre-read (see "Skip unchanged sources"), so newly stated terms
+    arrive with the group's next edit. Codex regenerates both files in one pass,
+    so in practice they move together.
     """
     try:
         return (memory_path.parent / _SUMMARY_NAME).read_text(encoding="utf-8")
@@ -201,12 +210,12 @@ def _read_groups(text: str, summary_text: str) -> tuple[RawEntry, ...]:
     entries: list[RawEntry] = []
     for entry in groups:
         # A group can route to more than one cwd (`applies_to: cwd=A and B`);
-        # attributing every entry to all of them would give the same anchor
-        # two homes and blur which partition a note built from it belongs to
-        # (FR-018), so — same as the un-ambiguous, overwhelmingly common
-        # single-cwd case — the first recorded cwd is the one project a
-        # group's entries are filed under. A group with none files under ""
-        # (global).
+        # attributing every entry to all of them would give the same anchor two
+        # homes and blur which partition a note built from it belongs to (see
+        # "Record provenance and merge by meaning"), so — same as the
+        # un-ambiguous, overwhelmingly common single-cwd case — the first
+        # recorded cwd is the one project a group's entries are filed under. A
+        # group with none files under "" (global).
         project_root = entry.cwds[0] if entry.cwds else ""
         search_terms = terms_by_title.get(entry.title, ())
         for heading, entry_type in _GROUP_SECTIONS.items():
@@ -251,8 +260,9 @@ def _read_summary(text: str) -> tuple[RawEntry, ...]:
             )
         )
     # No `search_terms` here on purpose: Codex states terms per *task group*,
-    # and the profile is about the person, not about any group. Inventing
-    # terms for it would be exactly the guess FR-004 exists to avoid.
+    # and the profile is about the person, not about any group. Inventing terms
+    # for it would be exactly the guess "Read Claude Code and Codex memory with
+    # their search terms" exists to avoid.
     return tuple(entries)
 
 
@@ -315,13 +325,14 @@ def _title_tokens(title: str) -> frozenset[str]:
 def _bullet_title(bullet: str) -> str:
     """A short handle from a bullet's first clause.
 
-    Codex's bullets are freeform prose with no author-given title (unlike
-    Claude Code's frontmatter `name`). The first clause — up to the first
-    `->`, `. ` or `; ` — reads as a reasonable stand-in; the full bullet
-    stays intact as the description and the body, and the body is what lands
-    verbatim under `.raw/` (FR-008), so nothing is lost by a handle that
-    trims it. It is not trying to be a title a person will read: the note's
-    title is Coffer's to write, later, in the distil pass (FR-020).
+    Codex's bullets are freeform prose with no author-given title (unlike Claude
+    Code's frontmatter `name`). The first clause — up to the first `->`, `. ` or
+    `; ` — reads as a reasonable stand-in; the full bullet stays intact as the
+    description and the body, and the body is what lands verbatim under `.raw/`
+    (see "Keep raw entries verbatim and hidden"), so nothing is lost by a handle
+    that trims it. It is not trying to be a title a person will read: the note's
+    title is Coffer's to write, later, in the distil pass (see "Write notes in
+    Coffer's own words").
     """
     clause = re.split(r"\s*->\s*|\.\s|;\s", bullet, maxsplit=1)[0].strip().rstrip(".")
     if not clause:
@@ -332,14 +343,17 @@ def _bullet_title(bullet: str) -> str:
 
 
 def _anchor(group: str, heading: str, bullet: str) -> str:
-    """Stable identity for one bullet (FR-009): group + section + content.
+    """Stable identity for one bullet: group + section + content.
 
-    Two different bullets in the same section hash differently; the same
-    bullet re-read on a later sync hashes the same, which is the whole point
-    — the anchor is half of a note's provenance (FR-018) and the name a raw
-    entry keeps under `.raw/`, so a note must still point at the entry it was
-    built from after MEMORY.md is regenerated with this group's text
-    unchanged.
+    See "Let only aggregation write raw entries" (reproducible from an unchanged
+    source).
+
+    Two different bullets in the same section hash differently; the same bullet
+    re-read on a later sync hashes the same, which is the whole point — the
+    anchor is half of a note's provenance (see "Record provenance and merge by
+    meaning") and the name a raw entry keeps under `.raw/`, so a note must still
+    point at the entry it was built from after MEMORY.md is regenerated with
+    this group's text unchanged.
     """
     digest = hashlib.sha256(bullet.encode("utf-8")).hexdigest()[:16]
     return f"{group}::{heading}::{digest}"

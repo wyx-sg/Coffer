@@ -15,6 +15,8 @@ import json
 import pathlib
 from typing import Any
 
+import pytest
+
 from coffer.infrastructure.agent.codex_rpc_models import CodexRpcModelDiscovery
 from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient
 
@@ -367,3 +369,74 @@ async def test_the_probe_starts_in_a_directory_that_exists(tmp_path: pathlib.Pat
         agent_key="codex", config_dir=tmp_path / "does-not-exist"
     )
     assert built2[0].cwd == str(pathlib.Path.home())
+
+
+# --- acceptance ---------------------------------------------------------------
+
+
+@pytest.mark.acceptance(spec="agent-registry", scenario="carry effort levels beside the model id")
+async def test_one_model_with_several_levels_stays_one_entry() -> None:
+    """Folding the levels into the name would turn one model into three entries
+    under names Coffer made up; the level rides beside the id instead."""
+    peer = FakeCodexPeer(
+        [
+            {
+                "data": [
+                    _model(
+                        "gpt-x",
+                        supportedReasoningEfforts=[
+                            {"reasoningEffort": "low"},
+                            {"reasoningEffort": "medium"},
+                            {"reasoningEffort": "high"},
+                        ],
+                        defaultReasoningEffort="medium",
+                    )
+                ],
+                "nextCursor": None,
+            }
+        ]
+    )
+    make, _ = _factory(peer)
+
+    models = await CodexRpcModelDiscovery(make).discover(agent_key="codex", config_dir=None)
+
+    assert len(models) == 1
+    assert models[0].id == "gpt-x"
+    assert models[0].efforts == ("low", "medium", "high")
+    assert models[0].default_effort == "medium"
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry/codex", scenario="drop a default effort the model does not offer"
+)
+async def test_each_codex_model_keeps_its_own_levels_and_only_an_offered_default() -> None:
+    peer = FakeCodexPeer(
+        [
+            {
+                "data": [
+                    _model(
+                        "gpt-a",
+                        supportedReasoningEfforts=[
+                            {"reasoningEffort": "low"},
+                            {"reasoningEffort": "high"},
+                        ],
+                        defaultReasoningEffort="low",
+                    ),
+                    _model(
+                        "gpt-b",
+                        supportedReasoningEfforts=[{"reasoningEffort": "medium"}],
+                        defaultReasoningEffort="xhigh",
+                    ),
+                ],
+                "nextCursor": None,
+            }
+        ]
+    )
+    make, _ = _factory(peer)
+
+    models = await CodexRpcModelDiscovery(make).discover(agent_key="codex", config_dir=None)
+
+    assert [(m.id, m.efforts, m.default_effort) for m in models] == [
+        ("gpt-a", ("low", "high"), "low"),
+        ("gpt-b", ("medium",), None),
+    ]

@@ -1,7 +1,8 @@
 // frontend/src/components/agents/AgentMemoryDelivery.test.tsx
 //
-// One agent's delivery state, on that agent's own page (spec memory
-// FR-025/FR-026, ADR aggregate-agent-memory-never-write-it). The card answers
+// One agent's delivery state, on that agent's own page (spec memory "Show
+// delivery state on the agent's own page", ADR
+// aggregate-agent-memory-never-write-it). The card answers
 // exactly one question — installed or not. Whether the hook has fired is a
 // stream of events and is read on the Activity page, one audit entry per fire,
 // so this surface must not speculate about it.
@@ -16,6 +17,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
+import { acceptance } from "@/test/acceptance";
 import { AgentMemoryDelivery } from "./AgentMemoryDelivery";
 import type { DeliveryStatusOut } from "@/lib/api/memoryTypes";
 
@@ -124,5 +126,42 @@ describe("AgentMemoryDelivery", () => {
 
     expect(screen.getByText(/no hook event/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /install/i })).toBeNull();
+  });
+
+  acceptance("memory", "show installed or not on the agent page", () => {
+    // Two agents' pages: one with delivery installed, one without. Each card
+    // answers installed-or-not, offers the one action that matches, and
+    // carries no last-fired time — a fire is an event on the Activity page.
+    stubMutations();
+    const notInstalled: DeliveryStatusOut = {
+      ...INSTALLED,
+      agent_uid: "u-codex",
+      agent_name: "codex",
+      installed: false,
+      event: "SessionStart",
+    };
+    deliveryMock.mockImplementation(
+      (uid?: string) =>
+        ({
+          data: uid === "u-codex" ? [notInstalled] : [INSTALLED],
+          isPending: false,
+          error: null,
+        }) as unknown as ReturnType<typeof useMemoryDelivery>,
+    );
+
+    const { unmount } = render(<AgentMemoryDelivery agentUid="u-claude-code" />);
+    const installed = within(screen.getByTestId("memory-delivery-claude_code"));
+    expect(installed.getByText(/^installed$/i)).toBeInTheDocument();
+    expect(installed.getByRole("button", { name: /remove/i })).toBeInTheDocument();
+    expect(installed.queryByRole("button", { name: /^install$/i })).toBeNull();
+    expect(screen.queryByText(/last fired|never fired|fired at|ago\b/i)).toBeNull();
+    unmount();
+
+    render(<AgentMemoryDelivery agentUid="u-codex" />);
+    const absent = within(screen.getByTestId("memory-delivery-codex"));
+    expect(absent.getByText(/^not installed$/i)).toBeInTheDocument();
+    expect(absent.getByRole("button", { name: /^install$/i })).toBeInTheDocument();
+    expect(absent.queryByRole("button", { name: /remove/i })).toBeNull();
+    expect(screen.queryByText(/last fired|never fired|fired at|ago\b/i)).toBeNull();
   });
 });

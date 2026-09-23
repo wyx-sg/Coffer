@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-05-20
 **Deciders**: Yuxing Wu
-**Related**: `.specify/memory/constitution.md` (II Spec-as-Truth, Architectural Constraints), [Layer-First Code Layout](code-layout-layer-first.md), spec `mcp-gateway`
+**Related**: [`docs/principles.md`](../principles.md) (II Spec-as-Truth, Technology & Architectural Constraints), [Layer-First Code Layout](code-layout-layer-first.md), spec `mcp-gateway`
 
 ## Context
 
@@ -12,7 +12,7 @@ spec (`mcp-gateway`) ships `mcp_server` as the only concrete kind. The
 decision is whether to design the **Resource abstraction** now — while only
 one kind is concrete — or to delay until a second kind lands.
 
-The constitution states:
+The principles state:
 
 > Cross-cutting modules are extracted only after the second feature needs them.
 
@@ -44,7 +44,7 @@ Design the Resource framework as **core domain** in spec `mcp-gateway`:
 - The MCP gateway is the first concrete kind plugged into this framework, not
   a one-off feature.
 
-The constitutional clause about cross-cutting modules does **not** apply,
+The principles' clause about cross-cutting modules does **not** apply,
 because Resource is part of the project's core domain model, not a cross-cutting
 infrastructure module (such as logging, telemetry, or auth middleware).
 
@@ -75,13 +75,13 @@ infrastructure module (such as logging, telemetry, or auth middleware).
 **Follow-ons**
 
 - The first time a _cross-kind_ concern surfaces inside the kind code (e.g., MCP
-  and skill both needing subprocess supervision), apply the constitutional
+  and skill both needing subprocess supervision), apply the principles'
   "extract on second feature" rule normally — the Resource framework is not a
   blanket licence to pre-abstract everything.
 
 ## Alternatives Considered
 
-**Extract on second feature (constitutional default)**. Rejected: a generic
+**Extract on second feature (the principles' default)**. Rejected: a generic
 Resource framework cannot be extracted cleanly from MCP-specific code without
 also re-modelling the audit table, the surface routing, and the retention
 framework. The "second feature" cost would be a substantial refactor, not a
@@ -97,3 +97,38 @@ realistic third-party plugin ecosystem to serve at this scope.
 future kinds with high confidence, all of which share identity, lifecycle,
 audit, and surface-level CRUD. Building those four times would be both more
 code and more drift risk than one framework.
+
+## Implementation notes
+
+How the framework held its boundary once built (spec
+[resource-framework](../../openspec/specs/resource-framework/spec.md)):
+
+- **The core knows no kind.** `Resource`, `Kind`, `ResourceService`,
+  `AuditService` and the retention trio are exercised against a `fake_kind`
+  registered only for tests, and the import-linter contract "Kind-agnostic core
+  does not import kind-specific code" (`backend/pyproject.toml`) keeps them
+  from importing any real one. A core that needed `mcp_server` to be testable
+  would already have leaked.
+- **A kind plugs in through one frozen descriptor**, `Kind` in
+  `domain/resource.py`, and the plug-in contract is an asymmetry: pre-write
+  validators may reject a change; post-write reactions (`on_enabled_changed`,
+  `on_scope_changed`, …) run after persistence and audit and may not.
+  Validation decides whether a change happens; a reaction only catches up with
+  one that already did, so a reaction that raises cannot undo a persisted,
+  audited change. `on_delete` is the one reaction that runs before the row is
+  removed — so its cleanup can still resolve the resource — but it is still a
+  reaction to a delete already decided; refusing one is `validate_delete`'s job.
+- **Creation is the one operation not generalised.** A kind whose creation
+  carries an invariant beyond config validation sets
+  `generic_create_allowed = False` and registers through its own surface, so
+  there is no `coffer resource create`. Everything after creation is generic.
+- **Reach is written by the framework and enforced by each kind**, at the
+  choke point where the asking identity is known; one central gate would have
+  to sit on every kind's read path.
+- **REST and CLI are parity surfaces** answering through the same services;
+  the parity is asserted by a test over the whole CLI tree rather than left to
+  habit, and covers every capability's commands, not only the framework's.
+- **The passes in flight live in an in-process registry**
+  (`application/upkeep_runs.py`) with no table and no lease: a pass belongs to
+  the process running it, a daemon restart ends it, and a persisted claim that
+  outlived its runner would wedge its target forever.

@@ -104,13 +104,15 @@ def start_background_workers(
     )
     converge_worker = start_converge_worker(sync, sm)
 
-    # Curation: a sweep that folds whatever sources have changed since they
-    # were last consumed into the collection's topic documents.
+    # Curation: a sweep that merges each collection's inbox into its
+    # documents, then carries through any document edited since it was last
+    # curated.
     curation_task = start_curation_worker(
         knowledge_service, curation_pass, guide, resource_svc, engine_config, sync
     )
     distil_task = start_distil_worker(distil, resource_svc, engine_config)
-    # Aggregation (spec memory FR-007): a catch-up pass now, then hourly. It
+    # Aggregation (spec memory "Aggregate on an interval and on demand"): a
+    # catch-up pass now, then hourly. It
     # only reads the agents' own memory and only writes the derived tree, so
     # nothing here has to wait on the vault rewriters above.
     aggregate_task = start_aggregate_worker(memory_service, engine_config)

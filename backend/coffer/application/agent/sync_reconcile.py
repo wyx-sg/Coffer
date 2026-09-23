@@ -3,16 +3,17 @@ reconciliation).
 
 Gate: an agent doc only imports where its config dir exists and its skill
 dir is usable — the same checks ``AgentService.register`` runs on the front
-door. An installation without the agent quarantines the doc (retried every
-run; self-heals once the agent is installed), instead of creating a registry
-row pointing at a dead directory.
+door. An installation without the agent refuses the doc as not applicable here
+(``AGENT_CONFIG_DIR_MISSING``: held, not retried), instead of creating a
+registry row pointing at a dead directory; an unusable skill dir is retried.
 
-Hook: importing resources changes which skills each agent should be holding. A
-skill's reach — its ``enabled`` flag and its ``scope`` — is this machine's own
-and never arrives with the document, but the set of skill ROWS does change, and
-the registry upsert alone performs no on-disk delivery. After every import each
-agent's delivered set is reconciled idempotently against the delivery predicate
-(spec skill-manager FR-012) from the converged rows and this machine's reach.
+Hook: importing resources changes which skills each agent should be holding. A skill's
+reach — its ``enabled`` flag and its ``scope`` — is this machine's own and never arrives
+with the document, but the set of skill ROWS does change, and the registry upsert alone
+performs no on-disk delivery. After every import each agent's delivered set is
+reconciled idempotently against the delivery predicate (spec skill-manager "Deliver a
+skill only where it is enabled and in scope") from the converged rows and this machine's
+reach.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from typing import Protocol
 
 from coffer.application.agent.service import AgentService
 from coffer.domain.agent.config import AgentConfig
-from coffer.domain.errors import ConfigValidationError
+from coffer.domain.errors import AgentConfigDirMissing, ConfigValidationError
 
 
 class _ConfigFileStore(Protocol):
@@ -44,7 +45,13 @@ class AgentImportGate:
             raise ConfigValidationError(str(e)) from e
         # Same machine-local precondition as AgentService.register: the config
         # dir must already exist here (the agent is installed) and the skill
-        # subdir must be usable. Raises SkillDirNotWritable → quarantine.
+        # subdir must be usable. A missing config dir means the agent is not
+        # installed on this machine — AgentConfigDirMissing, which the round
+        # records as not applicable here instead of retrying it every round.
+        # An unusable skill dir stays SkillDirNotWritable → retried.
+        config_dir = cfg.resolved_config_dir()
+        if not await asyncio.to_thread(config_dir.is_dir):
+            raise AgentConfigDirMissing(str(config_dir))
         await asyncio.to_thread(
             AgentService._ensure_skill_dir,
             cfg.resolved_config_dir(),

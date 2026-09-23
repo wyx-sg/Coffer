@@ -12,7 +12,29 @@ The daemon is the system's center of gravity. It is a FastAPI application bound 
 - Owns all in-memory session state for connected MCP clients.
 - Spawns and supervises upstream MCP server subprocesses (one set per connected client session — see [Upstream session model](#upstream-session-model-adr-session-subprocess-model) below).
 - Persists all control-plane state: resource registrations, capability preferences, audit log, retention policies, the encrypted credential store, chat conversations and turns, channel bindings, and sync state. Knowledge and memory are **not** in that list: they are directories of Markdown files, with nothing in `coffer.db` mirroring or indexing them.
-- Does **not** auto-shutdown. The daemon keeps running until `coffer daemon stop` or a system shutdown. This is intentional: the daemon's job is to outlive any single client or CLI invocation.
+- Outlives any single client or CLI invocation. It keeps running until `coffer daemon stop`, a system shutdown, or a long enough stretch with nothing using it (see [Resident, but not forever](#resident-but-not-forever)).
+
+### Resident, but not forever
+
+The daemon can be installed as a **login service** — a per-user launchd agent — so it is already running before anything asks for it:
+
+```bash
+coffer daemon service install    # start at login, restart after a crash
+coffer daemon service status
+coffer daemon service uninstall
+```
+
+This matters because most of what talks to Coffer has no window: an agent in a terminal, an editor plugin, a chat channel. Started only on demand, the daemon is down at exactly those moments, and whoever asks first pays the five-to-fifteen seconds a cold start takes. The Settings → General page has the same switch.
+
+A resident daemon needs a ceiling, or it survives every weekend nobody worked. So it **stands down after a long enough silence** — twelve hours by default:
+
+```bash
+coffer daemon idle show
+coffer daemon idle set 4        # hours
+coffer daemon idle never        # for a vault whose channels must answer at any hour
+```
+
+What counts as use is a request that reached the application — a request the loopback host guard refused is an attack, not use. Readiness counts too: while a channel listener is up the daemon is never idle, because the message that justifies it arrives the next morning. The clock is monotonic, so a laptop that slept did not thereby go unused. Standing down is a **clean exit**, which is why the launchd agent restarts only *unsuccessful* ones — otherwise the shutdown would be undone a second later. Whatever next needs a daemon starts one, as every client already knows how to do.
 
 ### The port is fixed
 
@@ -72,14 +94,14 @@ Beyond the subprocesses above, the daemon runs a set of in-process background wo
 | Worker             | What it does                                                                                                   |
 | ------------------ | -------------------------------------------------------------------------------------------------------------- |
 | Retention          | Prunes log-style tables (audit log, invocation log, sync rounds) according to the configured retention policies. |
-| Converge (sync)    | A converge round against the configured git remote on a timer, re-reading its interval from the remote. A no-op until the user configures one. Wired **first** among the vault rewriters: the tidy worker takes its lock and state. |
-| Tidy               | The knowledge tidy pass — on idle after a write, and on a periodic sweep.                                       |
+| Converge (sync)    | A converge round against the configured git remote on a timer, re-reading its interval from the remote. A no-op until the user configures one. Wired **first** among the vault rewriters: the curation worker takes its lock and state. |
+| Curation           | The knowledge curation pass — a sweep every minute that merges each collection's inbox into its documents, then carries out-of-band edits outward. |
 | Memory organise    | The organise pass over a memory partition.                                                                      |
 | Memory aggregate   | Re-derives Coffer's memory tree from the agents' own native memory: a catch-up pass at startup, then hourly. It only reads the agents' memory and only writes the derived tree, so it waits on none of the vault rewriters above. |
 | Transcript warm    | Warms the transcript-summary cache, so the first visit to an agent's Conversations tab is never the one that pays the cold read. |
 | Channel reconciler | On every tick it diffs enabled channel resources against running adapters and starts/stops/restarts to match — and starts or stops the callback listener with the SeaTalk channel set. REST/CLI/UI never start or stop adapters directly; the reconciler owns all runtime state transitions, which keeps status truthful. |
 
-Three of these — tidy, organise and aggregate — are the **unattended passes**: each has its own on/off switch and interval under **Settings → Engine**, and what they are doing right now is readable at `GET /api/v1/upkeep/runs`. An unattended rewriter should be something the user turned on, never something they discover running.
+Three of these — curation, organise and aggregate — are the **unattended passes**: each has its own on/off switch and interval under **Settings → Engine**, and what they are doing right now is readable at `GET /api/v1/upkeep/runs`. An unattended rewriter should be something the user turned on, never something they discover running.
 
 Vault sync is emphatically *not* a request-scoped operation. `coffer sync now` forces a round, but the converge worker runs rounds on its own, and the vault converges **bidirectionally** with the remote under git's own three-way merge. One-shot export and import no longer exist.
 

@@ -115,6 +115,22 @@ class SkillDirNotWritable(CofferError):  # noqa: N818
         self.reason = reason
 
 
+class AgentConfigDirMissing(CofferError):  # noqa: N818
+    """An agent's config dir does not exist on this machine.
+
+    Raised by the sync import gate, where it means "this document is for an
+    agent not installed here" — not applicable, rather than a failure to retry
+    every round (spec vault-sync). The front door (``AgentService.register``)
+    still reports a missing dir as ``SkillDirNotWritable``.
+    """
+
+    code = "AGENT_CONFIG_DIR_MISSING"
+
+    def __init__(self, path: str) -> None:
+        super().__init__(f"agent config dir does not exist on this machine: {path}")
+        self.path = path
+
+
 class PrivilegedPath(CofferError):  # noqa: N818
     code = "PRIVILEGED_PATH"
 
@@ -197,7 +213,8 @@ class FsPathNotOpenable(CofferError):  # noqa: N818
 
     Surfaces map this to 400 — the caller-supplied path is invalid or the OS
     launcher could not be spawned. The daemon acts only on an existing absolute
-    path; it never creates anything (spec daemon FR-021,
+    path; it never creates anything (spec daemon "Open and reveal existing
+    absolute paths",
     ADR: daemon-proxies-os-file-actions).
     """
 

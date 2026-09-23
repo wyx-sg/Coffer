@@ -2,35 +2,33 @@
 
 A workflow *template* gets no table: it is one row in ``resources`` with
 ``kind = 'workflow'``, so it takes the framework's lifecycle, audit, schema
-validation and sync for free (spec workflow FR-001). What has no home in that
-row is the *execution* — a run is operational state, not a curated asset
-(FR-011), it is owned by one machine (FR-012), and it must not travel with the
-vault the way a template does.
+validation and sync for free (spec workflow). What has no home in that row is the
+*execution* — a run is operational state, not a curated asset, it is owned by
+one machine, and it must not travel with the vault the way a template does.
 
 So four tables arrive together, because they only make sense together:
 
 ``workflow_runs`` is one run. Its ``template_snapshot`` is the definition
-frozen at creation (FR-010) — the run executes the snapshot, never the
-template as it stands today, so editing a template cannot change a run already
-under way. ``status``, ``current_stage_key``, ``current_node_key`` and
-``tokens_spent`` are projections of the event log, stored so listing runs is
-one row read rather than a fold, and rebuilt from the events on daemon start
-(FR-014). ``version`` is the optimistic lock every mutating command carries
-(FR-015). ``template_ref`` is deliberately *not* a foreign key: deleting a
-template is permitted and leaves the reference dangling by design, the way a
-deleted source leaves an artifact's provenance intact.
+frozen at creation — the run executes the snapshot, never the template as it
+stands today, so editing a template cannot change a run already under way.
+``status``, ``current_stage_key``, ``current_node_key`` and ``tokens_spent``
+are projections of the event log, stored so listing runs is one row read rather
+than a fold, and rebuilt from the events on daemon start. ``version`` is the
+optimistic lock every mutating command carries. ``template_ref`` is
+deliberately *not* a foreign key: deleting a template is permitted and leaves
+the reference dangling by design, the way a deleted source leaves an artifact's
+provenance intact.
 
 ``workflow_events`` is the record of truth: append-only, with ``sequence``
 monotonic inside a run and unique with it, so a duplicate or a re-ordering is
 a constraint violation rather than a quietly rewritten history.
 
 ``workflow_node_attempts`` is one attempt at one node. A retry inserts
-``attempt + 1`` rather than rewriting the row (FR-022), which is what keeps
-the earlier attempt's conversation readable after it.
+``attempt + 1`` rather than rewriting the row, which is what keeps the earlier
+attempt's conversation readable after it.
 
 ``workflow_approvals`` is a held decision carrying the exact payload that will
-execute (FR-033). Its terminal states make a repeated decision idempotent
-(FR-038).
+execute. Its terminal states make a repeated decision idempotent.
 
 The three child tables cascade from ``workflow_runs`` in the schema rather
 than in application code: the engine runs with ``PRAGMA foreign_keys = ON``,

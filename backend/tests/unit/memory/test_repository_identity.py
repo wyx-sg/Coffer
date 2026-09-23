@@ -1,4 +1,5 @@
-"""What a repository's identity is, and what a partition is named (FR-014).
+"""What a repository's identity is, and what a partition is named (see
+"Identify a partition by its repository").
 
 Pure domain: ``domain/memory/repository.py`` decides which key a repository
 answers to once its root and remote are known, and ``domain/memory/partition.py``

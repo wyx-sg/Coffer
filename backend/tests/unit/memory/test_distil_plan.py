@@ -10,8 +10,9 @@ note file contradicting the record of its own removal:
   that retires one does not — which is what makes a partition split across
   several requests behave like one.
 
-Nothing here writes ``.raw/`` (FR-026): it reads the entries the caller listed
-and produces a plan, which ``distil_apply`` then carries out.
+Nothing here writes ``.raw/`` (see "Keep distil out of the raw directory"): it
+reads the entries the caller listed and produces a plan, which ``distil_apply``
+then carries out.
 """
 
 from __future__ import annotations
@@ -173,7 +174,8 @@ async def test_a_merge_routes_the_entry_into_the_note_it_names() -> None:
 @pytest.mark.asyncio
 async def test_two_agents_entries_can_share_one_note_by_naming_each_other() -> None:
     """On a fresh partition there is no index at all, so the cross-agent merge
-    this layer exists for can only happen sibling-to-sibling (FR-018)."""
+    this layer exists for can only happen sibling-to-sibling (see "Record
+    provenance and merge by meaning")."""
     first = _entry("one", agent="claude-code")
     second = _entry("two", agent="codex")
     ordered = sorted([first, second], key=lambda e: e.entry_id)
@@ -327,7 +329,7 @@ async def test_a_later_chunk_may_merge_into_a_note_an_earlier_one_opened() -> No
 @pytest.mark.asyncio
 async def test_every_retirement_this_pass_decided_is_shown_to_the_next_chunk() -> None:
     """Including the ones decided a moment ago, or the second chunk re-opens
-    what the first removed (FR-025)."""
+    what the first removed (see "Record retirements so they stick")."""
     first, second = _entry("one"), _entry("two")
     ordered = sorted([first, second], key=lambda e: e.entry_id)
 

@@ -1,4 +1,5 @@
-"""Unit tests for ``default_shim_resolver`` (spec agent-registry FR-015).
+"""Unit tests for ``default_shim_resolver`` (spec agent-registry "Install
+Coffer's MCP server into an agent in one action").
 
 The resolver must find a ``coffer-mcp-shim`` installed as a console script in
 the running interpreter's scripts directory even when the venv's ``bin`` is off

@@ -6,38 +6,38 @@ as it is a Resource row, so ``generic_create_allowed`` is False and
 (``allow_lifecycle_kind=True``, CODE-REG) rather than the generic
 ``POST /resources`` path being able to conjure a directory-less row.
 
-``supports_scope`` is left at the Kind default of False, and a partition is a
-Resource for three other things: its lifecycle (it is created by a pass and
-deleted through the framework's own route), the repository identity its config
-carries (FR-014), and its ``enabled`` flag — which is now the only gate on
+``supports_scope`` is left at the Kind default of False, and a partition is a Resource
+for three other things: its lifecycle (it is created by a pass and deleted through the
+framework's own route), the repository identity its config carries (see "Identify a
+partition by its repository"), and its ``enabled`` flag — which is now the only gate on
 what gets served.
 
-It used to carry the framework's per-agent reach, and the reach was never
-chosen: ``MemoryService._register_partition`` seeded it with "the agents this
-partition was aggregated from", so on the maintainer's own vault the
-``coffer`` partition came out scoped to ``claude-code`` alone — Codex, working
-in the Coffer repository every day, was served no project memory whatsoever —
-while the ``account*`` partitions came out scoped to ``codex`` and Claude Code
-got nothing from them. That default defeated the layer's whole purpose: memory
-aggregated from several agents exists precisely so each of them can read what
-the others learned. It was never a boundary either, because a note is a file
-the agent is handed the path to. So the reach is gone rather than
-re-defaulted, and every enabled partition is served to every agent (FR-013).
+It used to carry the framework's per-agent reach, and the reach was never chosen:
+``MemoryService._register_partition`` seeded it with "the agents this partition was
+aggregated from", so on the maintainer's own vault the ``coffer`` partition came out
+scoped to ``claude-code`` alone — Codex, working in the Coffer repository every day, was
+served no project memory whatsoever — while the ``account*`` partitions came out scoped
+to ``codex`` and Claude Code got nothing from them. That default defeated the layer's
+whole purpose: memory aggregated from several agents exists precisely so each of them
+can read what the others learned. It was never a boundary either, because a note is a
+file the agent is handed the path to. So the reach is gone rather than re-defaulted, and
+every enabled partition is served to every agent (see "Serve every enabled partition to
+every agent").
 
-``converges`` is False, and this is the only kind that sets it (spec memory
-FR-019). A partition row is derived from the agents installed on THIS machine,
-so publishing it to the sync remote puts on the second machine a partition
-naming a repository it may not have cloned, with no notes behind it — the
-derived tree under ``~/.coffer/memory/`` is not mirrored either — until that
-machine's own next pass recomputes it away. FR-019 names that exact sequence as
-the reason the layer must not converge; the flag is what makes the sync layer
-honour it, and it is declared here because it is a property of this kind rather
-than a case for the exporter to special-case.
+``converges`` is False, and this is the only kind that sets it (spec memory "Keep the
+memory tree derived and local"). A partition row is derived from the agents installed on
+THIS machine, so publishing it to the sync remote puts on the second machine a partition
+naming a repository it may not have cloned, with no notes behind it — the derived tree
+under ``~/.coffer/memory/`` is not mirrored either — until that machine's own next pass
+recomputes it away. That requirement names that exact sequence as the reason the layer
+must not converge; the flag is what makes the sync layer honour it, and it is declared
+here because it is a property of this kind rather than a case for the exporter to
+special-case.
 
-``on_delete`` removes the whole partition directory — index, notes, retirement
-record and ``.raw/`` — and that is safe for the same reason everything else
-here is: the tree is derived, and the agents still hold what it was built from.
-Deleting a partition is also the *only* answer to an unresolvable one (FR-016),
+``on_delete`` removes the whole partition directory — index, notes, retirement record
+and ``.raw/`` — and that is safe for the same reason everything else here is: the tree
+is derived, and the agents still hold what it was built from. Deleting a partition is
+also the *only* answer to an unresolvable one (see "Report unresolvable partitions"),
 which is why it stays reachable rather than being hidden behind the pass.
 
 ``on_rename`` moves that same directory, because the row's name is the
@@ -89,11 +89,11 @@ def make_memory_kind(service: MemoryService) -> Kind:
         rather than made to work, because "``global`` is called global" is what
         every other module in the layer is entitled to assume.
 
-        **A directory already under the new name is a collision.** The
-        framework checked that no *row* holds the name, not that the filesystem
-        is clear; ``store.rename_partition`` refuses to merge into what is
-        there, and merging is the specific harm — two repositories' raw entries
-        in one partition is exactly what keying on a repository (FR-014)
+        **A directory already under the new name is a collision.** The framework checked
+        that no *row* holds the name, not that the filesystem is clear;
+        ``store.rename_partition`` refuses to merge into what is there, and merging is
+        the specific harm — two repositories' raw entries in one partition is exactly
+        what keying on a repository (see "Identify a partition by its repository")
         exists to prevent, and the next pass would not undo it.
         """
         if resource.name == GLOBAL_PARTITION:

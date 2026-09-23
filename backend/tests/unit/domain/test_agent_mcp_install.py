@@ -161,7 +161,8 @@ def test_toml_uninstall_noop_for_scalar_mcp_servers():
     assert tomlkit.parse(out)["mcp_servers"] == "coffer-ish"
 
 
-# --- self-reported agent identity (spec agent-registry FR-015 amended) ------
+# --- self-reported agent identity -------------------------------------------
+# (spec agent-registry "Install Coffer's MCP server into an agent in one action")
 
 
 # The identity the shim reports is the agent's uid, never its name: the entry
@@ -334,3 +335,25 @@ def test_json_dotted_container_install_replaces_scalar_step():
         ConfigFileFormat.JSON, json.dumps({"mcp": 42}), SHIM, container_key="mcp.servers"
     )
     assert json.loads(out)["mcp"]["servers"][COFFER_SERVER_KEY] == {"command": SHIM}
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry/codex",
+    scenario="install Coffer's MCP into config.toml keeping the user's comments",
+)
+def test_codex_install_writes_a_command_map_and_keeps_comments_and_tables():
+    before = (
+        "# my codex settings\n"
+        'model = "gpt-5"  # the model I use\n'
+        "\n"
+        "[mcp_servers.other]\n"
+        'command = "other-server"\n'
+    )
+    out = apply_install(ConfigFileFormat.TOML, before, SHIM, agent_uid=AGENT_UID)
+    assert "# my codex settings" in out
+    assert "# the model I use" in out
+    doc = tomlkit.parse(out)
+    assert doc["mcp_servers"]["other"]["command"] == "other-server"
+    entry = doc["mcp_servers"][COFFER_SERVER_KEY]
+    assert entry["command"] == SHIM
+    assert list(entry["args"]) == ["--agent-uid", AGENT_UID]

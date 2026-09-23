@@ -1,4 +1,5 @@
-"""``coffer__recall`` — a locator, not a reader (FR-035, FR-034).
+"""``coffer__recall`` — a locator, not a reader (see "Recall locations by
+literal match", "Expose only coffer__recall").
 
 Three properties, and the third is a bug being kept fixed rather than a
 feature being restated:
@@ -93,11 +94,11 @@ async def test_a_match_comes_back_as_an_absolute_path_a_title_and_a_description(
 
 @pytest.mark.asyncio
 async def test_every_answer_points_inside_the_partitions_notes_directory() -> None:
-    """Which is how ``.raw/`` and a retired note stay out (FR-008, FR-025):
-    recall reads ``list_notes`` and nothing else, so there is no other
-    directory for an answer to come from. The retirement half of that is
-    exercised against a real pass in
-    ``tests/integration/memory/test_distil_lifecycle.py``."""
+    """Which is how ``.raw/`` and a retired note stay out (see "Keep raw
+    entries verbatim and hidden", "Record retirements so they stick"): recall
+    reads ``list_notes`` and nothing else, so there is no other directory for
+    an answer to come from. The retirement half of that is exercised against a
+    real pass in ``tests/integration/memory/test_distil_lifecycle.py``."""
     service = _service(
         {
             "coffer": [_note("current", "coffer", body="a shared phrase")],
@@ -165,8 +166,9 @@ async def test_matching_is_case_insensitive_and_literal() -> None:
 
 @pytest.mark.asyncio
 async def test_a_note_matches_on_the_search_terms_its_source_supplied() -> None:
-    """Codex's own answer to "what would you look this up up by" (FR-004) —
-    ignoring it here would waste the one hint the corpus carries."""
+    """Codex's own answer to "what would you look this up up by" (see "Read
+    Claude Code and Codex memory with their search terms") — ignoring it here
+    would waste the one hint the corpus carries."""
     service = _service(
         {"coffer": [_note("a", "coffer", body="nothing relevant", search_terms=("port drift",))]}
     )

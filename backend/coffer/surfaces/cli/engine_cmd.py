@@ -10,7 +10,8 @@ transcribe-model``). All five are thin shells over
 row through the same service and record the same audit entry.
 
 The upkeep half is why this group must exist rather than being a page-only
-surface (spec internal-engine FR-020/FR-021, ``.agents/sdd.md``): one of the
+surface (spec internal-engine "List and change each unattended pass from the
+CLI", ``.agents/openspec.md``): one of the
 three passes rewrites the user's own knowledge files on a timer, and an
 operator with only a terminal has to be able to switch that off. ``upkeep
 list`` therefore names each pass's default interval alongside its chosen one —

@@ -9,11 +9,11 @@ decided — it is a number of tokens, not a judgement about the work.
 
 So ``attempt_ceiling`` moves down: onto every task, and onto every feedback
 edge, because the work an edge creates is an ad-hoc task that exists nowhere
-else in the template (spec workflow, FR-026). ``token_budget`` is gone.
+else in the template (spec workflow). ``token_budget`` is gone.
 
 This rewrites the two places a template is stored. A `workflow` resource's
 config is the editable one. A run's ``template_snapshot`` is the frozen copy it
-executes (FR-010), and it must be rewritten too: the parser now REFUSES a root
+executes, and it must be rewritten too: the parser now REFUSES a root
 ``token_budget`` as an unknown field, so a snapshot left alone would strand the
 run that froze it — unreadable by the advancer and nameless in the list.
 

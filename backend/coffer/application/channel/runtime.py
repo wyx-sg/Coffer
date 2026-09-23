@@ -75,6 +75,7 @@ class ChannelRuntime:
         materialize: Callable[[dict[str, str]], Awaitable[dict[str, str]]] | None = None,
         interval_seconds: float = _DEFAULT_INTERVAL_SECONDS,
         machine_id: Callable[[], Awaitable[str]] | None = None,
+        service_hold: Callable[[bool], None] | None = None,
     ) -> None:
         self._resources = resources
         self._factory = adapter_factory
@@ -85,6 +86,12 @@ class ChannelRuntime:
         self._websockets = websockets
         self._materialize = materialize
         self._interval = interval_seconds
+        # Told, each tick, whether a listener is up. The daemon stands down
+        # when nothing has wanted it for hours, and a listener is the case
+        # that measure gets wrong — see ``_hold_the_daemon_open``. The runtime
+        # is handed the function rather than reaching for the daemon's clock
+        # itself: application code does not import infrastructure.
+        self._service_hold = service_hold
         # Which channels are this machine's to run — enabled, bound here, and
         # able to drive their own default agent. Three gates, one predicate,
         # kept out of the lifecycle loop (see ``wanted.py``).
@@ -143,6 +150,8 @@ class ChannelRuntime:
     async def dispose(self) -> None:
         """Stop every adapter and the listener (daemon shutdown / final)."""
         self.stop()
+        if self._service_hold is not None:
+            self._service_hold(False)
         for name in list(self._running):
             await self._stop_adapter(name)
         if self._listener is not None:
@@ -207,9 +216,25 @@ class ChannelRuntime:
             await self._reconcile_listener(desired)
             await self._reconcile_tunnels(desired)
             await self._reconcile_websockets(desired)
+            self._hold_the_daemon_open()
         except Exception:
             # The reconciler must outlive any single bad tick.
             _logger.exception("channel.runtime.tick_failed")
+
+    def _hold_the_daemon_open(self) -> None:
+        """Keep the daemon in service for as long as a listener is up.
+
+        A daemon stands down when nothing has wanted it for hours
+        (spec daemon "Stand down after an idle window"), and "wanted" is measured in requests that
+        arrived. A channel listener is the case that measure gets wrong: its
+        job is to be *reachable*, and the request that proves it was worth
+        keeping is the one that arrives at nine the next morning — after a
+        daemon counting only yesterday's traffic would already have gone. So
+        the listener says so directly, and re-says it every tick, which is
+        also how the claim is dropped when the last channel is disabled.
+        """
+        if self._service_hold is not None:
+            self._service_hold(self.listener_running)
 
     async def local_machine_id(self) -> str | None:
         """This machine's id, or ``None`` when no provider is wired.

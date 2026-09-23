@@ -5,14 +5,14 @@
 // writes instead is a folder per repository holding `MEMORY.md` (the index),
 // `notes/` (Coffer's own notes, one topic per file), `RETIRED.md` (what left
 // and why) and a hidden `.raw/` of the verbatim entries it read. See
-// specs/memory/spec.md and
+// openspec/specs/memory/spec.md and
 // docs/decisions/aggregate-agent-memory-never-write-it.md.
 //
 // The UI writes none of it: a partition is shown as what it literally is on
 // disk, a folder under `~/.coffer/memory/`, so the file types below carry no
 // fingerprint and there is no write shape to send.
 //
-// These are hand-written rather than generated: `specs/memory`'s contract
+// These are hand-written rather than generated: `openspec/specs/memory`'s contract
 // names the file shapes `FileNodeOut` / `FileTreeOut` / `FileContentOut`,
 // while every consumer here imports the `Memory…`-prefixed names below, so the
 // memory contract is deliberately absent from `CONTRACTS` in
@@ -22,7 +22,8 @@
 /** One partition: a repository's slug, or `global` for notes about the person.
  *
  *  Keyed on a REPOSITORY, not a working directory — a worktree and a second
- *  clone of the same repo resolve to one partition (FR-014). */
+ *  clone of the same repo resolve to one partition (see "Identify a
+ *  partition by its repository"). */
 export interface PartitionOut {
   /** The partition Resource's immutable identity — what every route under
    *  `/memory/partitions/{uid}/…` takes. Deliberately NOT the resolution key:
@@ -39,7 +40,7 @@ export interface PartitionOut {
   note_count: number;
   /** True when `repository_path` is no longer on disk. Surfaced rather than
    *  hidden: such a partition is delivered to nobody, and only the developer
-   *  can decide to delete it (FR-016). */
+   *  can decide to delete it (see "Report unresolvable partitions"). */
   unresolvable: boolean;
 }
 
@@ -93,7 +94,8 @@ export interface AggregationResultOut {
   entries_written: number;
   sources_read: number;
   sources_skipped: number;
-  /** Native source paths that failed to parse (FR-005) — the other agent's
+  /** Native source paths that failed to parse (see "Fail a broken reader loudly
+   *  and in isolation") — the other agent's
    *  aggregation still completed. */
   failures: string[];
 }
@@ -113,7 +115,7 @@ export interface DistilResultOut {
 
 /** Per-agent delivery state — whether Coffer's hook is written into that
  *  agent's settings. Whether it has fired is read from the audit log, one
- *  entry per fire (FR-022), not from here. */
+ *  entry per fire (see "Audit every delivery fire"), not from here. */
 export interface DeliveryStatusOut {
   /** Which agent this row is about, and what install/remove take. */
   agent_uid: string;

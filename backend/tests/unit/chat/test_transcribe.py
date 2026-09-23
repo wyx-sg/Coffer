@@ -1,4 +1,5 @@
-"""Voice transcription seam (spec channels FR-019).
+"""Voice transcription seam (spec channels "Transcribe inbound voice only when
+the user opted in").
 
 A text-only agent (Claude Code, Codex) receives a voice attachment as a
 transcript rather than an opaque audio file. The engine is behind the

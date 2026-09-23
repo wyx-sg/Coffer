@@ -1,5 +1,7 @@
 """Composing the session-start payload: the whole index, and where the bodies
-are (spec memory FR-028, FR-029, FR-030).
+are (spec memory "Deliver the index and the notes path at session start", "Write
+each index line to stand on its own", "Bound delivery and prefer the current
+repository").
 
 Delivery is no longer a digest. It is **the index** — every non-retired note
 in the current repository's partition and in ``global``, one line each, from
@@ -8,11 +10,11 @@ bodies live in. Nothing here names a tool, and that omission is the design:
 every consumer of this payload is a process on this machine with filesystem
 access. A hook-driven Claude Code session and a hook-driven Codex session
 both read files as their ordinary way of reaching their own memory, and a
-channel-driven turn (FR-031) drives a **local** Claude Code or Codex through
-``claude-agent-sdk`` with ``bypassPermissions`` — see
-``infrastructure/chat/claude_sdk_agent.py`` — rather than answering out of the
-daemon. Pointing such a reader at a tool is what the previous design did, and
-in three weeks it produced exactly zero calls.
+channel-driven turn (see "Deliver to channel turns through the system prompt") drives a
+**local** Claude Code or Codex through ``claude-agent-sdk`` with ``bypassPermissions`` —
+see ``infrastructure/chat/claude_sdk_agent.py`` — rather than answering out of the
+daemon. Pointing such a reader at a tool is what the previous design did, and in three
+weeks it produced exactly zero calls.
 
 Three things this module is deliberately narrow about:
 
@@ -23,15 +25,15 @@ Three things this module is deliberately narrow about:
   database at all, and the production composition root hands in the real
   service unchanged (structural typing: the Protocol is not a base class
   ``MemoryService`` has to inherit from). There is deliberately no ``agent``
-  among those: every enabled partition is composed for every agent (FR-013),
-  because memory aggregated from several agents exists so each of them can
-  read what the others learned.
+  among those: every enabled partition is composed for every agent (see "Serve every
+  enabled partition to every agent"), because memory aggregated from several agents
+  exists so each of them can read what the others learned.
 * **It reads the notes as the distil pass left them.** There is no second
   judgement on top: no hide, no pin, no status. A retired note is not
   filtered here because it is not here — retirement takes the file out of
-  ``notes/`` and writes ``RETIRED.md`` (FR-025), so ``list_notes`` cannot
-  return one. That is stated on the port, because it is the port's promise
-  to keep.
+  ``notes/`` and writes ``RETIRED.md`` (see "Record retirements so they stick"), so
+  ``list_notes`` cannot return one. That is stated on the port, because it is the port's
+  promise to keep.
 * **It renders no line of its own.** The delivered line *is* the index's
   line, so it comes from ``index.index_line`` and is sorted by
   ``index.recency`` — the same renderer and the same definition of "newest"
@@ -57,7 +59,8 @@ from coffer.domain.memory.partition import GLOBAL_PARTITION
 from coffer.infrastructure.memory import paths as memory_paths
 
 #: The ceiling on a composed payload, sized **for an index** rather than for a
-#: handful of lines (FR-030). Three real figures set it:
+#: handful of lines (see "Bound delivery and prefer the current repository"). Three real
+#: figures set it:
 #:
 #: * Claude Code loads its own whole index — 94 entries, **~9k tokens** — into
 #:   every session of its own accord. That is the ecosystem's demonstrated
@@ -76,7 +79,7 @@ DEFAULT_CEILING_TOKENS = 12000
 
 class PartitionView(Protocol):
     """What composing needs to know about one partition: its name and the
-    repository it was learned in (FR-014).
+    repository it was learned in (see "Identify a partition by its repository").
 
     Read-only properties rather than an import of ``service.PartitionSummary``,
     so this module does not depend on the shape of a management-surface
@@ -97,10 +100,10 @@ class MemoryPort(Protocol):
     service satisfies it with no adapter.
 
     ``list_notes`` answers from the partition's ``notes/`` directory, which
-    is what makes FR-025 hold on this path: a retired note's file has left
-    that directory, so there is no retired note to exclude. A cache that
-    outlived the file would break the guarantee silently, which is exactly
-    how the previous design went on serving 11 dead facts.
+    is what makes "Record retirements so they stick" hold on this path: a retired note's
+    file has left that directory, so there is no retired note to exclude. A cache that
+    outlived the file would break the guarantee silently, which is exactly how the
+    previous design went on serving 11 dead facts.
     """
 
     async def enabled_partitions(self) -> Sequence[str]: ...
@@ -114,7 +117,8 @@ class MemoryPort(Protocol):
 class ComposedContext:
     """What ``compose_context`` hands back: the text, which partition it
     resolved ``cwd`` to, and enough accounting for a caller — or a test — to
-    confirm the ceiling rule actually held (FR-030)."""
+    confirm the ceiling rule actually held (see "Bound delivery and prefer the current
+    repository")."""
 
     text: str
     partition: str
@@ -125,7 +129,7 @@ class ComposedContext:
 def _ordered(notes: Iterable[Note]) -> tuple[Note, ...]:
     """Newest first, by ``index.recency`` — not a second definition of it.
 
-    Under a ceiling this order *is* the trim rule: FR-030 drops the oldest
+    Under a ceiling this order *is* the trim rule: the spec's delivery bound drops the oldest
     lines, which is the tail of this sequence.
     """
     return tuple(sorted(notes, key=recency, reverse=True))
@@ -137,7 +141,8 @@ def _notes_dir(partition: str) -> str:
 
 
 def _trim_notice(dropped: int, notes_path: str) -> str:
-    """The line a trim leaves behind (FR-030).
+    """The line a trim leaves behind (see "Bound delivery and prefer the current
+    repository").
 
     It names the count **and the directory**, because that is what makes a
     trim here a small loss rather than the old design's large one: every line
@@ -155,14 +160,15 @@ def _resolve_cwd_partition(partitions: Sequence[PartitionView], cwd: str) -> str
 
     Matching on the repository rather than on a working directory is what
     makes a worktree and a second clone resolve to the partition their main
-    checkout contributes to (FR-014) — a session opened in
+    checkout contributes to (see "Identify a partition by its repository") — a session opened in
     ``repo/.claude/worktrees/x`` is a session about ``repo``.
 
     The longest matching repository wins, so a repository nested inside
     another checked-out one resolves to the inner one. An unknown, blank or
     unresolvable ``cwd`` — including one under no recorded repository —
     yields ``global``, which the spec treats as a normal answer, not an
-    error: a directory that is not a repository gets no partition (FR-015).
+    error: a directory that is not a repository gets no partition (see "Create no partition for a
+    non-repository directory").
     """
     stripped = (cwd or "").strip()
     if not stripped:
@@ -217,7 +223,7 @@ class _Ceiling:
 def _take(notes: Sequence[Note], ceiling: _Ceiling) -> list[str]:
     """As many lines as fit, newest first, stopping at the first that does not.
 
-    Stopping rather than skipping is the point: FR-030 drops **the oldest**
+    Stopping rather than skipping is the point: the delivery bound drops **the oldest**
     lines, so what survives is a contiguous prefix of a newest-first list.
     """
     taken: list[str] = []
@@ -236,12 +242,13 @@ async def compose_context(
     cwd: str,
     ceiling_tokens: int = DEFAULT_CEILING_TOKENS,
 ) -> ComposedContext:
-    """Build the session-start payload (FR-028): what is known about the
+    """Build the session-start payload (see "Deliver the index and the notes path at
+    session start"): what is known about the
     developer, then the whole index of this repository's partition, then the
     absolute path of that partition's ``notes/``.
 
     **When the two partitions compete for the ceiling, the current repository
-    wins.** The order of the text is FR-028's — ``global`` first, because it
+    wins.** The order of the text is the spec's — ``global`` first, because it
     is short and it frames everything after it — but the order of *spending*
     is the reverse: the repository's lines are taken first and ``global``
     gets what is left. This is the direct reversal of the previous design,
@@ -251,7 +258,7 @@ async def compose_context(
     open in is the one it is about.
 
     With nothing to deliver, the text is empty rather than a bare header:
-    FR-031's channel turn appends this only when it is non-empty, and an
+    A channel turn appends this only when it is non-empty, and an
     empty memory header is worse than none.
     """
     served = set(await memory.enabled_partitions())

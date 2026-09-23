@@ -7,12 +7,14 @@ behaviour, and a mocked subprocess would only assert our own assumptions.
 
 from __future__ import annotations
 
+import os
 import pathlib
 import subprocess
 import tempfile
 
 import pytest
 
+from coffer.infrastructure.sync.git_invoke import _git_env, credential_args
 from coffer.infrastructure.sync.git_mirror import GitMirror, GitMirrorError
 
 
@@ -171,19 +173,65 @@ async def test_the_token_never_lands_in_git_config(
 
 
 @pytest.mark.asyncio
-async def test_the_askpass_helper_does_not_outlive_the_push(
+async def test_the_token_leaves_nothing_behind_in_the_temp_dir(
     worktree: pathlib.Path, remote: pathlib.Path
 ) -> None:
-    """The helper carrying the token is deleted even though the push succeeded."""
+    """Nothing carrying the token is written to disk at all.
+
+    It used to be a temp askpass script, deleted in a `finally`; the token now
+    rides an environment variable read by a helper named on the command line,
+    so there is no file to leak in the first place.
+    """
     tmp = pathlib.Path(tempfile.gettempdir())
-    before = set(tmp.glob("coffer-askpass-*"))
+    before = set(tmp.glob("coffer-*"))
     mirror = GitMirror(worktree)
     await mirror.ensure_repo(remote_url=str(remote), branch="main")
     (worktree / "a.txt").write_text("one")
     await mirror.stage_all()
     await mirror.commit("first")
     await mirror.push(branch="main", token="sup3rsecret")
-    assert set(tmp.glob("coffer-askpass-*")) == before
+    assert set(tmp.glob("coffer-*")) == before
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="the push credential never reaches the repository"
+)
+def test_the_credential_reaches_git_as_a_helper_not_a_prompt() -> None:
+    """The regression that stopped sync dead, and why it was invisible.
+
+    `GIT_ASKPASS` is a *prompt* path. macOS's own git does not take it — it
+    answers `fatal: unable to get password from user` without ever running the
+    helper — so on the platform Coffer ships a desktop app for, the token
+    never reached git. What had been authenticating was the
+    `credential.helper = osxkeychain` line in Xcode's system gitconfig, which
+    `GIT_CONFIG_NOSYSTEM` deliberately switches off; the day that stopped
+    being papered over, every hourly round failed saying only that nobody
+    answered a prompt.
+
+    A helper is asked before any prompt, by every git. Pinning the shape here
+    because the failure needs a Mac, a private remote and an hour to show up.
+    """
+    args = credential_args("sup3rsecret")
+    assert "credential.helper=" in args, "an inherited helper must be cleared first"
+    helper = args[-1]
+    assert helper.startswith("credential.helper=!")
+    # The secret is read from the environment at helper runtime; argv is
+    # readable by every process on the machine.
+    assert "sup3rsecret" not in " ".join(args)
+    assert "$COFFER_GIT_TOKEN" in helper
+    assert _git_env("sup3rsecret")["COFFER_GIT_TOKEN"] == "sup3rsecret"
+    # No token, no credential machinery: a local-path remote pays nothing.
+    assert credential_args(None) == ()
+
+
+def test_a_users_own_git_config_cannot_answer_for_the_daemon() -> None:
+    env = _git_env("sup3rsecret")
+    assert env["GIT_CONFIG_GLOBAL"] == os.devnull
+    assert env["GIT_CONFIG_SYSTEM"] == os.devnull
+    assert env["GIT_CONFIG_NOSYSTEM"] == "1"
+    assert env["GIT_TERMINAL_PROMPT"] == "0"
+    # And whatever prompt helper the user had is dropped rather than inherited.
+    assert "GIT_ASKPASS" not in env
 
 
 @pytest.mark.asyncio
@@ -223,7 +271,8 @@ async def test_a_date_before_any_commit_has_no_revision(
 
 # --- the converge round: merge, diff, snapshot tags ------------------------
 #
-# Spec vault-sync ``## The converge round``, ``## Conflicts`` and ``## Safety``.
+# Spec vault-sync "Run the seven round steps in order", "Abort the round on an
+# unresolved conflict" and "Snapshot before applying and roll back from it".
 
 #: Seven lines so two machines can edit opposite ends of one file and git has
 #: enough context between them to merge without asking.
@@ -495,7 +544,7 @@ async def test_diff_paths_carries_a_content_id_that_pairs_a_move(
 ) -> None:
     """The deletion guard tells a move from a loss by pairing content, so the
     adapter owes it a content id that is an identity and not a prefix of one
-    (spec vault-sync FR-090, domain ``sync.diff.losses``)."""
+    (spec vault-sync "Count losses, not deletions", domain ``sync.diff.losses``)."""
     mirror = await _seeded(worktree, remote, {"knowledge/a.md": "same bytes\n"})
     first = await mirror.head()
     assert first
@@ -654,6 +703,9 @@ async def test_a_remote_url_that_looks_like_an_option_is_a_url_to_git(
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a remote URL or branch that git would read as an option is refused"
+)
 async def test_push_names_the_branch_as_an_explicit_refspec(
     worktree: pathlib.Path, remote: pathlib.Path
 ) -> None:
@@ -703,6 +755,9 @@ def _seed_foreign_repo(worktree: pathlib.Path, origin: str) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a foreign checkout at the working tree is refused, not repointed"
+)
 async def test_a_foreign_checkout_pointing_elsewhere_is_not_adopted(
     worktree: pathlib.Path, remote: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
@@ -748,6 +803,9 @@ async def test_a_foreign_repository_with_no_commits_is_adopted(
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a working tree Coffer made follows a new remote URL"
+)
 async def test_a_tree_coffer_made_can_be_repointed_at_a_new_remote(
     worktree: pathlib.Path, remote: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
@@ -773,3 +831,33 @@ async def test_a_tree_coffer_made_can_be_repointed_at_a_new_remote(
         text=True,
     )
     assert out.stdout.strip() == str(other)
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a foreign checkout at the working tree is refused, not repointed"
+)
+async def test_a_repository_already_pointing_at_the_configured_remote_is_adopted(
+    worktree: pathlib.Path, remote: pathlib.Path
+) -> None:
+    """A clone of the configured remote that Coffer did not make is the user's
+    own copy of the vault: adopted, with its history and files intact."""
+    _seed_foreign_repo(worktree, str(remote))
+
+    await GitMirror(worktree).ensure_repo(remote_url=str(remote), branch="main")
+
+    log = subprocess.run(
+        ["git", "-C", str(worktree), "log", "--oneline"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "their history" in log.stdout
+    assert (worktree / "theirs.txt").read_text() == "not ours"
+    out = subprocess.run(
+        ["git", "-C", str(worktree), "remote", "get-url", "origin"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert out.stdout.strip() == str(remote)

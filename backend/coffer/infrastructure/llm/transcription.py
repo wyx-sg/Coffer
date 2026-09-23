@@ -11,18 +11,18 @@ of the two, or a protocol that has no transcription endpoint,
 :func:`remote_transcriber` returns ``None`` and the adapter hands the agent
 the audio file untouched.
 
-**Its own connection, with no fallback to the engine's.** Speech-to-text used
-to borrow the ``internal_default`` connection on the reasoning that voice
-should introduce no new place to configure. It introduced a worse one: the
-gateway a user points Coffer's engine at commonly serves chat completions and
-no ``/audio/transcriptions`` at all, so the borrowed connection turned every
-voice message into a 404 — where a connection deliberately left unset produces
-the safe behaviour above. The model was an environment variable on top of
-that, read inside a daemon spawned detached from any shell, which made it
-unreachable in a packaged install. Both are settings now (spec internal-engine
-FR-025).
+**Its own connection, with no fallback to the engine's.** Speech-to-text used to
+borrow the ``internal_default`` connection on the reasoning that voice should
+introduce no new place to configure. It introduced a worse one: the gateway a
+user points Coffer's engine at commonly serves chat completions and no
+``/audio/transcriptions`` at all, so the borrowed connection turned every voice
+message into a 404 — where a connection deliberately left unset produces the
+safe behaviour above. The model was an environment variable on top of that, read
+inside a daemon spawned detached from any shell, which made it unreachable in a
+packaged install. Both are settings now (spec internal-engine "Transcribe speech
+on its own connection and model").
 
-The constitution permits this: cloud services are LLM and tool providers, and a
+Principle I in ``docs/principles.md`` permits this: cloud services are LLM and tool providers, and a
 transcription endpoint is a tool provider. The audio is data in transit, not
 vault state — the transcript lands locally like any other turn text.
 """

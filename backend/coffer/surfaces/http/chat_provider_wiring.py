@@ -51,7 +51,7 @@ def build_agent_provider_registry(
     resolver, without such a connection, or without a model, audio is handed to
     the agent untouched and nothing leaves the machine. That is the default,
     and there is no fallback to the engine's own connection (spec
-    internal-engine FR-025).
+    internal-engine "Transcribe speech on its own connection and model").
 
     ``resolve_channel_name`` turns the channel UID a conversation stores into
     the channel's current name, for the one place the name belongs: the
@@ -63,7 +63,8 @@ def build_agent_provider_registry(
     channel — without naming it.
 
     ``compose_memory_context`` is the memory kind's own third system-prompt
-    append (spec memory FR-024) for a channel-driven turn — a plain callable
+    append (spec memory "Deliver to channel turns through the system prompt")
+    for a channel-driven turn — a plain callable
     so this module, like ``claude_sdk_provider``, never imports anything from
     ``application.memory`` itself. Its real closure over
     ``MemoryService``/``OverrideRepository`` is built one level up, where

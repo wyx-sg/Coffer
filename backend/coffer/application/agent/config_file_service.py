@@ -183,7 +183,8 @@ class AgentConfigFileService:
         `validate_child_relpath` covers traversal/extension by path math; the
         store's `resolved_within` then re-checks with symlinks resolved so a
         symlinked child pointing outside the entry's directory is rejected
-        (spec agent-registry FR-028 "no symlink escape").
+        (spec agent-registry "Read, write and delete files inside a directory entry": no
+        symlink escape).
         """
         path = validate_child_relpath(spec.path, relpath)
         if not self._store.resolved_within(path, spec.path):

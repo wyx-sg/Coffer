@@ -4,7 +4,7 @@ Same ``set_*`` / ``get_*`` singleton shape as ``surfaces.http.dependencies``,
 typed concretely. Two services only: the directory itself, and document
 ingestion over it. There is no search service to provide — the layer keeps no
 index and offers no retrieval, on this surface or any other (spec knowledge
-FR-033), so the module that used to be wired here no longer exists.
+"Expose exactly one knowledge tool"), so the module that used to be wired here no longer exists.
 """
 
 from __future__ import annotations

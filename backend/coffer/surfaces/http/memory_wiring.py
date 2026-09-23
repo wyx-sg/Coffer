@@ -1,4 +1,4 @@
-"""Wiring for the one ``memory`` kind (spec memory FR-027..FR-024).
+"""Wiring for the one ``memory`` kind (spec memory).
 
 Mirrors ``knowledge_wiring.py`` + ``tidy_wiring.py`` combined: one service for
 the derived tree and its two passes (``MemoryService``), the MCP locator
@@ -9,11 +9,12 @@ the derived tree and its two passes (``MemoryService``), the MCP locator
 this module.** The distil pass reaches a model through the same injected ports
 every other internal-LLM consumer here uses — a completion port, a
 ``ModelSelectorPort`` over Coffer's own engine, and a **credential resolver**.
-All three default to ``None`` on the service, and that default is FR-024's
-mechanical pass: each raw entry becomes a note of its own and the index is
-still written. Which means a resolver forgotten here does not fail loudly; it
-degrades every pass to "wrote the index only" and says nothing, the model call
-having failed for want of a key it was never given. ``tidy_wiring.wire_tidy``
+All three default to ``None`` on the service, and that default is the
+mechanical pass of "Distil mechanically with no internal connection": each raw
+entry becomes a note of its own and the index is still written. Which means a
+resolver forgotten here does not fail loudly; it degrades every pass to "wrote
+the index only" and says nothing, the model call having failed for want of a
+key it was never given. ``tidy_wiring.wire_tidy``
 takes the resolver as a required parameter for the same reason, and this module
 follows it exactly: ``wire_memory_kind`` cannot be called without one.
 
@@ -30,7 +31,8 @@ agents' own memories (see ``distil_worker.py``).
 Nothing here can fail to build: with no internal connection configured the
 selector just resolves to ``None`` per call, and ``RecallService`` /
 ``MemoryService`` / ``DeliveryService`` need no internal connection at all —
-recall is a literal scan over notes on disk (FR-024).
+recall is a literal scan over notes on disk ("Recall locations by literal
+match").
 """
 
 from __future__ import annotations
@@ -103,6 +105,27 @@ class MemoryWiring:
     distil: DistilRunner
 
 
+async def run_memory_delivery_boot_heal(delivery: DeliveryService) -> None:
+    """Boot hook: rewrite hooks whose command Coffer no longer writes.
+
+    An installed hook is a string in somebody else's settings file, and the
+    CLI it calls ships in a binary that keeps moving; detection matches only
+    the marker, so an entry whose arguments went stale reads as installed and
+    fails at every session start. Repairing it needs no user, which is why it
+    happens here rather than behind a button.
+
+    Best-effort, like the sweeps it sits beside: whatever it finds is logged,
+    and nothing here is allowed to fail boot.
+    """
+    try:
+        notes = await delivery.heal_drift()
+    except Exception:
+        logger.exception("memory_delivery_boot_heal.failed")
+        return
+    for note in notes:
+        logger.warning("memory_delivery_boot_heal %s", note)
+
+
 def wire_memory_kind(
     app: FastAPI,
     resource_svc: ResourceService,
@@ -119,9 +142,10 @@ def wire_memory_kind(
         agent_source_resolver=_agent_source,
         # The distil pass's model half. All three travel together or not at
         # all: a completion port with no credential resolver behind it reaches
-        # the provider and is refused the key, which FR-024 then reads as "no
-        # internal connection" and answers with the mechanical pass. See the
-        # module docstring — this is the silent degradation the trio prevents.
+        # the provider and is refused the key, which "Distil mechanically with no
+        # internal connection" then reads as "no internal connection" and
+        # answers with the mechanical pass. See the module docstring — this is
+        # the silent degradation the trio prevents.
         completion=LangchainLlmCompletion(),
         model_selector=models,
         credential_resolver=credential_resolver,
@@ -131,7 +155,7 @@ def wire_memory_kind(
 
     # Nothing in this layer syncs: the whole tree under ``~/.coffer/memory/``
     # is derived from the agents installed on THIS machine and is rebuilt per
-    # machine (spec vault-sync "What does not sync").
+    # machine (spec vault-sync "Keep reach machine-local").
 
     recall_service = RecallService(memory=service)
     register_recall_tool(builtin_tools, recall_service=recall_service)
@@ -180,11 +204,13 @@ def _upkeep_interval(
 def start_aggregate_worker(
     service: MemoryService, engine_config: InternalEngineConfigService
 ) -> asyncio.Task[None]:
-    """Start the aggregation pass (FR-007) — a catch-up on boot, then on a timer.
+    """Start the aggregation pass — a catch-up on boot, then on a timer.
+
+    Spec memory "Aggregate on an interval and on demand".
 
     On by default: a pass reads the agents' own memory files and writes only
-    the derived tree, and FR-006 makes a pass over unchanged sources nearly
-    free. The Sync button and ``coffer memory sync`` stay: this makes the
+    the derived tree, and "Skip unchanged sources" makes a pass over unchanged
+    sources nearly free. The Sync button and ``coffer memory sync`` stay: this makes the
     layer current without being asked, it does not replace asking.
 
     Both halves of "on a timer" are the operator's (spec provider-switching
@@ -217,7 +243,8 @@ def start_distil_worker(
     engine_config: InternalEngineConfigService,
 ) -> asyncio.Task[None]:
     """Start the distil sweep — on by default, because the tree it rewrites is
-    disposable (FR-015: delete it and re-running reproduces it), unlike
+    disposable ("Keep the memory tree derived and local": delete it and
+    re-running reproduces it), unlike
     knowledge's tidy. On by default is not the same as unstoppable, though: the
     operator can switch it off and re-time it like any other pass.
     Returns the task; the lifespan cancels it at shutdown."""
@@ -226,7 +253,8 @@ def start_distil_worker(
         # Uids, not names: the sweep and the page's Distil button are two
         # writers over one directory and claim the same upkeep-runs key, so
         # both must spell the partition the way that cannot change between
-        # them reading it (FR-041, ADR resource-identity-is-an-immutable-uid).
+        # them reading it ("Run one distil pass per partition at a time", ADR
+        # resource-identity-is-an-immutable-uid).
         # The pass resolves the row for the directory it rewrites.
         return [r.uid for r in await resource_svc.list(kind=KIND_MEMORY, enabled=True)]
 
@@ -234,7 +262,8 @@ def start_distil_worker(
         """The sweep's own actor, fixed here rather than defaulted in the
         service: ``memory_distilled`` rows written by this timer must be
         readable as the timer's, or the audit log cannot answer whether a
-        partition was last rewritten because somebody asked (FR-038)."""
+        partition was last rewritten because somebody asked ("Audit every
+        lifecycle act")."""
         return await distil(uid, actor=WORKER_ACTOR)
 
     worker = DistilWorker(

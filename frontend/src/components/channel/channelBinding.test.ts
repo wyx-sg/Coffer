@@ -1,6 +1,6 @@
 // frontend/src/components/channel/channelBinding.test.ts
 //
-// The rule that is the channel's own (spec channels, "Where a channel runs"):
+// The rule that is the channel's own (spec channels, "Bind each channel to the one machine that runs it"):
 // the daemon's `runs_here` outranks anything this code could work out for
 // itself. The four states and the pick-list they share with the curation owner
 // are tested in `src/lib/machineBinding.test.ts`; what is left here is only

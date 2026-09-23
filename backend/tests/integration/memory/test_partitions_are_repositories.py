@@ -1,4 +1,7 @@
-"""One repository, one partition — against real git trees (FR-014, FR-015).
+"""One repository, one partition — against real git trees.
+
+See "Identify a partition by its repository" and "Create no partition for a
+non-repository directory".
 
 A partition used to be keyed on the working directory a fact was learned in,
 and measured on the maintainer's live vault that produced three failures at
@@ -106,7 +109,8 @@ def test_a_directory_in_no_repository_resolves_to_nothing(tmp_path: pathlib.Path
 
 def test_a_directory_that_no_longer_exists_resolves_to_nothing(tmp_path: pathlib.Path) -> None:
     """A working directory an agent recorded months ago may be gone; that is a
-    normal answer with a normal consequence, not an error (FR-016)."""
+    normal answer with a normal consequence, not an error ("Report unresolvable
+    partitions")."""
     assert resolve_repository(tmp_path / "deleted" / "months" / "ago") is None
 
 

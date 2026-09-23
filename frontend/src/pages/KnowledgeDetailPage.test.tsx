@@ -1,13 +1,9 @@
 // frontend/src/pages/KnowledgeDetailPage.test.tsx
 //
-// The collection viewer, which is TWO trees. Data hooks are mocked so the test
-// asserts the page's own rendering: a lane per tab, the file's body in the pane
-// beside it, and — the thing this page exists to get right — that what may be
-// DONE to a file follows the lane it is in.
-//
-// Radix tabs activate on **mousedown**, not click. A test that switches them
-// with `fireEvent.click` silently stays on the first tab and then passes its
-// assertions for the wrong reason, so every tab switch below is a `mouseDown`.
+// The collection viewer, which is ONE tree of documents rooted at the
+// collection directory. Data hooks are mocked so the test asserts the page's
+// own rendering: the tree, the document's body in the pane beside it, the same
+// actions on every document whoever wrote it, and the pending-material hint.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -23,7 +19,7 @@ import { acceptance } from "@/test/acceptance";
 // is mocked here the way every other data hook is.
 vi.mock("@/lib/hooks/useUpkeep", () => ({ useUpkeepRunning: vi.fn(() => false) }));
 // The route carries the collection's UID, and everything the page puts on
-// screen — the title, and every `path` its two trees ask for — is built from
+// screen — the title, and every `path` its tree asks for — is built from
 // the NAME. The name arrives on this read and nowhere else, so it is stubbed
 // like any other data hook rather than left to a query that never resolves.
 vi.mock("@/lib/hooks/useResources", () => ({
@@ -34,16 +30,19 @@ vi.mock("@/lib/hooks/useResources", () => ({
   })),
 }));
 vi.mock("@/lib/hooks/useKnowledge", () => ({
+  // The pending count comes off the collection list, matched by uid.
+  useKnowledgeCollections: vi.fn(),
   useKnowledgeTree: vi.fn(),
   useKnowledgeFile: vi.fn(),
   useCurateCollection: vi.fn(),
   // Mounted transitively via KnowledgeUploadButton;
-  // this suite only exercises the trees + preview, so both get an inert default.
+  // this suite only exercises the tree + preview, so both get an inert default.
   useUploadKnowledgeFile: vi.fn(),
   useDeleteKnowledgeFile: vi.fn(),
 }));
 
 const {
+  useKnowledgeCollections,
   useKnowledgeTree,
   useKnowledgeFile,
   useCurateCollection,
@@ -54,36 +53,39 @@ const { useUpkeepRunning } = await import("@/lib/hooks/useUpkeep");
 const { useResource } = await import("@/lib/hooks/useResources");
 const resourceMock = vi.mocked(useResource);
 const runningMock = vi.mocked(useUpkeepRunning);
+const collectionsMock = vi.mocked(useKnowledgeCollections);
 const treeMock = vi.mocked(useKnowledgeTree);
 const fileMock = vi.mocked(useKnowledgeFile);
 const curateMock = vi.mocked(useCurateCollection);
 const uploadMock = vi.mocked(useUploadKnowledgeFile);
 const deleteMock = vi.mocked(useDeleteKnowledgeFile);
 
-const SOURCE = {
-  path: "shopee/sources/gateway.md",
+/** A document a person wrote. */
+const MINE = {
+  path: "shopee/gateway.md",
   title: "Account Gateway",
   description: "where account decisions are made",
   actor: "user" as const,
   created_at: "2026-09-12T00:00:00Z",
   updated_at: "2026-09-12T00:00:00Z",
-  ingested_at: "2026-09-13T00:00:00Z",
+  curated_at: "2026-09-13T00:00:00Z",
   body: "The orchestration layer.",
-  file_path: "/Users/dev/.coffer/knowledge/shopee/sources/gateway.md",
-  folder_path: "/Users/dev/.coffer/knowledge/shopee/sources",
+  file_path: "/Users/dev/.coffer/knowledge/shopee/gateway.md",
+  folder_path: "/Users/dev/.coffer/knowledge/shopee",
 };
 
-const TOPIC = {
-  path: "shopee/topics/session-ownership.md",
+/** A document curation wrote, one folder down. */
+const CURATED = {
+  path: "shopee/account/session-ownership.md",
   title: "Session ownership",
   description: "who owns a login session",
   actor: "agent" as const,
   created_at: "2026-09-12T00:00:00Z",
   updated_at: "2026-09-12T00:00:00Z",
-  ingested_at: "",
+  curated_at: "",
   body: "Login state is owned by account.session.",
-  file_path: "/Users/dev/.coffer/knowledge/shopee/topics/session-ownership.md",
-  folder_path: "/Users/dev/.coffer/knowledge/shopee/topics",
+  file_path: "/Users/dev/.coffer/knowledge/shopee/account/session-ownership.md",
+  folder_path: "/Users/dev/.coffer/knowledge/shopee/account",
 };
 
 /** The delete mutation, stubbed. `mutate` reports nothing unless a test hands
@@ -119,32 +121,51 @@ function stubCurate(overrides: { mutate?: ReturnType<typeof vi.fn>; error?: unkn
   return mutate;
 }
 
-/** Each lane answers for its own path, the way the real hook does — a tree stub
- *  that ignored the path would show the same files under both tabs, which is
- *  exactly the bug this page could have. */
-function stubLanes({ sources = [SOURCE], topics = [TOPIC] } = {}) {
+/** The tree answers for its own path, the way the real hook does: the
+ *  collection root holds one document and the `account` folder, and the folder
+ *  holds the curated document. */
+function stubTree({ empty = false } = {}) {
   treeMock.mockImplementation(
     (path: string) =>
       ({
-        data: {
-          path,
-          directories: [],
-          files: path.endsWith("/topics") ? topics : sources,
-        },
+        data: empty
+          ? { path, directories: [], files: [] }
+          : path === COLLECTION_NAME
+            ? {
+                path,
+                directories: [{ path: "shopee/account", name: "account", file_count: 1 }],
+                files: [MINE],
+              }
+            : { path, directories: [], files: path === "shopee/account" ? [CURATED] : [] },
         isPending: false,
         error: null,
       }) as unknown as ReturnType<typeof useKnowledgeTree>,
   );
   // The file query is enabled only while one is selected (`enabled:
-  // Boolean(path)`), and answers for whichever lane's file was asked for.
+  // Boolean(path)`), and answers for whichever document was asked for.
   fileMock.mockImplementation(
     (path: string | null) =>
       ({
-        data: path === TOPIC.path ? TOPIC : path ? SOURCE : undefined,
+        data: path === CURATED.path ? CURATED : path ? MINE : undefined,
         isPending: false,
         error: null,
       }) as unknown as ReturnType<typeof useKnowledgeFile>,
   );
+}
+
+/** The collection list, carrying the pending count for this collection. */
+function stubPending(pending: number) {
+  collectionsMock.mockReturnValue({
+    data: [
+      {
+        uid: COLLECTION_UID,
+        name: COLLECTION_NAME,
+        description: "",
+        document_count: 2,
+        pending_count: pending,
+      },
+    ],
+  } as unknown as ReturnType<typeof useKnowledgeCollections>);
 }
 
 function stubInertDefaults() {
@@ -159,10 +180,11 @@ beforeEach(() => {
   stubDelete();
   stubCurate();
   stubInertDefaults();
-  stubLanes();
+  stubTree();
+  stubPending(0);
 });
 
-function renderPage() {
+function renderPage(search = "") {
   // The header's reach control reads the collection's Resource, so the page
   // needs a real query client — the fetch never resolves here, and the control
   // renders from its own defaults.
@@ -172,7 +194,7 @@ function renderPage() {
   return render(
     <QueryClientProvider client={qc}>
       <TooltipProvider>
-        <MemoryRouter initialEntries={[`/knowledge/${COLLECTION_UID}`]}>
+        <MemoryRouter initialEntries={[`/knowledge/${COLLECTION_UID}${search}`]}>
           <Routes>
             <Route path="/knowledge/:uid" element={<KnowledgeDetailPage />} />
           </Routes>
@@ -182,58 +204,82 @@ function renderPage() {
   );
 }
 
-/** Switch lanes. Radix activates a tab on mousedown; `click` would not. */
-function openTopics() {
-  fireEvent.mouseDown(screen.getByRole("tab", { name: /topics/i }));
+/** Open the `account` folder, which lists the curated document. */
+function openAccountFolder() {
+  fireEvent.click(screen.getByRole("button", { name: /^account$/ }));
 }
 
 describe("KnowledgeDetailPage", () => {
-  acceptance("knowledge", "the viewer edits sources and renders topics read-only", () => {
+  acceptance("knowledge", "the viewer shows one tree of documents", () => {
     renderPage();
 
-    // --- the sources lane: open, reveal, delete -----------------------------
+    // No tabs: the collection is one tree, rooted at its own directory.
+    expect(screen.queryByRole("tab")).toBeNull();
+
+    // --- a document a person wrote: open, reveal, delete --------------------
     fireEvent.click(screen.getByRole("button", { name: /Account Gateway/ }));
     expect(screen.getByText("The orchestration layer.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /delete file/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /delete document/i })).toBeInTheDocument();
 
-    // --- the topics lane: open and reveal only -----------------------------
-    openTopics();
-    expect(screen.getByRole("tab", { name: /topics/i })).toHaveAttribute("aria-selected", "true");
+    // --- a document curation wrote, in the same tree: the same actions -------
+    openAccountFolder();
     fireEvent.click(screen.getByRole("button", { name: /Session ownership/ }));
-
     expect(screen.getByText(/Login state is owned by account\.session\./)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
-    // No delete, no editor — curation is the only writer of this lane…
-    expect(screen.queryByRole("button", { name: /delete file/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /delete document/i })).toBeInTheDocument();
+
+    // The preview is read-only: editing happens in the person's own editor.
     expect(screen.queryByRole("textbox", { name: /body|content/i })).toBeNull();
-    // …and the page says so, rather than leaving the reader to discover it.
-    expect(screen.getByText(/overwritten by the next pass/i)).toBeInTheDocument();
   });
 
-  test("switching lanes leaves the pane on no file, not on the other lane's", () => {
-    // A path belongs to one lane. Previewing a source beside the topics tree
-    // would offer a source's delete under the Topics tab.
+  test("the tree is rooted at the collection directory", () => {
+    renderPage();
+    const askedFor = treeMock.mock.calls.map((call) => call[0]);
+    expect(askedFor).toContain(COLLECTION_NAME);
+    // The folder is listed, its contents are not fetched until it opens.
+    expect(screen.getByRole("button", { name: /^account$/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Session ownership/ })).toBeNull();
+  });
+
+  test("the open document lives in the URL", () => {
+    renderPage(`?file=${encodeURIComponent(MINE.path)}`);
+    expect(screen.getByText("The orchestration layer.")).toBeInTheDocument();
+  });
+
+  test("says how much new material is waiting to be merged", () => {
+    stubPending(3);
+    renderPage();
+    expect(screen.getByText(/3 new items are being merged/i)).toBeInTheDocument();
+  });
+
+  test("says nothing about pending material when none is waiting", () => {
+    renderPage();
+    expect(screen.queryByText(/being merged/i)).toBeNull();
+  });
+
+  test("shows when curation last had the document, or that it never has", () => {
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: /Account Gateway/ }));
-    expect(screen.getByText("The orchestration layer.")).toBeInTheDocument();
+    expect(screen.getByText(/last curated/i)).toBeInTheDocument();
 
-    openTopics();
-
-    expect(screen.queryByText("The orchestration layer.")).toBeNull();
-    expect(screen.getByText(/select a file/i)).toBeInTheDocument();
+    openAccountFolder();
+    fireEvent.click(screen.getByRole("button", { name: /Session ownership/ }));
+    expect(screen.getByText(/not curated yet/i)).toBeInTheDocument();
   });
 
   test("prompts for a selection before a file is chosen", () => {
-    stubLanes({ sources: [], topics: [] });
+    stubTree({ empty: true });
     renderPage();
     expect(screen.getByText(/select a file/i)).toBeInTheDocument();
+    expect(screen.getByText(/no documents yet/i)).toBeInTheDocument();
   });
 
-  test("the one input beside a tree is a filter, not a retrieval box", () => {
-    // The layer exposes no search and no grep (FR-050/FR-061). The only textbox
+  test("the one input beside the tree is a filter, not a retrieval box", () => {
+    // The layer exposes no search and no grep (spec knowledge "Present a collection
+    // as one tree in the web UI"). The only textbox
     // on the page narrows the names already on screen.
     renderPage();
 
@@ -279,7 +325,7 @@ describe("KnowledgeDetailPage", () => {
   test("the uid addresses the collection; its name builds every path", () => {
     // The split this page exists to hold: it is reached by an opaque uid, and
     // a knowledge `path` names a place on disk, where the collection's
-    // directory is its NAME. So the trees, the title and the run-list lookup
+    // directory is its NAME. So the tree, the title and the run-list lookup
     // all speak the name, and only the curate request speaks the uid.
     renderPage();
 
@@ -290,8 +336,6 @@ describe("KnowledgeDetailPage", () => {
     expect(runningMock).toHaveBeenCalledWith("knowledge", COLLECTION_NAME);
 
     const askedFor = treeMock.mock.calls.map((call) => call[0]);
-    expect(askedFor).toContain(`${COLLECTION_NAME}/sources`);
-    expect(askedFor).toContain(`${COLLECTION_NAME}/topics`);
     expect(askedFor.some((path) => path.includes(COLLECTION_UID))).toBe(false);
   });
 
@@ -303,11 +347,11 @@ describe("KnowledgeDetailPage", () => {
   });
 });
 
-// Deleting ONE source: the previewed file is the anchor — it is the file the
+// Deleting ONE document: the previewed file is the anchor — it is the file the
 // user is looking at, and the only one the page can name for certain.
-describe("KnowledgeDetailPage — deleting the previewed source", () => {
-  /** Open the collection and click the tree row, so a source is being previewed. */
-  function openSource() {
+describe("KnowledgeDetailPage — deleting the previewed document", () => {
+  /** Open the collection and click the tree row, so a document is being previewed. */
+  function openDocument() {
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: /Account Gateway/ }));
   }
@@ -316,26 +360,26 @@ describe("KnowledgeDetailPage — deleting the previewed source", () => {
     // The page can only name the file it has open; with none open, a delete
     // button could only mean the collection, which is the list page's action.
     renderPage();
-    expect(screen.queryByRole("button", { name: /delete file/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /delete document/i })).toBeNull();
   });
 
   test("the confirmation names the exact file path", () => {
-    openSource();
+    openDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /delete file/i }));
-    expect(screen.getByRole("dialog")).toHaveTextContent("shopee/sources/gateway.md");
+    fireEvent.click(screen.getByRole("button", { name: /delete document/i }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("shopee/gateway.md");
   });
 
   test("a refused delete keeps the dialog open with the reason", () => {
     const mutate = stubDelete({
       error: new ApiError("KNOWLEDGE_UNSAFE_PATH", "that path is outside the knowledge root"),
     });
-    openSource();
+    openDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /delete file/i }));
+    fireEvent.click(screen.getByRole("button", { name: /delete document/i }));
     fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
 
-    expect(mutate).toHaveBeenCalledWith("shopee/sources/gateway.md", expect.anything());
+    expect(mutate).toHaveBeenCalledWith("shopee/gateway.md", expect.anything());
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent(/outside the knowledge root/i);
   });
@@ -344,13 +388,13 @@ describe("KnowledgeDetailPage — deleting the previewed source", () => {
     const mutate = stubDelete({
       mutate: vi.fn((_path: string, opts?: { onSuccess?: () => void }) => opts?.onSuccess?.()),
     });
-    openSource();
+    openDocument();
     expect(screen.getByText("The orchestration layer.")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /delete file/i }));
+    fireEvent.click(screen.getByRole("button", { name: /delete document/i }));
     fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
 
-    expect(mutate).toHaveBeenCalledWith("shopee/sources/gateway.md", expect.anything());
+    expect(mutate).toHaveBeenCalledWith("shopee/gateway.md", expect.anything());
     expect(screen.queryByRole("dialog")).toBeNull();
     // Back to the empty pane: the file is gone, so re-reading it would 404.
     expect(screen.getByText(/select a file/i)).toBeInTheDocument();

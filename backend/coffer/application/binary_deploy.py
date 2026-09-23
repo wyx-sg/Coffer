@@ -1,4 +1,5 @@
-"""Deploy a frozen build's sibling binaries into ``~/.coffer/bin`` (spec daemon FR-027).
+"""Deploy a frozen build's sibling binaries into ``~/.coffer/bin`` (spec daemon "Deploy
+frozen sibling binaries and back up the vault before migrating").
 
 The Tauri shell used to do this on every launch. With the shell gone the daemon
 inherits the job, and it is the right owner: ``coffer-callback`` (the channel
@@ -8,9 +9,9 @@ webhook listener) is a process the *daemon* spawns at runtime, and
 reboot (ADR daemon-detect-or-spawn).
 
 Only frozen builds need this. A source install has already been handled by
-``pip install``, which puts the console scripts on PATH (spec daemon FR-024) — so
-:func:`deploy_frozen_sidecars` is a no-op outside a PyInstaller bundle rather
-than something the caller has to guard.
+``pip install``, which puts the console scripts on PATH (spec daemon "Install the console
+scripts from source") — so :func:`deploy_frozen_sidecars` is a no-op outside a
+PyInstaller bundle rather than something the caller has to guard.
 
 Layout — each build lands in its own directory and the public names are
 symlinks into it::

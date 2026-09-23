@@ -43,6 +43,7 @@ from coffer.domain.sync.convergence import (
 )
 from coffer.domain.sync.diff import ChangeStatus, DiffSummary, DocChange
 from coffer.infrastructure.persistence.models import SyncRemoteModel, SyncRunModel
+from coffer.infrastructure.persistence.sync_join_report_json import report_from_json, report_to_json
 
 _ROW_ID = 1
 
@@ -107,8 +108,10 @@ def _run_payload(run: ConvergeRun) -> str:
             "conflicts": list(run.conflicts),
             "agent_resolved": list(run.agent_resolved),
             "failures": [list(f) for f in run.failures],
+            "not_applicable": list(run.not_applicable),
             "locked_refs": list(run.locked_refs),
             "pending": _pending_to_json(run.pending) if run.pending else None,
+            "join_report": report_to_json(run.join_report) if run.join_report else None,
         },
         sort_keys=True,
     )
@@ -160,8 +163,10 @@ def _run_of(
         conflicts=tuple(str(p) for p in payload.get("conflicts", [])),
         agent_resolved=tuple(str(p) for p in payload.get("agent_resolved", [])),
         failures=tuple((str(p), str(r)) for p, r in payload.get("failures", [])),
+        not_applicable=tuple(str(p) for p in payload.get("not_applicable", [])),
         locked_refs=tuple(str(r) for r in payload.get("locked_refs", [])),
         pending=_pending_from_json(payload.get("pending")),
+        join_report=report_from_json(payload.get("join_report")),
         error=error,
     )
 
@@ -266,11 +271,12 @@ class SqlAlchemySyncRemoteRepo:
         """Re-stamp the newest recorded round instead of appending a new one.
 
         One outstanding confirmation is one situation, and the timer
-        re-deriving it every interval is not news (spec vault-sync FR-092). The
-        round is written over the row that first reported it — same
-        ``started_at``, so the moment the vault stopped is still readable, with
-        ``finished_at`` and the payload refreshed so the row also shows the
-        vault is still ticking — and the history grows no second row for it.
+        re-deriving it every interval is not news (spec vault-sync "Record one
+        outstanding confirmation once"). The round is written over the row that
+        first reported it — same ``started_at``, so the moment the vault
+        stopped is still readable, with ``finished_at`` and the payload
+        refreshed so the row also shows the vault is still ticking — and the
+        history grows no second row for it.
 
         False when there is nothing to refresh, or when the newest row is not
         the same outcome: the caller then records the round normally. The

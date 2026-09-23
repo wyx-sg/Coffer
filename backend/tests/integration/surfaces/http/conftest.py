@@ -39,26 +39,43 @@ def _create_collection(client: TestClient, name: str) -> None:
     assert resp.status_code == 201, resp.text
 
 
-def _write_source(
+def _submit(
     client: TestClient,
     *,
     collection: str,
     title: str,
     description: str,
     body: str,
-    folder: str | None = None,
 ) -> str:
-    """Write one source through the route. The caller never spells ``sources/``
-    — the service adds the lane segment (spec knowledge FR-013)."""
-    payload: dict[str, object] = {
-        "title": title,
-        "description": description,
-        "body": body,
-        "collection": collection,
-    }
-    if folder:
-        payload["folder"] = folder
-    resp = client.put("/api/v1/knowledge/file", json=payload)
-    assert resp.status_code == 200, resp.text
-    path: str = resp.json()["path"]
+    """Submit material through the route and return the document it became.
+
+    The app booted here has no internal model configured, so material is promoted to
+    a document on the spot rather than waiting in the inbox (spec knowledge "Promote
+    material directly when no model is configured") — which is what gives the caller
+    a path to read back.
+    """
+    resp = client.post(
+        "/api/v1/knowledge/material",
+        json={"collection": collection, "title": title, "description": description, "body": body},
+    )
+    assert resp.status_code == 201, resp.text
+    out = resp.json()
+    assert out["status"] == "written", out
+    path: str = out["path"]
     return path
+
+
+def _hold_material(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the running service believe a model could merge material, so a
+    submission waits in the inbox instead of being promoted.
+
+    Patched on the service rather than by configuring a provider: the only
+    thing under test is where material lands, and a real provider would bring
+    a model call into a tier that makes none.
+    """
+    from coffer.surfaces.http.knowledge.dependencies import get_knowledge_service
+
+    async def _yes() -> bool:
+        return True
+
+    monkeypatch.setattr(get_knowledge_service(), "_merge_available", _yes)

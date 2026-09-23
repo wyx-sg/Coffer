@@ -134,6 +134,9 @@ async def test_one_unreadable_agent_does_not_lose_the_others() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an arriving plugin inventory writes nothing into an agent"
+)
 async def test_import_writes_nothing_and_reports_nothing() -> None:
     """The whole point. Coffer has no plugin install path and deliberately does
     not hand-write another tool's private config; the list lands in the vault
@@ -146,6 +149,9 @@ async def test_import_writes_nothing_and_reports_nothing() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="keep local plugins when the inventory document is deleted"
+)
 async def test_deleting_an_agents_doc_touches_no_agent_and_republishes_what_is_held() -> None:
     """A deletion arriving from another machine cannot uninstall anything here:
     Coffer has no uninstall-by-sync path any more than it has an install one.

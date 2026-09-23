@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vitest";
 
 import type { RunRecord } from "@/lib/api/sync";
-import { collapseQuietRounds, heldRoundId, isQuiet, quietSpan } from "./syncRunRows";
+import { collapseRepeats, isQuiet, groupSpan } from "./syncRunRows";
+import { heldRoundId } from "./syncRowActions";
 
 const NO_COUNTS = { added: 0, modified: 0, deleted: 0, changes: [] };
 
@@ -47,60 +48,107 @@ describe("isQuiet", () => {
   });
 });
 
-describe("collapseQuietRounds", () => {
-  test("consecutive quiet rounds become one row", () => {
-    const rows = collapseQuietRounds([run({ id: 5 }), run({ id: 4 }), run({ id: 3 })]);
-    expect(rows).toHaveLength(1);
-    expect(rows[0].kind).toBe("quiet");
-    expect(rows[0].kind === "quiet" && rows[0].runs.map((r) => r.id)).toEqual([5, 4, 3]);
+describe("collapseRepeats", () => {
+  test("consecutive quiet rounds become one row, bar the newest", () => {
+    const rows = collapseRepeats([run({ id: 5 }), run({ id: 4 }), run({ id: 3 })]);
+    // The newest round is the present, not the history: it stands alone so a
+    // reader sees the state the vault is actually in, and so the row that may
+    // carry Undo or an answer is never hidden inside a summary.
+    expect(rows.map((r) => r.kind)).toEqual(["run", "group"]);
+    expect(rows[1].kind === "group" && rows[1].runs.map((r) => r.id)).toEqual([4, 3]);
+  });
+
+  test("a stretch of identical failures folds — the news is the same news", () => {
+    // The shape this was written for: an expired credential is ten rows of
+    // "failed" by morning, burying every round that said anything else.
+    const rows = collapseRepeats([
+      run({ id: 9, status: "failed", error: "git fetch failed" }),
+      run({ id: 8, status: "failed", error: "git fetch failed" }),
+      run({ id: 7, status: "failed", error: "git fetch failed" }),
+      run({ id: 6, status: "ok", published: { ...NO_COUNTS, added: 1 } }),
+    ]);
+    expect(rows.map((r) => r.kind)).toEqual(["run", "group", "run"]);
+    expect(rows[1].kind === "group" && rows[1].status).toBe("failed");
+    expect(rows[1].kind === "group" && rows[1].runs.map((r) => r.id)).toEqual([8, 7]);
+  });
+
+  test("a hold re-raised every hour folds too", () => {
+    const rows = collapseRepeats([
+      run({ id: 4, status: "ok" }),
+      run({ id: 3, status: "awaiting_confirmation" }),
+      run({ id: 2, status: "awaiting_confirmation" }),
+      run({ id: 1, status: "awaiting_confirmation" }),
+    ]);
+    expect(rows.map((r) => r.kind)).toEqual(["run", "group"]);
+    expect(rows[1].kind === "group" && rows[1].runs).toHaveLength(3);
+  });
+
+  test("rounds that changed something never fold, however many in a row", () => {
+    // `+3 ~1 −0` twice is two facts, not one printed twice.
+    const busy = { ...NO_COUNTS, added: 3 };
+    const rows = collapseRepeats([
+      run({ id: 4, status: "ok", published: busy }),
+      run({ id: 3, status: "ok", published: busy }),
+      run({ id: 2, status: "ok", published: busy }),
+    ]);
+    expect(rows.map((r) => r.kind)).toEqual(["run", "run", "run"]);
+  });
+
+  test("unlike outcomes never fold together", () => {
+    const rows = collapseRepeats([
+      run({ id: 4, status: "ok" }),
+      run({ id: 3, status: "failed", error: "x" }),
+      run({ id: 2 }),
+      run({ id: 1, status: "failed", error: "x" }),
+    ]);
+    expect(rows.map((r) => r.kind)).toEqual(["run", "run", "run", "run"]);
   });
 
   test("a lone quiet round stays a round — a group of one reads worse", () => {
-    const rows = collapseQuietRounds([run({ id: 2, status: "ok" }), run({ id: 1 })]);
-    expect(rows.map((r) => r.kind)).toEqual(["run", "run"]);
+    const rows = collapseRepeats([run({ id: 3, status: "ok" }), run({ id: 2 }), run({ id: 1, status: "ok" })]);
+    expect(rows.map((r) => r.kind)).toEqual(["run", "run", "run"]);
   });
 
   test("a round that did something breaks the fold in two", () => {
     // This is the whole point of folding ADJACENT rounds only: the busy round
     // in the middle must not be swallowed, and the two quiet stretches around
     // it are two different stretches.
-    const rows = collapseQuietRounds([
+    const rows = collapseRepeats([
       run({ id: 6 }),
       run({ id: 5 }),
       run({ id: 4, status: "ok", published: { ...NO_COUNTS, added: 3 } }),
       run({ id: 3 }),
       run({ id: 2 }),
     ]);
-    expect(rows.map((r) => r.kind)).toEqual(["quiet", "run", "quiet"]);
-    expect(rows[0].kind === "quiet" && rows[0].runs.map((r) => r.id)).toEqual([6, 5]);
-    expect(rows[2].kind === "quiet" && rows[2].runs.map((r) => r.id)).toEqual([3, 2]);
+    expect(rows.map((r) => r.kind)).toEqual(["run", "run", "run", "group"]);
+    expect(rows[3].kind === "group" && rows[3].runs.map((r) => r.id)).toEqual([3, 2]);
   });
 
   test("every round survives the fold — nothing is dropped", () => {
     const runs = [run({ id: 4 }), run({ id: 3 }), run({ id: 2, status: "ok" }), run({ id: 1 })];
-    const seen = collapseQuietRounds(runs).flatMap((r) =>
+    const seen = collapseRepeats(runs).flatMap((r) =>
       r.kind === "run" ? [r.run.id] : r.runs.map((x) => x.id),
     );
     expect(seen).toEqual([4, 3, 2, 1]);
   });
 
   test("row ids are unique and stable", () => {
-    const rows = collapseQuietRounds([run({ id: 3 }), run({ id: 2 }), run({ id: 1, status: "ok" })]);
+    const rows = collapseRepeats([run({ id: 3 }), run({ id: 2 }), run({ id: 1, status: "ok" })]);
     const ids = rows.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(collapseQuietRounds([run({ id: 3 }), run({ id: 2 }), run({ id: 1, status: "ok" })])
+    expect(collapseRepeats([run({ id: 3 }), run({ id: 2 }), run({ id: 1, status: "ok" })])
       .map((r) => r.id)).toEqual(ids);
   });
 
   test("an empty history folds to nothing", () => {
-    expect(collapseQuietRounds([])).toEqual([]);
+    expect(collapseRepeats([])).toEqual([]);
   });
 });
 
-describe("quietSpan", () => {
+describe("groupSpan", () => {
   test("spans from the oldest member's start to the newest member's finish", () => {
     // The list is newest-first, so the span's ends come from opposite ends of it.
-    const span = quietSpan([run({ id: 3 }), run({ id: 2 }), run({ id: 1 })]);
+    const span = groupSpan([run({ id: 3 }), run({ id: 2 }), run({ id: 1 })]);
     expect(span).toEqual({
       from: "2026-09-16T01:00:00Z",
       to: "2026-09-16T03:00:05Z",

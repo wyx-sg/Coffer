@@ -1,5 +1,6 @@
 // components/settings/ModalitySelect.tsx — the five-value picker that says what
-// KIND of model a curated entry is (spec provider-switching FR-031): text, embedding,
+// KIND of model a curated entry is (spec provider-switching
+// "Store a modality with each curated model"): text, embedding,
 // image, video or audio. One endpoint serves several kinds from one key, and a
 // downstream picker asks for the kind it needs, so the answer has to be sayable
 // per model — introspection guesses it from the id, this is where the user

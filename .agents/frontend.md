@@ -128,7 +128,7 @@ the chat SSE stream (below).
 
 - **Generated types for every contract.** `npm run codegen`
   (`frontend/scripts/codegen.mjs`) runs openapi-typescript over each
-  `specs/*/contracts/api.openapi.yaml` into `src/lib/api/generated/<spec>.ts`
+  `openspec/specs/*/contracts/api.openapi.yaml` into `src/lib/api/generated/<spec>.ts`
   — **all seven** contracts that have one (`mcp-gateway`, `agent-registry`,
   `channels`, `knowledge`, `provider-switching`, `skill-manager`, `vault-sync`,
   the `CONTRACTS` array in `codegen.mjs`); `src/lib/api/types.ts` re-exports the

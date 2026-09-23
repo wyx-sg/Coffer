@@ -2,7 +2,7 @@
 
 ``resources.scope_json`` goes back to a single axis. A resource's activation
 state is machine-local — it is set on the machine it applies to and does not
-travel (spec vault-sync ``## What does not sync``) — so each machine already
+travel (spec vault-sync "Keep reach machine-local") — so each machine already
 says which resources it activates by *holding* that scope. Naming machine ids
 inside the scope as well recorded the same fact twice, with two places to
 disagree, which is the counterpart 0072 added and this revision removes.

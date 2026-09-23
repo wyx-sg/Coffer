@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-14
 **Deciders**: Yuxing Wu
-**Related**: [Harness in Layers](industrial-grade-harness-in-layers.md) (harness in layers), [Tool Retrieval](tool-retrieval-for-overload.md) (tool retrieval), `evals/README.md`, `.specify/memory/roadmap.md`
+**Related**: [Harness in Layers](industrial-grade-harness-in-layers.md) (harness in layers), [Tool Retrieval](tool-retrieval-for-overload.md) (tool retrieval), `evals/README.md`
 
 ## Context
 
@@ -14,7 +14,7 @@ decides what the agent CAN do (static — tools, context, guardrails); the loop 
 engineering" is concretely the **AI-assisted development-time loop that builds
 Coffer's own code** — not a runtime agent loop.
 
-That development loop already has a strong deterministic spine: `/coffer-spec`
+That development loop already has a strong deterministic spine: `/opsx:propose`
 (frame) → `writing-plans` (plan) → TDD (set the bar) → Claude Code (act) →
 `make verify` (4 tiers + import-linter + acceptance audit) → `/code-review` →
 CI-gated PR (integrate). The inner edit-verify loop and the loop-control
@@ -56,7 +56,8 @@ real usage ─▶ [honest invocation log] ─▶ [capture sink] ─▶ [curate] 
   in-band `isError` tool result is recorded as `status=error`, not `ok`. The
   error text is upstream-controlled (may echo secrets) so only a fixed
   Coffer-authored marker is persisted, never the result content (preserves
-  SC-010 and the roadmap non-goal "argument/result content stays out of the DB").
+  [credentials](../../openspec/specs/credentials/spec.md) "Hold plaintext only in memory at the moment of use"
+  and [mcp-gateway](../../openspec/specs/mcp-gateway/spec.md) "Record invocations without content").
   *Shipped with this ADR.*
 - **Slice 2 — Capture sink.** An **opt-in, dev-only, local** capture path that
   records the eval-relevant shape of real interactions (tool-routing: intent +

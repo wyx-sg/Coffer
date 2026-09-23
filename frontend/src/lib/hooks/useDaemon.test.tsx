@@ -10,12 +10,12 @@ vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
 vi.mock("@/lib/tauri", () => ({
   daemonVersionMatches: vi.fn(),
   restartDaemon: vi.fn(),
-  connectToShellDaemon: vi.fn(),
+  applyDaemonConnection: vi.fn(),
 }));
-const { daemonVersionMatches, restartDaemon, connectToShellDaemon } = await import("@/lib/tauri");
+const { daemonVersionMatches, restartDaemon, applyDaemonConnection } = await import("@/lib/tauri");
 const daemonVersionMatchesMock = vi.mocked(daemonVersionMatches);
 const restartDaemonMock = vi.mocked(restartDaemon);
-const connectToShellDaemonMock = vi.mocked(connectToShellDaemon);
+const applyDaemonConnectionMock = vi.mocked(applyDaemonConnection);
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
 
@@ -91,9 +91,9 @@ describe("useDaemonOutOfDate", () => {
 describe("useRestartDaemon", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  test("restarts, re-handshakes, then refetches the whole cache in that order", async () => {
-    restartDaemonMock.mockResolvedValue({ pid: 1, started: true } as never);
-    connectToShellDaemonMock.mockResolvedValue(undefined);
+  test("installs the connection the restart returned, then refetches the whole cache", async () => {
+    const connection = { baseUrl: "http://127.0.0.1:8000/api/v1", token: "fresh" };
+    restartDaemonMock.mockResolvedValue({ pid: 1, started: true, ...connection } as never);
     const qc = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
     const { result } = renderHook(() => useRestartDaemon(), {
@@ -107,16 +107,19 @@ describe("useRestartDaemon", () => {
     });
 
     expect(restartDaemonMock).toHaveBeenCalledOnce();
-    expect(connectToShellDaemonMock).toHaveBeenCalledOnce();
+    // The shell already waited for the replacement; taking what it handed
+    // back is what keeps one restart to one daemon.
+    expect(applyDaemonConnectionMock).toHaveBeenCalledWith(expect.objectContaining(connection));
     await waitFor(() => expect(invalidateSpy).toHaveBeenCalledWith());
-    expect(connectToShellDaemonMock.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(applyDaemonConnectionMock.mock.invocationCallOrder[0]).toBeLessThan(
       invalidateSpy.mock.invocationCallOrder[0],
     );
   });
 
-  test("a failed re-handshake is reported as its own error, not a failed restart", async () => {
-    restartDaemonMock.mockResolvedValue({ pid: 1, started: true } as never);
-    connectToShellDaemonMock.mockRejectedValue(new Error("did not become ready"));
+  test("a replacement that never answers fails the restart, and installs nothing", async () => {
+    restartDaemonMock.mockRejectedValue(
+      new Error("coffer-daemon (pid 1) was started but did not answer within 90s"),
+    );
     const { result } = renderHook(() => useRestartDaemon(), { wrapper: wrapper() });
 
     await act(async () => {
@@ -124,7 +127,9 @@ describe("useRestartDaemon", () => {
     });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.error?.message).toMatch(/did not become ready/);
-    expect(result.current.error?.message).toMatch(/restarted, but/i);
+    expect(result.current.error?.message).toMatch(/did not answer within/);
+    // Half-applying a connection that was never confirmed would leave the app
+    // calling a daemon nobody has heard from.
+    expect(applyDaemonConnectionMock).not.toHaveBeenCalled();
   });
 });

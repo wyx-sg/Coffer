@@ -5,13 +5,13 @@ reasoning effort were nobody's — they were whatever the agent's own
 configuration happened to project. The picker that changes them lives on a
 conversation, and a task has no conversation until it starts, so the one moment
 a developer most wants to say "do this one on the bigger model" — before it
-runs — was the one moment nothing could be said (spec workflow, FR-071).
+runs — was the one moment nothing could be said (spec workflow).
 
 These three columns are that answer, per ATTEMPT rather than per task: a retry
-is a new attempt (FR-022), so choosing a stronger model for the second try
-leaves the first attempt's record saying what it actually ran on. NULL means
-"whatever the template said", and the template says NULL for "whatever the
-agent's own configuration projects" — one ladder, no magic strings.
+is a new attempt, so choosing a stronger model for the second try leaves the
+first attempt's record saying what it actually ran on. NULL means "whatever the
+template said", and the template says NULL for "whatever the agent's own
+configuration projects" — one ladder, no magic strings.
 
 Nullable with no backfill: an attempt that ran before this column existed ran
 on the template's answer, which is exactly what NULL says.

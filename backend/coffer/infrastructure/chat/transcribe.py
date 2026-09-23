@@ -1,4 +1,5 @@
-"""Speech-to-text seam for inbound voice (spec channels FR-019).
+"""Speech-to-text seam for inbound voice (spec channels
+"Transcribe inbound voice only when the user opted in").
 
 An agent that cannot hear audio (Claude Code, Codex) receives a voice message as
 a **transcript** rather than an opaque file: the adapter transcribes the audio to

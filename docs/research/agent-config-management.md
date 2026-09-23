@@ -18,7 +18,7 @@
 > `backend/coffer/surfaces/http/agent_instructions_routes.py` — do not exist on
 > disk, so the "headline finding is flipped" claim about a hub-delivered master
 > instruction should not be relied on without re-checking `main`. Read
-> `.specify/memory/architecture.md` and `specs/agent-registry/spec.md` for the
+> `docs/architecture.md` and `openspec/specs/agent-registry/spec.md` for the
 > live design; read what follows as the state of the field, and of Coffer, in
 > mid-2026.
 
@@ -174,13 +174,12 @@ Primary (project repos/docs):
   Cursor / OpenCode / OpenClaw / Hermes (`enabled=False`), and exactly 2 are
   enabled (Claude Code, Codex). `repo:backend/coffer/domain/agent/descriptor.py`
 - **Coffer ingests config bi-directionally (the "ingest half").** The
-  agent-registry spec frames the workspace amendment as ingest→hub→deliver; US10 / FR-021 define "Adopt a
-  direct MCP server into Coffer" as "the ingest half of Coffer's hub-and-spoke
-  model." `adopt()` registers an `mcp_server` resource, verifies read-back via
+  agent-registry spec frames the workspace amendment as ingest→hub→deliver; "Adopt a direct MCP entry into Coffer"
+  describes adoption as "the ingest half of Coffer's hub-and-spoke model." `adopt()` registers an `mcp_server` resource, verifies read-back via
   `self._rs.get(...)`, then removes the direct entry — and drift-awareness is
   backed by the derived-never-stored Agent MCP Entry view (`cache_present=false`
   example). A parallel skill `adopt_unmanaged` path exists too.
-  `repo:specs/agent-registry/spec.md`,
+  `repo:openspec/specs/agent-registry/spec.md`,
   `repo:backend/coffer/application/agent/mcp_entry_service.py`
 - **ai-rulez ships its own built-in MCP server.** README: "ai-rulez includes a
   built-in MCP server with 35+ tools that lets AI assistants manage their own
@@ -221,7 +220,7 @@ Primary (project repos/docs):
   `repo:backend/coffer/domain/agent/instructions.py`,
   `repo:backend/coffer/domain/agent/managed_block.py`,
   `repo:backend/coffer/surfaces/http/agent_instructions_routes.py`,
-  `repo:specs/agent-registry/spec.md` (the master-instructions requirements, since removed)
+  `repo:openspec/specs/agent-registry/spec.md` (the master-instructions requirements, since removed)
 - **Coffer agent count (§4 takeaway #4 / area table).** Old: "4 wired, 2 enabled"
   → corrected: **6 wired total, 2 enabled, 4 hidden.** The manifest defines 6
   `AgentDescriptor` records, not 4; the named-and-hidden set and "2 enabled" were

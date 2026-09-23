@@ -1,21 +1,29 @@
-"""A file dropped into ``sources/`` by hand is curated with no import step.
+"""A document edited by hand is curated with no import step.
 
 This is the promise that makes the layer a directory rather than a database
-(spec knowledge FR-015): a person drags a Markdown file into
-``~/.coffer/knowledge/<collection>/sources/`` in Finder and Coffer picks it up.
-Nothing registers it, nothing indexes it and no row is written, so the only
-thing that can notice it is the sweep comparing each file's modification time
-with its own ``coffer_ingested_at`` frontmatter (FR-022, FR-028).
+(spec knowledge "Keep direct file edits a complete way to change knowledge"): a
+person edits a Markdown file under ``~/.coffer/knowledge/<collection>/`` in
+their own editor — or drops a new one in with Finder — and Coffer carries the
+edit into the rest of the collection. Nothing registers it, nothing indexes it
+and no row is written, so the only thing that can notice it is the sweep
+comparing each document's modification time with its own ``coffer_curated_at``
+frontmatter (see "Run curation on a sweep and on demand" and "Settle an item
+only after its pass completes").
+
+The sweep owes material in the hidden inbox first: until it is merged, it is
+knowledge no agent can read, whereas an edited document is readable as it
+stands.
 
 Driven through the real ``CurationWorker`` over a real directory, because that
 comparison is the whole mechanism and a fake of either side would be testing
 the fake. The only thing standing in for the world is the agentic loop: it is
-an LLM call, which the tier does not make. It is scripted to write one topic
-document, which is what a model absorbing this source would do.
+an LLM call, which the tier does not make. It is scripted to write one
+document, which is what a model carrying this edit outward would do.
 """
 
 from __future__ import annotations
 
+import pathlib
 from datetime import UTC, datetime
 from typing import Any
 
@@ -27,7 +35,7 @@ from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeServic
 from coffer.application.upkeep_runs import UpkeepRunRegistry
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource
-from coffer.infrastructure.knowledge import catalogue, fs, paths
+from coffer.infrastructure.knowledge import fs, paths
 
 _DROPPED = "The account gateway owns the session cache.\n"
 
@@ -86,19 +94,19 @@ class _Models:
 
 
 class _Loop:
-    """A scripted agentic loop: absorbs whatever brief it is given into one
-    topic document. Records the brief so the test can assert the dropped file
-    is what reached the model."""
+    """A scripted agentic loop: absorbs whatever brief it is given into one new
+    document, named after the pass. Records the brief so the test can assert
+    which item reached the model."""
 
     def __init__(self) -> None:
         self.briefs: list[str] = []
 
     async def run(self, *, tools, user_prompt, **kwargs: Any) -> dict[str, Any]:
         self.briefs.append(user_prompt)
-        write = next(t for t in tools if t.name == "write_topic")
+        write = next(t for t in tools if t.name == "write_document")
         await write.handler(
             {
-                "title": "Session cache",
+                "title": f"Session cache {len(self.briefs)}",
                 "description": "Which service owns the session cache",
                 "body": _DROPPED.strip(),
             }
@@ -133,60 +141,69 @@ def _worker(service: KnowledgeService, loop: _Loop) -> CurationWorker:
     )
 
 
+def _drop(name: str, text: str) -> pathlib.Path:
+    """A file manager's write: no frontmatter, no registration, no conversion —
+    just bytes appearing in the collection."""
+    path = paths.collection_dir("shopee") / name
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="a source added out-of-band is curated by the next sweep"
+    spec="knowledge", scenario="a document edited out-of-band is curated by the next sweep"
 )
 @pytest.mark.anyio
-async def test_a_file_dropped_into_sources_is_picked_up_by_the_next_sweep(corpus) -> None:  # type: ignore[no-untyped-def]
-    # A file manager's write: no frontmatter, no registration, no conversion —
-    # just bytes appearing in the lane.
-    dropped = paths.sources_dir("shopee") / "dropped-by-hand.md"
-    dropped.write_text(_DROPPED, encoding="utf-8")
+async def test_a_document_dropped_in_by_hand_is_picked_up_by_the_next_sweep(corpus) -> None:  # type: ignore[no-untyped-def]
+    _drop("dropped-by-hand.md", _DROPPED)
 
     service = KnowledgeService(resources=_Resources(["shopee"]), audit=_Audit())
     loop = _Loop()
     await _worker(service, loop).run_once()
 
-    # The fact the file stated is now in the lane an agent reads.
-    [topic] = catalogue.walk_files(paths.topics_dir("shopee"))
-    assert topic.path == "shopee/topics/session-cache.md"
-    assert "session cache" in fs.read_file(topic.path).body
+    # It got to the model from THIS file: the brief carried it as a person's edit.
+    [brief] = loop.briefs
+    assert _DROPPED.strip() in brief
+    assert f"The document a person edited: {_DROPPED_RELPATH}" in brief
 
-    # And it got there from THIS file: the brief the model saw carried it.
-    assert _DROPPED.strip() in loop.briefs[0]
+    # The pass's own write is a document an agent reads, and is stamped so the
+    # sweep does not hand it back.
+    written = fs.read_file("shopee/session-cache-1.md")
+    assert written.curated_at != ""
 
     # The watermark is written into the person's own file, which is what makes
-    # the next sweep a no-op without any state Coffer has to keep (FR-028).
-    assert fs.read_file(dropped_relpath()).ingested_at != ""
-    assert fs.pending_sources("shopee") == ()
+    # the next sweep a no-op without any state Coffer has to keep ("Settle an item
+    # only after its pass completes").
+    assert fs.read_file(_DROPPED_RELPATH).curated_at != ""
+    assert fs.edited_documents("shopee") == ()
 
 
 @pytest.mark.anyio
-async def test_the_sweep_does_not_rewrite_the_dropped_file(corpus) -> None:  # type: ignore[no-untyped-def]
-    """It is the person's file. Curation may stamp it and nothing else — the
-    body, and any frontmatter they wrote themselves, come through untouched
-    (FR-013, FR-028)."""
-    dropped = paths.sources_dir("shopee") / "dropped-by-hand.md"
-    dropped.write_text(
-        f"---\ntitle: My own title\ndescription: what I wrote\nactor: user\n---\n\n{_DROPPED}",
-        encoding="utf-8",
+async def test_the_sweep_does_not_rewrite_the_edited_document(corpus) -> None:  # type: ignore[no-untyped-def]
+    """It is the person's file. Settling the pass may stamp it and nothing
+    else — the body, and any frontmatter they wrote themselves, come through
+    untouched ("Settle an item only after its pass completes")."""
+    _drop(
+        "dropped-by-hand.md",
+        "---\ntitle: My own title\ndescription: what I wrote\nactor: user\n"
+        f"tags: [cache, redis]\n---\n\n{_DROPPED}",
     )
 
     service = KnowledgeService(resources=_Resources(["shopee"]), audit=_Audit())
     await _worker(service, _Loop()).run_once()
 
-    after = fs.read_file(dropped_relpath())
+    after = fs.read_file(_DROPPED_RELPATH)
     assert after.title == "My own title"
     assert after.description == "what I wrote"
     assert after.actor == "user"
     assert after.body.strip() == _DROPPED.strip()
+    raw = (paths.collection_dir("shopee") / "dropped-by-hand.md").read_text(encoding="utf-8")
+    assert "cache" in raw and "redis" in raw
 
 
 @pytest.mark.anyio
-async def test_a_second_sweep_starts_no_pass_until_the_file_changes(corpus) -> None:  # type: ignore[no-untyped-def]
+async def test_a_second_sweep_starts_no_pass_until_the_document_changes(corpus) -> None:  # type: ignore[no-untyped-def]
     """The watermark is what stops a corpus being re-curated every minute."""
-    dropped = paths.sources_dir("shopee") / "dropped-by-hand.md"
-    dropped.write_text(_DROPPED, encoding="utf-8")
+    dropped = _drop("dropped-by-hand.md", _DROPPED)
 
     service = KnowledgeService(resources=_Resources(["shopee"]), audit=_Audit())
     loop = _Loop()
@@ -196,12 +213,37 @@ async def test_a_second_sweep_starts_no_pass_until_the_file_changes(corpus) -> N
     await worker.run_once()
     assert len(loop.briefs) == 1
 
-    # Edited in the same editor it arrived from: owed again, no registration.
-    dropped.write_text(f"{_DROPPED}The cache is Redis.\n", encoding="utf-8")
+    # Edited again in the same editor: owed again, no registration.
+    text = dropped.read_text(encoding="utf-8")
+    dropped.write_text(f"{text}The cache is Redis.\n", encoding="utf-8")
     await worker.run_once()
     assert len(loop.briefs) == 2
     assert "The cache is Redis." in loop.briefs[1]
 
 
-def dropped_relpath() -> str:
-    return "shopee/sources/dropped-by-hand.md"
+@pytest.mark.anyio
+async def test_the_inbox_is_drained_before_edited_documents(corpus) -> None:  # type: ignore[no-untyped-def]
+    """Material first: until it is merged it is knowledge no agent can read,
+    while an edited document is readable as it stands."""
+    _drop("dropped-by-hand.md", _DROPPED)
+    fs.submit_material(
+        "shopee",
+        title="Gateway notes",
+        description="What the gateway caches",
+        body="The gateway also caches tokens.",
+    )
+
+    service = KnowledgeService(resources=_Resources(["shopee"]), audit=_Audit())
+    loop = _Loop()
+    await _worker(service, loop).run_once()
+
+    assert len(loop.briefs) == 2
+    assert "## The new material to absorb" in loop.briefs[0]
+    assert "The gateway also caches tokens." in loop.briefs[0]
+    assert f"The document a person edited: {_DROPPED_RELPATH}" in loop.briefs[1]
+    # Material a pass folded in leaves the inbox; nothing is owed any more.
+    assert fs.inbox_items("shopee") == ()
+    assert fs.edited_documents("shopee") == ()
+
+
+_DROPPED_RELPATH = "shopee/dropped-by-hand.md"

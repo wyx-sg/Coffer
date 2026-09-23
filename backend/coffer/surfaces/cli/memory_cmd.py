@@ -1,5 +1,5 @@
 """``coffer memory …`` — the memory layer from the terminal (spec memory
-FR-036).
+"Cover memory management on REST and the CLI").
 
 Every command but one is a thin HTTP shell over the daemon, matching
 ``knowledge_cmd.py``. ``context`` is the exception: it is the exact command an
@@ -7,8 +7,9 @@ agent's own session-start hook invokes
 (``domain.memory.delivery.hook_command``), so it must be fast and must never
 fail a session — no detect-or-spawn, a short timeout, and any failure at all
 (daemon not running, a slow response, a malformed one) degrades to printing
-nothing and exiting 0. FR-033 exists precisely because the previous injection
-layer had no such safety net and nothing said so for two months; this command
+nothing and exiting 0. "Audit every delivery fire" exists precisely because the
+previous injection layer had no such safety net and nothing said so for two
+months; this command
 must not repeat that by crashing a real session over its own plumbing.
 
 Every command here takes **names** — a partition's, an agent's — because that
@@ -82,7 +83,7 @@ def list_partitions(ctx: typer.Context, output_json: bool = typer.Option(False, 
             # A partition nothing can resolve to any more is called out rather
             # than hidden: only the developer can decide that repository is not
             # coming back, and an orphan that says nothing simply sits there
-            # undeliverable and unmentioned (FR-016).
+            # undeliverable and unmentioned ("Report unresolvable partitions").
             where = p["repository_path"] or p["repository_key"]
             table.add_row(
                 p["name"],
@@ -104,7 +105,7 @@ def list_notes(
 
     A retired note is not in this list and is not marked in it either — it has
     left ``notes/`` and is in ``RETIRED.md``, which ``coffer memory retired``
-    prints (FR-025).
+    prints ("Record retirements so they stick").
     """
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -133,7 +134,8 @@ def show_note(
     """Show one note — Coffer's own text, and the entries behind it.
 
     The origins are printed with the absolute path of the native file each one
-    was read out of, because the body is a **paraphrase** (FR-020): a note that
+    was read out of, because the body is a **paraphrase** ("Write notes in
+    Coffer's own words"): a note that
     reads wrong has to be traceable back to the thing that actually said it.
     """
     c, _info = _cli_client.client_or_exit()
@@ -166,7 +168,7 @@ def list_retired(
     partition: str = typer.Argument(..., help="Partition name (or 'global')"),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Show what this partition retired, and why (FR-025).
+    """Show what this partition retired, and why.
 
     Newest first. ``RETIRED.md`` is not a bin: the material a retired note was
     built from still lives in the agent's own memory, so without the record the
@@ -196,7 +198,7 @@ def list_files(
     partition: str = typer.Argument(..., help="Partition name (or 'global')"),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """List a partition's own directory as a tree (FR-037).
+    """List a partition's own directory as a tree.
 
     The whole tree rather than one level, unlike `coffer knowledge ls`: a
     partition is two levels deep by construction (`MEMORY.md`, `RETIRED.md`, a
@@ -251,7 +253,8 @@ def read_file(
     """Print one file out of a partition's directory.
 
     Read-only, like the route: everything under ``~/.coffer/memory/`` is
-    derived (FR-019), so there is no matching write for an edit to survive.
+    derived ("Keep the memory tree derived and local"), so there is no
+    matching write for an edit to survive.
     ``--json`` carries the absolute paths an editor or a file manager needs.
     """
     c, _info = _cli_client.client_or_exit()
@@ -292,7 +295,8 @@ def distil(
 
     Only one pass per partition runs at a time, whoever started it: a request
     made while the unattended sweep already holds this partition is refused
-    with ``UPKEEP_ALREADY_RUNNING`` rather than queued (FR-041).
+    with ``UPKEEP_ALREADY_RUNNING`` rather than queued ("Run one distil pass
+    per partition at a time").
     """
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -318,7 +322,8 @@ def context(
 
     ``--agent-uid`` says who fired, and only that: the payload is the same for
     every agent, and the uid travels so the daemon can record the fire against
-    it (FR-033). It is still required, because an unattributed fire is a hook
+    it ("Audit every delivery fire"). It is still required, because an
+    unattributed fire is a hook
     nobody can tell is working.
 
     It is the **one** command in this group that does not take a name, because

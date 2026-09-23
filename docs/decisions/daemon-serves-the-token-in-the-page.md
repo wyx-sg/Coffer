@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-11
 **Deciders**: Yuxing Wu
-**Spec**: [daemon](../../specs/daemon/spec.md) FR-016 / FR-017 / FR-015
+**Spec**: [daemon](../../openspec/specs/daemon/spec.md) "Serve the built web UI from the daemon's own origin" / "Hand the browser its token in the served page" / "Refuse a request whose Host is not loopback"
 **Related**: [Detect-or-Spawn](./daemon-detect-or-spawn.md) (the daemon's port moves between restarts, which is the other half of why a browser could not find its way back)
 **Amended by**: [The Desktop Shell Returns](./desktop-shell-over-a-shared-frontend.md) (2026-09-12) — a third case now exists; the decision below is unchanged for browsers
 
@@ -26,7 +26,7 @@ The real recovery was to run `coffer open` again, which nothing told the user.
 
 The original design's premise is stated in the module it justified: "the URL is
 the only channel a freshly-opened browser will read." That premise is wrong.
-The daemon serves the SPA itself (spec daemon FR-016), so the **response body** is a channel
+The daemon serves the SPA itself ([daemon](../../openspec/specs/daemon/spec.md) "Serve the built web UI from the daemon's own origin"), so the **response body** is a channel
 to that browser — one the URL rules do not touch.
 
 ## Decision
@@ -54,7 +54,7 @@ Three properties make it correct rather than merely convenient:
   `/assets` keep normal caching.
 
 **And the daemon refuses any request whose `Host` header is not a loopback
-authority** (spec daemon FR-015), answering `421 HOST_NOT_LOOPBACK`. This is not an
+authority** ([daemon](../../openspec/specs/daemon/spec.md) "Refuse a request whose Host is not loopback"), answering `421 HOST_NOT_LOOPBACK`. This is not an
 independent tidy-up; it is what makes the injection safe, and neither half
 ships without the other.
 
@@ -96,7 +96,7 @@ browser at that origin.
   hosts the page as a local asset, so nobody served that document and this
   injection cannot reach it; the shell supplies the same two globals over an IPC
   command before first render instead ([The Desktop Shell
-  Returns](./desktop-shell-over-a-shared-frontend.md), spec desktop-app FR-004).
+  Returns](./desktop-shell-over-a-shared-frontend.md), [desktop-app](../../openspec/specs/desktop-app/spec.md) "Supply the page its daemon connection over IPC").
   Nothing above changes: injection remains how browsers are credentialed, and
   the `Host` guard that makes it safe is untouched. What the third case shows is
   that the invariant was never "the daemon serves the token" but "whoever hosts
@@ -118,3 +118,11 @@ browser at that origin.
 - **Rely on loopback binding alone and skip the `Host` check.** Rejected: that
   is precisely the gap DNS rebinding walks through, and it is the gap the
   injection would have opened.
+
+## Implementation notes
+
+- **Reserved roots are matched by whole path segment, never by prefix**
+  (`_RESERVED_ROOTS` in `surfaces/http/webui.py`). The SPA fallback that
+  answers client-side routes with the token-bearing `index.html` must not
+  swallow `/api`, `/mcp` and the other daemon roots, and a prefix test such as
+  `startswith("mcp")` would instead claim the UI's own `/mcp-servers` route.

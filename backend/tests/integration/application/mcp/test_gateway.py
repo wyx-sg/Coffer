@@ -213,9 +213,10 @@ async def test_initialize_returns_capabilities(
 async def test_initialize_captures_agent_uid_from_meta(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """MCP Gateway FR-013 (amended): the shim self-reports its bound agent's name
-    at the handshake via ``params._meta["coffer/agent-uid"]``, alongside the
-    existing ``coffer/cwd`` key; the gateway captures it onto the session. It is
+    """Per "Take the agent identity from the handshake", the shim self-reports
+    its bound agent's name at the handshake via
+    ``params._meta["coffer/agent-uid"]``, alongside the existing ``coffer/cwd``
+    key; the gateway captures it onto the session. It is
     the agent's UID, so the value survives a rename of the agent and matches the
     uids a resource's ``scope`` holds (ADR resource-identity-is-an-immutable-uid)."""
     _with_in_memory(monkeypatch)
@@ -280,11 +281,12 @@ async def _tools_list_names_for_agent(
 async def test_tools_list_agent_scoped_server_visible_only_to_matching_agent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Per-agent scope (FR-012/021): a server scoped to Claude Code's uid is
-    visible in tools/list to a session that initialized reporting that uid;
-    invisible to a session reporting Codex's; and invisible to an unidentified
-    session (no ``coffer/agent-uid`` key in the initialize ``_meta``) — an
-    unidentified session matches only an unscoped resource."""
+    """Per-agent scope ("Gate server exposure by scope per session"): a server
+    scoped to Claude Code's uid is visible in tools/list to a session that
+    initialized reporting that uid; invisible to a session reporting Codex's;
+    and invisible to an unidentified session (no ``coffer/agent-uid`` key in the
+    initialize ``_meta``) — an unidentified session matches only an unscoped
+    resource."""
     _with_in_memory(monkeypatch)
 
     configs = {
@@ -332,9 +334,10 @@ async def test_tools_list_unscoped_server_visible_to_all_sessions(
 async def test_tools_call_refused_for_server_excluded_by_agent_axis(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """FR-012: 'the agent axis gates per-session tools/list ... and call
-    routing by the session's self-reported identity.' A session identified
-    as an excluded agent must not be able to invoke a namespaced tool on a
+    """Per "Gate server exposure by scope per session": 'the agent axis gates
+    per-session tools/list ... and call routing by the session's self-reported
+    identity.' A session identified as an excluded agent must not be able to
+    invoke a namespaced tool on a
     server that tools/list hides from it, even by calling tools/call
     directly with the server's still-guessable prefixed tool name — the
     supervisor has no session context, so this must be gated on the session's

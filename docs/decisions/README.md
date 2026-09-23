@@ -12,13 +12,13 @@ Write one for any decision that meets at least one of these:
 - Affects more than one module, or imposes structural constraints on future work.
 - Has non-obvious trade-offs that future engineers (or future you) will question.
 - Diverges from a default, a popular convention, or a project rule
-  (constitution clause, prior ADR).
+  (a clause of `docs/principles.md`, a prior ADR).
 
 Do **not** write an ADR for:
 
 - Library version bumps that don't change API surface.
 - Routine bug fixes.
-- Scope decisions that belong in a spec's `## Assumptions` or `## Out of Scope`.
+- Scope decisions that belong in a spec's `## Purpose` or in the requirement they bound.
 - Naming or formatting preferences.
 
 ## File naming and lifecycle
@@ -64,7 +64,7 @@ Do **not** write an ADR for:
 ## Context
 
 <What forces are at play? What problem are we solving? Existing constraints,
-related ADRs, relevant constitutional clauses.>
+related ADRs, relevant clauses of docs/principles.md.>
 
 ## Decision
 
@@ -118,6 +118,5 @@ section that future readers most often want — don't skip it.>
 | [`budget-driven-tool-tiering`](budget-driven-tool-tiering.md) | Budget-Driven Tool Tiering at the Gateway | Accepted |
 | [`seatalk-websocket-inbound`](seatalk-websocket-inbound.md) | SeaTalk Inbound Over WebSocket, With an Operator-Supplied SDK | Accepted |
 | [`product-scope-is-settled`](product-scope-is-settled.md) | Product Scope Is Settled | Accepted |
-| [`fr-ids-reset-once`](fr-ids-reset-once.md) | FR Ids Reset Once, Then Are Never Reused Again | Accepted |
 | [`coffer-ships-its-own-skill`](coffer-ships-its-own-skill.md) | Coffer Ships Its Own Manual as a Skill Resource | Accepted |
 | [`workflow-gates-tool-calls`](workflow-gates-tool-calls.md) | A Workflow Run's Writes Are Gated at the Gateway | Accepted — amends [Remove the Tool-Approval System](remove-tool-approval.md) |

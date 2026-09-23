@@ -6,7 +6,8 @@ trees, the repository is a real ``git init``, and what comes out is real files
 under ``COFFER_MEMORY_ROOT``.
 
 The test that matters most here is the read-only one. **Coffer never writes an
-agent's native memory** (FR-002) — that is the prohibition
+agent's native memory** ("Never write an agent's native memory") — that is the
+prohibition
 [Aggregate Agent Memory](../../../../docs/decisions/aggregate-agent-memory-never-write-it.md)
 records and the load-bearing constraint of the whole design, so a full pass is
 bracketed by a snapshot of every file's **bytes and modification time** under
@@ -201,8 +202,9 @@ async def test_neither_agents_own_roll_up_is_read_as_material(vault) -> None:  #
     scenario="a Codex task group becomes raw entries carrying its own search terms",
 )
 async def test_codexs_search_terms_reach_the_entry_and_the_index_line(vault) -> None:  # type: ignore[no-untyped-def]
-    """FR-004 carries the source's own terms; FR-029 has the index line state
-    them, so the next agent does not have to guess a word."""
+    """Per "Read Claude Code and Codex memory with their search terms", the entry
+    carries the source's own terms; "Write each index line to stand on its own" has the index
+    line state them, so the next agent does not have to guess a word."""
     await vault["service"].aggregate()
 
     entries = [e for e in list_raw_entries("coffer") if e.agent == "codex"]
@@ -252,7 +254,8 @@ async def test_a_partition_two_real_agents_filled_records_its_repository_only(va
 async def test_a_malformed_file_in_one_agent_leaves_the_others_material_and_the_notes_standing(
     vault,  # type: ignore[no-untyped-def]
 ) -> None:
-    """SC-006, with a real reader hitting a real broken file.
+    """A real reader hitting a real broken file ("Fail a broken reader loudly
+    and in isolation").
 
     A previously distilled note must be left standing: a reader broken by an
     agent's format change may not empty that agent's contribution, and must

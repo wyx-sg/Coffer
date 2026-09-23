@@ -144,8 +144,9 @@ def test_agent_get_one(tmp_path, monkeypatch):
 
 
 def test_agent_out_has_no_capability_matrix(tmp_path, monkeypatch):
-    """spec agent-registry FR-003: with the supported types narrowed to claude_code + codex, every
-    agent supports every facet — so AgentOut carries no capability matrix."""
+    """Per "Support exactly the Claude Code and Codex agent types": with the
+    supported types narrowed to claude_code + codex, every agent supports every
+    facet — so AgentOut carries no capability matrix."""
     app = _app(tmp_path, monkeypatch, 59608)
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()
@@ -287,6 +288,7 @@ def test_patch_description_only_preserves_config_dir(tmp_path, monkeypatch):
         assert r.json()["config_dir"] == str(config_dir)
 
 
+@pytest.mark.acceptance(spec="agent-registry", scenario="keep an agent's uid across a rename")
 def test_uid_survives_a_rename_and_no_name_addresses_the_agent(tmp_path, monkeypatch):
     """The identity stays put when the label moves — the point of the change.
 

@@ -1,4 +1,4 @@
-"""Migration 0085's on-disk rewrite, against a real tree (spec knowledge FR-042/071).
+"""Migration 0085's on-disk rewrite, against a real tree.
 
 The corpus is the user's own writing and this pass moves every file in it, so
 the assertions below are about the FILES, not about a report: a fixture tree in
@@ -53,15 +53,13 @@ def _tree(root: pathlib.Path) -> set[str]:
     return {str(p.relative_to(root).as_posix()) for p in root.rglob("*")}
 
 
-@pytest.mark.acceptance(
-    spec="knowledge", scenario="migration moves the corpus into sources and clears topics"
-)
 def test_content_files_move_into_sources_keeping_their_nesting(root: pathlib.Path) -> None:
     tree.migrate()
 
     sources = root / "shopee" / "sources"
     assert (sources / "account-service.md").read_text() == "---\ntitle: Account\n---\n\nbody\n"
-    # The folders a person made are their organisation of the material (FR-004).
+    # The folders a person made are their organisation of the material ("Allow
+    # nesting without giving it meaning").
     assert (sources / "platforms" / "datasuite.md").is_file()
     assert (sources / "platforms" / "deep" / "smart.md").is_file()
     # And nothing is left behind at the collection root.

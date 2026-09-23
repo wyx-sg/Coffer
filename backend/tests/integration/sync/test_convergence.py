@@ -21,6 +21,7 @@ import pathlib
 
 import pytest
 
+from coffer.application.agent.sync_reconcile import AgentImportGate
 from coffer.domain.credential_errors import CredentialUnreadable
 from coffer.domain.sync.convergence import ConvergeStatus, GuardDirection, JoinKind
 from coffer.domain.sync.diff import ChangeStatus, DeletionGuard
@@ -97,7 +98,7 @@ async def test_a_changed_vault_commits_and_pushes(pair) -> None:
     a, _b = pair
     a.write_knowledge("notes", "first", "hello\n")
 
-    run = await a.converge()
+    run = await a.adopt()
 
     assert run.status is ConvergeStatus.OK, run.error
     assert run.commit
@@ -116,7 +117,7 @@ async def test_an_unchanged_vault_makes_no_commit(pair) -> None:
     before = await a.remote_commit_count()
     local_before = await a.local_commit_count()
 
-    run = await a.converge()
+    run = await a.adopt()
 
     assert run.status is ConvergeStatus.NO_CHANGE
     assert await a.remote_commit_count() == before
@@ -180,13 +181,13 @@ async def test_a_local_only_document_survives_and_is_published(pair) -> None:
     await _seeded(a, b)
     b.write_knowledge("notes", "only-here", "mine\n")
 
-    run = await b.converge()
+    run = await b.adopt()
 
     assert b.read_knowledge("notes", "only-here") == "mine\n"
     assert "knowledge/notes/only-here.md" in added(run.published)
     assert "knowledge/notes/only-here.md" in await b.remote_paths()
     # And the other machine picks it up rather than deleting it back.
-    await a.converge()
+    await a.adopt()
     assert a.read_knowledge("notes", "only-here") == "mine\n"
 
 
@@ -209,11 +210,11 @@ async def test_a_stale_machine_applies_the_deletion_instead_of_reverting_it(room
 
     # B goes quiet here. Everything below happens while it is offline.
     a.delete_skill_files("shared-skill")
-    deletion = await a.converge()
+    deletion = await a.adopt()
     assert "skills/shared-skill/SKILL.md" in deleted(deletion.published)
     assert "skills/shared-skill/SKILL.md" not in await a.remote_paths()
 
-    run = await b.converge()
+    run = await b.adopt()
 
     assert run.status is ConvergeStatus.OK, run.error
     assert "skills/shared-skill/SKILL.md" in deleted(run.applied)
@@ -254,9 +255,9 @@ async def test_a_returning_machine_recovers_its_base_and_takes_the_deletion(room
     b.forget_worktree()
 
     a.delete_skill_files("shared-skill")
-    await a.converge()
+    await a.adopt()
 
-    run = await b.converge()
+    run = await b.adopt()
 
     assert run.join is JoinKind.RETURNING
     assert run.status is ConvergeStatus.OK, run.error
@@ -291,7 +292,7 @@ async def test_a_returning_machine_whose_vault_is_gone_is_held_not_published(pai
     b.forget_worktree()
     await b.wipe_vault()
 
-    run = await b.converge()
+    run = await b.adopt()
 
     assert run.status is ConvergeStatus.AWAITING_CONFIRMATION
     assert run.pending is not None
@@ -329,7 +330,7 @@ async def test_a_damaged_machine_rebuilds_instead_of_publishing_its_loss(pair) -
     # rather than publish it, which is what separates rebuild from confirm.
     b.write_knowledge("notes", "local-only", "written after the wipe\n")
 
-    held = await b.converge()
+    held = await b.adopt()
     assert held.status is ConvergeStatus.AWAITING_CONFIRMATION
 
     run = await b.rebuild()
@@ -358,7 +359,7 @@ async def test_a_new_machine_takes_the_union(pair) -> None:
     b.write_knowledge("notes", "from-b", "b\n")
     await b.register("mcp_server", "only-on-b", {"value": "b"})
 
-    run = await b.converge()
+    run = await b.adopt()
 
     assert run.join is JoinKind.NEW
     assert run.status is ConvergeStatus.OK, run.error
@@ -466,6 +467,9 @@ async def test_an_agent_resolution_that_validates_is_applied_and_named(pair) -> 
 
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="an agent resolution that fails validation is not applied"
+)
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a resolution that fails is still reported with its path"
 )
 async def test_an_agent_resolution_leaving_a_conflict_marker_is_refused(pair) -> None:
     a, b = pair
@@ -583,11 +587,61 @@ async def test_a_path_that_can_never_apply_here_is_recorded_as_not_applicable(pa
     path = await a.doc_path("mcp_server", "wrong-machine")
     retry, not_applicable = await b.state.held_paths()
     assert path in not_applicable and path not in retry
-    assert [p for p, _r in run.failures] == [path]
+    # Said to be not applicable here, and not presented as a failure to chase.
+    assert run.failures == ()
+    assert run.not_applicable == (path,)
     # Preserved exactly like a retry-set path: the next export must not publish
-    # it as a deletion.
-    await b.converge()
+    # it as a deletion. And not retried: the next round re-checks the gate's
+    # precondition, finds it still unmet, and neither applies nor reports it.
+    second = await b.converge()
     assert path in await b.remote_paths()
+    assert await b.find("mcp_server", "wrong-machine") is None
+    assert second.failures == ()
+    assert second.not_applicable == ()
+    retry, not_applicable = await b.state.held_paths()
+    assert path in not_applicable and path not in retry
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an agent whose config directory is missing here is not applicable"
+)
+async def test_an_agent_whose_config_dir_is_missing_here_is_not_applicable(
+    pair, tmp_path: pathlib.Path
+) -> None:
+    """The production gate, not a stand-in: an agent installed on A whose
+    config directory does not exist on B."""
+    a, b = pair
+    await settle(a, b)
+    b.use_gate(AgentImportGate())
+    await a.register(
+        "agent",
+        "installed-elsewhere",
+        {"type": "claude_code", "config_dir": str(tmp_path / "only-on-a" / ".claude")},
+    )
+    await a.converge()
+
+    run = await b.converge()
+
+    path = await a.doc_path("agent", "installed-elsewhere")
+    assert run.failures == ()
+    assert run.not_applicable == (path,)
+    retry, not_applicable = await b.state.held_paths()
+    assert path in not_applicable and path not in retry
+    assert await b.find("agent", "installed-elsewhere") is None
+
+    second = await b.converge()
+    assert second.failures == ()
+    assert second.not_applicable == ()
+    assert path in await b.remote_paths()
+
+    # The agent is installed here later: the next ordinary round applies it.
+    (tmp_path / "only-on-a" / ".claude").mkdir(parents=True)
+    third = await b.converge()
+
+    assert third.failures == ()
+    assert await b.find("agent", "installed-elsewhere") is not None
+    retry, not_applicable = await b.state.held_paths()
+    assert path not in retry and path not in not_applicable
 
 
 @pytest.mark.acceptance(
@@ -659,8 +713,8 @@ async def test_a_round_can_be_rolled_back_to_its_pre_apply_snapshot(roomy) -> No
 
     a.write_knowledge("notes", "shared", "rewritten by A\n")
     a.write_knowledge("notes", "extra", "new from A\n")
-    await a.converge()
-    applied = await b.converge()
+    await a.adopt()
+    applied = await b.adopt()
     assert applied.status is ConvergeStatus.OK, applied.error
     assert b.read_knowledge("notes", "shared") == "rewritten by A\n"
     assert b.read_knowledge("notes", "extra") == "new from A\n"
@@ -747,7 +801,7 @@ async def test_the_repository_carries_ciphertext_and_no_key_material(pair) -> No
 
     # A machine holding the ciphertext without the key reports the ref locked
     # rather than failing decryption silently.
-    await b.converge()
+    await b.adopt()
     await b.converge()
     assert b.credentials.locked_refs() == ["mcp/files/token"]
     # "Locked", not "silently wrong": reading it here is refused outright.
@@ -764,7 +818,7 @@ def _sleep_past_a_fernet_second() -> None:
     time.sleep(1.05)
 
 
-# --- a move is not a deletion (spec vault-sync FR-090) ----------------------
+# --- a move is not a deletion (spec vault-sync "Count losses, not deletions") ---
 
 
 def _relayout(machine: VaultMachine, names: list[str]) -> None:
@@ -873,7 +927,7 @@ async def test_a_relayout_that_rewrites_its_documents_publishes_unattended(pair)
     """The 2026-09-19 bug: the vault was held for four days over a migration
     this project shipped, with nothing lost. Exact-bytes pairing could not see
     it because the migration edited every document on its way; git's rename
-    detection can (spec vault-sync FR-090).
+    detection can (spec vault-sync "Count losses, not deletions").
     """
     a, b = pair
     names = [f"n{i:02d}" for i in range(30)]

@@ -60,7 +60,8 @@ async def test_install_claude_writes_entry_with_backup_and_audit(
     assert st.installed is True
     assert st.command == SHIM
     data = json.loads(claude_json.read_text())
-    # spec agent-registry FR-015 (amended): install threads the agent's own UID
+    # spec agent-registry "Install Coffer's MCP server into an agent in one
+    # action": install threads the agent's own UID
     # through as `--agent-uid <uid>` so the shim self-reports an identity the
     # gateway can still match after the agent is renamed.
     assert data["mcpServers"]["coffer"] == {
@@ -151,6 +152,9 @@ async def test_uninstall_removes_entry(agent_bundle, tmp_path, monkeypatch):
     assert len(rows) == 1
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="uninstall Coffer's MCP when it is not installed"
+)
 async def test_uninstall_when_absent_is_noop(agent_bundle, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     agent = await _register_claude(agent_bundle, tmp_path)
@@ -164,6 +168,9 @@ async def test_uninstall_when_absent_is_noop(agent_bundle, tmp_path, monkeypatch
     assert rows == []
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="refuse the Coffer MCP install when the shim cannot be resolved"
+)
 async def test_install_raises_when_shim_unresolvable(agent_bundle, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     agent = await _register_claude(agent_bundle, tmp_path)
@@ -177,7 +184,7 @@ async def test_install_raises_when_shim_unresolvable(agent_bundle, tmp_path, mon
         store=ConfigFileStore(),
         shim_resolver=_boom,
     )
-    with pytest.raises(ShimNotFound):
+    with pytest.raises(ShimNotFound, match="coffer-mcp-shim"):
         await svc.install(agent.uid, actor="ui")
     # Nothing written.
     assert not (tmp_path / ".claude.json").exists()

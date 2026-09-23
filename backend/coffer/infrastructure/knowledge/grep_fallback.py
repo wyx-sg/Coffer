@@ -3,11 +3,11 @@
 ``rg`` is the mechanism (see ``grep``), not a requirement: an installation
 without it still has a knowledge directory, and an agent asking which line
 mentions a phrase must get the same answer, just slower. So this module walks
-the same files ripgrep would — every non-hidden file under the roots, in
-order — and applies the same rules: a regex matched line by line, at most
-``cap`` hits per file so "more exist" stays visible, hidden entries skipped
-(FR-035), binary files skipped, and a wall-clock budget that reports
-truncation rather than "no matches" when it runs out.
+the same files ripgrep would — every non-hidden file under the roots, in order
+— and applies the same rules: a regex matched line by line, at most ``cap``
+hits per file so "more exist" stays visible, hidden entries skipped (see "Hide
+dot-prefixed entries except the inbox"), binary files skipped, and a wall-clock
+budget that reports truncation rather than "no matches" when it runs out.
 
 Ripgrep's regex dialect (Rust's) and Python's ``re`` agree on everything a
 knowledge search plausibly contains — literals, classes, anchors, ``(?i)`` —

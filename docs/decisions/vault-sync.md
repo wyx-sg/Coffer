@@ -3,8 +3,8 @@
 **Status**: Accepted
 **Date**: 2026-09-13
 **Deciders**: Yuxing Wu
-**Spec**: [vault-sync](../../specs/vault-sync/spec.md)
-**Constitution**: Principle I (0.6.0 — bidirectional convergence with a user-owned sync remote)
+**Spec**: [vault-sync](../../openspec/specs/vault-sync/spec.md)
+**Principles**: Principle I in [`docs/principles.md`](../principles.md) (the user-owned sync remote exception — bidirectional convergence)
 
 ## Context
 
@@ -131,7 +131,7 @@ to absorb is pending, not deleted.
 The same guarantee is what lets shared state be deleted at all. Under one-way
 import a state area could only ever be upserted; under convergence a deleted
 state document is a decision some machine took back, and every area's provider
-honours it in its own terms (spec `## Applying a diff`): an override is cleared,
+honours it in its own terms (spec vault-sync "Let each state area define its document's deletion"): an override is cleared,
 a server's capabilities are re-enabled, the engine settings are reset to their
 defaults, and the plugin inventory — which has no local store beyond the
 document and no uninstall path — drops nothing. One rule follows for the
@@ -273,8 +273,10 @@ asks.
 
 The detection is a property of any round that starts with no pointer, not of the
 `adopt` command, so configuring a remote on a machine that has forgotten its
-pointer cannot route around it. Either way joining is an explicit, reported act:
-the surfaces say which case it is and what it would move before anything is
+pointer cannot route around it. Joining itself is an explicit, reported act:
+only `adopt` joins — the timer's round and `coffer sync now` on a machine with
+no pointer apply and publish nothing and report `awaiting_join` — and the
+surfaces say which case it is and what it would move before anything is
 applied.
 
 ### Local export and import are deleted
@@ -335,17 +337,17 @@ converged day" rather than implying a timestamp they do not have.
 ### An unattended rewriter of synced content names one owner machine
 
 A worker that rewrites vault content with no human approving the diff is safe
-on one machine and unsafe on several. The knowledge tidy pass is the case that
-exists today: run over one corpus on two machines, each merges the same two
-notes into a topic document — but into *different* documents. The merge is
-perfectly clean (both agree the two notes are deleted; the two topic documents
-are additions at different paths) and the vault ends up holding the same
+on one machine and unsafe on several. The knowledge curation pass is the case
+that exists today: run over one corpus on two machines, each merges the same
+inbox material into a document — but into *different* documents. The merge is
+perfectly clean (both agree the material is gone from the inbox; the two
+documents are additions at different paths) and the vault ends up holding the same
 knowledge twice. Git cannot see this, because nothing conflicted.
 
-So such a rewriter names one owner machine and is a no-op everywhere else. Tidy
-is already off by default and installation-wide, so this costs a field rather
-than a concept, and "the owner is off, so no tidy happens" is the right trade
-for a background nicety. A pass and a converge round also take the same lock —
+So such a rewriter names one owner machine and is a no-op everywhere else. The
+switch is already installation-wide, so this costs a field rather than a
+concept, and "the owner is off, so no pass happens" is the right trade for work
+that only has to happen somewhere. A pass and a converge round also take the same lock —
 an export taken mid-rewrite is a torn snapshot — and delete-versus-edit
 resolves toward the edit, because an edit is something a person or an agent
 just decided while the deletion is a housekeeping judgement the next pass will
@@ -365,13 +367,13 @@ that shape needs: a binding naming a machine the registry does not hold is a
 elsewhere, and rebindable in one action. The curation owner had none of the
 three — no surface showed it, nothing reported it, and no route changed it, so
 the only repair was editing SQLite. It now carries all three (spec vault-sync
-FR-098), under the channel's own four-state vocabulary rather than a second one
+"Report and change the rewriter's owner"), under the channel's own four-state vocabulary rather than a second one
 invented for it, because a reader should not have to learn the same fact twice.
 
 One state is deliberately NOT shared. An unbound channel runs **nowhere**,
 because answering a platform twice cannot be walked back; an unowned pass runs
 **here**, because a vault that never named an owner is a vault with one
-machine, and the cost of being wrong is a duplicated topic document rather than
+machine, and the cost of being wrong is a duplicated document rather than
 a bot answering itself.
 
 ## Alternatives considered
@@ -388,13 +390,36 @@ a bot answering itself.
   would re-implement outside git four things git already does, and would carry
   forward the projection gap that produced the 2026-07-10 incident.
 - **A hosted Coffer sync endpoint** — best UX, but a vendor-controlled system
-  of record; rejected, and explicitly outside the 0.6.0 exception. It would
-  need a much broader constitutional amendment.
+  of record; rejected, and explicitly outside Principle I's sync remote exception. It
+  would need a much broader amendment to `docs/principles.md`.
 - **Copy `~/.coffer/` wholesale** — simplest, but it carries machine-local
   state (daemon configuration, port allocations, per-machine logs) and a binary
   SQLite file that cannot be merged, inspected, or partially applied; rejected.
   Hence the deterministic text serialization, which is also what lets a round
   with nothing to say produce no commit.
+
+- **Other user-owned transports** — a peer-to-peer file sync
+  (Syncthing-style) has no history and resolves by last writer wins; a
+  user-owned object store (S3-style) has no history or merge either and weak
+  conflict handling. Git was chosen for a developer audience that already holds
+  git credentials, and because it brings diff, history and three-way merge for
+  free. Peer-to-peer was deferred rather than rejected outright.
+- **Commit `~/.coffer/` in place instead of serializing into a separate working
+  tree** — rejected. The live directory mixes the vault's truth (knowledge and
+  skill files) with rebuildable or machine-local state (`coffer.db`, logs,
+  `daemon-config.json`), and the database is binary and unmergeable. A
+  dedicated tree the vault is serialized *into* keeps git's diffs meaningful
+  and leaves SQLite the local system of record. The tree was first built for
+  one-shot export; the argument for it never depended on that verb.
+- **Manual convergence by default, automatic as an opt-in** — the earlier
+  research's answer, reversed. A vault that converges only when someone
+  remembers to ask is the island problem with an extra step. The worker
+  converges on the remote's interval as soon as a remote is configured and
+  enabled; the interval is the knob, `enabled` the off switch, and `coffer sync
+  now` a way not to wait. The surprises opt-in was meant to prevent are handled
+  where they occur: egress is only `git fetch` / `git push` to the user's own
+  remote, an unchanged vault makes no commit, a conflict stops the round with
+  the vault untouched, and an oversized deletion is held in both directions.
 
 ## Consequences
 
@@ -413,9 +438,9 @@ a bot answering itself.
   grounds that a channel is an inbound surface bound to one machine and so
   travels to be at best inert and at worst a second machine answering the same
   conversation. That objection is answered rather than avoided by a binding
-  (spec channels FR-026): the document travels, the adapter does not, and only
+  ([channels](../../openspec/specs/channels/spec.md) "Bind each channel to the one machine that runs it"): the document travels, the adapter does not, and only
   the machine the document names starts one. The reversal is written up in spec
-  vault-sync's `## What does not sync` amendment.
+  vault-sync's "Keep reach machine-local" amendment.
 - Coffer now writes the vault without a human in the loop. That is the real
   cost of this decision, and it is why the pointer, the snapshot and the
   circuit breaker are normative rather than nice to have.
@@ -432,3 +457,51 @@ a bot answering itself.
 - Conversations, the audit log and MCP invocation records stay machine-local.
   They record what happened *on a machine*; merging them is a different feature
   with a different shape.
+- Credentials travel as **ciphertext only**, with the master key moved out of
+  band once per machine: a key in the repository would make the ciphertext
+  pointless, and ciphertext alone means even a hosted remote holds nothing
+  usable. Until the key is present, arrived credentials are reported as locked
+  rather than failing silently.
+
+## Implementation notes
+
+- **Sync is a cross-cutting service, not a resource kind.** The only
+  user-entered row it owns is the single `sync_remotes` config row, beside the
+  `sync_runs` history. The pointer, the retry set, the not-applicable set and a
+  held round live in machine-local SQLite
+  (`infrastructure/persistence/convergence_state_repo.py`), not a file of their
+  own: `coffer.db` is already machine-local and already outside the bundle, so
+  the state adds no second store to write atomically or to explain.
+- **Removal is its own operation at the apply seam.** Each area's applier
+  exposes exactly `upsert` and `remove`, because removal is the operation that
+  had to be authorised, and it belongs at the seam rather than inside a branch.
+- **The conflict pass never sees the vault.** `ConflictArbiter`
+  (`application/sync/conflicts.py`) is handed paths and the working tree and
+  nothing else, so "attempt the merge in the working tree only" is structural
+  rather than remembered.
+- **A confirmation is scoped to one diff.** A held round records the remote tip
+  it was raised against, and a confirmed round is re-derived rather than
+  resumed; the deletion guard is waived only while the remote tip is unchanged
+  (`application/sync/convergence.py`). If the remote moved, the guard runs again
+  and the round is held afresh — a "yes" that outlived the diff it was given for
+  is the shape of an accident. The tip stays off the wire: a caller cannot act on
+  a revision, and confirming means "yes, that one". Confirm, reject and rebuild
+  are three routes rather than one `decision` field because they are three
+  different operations: confirming re-derives a round, rebuilding runs a
+  different one, and rejecting only resets the tree to the pointer, since the
+  guard ran before anything was applied.
+- **One lock for every rewriter of vault content.** The converge service's lock
+  is injected into the knowledge curation pass, because an export taken
+  half-way through a rewrite is a torn snapshot git would read as a deliberate
+  change.
+- **Egress is bounded and the credential redacted twice.** The only outbound
+  traffic is `git fetch` / `git push` from the single git adapter, with the push
+  credential resolved for one call and scrubbed from every recorded error both
+  in the adapter and again in the service. The sync package imports no kind:
+  kinds reach it through ports registered by the composition root.
+- **Two lessons from the 2026-07-10 fixes still stand in the code.** git is run
+  with `core.quotepath=false`, because a conflicted file with a non-ASCII name
+  came back C-quoted from `git diff` and crashed conflict handling into a retry
+  loop; and installing a master key first backs the existing one up to a
+  timestamped `master.key.bak-*` sibling, because truncating the only copy in
+  place orphaned everything encrypted under it.

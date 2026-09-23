@@ -1,6 +1,6 @@
 """Pydantic API schemas (kind-agnostic).
 
-Wire-compatible with specs/mcp-gateway/contracts/api.openapi.yaml.
+Wire-compatible with openspec/specs/mcp-gateway/contracts/api.openapi.yaml.
 MCP-kind-specific schemas live in surfaces/http/mcp/schemas.py (Phase 3).
 """
 
@@ -170,55 +170,21 @@ class PruneResultOut(BaseModel):
 
 
 # --- Daemon ---
+#
+# In ``daemon_schemas.py``, re-exported here so every existing
+# ``from ...schemas import DaemonStatusOut`` keeps resolving.
 
-
-class UpstreamSummary(BaseModel):
-    registered: int
-    enabled: int
-    healthy: int
-    unhealthy: int
-
-
-class DaemonStatusOut(BaseModel):
-    status: Literal["starting", "ready", "draining"]
-    version: str
-    #: The daemon process's ``sys.executable`` — the frozen binary or the
-    #: interpreter — so a caller reporting version skew can name the build.
-    executable: str
-    started_at: datetime
-    port: int
-    upstream_summary: UpstreamSummary | None = None
-
-
-class TokenRotationOut(BaseModel):
-    token: str = Field(description="New token; clients must re-read daemon.json")
-
-
-class DaemonLogRecordOut(BaseModel):
-    """One record of ``daemon.log``, parsed where possible.
-
-    ``daemon.log`` interleaves several writers — Coffer's own JSON (one object
-    per line, every field on it), uvicorn, rich, and the cloudflared child's
-    zerolog — so ``record`` carries whatever that line stated, normalised onto
-    ``timestamp`` / ``level`` / ``logger`` / ``event``, plus ``continuation``
-    for the lines (a traceback, a wrapped message) that belong to this record
-    rather than to one of their own. A line no writer's format fits is kept whole as
-    ``{"raw": <line>}``. The three lifted fields are what a timeline renders
-    without knowing any of that; they are absent on a raw line, which is why
-    they are nullable.
-    """
-
-    timestamp: str | None = None
-    level: str | None = None
-    #: The message — the ``event`` field of one of Coffer's own lines, or the
-    #: text another writer put after its level.
-    event: str | None = None
-    record: dict[str, Any]
-
-
-class DaemonLogListOut(BaseModel):
-    records: list[DaemonLogRecordOut]
-
+from coffer.surfaces.http.daemon_schemas import DaemonLogListOut as DaemonLogListOut  # noqa: E402
+from coffer.surfaces.http.daemon_schemas import (  # noqa: E402
+    DaemonLogRecordOut as DaemonLogRecordOut,
+)
+from coffer.surfaces.http.daemon_schemas import DaemonResidencyIn as DaemonResidencyIn  # noqa: E402
+from coffer.surfaces.http.daemon_schemas import (  # noqa: E402
+    DaemonResidencyOut as DaemonResidencyOut,
+)
+from coffer.surfaces.http.daemon_schemas import DaemonStatusOut as DaemonStatusOut  # noqa: E402
+from coffer.surfaces.http.daemon_schemas import TokenRotationOut as TokenRotationOut  # noqa: E402
+from coffer.surfaces.http.daemon_schemas import UpstreamSummary as UpstreamSummary  # noqa: E402
 
 # --- MCP capability views ---
 
@@ -330,6 +296,28 @@ class CredentialExistsOut(BaseModel):
     """Presence-only response — never carries the secret value."""
 
     present: bool = Field(description="Whether a secret is stored under the ref.")
+
+
+class CredentialCiterOut(BaseModel):
+    """A resource citing a credential ref — identity and label, never config."""
+
+    uid: str
+    kind: str
+    name: str
+
+
+class CredentialRefOut(BaseModel):
+    """One cited credential ref and whether the store holds it."""
+
+    ref: str
+    present: bool = Field(description="Whether a secret is stored under the ref.")
+    cited_by: list[CredentialCiterOut]
+
+
+class CredentialListOut(BaseModel):
+    """Every ref a registered resource cites, of any kind, sorted by ref."""
+
+    refs: list[CredentialRefOut]
 
 
 class CredentialGetOut(BaseModel):

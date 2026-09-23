@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from coffer.domain.sync.portability import expand_home, normalize_home
 
 
@@ -20,10 +22,16 @@ def test_home_round_trip_across_two_homes() -> None:
     assert landed["not_a_path"] == "hello"
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a path outside the home directory is stored verbatim"
+)
 def test_paths_outside_home_are_carried_verbatim() -> None:
     # They may simply not resolve on the other machine, which surfaces as a
     # reported import failure rather than a silent rewrite.
     config = {"cmd": "/opt/homebrew/bin/x"}
+    # Stored exactly as written — no ``${HOME}`` sentinel in the tree...
+    assert normalize_home(config, "/Users/alice") == config
+    # ...and landed exactly as written on a machine with another home.
     assert expand_home(normalize_home(config, "/Users/alice"), "/home/bob") == config
 
 

@@ -55,7 +55,8 @@ _UPDATE_INTERVAL_SECONDS = 1.5
 #: there is one — the same message, rewritten in place, never a second one.
 _ACK_TEXT = "\u23f3 Got it \u2014 working on this\u2026"
 _PROGRESS_MAX_LINES = 8
-#: FR-039: cadence for re-sending the typing indicator on a supports_typing-only
+#: Cadence (spec channels/seatalk "Keep a typing heartbeat alive in DMs and group
+#: threads") for re-sending the typing indicator on a supports_typing-only
 #: transport (SeaTalk). Its typing signal expires, so a long turn needs a
 #: periodic re-send to keep the "working…" hint alive before the first live
 #: update lands.
@@ -71,16 +72,16 @@ _TYPING_HEARTBEAT_SECONDS = 3.0
 class _Progress:
     lines: dict[str, str] = field(default_factory=dict)  # tool_use_id -> line
     desc: dict[str, str] = field(default_factory=dict)  # tool_use_id -> descriptor
-    # FR-039: the one live surface this turn owns (None until it is opened, and
-    # again once it is closed). ``live_tried`` keeps a transport that refuses one
-    # from being asked on every event.
+    # The one live surface this turn owns (see "Grow a reply in place on one live
+    # surface") (None until it is opened, and again once it is closed). ``live_tried``
+    # keeps a transport that refuses one from being asked on every event.
     live: LiveText | None = None
     live_tried: bool = False
-    # FR-039: once reply text starts streaming it takes over the single live
+    # Once reply text starts streaming it takes over the single live
     # surface from the tool-progress lines, and a late tool event must not
     # overwrite it back to tool lines.
     text_started: bool = False
-    # FR-039: the turn's start time (renderer clock), so a text-only turn can gate
+    # The turn's start time (renderer clock), so a text-only turn can gate
     # opening its live surface on ELAPSED TIME — a fast reply opens none (no
     # flicker), a slow/long one does.
     started: float = 0.0
@@ -101,18 +102,19 @@ class TurnRenderer:
     # tells a transport whose group/DM send paths differ which one to use.
     thread_id: str = ""
     chat_kind: str = "direct"
-    # FR-055: the id of whoever asked, as the platform addresses them in a
-    # mention (SeaTalk's ``seatalk_id``), and their email as the fallback for a
-    # platform that also mentions by address. Used in a GROUP only, and only
-    # where the transport declares the matching template; "" everywhere else.
+    # The id of whoever asked (see "Mention the asker in a group answer"), as the
+    # platform addresses them in a mention (SeaTalk's ``seatalk_id``), and their email
+    # as the fallback for a platform that also mentions by address. Used in a GROUP
+    # only, and only where the transport declares the matching template; "" everywhere
+    # else.
     mention_user_id: str = ""
     mention_user_email: str = ""
-    # FR-039: typing-heartbeat cadence (injectable so a test can drive it fast).
+    # Typing-heartbeat cadence (injectable so a test can drive it fast).
     heartbeat_seconds: float = _TYPING_HEARTBEAT_SECONDS
 
     async def consume(self, queue: asyncio.Queue[Any]) -> bool:
         """Render the turn; return ``True`` on a clean success (no error, a
-        normal ``end_turn``), which the driver uses to gate the FR-038 ✅
+        normal ``end_turn``), which the driver uses to gate the ✅
         completion reaction. An errored/interrupted turn returns ``False``."""
         heartbeat = self._start_typing_heartbeat()
         try:
@@ -140,7 +142,7 @@ class TurnRenderer:
                 break
             if isinstance(event, TextDelta):
                 parts.append(event.text)
-                # FR-039: reply text takes over the single live surface (a turn
+                # Reply text takes over the single live surface (a turn
                 # runs tools first, then writes its answer).
                 progress.text_started = True
                 await self._stream_text(progress, parts)
@@ -200,7 +202,7 @@ class TurnRenderer:
         return f"✅ done · {detail}"
 
     def _start_typing_heartbeat(self) -> asyncio.Task[None] | None:
-        # FR-039: a supports_typing-but-not-edit transport (SeaTalk) has an
+        # A supports_typing-but-not-edit transport (SeaTalk) has an
         # ephemeral keep-alive nothing else offers — the typing indicator (zero
         # chat clutter), which expires within seconds, so re-send it on a
         # heartbeat while the turn runs. It covers the window BEFORE the live
@@ -209,12 +211,12 @@ class TurnRenderer:
         # thread, so the cue appears where the reply will. (This was DM-only on
         # the belief that no such endpoint existed.)
         #
-        # Gated on the RECEIPT mechanism, not on editing: a transport that can
-        # react (Telegram, 👀 per FR-038) already told the sender it was heard,
-        # and one that cannot leans on typing for the same cue. Reading
-        # `supports_edit` here happened to give the same answer for both live
-        # transports while meaning something else entirely — the exact
-        # confusion this capability split exists to remove.
+        # Gated on the RECEIPT mechanism, not on editing: a transport that can react
+        # (Telegram, 👀 per "Acknowledge receipt and completion by capability") already
+        # told the sender it was heard, and one that cannot leans on typing for the same
+        # cue. Reading `supports_edit` here happened to give the same answer for both
+        # live transports while meaning something else entirely — the exact confusion
+        # this capability split exists to remove.
         caps = self.adapter.capabilities
         if caps.supports_typing and not caps.supports_reactions:
             return asyncio.create_task(self._typing_heartbeat())
@@ -230,7 +232,7 @@ class TurnRenderer:
                 )
 
     async def _update_progress(self, progress: _Progress) -> None:
-        # Once reply text is streaming it owns the live surface (FR-039) — a
+        # Once reply text is streaming it owns the live surface — a
         # late tool event must not overwrite it back to tool lines.
         if progress.text_started:
             return
@@ -238,7 +240,7 @@ class TurnRenderer:
         await self._render_status(progress, text)
 
     async def _stream_text(self, progress: _Progress, parts: list[str]) -> None:
-        # FR-039: stream the accumulating reply text into the single live surface
+        # Stream the accumulating reply text into the single live surface
         # (throttled), clipped to the platform limit so a long preview never
         # exceeds the per-message cap. When tool progress already opened the
         # surface, morph it into the reply text; on a text-only turn, open it only
@@ -268,7 +270,8 @@ class TurnRenderer:
         await self._live_update(progress.live, text)
 
     async def _live_update(self, live: LiveText, text: str) -> None:
-        """Hand ONE snapshot to the live surface, @mentioned (FR-055).
+        """Hand ONE snapshot to the live surface, @mentioned (see "Mention the asker in
+        a group answer").
 
         Every snapshot the surface is given passes through here — the
         acknowledgement, each tool-progress redraw, each growing preview — so the
@@ -371,7 +374,7 @@ class TurnRenderer:
             await self.send(leftover)
 
     def _with_mention(self, body: str) -> str:
-        """FR-055: open the reply by @mentioning whoever asked — on EVERY
+        """Open the reply by @mentioning whoever asked — on EVERY
         snapshot of it, for the reason written out in ``turn_text.with_mention``.
         """
         caps = self.adapter.capabilities

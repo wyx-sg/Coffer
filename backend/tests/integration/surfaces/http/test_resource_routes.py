@@ -526,7 +526,10 @@ def _renames(tmp_path) -> list[tuple[str, str]]:
     scenario="renaming a resource is an ordinary edit",
 )
 async def test_a_rename_carries_everything_that_was_not_the_name(tmp_path):
-    """FR-011: the name is a label, so it moves and nothing else does."""
+    """The name is a label, so it moves and nothing else does.
+
+    See "Treat a resource's name as a mutable label".
+    """
     c, engine = await _client(tmp_path)
     async with c:
         created = await c.post(
@@ -571,7 +574,7 @@ async def test_a_rename_carries_everything_that_was_not_the_name(tmp_path):
 
 @pytest.mark.asyncio
 async def test_a_rename_alone_does_not_rewrite_the_config(tmp_path):
-    """FR-011: a PATCH carrying only a name touches only the name.
+    """A PATCH carrying only a name touches only the name.
 
     Writing the stored config back over itself is not a no-op — it re-validates,
     re-probes every credential the config cites, fires the kind's update hook

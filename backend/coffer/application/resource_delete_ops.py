@@ -85,3 +85,22 @@ async def citations_of(service: ResourceService, credential_ref: str) -> list[Re
         if credential_ref in credential_refs(kind_def, resource.config).values():
             citing.append(resource)
     return citing
+
+
+async def all_citations(service: ResourceService) -> dict[str, list[Resource]]:
+    """Every credential ref any registered resource cites, with its citers.
+
+    The whole-vault form of ``citations_of``: one scan over every row, each
+    kind asked through its own ``credential_ref_extractor``, so a channel's bot
+    token and a provider connection's API key count as much as an MCP server's
+    header. ``coffer credentials list`` reads this to say which cited secrets
+    the store is missing.
+    """
+    cited: dict[str, list[Resource]] = {}
+    for resource in await service._repo.list():
+        kind_def = service._kinds.get(resource.kind)
+        if kind_def is None:
+            continue
+        for ref in dict.fromkeys(credential_refs(kind_def, resource.config).values()):
+            cited.setdefault(ref, []).append(resource)
+    return cited

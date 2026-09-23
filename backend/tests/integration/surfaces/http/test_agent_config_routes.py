@@ -77,7 +77,8 @@ def test_list_and_read_config_file(tmp_path, monkeypatch):
         assert items["settings"]["files"] is None
         assert items["subagents"]["kind"] == "directory"
         # The read-only viewer needs absolute paths for open/reveal
-        # (FR-047): a file entry exposes its own path + its containing folder.
+        # ("Open config files in an external editor or reveal them"): a file entry
+        # exposes its own path + its containing folder.
         assert items["settings"]["path"] == str(settings_path)
         assert items["settings"]["folder_path"] == str(claude_dir)
         # A directory entry's path IS the folder; folder_path is its parent.
@@ -321,12 +322,12 @@ def test_mcp_install_lifecycle(tmp_path, monkeypatch):
         assert r.json()["installed"] is True
         assert r.json()["command"] == str(shim)
         data = json.loads((tmp_path / ".claude.json").read_text())
-        # Agent Registry FR-015 (amended): install writes `--agent-uid <uid>` so
-        # the shim self-reports its identity at the MCP handshake. It is the uid
-        # and not the label because this string is written once into a file
-        # Coffer does not otherwise touch, and then outlives every rename — a
-        # name here would go stale on the first one and quietly stop matching
-        # any resource scope (ADR resource-identity-is-an-immutable-uid).
+        # "Install Coffer's MCP server into an agent in one action": install writes
+        # `--agent-uid <uid>` so the shim self-reports its identity at the MCP
+        # handshake. It is the uid and not the label because this string is written
+        # once into a file Coffer does not otherwise touch, and then outlives every
+        # rename — a name here would go stale on the first one and quietly stop
+        # matching any resource scope (ADR resource-identity-is-an-immutable-uid).
         assert data["mcpServers"]["coffer"] == {
             "command": str(shim),
             "args": ["--agent-uid", uid],

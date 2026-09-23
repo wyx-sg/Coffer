@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-21
 **Deciders**: Yuxing Wu
-**Spec**: [specs/provider-switching/spec.md](../../specs/provider-switching/spec.md)
+**Spec**: [openspec/specs/provider-switching/spec.md](../../openspec/specs/provider-switching/spec.md)
 
 The live decision is the one below **as corrected by the amendments** at the end
 of this file (D6 onwards). Three clauses of `## Decision` were reversed there and
@@ -169,13 +169,27 @@ function. All I/O (file writes) is performed by `ProviderService._project`.
 
 ## Alternatives considered
 
-See [specs/provider-switching/research.md](../../specs/provider-switching/research.md)
-for the full enumeration of alternatives (A1/A2/A3, B1/B2/B3, C1/C2) and the
-rationale for rejecting each alternative.
+- **One record driving both agents at once (vs. A).** Rejected: it forces every
+  agent's fields onto one record and leaves "active" undefined when one agent's
+  write succeeds and the other's fails. The per-agent scope (see the preamble)
+  later delivered the useful half — one gateway account reaching both agents —
+  without collapsing two agents' activation into one flag.
+- **A per-agent provider list with no shared registry (vs. A).** Rejected: it
+  loses the unified audit, sync and encryption that are the point of the kind;
+  it is the status quo this ADR replaces.
+- **Writing the raw key into the native config (vs. B).** Rejected: plaintext
+  keys in config files leak into backups, sync and git history, and it breaks
+  the `credential_refs` pattern MCP servers already follow.
+- **A local proxy that injects the key (vs. B).** Rejected: a new resident
+  component, added latency, and clients reconfigured to hit it — and a proxy is
+  also what protocol translation and failover would need, both non-goals.
+- **Hot-switch in the first delivery (vs. C).** Rejected: detecting and
+  signalling running agent processes, with partial failures, is substantially
+  more work, while `apiKeyHelper` already gives Claude Code most of the effect.
 
 ## Amendment 2026-06-22 — connections are optional overrides (introspection: inline secret)
 
-Authoritative design: the [spec provider-switching Amendment 2026-06-22](../../specs/provider-switching/spec.md)
+Authoritative design: the [spec provider-switching Amendment 2026-06-22](../../openspec/specs/provider-switching/spec.md)
 (D1–D7). This ADR section records the introspection consequence delivered first
 (D6); later D-points extend it.
 
@@ -220,7 +234,7 @@ Authoritative design: the [spec provider-switching Amendment 2026-06-22](../../s
 
 ## Amendment 2026-09-11 — the connection curates WHICH models it offers
 
-Authoritative design: the [spec provider-switching Amendment 2026-09-11](../../specs/provider-switching/spec.md)
+Authoritative design: the [spec provider-switching Amendment 2026-09-11](../../openspec/specs/provider-switching/spec.md)
 (J1–J3).
 
 - **D10 — `models` on the connection: the offered set, not a chosen model.** D9
@@ -242,7 +256,7 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-11](../../s
 
 ## Amendment 2026-09-11b — the agent curates which of its own catalogue it offers
 
-Authoritative design: the [spec provider-switching Amendment 2026-09-11b](../../specs/provider-switching/spec.md)
+Authoritative design: the [spec provider-switching Amendment 2026-09-11b](../../openspec/specs/provider-switching/spec.md)
 (K1–K4).
 
 - **D11 — Two tables in the CLI binary, not one.** The catalog Coffer reads is
@@ -286,7 +300,7 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-11b](../../
 
 ## Amendment 2026-09-13 — the Claude Code picker offers tier aliases
 
-Authoritative design: the [spec provider-switching Amendment 2026-09-13](../../specs/provider-switching/spec.md)
+Authoritative design: the [spec provider-switching Amendment 2026-09-13](../../openspec/specs/provider-switching/spec.md)
 (M1–M3).
 
 - **D14 — Offer what the CLI offers, not what its binary remembers.** D12 said
@@ -309,7 +323,7 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-13](../../s
 
 ## Amendment 2026-09-13b — the effort a Codex turn thinks at is Coffer's to offer
 
-Authoritative design: the [spec provider-switching Amendment 2026-09-13b](../../specs/provider-switching/spec.md)
+Authoritative design: the [spec provider-switching Amendment 2026-09-13b](../../openspec/specs/provider-switching/spec.md)
 (N1–N4).
 
 - **D16 — An effort is a field beside the model, not a name inside it.** D14 made
@@ -341,9 +355,9 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-13b](../../
 
 ## Amendment 2026-09-17 — speech-to-text gets a flag of its own
 
-Authoritative design: [spec provider-switching](../../specs/provider-switching/spec.md)
-FR-035 and [spec internal-engine](../../specs/internal-engine/spec.md) FR-025 –
-FR-027.
+Authoritative design: [spec provider-switching](../../openspec/specs/provider-switching/spec.md)
+"Keep an independent speech-to-text default" and the speech-to-text requirements of
+[spec internal-engine](../../openspec/specs/internal-engine/spec.md).
 
 - **D18 — A second global flag, `transcribe_default`, not a second use of the
   first.** D said one connection, two uses: active for an agent AND the internal
@@ -369,3 +383,41 @@ FR-027.
   engine's own model, and it follows the same both-halves-or-neither rule —
   unset means Coffer transcribes nothing, which is an answer rather than a
   failure.
+
+## Implementation notes
+
+Where the code stands against the clauses above, beyond the amendments:
+
+- **Activation is per agent type.** A first tied a connection to one wire and
+  made activation per wire; neither held. The wire was never the thing being
+  taken over, so the single-active invariant is per agent type, and which agent
+  types a connection covers is its per-agent scope. The projection writer is
+  chosen by the agent type, not by the connection's protocol.
+- **The helper cites the connection's uid.** Claude Code's `apiKeyHelper` is
+  `coffer provider key --connection-uid <uid>`, not `--wire anthropic`, so the
+  agent reads exactly the activated connection's key and a rename rewrites
+  nothing. The `--wire` form survives for files written before that change.
+- **Three non-goals shipped in narrow form.** Reverting an agent to its
+  built-in login is `use-builtin/{wire}` (idempotent, ownership-aware). Coffer
+  materialises `COFFER_PROVIDER_KEY` for every Codex process it spawns itself
+  (`CODEX_ENV_KEY` lives in `domain/connection.py` so the provider kind and the
+  chat kind's Codex adapter share it without importing each other); only a
+  Codex started from the user's own shell needs the export. And drift-verify
+  exists as a boot self-check that clears `is_active` when the projection is no
+  longer in the file — it never re-projects.
+- **A native config file is shared with its agent.** Atomic writes plus a
+  fingerprint of the text read make a concurrent edit a refusal
+  (`CONFIG_FILE_STALE`) rather than a silent overwrite, but cannot serialise the
+  other program (`application/provider/projector.py`). The Codex merge goes
+  through `tomlkit`'s dict API so comments and ordering survive.
+- **The Codex model catalogue is a contract with another program.** A malformed
+  `model_catalog_json` does not fail loudly — Codex warns and falls back to its
+  built-in list — so the document's required fields are pinned by a test
+  (`backend/tests/integration/providers/test_codex_model_catalog.py`).
+- **Sync costs one post-import hook.** The kind converges through the
+  framework's resource serialisation; what it adds is `sync_reconcile.py`, which
+  re-derives each agent's projection after a converge round, because writing a
+  native config file is a machine-local side effect no document can carry.
+  Credentials travel only as Fernet ciphertext.
+- **`provider_switched` is its own audit event** carrying `{from, to, protocol,
+  agents}`, so the switch history can be read without diffing resource updates.

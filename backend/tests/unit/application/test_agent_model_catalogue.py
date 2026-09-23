@@ -11,6 +11,8 @@ from __future__ import annotations
 import datetime as dt
 import pathlib
 
+import pytest
+
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.domain.agent.model_catalogue import AgentModel
 from coffer.domain.resource import Resource
@@ -182,6 +184,10 @@ _THREE = [
 ]
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="offer the agent's whole catalogue with nothing curated on the agent",
+)
 async def test_an_agent_offers_its_whole_catalogue(tmp_path: pathlib.Path) -> None:
     """The only state there is now. What a picker shows is what the agent
     reports — a surface that wants less says so on its own side."""
@@ -194,6 +200,10 @@ async def test_an_agent_offers_its_whole_catalogue(tmp_path: pathlib.Path) -> No
     assert await svc.suggest("claude_code") == [m.id for m in _THREE]
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="offer the agent's whole catalogue with nothing curated on the agent",
+)
 async def test_the_agent_resource_carries_no_model_curation(tmp_path: pathlib.Path) -> None:
     """``AgentConfig`` forbids extra keys, so a stored ``models`` key would fail
     to validate — and ``_agent()`` skipping it is not an oversight. This pins

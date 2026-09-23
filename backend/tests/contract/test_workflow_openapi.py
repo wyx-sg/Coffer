@@ -1,5 +1,5 @@
 """Contract test: the app's generated OpenAPI for ``/api/v1/workflow`` matches
-specs/workflow/contracts/api.openapi.yaml.
+openspec/specs/workflow/contracts/api.openapi.yaml.
 
 ``test_contract_coverage.py`` already sweeps every contract in both directions.
 This module is what that sweep cannot know: what is **deliberately absent**, how
@@ -36,7 +36,7 @@ import yaml
 from coffer.main import app
 
 _WORKFLOW_OPENAPI_PATH = (
-    Path(__file__).resolve().parents[3] / "specs/workflow/contracts/api.openapi.yaml"
+    Path(__file__).resolve().parents[3] / "openspec/specs/workflow/contracts/api.openapi.yaml"
 )
 
 _WORKFLOW_PREFIX = "/api/v1/workflow"
@@ -158,7 +158,7 @@ def test_no_workflow_route_is_undocumented(
     contract is the whole management plane or it is decoration."""
     undeclared = _served_operations(generated_schema) - _declared_operations(spec_doc)
     assert not undeclared, (
-        f"served by the app but absent from specs/workflow/contracts/api.openapi.yaml: "
+        f"served by the app but absent from openspec/specs/workflow/contracts/api.openapi.yaml: "
         f"{sorted(f'{m} {p}' for m, p in undeclared)}"
     )
 
@@ -388,7 +388,7 @@ def test_every_yaml_component_exists_with_its_required_fields(
         missing = set(schema.get("required") or []) - set(generated[name].get("required") or [])
         if missing:
             problems.append(f"{name}: required in the yaml but not generated: {sorted(missing)}")
-    assert not problems, "specs/workflow/contracts/api.openapi.yaml drift:\n  " + "\n  ".join(
+    assert not problems, "openspec/specs/workflow/contracts/api.openapi.yaml drift:\n  " + "\n  ".join(
         problems
     )
 

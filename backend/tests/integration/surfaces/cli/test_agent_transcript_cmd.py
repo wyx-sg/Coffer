@@ -1,6 +1,7 @@
 """Integration tests for `coffer agent transcripts`.
 
-FR-044/FR-046 require every agent-workspace op to exist on BOTH REST and CLI;
+Spec agent-registry "Expose every agent operation through REST, CLI and the Agents page"
+requires every agent-workspace op to exist on BOTH REST and CLI;
 this verb wraps the one read-only route:
 
   ``GET /agents/{uid}/transcripts`` → ``transcripts``
@@ -239,6 +240,6 @@ def test_transcripts_unknown_agent_exits_4(monkeypatch):
 
 
 def test_transcripts_is_registered():
-    """The read verb appears under `coffer agent` (FR-044 CLI/REST parity)."""
+    """The read verb appears under `coffer agent` (CLI/REST parity)."""
     help_out = _runner.invoke(cli_app, ["agent", "--help"]).output
     assert "transcripts" in help_out

@@ -1224,7 +1224,7 @@ async def test_refresh_unknown_server_returns_404(
 
 
 # ---------------------------------------------------------------------------
-# FR-011 (amendment 2026-07-10) — missing stdio launcher surfaced
+# Missing stdio launcher surfaced ("Name a missing stdio launcher")
 # ---------------------------------------------------------------------------
 
 

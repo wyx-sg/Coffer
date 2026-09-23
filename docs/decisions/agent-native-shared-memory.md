@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-09
 **Deciders**: Yuxing Wu
-**Related**: spec [knowledge](../../specs/knowledge/spec.md), [Knowledge Is Plain Files](knowledge-is-plain-files.md) (the store's shape), [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md) (the same prohibition, applied to memory), [Everything Is a Resource Kind](everything-is-a-resource-kind.md), [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md)
+**Related**: spec [knowledge](../../openspec/specs/knowledge/spec.md), [Knowledge Is Plain Files](knowledge-is-plain-files.md) (the store's shape), [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md) (the same prohibition, applied to memory), [Everything Is a Resource Kind](everything-is-a-resource-kind.md), [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md)
 
 This ADR owns exactly one question: **one store for every agent, or one store
 per agent.** The store's layout, tool list and retrieval belong to

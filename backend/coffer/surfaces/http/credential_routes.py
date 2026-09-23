@@ -9,8 +9,9 @@ pasted `env` is lifted into the credential store here, so it never lands in
 Coffer's resource config unencrypted — the resource config only keeps a
 credential ref.
 
-Every lifecycle change is audited (spec resource-framework FR-006). The audit row records the `ref`
-only — secret values never appear in the audit log.
+Every lifecycle change is audited (spec resource-framework "Audit every lifecycle
+change"). The audit row records the `ref` only — secret values never appear in
+the audit log.
 """
 
 from __future__ import annotations
@@ -33,8 +34,11 @@ from coffer.surfaces.http.dependencies import (
 )
 from coffer.surfaces.http.errors import error_response
 from coffer.surfaces.http.schemas import (
+    CredentialCiterOut,
     CredentialExistsOut,
     CredentialGetOut,
+    CredentialListOut,
+    CredentialRefOut,
     CredentialSetIn,
 )
 
@@ -66,6 +70,35 @@ async def set_secret(
         details={"ref": body.ref},
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("", response_model=CredentialListOut)
+async def list_cited_refs(
+    store: Any = Depends(get_credential_store),  # noqa: B008
+    resources: ResourceService = Depends(get_resource_service),  # noqa: B008
+) -> CredentialListOut:
+    """Every credential ref a registered resource cites, with its presence.
+
+    Refs come from every kind's credential extractor (MCP server headers,
+    channel bot tokens, provider API keys, ...), so a vault restored without
+    its secrets can say which ones are missing. Presence only — no value is
+    decrypted, so nothing is audited.
+    """
+    cited = await resources.cited_credential_refs()
+    out: list[CredentialRefOut] = []
+    for ref in sorted(cited):
+        # to_thread: see secret_exists — a store read can wait on the write lock.
+        present = await asyncio.to_thread(store.exists, ref)
+        out.append(
+            CredentialRefOut(
+                ref=ref,
+                present=present,
+                cited_by=[
+                    CredentialCiterOut(uid=r.uid, kind=r.kind, name=r.name) for r in cited[ref]
+                ],
+            )
+        )
+    return CredentialListOut(refs=out)
 
 
 # NOTE: /exists is declared BEFORE the value route — both use `{ref:path}`

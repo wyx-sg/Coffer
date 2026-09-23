@@ -180,8 +180,9 @@ def test_discovered_models_from_the_agents_own_config(tmp_path: pathlib.Path) ->
 
 # --- the retired per-agent selection -----------------------------------------
 #
-# Model curation lives on the CHANNEL now (spec channels/seatalk FR-004), not on the
-# agent. The agent answers one question — what can this agent be put on — and
+# Model curation lives on the provider connection now (spec provider-switching
+# "Curate the models a connection offers"), not on the agent. The agent answers
+# one question — what can this agent be put on — and
 # these pin that the second question no longer has a route to ask it from.
 
 

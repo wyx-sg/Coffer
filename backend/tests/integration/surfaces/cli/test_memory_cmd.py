@@ -1,4 +1,6 @@
-"""Integration tests for ``coffer memory ...`` (spec memory FR-036).
+"""Integration tests for ``coffer memory ...``.
+
+See spec memory "Cover memory management on REST and the CLI".
 
 Most commands are thin HTTP shells, tested the same way
 ``test_knowledge_cmd.py`` tests its own: boot the real app, route
@@ -9,11 +11,13 @@ monkeypatching ``live_daemon``/``httpx.post`` directly, proving the "never
 fail a session" contract even when nothing is listening at all.
 
 The fixture repository is a **real** ``git init``, because a partition is keyed
-on a repository and a plain directory deliberately earns none (FR-014, FR-015);
+on a repository and a plain directory deliberately earns none ("Identify a partition
+by its repository", "Create no partition for a non-repository directory");
 and every test that wants notes runs ``sync`` **then** ``distil``, because
 aggregation writes only the hidden ``.raw/`` and the notes are the distil pass's
-output (FR-008). With no internal connection configured that pass is the
-mechanical one — one note per entry, and an index over them (FR-024).
+output ("Keep raw entries verbatim and hidden"). With no internal connection
+configured that pass is the mechanical one — one note per entry, and an index
+over them ("Distil mechanically with no internal connection").
 """
 
 from __future__ import annotations
@@ -148,7 +152,7 @@ def _agent_uid(name: str) -> str:
 def _seed_repository(tmp_path: pathlib.Path) -> pathlib.Path:
     """A real repository with two Claude Code memory files in it: one about the
     project, one about the developer — which is the split that fills both a
-    repository partition and ``global`` (FR-011)."""
+    repository partition and ``global`` ("File personal entries into global")."""
     repository = init_repository(tmp_path / "coffer")
     claude_code_config(
         tmp_path / ".claude",
@@ -216,13 +220,15 @@ def test_sync_then_partitions_notes_and_one_note(memory_cli_daemon):
     assert shown.exit_code == 0, shown.output
     assert "uv sync --frozen" in shown.output
     # The origin is printed because a note's body is Coffer's paraphrase
-    # (FR-020): a note that reads wrong has to be traceable to what said it.
+    # ("Write notes in Coffer's own words"): a note that reads wrong has to be
+    # traceable to what said it.
     assert "origin: cc <-" in shown.output
 
 
 def test_partitions_table_calls_out_a_repository_that_is_gone(memory_cli_daemon):
-    """FR-016: an orphan is named as one rather than sitting there, listed and
-    undeliverable, looking exactly like a live partition."""
+    """Per "Report unresolvable partitions", an orphan is named as one rather
+    than sitting there, listed and undeliverable, looking exactly like a live
+    partition."""
     tmp_path = memory_cli_daemon
     partition = _distilled_partition(tmp_path)
     shutil.rmtree(tmp_path / "coffer")
@@ -256,7 +262,8 @@ def test_note_that_is_not_there_exits_not_found(memory_cli_daemon):
 
 def test_retired_prints_what_was_retired_and_why(memory_cli_daemon):
     """``RETIRED.md`` is the only thing that makes a deletion stick in a store
-    whose sources live outside it (FR-025), so it has a verb of its own."""
+    whose sources live outside it ("Record retirements so they stick"), so it has
+    a verb of its own."""
     partition = _distilled_partition(memory_cli_daemon)
     empty = _runner.invoke(cli_app, ["memory", "retired", partition, "--json"])
     assert json.loads(_extract_json(empty.output))["retired"] == []
@@ -300,8 +307,9 @@ def test_distil_of_an_unknown_partition_exits_not_found(memory_cli_daemon):
 
 
 def test_distil_without_an_internal_connection_reports_the_mechanical_pass(memory_cli_daemon):
-    """FR-024: thinner, not absent — the verb still returns a real pass, and
-    says a model was not used rather than pretending one was."""
+    """Per "Distil mechanically with no internal connection": thinner, not
+    absent — the verb still returns a real pass, and says a model was not used
+    rather than pretending one was."""
     tmp_path = memory_cli_daemon
     _register_cc_via_http()
     _seed_repository(tmp_path)
@@ -418,7 +426,8 @@ def _route_context_at_the_test_app(monkeypatch) -> None:
 
 def test_context_prints_the_whole_index_and_records_a_fire(memory_cli_daemon, monkeypatch):
     """What an installed session-start hook actually puts in front of an agent:
-    a line per note and the absolute directory their bodies are in (FR-028)."""
+    a line per note and the absolute directory their bodies are in ("Deliver the
+    index and the notes path at session start")."""
     tmp_path = memory_cli_daemon
     partition = _distilled_partition(tmp_path)
     _route_context_at_the_test_app(monkeypatch)
@@ -456,9 +465,10 @@ def test_context_of_a_partition_with_nothing_in_it_prints_nothing(memory_cli_dae
 
 # ----- `ls` / `read`: the partition's own directory from the terminal -------
 #
-# The REST half has existed since FR-037 (GET /memory/partitions/{uid}/files
-# and .../files/content) but `coffer memory` could reach notes and partitions
-# and not the files they are stored in, which is the one thing FR-036 names
+# The REST half has existed since "Present partitions as a table and a file
+# tree" (GET /memory/partitions/{uid}/files and .../files/content) but `coffer
+# memory` could reach notes and partitions and not the files they are stored in,
+# which is the one thing "Cover memory management on REST and the CLI" names
 # that the group did not do. The verbs are `ls` and `read` so that browsing
 # memory and browsing knowledge are the same two words.
 
@@ -474,7 +484,8 @@ def test_ls_walks_a_partitions_own_directory(memory_cli_daemon):
     assert set(children) == {"MEMORY.md", "notes", ".raw"}
     assert children["notes"]["type"] == "dir"
     assert "notes/python-lockfile.md" in {c["path"] for c in children["notes"]["children"]}
-    # `.raw/` is reachable and flagged as the verbatim input (FR-008, FR-037).
+    # `.raw/` is reachable and flagged as the verbatim input ("Keep raw entries
+    # verbatim and hidden", "Present partitions as a table and a file tree").
     assert children[".raw"]["derived"] is True
     assert children["notes"]["derived"] is False
 

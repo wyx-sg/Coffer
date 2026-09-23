@@ -17,6 +17,12 @@ test("en and zh expose the same common.* keys", () => {
   expect(Object.keys(zh.common).sort()).toEqual(Object.keys(en.common).sort());
 });
 
+test("errors.INTERNAL_ERROR reads as a readable message in every locale, never a shrug", () => {
+  for (const text of [en.errors.INTERNAL_ERROR, zh.errors.INTERNAL_ERROR]) {
+    expect(text).not.toMatch(/unexpected error|INTERNAL_ERROR|意外错误/i);
+  }
+});
+
 function flatKeys(obj: unknown, prefix = ""): string[] {
   if (obj === null || typeof obj !== "object") return [prefix];
   return Object.entries(obj as Record<string, unknown>).flatMap(([k, v]) =>

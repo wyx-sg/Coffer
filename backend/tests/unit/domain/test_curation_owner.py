@@ -6,8 +6,8 @@ distinction it draws that a boolean cannot is the point: "another machine is
 curating" and "nobody is curating, because the machine named no longer exists"
 are both "not here" to the timer, and only one of them is a fault.
 
-Covers `specs/knowledge/spec.md` and `specs/vault-sync/spec.md`
-"## Unattended rewriters".
+Covers `openspec/specs/knowledge/spec.md` and `openspec/specs/vault-sync/spec.md`
+"Report and change the rewriter's owner".
 """
 
 from __future__ import annotations

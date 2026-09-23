@@ -1,0 +1,390 @@
+# Data Model — Skill Manager
+
+Entities, fields, relationships, and SQLite additions for the skill manager.
+Depends on the agent kind from spec agent-registry and the kind-agnostic Resource
+framework from spec resource-framework.
+
+## Domain entities (`backend/coffer/domain/skill/`)
+
+### `SkillSource` (`domain/skill/source.py`)
+
+A Pydantic model recording where a managed skill came from. In v1, only local-folder import is supported.
+
+#### `LocalImportSource`
+
+| Field           | Type                      | Notes                                                 |
+| --------------- | ------------------------- | ----------------------------------------------------- |
+| `type`          | `Literal["local_import"]` | source type                                           |
+| `original_path` | `str`                     | informational only; not retained as a live dependency |
+
+### `SkillConfig` (`domain/skill/config.py`)
+
+Pydantic v2 `BaseModel`. It carries no copy of the skill's name: the name comes
+from the SKILL.md frontmatter at import and is stored once, as `Resource.name`.
+A `skill_md_name` key mirrored it until migration 0098 stripped it — one fact
+written twice, with nothing reading the second copy and two places to disagree
+once renaming arrived ([Resource Identity Is an Immutable
+`uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
+
+| Field                        | Type               | Notes                                               |
+| ---------------------------- | ------------------ | --------------------------------------------------- |
+| `source`                     | `LocalImportSource` | single local_import source                         |
+| `skill_md_description`       | `str`              | frontmatter `description`                           |
+| `version_hash`               | `str`              | sha256 of SKILL.md content at last sync             |
+| `last_synced_from_source_at` | `datetime \| None` | UTC; set on import                                  |
+
+### `SkillFrontmatter` (`domain/skill/frontmatter.py`)
+
+Pydantic v2 model used during validation of an imported folder. Aligns
+with the agentskills.io constraints:
+
+| Field           | Type                | Constraint                                                        |
+| --------------- | ------------------- | ----------------------------------------------------------------- |
+| `name`          | `str`               | required, 1–64 chars, `^[a-z0-9][a-z0-9_-]{0,63}$`                |
+| `description`   | `str`               | required, 1–1024 chars                                            |
+| `license`       | `str \| None`       | optional; recognized, not interpreted                             |
+| `allowed_tools` | `list[str] \| None` | optional (`allowed-tools`); normalized from list or delimited str |
+
+`name` accepts a documented superset of the standard's charset — the standard
+allows lowercase letters, digits, and hyphens, and Coffer also tolerates
+underscores for backward-compatibility. `license` and `allowed-tools` are
+third-party authored, so recognizing them stays additive: a non-string
+`license` scalar is coerced to a string and a malformed `allowed-tools` value
+is tolerated (treated as absent) rather than failing validation. Every other
+unrecognized field is tolerated under `extra='allow'`.
+
+The frontmatter `description` is stored on the skill kind's config as
+`SkillConfig.skill_md_description` (see above) — this is the authoritative
+copy. The `resources` row has
+its own `description` column inherited from the kind-agnostic Resource
+framework; on import it is seeded from the frontmatter `description`
+for parity with other kinds, but it is not re-synced afterwards
+(treat it as a free-form human label after the initial write).
+
+### `BindingState` (`domain/skill/binding.py`)
+
+Plain dataclass; in-memory representation of one row from
+`skill_agent_bindings`. The row is internal delivery bookkeeping — it records
+that this agent currently holds a delivered copy — not a user-facing axis.
+
+| Field               | Type               | Notes                                                                                                                 |
+| ------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `skill_resource_id` | `int`              | FK                                                                                                                    |
+| `agent_resource_id` | `int`              | FK                                                                                                                    |
+| `enabled`           | `bool`             | still present in the table and in this dataclass; internal only — it marks a live delivered copy and no surface exposes it |
+| `last_linked_at`    | `datetime \| None` | last successful link op                                                                                               |
+| `last_link_path`    | `str \| None`      | absolute path where the link was created                                                                              |
+| `link_mode`         | `LinkMode \| None` | `symlink`, `junction`, or `copy_fallback`; mirrors `SkillBindingOut.link_mode` and lets the UI flag degraded deliveries |
+
+### `DriftKind` (`domain/skill/drift.py`)
+
+String-valued enum.
+
+| Value                   | Meaning                                       | Suggested remedy                      |
+| ----------------------- | --------------------------------------------- | ------------------------------------- |
+| `missing_link`          | a delivered copy is recorded but no target on disk | run the opt-in repair to re-link |
+| `tampered_link`         | symlink target is not Coffer's master         | run the opt-in repair (backs up, then re-links) |
+| `replaced_with_regular` | path is a regular file/dir instead of a link  | same as above                         |
+| `missing_master`        | binding refers to a master folder that's gone | re-import                             |
+| `orphan_master`         | master folder on disk has no DB record        | adopt or remove                       |
+
+### Unmanaged Skill (`domain/skill/scan.py` + `domain/agent/scan.py`) — workspace amendment
+
+A derived (never stored) view of a skill-shaped entry found in an agent's skill
+locations that Coffer does not manage (see "List unmanaged skills in an agent's
+skill locations"). The filesystem is the source of truth; adoption or deletion
+are the only mutations.
+
+`scan_locations(agent_type, config_dir)` lives in `domain/agent/scan.py`
+(it depends on `AgentType`, which `domain/skill` must not import — Contract
+5c) and returns the ordered directories to scan: `<config_dir>/skills` for
+both types, plus `~/.agents/skills` for `codex`. The infrastructure layer
+(`infrastructure/skill/workspace_scan.py`) walks them into `ScanEntry` values
+(name, path, `is_dir`, `link_target`), and the pure `classify` in
+`domain/skill/scan.py` turns those into `UnmanagedSkill` results:
+
+- entries that are Coffer-managed links (symlink resolving inside
+  `~/.coffer/skills/`) are excluded;
+- dot-entries (e.g. Codex's `.system`) and plain files are silently excluded;
+- symlinks pointing outside the master store are listed with
+  `foreign_link=True` and are never adoptable;
+- plain directories are listed and adoptable.
+
+Surfaced fields (`UnmanagedView` in `application/skill/unmanaged_ops.py`):
+
+| Field          | Type          | Notes                                                                     |
+| -------------- | ------------- | ------------------------------------------------------------------------- |
+| `name`         | `str`         | folder name                                                               |
+| `path`         | `str`         | absolute path on disk                                                     |
+| `location`     | `str`         | `"skills"` (`<config_dir>/skills`) or `"agents_dir"` (`~/.agents/skills`) |
+| `valid`        | `bool`        | passes AgentSkills validation (see "Validate imported skill folders against AgentSkills") |
+| `reason`       | `str \| None` | validation failure reason when invalid                                    |
+| `foreign_link` | `bool`        | symlink targeting outside the master store — surfaced, never adoptable    |
+
+### Delivery predicate (owned entirely by the skill resource) — workspace amendment
+
+Delivery has exactly one input pair, both on the `skill` resource itself: the
+framework-level `enabled` flag and the framework-level `scope`
+([ADR per-agent-resource-scope](../../../docs/decisions/per-agent-resource-scope.md)).
+`scope` is one allow-list of agents, `null` meaning unrestricted, so the answer
+depends on the agent asking and on nothing else:
+
+```
+delivered(skill, agent)  ⟺  skill.enabled
+                         AND is_active(skill.scope, agent)
+```
+
+`is_active` is the free function in `domain/scope.py`. There is no evaluator
+object to construct at the composition root and no machine id to bind into one;
+the delivery call sites call the predicate directly. The pair it reads is the
+skill's reach, and reach never leaves this machine (spec vault-sync
+"Keep reach machine-local") — so a skill dormant here and delivered on the laptop
+is two rows with two answers, not one scope with two axes.
+
+The agent resource carries **no** skill-delivery policy: `follow_all_skills`
+and `skill_exclusions` are gone from `AgentConfig` (spec agent-registry's schema), and
+migration `0058` strips both keys from every stored agent row. There is no
+load-time shim and no back-compat default — a stored row simply no longer has
+them.
+
+`application/skill/delivery_ops.py` holds the reconciler,
+`apply_scope_for_agent(agent_name)` (renamed from `apply_follow_for_agent`,
+which lived in `follow_ops.py`). It computes
+
+```
+wanted = {s.name for s in skills if s.enabled and is_active(s.scope, agent_name)}
+```
+
+then delivers `wanted - bound` and reclaims `bound - wanted`, where `bound` is
+the set of skills whose `skill_agent_bindings` row says this agent currently
+holds a delivered copy. It runs on: a skill being enabled or disabled, a
+skill's scope being edited, a skill being imported, a skill being removed, an
+agent being registered, an agent's `config_dir` changing, and the sync
+post-import hook. The skill/agent enable and scope edits reach it through the
+kind hooks `on_enabled_changed` and `on_scope_changed`, so skill code still
+never imports agent-kind code (Contract 5c).
+
+**Wire shapes.** `SkillOut` gains `scope` (`ScopeOut | None`, always emitted,
+placed right after `enabled`) — the allow-list `{agents}` this skill is
+delivered under, `null` on the whole field meaning every agent, and `[]`
+meaning no agent matches. `SkillBindingOut` loses
+`enabled`: it now carries only `agent_name`, `last_linked_at`,
+`last_link_path`, and `link_mode`, and a row present at all means "this agent
+currently holds a delivered copy". The per-`(skill, agent)`
+`POST /skills/{name}/enable` and `/disable` routes (and their
+`SkillEnableRequest` / `SkillDisableRequest` bodies) are removed.
+
+## SQLite schema additions
+
+Migration `20260526_0005_skill_tables.py` (revision `0005`, down_revision `0004`) adds the skill binding table. Agents themselves live in the shared `resources` tables, so spec agent-registry needs no dedicated agent-tables migration.
+
+### `skill_agent_bindings`
+
+| Column              | Type                                     | Constraints                                                            |
+| ------------------- | ---------------------------------------- | ---------------------------------------------------------------------- |
+| `skill_resource_id` | `int`                                    | FK → `resources(id)` ON DELETE CASCADE                                 |
+| `agent_resource_id` | `int`                                    | FK → `resources(id)` ON DELETE CASCADE                                 |
+| `enabled`           | `bool`                                   | not null, default `0`; internal bookkeeping — `1` means this agent currently holds a delivered copy |
+| `last_linked_at`    | `timestamp`                              | nullable                                                               |
+| `last_link_path`    | `text`                                   | nullable                                                               |
+| `link_mode`         | `text`                                   | nullable; one of `symlink`, `junction`, `copy_fallback` when populated |
+| primary key         | `(skill_resource_id, agent_resource_id)` |                                                                        |
+
+Index: `idx_bindings_agent` on `(agent_resource_id, enabled)` — supports "which skills does this agent currently hold" queries.
+
+### Reuse of existing tables
+
+- `resources`: new rows with `kind='skill'`. No schema change.
+- `audit_log`: new event types written (see below).
+
+## Audit event types added
+
+Add to `AuditEventType`:
+
+| Value                  | When emitted                                                               |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `skill_imported`       | Local-path import succeeds                                                 |
+| `skill_updated`        | In-place file edit changes skill content (with before/after hashes)        |
+| `skill_bound`          | A copy was delivered to an agent (symlink created)                         |
+| `skill_unbound`        | A delivered copy was reclaimed from an agent (symlink removed)             |
+
+The workspace amendment adds:
+
+| Value                     | When emitted                                                                                               |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `skill_adopted`           | An unmanaged skill folder was adopted into the master store (see "Adopt an unmanaged skill")                                       |
+| `skill_unmanaged_deleted` | An unmanaged skill folder was deleted from an agent's workspace (see "Delete an unmanaged skill on explicit request")                                   |
+| `skill_relinked`          | A delivered copy's managed link was re-created at a new delivery path (e.g. after a `config_dir` change) |
+
+Skill **removal** has no dedicated event — deleting a skill goes through
+`ResourceService.delete`, which emits the generic `resource_deleted` event
+(with a pre-delete snapshot in `details`), the same as any other resource kind.
+
+## On-disk layout
+
+```
+~/.coffer/
+  skills/
+    <skill-name>/           # canonical master, one per skill
+      SKILL.md
+      scripts/ ...           # optional
+      references/ ...        # optional
+      assets/ ...            # optional
+      .coffer.meta.json      # source provenance redundancy; not authoritative
+```
+
+`.coffer.meta.json` mirrors a subset of `SkillConfig` for forensic recovery
+if the DB is lost. The file is written by `MasterStore` immediately after the
+master folder content is copied (i.e. at the end of import) and is rewritten
+in place on every subsequent successful sync.
+It is **not** read by Coffer at runtime; the DB is authoritative and wins on
+any disagreement.
+
+Keys persisted:
+
+| Key                          | Source                                   | Notes                                        |
+| ---------------------------- | ---------------------------------------- | -------------------------------------------- |
+| `source`                     | `SkillConfig.source`                     | local_import source with original_path       |
+| `name`                       | `Resource.name`                          | the master folder's name at write time       |
+| `imported_at`                | import timestamp                         | ISO-8601 UTC                                 |
+| `skill_md_description`       | `SkillConfig.skill_md_description`       |                                              |
+| `version_hash`               | `SkillConfig.version_hash`               | sha256 of SKILL.md at last sync              |
+| `last_synced_from_source_at` | `SkillConfig.last_synced_from_source_at` | ISO-8601 UTC                                 |
+
+Per-agent symlink targets land at:
+
+```
+<config_dir>/skills/<skill-name>  → symlink/junction to  ~/.coffer/skills/<skill-name>
+```
+
+### Per-agent delivery targets
+
+Skill delivery has exactly one model: Coffer symlinks (copy fallback) the master
+skill folder into the agent's skills directory. Each agent declares _where_ that
+directory is via the capability manifest (`domain/agent/descriptor.py`) — a
+`skill_subpath` under the agent's config dir. The skill service resolves the
+target dir through a composition-root resolver (Contract 5: the service never
+imports the descriptor).
+
+| Agent       | Folder target                | Status    |
+| ----------- | ---------------------------- | --------- |
+| Claude Code | `<config_dir>/skills/<name>` | Delivered |
+| Codex       | `<config_dir>/skills/<name>` | Delivered |
+
+The link points at the master folder, so the agent reads the canonical
+`SKILL.md` at `<config_dir>/skills/<name>/SKILL.md`.
+
+## Application service contracts (`backend/coffer/application/skill/`)
+
+### `SkillService`
+
+| Method                                                         | Purpose                                                                                                                        |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `import_local(path, actor) -> Resource`                        | Read SKILL.md, validate, copy to master, register Resource, audit, return, then reconcile so the skill lands wherever its scope grants it. |
+| `enable_for(skill_ref, agent_ref, force=False, actor) -> None` | INTERNAL delivery primitive driven by `apply_scope_for_agent`: upsert the delivery row, create the symlink (or copy fallback on FAT32).                                                                   |
+| `disable_for(skill_ref, agent_ref, actor) -> None`             | INTERNAL reclaim primitive driven by `apply_scope_for_agent`: remove the link, clear the delivery row.                                                                                           |
+| `apply_scope_for_agent(agent_name, actor) -> list[str]`        | Reconcile one agent against the delivery predicate (see "Delivery predicate" above). |
+| `verify() -> DriftReport`                                      | Walk every delivered copy; classify drift per `DriftKind`.                                                                   |
+| `remove(ref, actor) -> None`                                   | Cascade-cleanup symlinks, delete master, delegate to `ResourceService.delete`.                                                 |
+| `cleanup_bindings_for_agent(agent_ref) -> None`                | Called by spec agent-registry's `agent.on_delete` hook; removes all bindings + symlinks for that agent.                                   |
+
+Workspace-amendment additions (implemented as free functions in
+`unmanaged_ops.py` / `delivery_ops.py`, with `binding_ops.py` split out of
+`service.py` for the deliver/reclaim primitives — all conceptually private
+to the skill subpackage, same style as `lifecycle_ops.py`):
+
+| Method                                                                 | Purpose                                                                                                                                                                          |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `list_unmanaged(agent_uid) -> list[UnmanagedView]`                     | Read-only scan ("List unmanaged skills in an agent's skill locations") over the agent's skill locations (see Unmanaged Skill above).                                                                                              |
+| `adopt_unmanaged(agent_uid, skill_name, location, actor) -> Resource`  | "Adopt an unmanaged skill": validate → move to `~/.coffer/skills/<name>/` → register → deliver the managed link to `<config_dir>/skills/<name>` → record an enabled binding; audits `skill_adopted`. |
+| `delete_unmanaged(agent_uid, skill_name, location, actor) -> None`     | "Delete an unmanaged skill on explicit request": delete only that folder from disk; audits `skill_unmanaged_deleted`.                                                                                                     |
+| delivery reconciliation (`delivery_ops.py`)                            | "Reconcile deliveries per agent on every trigger": `apply_scope_for_agent` — recompute the agent's wanted set from `skill.enabled AND is_active(skill.scope, agent)`, deliver what is missing, reclaim what is no longer wanted.                                 |
+
+### File viewer (`application/skill/file_ops.py`)
+
+Stateless helpers beside `service.py` (same pattern as
+`verify_ops.py`) that expose a skill's master folder to
+surfaces. The **read** helpers (`build_file_tree`, `read_skill_file`) back the
+in-app viewer and surface each node's absolute on-disk path so the UI can offer
+open-in-external-editor / reveal-in-file-manager affordances (spec.md
+`## Purpose`). A
+**write** helper (`write_skill_file`) is the only mutation here, and it serves
+the in-app editor and programmatic REST/CLI clients alike ("Save an existing skill file conditionally") — one
+endpoint, one code path. The conditional half of that write (comparing the
+caller's `expected_fingerprint` against the bytes on disk and raising for a 409)
+lives one layer up in `content_ops.py`, so the containment helpers stay free of
+request semantics.
+No DB, no audit; containment is enforced by resolving every candidate path and
+requiring it to stay inside the resolved master folder, reusing the path-escape
+approach from `domain/skill/validator.py`.
+
+| Function                                                           | Purpose                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `build_file_tree(master_folder) -> FileNode`                       | Recursively list the master folder; skip symlinks whose real target escapes the folder; never descend symlinked dirs. Each node carries its absolute on-disk path.                                                                                 |
+| `read_skill_file(master_folder, relpath) -> FileContent`           | Resolve `master_folder/relpath`, verify it stays inside the folder (else `ValueError`), read with a size cap, detect binary; returns the file's absolute path and containing folder's absolute path.                                               |
+| `write_skill_file(master_folder, relpath, content) -> FileContent` | Overwrite ("Save an existing skill file conditionally") of an existing text file under the same containment guard and size cap; refuses to create new files/dirs, write outside the folder, or overwrite a binary file; atomic. Returns the NEW fingerprint, so an editor holding the buffer open can save again without a re-read. |
+
+#### File-node shape (`FileNode` / `SkillFileNodeOut`)
+
+One node in the recursive tree. The root node has `path == ""`.
+
+| Field      | Type              | Notes                                                                      |
+| ---------- | ----------------- | -------------------------------------------------------------------------- |
+| `name`     | `str`             | entry's base name                                                          |
+| `path`     | `str`             | POSIX path relative to the master folder root (`""` for the root)          |
+| `abs_path` | `str`             | absolute on-disk path (for open-in-editor / reveal)               |
+| `type`     | `"file" \| "dir"` | node kind                                                                  |
+| `size`     | `int \| None`     | byte size for files; `null` for directories                                |
+| `children` | `list[FileNode]`  | populated for directories (sorted dirs-first then by name); `[]` for files |
+
+#### File-content shape (`FileContent` / `SkillFileContentOut`)
+
+A single file's contents — what the in-app viewer renders and edits, and what
+the write returns (see "Save an existing skill file conditionally").
+
+| Field             | Type   | Notes                                                                            |
+| ----------------- | ------ | -------------------------------------------------------------------------------- |
+| `path`            | `str`  | POSIX path relative to the master folder root                                    |
+| `abs_path`        | `str`  | absolute on-disk path of the file                                                |
+| `folder_abs_path` | `str`  | absolute on-disk path of the file's containing folder                            |
+| `content`         | `str`  | file text; empty (`""`) when `binary` is true                                    |
+| `truncated`       | `bool` | true when the file exceeded the 256 KiB read cap and only the prefix is returned |
+| `binary`          | `bool` | true when the file is non-UTF-8 or contains a NUL byte (content is empty)        |
+| `size`            | `int`  | true byte size of the file on disk (independent of any truncation)               |
+| `fingerprint`     | `str`  | digest of the file's RAW BYTES on disk — never of the returned `content`, so an oversized or binary file's fingerprint still round-trips and an edit past the truncation point is still detected. A write carries it back to be conditional (409 on mismatch); omitting it stays last-writer-wins |
+
+### `SyncEngine` (`infrastructure/skill/sync_engine.py`)
+
+Cross-platform directory-link helper. Lives in `infrastructure/` because its
+implementation talks directly to the host filesystem (and on Windows, to
+`cmd.exe /c mklink`); the application layer accesses it through a port
+defined in `application/skill/ports.py`.
+
+| Method                                                               | Purpose                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make_directory_link(target: Path, link: Path) -> LinkMode`          | POSIX: `os.symlink(target, link, target_is_directory=True)`. Windows: try `os.symlink` first; on `OSError(WinError 1314)` fall back to `subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)])` (junction). Returns `LinkMode.SYMLINK \| LinkMode.JUNCTION \| LinkMode.COPY_FALLBACK`. |
+| `remove_directory_link(link: Path) -> None`                          | Detect type then remove correctly (junction vs symlink vs copy-tree).                                                                                                                                                                                                                                 |
+| `classify_target(link: Path, expected_master: Path) -> TargetStatus` | Returns the right `DriftKind` (or `OK`).                                                                                                                                                                                                                                                              |
+
+### `AgentSkillsValidator` (`domain/skill/validator.py`)
+
+Pure validator: given a folder path, returns `ValidationOk(name, description)` or
+`ValidationError(reason, details)`. Checks: `SKILL.md` exists, frontmatter parses,
+`name` and `description` non-empty, no path-escape symlinks within the folder,
+total size ≤ 50 MB.
+
+## Composition root wiring
+
+`surfaces/http/app.py` calls `wire_agent_and_skill_kinds(app, resource_svc, audit, sm)` from `surfaces/http/agent_skill_wiring.py`. The wiring function:
+
+1. Builds `SkillBindingRepo`, `MasterStore`, `SyncEngine`, and the `SkillService` (plus its `verify_ops` collaborator).
+2. Constructs the skill `Kind` via `make_skill_kind(...)` and registers it into `app.state.kinds["skill"]`.
+3. Reads the existing agent `Kind` already registered by `_wire_agent_kind` and builds a new `Kind` whose `on_delete` is a closure: first `await skill_svc.cleanup_bindings_for_agent(ref)`, then delegate to the original agent `on_delete`. The wrapped agent kind replaces the previous entry in `app.state.kinds["agent"]`.
+4. Mounts the `skill_routes` router.
+
+This closure-based composition keeps both kinds independent at the application layer (neither imports the other) and centralises cross-kind glue at the composition root.
+
+## Constraints summary
+
+- All HTTP loopback-only.
+- File-size limit: 50 MB total per skill folder, enforced by `validate_skill_folder`. The limit is a `SkillService` constructor default (`size_limit_bytes`); it is not yet plumbed to a config file, so v1 always uses the hardcoded 50 MB.

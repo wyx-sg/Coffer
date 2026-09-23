@@ -4,14 +4,13 @@ Revision ID: 0085
 Revises: 0084
 Create Date: 2026-09-17
 
-Spec knowledge FR-042/FR-043/FR-044. A collection stops being a flat directory
-of Markdown with two hidden folders beside it and becomes ``sources/`` +
-``topics/``: what people contribute, and what Coffer's own model derives from
-it. The rewrite itself is
+A collection stops being a flat directory of Markdown with two hidden folders
+beside it and becomes ``sources/`` + ``topics/``: what people contribute, and
+what Coffer's own model derives from it. The rewrite itself is
 ``persistence/migrations/knowledge_tree_0085.py``, frozen alongside this file
 so an old upgrade never changes behaviour because the live path helpers later
 did, and it takes a backup of the whole knowledge root before it moves
-anything (FR-043).
+anything.
 
 **Order.** The on-disk rewrite runs FIRST, before any DDL. It is the only step
 that touches writing the user cannot get back, and running it first means a
@@ -26,16 +25,16 @@ for: tidy rewrote the user's own files, curation may not touch them at all —
 it reads ``sources/`` and writes only ``topics/``. SQLite cannot rename a
 column in place, so the change goes through ``batch_alter_table``.
 
-**The switch flips ON** (FR-032, FR-044). Tidy shipped off because an
-unattended rewriter of a person's own writing is something they should switch
-on deliberately. Curation is the opposite case: it is the *only* path from a
-source to something an agent can read, so a vault where it never runs has an
-empty ``topics/`` lane forever — the upgrade would take away the corpus and
-give nothing back. The existing row is set on for the same reason, and
-``curate_owner_machine_id`` is seeded with this machine, read from
-``daemon-config.json`` beside the database the way 0079 read it. That seeding
-does mean a migrated machine starts publishing the settings document to the
-shared tree naming itself as owner; on a fleet, the second machine to be
+**The switch flips ON** (see "Keep auto-curation on for migrated vaults"). Tidy
+shipped off because an unattended rewriter of a person's own writing is
+something they should switch on deliberately. Curation is the opposite case: it
+is the *only* path from a source to something an agent can read, so a vault
+where it never runs has an empty ``topics/`` lane forever — the upgrade would
+take away the corpus and give nothing back. The existing row is set on for the
+same reason, and ``curate_owner_machine_id`` is seeded with this machine, read
+from ``daemon-config.json`` beside the database the way 0079 read it. That
+seeding does mean a migrated machine starts publishing the settings document to
+the shared tree naming itself as owner; on a fleet, the second machine to be
 upgraded conflicts on that document and the user picks. That is the intended
 direction: a named owner that has to be resolved once beats two machines
 curating one corpus into two different documents that git merges cleanly.
@@ -48,16 +47,16 @@ inlined rather than imported from ``AuditEventType``: a migration must mean the
 same thing forever.
 
 **The retired skill.** The shared ``coffer-knowledge`` skill Resource, its
-agent bindings and its master folder all go (FR-042). The knowledge skill is
-generated per agent now, with content that differs by which collections that
-agent may see, and a registered shared master left behind would keep being
-delivered beside the generated copy — the same layer described twice, one of
-the descriptions wrong.
+agent bindings and its master folder all go. The knowledge skill is generated
+per agent now, with content that differs by which collections that agent may
+see, and a registered shared master left behind would keep being delivered
+beside the generated copy — the same layer described twice, one of the
+descriptions wrong.
 
 Every step is guarded: a database missing the column, the table or the row
 still upgrades, and the rewrite is a no-op on a tree already in the new shape.
 No compatibility shim is left anywhere — nothing reads the old column names or
-the old document key after this (FR-042).
+the old document key after this.
 """
 
 from __future__ import annotations
@@ -178,7 +177,7 @@ def _rename_columns(
     with op.batch_alter_table(_CONFIG_TABLE) as batch:
         for old, new in todo:
             if old.startswith("auto_"):
-                # The switch also changes what a fresh row gets (FR-032).
+                # The switch also changes what a fresh row gets.
                 batch.alter_column(
                     old,
                     new_column_name=new,
@@ -193,11 +192,12 @@ def _rename_columns(
 def _seed_curation() -> None:
     """Switch curation on for the row that exists, and name this machine.
 
-    FR-044. An existing vault has a row holding tidy's shipped-off default, and
-    leaving it there would migrate a user into a corpus whose readable lane is
-    empty and stays that way. The owner is only written when it is currently
-    NULL: a user who already chose a machine chose it for the same corpus, and
-    this upgrade is not the moment to overrule them.
+    Spec knowledge "Keep auto-curation on for migrated vaults". An existing
+    vault has a row holding tidy's shipped-off default, and leaving it there
+    would migrate a user into a corpus whose readable lane is empty and stays
+    that way. The owner is only written when it is currently NULL: a user who
+    already chose a machine chose it for the same corpus, and this upgrade is
+    not the moment to overrule them.
     """
     if not _has_column(_CONFIG_TABLE, "auto_curate_enabled"):
         return
@@ -288,7 +288,7 @@ def downgrade() -> None:
     down there it governs tidy again.
 
     What does not come back is the tree, the shared skill's Resource row, or
-    its master folder. That is deliberate (FR-042): this is a one-way
+    its master folder. That is deliberate: this is a one-way
     migration, the corpus's pre-migration copy is the backup beside the root,
     and re-registering a skill whose bytes are gone would deliver an agent a
     dangling link. The audit rows are renamed back so a build below this

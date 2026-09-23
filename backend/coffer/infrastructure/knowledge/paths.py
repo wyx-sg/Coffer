@@ -1,24 +1,23 @@
 """On-disk layout for the knowledge layer — the sole owner of path construction.
 
-One root, two lanes: ``~/.coffer/knowledge/<collection>/{sources,topics}/…``.
-A collection is a top-level subdirectory holding both (spec knowledge FR-001);
-its ``README.md`` sits between them at the collection root, belonging to
-neither (FR-007).
+One root, one tree per collection: ``~/.coffer/knowledge/<collection>/…``.
+Everything visible under a collection is a **document** — Markdown a person and
+Coffer's curation pass write together, in whatever nesting either of them
+chooses (spec knowledge "Store each collection as one tree of Markdown files",
+"Allow nesting without giving it meaning"). The collection's ``README.md``
+sits at its root and describes it rather than being content in it (see "Keep
+the collection README out of the corpus").
 
-The lanes are directories rather than a frontmatter property because what they
-carry is *who may write here* — the one thing a key inside a file cannot say.
-``sources/`` is written by a person, an upload and ``coffer__write``; ``topics/``
-is written by the curation pass and by nothing else (FR-013, FR-021). Below a
-lane the nesting is free: the person's own under ``sources/``, curation's under
-``topics/`` (FR-004).
-
-Coffer creates no hidden directory of its own. ``.history/`` and ``.raw/`` are
-gone: the first existed because a topic was the only copy, which sources now
-are, and the second existed to keep an uploaded original out of retrieval,
-which having no retrieval surface does for free (FR-005).
+There is exactly one hidden directory, and it is Coffer's: ``.inbox/``, where
+new material waits to be merged into the documents — an upload's extracted
+text, an agent's ``coffer__write``, a migrated file. It is hidden because it is
+not knowledge yet: nothing lists it, no catalogue names it, and each item is
+deleted the moment a pass has folded it in (see "Hide dot-prefixed entries
+except the inbox"). Hidden entries are otherwise never addressable.
 
 ``$COFFER_KNOWLEDGE_ROOT`` overrides the root for tests. Every segment that
-becomes a path component goes through the traversal guard here (FR-006).
+becomes a path component goes through the traversal guard here (see "Guard every
+path through one module").
 """
 
 from __future__ import annotations
@@ -29,12 +28,10 @@ import re
 
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 
-SOURCES_DIR_NAME = "sources"
-TOPICS_DIR_NAME = "topics"
 README_NAME = "README.md"
 
-#: The two lanes, in the order every surface presents them.
-LANES = (SOURCES_DIR_NAME, TOPICS_DIR_NAME)
+#: Where material waits to be merged into a collection's documents.
+INBOX_DIR_NAME = ".inbox"
 
 _DOTS_ONLY = re.compile(r"^\.+$")
 _SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._\- 一-鿿]+$")
@@ -90,7 +87,7 @@ def assert_inside_root(candidate: pathlib.Path, relpath: str) -> None:
     Checked on the nearest *existing* ancestor rather than on ``candidate``
     itself: a file that does not exist yet has nothing to resolve, but the
     directory it would be created in does — and a symlinked directory inside
-    the root would carry the write wherever it points (FR-006).
+    the root would carry the write wherever it points.
     """
     root = knowledge_root()
     root_resolved = root.resolve()
@@ -126,36 +123,19 @@ def collection_of(relpath: str) -> str:
     return segments[0]
 
 
-def lane_of(relpath: str) -> str | None:
-    """The lane a relative path belongs to, or ``None`` for a collection root.
+def require_document(relpath: str) -> None:
+    """Refuse a path that cannot name a document.
 
-    ``None`` is a legitimate answer for the collection itself and for its
-    ``README.md``; it is not an answer for a content file, which is why
-    :func:`require_lane` exists beside this.
+    A document lives *inside* a collection — never the collection itself, and
+    never its ``README.md``, which describes the collection rather than being
+    knowledge in it. The hidden inbox is out of reach already: ``split``
+    refuses every dot-prefixed segment.
     """
     segments = split(relpath)
     if len(segments) < 2:
-        return None
-    lane = segments[1]
-    return lane if lane in LANES else None
-
-
-def require_lane(relpath: str, *, expected: str | None = None) -> str:
-    """The lane ``relpath`` names, refusing anything outside one.
-
-    Every content read and write resolves through here, so "a file lives in a
-    lane" is a property of path construction rather than a rule each caller
-    remembers. ``expected`` additionally pins which lane, which is how the
-    curation pass is kept out of ``sources/`` (FR-021) and how an agent write
-    is kept out of ``topics/`` (FR-013).
-    """
-    lane = lane_of(relpath)
-    if lane is None:
-        lanes = " or ".join(f"{name}/" for name in LANES)
-        raise UnsafeKnowledgePath(relpath, f"a knowledge file lives under {lanes}")
-    if expected is not None and lane != expected:
-        raise UnsafeKnowledgePath(relpath, f"expected the {expected}/ lane, got {lane}/")
-    return lane
+        raise UnsafeKnowledgePath(relpath, "a document lives inside a collection")
+    if len(segments) == 2 and segments[1] == README_NAME:
+        raise UnsafeKnowledgePath(relpath, "a collection's README is not a document")
 
 
 def relative_of(path: pathlib.Path) -> str:
@@ -168,32 +148,10 @@ def relative_of(path: pathlib.Path) -> str:
 
 
 def readme_path(collection: str) -> pathlib.Path:
-    """A collection's own description file, outside both lanes (FR-007)."""
+    """A collection's own description file, at its root."""
     return collection_dir(collection) / README_NAME
 
 
-def lane_dir(collection: str, lane: str) -> pathlib.Path:
-    """One lane's directory inside a collection."""
-    if lane not in LANES:
-        raise UnsafeKnowledgePath(f"{collection}/{lane}", f"unknown lane {lane!r}")
-    return collection_dir(collection) / lane
-
-
-def sources_dir(collection: str) -> pathlib.Path:
-    """Where a collection keeps the material people contributed."""
-    return lane_dir(collection, SOURCES_DIR_NAME)
-
-
-def topics_dir(collection: str) -> pathlib.Path:
-    """Where a collection keeps the documents curation derived."""
-    return lane_dir(collection, TOPICS_DIR_NAME)
-
-
-def lane_relpath(collection: str, lane: str, *rest: str) -> str:
-    """A knowledge-root-relative path inside one lane, guarded segment by segment."""
-    if lane not in LANES:
-        raise UnsafeKnowledgePath(f"{collection}/{lane}", f"unknown lane {lane!r}")
-    parts = [collection, lane, *[p for p in rest if p]]
-    joined = "/".join(parts)
-    split(joined)
-    return joined
+def inbox_dir(collection: str) -> pathlib.Path:
+    """Where a collection's unmerged material waits."""
+    return collection_dir(collection) / INBOX_DIR_NAME

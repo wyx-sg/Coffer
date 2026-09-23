@@ -47,7 +47,9 @@ class BackwardsMixin:
     async def _serialize_and_commit(self, pointer: str) -> str:
         raise NotImplementedError  # pragma: no cover - provided by ConvergeRound
 
-    async def apply(self, diff: DiffSummary) -> list[tuple[str, str]]:
+    async def apply(
+        self, diff: DiffSummary, *, not_applicable: list[str] | None = None
+    ) -> list[tuple[str, str]]:
         raise NotImplementedError  # pragma: no cover - provided by ConvergeRound
 
     async def reverse_to(self, current: str, target: str, *, delete: bool = True) -> ConvergeRun:

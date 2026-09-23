@@ -81,6 +81,7 @@ from coffer.surfaces.http.kind_wiring import wire_resource_kinds
 from coffer.surfaces.http.mcp.protocol_routes import (
     start_session_reaper,
 )
+from coffer.surfaces.http.memory_wiring import run_memory_delivery_boot_heal
 from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.provider_wiring import run_provider_projection_sweep
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
@@ -231,8 +232,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Kept on app.state: an integration test asserts the registry's contents.
     app.state.mcp_session_supervisors = kinds.mcp.session_supervisors
 
-    # Another internal-LLM knowledge consumer: the curation pass that derives
-    # a collection's `topics/` lane from the sources people write. It carries
+    # Another internal-LLM knowledge consumer: the curation pass that merges
+    # new material into a collection's documents. It carries
     # the skill delivery too, because a document nothing has re-rendered a
     # catalogue for is a document no agent has a path to (spec knowledge).
     curation_pass = wire_curation(kinds.knowledge.models, credential_resolver, kinds.guide)
@@ -267,6 +268,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # provider_wiring / agent_skill_wiring for what each corrects).
     await run_provider_projection_sweep(kinds.provider.boot_heal)
     await run_skill_drift_boot_heal(kinds.agent_skill.boot_heal)
+    await run_memory_delivery_boot_heal(kinds.memory.delivery_service)
     # Coffer's own skill, re-rendered from this build and whatever the corpus
     # holds right now, and seeded into the master store as an ordinary skill
     # resource. Done every boot rather than only on change: it is cheap when
@@ -285,7 +287,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     publish_daemon_identity()
 
-    # Frozen builds only; no-op from source (spec daemon FR-027, see binary_deploy).
+    # Frozen builds only; no-op from source (spec daemon "Deploy frozen sibling
+    # binaries and back up the vault before migrating", see binary_deploy).
     await asyncio.to_thread(deploy_frozen_sidecars)
 
     workers = start_background_workers(

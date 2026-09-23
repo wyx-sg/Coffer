@@ -1,12 +1,13 @@
-"""Choosing which topic documents a new source might belong to.
+"""Choosing which documents a piece of new material might belong to.
 
-A curation pass is bounded (spec knowledge FR-023): it sees one source, at most
-five existing topic documents in full, and the collection's whole catalogue of
-titles and descriptions. This module answers the middle one.
+A curation pass is bounded (spec knowledge "Assemble a pass from a bounded context"): it
+sees one piece of material, at most five existing documents in full, and the
+collection's whole catalogue of titles and descriptions. This module answers the middle
+one.
 
 There is no index and no embedding, so selection is literal: pull the strings a
 document about this subject would have to contain — identifiers, headings,
-proper nouns — and ask ripgrep which topic documents contain them. Getting it
+proper nouns — and ask ripgrep which documents contain them. Getting it
 wrong is survivable by design, because the catalogue is in the prompt too: a
 model handed five irrelevant candidates and a list of every title can still
 conclude that none of them is the right home and open a new document. That is
@@ -21,7 +22,7 @@ from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.knowledge.entry import KnowledgeFile
 from coffer.infrastructure.knowledge import paths
 
-#: Candidates handed to one pass (FR-023).
+#: Candidates handed to one pass (see "Assemble a pass from a bounded context").
 DEFAULT_CANDIDATE_LIMIT = 5
 
 #: Terms folded into the one alternation we run. Past this the regex stops
@@ -133,7 +134,11 @@ async def select(
     *,
     limit: int = DEFAULT_CANDIDATE_LIMIT,
 ) -> tuple[str, ...]:
-    """Topic documents most likely to be this source's home, best first.
+    """Documents most likely to be this material's home, best first.
+
+    When the material IS a document — the sweep came back for one a person
+    edited — that document is never its own candidate: it is already in front
+    of the pass in full.
 
     Empty is a legitimate answer and means "nothing in the corpus mentions any
     of this" — for a genuinely new subject that is the truth, and the pass goes
@@ -143,10 +148,10 @@ async def select(
     terms = distinctive_terms(source.body, title=source.title)
     if not terms:
         return ()
-    outcome = await service.match_topics(_alternation(terms), collection=collection)
+    outcome = await service.match_documents(_alternation(terms), collection=collection)
     hits: dict[str, int] = {}
     for match in outcome.matches:
-        if paths.lane_of(match.path) != paths.TOPICS_DIR_NAME:
+        if match.path == source.path or match.path.rsplit("/", 1)[-1] == paths.README_NAME:
             continue
         hits[match.path] = hits.get(match.path, 0) + 1
     ranked = sorted(hits.items(), key=lambda item: (-item[1], item[0]))

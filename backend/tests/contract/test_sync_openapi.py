@@ -1,5 +1,5 @@
 """Contract test: the running app's generated OpenAPI for the /api/v1/sync
-paths structurally matches specs/vault-sync/contracts/api.openapi.yaml.
+paths structurally matches openspec/specs/vault-sync/contracts/api.openapi.yaml.
 
 Same shape as test_memory_openapi.py: routes are checked in both directions
 (nothing declared is unserved, nothing served is undeclared) and every
@@ -11,9 +11,9 @@ cross-cutting service rather than a resource kind, so it owns the whole
 **The status vocabulary is checked in three places at once**, because it is
 what discriminates the one round shape across every round-shaped operation.
 The wire model types ``RoundOut.status`` as ``ConvergeStatus`` itself, so the
-generated schema narrows the field by ``$ref`` to a seven-value enum: the
+generated schema narrows the field by ``$ref`` to an eight-value enum: the
 domain enum, the yaml and the generated schema are each asserted to hold
-exactly the same seven values, and none of the three can quietly gain or lose
+exactly the same eight values, and none of the three can quietly gain or lose
 one. ``DocChangeOut.status`` — the round's other status — is narrowed the
 same way, to the three ways a document can move.
 """
@@ -31,7 +31,7 @@ from coffer.domain.sync.diff import ChangeStatus
 from coffer.main import app
 
 _SYNC_OPENAPI_PATH = (
-    Path(__file__).resolve().parents[3] / "specs/vault-sync/contracts/api.openapi.yaml"
+    Path(__file__).resolve().parents[3] / "openspec/specs/vault-sync/contracts/api.openapi.yaml"
 )
 
 _SYNC_PREFIX = "/api/v1/sync"
@@ -49,6 +49,7 @@ _CONVERGE_STATUS_VALUES = frozenset(
         "push_failed",
         "failed",
         "disabled",
+        "awaiting_join",
     }
 )
 
@@ -66,7 +67,7 @@ def generated_schema() -> dict[str, Any]:
 
 @pytest.fixture(scope="module")
 def spec_doc() -> dict[str, Any]:
-    """Parse specs/vault-sync/contracts/api.openapi.yaml once per module."""
+    """Parse openspec/specs/vault-sync/contracts/api.openapi.yaml once per module."""
     return yaml.safe_load(_SYNC_OPENAPI_PATH.read_text())  # type: ignore[no-any-return]
 
 
@@ -120,7 +121,7 @@ def test_no_sync_route_is_undocumented(
     contract fails too."""
     undeclared = _operations(generated_schema) - _operations(spec_doc)
     assert not undeclared, (
-        f"served by the app but absent from specs/vault-sync/contracts/api.openapi.yaml: "
+        f"served by the app but absent from openspec/specs/vault-sync/contracts/api.openapi.yaml: "
         f"{sorted(f'{m} {p}' for m, p in undeclared)}"
     )
 
@@ -186,8 +187,8 @@ def test_every_yaml_component_exists_with_its_required_fields(
         missing = _required_fields(schema) - _required_fields(generated[name])
         if missing:
             problems.append(f"{name}: required in the yaml but not generated: {sorted(missing)}")
-    assert not problems, "specs/vault-sync/contracts/api.openapi.yaml drift:\n  " + "\n  ".join(
-        problems
+    assert not problems, (
+        "openspec/specs/vault-sync/contracts/api.openapi.yaml drift:\n  " + "\n  ".join(problems)
     )
 
 
@@ -212,18 +213,18 @@ def test_the_run_list_is_a_list_of_history_rows(generated_schema: dict[str, Any]
 
 
 # ---------------------------------------------------------------------------
-# ConvergeStatus — the seven values
+# ConvergeStatus — the eight values
 # ---------------------------------------------------------------------------
 
 
-def test_converge_status_is_exactly_seven_values() -> None:
+def test_converge_status_is_exactly_eight_values() -> None:
     """The domain enum is the oracle for the status vocabulary, because the wire
-    model does not narrow it. Exactly these seven — a subset is not enough."""
+    model does not narrow it. Exactly these eight — a subset is not enough."""
     assert {status.value for status in ConvergeStatus} == set(_CONVERGE_STATUS_VALUES)
-    assert len(ConvergeStatus) == 7
+    assert len(ConvergeStatus) == 8
 
 
-def test_the_yaml_declares_exactly_the_domains_seven_statuses(spec_doc: dict[str, Any]) -> None:
+def test_the_yaml_declares_exactly_the_domains_eight_statuses(spec_doc: dict[str, Any]) -> None:
     """``status`` is what discriminates the one round shape across every
     round-shaped operation, so the contract must list the whole of
     ``ConvergeStatus`` — no more, no fewer."""
@@ -232,14 +233,14 @@ def test_the_yaml_declares_exactly_the_domains_seven_statuses(spec_doc: dict[str
     assert set(declared) == {status.value for status in ConvergeStatus}
 
 
-def test_the_generated_schema_narrows_status_to_the_same_seven(
+def test_the_generated_schema_narrows_status_to_the_same_eight(
     generated_schema: dict[str, Any], spec_doc: dict[str, Any]
 ) -> None:
     """The third place the vocabulary is pinned: what the app actually serves.
 
     ``status`` is typed as ``ConvergeStatus``, so every round-shaped response
     narrows it by ``$ref`` rather than promising any string — and a client
-    generated from this schema gets the seven values instead of ``str``. Both
+    generated from this schema gets the eight values instead of ``str``. Both
     round shapes must ref the same enum, or the status page and the history
     table could describe a round differently.
     """

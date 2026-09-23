@@ -1,6 +1,6 @@
 // frontend/src/components/knowledge/KnowledgeTreeLevel.tsx
 //
-// ONE level of ONE lane of a collection, and the recursion that walks it. The
+// ONE level of a collection's tree, and the recursion that walks it. The
 // rows are deliberately the same rows the skill Files tab draws
 // (`SkillFileTree`): chevron, folder / open-folder or file icon, one truncated
 // line, a depth-proportional indent instead of a rail, and the selected file
@@ -9,7 +9,7 @@
 //
 // What is NOT copied is the fetch. A skill's whole folder arrives in a single
 // response, so that tree can afford to open its first two levels on mount. A
-// lane descends a level per request, so each expanded directory
+// collection descends a level per request, so each expanded directory
 // mounts another level and fetches its own listing — and directories therefore
 // start CLOSED: pre-opening them would fire one request per child folder for a
 // subtree nobody has asked to see.
@@ -28,8 +28,8 @@ import { matchesFilter } from "@/lib/knowledge/filter";
 import { useKnowledgeTree } from "@/lib/hooks/useKnowledge";
 
 interface Props {
-  /** Directory to list, relative to the knowledge root and lane-qualified
-   *  (`shopee/sources`, `shopee/topics/account`). */
+  /** Directory to list, relative to the knowledge root (`shopee` for the
+   *  collection itself, `shopee/account` for a folder inside it). */
   path: string;
   /** Nesting depth; drives the indent only (0 = the collection root). */
   depth: number;
@@ -38,9 +38,9 @@ interface Props {
   /** Client-side filename filter, applied to this level's files. */
   filter: string;
   onSelect: (path: string) => void;
-  /** What an EMPTY lane root says. Each lane is empty for its own reason — no
-   *  source has been added, or no pass has derived a topic yet — so the copy
-   *  comes from the caller rather than being one sentence for both. */
+  /** What an EMPTY collection root says — how to put the first document in,
+   *  which an empty subfolder has no need to repeat. The caller passes it for
+   *  the root only; nested levels fall back to a plain "nothing here". */
   emptyLabel?: string;
 }
 

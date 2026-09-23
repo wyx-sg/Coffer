@@ -3,7 +3,7 @@
 ``workflow_runs.template_ref`` held ``workflow:<name>`` — the ``<kind>:<name>``
 string form that this release deletes along with the value object behind it
 (ADR resource-identity-is-an-immutable-uid). The column was never a foreign
-key and is documented as provenance only (spec workflow FR-010): the frozen
+key and is documented as provenance only (spec workflow): the frozen
 ``template_snapshot`` beside it is what a run actually executes, and the two
 surfaces that read this one render it raw, as a run's subtitle and as a column
 in the runs table.

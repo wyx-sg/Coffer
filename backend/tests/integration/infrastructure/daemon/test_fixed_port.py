@@ -1,4 +1,4 @@
-"""spec daemon FR-011 — the daemon binds one port, or it does not start.
+"""The daemon binds one port, or it does not start (spec daemon "Bind a fixed, settable port").
 
 The daemon has exactly one port: the one the user pinned, or 8000 when they
 pinned none. There is no scan left on a user-facing start, so the two

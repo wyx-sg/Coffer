@@ -319,7 +319,7 @@ def test_adopt_name_conflict_409_with_suggestion(tmp_path, monkeypatch, fake_key
 
 
 @pytest.mark.acceptance(
-    spec="agent-registry", scenario="require keychain mapping for secret-like env values"
+    spec="agent-registry", scenario="require a credential mapping for secret-like env values"
 )
 def test_adopt_requires_secret_mapping(tmp_path, monkeypatch, fake_keyring):
     app = _app(tmp_path, monkeypatch, 59870)

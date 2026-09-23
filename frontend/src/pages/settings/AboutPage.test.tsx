@@ -1,5 +1,6 @@
 // frontend/src/pages/settings/AboutPage.test.tsx
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { acceptance } from "@/test/acceptance";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
@@ -44,26 +45,28 @@ describe("AboutPage", () => {
     expect(screen.getByText(/github\.com\/wyx-sg\/Coffer/)).toBeInTheDocument();
   });
 
-  test("shows the version, port and start time returned by /daemon/status", async () => {
+  acceptance("web-ui", "settings shows no daemon tab and no daemon status", async () => {
     mockStatus();
-    render(<AboutPage />, { wrapper: wrap });
+    const { container } = render(<AboutPage />, { wrapper: wrap });
 
     await waitFor(() => {
       expect(screen.getByText("0.7.42")).toBeInTheDocument();
     });
-    expect(screen.getByText("Daemon port")).toBeInTheDocument();
-    expect(screen.getByText("8000")).toBeInTheDocument();
-    expect(screen.getByText("Daemon started")).toBeInTheDocument();
+    expect(screen.getByText("Version")).toBeInTheDocument();
+    expect(screen.getByText("License")).toBeInTheDocument();
+    expect(screen.getByText("Source")).toBeInTheDocument();
+    // A user never needs to know Coffer runs a background daemon.
+    expect(container.textContent).not.toMatch(/daemon/i);
+    expect(screen.queryByText("8000")).not.toBeInTheDocument();
   });
 
-  test("falls back to '—' for every daemon field before /daemon/status resolves", () => {
+  test("falls back to '—' for the version before /daemon/status resolves", () => {
     getApiClientMock.mockReturnValue({
       GET: vi.fn().mockReturnValue(new Promise(() => {})),
     } as unknown as ReturnType<typeof getApiClient>);
     render(<AboutPage />, { wrapper: wrap });
 
-    // Version, port and start time all come from the daemon.
-    expect(screen.getAllByText("—")).toHaveLength(3);
+    expect(screen.getAllByText("—")).toHaveLength(1);
   });
 
   test("Copy diagnostics puts every row on the clipboard as label: value lines", async () => {
@@ -78,7 +81,8 @@ describe("AboutPage", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
     const text = writeText.mock.calls[0][0] as string;
     expect(text).toContain("Version: 0.7.42");
-    expect(text).toContain("Daemon port: 8000");
+    expect(text).toContain("License: MIT");
+    expect(text).not.toMatch(/daemon/i);
     expect(text).toContain("Source: https://github.com/wyx-sg/Coffer");
   });
 });

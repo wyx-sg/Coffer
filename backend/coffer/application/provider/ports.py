@@ -77,7 +77,8 @@ class ProviderIntrospectionPort(Protocol):
 
 class EngineNotifyPort(Protocol):
     """What this kind tells Coffer's internal engine when a connection the
-    engine runs on moves (spec internal-engine FR-005/FR-026).
+    engine runs on moves (spec internal-engine "Drop the engine model when its connection moves",
+    "Drop the speech-to-text model when its connection moves").
 
     Two connections, two methods: the one Coffer thinks with and the one it
     transcribes speech with. They are told apart rather than folded together

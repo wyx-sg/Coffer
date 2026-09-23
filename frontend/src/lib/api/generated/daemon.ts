@@ -21,6 +21,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/daemon/residency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the daemon starts at login, and when it stands down */
+        get: operations["getDaemonResidency"];
+        /**
+         * Install or remove the login service, and set the idle window
+         * @description Two settings, one request, because they are one question with two
+         *     halves: what starts the daemon (spec daemon "Run as a login service")
+         *     and what ends it ("Stand down after an idle window"). The login service
+         *     takes effect immediately — launchd is a different process. The idle
+         *     window takes effect at the next daemon start, because this one read it
+         *     when it booted.
+         *
+         *     This pair has a REST surface where the port deliberately does not ("Bind
+         *     a fixed, settable port"): a port is changed when the daemon cannot
+         *     start, so a route it would have to serve is useless exactly then, while
+         *     residency is a settings question asked of a daemon that is working.
+         */
+        put: operations["setDaemonResidency"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/daemon/logs": {
         parameters: {
             query?: never;
@@ -31,7 +62,8 @@ export interface paths {
         /**
          * The tail of daemon.log, newest-first
          * @description `daemon.log` interleaves several writers' formats, normalised onto one
-         *     set of fields before they reach a caller (spec daemon FR-022, FR-023).
+         *     set of fields before they reach a caller (spec daemon "Write one bounded
+         *     daemon log in one format", "Serve the daemon log tail normalised").
          *     Read from the tail, so a large file is never pulled into memory whole.
          */
         get: operations["listDaemonLogs"];
@@ -54,7 +86,7 @@ export interface paths {
         put?: never;
         /**
          * Stop this daemon
-         * @description Answers `204` and then signals this same process, so an API stop and a `SIGTERM` stop take the identical exit path (spec daemon FR-008).
+         * @description Answers `204` and then signals this same process, so an API stop and a `SIGTERM` stop take the identical exit path (spec daemon "Shut down through one graceful exit path").
          */
         post: operations["shutdownDaemon"];
         delete?: never;
@@ -74,7 +106,7 @@ export interface paths {
         put?: never;
         /**
          * Mint a new API token and republish it
-         * @description Rewrites `~/.coffer/daemon.json` atomically at mode 0600, publishes the new value to the in-process check, and records a `token_rotated` audit entry (spec daemon FR-014). Clients holding the previous token are rejected from the next call onward.
+         * @description Rewrites `~/.coffer/daemon.json` atomically at mode 0600, publishes the new value to the in-process check, and records a `token_rotated` audit entry (spec daemon "Rotate the token from REST or the command line"). Clients holding the previous token are rejected from the next call onward.
          */
         post: operations["rotateDaemonToken"];
         delete?: never;
@@ -92,9 +124,9 @@ export interface paths {
         };
         /**
          * List the subdirectories of a local directory
-         * @description Read-only filesystem browse (spec daemon FR-019). Returns a directory's
-         *     path, its parent, and its immediate subdirectories only — never file
-         *     contents.
+         * @description Read-only filesystem browse (spec daemon "Browse folders without reading
+         *     files"). Returns a directory's path, its parent, and its immediate
+         *     subdirectories only — never file contents.
          */
         get: operations["browseFilesystem"];
         put?: never;
@@ -117,9 +149,10 @@ export interface paths {
         /**
          * Open a local path in an application
          * @description Open an existing absolute path in an application — the preferred editor
-         *     (`with`) or the OS default (spec daemon FR-021). Validated
-         *     absolute-and-existing before any launch; the launcher is invoked with a
-         *     fixed argument vector and creates nothing.
+         *     (`with`) or the OS default (spec daemon "Open and reveal existing
+         *     absolute paths"). Validated absolute-and-existing before any launch;
+         *     the launcher is invoked with a fixed argument vector and creates
+         *     nothing.
          */
         post: operations["openFilesystemPath"];
         delete?: never;
@@ -141,8 +174,8 @@ export interface paths {
          * Reveal a local path in the OS file manager
          * @description Select / reveal an existing absolute path in the OS file manager; on a
          *     platform with no portable "select" primitive the containing folder is
-         *     opened instead (spec daemon FR-021). Validated absolute-and-existing;
-         *     creates nothing.
+         *     opened instead (spec daemon "Open and reveal existing absolute paths").
+         *     Validated absolute-and-existing; creates nothing.
          */
         post: operations["revealFilesystemPath"];
         delete?: never;
@@ -161,12 +194,14 @@ export interface paths {
         /**
          * List GUI editors installed on this machine
          * @description Enumerate common GUI code editors detected as installed (spec daemon
-         *     FR-021). Detection is per-OS: macOS returns app-bundle names for
-         *     `open -a`, Linux and Windows return commands found on PATH. The
+         *     "Open and reveal existing absolute paths"). Detection is per-OS: macOS
+         *     returns app-bundle names for `open -a`, Linux and Windows return
+         *     commands found on PATH. The
          *     returned `value` is exactly what `/fs/open`'s `with` field accepts.
          *     Reads nothing but app presence. Its consumers are spec agent-registry
-         *     FR-038 and spec web-ui's preferred-editor setting, which stores the
-         *     chosen preference on its own side.
+         *     "Open config files in an external editor or reveal them" and spec
+         *     web-ui's preferred-editor setting, which stores the chosen preference on
+         *     its own side.
          */
         get: operations["listEditors"];
         put?: never;
@@ -188,13 +223,13 @@ export interface paths {
         put?: never;
         /**
          * Open the host's native folder dialog
-         * @description The one native dialog the daemon opens (spec daemon FR-020): macOS
-         *     `osascript`, Linux `zenity`/`kdialog`, invoked with a fixed argument
-         *     vector. `available: false` means this host has no native dialog tool;
-         *     `available: true` with `path: null` means the user cancelled. Creates
-         *     nothing. The open-file and save-file dialogs are deliberately absent —
-         *     the browser's own `<input type="file">` and `<a download>` cover those
-         *     better.
+         * @description The one native dialog the daemon opens (spec daemon "Open the host's
+         *     native folder picker"): macOS `osascript`, Linux `zenity`/`kdialog`,
+         *     invoked with a fixed argument vector. `available: false` means this
+         *     host has no native dialog tool; `available: true` with `path: null`
+         *     means the user cancelled. Creates nothing. The open-file and save-file
+         *     dialogs are deliberately absent — the browser's own
+         *     `<input type="file">` and `<a download>` cover those better.
          */
         post: operations["pickFolder"];
         delete?: never;
@@ -217,6 +252,18 @@ export interface components {
                 };
             };
         };
+        DaemonResidencyOut: {
+            /** @description False where there is no launchd to install into. The control renders as unavailable rather than as off, which is a different claim. */
+            login_service_supported: boolean;
+            login_service_installed: boolean;
+            /** @description Hours of disuse before standing down; null means never. */
+            idle_shutdown_hours?: number | null;
+        };
+        DaemonResidencyIn: {
+            login_service_installed: boolean;
+            /** @description Required, because null already means "never stand down" here. A caller that omitted it would turn the idle shutdown off without saying so. */
+            idle_shutdown_hours: number | null;
+        };
         DaemonStatusOut: {
             /**
              * @description The daemon's lifecycle phase.
@@ -225,7 +272,7 @@ export interface components {
             status: "starting" | "ready" | "draining";
             /** @description The build's version, read from package metadata rather than a literal, so an old daemon reused by a new install is detectable. */
             version: string;
-            /** @description Which build is answering — the frozen binary's path, or the interpreter of a run-from-source daemon. A CLI or shim whose version differs from `version` names it in its skew warning (spec daemon FR-006). */
+            /** @description Which build is answering — the frozen binary's path, or the interpreter of a run-from-source daemon. A CLI or shim whose version differs from `version` names it in its skew warning (spec daemon "Warn on a version mismatch and carry on"). */
             executable: string;
             /** Format: date-time */
             started_at: string;
@@ -321,6 +368,15 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
+        /** @description The request was understood and refused */
+        ValidationError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
     };
     parameters: never;
     requestBodies: never;
@@ -347,6 +403,53 @@ export interface operations {
                     "application/json": components["schemas"]["DaemonStatusOut"];
                 };
             };
+        };
+    };
+    getDaemonResidency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonResidencyOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    setDaemonResidency: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DaemonResidencyIn"];
+            };
+        };
+        responses: {
+            /** @description What is true after the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DaemonResidencyOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationError"];
         };
     };
     listDaemonLogs: {

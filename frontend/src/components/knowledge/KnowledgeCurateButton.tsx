@@ -1,9 +1,11 @@
 // frontend/src/components/knowledge/KnowledgeCurateButton.tsx
 //
-// The manual curation trigger on a collection's page (spec knowledge FR-040):
-// one bounded pass that reads a source and derives the documents an agent
-// reads. The background sweep runs the same pass on an interval; this is the
-// "do it now" for a note somebody has just written.
+// The manual curation trigger on a collection's page (spec knowledge "Present a
+// collection as one tree in the web UI"):
+// one bounded pass that merges the next pending item — new material from the
+// inbox, or a document edited since curation last saw it — into the
+// collection's documents. The background sweep runs the same pass on an
+// interval; this is the "do it now" for something somebody has just added.
 //
 // Whether a pass is running is the DAEMON's answer, not this component's:
 // leaving the page mid-pass and coming back must still show the pass, not an

@@ -353,6 +353,8 @@ acceptance(
     // The forbidden copy MUST NOT appear inside the dialog.
     await expect(page.getByText(/unexpected error/i)).toHaveCount(0);
     await expect(page.getByText(/INTERNAL_ERROR/)).toHaveCount(0);
+    // The INTERNAL_ERROR copy reads "Coffer hit an internal error…".
+    await expect(page.getByText(/internal error/i)).toHaveCount(0);
 
     // No write request landed at the backend.
     expect(

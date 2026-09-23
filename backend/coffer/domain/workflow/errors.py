@@ -1,7 +1,7 @@
 """Workflow-layer domain errors (spec workflow).
 
 Every one of these is raised by pure domain code and mapped by the HTTP surface
-to the envelope codes named in ``specs/workflow/contracts/api.openapi.yaml``:
+to the envelope codes named in ``openspec/specs/workflow/contracts/api.openapi.yaml``:
 the four conflict codes are exactly the ones that document's ``Conflict``
 response lists, so a code here and a code there are the same string, not two
 strings that happen to agree today.

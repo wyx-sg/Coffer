@@ -10,13 +10,13 @@ Layout::
     machines/<machine_id>.yaml     # one descriptor per machine, disjointly owned
 
 Resource, state and machine docs are dumped with sorted keys so two exports of
-an unchanged vault are byte-identical (spec vault-sync "Determinism"). Fernet
+an unchanged vault are byte-identical (spec vault-sync "Serialize deterministically"). Fernet
 ciphertext is urlsafe-base64 ascii, so blobs are written as one text line —
 readable, diffable, and never key material.
 
 Every write is **differential**: a document is written only when its bytes
 changed and removed only when the vault no longer holds it. That is normative
-(spec vault-sync "Why deletion is safe") — the bundle is the git working tree
+(spec vault-sync "Export differentially") — the bundle is the git working tree
 that gets three-way-merged, so clearing a directory and rewriting it from local
 state would tell the merge "this vault deleted everything it never absorbed".
 """
@@ -56,7 +56,7 @@ _MACHINES = "machines"
 #: and no other's, so the registry is not derived from local state at all —
 #: converging it here would delete every other machine's descriptor on every
 #: export. Disjoint ownership is exactly what makes the registry unconflictable
-#: (spec vault-sync "The registry is a derived view").
+#: (spec vault-sync "Derive the registry from the descriptors").
 _OWNED_DIRS = (_RESOURCES, _STATE, _CREDENTIALS)
 
 
@@ -165,7 +165,7 @@ class Bundle:
                     protected=self._held_under(subdir),
                     # Derived output: not published, and not deleted from the
                     # tree either if an older build put it there (spec
-                    # vault-sync FR-093).
+                    # vault-sync "Withhold derived output in both halves").
                     excluded=self._excluded_under(subdir),
                 )
             )
@@ -257,9 +257,9 @@ class Bundle:
         uid THIS machine holds, where the name-keyed version protected the
         label wherever it came from. Benign, because a build on this layout
         never publishes a guide document at all — the only way one exists in
-        the tree is a machine that published it before FR-093, and that one
-        registered it at the identity the document carried, so it is the same
-        uid."""
+        the tree is a machine that published it before derived output was
+        withheld, and that one registered it at the identity the document
+        carried, so it is the same uid."""
         desired = {f"{doc['kind']}/{doc['uid']}.yaml": _dump(doc) for doc in docs}
         protected = (
             self._held_under(_RESOURCES)
@@ -312,7 +312,7 @@ class Bundle:
         machine's file.
 
         That restraint is the whole design of the registry (spec vault-sync
-        "The registry is a derived view, not a synced table"). Because every
+        "Derive the registry from the descriptors"). Because every
         machine owns a disjoint path, two machines can never stage a change to
         the same file, so git merges descriptors trivially and the registry
         needs no convergence machinery of its own — it is simply whatever
@@ -327,7 +327,7 @@ class Bundle:
         path = target / f"{machine_id}.yaml"
         payload = _dump(descriptor_doc)
         # Skipping an unchanged descriptor is what keeps an idle machine from
-        # staging a file on every round (spec vault-sync "Determinism").
+        # staging a file on every round (spec vault-sync "Serialize deterministically").
         if path.exists() and path.read_bytes() == payload:
             return
         path.write_bytes(payload)

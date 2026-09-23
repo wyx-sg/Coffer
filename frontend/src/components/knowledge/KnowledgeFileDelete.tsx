@@ -1,6 +1,7 @@
 // frontend/src/components/knowledge/KnowledgeFileDelete.tsx
 //
-// Delete the ONE file being previewed on a collection's detail page.
+// Delete the ONE document being previewed on a collection's detail page — any
+// document, whoever wrote it (see "Let only a person delete a document").
 //
 // Deleting the collection is the library page's action, on the Resource; this
 // is the file-sized one, which the UI did not have at all — a collection could
@@ -8,7 +9,7 @@
 // the anchor because it is the only file the page can name for certain: it is
 // the one on screen.
 //
-// A knowledge file is the only copy — no index behind it, no soft delete — so
+// A knowledge document is the only copy — no index behind it, no soft delete — so
 // the confirmation spells the path out rather than describing it, and the
 // dialog closes only on success so a refusal is read where it happened
 // (agents/frontend.md §5).
@@ -21,7 +22,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useDeleteKnowledgeFile } from "@/lib/hooks/useKnowledge";
 
 interface Props {
-  /** The collection-relative path of the file on screen. */
+  /** The knowledge-root-relative path of the document on screen. */
   path: string;
   /** Called once the daemon has removed it — the page leaves the pane rather
    *  than keep previewing a path that is now a 404. */

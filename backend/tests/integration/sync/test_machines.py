@@ -370,7 +370,7 @@ async def test_a_reinstalled_machine_returns_under_the_same_id(tmp_path: pathlib
         b.state.forget()
         b.forget_worktree()
 
-        run = await b.converge()
+        run = await b.adopt()
 
         assert run.join is JoinKind.RETURNING
         views = await b.machine_views()

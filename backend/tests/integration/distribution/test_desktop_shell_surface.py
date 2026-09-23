@@ -112,3 +112,164 @@ def test_the_shell_writes_into_the_daemon_log_and_opens_no_second_file() -> None
             f"{rs.name} names a log file of its own; the shell has exactly one, "
             f"opened through logging::open_daemon_log"
         )
+
+
+_FRONTEND_SRC = _REPO / "frontend" / "src"
+
+# The only frontend modules allowed to know which host they run in: the
+# credential supplier itself, and the offline banner whose Restart control only
+# the shell can offer.
+_HOST_AWARE_MODULES = {
+    Path("lib/tauri.ts"),
+    Path("components/DaemonOfflineBanner.tsx"),
+}
+
+
+@pytest.mark.acceptance(
+    spec="desktop-app",
+    scenario="the shell hosts the one build the daemon serves",
+)
+def test_the_shell_and_the_frozen_daemon_ship_the_same_frontend_build() -> None:
+    """Both hosts name the one `frontend/dist`, built by the one `npm run build`.
+
+    A second build (or a second directory) is how the two hosts drift: the
+    shell would ship a UI the daemon never serves, and a bug report from one
+    host would not reproduce in the other.
+    """
+    conf = json.loads((_DESKTOP / "tauri.conf.json").read_text(encoding="utf-8"))
+    build = conf["build"]
+    assert (_DESKTOP / build["frontendDist"]).resolve() == (_REPO / "frontend" / "dist"), (
+        f"tauri.conf.json frontendDist {build['frontendDist']!r} must be the repo's frontend/dist"
+    )
+    assert build["beforeBuildCommand"] == "npm run build --prefix frontend", (
+        "the shell must build the UI with the frontend's own build script, not a variant of it"
+    )
+
+    daemon_spec = (_REPO / "backend" / "coffer-daemon.spec").read_text(encoding="utf-8")
+    assert '"..", "frontend", "dist"' in daemon_spec and '(_webui_dist, "webui")' in daemon_spec, (
+        "the frozen daemon must ship the same frontend/dist the shell bundles"
+    )
+
+    package = json.loads((_REPO / "frontend" / "package.json").read_text(encoding="utf-8"))
+    builds = sorted(name for name in package["scripts"] if name.startswith("build"))
+    assert builds == ["build"], f"the frontend must have exactly one UI build; found {builds}"
+    vite_configs = sorted(p.name for p in (_REPO / "frontend").glob("vite*.config.*"))
+    assert vite_configs == ["vite.config.ts"], (
+        f"a second Vite config is a second UI build; found {vite_configs}"
+    )
+
+    host_aware: set[Path] = set()
+    scanned = 0
+    for source in _FRONTEND_SRC.rglob("*.ts*"):
+        if ".test." in source.name:
+            continue
+        scanned += 1
+        text = source.read_text(encoding="utf-8")
+        if "isTauri(" in text or "__TAURI" in text or "@tauri-apps/api" in text:
+            host_aware.add(source.relative_to(_FRONTEND_SRC))
+    assert scanned > 50, "the frontend source tree was not found"
+    assert host_aware <= _HOST_AWARE_MODULES, (
+        f"only the credential supplier and the offline banner may branch on the host; "
+        f"also branching: {sorted(str(p) for p in host_aware - _HOST_AWARE_MODULES)}"
+    )
+    assert Path("lib/tauri.ts") in host_aware, "the credential supplier must be the host-aware seam"
+
+
+def _csp_directives() -> dict[str, list[str]]:
+    conf = json.loads((_DESKTOP / "tauri.conf.json").read_text(encoding="utf-8"))
+    directives: dict[str, list[str]] = {}
+    for part in conf["app"]["security"]["csp"].split(";"):
+        words = part.split()
+        if words:
+            directives[words[0]] = words[1:]
+    return directives
+
+
+@pytest.mark.acceptance(
+    spec="desktop-app",
+    scenario="the content policy admits loopback on any port and the bundle's own scripts",
+)
+def test_the_content_policy_admits_any_loopback_port_and_only_bundled_code() -> None:
+    """The port is only known after the handshake, so loopback must be
+    port-wildcarded; everything else the page loads must come from the bundle."""
+    csp = _csp_directives()
+
+    assert csp.get("default-src") == ["'self'"], (
+        f"default-src must fall back to the bundle only; got {csp.get('default-src')}"
+    )
+
+    connect = csp["connect-src"]
+    assert any(src in ("http://127.0.0.1:*", "http://localhost:*") for src in connect), (
+        f"connect-src must admit a loopback origin on any port; got {connect}"
+    )
+    assert any(src in ("ipc:", "http://ipc.localhost") for src in connect), (
+        f"connect-src must admit the shell's IPC scheme; got {connect}"
+    )
+    loopback_or_ipc = {"'self'", "ipc:", "http://ipc.localhost"}
+    for src in connect:
+        host = src.split("://", 1)[-1].split(":", 1)[0].split("/", 1)[0]
+        assert src in loopback_or_ipc or host in {"127.0.0.1", "localhost", "[::1]"}, (
+            f"connect-src admits {src!r}, which is neither loopback nor IPC"
+        )
+
+    assert csp.get("script-src") == ["'self'"], (
+        f"scripts must load only from the bundle; got {csp.get('script-src')}"
+    )
+    assert set(csp.get("style-src", [])) <= {"'self'", "'unsafe-inline'"}, (
+        f"styles must come from the bundle or inline in it; got {csp.get('style-src')}"
+    )
+    assert "'self'" in csp.get("style-src", []), "style-src must admit the bundle's stylesheets"
+    for directive, sources in csp.items():
+        for src in sources:
+            assert not src.startswith("https://"), (
+                f"{directive} admits the remote origin {src!r}; the page loads nothing remote"
+            )
+
+    # Every directive, allowlisted: a directive that is not named here falls
+    # back to default-src, so an added one (object-src, frame-src, …) or a
+    # widened source list is a change to review, not something to slip through.
+    assert csp == {
+        "default-src": ["'self'"],
+        "connect-src": ["'self'", "http://127.0.0.1:*", "ipc:", "http://ipc.localhost"],
+        "script-src": ["'self'"],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        # Inline data images and the shell's asset protocol, nothing remote.
+        "img-src": ["'self'", "data:", "asset:", "http://asset.localhost"],
+        "font-src": ["'self'", "data:"],
+    }
+
+
+_APP_QUARANTINE_STEP = "xattr -dr com.apple.quarantine /Applications/Coffer.app"
+
+
+def _release_notes() -> str:
+    """The body the release job publishes: the heredoc ending at `NOTES`."""
+    text = (_REPO / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    start = text.index("<<'NOTES'")
+    end = text.index("\n", text.index("\n          NOTES\n", start) + 1)
+    return text[start:end]
+
+
+@pytest.mark.acceptance(
+    spec="desktop-app",
+    scenario="the install instructions carry the quarantine-clearing step for the app",
+)
+def test_release_notes_and_readme_carry_the_app_quarantine_step() -> None:
+    """An unsigned, browser-downloaded `.dmg` is refused on double-click as
+    "damaged"; the one command that fixes it must be where the user looks."""
+    notes = _release_notes()
+    assert _APP_QUARANTINE_STEP in notes, "the release notes must carry the app's xattr step"
+
+    # Same notice as the terminal tier's step — not buried somewhere else.
+    notice = [ln for ln in notes.splitlines() if ln.strip().startswith(">")]
+    notice_text = "\n".join(notice)
+    assert _APP_QUARANTINE_STEP in notice_text, "the app's step must be in the quarantine notice"
+    assert "xattr -dr com.apple.quarantine <extracted-directory>" in notice_text, (
+        "the terminal tier's step must be in that same notice"
+    )
+
+    readme = (_REPO / "README.md").read_text(encoding="utf-8")
+    assert _APP_QUARANTINE_STEP in readme, "the README must carry the app's xattr step"
+    assert "xattr -dr com.apple.quarantine ~/.coffer/bin" in readme, (
+        "the README carries the terminal tier's step; the app's must sit beside it"
+    )

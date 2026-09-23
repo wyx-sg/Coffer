@@ -490,7 +490,8 @@ async def test_channel_turn_carries_the_notes_codex_used_to_miss(tmp_path: Any) 
     ``developerInstructions`` made one possible, so a Codex agent answering a
     phone had no idea it was on one and could not see which model Coffer had
     put it on. It now composes the same three appends the SDK provider does —
-    channel note, memory digest (spec memory FR-024), model note — through the
+    channel note, memory digest (spec memory "Deliver to channel turns through the
+    system prompt"), model note — through the
     shared composer, so the two providers cannot drift apart again.
     """
     repo, engine = await _repo(tmp_path)
@@ -532,7 +533,8 @@ async def test_channel_turn_carries_the_notes_codex_used_to_miss(tmp_path: Any) 
 @pytest.mark.acceptance(spec="chat", scenario="a channel-driven turn carries the memory digest")
 async def test_a_turn_with_no_channel_gets_no_memory_digest(tmp_path: Any) -> None:
     """Memory rides a channel turn only. An agent the developer drives
-    themselves receives it through its own session-start hook (spec chat FR-020) — never
+    themselves receives it through its own session-start hook (spec memory "Deliver
+    the index and the notes path at session start") — never
     both, or the same facts arrive twice."""
     repo, engine = await _repo(tmp_path)
     conv = await repo.create(_conv())

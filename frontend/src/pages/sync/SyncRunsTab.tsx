@@ -28,16 +28,16 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DataTable, type FilterDef } from "@/components/DataTable";
 import { translateApiError } from "@/lib/api/errors";
 import { useSyncRuns, useSyncStatus } from "@/lib/hooks/useSync";
+import { heldRoundId, rollbackTargetId } from "./syncRowActions";
 import type { RunRecord } from "@/lib/api/sync";
 import { formatDateTime } from "@/lib/utils";
 import { SyncConflictBanner } from "./SyncConflictBanner";
 import { SyncRunDetail } from "./SyncRunDetail";
-import { rowSearchHaystack, rowStatus, statusLabel, syncRunColumns } from "./syncRunColumns";
+import { rowStatus, statusLabel, syncRunColumns } from "./syncRunColumns";
+import { rowSearchHaystack } from "./syncRunSearch";
 import {
-  collapseQuietRounds,
-  heldRoundId,
-  quietSpan,
-  rollbackTargetId,
+  collapseRepeats,
+  groupSpan,
   type SyncRunRow,
 } from "./syncRunRows";
 
@@ -50,6 +50,7 @@ const STATUSES = [
   "push_failed",
   "failed",
   "disabled",
+  "awaiting_join",
 ] as const;
 
 interface Props {
@@ -58,10 +59,16 @@ interface Props {
 }
 
 
-/** A folded row opened up: which rounds it stands in for. */
-function QuietDetail({ runs }: { runs: RunRecord[] }) {
+/** A folded row opened up: which rounds it stands in for, and what they said.
+ *
+ * A stretch of quiet rounds has nothing per round worth a line — the times
+ * are the whole content. A stretch of failures does: the message. It is the
+ * same message on every member (that is what let them fold), so it is stated
+ * once above the times rather than repeated down the list. */
+function GroupDetail({ runs }: { runs: RunRecord[] }) {
   const { t } = useTranslation();
-  const span = quietSpan(runs);
+  const span = groupSpan(runs);
+  const shared = runs[0]?.error ?? null;
   return (
     <div className="space-y-2 px-4 py-3">
       <p className="text-sm text-muted-foreground">
@@ -71,9 +78,7 @@ function QuietDetail({ runs }: { runs: RunRecord[] }) {
           to: formatDateTime(span.to),
         })}
       </p>
-      {/* The individual finish times, and nothing else: a quiet round has no
-          other field worth a line, and listing five empty tallies would say
-          less than the count above already does. */}
+      {shared ? <p className="font-mono text-xs text-destructive">{shared}</p> : null}
       <ul className="space-y-0.5 font-mono text-xs text-muted-foreground">
         {runs.map((run) => (
           <li key={run.id}>{formatDateTime(run.finished_at)}</li>
@@ -95,7 +100,7 @@ export function SyncRunsTab({ enabled }: Props) {
   // than rewriting the ones that were held.
   const status = useSyncStatus();
   const runs = useMemo(() => data?.runs ?? [], [data]);
-  const rows = useMemo(() => collapseQuietRounds(runs), [runs]);
+  const rows = useMemo(() => collapseRepeats(runs), [runs]);
   // Which row may offer "Undo this round": `POST /sync/rollback` names no
   // round, it reverses the newest pre-apply snapshot, so exactly one row can
   // honestly carry the action. Computed over the WHOLE history rather than the
@@ -163,7 +168,7 @@ export function SyncRunsTab({ enabled }: Props) {
         }}
         filters={filters}
         getRowDetail={(row) =>
-          row.kind === "run" ? <SyncRunDetail run={row.run} /> : <QuietDetail runs={row.runs} />
+          row.kind === "run" ? <SyncRunDetail run={row.run} /> : <GroupDetail runs={row.runs} />
         }
         emptyMessage={t("sync.history.empty")}
       />

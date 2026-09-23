@@ -60,7 +60,8 @@ def _entry_fields(
     """The key/value pairs of a single stdio ``coffer`` entry for the style.
 
     ``agent_uid``, when given, threads the installing agent's own **uid**
-    through as ``--agent-uid <uid>`` (spec agent-registry FR-015, amended) so
+    through as ``--agent-uid <uid>`` (spec agent-registry "Install Coffer's MCP
+    server into an agent in one action") so
     the shim can self-report its identity at the MCP handshake. It is the uid
     and not the name because this string outlives the edit that renames the
     agent: the entry is written once into a file Coffer does not otherwise

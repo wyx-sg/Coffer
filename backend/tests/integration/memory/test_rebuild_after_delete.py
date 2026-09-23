@@ -1,4 +1,6 @@
-"""Delete the tree, re-sync, get an equivalent partition back (FR-019, SC-002).
+"""Delete the tree, re-sync, get an equivalent partition back.
+
+See "Keep the memory tree derived and local".
 
 Everything under ``~/.coffer/memory/`` is derived, which is what makes it safe
 to rewrite aggressively — but only if it actually comes back. The trap is the
@@ -167,8 +169,8 @@ async def test_deleting_the_tree_with_the_digest_cache_left_behind_rebuilds_it(v
     index = store.read_index(_PARTITION)
     for slug in subjects_before:
         assert f"`{slug}.md`" in index
-    # Equivalent, not identical: the wording is the distillation's, and FR-019
-    # does not require it back.
+    # Equivalent, not identical: the wording is the distillation's, and "Keep the
+    # memory tree derived and local" does not require it back.
     assert {n.slug: n.body for n in store.list_notes(_PARTITION)} != bodies_before
 
 

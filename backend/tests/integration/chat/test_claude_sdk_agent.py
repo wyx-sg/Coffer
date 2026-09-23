@@ -226,9 +226,10 @@ def test_build_content_does_not_inline_an_unsupported_image_format(tmp_path: Any
 
 
 def test_build_content_no_longer_inlines_a_pdf_as_a_document_block(tmp_path: Any) -> None:
-    # FR-031: documents are text-extracted upstream, so a PDF that reaches
-    # _build_content (extraction absent/failed) degrades to a path note — not a
-    # base64 ``document`` block (uniform text-or-path across all agents).
+    # Documents are text-extracted upstream (spec channels "Give documents to every
+    # agent as extracted text"), so a PDF that reaches _build_content (extraction
+    # absent/failed) degrades to a path note — not a base64 ``document`` block
+    # (uniform text-or-path across all agents).
     pdf = tmp_path / "report.pdf"
     pdf.write_bytes(b"%PDF-1.7 fake")
     att = Attachment(path=str(pdf), mime="application/pdf", filename="report.pdf")
@@ -243,7 +244,7 @@ def test_build_content_no_longer_inlines_a_pdf_as_a_document_block(tmp_path: Any
 
 @pytest.mark.asyncio
 async def test_pdf_reaches_claude_as_extracted_text_not_a_document_block(tmp_path: Any) -> None:
-    # FR-031: a PDF is text-extracted and folded into the prompt as a labelled
+    # A PDF is text-extracted and folded into the prompt as a labelled
     # text block; it is NOT sent as a base64 ``document`` block. An image on the
     # same turn stays vision-inlined — only documents go through extraction.
     pdf = tmp_path / "report.pdf"
@@ -270,7 +271,7 @@ async def test_pdf_reaches_claude_as_extracted_text_not_a_document_block(tmp_pat
     assert "Quarterly revenue was $4.2M." in joined
     # …no document/binary block was sent for the PDF…
     assert not any(b.get("type") == "document" for b in content)
-    # …and the image stays vision-inlined (images are untouched by FR-031).
+    # …and the image stays vision-inlined (images are untouched by extraction).
     assert any(b.get("type") == "image" for b in content)
 
 
@@ -578,6 +579,7 @@ async def test_adapter_asks_the_sdk_for_partial_messages():
     assert factory.last_options.include_partial_messages is True
 
 
+@pytest.mark.acceptance(spec="chat", scenario="a streamed reply reaches the consumer exactly once")
 @pytest.mark.asyncio
 async def test_a_streamed_turn_reaches_a_consumer_exactly_once():
     messages = [

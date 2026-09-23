@@ -89,8 +89,8 @@ def _mentions_other(
     message: dict[str, Any], text: str, *, bot_id: int | None, bot_username: str | None
 ) -> bool:
     """Whether any @mention/text_mention entity names a user OTHER than the bot
-    (FR-037): a ``mention`` entity whose token isn't ``@<bot_username>``, or a
-    ``text_mention`` whose ``user.id`` isn't ``bot_id``."""
+    ("Configure when the bot answers in a group"): a ``mention`` entity whose token isn't
+    ``@<bot_username>``, or a ``text_mention`` whose ``user.id`` isn't ``bot_id``."""
     entities = message.get("entities") or []
     for ent in entities:
         if not isinstance(ent, dict):
@@ -208,7 +208,7 @@ def build_inbound_message(
 
     ``attachments`` are passed in already-downloaded (the caller owns the
     network) so this stays pure — it lets an album flush reuse the exact same
-    text/addressing/routing derivation as a single message (spec channels/telegram FR-015)."""
+    text/addressing/routing derivation as a single message."""
     group = is_group(message)
     # A media message carries its text in ``caption``, not ``text``.
     raw_text = str(message.get("text") or message.get("caption") or "")
@@ -223,10 +223,8 @@ def build_inbound_message(
         )
     text = prepend_context(message, raw)
     if notes:
-        # spec channels/telegram FR-014: an attachment that could not be fetched is stated in the
-        # turn
-        # text, so the answer can acknowledge it instead of ignoring a file the
-        # user watched themselves send.
+        # An attachment that could not be fetched is stated in the turn text, so the answer can
+        # acknowledge it instead of ignoring a file the user watched themselves send.
         text = "\n".join([text, *notes]).strip()
     sender = message.get("from") or {}
     return InboundMessage(
@@ -238,14 +236,14 @@ def build_inbound_message(
         timestamp=datetime.fromtimestamp(int(message.get("date", 0)), tz=UTC),
         sender_id=str(sender.get("id") or ""),
         chat_kind="group" if group else "direct",
-        # Telegram hands the group's name over for free on every update (FR-035);
-        # a DM's chat has no title.
+        # Telegram hands the group's name over for free on every update ("Open every turn with its
+        # message origin"); a DM's chat has no title.
         chat_title=str(message.get("chat", {}).get("title") or ""),
         addressed=addressed,
         mentions_others=mentions_other,
         thread_id=str(message.get("message_thread_id") or ""),
         attachments=attachments,
-        # FR-049: present when the user sent an ephemeral command, and the
+        # Present when the user sent an ephemeral command, and the
         # handle that lets the bot answer them privately in the group.
         ephemeral_id=str(message.get("ephemeral_message_id") or ""),
     )

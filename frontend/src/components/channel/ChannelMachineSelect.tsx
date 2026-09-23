@@ -1,6 +1,6 @@
 // frontend/src/components/channel/ChannelMachineSelect.tsx
 // The control that says — and changes — which machine runs a channel's
-// adapter (spec channels, "Where a channel runs"). One component for both
+// adapter (spec channels, "Bind each channel to the one machine that runs it"). One component for both
 // surfaces: the list row's cell and the detail page's machine card, so the
 // two can never offer different machines or write the binding differently.
 //
@@ -110,11 +110,12 @@ export function ChannelMachineSelect({
             {labelFor(option)}
           </SelectItem>
         ))}
-        {/* FR-027 requires the surface offering the rebind to say what a
-            rebind actually costs: binding a channel to the machine you are
-            sitting at, while another still holds it, leaves both live until
-            that machine's next round. It belongs in the menu rather than
-            beside it — this is the moment the choice is made. */}
+        {/* "Bind each channel to the one machine that runs it" requires the
+            surface offering the rebind to say what a rebind actually costs:
+            binding a channel to the machine you are sitting at, while another
+            still holds it, leaves both live until that machine's next round.
+            It belongs in the menu rather than beside it — this is the moment
+            the choice is made. */}
         <div className="max-w-[18rem] space-y-1.5 border-t px-2 pb-1 pt-2">
           <p className="text-xs text-muted-foreground">{t("channels.machine.handover")}</p>
           {/* Reach and the binding must never be merged (spec channels, "Reach

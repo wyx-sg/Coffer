@@ -1,18 +1,19 @@
 """Unattended rewriters over a vault that spans machines (spec vault-sync).
 
-The knowledge **curation** pass rewrites the ``topics/`` lane with no diff
+The knowledge **curation** pass rewrites a collection's documents with no diff
 anyone approved. That is defensible on one machine and not on several, and the
-spec's ``## Unattended rewriters`` section states three normative rules to make
-it safe:
+spec states three normative rules to make it safe (requirements
+"Run an unattended rewriter on one owner machine", "Never overlap a tidy pass
+and a round" and "Let an edit beat a tidy deletion"):
 
 The acceptance scenario titles below still read "tidy" because that is what
-`specs/vault-sync/spec.md` calls the pass; curation is what replaced it, and
+`openspec/specs/vault-sync/spec.md` calls the pass; curation is what replaced it, and
 the rules and the fields are the same three. The titles are matched as strings
 by `scripts/audit_acceptance.py`, so they follow the spec rather than the code.
 
 1. **An unattended rewriter of synced content names one owner machine**, and is
-   a no-op everywhere else — otherwise two machines fold the same source into
-   two *different* topic documents, git merges that cleanly (the two topics are
+   a no-op everywhere else — otherwise two machines fold the same material into
+   two *different* documents, git merges that cleanly (the two documents are
    additions at different paths), and the vault ends up holding the same
    knowledge twice with nothing in conflict.
 2. **A pass and a converge round never overlap.** They both write the vault,
@@ -70,7 +71,7 @@ async def test_a_round_waits_for_whatever_else_is_rewriting_the_vault(pair) -> N
     async with lock:
         # A pass is "in progress": it has the lock and is midway through
         # rewriting the corpus.
-        round_task = asyncio.create_task(service.run_once())
+        round_task = asyncio.create_task(service.run_once(adopt=True))
         await asyncio.sleep(0.15)
         assert not round_task.done(), "the round serialized the vault mid-rewrite"
         # The rewrite finishes while the round is still waiting.
@@ -112,12 +113,12 @@ async def test_curation_names_one_owner_machine_and_is_a_no_op_elsewhere(pair) -
     assert owned_by_a.curate_runs_on(a.machine_id) is True
     assert owned_by_a.curate_runs_on(b.machine_id) is False, (
         "the pass ran on a machine that does not own it — two machines "
-        "rewriting one corpus produce duplicate topic documents that git "
+        "rewriting one corpus produce duplicate documents that git "
         "merges cleanly and nothing ever reports"
     )
 
     # An owner naming a machine nobody has heard of stops curation everywhere.
-    # No curation costs a stale `topics/` lane; curation everywhere costs
+    # No curation costs an inbox nobody merges; curation everywhere costs
     # duplicated knowledge no merge can see.
     orphaned = dataclasses.replace(enabled_here, curate_owner_machine_id="0000000000000000")
     assert orphaned.curate_runs_on(a.machine_id) is False
@@ -138,7 +139,8 @@ async def test_an_orphaned_owner_is_a_reportable_fault_and_can_be_taken_over(pai
     and False for an owner that no longer exists, and those two are a vault
     that is fine and a vault whose curation stopped everywhere. Until this the
     difference was unrepresentable, so the second one looked exactly like the
-    first and nothing in the product said otherwise (spec vault-sync FR-098).
+    first and nothing in the product said otherwise (spec vault-sync "Report and
+    change the rewriter's owner").
     """
     from coffer.domain.internal_engine_config import (
         CurationOwner,
@@ -178,7 +180,7 @@ async def test_an_edit_beats_a_curation_deletion_without_reporting_a_conflict(pa
 
     # A owns curation: its pass merged this note elsewhere and deleted it.
     a.delete_knowledge("notes", "merged-away")
-    a.write_knowledge("notes", "topic", "the original note, now part of a topic\n")
+    a.write_knowledge("notes", "merged", "the original note, now part of another document\n")
     await a.converge()
 
     # B edited the same note before it converged.

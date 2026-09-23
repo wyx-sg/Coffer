@@ -27,6 +27,9 @@ def test_the_levels_are_the_installed_sdks_own_alias() -> None:
     assert claude_effort_levels()
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="offer no effort levels when the runtime declares none"
+)
 def test_an_sdk_without_the_alias_simply_offers_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
     """An older pin or a partial install is an ordinary state of the world, not
     an error: the pickers hide themselves and turns run as they did before."""

@@ -1,4 +1,6 @@
-"""ChannelRuntime._reconcile_websockets: hold/drop/retry per channel (spec channels/seatalk FR-004).
+"""ChannelRuntime._reconcile_websockets: hold/drop/retry per channel.
+
+See spec channels/seatalk "Carry no ingress fields on websocket delivery".
 
 Drives the reconcile step directly with the recording stub controller and a fake
 materialize — no SDK, no socket, no DB. The real connector's threading lives in

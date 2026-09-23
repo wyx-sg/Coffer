@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-12
 **Deciders**: Yuxing Wu
-**Related**: `.specify/memory/constitution.md` (Credentials invariant — amended to v0.2.0), spec `mcp-gateway` (data-model: `credentials` table, audit events), [PyInstaller Distribution](distribution-pyinstaller.md) (unsigned macOS distribution)
+**Related**: [`docs/principles.md`](../principles.md) (Credentials invariant — amended by this decision), spec `mcp-gateway` (data-model: `credentials` table, audit events), [PyInstaller Distribution](distribution-pyinstaller.md) (unsigned macOS distribution)
 
 ## Context
 
@@ -73,8 +73,8 @@ keep a single Fernet master key in a `0600` file beside the database by default
   migration. The daemon remains the sole owner of secret material; CLI and web
   go through the HTTP API.
 
-This required amending the constitution's Credentials invariant (v0.1.0 →
-v0.2.0): from "only the credential module accesses the OS keychain; no plaintext
+This required amending the Credentials invariant in the project principles
+(now `docs/principles.md`): from "only the credential module accesses the OS keychain; no plaintext
 in the DB" to "secrets only as Fernet ciphertext in the `credentials` table;
 master key managed solely by `coffer.infrastructure.credentials`, file default /
 keychain opt-in".
@@ -98,7 +98,7 @@ keychain opt-in".
 - **Backup caveat.** `coffer.db` now holds ciphertext; restoring it requires the
   matching `master.key` (or keychain entry). Users must back up the master key
   alongside the database, and docs must say so.
-- **Constitution amendment** (v0.2.0) and a one-time legacy migration path to
+- **Principles amendment** (the Credentials invariant) and a one-time legacy migration path to
   carry, both shipped with this change.
 - **Default mode does not defend against a reader of `~/.coffer/`** — the key
   sits beside the data. This is the same boundary as before, stated plainly so
@@ -127,3 +127,30 @@ keychain opt-in already covers users who want the key off the disk.
 re-prompt wall as the out-of-box experience on the most common developer
 platform. The mode that works painlessly under an unsigned binary must be the
 default; hardening is the opt-in.
+
+## Implementation notes
+
+- **The store is synchronous on purpose.** `EncryptedCredentialStore` opens a
+  short-lived stdlib `sqlite3` connection per call, because MCP spawn and
+  register-time probing are synchronous and have no event loop. Loop callers go
+  through the `aget`/`aexists`/`aset`/`adelete` facade, which runs each call
+  under `asyncio.to_thread`; a sync call made on the loop would deadlock against
+  the aiosqlite connection holding the write lock. An async-only store was
+  rejected because it would force every sync caller to create a loop.
+- **One key manager, one `keyring` importer.** `MasterKeyManager` is the only
+  code that reads or writes key material, and `keyring_adapter.py` the only
+  module that imports `keyring`; the importlinter contract "keyring confined to
+  infrastructure" enforces it. The CLI goes through the daemon for everything,
+  so each machine has a single reader of the key.
+- **Startup order is a correctness property.** `init_credential_store` counts
+  the `credentials` rows *before* resolving the key, so a key is created only
+  for an empty store. A key that fails to construct a Fernet is reported as
+  `MASTER_KEY_MISSING` naming the path, never silently regenerated.
+- **Deletion is refused from the citing side.** `find_credential_citations`
+  walks registered resource configs through each kind's extractor. No foreign
+  key can do this: the reference lives inside another kind's JSON config.
+- **Rollback lives at the writing surface.** A secret written just before a
+  registration that then fails is deleted by the surface that wrote it (the MCP
+  import and edit dialogs, the channel register flow), because only that caller
+  knows whether the registration succeeded. It is best-effort and logs rather
+  than raising a second error over the first.

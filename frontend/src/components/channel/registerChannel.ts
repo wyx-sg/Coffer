@@ -1,6 +1,7 @@
 // frontend/src/components/channel/registerChannel.ts
 // Registration plumbing for AddChannelDialog: secrets are written to the
-// credential store FIRST (registration probes the refs — FR-001), then the
+// credential store FIRST (registration probes the refs — see "Register
+// channels as a credential-referencing resource kind"), then the
 // resource is registered; on failure the just-written secrets are rolled
 // back so nothing orphaned stays behind.
 import { getApiClient } from "@/lib/api/client";

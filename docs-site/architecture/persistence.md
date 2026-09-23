@@ -14,8 +14,8 @@ The answer is two layers. A single SQLite file at `~/.coffer/coffer.db` is the s
 
 The rejected alternative — a server database like Postgres or MySQL — would require the user to install and manage a database process, configure credentials, and keep a service running. For a single-user local tool, that overhead is pure friction with no benefit.
 
-::: tip Constitutional invariant
-The constitution designates SQLite as the system of record for control-plane state. Bulk user content is stored as files on the local filesystem. Migrating the control plane to a server database requires a constitutional amendment.
+::: tip Principles invariant
+Coffer's principles designate SQLite as the system of record for control-plane state. Bulk user content is stored as files on the local filesystem. Migrating the control plane to a server database requires an amendment to the principles.
 :::
 
 The practical consequences of the SQLite choice shape every detail of the persistence layer:
@@ -148,7 +148,7 @@ The full set of files Coffer writes:
 | `~/.coffer/daemon-config.json` | Configuration read before the database opens: the port (mode `0600`). Written only by `coffer daemon port`. |
 | `~/.coffer/master.key`        | Credential-store master key (file-default; opt-in keychain). See [Security](/architecture/security). |
 | `~/.coffer/machine-id`        | This machine's stable identity for sync                |
-| `~/.coffer/knowledge/`        | One directory per collection of markdown files — the knowledge layer itself, plus the hidden `.raw/` originals behind uploaded documents and the `.history/` revisions the tidy pass superseded |
+| `~/.coffer/knowledge/`        | One directory per collection of markdown files — the knowledge layer itself, one tree of documents each, plus a hidden `.inbox/` of new material waiting for curation to merge it |
 | `~/.coffer/memory/`           | The facts aggregated out of each agent's own native memory, one directory per partition |
 | `~/.coffer/skills/`           | The canonical master copy of every managed skill       |
 | `~/.coffer/sync/`             | The git working tree the vault converges through (default; the remote's row can name another) |

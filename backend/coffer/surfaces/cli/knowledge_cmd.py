@@ -4,14 +4,16 @@ Thin HTTP shells over the daemon, matching the other CLI groups and their
 exit-code mapping (``_cli_client.check``).
 
 This group serves the **human**, which is why it still browses and reads while
-the MCP gateway exposes nothing but ``coffer__write`` (spec knowledge FR-033).
+the MCP gateway exposes nothing but ``coffer__write`` (spec knowledge "Expose
+exactly one knowledge tool").
 The two are not the same surface and do not answer to the same rule: an agent
 has ``Read`` and ``Grep`` of its own and is handed absolute paths by the
 delivered skill, so a retrieval tool for it would be a tool it never
 remembers to call; a person at a prompt has neither the paths nor the daemon's
-scope resolution in front of them. What this group must cover is FR-039's
-list — create a collection, list a lane, read a file, write a source, upload a
-document, delete a source, trigger curation — and nothing beyond it. There is
+scope resolution in front of them. What this group must cover is the list in
+"Cover collection management on REST and the CLI" — create a collection, list
+a level, read a document, submit material, upload a document, delete a
+document, trigger curation — and nothing beyond it. There is
 deliberately no ``grep`` and no ``search`` command: the corpus is plain
 Markdown under ``~/.coffer/knowledge/``, so a person's own ``grep`` is already
 better than anything this group could wrap, and the group's help says where
@@ -40,10 +42,11 @@ from coffer.surfaces.cli._resolve import resolve_uid
 app = typer.Typer(
     help=(
         "Browse and edit Coffer's knowledge, the Markdown under "
-        "~/.coffer/knowledge/<collection>/. Each collection has two lanes: you "
-        "write source material into sources/, and Coffer's curation pass "
-        "derives topics/ from it — topics/ is what an agent reads. Grep the "
-        "directory with your own tools; there is no search command."
+        "~/.coffer/knowledge/<collection>/. Each collection is one tree of "
+        "documents you and Coffer write together: edit them in your own editor, "
+        "and add new knowledge with `write` or `upload` — Coffer's curation pass "
+        "merges it into the documents. Grep the directory with your own tools; "
+        "there is no search command."
     )
 )
 _console = Console()
@@ -58,7 +61,7 @@ def list_collections(
     ctx: typer.Context,
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """List every collection, with what each lane holds."""
+    """List every collection, with its documents and unmerged material."""
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get("/knowledge/collections")
@@ -69,18 +72,16 @@ def list_collections(
         return
     table = Table(title="Knowledge collections")
     table.add_column("name")
-    # The two counts are the one honest picture of a collection's state: a
-    # collection with sources and no topics has not been curated yet, and
-    # that is the difference between material Coffer holds and material an
-    # agent can reach (spec knowledge FR-021).
-    table.add_column("sources", justify="right")
-    table.add_column("topics", justify="right")
+    # Pending is material still waiting to be merged — what an agent cannot
+    # read yet (spec knowledge "Hide dot-prefixed entries except the inbox").
+    table.add_column("documents", justify="right")
+    table.add_column("pending", justify="right")
     table.add_column("description")
     for entry in data["collections"]:
         table.add_row(
             entry["name"],
-            str(entry["source_count"]),
-            str(entry["topic_count"]),
+            str(entry["document_count"]),
+            str(entry["pending_count"]),
             entry["description"],
         )
     _console.print(table)
@@ -92,7 +93,7 @@ def create_collection(
     name: str = typer.Argument(..., help="Collection name (one path segment)"),
     description: str = typer.Option("", "--description", "-d"),
 ) -> None:
-    """Create a collection and its two lanes. Nothing else creates one."""
+    """Create a collection. Nothing else creates one."""
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post(
@@ -107,11 +108,11 @@ def create_collection(
 def list_level(
     ctx: typer.Context,
     path: str = typer.Argument(
-        ..., help="Path inside a lane, e.g. shopee/sources or shopee/topics/apis"
+        ..., help="A collection or a folder inside one, e.g. shopee or shopee/apis"
     ),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """List one level of one lane — folders and files, not the whole tree."""
+    """List one level of a collection — folders and files, not the whole tree."""
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get("/knowledge/tree", params={"path": path})
@@ -137,7 +138,7 @@ def read_file(
     path: str = typer.Argument(..., help="File path under the knowledge root"),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Print a file from either lane."""
+    """Print a document."""
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get("/knowledge/file", params={"path": path})
@@ -150,38 +151,40 @@ def read_file(
 
 
 @app.command("write")
-def write_source(
+def submit_material(
     ctx: typer.Context,
     title: str = typer.Option(..., "--title", "-t"),
-    description: str = typer.Option(..., "--description", "-d", help="What the source is about"),
+    description: str = typer.Option(..., "--description", "-d", help="What it is about"),
     body: str = typer.Option("", "--body", "-b"),
-    collection: str = typer.Option(..., "--in", help="Collection to file it in"),
-    folder: str = typer.Option("", "--folder", help="Subfolder inside sources/, if any"),
+    collection: str = typer.Option(..., "--in", help="Collection to add it to"),
 ) -> None:
-    """Write a source. Only curation writes topics/ (spec knowledge FR-013)."""
-    # The `sources/` segment is the layer's, not the caller's, so it is never
-    # spelled here: the lane a write lands in is not a thing a surface gets to
-    # choose (FR-013).
+    """Add new knowledge. Coffer's curation pass merges it into the documents."""
     payload = {
         "title": title,
         "description": description,
         "body": body,
         "collection": collection,
-        "folder": folder or None,
     }
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.put("/knowledge/file", json=payload)
+        r = c.post("/knowledge/material", json=payload)
         _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(r.json()["path"])
+    typer.echo(_submission(r.json()))
+
+
+def _submission(data: dict[str, object]) -> str:
+    """One line saying what became of the material."""
+    if data.get("path"):
+        return str(data["path"])
+    return f"queued in {data['collection']} — curation merges it into the documents"
 
 
 @app.command("delete")
-def delete_source(
+def delete_document(
     ctx: typer.Context,
-    path: str = typer.Argument(..., help="Source path, e.g. shopee/sources/gateway.md"),
+    path: str = typer.Argument(..., help="Document path, e.g. shopee/gateway.md"),
 ) -> None:
-    """Delete a source. A topic document cannot be deleted by hand (FR-020)."""
+    """Delete a document."""
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.delete("/knowledge/file", params={"path": path})
@@ -196,19 +199,14 @@ def upload(
         ..., help="Document to ingest", exists=True
     ),
     collection: str = typer.Option(..., "--collection", help="Collection to ingest it into"),
-    folder: str = typer.Option("", "--folder", help="Subfolder inside sources/, if any"),
 ) -> None:
-    """Convert a document to Markdown and file both it and the original.
+    """Convert a document to Markdown and add what it says to a collection.
 
-    Both land in the collection's ``sources/``, the original under its own
-    name and byte-identical to what was sent (FR-016).
+    The extracted text is new material: curation merges it into the documents,
+    and neither the original nor the extracted file is kept ("Convert uploads
+    into material without keeping them").
     """
-    # httpx encodes a `None` form value as an empty field rather than
-    # omitting it, which would arrive as "" and not the server's own
-    # default — so an empty --folder is left out of the body entirely.
     form: dict[str, str] = {"collection": collection}
-    if folder:
-        form["folder"] = folder
     c, _info = _cli_client.client_or_exit()
     with c:
         with file.open("rb") as fh:
@@ -218,28 +216,31 @@ def upload(
                 files={"file": (file.name, fh)},
             )
         _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(r.json()["path"])
+    data = r.json()
+    typer.echo(_submission({**data, "collection": collection}))
 
 
 @app.command("curate")
 def curate(
     ctx: typer.Context,
     collection: str = typer.Argument(..., help="Collection to curate"),
-    source: str = typer.Option(
-        "", "--source", help="Curate one source path rather than everything pending"
+    document: str = typer.Option(
+        "", "--document", help="Carry one edited document through rather than the next pending item"
     ),
 ) -> None:
     """Run a curation pass by hand over one collection.
 
     A pass is bounded and reports why it stopped, so the status is the answer:
     ``ok``, ``up_to_date``, ``no_model`` when no internal connection is
-    configured (FR-029), ``too_large``, or ``failed``. A pass already in
-    flight over the same collection is refused rather than queued (FR-030).
+    configured ("Promote material directly when no model is configured"),
+    ``too_large``, or ``failed``. A pass already in flight over the same
+    collection is refused rather than queued ("Run one pass per collection at
+    a time").
     """
-    # The route takes the source in the body, not the query string: a path is
-    # content, and a silently-ignored query param would look like a pass that
-    # simply chose a different source.
-    body = {"source": source} if source else {}
+    # The route takes the document in the body, not the query string: a path
+    # is content, and a silently-ignored query param would look like a pass
+    # that simply chose a different item.
+    body = {"document": document} if document else {}
     c, _info = _cli_client.client_or_exit()
     with c:
         # The one command in this group addressed by identity rather than by a

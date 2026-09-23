@@ -4,7 +4,7 @@ Three things only a composition root can supply meet here: the langgraph loop
 adapter (import contract 9a keeps langgraph inside ``infrastructure.llm``, so
 ``application.knowledge`` reaches it only through the injected port), the
 installation-wide switch that decides whether the worker runs, and Coffer's
-own skill, which the pass re-renders after every corpus change — a new topic
+own skill, which the pass re-renders after every corpus change — a new
 document is unreachable until the catalogue in that skill names it.
 
 Kept out of ``app.py`` / ``chat_wiring.py``, both at the 400-LOC ceiling,
@@ -69,10 +69,11 @@ def start_curation_worker(
 ) -> asyncio.Task[None]:
     """Start the interval sweep.
 
-    Unlike the tidy worker this replaces, it is **on by default** (FR-032):
-    curation is the only path from a source to something an agent can read, so
-    an installation where it never runs is one whose ``topics/`` lane stays
-    empty forever. Returns the task; the lifespan cancels it at shutdown.
+    It is **on by default** (spec knowledge "Curate on one owner machine
+    only"): curation is what merges new material into
+    the documents an agent reads, so an installation where it never runs is one
+    whose inbox is never read. Returns the task; the lifespan cancels it at
+    shutdown.
 
     Takes the sync graph explicitly: the worker consults this machine's
     identity, the pending-round state and the vault-write lock, all of which
@@ -95,8 +96,8 @@ def start_curation_worker(
         """On, and on the machine that owns the pass.
 
         Once a vault spans machines an unattended rewriter must run on exactly
-        one of them (spec vault-sync ``## Unattended rewriters``): two machines
-        folding the same source produce two *different* topic documents, git
+        one of them (spec vault-sync "Run an unattended rewriter on one owner
+        machine"): two machines folding the same material produce two *different* documents, git
         merges both additions cleanly, and the vault silently holds the
         knowledge twice. No owner set means a single-machine vault, where
         "here" is the only answer there is.
@@ -104,7 +105,7 @@ def start_curation_worker(
         if not (await engine_config.get()).curate_runs_on(sync.registry.machine_id):
             return False
         # And not while a round is waiting on the user (spec vault-sync
-        # "## Unattended rewriters"). A confirmation is answered on the promise
+        # "Never overlap a tidy pass and a round"). A confirmation is answered on the promise
         # that re-deriving the round yields the diff the user was shown, and a
         # rewriter that moves documents underneath them breaks exactly that
         # promise.

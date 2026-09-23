@@ -1,5 +1,5 @@
-"""Unit tests for the Codex global-memory parser (spec agent-registry, spec agent-registry/codex
-FR-012).
+"""Unit tests for the Codex global-memory parser (spec agent-registry, spec
+agent-registry/codex "Scan Codex's global task-grouped memory").
 
 Codex keeps a single global ``~/.codex/memories/MEMORY.md`` organised as
 ``# Task Group:`` blocks, each carrying one ``applies_to: cwd=...`` line that

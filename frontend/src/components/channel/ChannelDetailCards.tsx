@@ -87,8 +87,8 @@ export function ChannelPairingCard({
               </Button>
             </div>
             {code.pair_url ? (
-              // FR-051: opening the link pairs in one tap; the code above still
-              // works typed, for anyone reading it off another screen.
+              // "Pair by a one-tap start link": opening the link pairs in one tap; the code above
+              // still works typed, for anyone reading it off another screen.
               <a
                 href={code.pair_url}
                 target="_blank"

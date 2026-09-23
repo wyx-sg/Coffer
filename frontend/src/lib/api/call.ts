@@ -10,7 +10,7 @@
 // The only other `fetch` in the app is `lib/chat/streamClient.ts`, which reads
 // an SSE body and so cannot share a JSON helper. Do not add a third.
 import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";
-import { ApiError } from "@/lib/api/errors";
+import { ApiError, daemonNotReadyError } from "@/lib/api/errors";
 
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -46,7 +46,14 @@ export async function call<T>(path: string, { method = "GET", body }: Options = 
   const isForm = typeof FormData !== "undefined" && body instanceof FormData;
   if (body !== undefined && !isForm) headers["Content-Type"] = "application/json";
 
-  const response = await fetch(`${getCofferBaseUrl()}${path}`, {
+  // No supplier has named the API's address yet (the desktop shell's
+  // handshake is still in flight). There is nothing to call, and saying so in
+  // the daemon's own "not ready" vocabulary is what keeps the offline banner
+  // truthful — see getCofferBaseUrl.
+  const baseUrl = getCofferBaseUrl();
+  if (baseUrl === null) throw daemonNotReadyError();
+
+  const response = await fetch(`${baseUrl}${path}`, {
     method,
     headers,
     ...(body === undefined ? {} : { body: isForm ? body : JSON.stringify(body) }),

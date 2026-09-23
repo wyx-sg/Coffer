@@ -108,7 +108,8 @@
     "runs": "运行",
     "workflows": "工作流",
     "modelProviders": "模型提供商",
-    "sync": "同步"
+    "sync": "同步",
+    "needsAttention": "有待处理的事项"
   },
   "resources": {
     "title": "MCP 服务器",
@@ -348,6 +349,7 @@
       "sync_rolled_back": "回滚了一轮收敛",
       "sync_run": "执行了一轮收敛",
       "token_rotated": "已轮换访问令牌",
+      "daemon_residency_updated": "守护进程常驻设置已变更",
       "knowledge_curated": "从 {{resource}} 的原料归纳出了主题文档",
       "workflow_run_started": "启动工作流 {{resource}}",
       "workflow_run_finished": "工作流 {{resource}} 已结束",
@@ -417,6 +419,17 @@
       "preferredEditorCustomCommand": "自定义编辑器命令",
       "preferredEditorCustomPlaceholder": "例：zed 或 /Applications/Zed.app"
     },
+    "daemon": {
+      "title": "Coffer 守护进程",
+      "autostart": "开机自启动",
+      "autostartHelp": "不管 Coffer 有没有打开，守护进程都保持运行，这样 agent 当天第一次调用不用等它启动；崩溃后会自动拉起。",
+      "autostartUnsupported": "仅 macOS 可用。",
+      "idle": "闲置多久后停止",
+      "idleHelp": "没有任何东西使用守护进程时，它还会继续运行多久。之后谁需要它，谁就会重新拉起它。下次启动守护进程时生效。",
+      "idleHours_one": "{{count}} 小时",
+      "idleHours_other": "{{count}} 小时",
+      "idleNever": "永不停止"
+    },
     "retention": {
       "title": "数据保留",
       "keepForever": "永久保留",
@@ -461,10 +474,7 @@
       "title": "关于 Coffer",
       "copyDiagnostics": "复制诊断信息",
       "fields": {
-        "name": "名称",
         "version": "版本",
-        "port": "守护进程端口",
-        "startedAt": "守护进程启动时间",
         "license": "许可证",
         "source": "源代码"
       }
@@ -611,14 +621,14 @@
         "unknownMachine": "未知机器（{{id}}）",
         "self": "提炼在本机运行。共用这个金库的其他机器不会去改这些派生文档。",
         "other": "提炼运行在 {{machine}} 上。本机只读那台机器提炼出的文档，不会重写它们。",
-        "unowned": "没有指定任何机器，因此在哪台机器上打开这个金库，提炼就在哪台上跑。只有一台机器时这样没问题；有两台时，两边会各自把同一批源材料提炼成各自的文档，最后同一份知识在金库里存了两遍。",
+        "unowned": "没有指定任何机器，因此在哪台机器上打开这个金库，提炼就在哪台上跑。只有一台机器时这样没问题；有两台时，两边会各自把同一批新材料并入各自的文档，最后同一份知识在金库里存了两遍。",
         "fault": "提炼被指派给了 {{id}}，而注册表里没有任何机器认领这个 id。也就是说它现在一台机器上都没在跑——上面的开关仍然显示「开」，而 Coffer 别的地方不会提这件事。在这里把它接管过来，提炼才会重新开始。",
         "takeOver": "让提炼在本机运行",
         "takeOverHint": "把本机指定为负责的机器。原先持有它的那台机器会在下一轮同步把变更带过去之后停止提炼；本机会在下一次轮到它时开始。",
         "noMachineId": "本机还没有机器 id，无法被指定为负责的机器。",
         "clear": "清除指定",
         "clearTitle": "让每一台机器都去提炼？",
-        "clearBody": "不指定机器之后，共用这个金库的每一台机器都会从同一批源材料提炼文档。只有一台机器时这不改变什么；机器更多时，同一份知识很可能被写成两份、各叫一个名字。",
+        "clearBody": "不指定机器之后，共用这个金库的每一台机器都会把同一批新材料并入文档。只有一台机器时这不改变什么；机器更多时，同一份知识很可能被写成两份、各叫一个名字。",
         "claimedToast": "提炼现在运行在本机",
         "clearedToast": "提炼不再绑定到某一台机器"
       },
@@ -632,9 +642,9 @@
           "writes": "模型把从 Agent 读到的原始条目提炼成 Coffer 自己的笔记，并重写索引。删掉这棵树再跑一遍，能复现出等价的一组笔记。"
         },
         "curate": {
-          "name": "从源材料提炼文档",
-          "writes": "Coffer 的模型读你写的源材料，提炼出 Agent 会去读的文档。它不会改动任何一份源材料。",
-          "caution": "关掉它就不会再提炼任何东西：你的源材料原样留着，而 Agent 能读的文档会一直是空的。"
+          "name": "把新知识并入文档",
+          "writes": "Coffer 的模型把新材料（上传的文件、Agent 写下的内容）并入集合里的文档，并把你改过的文档同步到相关的其他文档。",
+          "caution": "关掉它之后，新材料会一直等着，直到你手动跑一次；你改过的文档也不会被同步到其他文档。"
         }
       }
     }
@@ -649,7 +659,6 @@
       "outOfDateBody": "当前应用复用了上一个版本残留的旧后台服务。请重启守护进程，使应用与守护进程运行同一版本。",
       "restart": "重启守护进程",
       "restarting": "重启中…",
-      "reconnectFailed": "守护进程已重启，但应用未能重新连接：{{message}}。请退出并重新打开 Coffer。",
       "webRestartHint": "浏览器无法重启它——请在终端运行："
     }
   },
@@ -661,6 +670,7 @@
     "cta": "返回首页"
   },
   "errors": {
+    "AGENT_CONFIG_DIR_MISSING": "该 agent 的配置目录在本机不存在",
     "AGENT_CONFIG_DIR_REGISTERED": "该配置目录已经注册过一个 Agent 了。",
     "AGENT_CONFIG_PARSE_ERROR": "无法解析该 Agent 的配置文件",
     "AGENT_CONFIG_REJECTED": "该 Agent 配置被拒绝",
@@ -691,7 +701,7 @@
     "INGEST_REJECTED": "文档在摄入过程中被拒绝",
     "INGEST_REJECTED_scanned_pdf": "该 PDF 似乎是扫描件或纯图片——无法提取文本。请先运行 OCR（或将其转换为基于文本的 PDF）后重新上传。",
     "INGEST_REJECTED_unsupported_type": "暂不支持此文件类型。请转换为 PDF、Word（.docx）、PowerPoint（.pptx）、Excel（.xlsx）、HTML、EPUB、CSV 或纯文本/Markdown 后重新上传；旧版 .doc/.ppt 请先另存为 .docx/.pptx。",
-    "INTERNAL_ERROR": "发生意外错误",
+    "INTERNAL_ERROR": "Coffer 内部出错，详情见守护进程日志：「活动」→「守护进程」。",
     "INVALID_PREFIX": "无效的前缀",
     "KNOWLEDGE_COLLECTION_EXISTS": "同名知识集合已存在",
     "KNOWLEDGE_COLLECTION_NOT_FOUND": "未找到该知识集合",
@@ -720,6 +730,7 @@
     "PLUGIN_UNINSTALL_UNSUPPORTED": "该插件不支持卸载",
     "PRIVILEGED_PATH": "该路径受保护，无法在此使用",
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": "已保存的凭据与内联密钥，二者必须且只能提供一个",
+    "PROVIDER_INTERNAL_ONLY": "该连接使用 ollama 协议，仅供 Coffer 内部引擎使用，不能为 agent 启用",
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "该连接正在启用中，无法更改协议格式——请先让相关 agent 切回自带登录，再修改协议，然后重新启用",
     "RESOURCE_ALREADY_EXISTS": "同名资源已存在",
     "RESOURCE_NOT_FOUND": "资源未找到",
@@ -1057,7 +1068,7 @@
   },
   "knowledge": {
     "title": "知识",
-    "subtitle": "每个集合两个文件夹：你和 Agent 写下的源材料，以及 Coffer 从中提炼出的主题文档。Agent 用自己的工具读主题文档；只有你允许的 Agent 才知道某个集合的存在。",
+    "subtitle": "每个集合是一个 Markdown 文档文件夹，由你和 Coffer 共同编写。新材料由提炼并入这些文档；Agent 用自己的工具读，只有你启用的集合才会告诉它们。",
     "add": "新建集合",
     "loadFailed": "加载集合失败",
     "searchPlaceholder": "搜索集合…",
@@ -1065,53 +1076,44 @@
     "cols": {
       "name": "名称",
       "description": "描述",
-      "sources": "源材料",
-      "topics": "主题文档"
+      "documents": "文档",
+      "pending": "待并入"
     },
     "detail": {
       "noMatches": "没有匹配。",
       "filterPlaceholder": "按名称筛选…",
       "emptyFolder": "这里还没有内容",
       "selectAFile": "选择一个文件来阅读",
-      "deleteFile": "删除文件",
-      "deleteFileTitle": "删除这份源材料？",
-      "deleteFileConfirm": "从磁盘上删除「{{path}}」？这份源材料是唯一的副本——此操作不可撤销。",
+      "deleteFile": "删除文档",
+      "deleteFileTitle": "删除这份文档？",
+      "deleteFileConfirm": "从磁盘上删除「{{path}}」？这份文档是唯一的副本——此操作不可撤销。",
       "curate": "提炼",
-      "curateHint": "把下一份待处理的源材料并入本集合的主题文档。",
+      "curateHint": "把下一份待并入的材料并入本集合的文档。",
       "curateRunning": "已经有一次提炼在跑了",
       "curateStatus": {
         "ok": "提炼已完成。",
-        "no_model": "没有配置内部模型，这次什么都没提炼。",
-        "up_to_date": "每一份源材料都已经在主题文档里了。",
-        "too_large": "这份源材料太大，一次提炼放不下。",
-        "failed": "这次提炼没有跑完，没有任何源材料被标记为已提炼。"
+        "no_model": "没有配置内部模型，所以没有做合并——待并入的材料已按原样成为文档（{{count}} 份）。",
+        "up_to_date": "没有待并入的内容。",
+        "too_large": "这份内容太大，一次提炼放不下。",
+        "failed": "这次提炼没有跑完。没有丢失任何内容，稍后会重试。"
       },
-      "curatedAt": "自 {{when}} 起已进入主题文档",
-      "notCuratedYet": "还没进入主题文档",
-      "lanes": {
-        "sources": {
-          "tab": "源材料",
-          "treeLabel": "本集合的源材料",
-          "empty": "还没有源材料——上传一份文档，或者把 Markdown 文件直接放进这个文件夹。"
-        },
-        "topics": {
-          "tab": "主题文档",
-          "treeLabel": "本集合的主题文档",
-          "empty": "还没有主题文档。它们由 Coffer 从你写的源材料里提炼出来。",
-          "writtenByCuration": "这些文档由 Coffer 的提炼过程根据你的源材料写成。你在这里改的内容会被下一次提炼覆盖——要更正，请以新的源材料写进去。"
-        }
-      }
+      "curatedAt": "上次提炼于 {{when}}",
+      "notCuratedYet": "尚未提炼",
+      "treeLabel": "本集合的文档",
+      "empty": "还没有文档——上传一份，或者把 Markdown 文件直接放进这个文件夹。",
+      "pending_one": "{{count}} 份新材料正在并入文档。",
+      "pending_other": "{{count}} 份新材料正在并入文档。"
     },
     "welcome": {
       "title": "把 Agent 知道的一切放在一处",
-      "body": "一个集合就是两个文件夹：你和 Agent 写下的源材料，以及 Coffer 从中提炼出的主题文档。建一个，然后让 Agent 来读。",
+      "body": "一个集合就是一个文档文件夹，由你、Agent 和 Coffer 一起构建。建一个，然后让 Agent 来读。",
       "featureEntries": {
-        "title": "你写下的",
-        "body": "你和 Agent 一起添加源材料——通过 Coffer 工具写下的笔记、上传的文档、你自己放进去的 Markdown。"
+        "title": "放进去的",
+        "body": "上传一份文档、让 Agent 写下它学到的东西，或者在你自己的编辑器里直接改文档。"
       },
       "featureDocuments": {
-        "title": "Coffer 提炼的",
-        "body": "Coffer 自己的模型把这些源材料并成主题文档，Agent 读的就是它们。"
+        "title": "Coffer 做的",
+        "body": "Coffer 自己的模型把新材料并入文档，一个事实只放在一处，而不是堆成一条条笔记。"
       },
       "featureLocal": {
         "title": "本地优先",
@@ -1132,7 +1134,8 @@
     "upload": {
       "button": "上传",
       "uploading": "正在上传…",
-      "success": "已上传「{{title}}」。"
+      "pending": "已上传「{{title}}」——稍后会并入文档。",
+      "written": "已上传「{{title}}」——已保存为 {{path}}。"
     }
   },
   "memory": {
@@ -1199,7 +1202,7 @@
     }
   },
   "chat": {
-    "title": "对话",
+    "title": "聊天",
     "thinking": "思考中…",
     "message": {
       "failed": "该回复未完成。",
@@ -1502,7 +1505,7 @@
     "history": {
       "description": "这台机器执行过的每一轮收敛，最新的在最前。什么都没变的那些轮次也会列出来——正是它们说明金库一直在收敛。",
       "searchPlaceholder": "搜索轮次…",
-      "empty": "还没有执行过任何一轮。先保存远端，再点「立即收敛」。",
+      "empty": "还没有执行过任何一轮。先保存远端，再加入它，开始收敛。",
       "nothingFurther": "这一轮没有更多可报告的内容。",
       "ran": "运行于 {{from}} → {{to}}",
       "countsShort": "+{{added}} ~{{modified}} −{{deleted}}",
@@ -1519,6 +1522,28 @@
         "applied": "应用到本机",
         "published": "发布到远端",
         "commit": "提交"
+      }
+    },
+    "join": {
+      "title": "加入这个远端？",
+      "case": {
+        "new": "这台机器第一次接入这个远端。它会取并集：拿到远端已有的内容，同时保留自己的全部内容，不会删除任何东西。",
+        "returning": "这台机器之前在这里同步过，会从上次收敛的基点继续，并接收远端自那以后的改动——包括删除。",
+        "ambiguous": "这台机器之前在这里同步过，但它到达的提交已不在远端历史中，基点无法恢复。保留本机文档会把它们作为新增发布，可能让其他机器删除过的内容重新出现。若要改用远端的状态，请运行 'coffer sync rebuild'。"
+      },
+      "lastConverged": "上次在此收敛",
+      "never": "从未",
+      "remoteChanged": "远端自那以后改动的文档",
+      "vaultDocuments": "本机保险库中的文档",
+      "confirm": "加入",
+      "keepLocal": "保留本机文档",
+      "joining": "正在加入…",
+      "action": "加入这个远端",
+      "notJoined": "这台机器尚未加入这个远端。加入之前，同步轮次不会应用或发布任何内容——加入时会先告诉你加入会做什么。",
+      "detected": {
+        "new": "检测结果：这台机器会以新机器身份加入，并取并集。",
+        "returning": "检测结果：这台机器之前在这里同步过，会从上次收敛的基点继续。",
+        "ambiguous": "检测结果：这台机器之前在这里同步过，但基点已不在远端历史中——加入需要你来选择。"
       }
     },
     "key": {
@@ -1610,7 +1635,6 @@
       "description": "这会把本机金库恢复到 {{when}} 结束的那一轮开始写入之前的状态。撤销本身是一次普通的本地改动：下一轮会把它发布到远端，其他机器随之跟上。",
       "willUndo": "这一轮在本机写入的内容——撤销会把每一条都反向还原",
       "morePaths": "…还有 {{count}} 条",
-      "nothingApplied": "这一轮没有往本机金库里写任何内容，撤销它在本机不会改变什么。",
       "confirm": "撤销这一轮",
       "undoing": "正在撤销…",
       "done": "已撤销这一轮（回退 +{{added}} ~{{modified}} −{{deleted}}）。"
@@ -1621,9 +1645,11 @@
         "no_change": "没有变化",
         "conflict": "因冲突中止",
         "awaiting_confirmation": "已暂停，等你确认",
+        "awaiting_confirmation_past": "已暂停",
         "push_failed": "本地已应用，推送失败",
         "failed": "失败",
-        "disabled": "已关闭"
+        "disabled": "已关闭",
+        "awaiting_join": "等待加入"
       },
       "join": {
         "new": "以新机器身份加入——远端持有的内容全部添加过来，本机金库原有的内容也全部保留。",
@@ -1633,6 +1659,9 @@
       "agentResolvedHint": "内部模型在工作区里解决了这些路径上的冲突。如果是你自己的笔记，值得回头看一眼。",
       "failures": "本机无法应用",
       "failure": "{{path}}——{{reason}}",
+      "notApplicable": "在本机不适用",
+      "notApplicableHint": "这些内容在本机永远无法应用——例如配置目录在本机不存在的 agent。它们保留在共享树中，不会重试，也不算错误。",
+      "awaitingJoin": "这台机器尚未加入这个远端，因此没有应用或发布任何内容。请在「配置」页使用「加入这个远端」，先查看加入会做什么，再加入。",
       "lockedRefs": "本机无法解密的凭据",
       "lockedRefsHint": "本机金库拿到了它们的密文，却没有能打开它的主密钥。请从持有主密钥的那台机器导出，并在下方导入。",
       "applied": "应用到本机",

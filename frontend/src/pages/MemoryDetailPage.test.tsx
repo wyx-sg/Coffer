@@ -151,8 +151,8 @@ describe("MemoryDetailPage", () => {
   });
 
   test("a partition whose repository is gone says so in its header", () => {
-    // FR-016: nothing is delivered from it, and whether it should still exist
-    // is the developer's call — which they can only make if the page says so.
+    // "Report unresolvable partitions": nothing is delivered from it, and whether it should still
+    // exist is the developer's call — which they can only make if the page says so.
     stubPartitions([{ ...COFFER, unresolvable: true }]);
 
     renderPage();

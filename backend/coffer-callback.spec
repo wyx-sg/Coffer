@@ -3,7 +3,8 @@
 #
 # Output: dist/coffer-callback (single-file executable)
 # Shipped in coffer-cli-<triple>.tar.gz; a frozen daemon deploys it into
-# ~/.coffer/bin/ at startup (spec daemon FR-027) because it spawns it at runtime.
+# ~/.coffer/bin/ at startup (spec daemon "Deploy frozen sibling binaries and
+# back up the vault before migrating") because it spawns it at runtime.
 #
 # The callback listener is the SeaTalk webhook-ingress child the daemon spawns
 # (channel/listener_spawn.py resolves it as a sibling of the frozen daemon).
@@ -42,7 +43,8 @@ a = Analysis(
     excludes=[
         # Heavy ML stack (torch/mlx/numba/scipy/…). No coffer source imports
         # any of it: nothing local decodes audio or runs a model — voice is
-        # transcribed through the user's own connection (spec channels FR-019).
+        # transcribed through the user's own connection (spec channels
+        # "Transcribe inbound voice only when the user opted in").
         # The exclude stays as a guard — a transitive pull would inflate every
         # binary from ~95 MB to ~260 MB, and torch is fragile under PyInstaller.
         "torch",

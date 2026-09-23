@@ -14,6 +14,8 @@ import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
+import { acceptance } from "@/test/acceptance";
+
 import { SyncPage } from "./SyncPage";
 
 vi.mock("./SyncRunsTab", () => ({ SyncRunsTab: () => <div>runs tab</div> }));
@@ -73,5 +75,20 @@ describe("SyncPage", () => {
       expect(screen.getByText("runs tab")).toBeInTheDocument();
       view.unmount();
     }
+  });
+  acceptance("vault-sync", "the Sync page opens on Runs beside Setup and nothing else", () => {
+    const view = renderAt();
+    const tabs = screen.getAllByRole("tab");
+    // Exactly two tabs — no Status tab beside them.
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Runs", "Setup"]);
+    expect(screen.getByRole("tab", { name: "Runs" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("runs tab")).toBeInTheDocument();
+    view.unmount();
+
+    // A link to the retired Status tab lands on Runs.
+    renderAt("/sync?tab=status");
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    expect(screen.getByRole("tab", { name: "Runs" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("runs tab")).toBeInTheDocument();
   });
 });

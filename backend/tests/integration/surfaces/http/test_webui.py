@@ -1,4 +1,7 @@
-"""The daemon serving the built web UI (spec daemon FR-016/FR-017).
+"""The daemon serving the built web UI.
+
+See spec daemon "Serve the built web UI from the daemon's own origin" and "Hand the
+browser its token in the served page".
 
 Two load-bearing properties. Mounting a SPA at ``/`` must not swallow the API.
 And every route that ends at ``index.html`` must carry the daemon's live token,
@@ -156,7 +159,8 @@ def test_daemon_surfaces_404_rather_than_returning_the_spa(
 
 
 # ---------------------------------------------------------------------------
-# The token the served document carries (spec daemon FR-017)
+# The token the served document carries (spec daemon "Hand the browser its token in
+# the served page")
 # ---------------------------------------------------------------------------
 
 

@@ -108,7 +108,8 @@
     "runs": "Runs",
     "workflows": "Workflows",
     "modelProviders": "Model providers",
-    "sync": "Sync"
+    "sync": "Sync",
+    "needsAttention": "Needs your attention"
   },
   "resources": {
     "title": "MCP servers",
@@ -348,6 +349,7 @@
       "sync_rolled_back": "Rolled a converge round back",
       "sync_run": "Ran a converge round",
       "token_rotated": "Access token rotated",
+      "daemon_residency_updated": "Daemon residency changed",
       "knowledge_curated": "Derived the {{resource}} documents from its sources",
       "workflow_run_started": "Started workflow run {{resource}}",
       "workflow_run_finished": "Workflow run {{resource}} finished",
@@ -417,6 +419,17 @@
       "preferredEditorCustomCommand": "Custom editor command",
       "preferredEditorCustomPlaceholder": "e.g. zed or /Applications/Zed.app"
     },
+    "daemon": {
+      "title": "Coffer's daemon",
+      "autostart": "Start at login",
+      "autostartHelp": "Keep the daemon running whether or not Coffer is open, so an agent's first call of the day does not wait for it to start. It is restarted if it crashes.",
+      "autostartUnsupported": "Only available on macOS.",
+      "idle": "Stand down after",
+      "idleHelp": "How long the daemon keeps running with nothing using it. Whatever next needs it starts it again. Takes effect at the next daemon start.",
+      "idleHours_one": "{{count}} hour",
+      "idleHours_other": "{{count}} hours",
+      "idleNever": "Never"
+    },
     "retention": {
       "title": "Data retention",
       "keepForever": "Keep forever",
@@ -461,10 +474,7 @@
       "title": "About Coffer",
       "copyDiagnostics": "Copy diagnostics",
       "fields": {
-        "name": "Name",
         "version": "Version",
-        "port": "Daemon port",
-        "startedAt": "Daemon started",
         "license": "License",
         "source": "Source"
       }
@@ -611,14 +621,14 @@
         "unknownMachine": "Unknown machine ({{id}})",
         "self": "Curation runs here. The other machines sharing this vault leave the derived documents to this one.",
         "other": "Curation runs on {{machine}}. This machine reads what that one derives and never rewrites it.",
-        "unowned": "No machine has been named, so curation runs wherever this vault is opened. That is right for a vault on one machine; on two, both fold the same sources into their own documents and the vault ends up holding the same knowledge twice.",
+        "unowned": "No machine has been named, so curation runs wherever this vault is opened. That is right for a vault on one machine; on two, both fold the same material into their own documents and the vault ends up holding the same knowledge twice.",
         "fault": "Curation is assigned to {{id}}, which no machine in the registry claims. It is running on no machine at all — the switch above still reads on, and nothing else in Coffer reports this. Take it over here to start it again.",
         "takeOver": "Run curation on this machine",
         "takeOverHint": "Names this machine as the owner. Whichever machine held it stops curating after the next sync round brings the change over; this one starts at its next pass.",
         "noMachineId": "This machine has no id yet, so it cannot be named as the owner.",
         "clear": "Clear owner",
         "clearTitle": "Let every machine curate?",
-        "clearBody": "With no owner, every machine sharing this vault derives documents from the same sources. On a vault with one machine that changes nothing; on more, expect the same knowledge to be written twice under two names.",
+        "clearBody": "With no owner, every machine sharing this vault merges the same material into documents. On a vault with one machine that changes nothing; on more, expect the same knowledge to be written twice under two names.",
         "claimedToast": "Curation now runs on this machine",
         "clearedToast": "Curation is no longer tied to one machine"
       },
@@ -632,9 +642,9 @@
           "writes": "The model turns the entries read from your agents into Coffer's own notes and rewrites the index. Deleting the tree and re-running reproduces an equivalent set."
         },
         "curate": {
-          "name": "Derive documents from sources",
-          "writes": "Coffer's model reads the sources you write and derives the documents your agents read. It never changes a source.",
-          "caution": "Switch this off and nothing is ever derived: your sources stay as they are, and the documents agents read stay empty."
+          "name": "Merge new knowledge into documents",
+          "writes": "Coffer's model merges new material — uploads and what agents write down — into a collection's documents, and carries a document you edited through to the others.",
+          "caution": "Switch this off and new material waits unmerged until you run a pass by hand, and edits are not carried through."
         }
       }
     }
@@ -649,7 +659,6 @@
       "outOfDateBody": "This app reused an older background service left running from a previous version. Restart the daemon so the app and daemon run the same version.",
       "restart": "Restart daemon",
       "restarting": "Restarting…",
-      "reconnectFailed": "The daemon restarted, but the app could not reconnect to it: {{message}}. Quit and reopen Coffer.",
       "webRestartHint": "The browser can't restart it — run this in your terminal:"
     }
   },
@@ -661,6 +670,7 @@
     "cta": "Back to home"
   },
   "errors": {
+    "AGENT_CONFIG_DIR_MISSING": "This agent's config directory doesn't exist on this machine",
     "AGENT_CONFIG_DIR_REGISTERED": "An agent for this config directory is already registered.",
     "AGENT_CONFIG_PARSE_ERROR": "The agent's config file couldn't be parsed",
     "AGENT_CONFIG_REJECTED": "The agent configuration was rejected",
@@ -691,7 +701,7 @@
     "INGEST_REJECTED": "The document was rejected during ingestion",
     "INGEST_REJECTED_scanned_pdf": "This PDF appears to be scanned or image-only — no text could be extracted. Run OCR (or convert it to a text-based PDF) and re-upload.",
     "INGEST_REJECTED_unsupported_type": "This file type isn't supported. Convert it to PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), HTML, EPUB, CSV, or a text/Markdown file and re-upload. Legacy .doc/.ppt: save as .docx/.pptx first.",
-    "INTERNAL_ERROR": "An unexpected error occurred",
+    "INTERNAL_ERROR": "Coffer hit an internal error. The details are in its daemon log: Activity → Daemon.",
     "INVALID_PREFIX": "Invalid prefix",
     "KNOWLEDGE_COLLECTION_EXISTS": "A knowledge collection with that name already exists",
     "KNOWLEDGE_COLLECTION_NOT_FOUND": "Knowledge collection not found",
@@ -720,6 +730,7 @@
     "PLUGIN_UNINSTALL_UNSUPPORTED": "This plugin can't be uninstalled",
     "PRIVILEGED_PATH": "That path is privileged and can't be used here",
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": "Supply exactly one of a saved credential or an inline key",
+    "PROVIDER_INTERNAL_ONLY": "This connection uses the ollama protocol, which only Coffer's internal engine uses — it can't be switched on for an agent",
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "This connection is switched on, so its wire format can't change — put its agents back on their built-in login first, then edit the wire, then switch it on again",
     "RESOURCE_ALREADY_EXISTS": "A resource with that name already exists",
     "RESOURCE_NOT_FOUND": "Resource not found",
@@ -1057,7 +1068,7 @@
   },
   "knowledge": {
     "title": "Knowledge",
-    "subtitle": "Two folders per collection: the sources you and your agents write, and the topic documents Coffer curates from them. Agents read the topics with their own tools; only the agents you allow are told a collection exists.",
+    "subtitle": "Each collection is one folder of Markdown documents that you and Coffer write together. New material is merged into them by curation; agents read them with their own tools, and only the collections you enable are named to them.",
     "add": "New collection",
     "loadFailed": "Failed to load collections",
     "searchPlaceholder": "Search collections…",
@@ -1065,53 +1076,44 @@
     "cols": {
       "name": "Name",
       "description": "Description",
-      "sources": "Sources",
-      "topics": "Topics"
+      "documents": "Documents",
+      "pending": "Pending"
     },
     "detail": {
       "noMatches": "No matches.",
       "filterPlaceholder": "Filter by name…",
       "emptyFolder": "Nothing here yet",
       "selectAFile": "Select a file to read it",
-      "deleteFile": "Delete file",
-      "deleteFileTitle": "Delete this source?",
-      "deleteFileConfirm": "Delete “{{path}}” from disk? The source is the only copy — this cannot be undone.",
+      "deleteFile": "Delete document",
+      "deleteFileTitle": "Delete this document?",
+      "deleteFileConfirm": "Delete “{{path}}” from disk? The document is the only copy — this cannot be undone.",
       "curate": "Curate",
-      "curateHint": "Fold the next pending source into this collection's topic documents.",
+      "curateHint": "Merge the next pending item into this collection's documents.",
       "curateRunning": "A pass is already running",
       "curateStatus": {
         "ok": "Curation pass finished.",
-        "no_model": "No internal model is configured, so nothing was curated.",
-        "up_to_date": "Every source is already in the topics.",
-        "too_large": "That source is too large for one pass to take in.",
-        "failed": "The curation pass didn't finish. Nothing was marked as curated."
+        "no_model": "No internal model is configured, so nothing was merged — pending material became documents as it was ({{count}}).",
+        "up_to_date": "Nothing is waiting to be merged.",
+        "too_large": "That item is too large for one pass to take in.",
+        "failed": "The curation pass didn't finish. Nothing was lost — it will be tried again."
       },
-      "curatedAt": "In the topics since {{when}}",
-      "notCuratedYet": "Not in the topics yet",
-      "lanes": {
-        "sources": {
-          "tab": "Sources",
-          "treeLabel": "Sources in this collection",
-          "empty": "No sources yet — upload a document, or drop a Markdown file into this folder."
-        },
-        "topics": {
-          "tab": "Topics",
-          "treeLabel": "Topics in this collection",
-          "empty": "No topics yet. Curation derives them from the sources you write.",
-          "writtenByCuration": "Coffer's curation writes these documents from your sources. Anything you change here is overwritten by the next pass — put a correction in as a new source instead."
-        }
-      }
+      "curatedAt": "Last curated {{when}}",
+      "notCuratedYet": "Not curated yet",
+      "treeLabel": "Documents in this collection",
+      "empty": "No documents yet — upload one, or drop a Markdown file into this folder.",
+      "pending_one": "{{count}} new item is being merged into the documents.",
+      "pending_other": "{{count}} new items are being merged into the documents."
     },
     "welcome": {
       "title": "One place for everything your agents know",
-      "body": "A collection is two folders: the sources you and your agents write, and the topic documents Coffer curates from them. Make one, then let agents read it.",
+      "body": "A collection is one folder of documents that you, your agents and Coffer build together. Make one, then let agents read it.",
       "featureEntries": {
-        "title": "What you write",
-        "body": "You and your agents add source material — notes through Coffer's tools, uploads, Markdown you drop in yourself."
+        "title": "What goes in",
+        "body": "Upload a document, let an agent write down what it learned, or edit a document yourself in your own editor."
       },
       "featureDocuments": {
-        "title": "What Coffer derives",
-        "body": "Coffer's own model folds those sources into topic documents, and those are what an agent reads."
+        "title": "What Coffer does",
+        "body": "Coffer's own model merges new material into the documents, so a fact lives in one place instead of piling up as notes."
       },
       "featureLocal": {
         "title": "Local-first",
@@ -1132,7 +1134,8 @@
     "upload": {
       "button": "Upload",
       "uploading": "Uploading…",
-      "success": "Uploaded “{{title}}”."
+      "pending": "Uploaded “{{title}}” — it will be merged into the documents shortly.",
+      "written": "Uploaded “{{title}}” — saved as {{path}}."
     }
   },
   "memory": {
@@ -1502,7 +1505,7 @@
     "history": {
       "description": "Every converge round this machine has run, newest first. The rounds that changed nothing are listed too — they are what shows the vault was still converging.",
       "searchPlaceholder": "Search rounds…",
-      "empty": "No round has run yet. Save a remote, then Converge now to start one.",
+      "empty": "No round has run yet. Save a remote, then join it to start converging.",
       "nothingFurther": "This round reported nothing further.",
       "ran": "Ran {{from}} → {{to}}",
       "countsShort": "+{{added}} ~{{modified}} −{{deleted}}",
@@ -1519,6 +1522,28 @@
         "applied": "Applied here",
         "published": "Published",
         "commit": "Commit"
+      }
+    },
+    "join": {
+      "title": "Join this remote?",
+      "case": {
+        "new": "This machine is new to this remote. It takes the union: it gains what the remote holds and keeps everything it has. Nothing is deleted.",
+        "returning": "This machine synced here before, so it resumes from the base it last converged on and takes what the remote changed since — deletions included.",
+        "ambiguous": "This machine synced here before, but the commit it reached is gone from the remote's history, so its base cannot be recovered. Keeping this vault's documents publishes them as additions, which may bring back what other machines deleted. To take the remote's state instead, run 'coffer sync rebuild'."
+      },
+      "lastConverged": "Last converged here",
+      "never": "never",
+      "remoteChanged": "Documents the remote changed since",
+      "vaultDocuments": "Documents this vault holds",
+      "confirm": "Join",
+      "keepLocal": "Keep this vault's documents",
+      "joining": "Joining…",
+      "action": "Join this remote",
+      "notJoined": "This machine has not joined this remote yet. Until it does, rounds apply and publish nothing — join to see what joining would do first.",
+      "detected": {
+        "new": "Detected: this machine would join as a new machine and take the union.",
+        "returning": "Detected: this machine has synced here before and would resume from the base it last converged on.",
+        "ambiguous": "Detected: this machine synced here before, but its base is gone from the remote's history — joining needs your choice."
       }
     },
     "key": {
@@ -1610,7 +1635,6 @@
       "description": "This puts the vault back to the state it was in immediately before the round that finished {{when}} applied anything. The undo is an ordinary local change: the next round publishes it to the remote, so the other machines follow.",
       "willUndo": "What this round applied here — the undo reverses each of these",
       "morePaths": "…and {{count}} more",
-      "nothingApplied": "This round applied nothing to this vault, so undoing it changes nothing here.",
       "confirm": "Undo round",
       "undoing": "Undoing…",
       "done": "Round undone (+{{added}} ~{{modified}} −{{deleted}} reversed)."
@@ -1621,9 +1645,11 @@
         "no_change": "nothing changed",
         "conflict": "stopped on a conflict",
         "awaiting_confirmation": "held, waiting for you",
+        "awaiting_confirmation_past": "Paused",
         "push_failed": "applied here, push failed",
         "failed": "failed",
-        "disabled": "turned off"
+        "disabled": "turned off",
+        "awaiting_join": "waiting to join"
       },
       "join": {
         "new": "Joined as a new machine — everything the remote held was added, and everything this vault held was kept.",
@@ -1633,6 +1659,9 @@
       "agentResolvedHint": "An internal model resolved the conflict on these paths in the working tree. Worth reading if they are your own notes.",
       "failures": "Could not be applied here",
       "failure": "{{path}} — {{reason}}",
+      "notApplicable": "Not applicable on this machine",
+      "notApplicableHint": "These can never apply here — an agent whose config directory does not exist on this machine. They are kept in the shared tree, not retried, and not errors.",
+      "awaitingJoin": "This machine has not joined this remote yet, so nothing was applied or published. Use “Join this remote” on the Setup tab to see what joining would do, and join.",
       "lockedRefs": "Credentials this machine cannot decrypt",
       "lockedRefsHint": "This vault holds their ciphertext but not the key that opens it. Import the master key from the machine that has it, below.",
       "applied": "Applied here",

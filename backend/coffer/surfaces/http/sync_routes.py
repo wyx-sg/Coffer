@@ -22,12 +22,15 @@ nothing to redact.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
 
+from coffer.application.sync.joining import JoinPreview
 from coffer.application.sync.machines import MachineRegistry, MachineView
 from coffer.application.sync.service import ConvergeService
 from coffer.domain.sync.backup import BackupRemote
-from coffer.domain.sync.convergence import ConvergeRun, RunRecord
+from coffer.domain.sync.convergence import ConvergeRun, JoinKind, RunRecord
 from coffer.domain.sync.diff import DiffSummary
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.sync_schemas import (
@@ -36,6 +39,7 @@ from coffer.surfaces.http.sync_schemas import (
     DiffCountsOut,
     DocChangeOut,
     FailureOut,
+    JoinPreviewOut,
     KeyFingerprintOut,
     KeyImportOut,
     KeyMaterialIn,
@@ -127,6 +131,7 @@ def _round_out(run: ConvergeRun) -> RoundOut:
         conflicts=list(run.conflicts),
         agent_resolved=list(run.agent_resolved),
         failures=[FailureOut(path=p, reason=r) for p, r in run.failures],
+        not_applicable=list(run.not_applicable),
         locked_refs=list(run.locked_refs),
         pending=PendingConfirmationOut(
             direction=pending.direction.value,
@@ -136,6 +141,7 @@ def _round_out(run: ConvergeRun) -> RoundOut:
         )
         if pending is not None
         else None,
+        join_report=_preview_out(run.join_report) if run.join_report else None,
         error=run.error,
     )
 
@@ -179,17 +185,50 @@ async def run_round() -> RoundOut:
     return _round_out(await get_sync_service().run_once())
 
 
+def _preview_out(preview: JoinPreview) -> JoinPreviewOut:
+    case: Literal["new", "returning", "ambiguous"] | None = (
+        "ambiguous"
+        if preview.ambiguous
+        else (
+            "returning" if preview.kind is JoinKind.RETURNING else "new" if preview.kind else None
+        )
+    )
+    day = preview.last_converged_on
+    return JoinPreviewOut(
+        joining=preview.joining,
+        case=case,
+        base=preview.base,
+        last_converged_on=day.isoformat() if day else None,
+        remote_changed=preview.remote_changed,
+        vault_documents=preview.vault_documents,
+    )
+
+
+@router.get("/join", response_model=JoinPreviewOut)
+async def preview_join(
+    choice: str | None = Query(default=None, pattern="^keep-local$"),
+) -> JoinPreviewOut:
+    """State the join ``/adopt`` would make, applying nothing.
+
+    The surfaces call this first so the user sees the case, the day this
+    machine last converged and the counts before a single document moves.
+    """
+    return _preview_out(await get_sync_service().preview_join(choice=choice))
+
+
 @router.post("/adopt", response_model=RoundOut)
 async def adopt(body: AdoptIn | None = None) -> RoundOut:
     """Join the configured remote.
 
-    The same round as any other — joining is detected by the absence of a
-    pointer, not by this route, so configuring a remote on a machine that
-    forgot its pointer cannot route around the new-versus-returning
-    distinction.
+    The same round as any other, and the only one allowed to join: ``/run``
+    on a machine with no pointer reports ``awaiting_join``. Whether this is a
+    join, and of which kind, is still read from the pointer and the registry,
+    so configuring a remote on a machine that forgot its pointer cannot route
+    around the new-versus-returning distinction. The surfaces call
+    ``GET /join`` first and show its answer.
     """
     return _round_out(
-        await get_sync_service().run_once(join_choice=(body.choice if body else None))
+        await get_sync_service().run_once(join_choice=(body.choice if body else None), adopt=True)
     )
 
 
@@ -269,6 +308,8 @@ async def status() -> SyncStatusOut:
         last_run=_round_out(last) if last is not None else None,
         machine_id=registry.machine_id,
         machine_id_is_derived=registry.identity_is_derived,
+        joined=await svc.joined(),
+        not_applicable=await svc.not_applicable(),
     )
 
 

@@ -2,7 +2,7 @@
 // (spec workflow, FR-044/FR-045).
 //
 // Wire types are the workflow contract's generated schemas
-// (`specs/workflow/contracts/api.openapi.yaml` → `generated/workflow.ts`),
+// (`openspec/specs/workflow/contracts/api.openapi.yaml` → `generated/workflow.ts`),
 // aliased — never re-derived — under the names the hooks and pages import.
 // Transport is the shared `call` (agents/frontend.md §4).
 //

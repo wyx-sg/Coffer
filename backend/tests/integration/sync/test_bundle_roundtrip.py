@@ -26,7 +26,7 @@ import os
 import pathlib
 import time
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
@@ -171,6 +171,9 @@ async def _populate(machine: VaultMachine) -> None:
 # --- export ----------------------------------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="each shared state area reaches the working tree"
+)
 async def test_export_writes_every_area_and_counts_it(vault: VaultMachine) -> None:
     await _populate(vault)
 
@@ -215,6 +218,164 @@ async def test_export_writes_every_area_and_counts_it(vault: VaultMachine) -> No
     assert summary.failures == []
 
 
+def _claude_plugin_inventory(home: pathlib.Path) -> None:
+    """One installed Claude Code plugin under ``home/.claude``, as the CLI writes it."""
+    plugins = home / ".claude" / "plugins"
+    install = plugins / "cache" / "mk" / "here" / "1.0.0"
+    install.mkdir(parents=True)
+    (plugins / "installed_plugins.json").write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "plugins": {
+                    "here@mk": [{"scope": "user", "installPath": str(install), "version": "1.0.0"}]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (plugins / "known_marketplaces.json").write_text(
+        json.dumps({"mk": {"source": {"source": "github", "repo": "owner/mk"}}}), encoding="utf-8"
+    )
+    (home / ".claude" / "settings.json").write_text(
+        json.dumps({"enabledPlugins": {"here@mk": True}}), encoding="utf-8"
+    )
+
+
+#: Every shared state area the requirement names, by its directory under ``state/``.
+_SHARED_AREAS = {"settings", "mcp-preferences", "agent-plugins", "channel-peers"}
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="each shared state area reaches the working tree"
+)
+async def test_every_production_state_area_reaches_the_working_tree(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The areas the real daemon registers, each holding a non-default choice.
+
+    The harness above carries a stand-in area; this boots ``create_app`` so the
+    providers are the ones the composition root actually collected. An area
+    whose wiring stops registering its provider, or whose provider stops
+    exporting, leaves its ``state/<area>/`` directory empty and fails here.
+    """
+    from httpx import ASGITransport, AsyncClient
+
+    from coffer.application.channel.store_ports import ChannelPeer
+    from coffer.application.sync.exporter import SyncExporter
+    from coffer.infrastructure.channel.persistence import ChannelPeerRepo
+    from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceRepo
+    from coffer.infrastructure.persistence.engine import (
+        create_async_engine_with_pragmas,
+        session_maker,
+    )
+    from coffer.infrastructure.sync.bundle import Bundle
+    from coffer.surfaces.http.app import create_app
+    from coffer.surfaces.http.auth import set_active_token
+    from coffer.surfaces.http.dependencies import get_resource_service
+
+    home = tmp_path / "home"
+    home.mkdir()
+    db_url = f"sqlite+aiosqlite:///{tmp_path / 'c.db'}"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("COFFER_DB_URL", db_url)
+    monkeypatch.setenv("COFFER_PORT_RANGE_START", "61330")
+    monkeypatch.setenv("COFFER_PORT_RANGE_END", "61339")
+    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
+    shim = tmp_path / "coffer-mcp-shim"
+    shim.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(shim))
+    _claude_plugin_inventory(home)
+
+    app = create_app()
+    set_active_token("t")
+    engine = create_async_engine_with_pragmas(db_url)
+    try:
+        async with (
+            app.router.lifespan_context(app),
+            AsyncClient(
+                transport=ASGITransport(app),
+                base_url="http://127.0.0.1/api/v1",
+                headers={"X-Coffer-Token": "t"},
+            ) as api,
+        ):
+            providers = app.state.sync_contributions.state_providers
+            assert {p.area for p in providers} == _SHARED_AREAS
+
+            resources = get_resource_service()
+            sm = session_maker(engine)
+            # settings: an engine model is a choice a fresh machine does not have.
+            r = await api.put("/internal-engine-config", json={"model": "m"})
+            assert r.status_code == 200, r.text
+            # agent-plugins: an agent whose config dir holds a plugin.
+            r = await api.post("/agents", json={"type": "claude_code", "name": "cc"})
+            assert r.status_code == 201, r.text
+            agent_uid = r.json()["uid"]
+            # mcp-preferences: one capability switched off on one server.
+            server = await resources.register(
+                kind="mcp_server",
+                name="files",
+                config={"transport": {"type": "http", "url": "http://127.0.0.1:9/mcp"}},
+                actor="t",
+            )
+            seen = datetime.now(tz=UTC)
+            await MCPCapabilityPreferenceRepo(sm).insert(server.id, "tool", "x", False, seen, seen)
+            # channel-peers: a channel bound to no machine (so nothing starts)
+            # with one paired chat.
+            r = await api.post(
+                "/credentials", json={"ref": "channel/tg/bot-token", "value": "123:abc"}
+            )
+            assert r.status_code == 204, r.text
+            channel = await resources.register(
+                kind="channel",
+                name="tg",
+                config={
+                    "channel_type": "telegram",
+                    "bot_token_ref": "channel/tg/bot-token",
+                    "default_agent": agent_uid,
+                },
+                actor="t",
+            )
+            await ChannelPeerRepo(sm).upsert(
+                ChannelPeer(
+                    resource_id=channel.id, chat_id="c1", display_name="Owner", paired_at=seen
+                )
+            )
+
+            worktree = tmp_path / "worktree"
+            worktree.mkdir()
+            exporter = SyncExporter(resources, _NoCredentials(), providers, home=str(home))
+            summary = await exporter.export(Bundle(worktree, trees=[]), with_credentials=False)
+    finally:
+        await engine.dispose()
+        set_active_token(None)
+
+    assert summary.failures == []
+    counts = _areas(summary)
+    for area in _SHARED_AREAS:
+        written = sorted(p for p in (worktree / "state" / area).rglob("*") if p.is_file())
+        assert written, f"state/{area}/ is empty"
+        assert counts[f"state/{area}"] == len(written) == 1, area
+    assert _doc(worktree / "state" / "settings" / "internal-engine.yaml")["model"] == "m"
+    assert _doc(worktree / "state" / "mcp-preferences" / f"{server.uid}.yaml")["disabled"] == [
+        {"type": "tool", "key": "x"}
+    ]
+    plugins = _doc(next((worktree / "state" / "agent-plugins").rglob("*.yaml")))
+    assert [p["id"] for p in plugins["plugins"]] == ["here@mk"]
+    peers = _doc(next((worktree / "state" / "channel-peers").rglob("*.yaml")))
+    assert (peers["channel_uid"], peers["chat_id"]) == (channel.uid, "c1")
+
+
+class _NoCredentials:
+    """The export is asked for no credentials, so the port is never read."""
+
+    def list_refs(self) -> list[str]:
+        raise AssertionError("credentials were not requested")
+
+    def read_ciphertext(self, ref: str) -> bytes | None:
+        raise AssertionError("credentials were not requested")
+
+
 async def test_export_leaves_reach_behind(vault: VaultMachine) -> None:
     """The document is the resource, not the user's answer about it.
 
@@ -238,6 +399,9 @@ async def test_export_leaves_reach_behind(vault: VaultMachine) -> None:
     assert "scope" not in raw
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a channel document names the machine that runs it"
+)
 async def test_export_writes_a_channel_document_like_any_other(vault: VaultMachine) -> None:
     """A channel is exported now, and counted as exported.
 
@@ -264,13 +428,15 @@ async def test_export_writes_a_channel_document_like_any_other(vault: VaultMachi
 async def test_export_withholds_a_kind_whose_rows_are_derived_on_each_machine(
     vault: VaultMachine,
 ) -> None:
-    """A ``memory`` partition row does not travel (spec memory FR-016).
+    """A ``memory`` partition row does not travel (spec memory "Keep the memory tree
+    derived and local").
 
     The tree under ``~/.coffer/memory/`` was already left behind — it is not a
-    mirrored tree — but the partition's Resource ROW was exported like any
-    other, which produces on the second machine exactly the thing memory FR-016
-    forbids: a partition that appears there, naming a project root that machine
-    may not have, with no facts behind it because the facts stayed home.
+    mirrored tree — but the partition's Resource ROW was exported like any other,
+    which produces on the second machine exactly the thing memory "Keep the memory
+    tree derived and local" forbids: a partition that appears there, naming a
+    project root that machine may not have, with no facts behind it because the
+    facts stayed home.
 
     The rule is declared on the kind (``Kind.converges``), not listed in this
     module, so the exporter keeps one rule rather than a table of exceptions.
@@ -322,6 +488,9 @@ async def test_export_removes_a_derived_document_an_older_build_published(
     assert (root / await vault.doc_path("mcp_server", "files")).is_file()
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an unchanged vault serializes to an identical tree"
+)
 async def test_a_second_export_of_an_unchanged_vault_is_identical_and_rewrites_nothing(
     vault: VaultMachine,
 ) -> None:
@@ -335,7 +504,7 @@ async def test_a_second_export_of_an_unchanged_vault_is_identical_and_rewrites_n
 
     await vault.exporter.export(vault.bundle, with_credentials=True)
 
-    # Byte-identical (spec vault-sync "Determinism and path portability") — the
+    # Byte-identical (spec vault-sync "Serialize deterministically") — the
     # manifest included, which is why it can be rewritten harmlessly.
     assert _bytes(root) == before_bytes
     # And not one document was touched: an idle vault stages nothing, so a
@@ -343,6 +512,9 @@ async def test_a_second_export_of_an_unchanged_vault_is_identical_and_rewrites_n
     assert _mtimes(root) == before_mtimes
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a locally deleted resource removes exactly its document"
+)
 async def test_a_locally_deleted_resource_removes_exactly_its_document(
     vault: VaultMachine,
 ) -> None:
@@ -467,6 +639,9 @@ async def test_home_paths_leave_the_vault_as_a_portable_token(vault: VaultMachin
     assert home not in document.read_text(encoding="utf-8")
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a round publishes this machine's descriptor and no other"
+)
 async def test_a_machine_publishes_its_own_descriptor_and_no_other(vault: VaultMachine) -> None:
     await _populate(vault)
     await vault.register("agent", "writer", {"value": "writer"})
@@ -514,6 +689,9 @@ async def test_a_machine_publishes_its_own_descriptor_and_no_other(vault: VaultM
 # --- apply: knowledge/ and skills/ -----------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an arriving file is written and a deleted one removed"
+)
 async def test_tree_applier_copies_files_in_and_prunes_emptied_collections(
     vault: VaultMachine,
 ) -> None:
@@ -538,6 +716,9 @@ async def test_tree_applier_copies_files_in_and_prunes_emptied_collections(
     assert vault.knowledge_root.is_dir()
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an arriving file is written and a deleted one removed"
+)
 async def test_tree_applier_also_carries_the_skill_store(vault: VaultMachine) -> None:
     applier = TreeApplier("skills/", worktree=vault.worktree, live_root=vault.skills_root)
     _stage(vault.worktree, "skills/demo/SKILL.md", "# demo\n")
@@ -584,6 +765,9 @@ async def test_tree_applier_refuses_a_path_that_is_not_a_file(vault: VaultMachin
 # --- apply: resources/ ------------------------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an arriving resource document is upserted through the import gate"
+)
 async def test_resource_applier_registers_then_updates_a_row(vault: VaultMachine) -> None:
     applier = ResourceApplier(
         vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
@@ -773,6 +957,9 @@ async def test_bundle_reads_a_whole_document_and_refuses_a_field_it_does_not_kno
         vault.bundle.read_resource_docs()
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an arriving resource document is upserted through the import gate"
+)
 async def test_resource_applier_runs_the_gate_before_it_writes_anything(
     vault: VaultMachine,
 ) -> None:
@@ -883,7 +1070,8 @@ async def test_a_channel_deletion_in_the_tree_deletes_the_channel(
 async def test_resource_applier_ignores_a_document_of_a_kind_that_does_not_converge(
     vault: VaultMachine,
 ) -> None:
-    """The import side of spec memory FR-016, and it is not redundant.
+    """The import side of spec memory "Keep the memory tree derived and local", and
+    it is not redundant.
 
     Withholding on export only binds machines running this build. A machine
     still on the older one keeps publishing ``memory`` documents, and this end
@@ -976,6 +1164,9 @@ async def test_resource_applier_removes_a_row_and_agrees_when_it_is_already_gone
 # --- apply: state/ ----------------------------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a state document is applied by the provider that claims its area"
+)
 async def test_state_applier_routes_to_the_provider_that_claims_the_area(
     vault: VaultMachine,
 ) -> None:
@@ -995,7 +1186,7 @@ async def test_state_applier_routes_to_the_provider_that_claims_the_area(
 
 
 async def test_state_docs_carry_home_as_a_sentinel_both_ways(vault: VaultMachine) -> None:
-    """spec vault-sync ``## Determinism and path portability``: the ``${HOME}``
+    """spec vault-sync "Store home paths against a sentinel": the ``${HOME}``
     rule is one rule for every serialized document, state areas included."""
     home = str(vault.home)
     vault.state_provider.docs["peer-1"] = {"log": f"{home}/logs/peer-1.log", "paired": True}
@@ -1014,6 +1205,9 @@ async def test_state_docs_carry_home_as_a_sentinel_both_ways(vault: VaultMachine
     }
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a state document is applied by the provider that claims its area"
+)
 async def test_state_applier_skips_an_area_no_module_claims(vault: VaultMachine) -> None:
     applier = StateApplier([vault.state_provider], worktree=vault.worktree)
     vault.state_provider.docs["peer-1"] = {"paired": True}
@@ -1031,6 +1225,10 @@ async def test_state_applier_skips_an_area_no_module_claims(vault: VaultMachine)
 # --- apply: credentials/ ----------------------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="a credential blob is written as ciphertext and its deletion deletes the credential",
+)
 async def test_credential_applier_writes_ciphertext_and_refuses_a_staler_blob(
     vault: VaultMachine,
 ) -> None:

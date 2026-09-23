@@ -167,6 +167,36 @@ describe("SyncMachinesTab", () => {
     expect(screen.queryByTestId("machine-id-not-derived")).not.toBeInTheDocument();
   });
 
+  acceptance("vault-sync", "a machine with no host identifier falls back and says so", () => {
+    // The machine surface's half: an id from the fallback file is marked as
+    // not derived, and the table warns that deleting ~/.coffer makes a new machine.
+    seed([machine()], false);
+    render(<SyncMachinesTab />);
+    const note = screen.getByTestId("machine-id-not-derived");
+    expect(note).toHaveTextContent("~/.coffer");
+    expect(note).toHaveTextContent(/new machine/i);
+  });
+
+  acceptance("vault-sync", "a peer holding another master key is flagged", () => {
+    // `key_matches` is the daemon's comparison of the peer's published
+    // fingerprint with this machine's; a mismatch is stated, not left to the user.
+    seed([
+      machine(),
+      machine({ machine_id: OTHER, name: "desktop", is_self: false, key_matches: false }),
+    ]);
+    render(<SyncMachinesTab />);
+    expect(rowFor(OTHER).getByText(/cannot be decrypted here/i)).toBeInTheDocument();
+    expect(rowFor(LOCAL).queryByText(/cannot be decrypted here/i)).not.toBeInTheDocument();
+  });
+
+  acceptance("vault-sync", "an idle machine restamps its descriptor at most once a day", () => {
+    // The UI's half: the value is labelled as the DAY the machine last converged.
+    seed([machine({ last_converged_on: "2026-09-12" })]);
+    render(<SyncMachinesTab />);
+    expect(rowFor(LOCAL).getByText("2026-09-12")).toBeInTheDocument();
+    expect(screen.getByText(/a day, not a moment/i)).toBeInTheDocument();
+  });
+
   test("an empty registry explains itself rather than showing an empty table", () => {
     seed([]);
     render(<SyncMachinesTab />);

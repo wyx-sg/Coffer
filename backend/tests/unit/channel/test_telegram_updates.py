@@ -1,5 +1,6 @@
 """Non-message Telegram updates: what the poll subscribes to, and what a
-membership change means (FR-043)."""
+membership change means (spec channels "Track the bot's own standing in a
+group")."""
 
 from __future__ import annotations
 
@@ -45,7 +46,7 @@ def test_updates_with_no_consequence_are_not_subscribed() -> None:
 
 @pytest.mark.parametrize("status", ["creator", "administrator", "member"])
 def test_a_bot_that_is_still_in_the_chat_is_not_an_event(status: str) -> None:
-    # Being added changes nothing until somebody pairs (FR-005), so arrival is
+    # Being added changes nothing until somebody pairs, so arrival is
     # deliberately not a lifecycle event.
     assert lifecycle_from_update(_update(status), channel="tg", bot_id=BOT_ID) is None
 

@@ -3,7 +3,7 @@
 > **Historical record.** This note designed a machine × agent scope **matrix**
 > on top of continuous multi-machine sync. Multi-machine sync is back — as a
 > converge round against a git rendezvous the user owns
-> ([Vault Sync](../../specs/vault-sync/spec.md)) — and the machine axis briefly
+> ([Vault Sync](../../openspec/specs/vault-sync/spec.md)) — and the machine axis briefly
 > returned with it, as two independent allow-lists rather than the matrix
 > designed here. It was **withdrawn again on 2026-09-14**, and this time the
 > question this note was investigating is settled rather than deferred: a
@@ -164,13 +164,13 @@ instead of misreading docs.
 
 This feature does not weaken local-first — multi-device sync over a
 user-owned medium is a core local-first ideal (every machine holds the full
-vault; the medium is transport + history only; constitution 0.3.0 conditions
-hold). What changes is wording: "local = this one machine" matures into
+vault; the medium is transport + history only; the Local-First principle's
+conditions hold). What changes is wording: "local = this one machine" matures into
 "local = the user's machines, one vault, each machine complete".
 
 | Document                             | Change                                                                                                            |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `constitution.md`                    | Editorial 0.3.x amendment: Principle I "the user's machine" → "the user's machines". No principle change.          |
+| `principles.md`                      | Editorial amendment: Principle I "the user's machine" → "the user's machines". No principle change.                |
 | `architecture.md`                    | Machine identity promoted to a framework core concept; `scope` facility documented alongside the kinds table.       |
 | `AGENTS.md` / `README.md`            | Positioning line gains "one vault across the user's machines".                                                      |
 | New ADR (amends the machine-identity ADR) | Scope matrix semantics, shim identity, follow-policy intersection, `runs_on` migration.                       |

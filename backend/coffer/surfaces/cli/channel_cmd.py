@@ -129,7 +129,8 @@ def register(
             raise typer.Exit(int(ExitCode.INVALID_INPUT))
         required = [("--app-id", app_id), ("--app-secret-ref", app_secret_ref)]
         if delivery == "webhook":
-            # Only webhook delivery has anything signed to verify (spec channels/seatalk FR-004).
+            # Only webhook delivery has anything signed to verify (spec
+            # channels/seatalk "Require a signing secret on webhook delivery").
             required.append(("--signing-secret-ref", signing_secret_ref))
         elif signing_secret_ref is not None:
             typer.echo(
@@ -180,7 +181,8 @@ def pair(
     typer.echo(f"pairing code: {body['code']}")
     typer.echo(f"expires at:   {body['expires_at']}")
     if body.get("pair_url"):
-        # FR-051: opening the link pairs in one tap; the code still works typed.
+        # "Pair by a one-tap start link": opening the link pairs in one tap; the
+        # code still works typed.
         typer.echo(f"pair link:    {body['pair_url']}")
     typer.echo("Send this code to the bot from the account that should own the channel.")
 
@@ -218,16 +220,19 @@ def status(
     if callback:
         _echo_inbound(callback)
     for diagnostic in body.get("diagnostics") or []:
-        # spec channels/telegram FR-004: a setting that reads correctly here and does nothing in the
-        # chat is worth interrupting for.
+        # spec channels/telegram "Report privacy mode that defeats the group
+        # configuration": a setting that reads correctly here and does nothing in
+        # the chat is worth interrupting for.
         typer.echo(f"warning:  {diagnostic['message']}")
 
 
 def _echo_inbound(callback: dict[str, object]) -> None:
-    """The inbound-transport lines of ``coffer channel status`` (spec channels/seatalk FR-004).
+    """The inbound-transport lines of ``coffer channel status``.
+
+    Spec channels/seatalk "Keep status truthful per transport".
 
     A SeaTalk channel receives events one of two ways, and each way's facts are
-    the OTHER way's absent values. spec channels/seatalk FR-004 requires the absent ones to read as
+    the OTHER way's absent values. That requirement has the absent ones read as
     absent — this used to print ``callback: 127.0.0.1:0 (listener down)`` for a
     perfectly healthy websocket channel, because ``port=0`` /
     ``listener_running=False`` are what the service deliberately reports when

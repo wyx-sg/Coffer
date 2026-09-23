@@ -1,4 +1,4 @@
-"""Pydantic schemas matching the chat paths in specs/channels/contracts/api.openapi.yaml.
+"""Pydantic schemas matching the chat paths in openspec/specs/channels/contracts/api.openapi.yaml.
 
 Every request/response body the web Chat page's REST + SSE surface serves is
 modelled here. Field names, types, and nullability mirror the yaml exactly.
@@ -41,7 +41,8 @@ class ErrorOut(BaseModel):
 class ContentBlockOut(BaseModel):
     """Wire representation of a ContentBlock (text | tool_use | tool_result |
     attachment). ``filename``/``mime`` describe an ``attachment`` reference; the
-    local ``path`` is deliberately NOT surfaced (leak/security — FR-034)."""
+    local ``path`` is deliberately NOT surfaced (leak/security — spec chat
+    "Re-materialise attachments from persisted history")."""
 
     type: Literal["text", "tool_use", "tool_result", "attachment"]
     text: str | None = None

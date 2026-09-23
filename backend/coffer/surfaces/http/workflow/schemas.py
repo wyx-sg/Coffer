@@ -1,6 +1,6 @@
 """Wire models for ``/api/v1/workflow/*`` — hand-written against the contract.
 
-Every model here is named exactly as ``specs/workflow/contracts/api.openapi
+Every model here is named exactly as ``openspec/specs/workflow/contracts/api.openapi
 .yaml`` names it, field for field, because ``make verify-contract`` compares
 the generated schema against that document in both directions: a name that
 drifts is a component the contract declares and the app does not serve.

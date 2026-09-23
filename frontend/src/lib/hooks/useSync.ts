@@ -15,8 +15,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { translateApiError } from "@/lib/api/errors";
-import { syncApi, type ConvergeRound, type SyncRemoteInput } from "@/lib/api/sync";
+import { syncApi, type ConvergeRound, type JoinChoice, type SyncRemoteInput } from "@/lib/api/sync";
 import { useToast } from "@/components/ui/toast";
+import { roundToast } from "@/lib/syncRoundToast";
 import {
   agentsKey,
   knowledgeKey,
@@ -109,18 +110,43 @@ export function useRunConverge() {
     mutationFn: () => syncApi.run(),
     onSuccess: (round: ConvergeRound) => {
       invalidate();
-      const applied = round.applied ?? { added: 0, modified: 0, deleted: 0 };
-      const published = round.published ?? { added: 0, modified: 0, deleted: 0 };
-      toast.success(
-        t("sync.toast.roundDone", {
-          status: t(`sync.round.statusLabel.${round.status}`, { defaultValue: round.status }),
-          added: applied.added + published.added,
-          modified: applied.modified + published.modified,
-          deleted: applied.deleted + published.deleted,
-        }),
-      );
+      const { variant, message } = roundToast(t, round);
+      toast[variant](message);
     },
     onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/**
+ * Ask what joining would do, applying nothing (spec vault-sync "Report a join
+ * before applying it"). "Converge now" asks this first: a machine already
+ * converged here runs its round, a joining one is shown the case and the
+ * counts and joins only from the dialog.
+ */
+export function usePreviewJoin() {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: (choice?: JoinChoice) => syncApi.previewJoin(choice),
+    onError: (error) => toast.error(translateApiError(t, error)),
+  });
+}
+
+/**
+ * Join the remote, after its preview was shown. No `onError` toast: this is
+ * only reached from a ConfirmDialog, which renders the failure in place.
+ */
+export function useAdoptRemote() {
+  const invalidate = useRoundInvalidation();
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: (choice?: JoinChoice) => syncApi.adopt(choice),
+    onSuccess: (round: ConvergeRound) => {
+      invalidate();
+      const { variant, message } = roundToast(t, round);
+      toast[variant](message);
+    },
   });
 }
 

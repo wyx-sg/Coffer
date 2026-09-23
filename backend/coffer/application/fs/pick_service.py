@@ -1,4 +1,5 @@
-"""Native OS picker dialogs via the loopback daemon (spec daemon FR-020).
+"""Native OS picker dialogs via the loopback daemon (spec daemon "Open the host's native
+folder picker").
 
 A web browser cannot open an OS-native file/folder dialog that returns an
 absolute path. But the daemon is *always co-located with the client on the

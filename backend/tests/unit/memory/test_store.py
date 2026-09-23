@@ -1,4 +1,5 @@
-"""A partition's four files, and the one-writer-per-directory split (FR-026).
+"""A partition's four files, and the one-writer-per-directory split (see "Keep
+distil out of the raw directory").
 
 ``COFFER_MEMORY_ROOT`` is pinned to ``tmp_path`` by the suite-wide
 ``_isolated_memory_root`` fixture (``backend/tests/conftest.py``), so every
@@ -7,15 +8,15 @@ real ``~/.coffer/memory``.
 
 This file covers the three ``store.py`` owns — ``notes/``, ``RETIRED.md`` and
 ``MEMORY.md``. ``.raw/`` is a module of its own (``raw_store.py``) and is
-tested in ``test_raw_store.py``, which is the split that makes FR-026
-checkable by reading an import list: the one directory only aggregation may
-write is the one module only aggregation imports.
+tested in ``test_raw_store.py``, which is the split that makes "Keep distil out
+of the raw directory" checkable by reading an import list: the one directory
+only aggregation may write is the one module only aggregation imports.
 
 What this file is really about is that **``RETIRED.md`` round-trips
-losslessly** (FR-025). It is the next pass's exclusion list, so a record that
-comes back short is a note re-opened on every pass thereafter — including when
-a reason contains a horizontal rule, which PyYAML writes as an indented
-continuation.
+losslessly** (see "Record retirements so they stick"). It is the next pass's
+exclusion list, so a record that comes back short is a note re-opened on every
+pass thereafter — including when a reason contains a horizontal rule, which
+PyYAML writes as an indented continuation.
 """
 
 from __future__ import annotations
@@ -86,8 +87,9 @@ def test_reading_a_note_that_is_not_there_names_the_partition_and_slug() -> None
 
 
 def test_notes_are_listed_by_slug_not_by_timestamp() -> None:
-    """One definition of "newest" lives in the index renderer (FR-029); a
-    second ordering here is how the file and the delivery drifted apart."""
+    """One definition of "newest" lives in the index renderer (see "Write each
+    index line to stand on its own"); a second ordering here is how the file
+    and the delivery drifted apart."""
     store.write_note(_note("zebra"))
     store.write_note(_note("alpha"))
     assert [n.slug for n in store.list_notes(_PARTITION)] == ["alpha", "zebra"]
@@ -132,7 +134,7 @@ def test_the_retirement_record_round_trips_every_field() -> None:
 
 
 def test_a_reason_containing_a_horizontal_rule_round_trips() -> None:
-    """The exclusion list's own trap (FR-025).
+    """The exclusion list's own trap (see "Record retirements so they stick").
 
     PyYAML writes this reason as an indented continuation, so the ``---``
     inside it sits at column 4. A reader that ended the frontmatter at the

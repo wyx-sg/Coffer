@@ -3,8 +3,8 @@
 // ALL queries + mutations for the `knowledge` kind, so the page, the trees and
 // the viewer stay thin views (agents/frontend.md §3). The keys are
 // hierarchical under one `["knowledge"]` root, so a write can invalidate the
-// whole subtree with a prefix — each lane is fetched one directory per key and
-// a curation pass may rewrite any level of `topics/`.
+// whole subtree with a prefix — the tree is fetched one directory per key and a
+// curation pass may rewrite any level of it.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -49,7 +49,7 @@ export function useCreateCollection() {
   });
 }
 
-/** One level of ONE lane. Each expanded directory mounts its own query. */
+/** One level of a collection's tree. Each expanded directory mounts its own query. */
 export function useKnowledgeTree(path: string, enabled = true) {
   return useQuery({
     queryKey: knowledgeTreeKey(path),
@@ -67,14 +67,15 @@ export function useKnowledgeFile(path: string | null) {
 }
 
 /**
- * Run ONE curation pass over one collection. It rewrites `topics/` — writing
- * new documents, retiring ones whose content moved — and stamps the source it
- * consumed, so every cached level and body under `["knowledge"]` is
- * invalidated afterwards.
+ * Run ONE curation pass over one collection. It rewrites the collection's
+ * documents — writing new ones, retiring ones whose content moved — and drains
+ * the inbox item it merged (or, with no model, promotes the whole inbox), so
+ * every cached level, body and count under `["knowledge"]` is invalidated
+ * afterwards.
  *
  * Every status the pass reports is a 200, so the toast says which one it was
  * rather than treating `no_model` or `up_to_date` as a success that did
- * something (FR-038).
+ * something.
  *
  * The pass is long and the daemon refuses a second one over the same
  * collection, so this keeps the shared run list honest at both ends — same
@@ -87,10 +88,14 @@ export function useCurateCollection(collectionUid: string) {
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: (source?: string | null) => curateCollection(collectionUid, source),
+    mutationFn: (document?: string | null) => curateCollection(collectionUid, document),
     onSuccess: (result) => {
       void qc.invalidateQueries({ queryKey: knowledgeKey });
-      toast.success(t(`knowledge.detail.curateStatus.${result.status}`));
+      // `count` only means something to `no_model`, which reports how much of
+      // the inbox it promoted to documents as it stood.
+      toast.success(
+        t(`knowledge.detail.curateStatus.${result.status}`, { count: result.promoted.length }),
+      );
     },
     onError: (error) => {
       if (error instanceof ApiError && error.code === "UPKEEP_ALREADY_RUNNING") return;
@@ -101,8 +106,8 @@ export function useCurateCollection(collectionUid: string) {
 }
 
 /**
- * Delete ONE source from a collection. The daemon refuses a `topics/` path,
- * and the page only ever offers the button on a source (FR-027).
+ * Delete ONE document from a collection — any document, whoever wrote it
+ * (see "Let only a person delete a document").
  *
  * The deleted file's own cache entry is REMOVED rather than invalidated: a
  * viewer still mounted on it would otherwise refetch a path that is now a 404
@@ -126,11 +131,11 @@ export function useDeleteKnowledgeFile() {
 }
 
 /**
- * Convert one uploaded document into a source. TWO files land — the original
- * and the Markdown extracted from it — at any level under the collection's
- * `sources/`, and its ancestors' counts all change with them, so success
- * invalidates the whole `["knowledge"]` subtree rather than guessing which
- * single level to refresh.
+ * Convert one uploaded document into material for a collection. It either
+ * waits in the inbox (the collection's `pending_count` goes up) or becomes a
+ * document on the spot (a tree level and `document_count` change), so success
+ * invalidates the whole `["knowledge"]` subtree rather than guessing which of
+ * the two happened. Which one it was is the caller's toast to report.
  */
 export function useUploadKnowledgeFile() {
   const qc = useQueryClient();
@@ -138,9 +143,8 @@ export function useUploadKnowledgeFile() {
   const { toast } = useToast();
   return useMutation({
     // `collection` is the collection's NAME here, not its uid: an upload lands
-    // a file in a directory, and the directory is named after the collection.
-    mutationFn: (vars: { collection: string; folder?: string | null; file: File }) =>
-      uploadFile(vars),
+    // material in a directory, and the directory is named after the collection.
+    mutationFn: (vars: { collection: string; file: File }) => uploadFile(vars),
     onSuccess: () => void qc.invalidateQueries({ queryKey: knowledgeKey }),
     onError: (error) => toast.error(translateApiError(t, error)),
   });

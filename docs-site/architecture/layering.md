@@ -10,7 +10,7 @@ Without enforced layering, a codebase tends to develop circular imports, acciden
 
 ## The four layers
 
-The constitutional layering diagram is:
+The layering diagram fixed by Coffer's principles is:
 
 ```
 surfaces  →  application  →  domain
@@ -70,7 +70,7 @@ The two critical invariants, stated precisely:
 
 A third rule governs cross-kind dependencies within a layer: a kind-specific module (`domain/mcp/`, `application/mcp/`, etc.) may not import a different kind's module (`domain/other_kind/`). Cross-kind coupling at the layer level would mean one kind's correctness depends on another's implementation, breaking the clean-extension guarantee.
 
-The "extract cross-cutting modules only when a second feature needs them" rule (from the constitution) is a corollary: shared utilities that live at the layer root (like `domain/errors.py`) are only promoted there when more than one kind genuinely needs them. Premature extraction bloats the shared surface and makes the next kind's author cargo-cult patterns that may not apply.
+The "extract cross-cutting modules only when a second feature needs them" rule (from Coffer's principles) is a corollary: shared utilities that live at the layer root (like `domain/errors.py`) are only promoted there when more than one kind genuinely needs them. Premature extraction bloats the shared surface and makes the next kind's author cargo-cult patterns that may not apply.
 
 ## Enforcement
 
@@ -143,7 +143,7 @@ backend/coffer/
     │   ├── dependencies.py       # kind-agnostic getters; per-kind *_dependencies.py sit beside the routes
     │   ├── resource_routes.py
     │   ├── mcp/                  # MCP HTTP/SSE routes and session handling
-    │   ├── knowledge/            # collections, tree, file, grep, search, upload, tidy
+    │   ├── knowledge/            # collections, tree, file, material, upload, curate
     │   ├── memory/               # partitions, facts, files, sync, organise, context, delivery
     │   └── chat/                 # conversations, turns, agent providers
     ├── cli/
@@ -167,13 +167,13 @@ The layer-first decision considered and rejected the vertical-slice alternative 
 
 The rejection rests on three observations:
 
-1. **A fifth top-level concept.** Vertical slices introduce `kinds/` alongside the constitutional four layers. Every architecture document would need to explain both organisational axes simultaneously, and every contributor would face the "does this belong in the shared layer root or in `kinds/<x>/<layer>/`?" dual-decision on every cross-kind extraction.
+1. **A fifth top-level concept.** Vertical slices introduce `kinds/` alongside the four layers the principles fix. Every architecture document would need to explain both organisational axes simultaneously, and every contributor would face the "does this belong in the shared layer root or in `kinds/<x>/<layer>/`?" dual-decision on every cross-kind extraction.
 
 2. **Misapplied pattern.** Vertical slices fit large codebases where team isolation, independent deploy cadence, or microservice extraction is the goal. None of these apply to a single-user local-first application. The benefit (IDE discoverability) largely evaporates under search; the cost (layout duality) does not.
 
 3. **Small kinds pay no ceremony.** A simple future kind might be a single `domain/profile.py` file. In a layer-first layout that is exactly what it looks like. In a vertical-slice layout it becomes `kinds/profile/domain/profile.py` — four levels of directories for one file.
 
-The layer-first layout mirrors the constitutional layering diagram directly in the file system. Reading the architecture document and reading the directory tree produce the same mental picture.
+The layer-first layout mirrors the principles' layering diagram directly in the file system. Reading the architecture document and reading the directory tree produce the same mental picture.
 
 ### Composition root — no global registry
 

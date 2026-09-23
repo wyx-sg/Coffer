@@ -102,10 +102,10 @@ def assert_skill_dir_usable(path: pathlib.Path) -> None:
     candidates = (s, unresolved, _strip_macos_private(s), _strip_macos_private(unresolved))
     if any(_is_privileged(c, prefixes) for c in candidates):
         raise PrivilegedPath(s)
-    # Existence + writability. FR-007 requires the skill_dir itself to be an
-    # existing, writable directory — we do NOT silently accept a missing path
-    # even if its parent is writable, because skill loading would then fail
-    # later in obscure ways. The user must mkdir up front.
+    # Existence + writability. "Validate the config directory at registration" requires
+    # the skill_dir itself to be an existing, writable directory — we do NOT silently
+    # accept a missing path even if its parent is writable, because skill loading would
+    # then fail later in obscure ways. The user must mkdir up front.
     if not resolved.is_dir():
         if not resolved.exists():
             raise SkillDirNotWritable(s, "directory_missing")
@@ -138,10 +138,10 @@ class AgentService:
         # - on_config_dir_changed: re-deliver an agent's skills after its
         #   config dir moves, so the old links aren't orphaned and the new
         #   dir isn't left empty.
-        # - reconcile_skill_delivery: bring a newly registered agent's
-        #   delivered set in line with the delivery predicate (spec
-        #   skill-manager FR-012) — every enabled skill whose scope names this
-        #   agent.
+        # - reconcile_skill_delivery: bring a newly registered agent's delivered set in
+        # line with the delivery predicate (spec skill-manager "Deliver a skill only
+        # where it is enabled and in scope") — every enabled skill whose scope names
+        # this agent.
         self._on_config_dir_changed = on_config_dir_changed
         self._reconcile_skill_delivery = reconcile_skill_delivery
 
@@ -188,8 +188,8 @@ class AgentService:
             allow_lifecycle_kind=True,  # CODE-REG: config dir detected/validated above
         )
         # Deliver everything this agent is granted right now (spec skill-manager
-        # FR-012): every enabled skill whose scope names it. Per-skill failures
-        # are tolerated inside the hook.
+        # "Deliver a skill only where it is enabled and in scope"): every enabled skill
+        # whose scope names it. Per-skill failures are tolerated inside the hook.
         if self._reconcile_skill_delivery is not None:
             await self._reconcile_skill_delivery(registered.uid)
         return registered

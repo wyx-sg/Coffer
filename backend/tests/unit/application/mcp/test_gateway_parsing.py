@@ -10,8 +10,9 @@ _UID = "9f2c41a0b7d94e6a8c1f35b2d07ae914"
 
 
 def test_extract_agent_uid_reads_meta_key():
-    """MCP Gateway FR-013 (amended): the shim stamps its bound agent's UID into
-    ``params._meta["coffer/agent-uid"]`` at the initialize handshake."""
+    """MCP Gateway "Take the agent identity from the handshake": the shim
+    stamps its bound agent's UID into ``params._meta["coffer/agent-uid"]`` at
+    the initialize handshake."""
     assert _extract_agent_uid({"_meta": {"coffer/agent-uid": _UID}}) == _UID
 
 

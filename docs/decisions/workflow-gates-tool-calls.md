@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-17
 **Deciders**: Yuxing Wu
-**Spec**: [workflow](../../specs/workflow/spec.md)
+**Spec**: [workflow](../../openspec/specs/workflow/spec.md)
 **Amends**: [Remove the Tool-Approval System](./remove-tool-approval.md) — its removal stands for every conversation a person is driving; this adds a gate for the one case it named as re-introducible, and puts it somewhere else entirely
 
 ## Context

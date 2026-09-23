@@ -18,13 +18,42 @@ Seven kinds ship today:
 
 The framework is kind-agnostic: adding a new kind in the future requires no changes to the core resource machinery.
 
+### Working with any resource
+
+Each kind is **created** through its own command — `coffer mcp add`, `coffer skill import`, `coffer agent add`, … — because only the kind knows what a valid one looks like: a skill needs its master folder, an agent has to be found on disk, a channel needs its binding checked. That is why there is no `coffer resource create`. From the moment a resource exists, everything else goes through one kind-agnostic surface, addressed by kind and name:
+
+```bash
+coffer resource list                      # every kind; --kind agent for one, --json for scripts
+coffer resource show mcp_server filesystem
+coffer resource disable mcp_server filesystem
+coffer resource enable mcp_server filesystem
+coffer resource delete mcp_server filesystem   # asks first; --force skips the prompt
+```
+
+**Disabled** means registered, configured and not in play. A kind whose `enabled` flag has an on-disk consequence — a skill, say — reacts to the flip in the same operation, so what is on disk never disagrees with the list.
+
+**Deleting** runs in a fixed order: the kind's own cleanup runs first, while the resource can still be resolved, and a failure there stops the deletion rather than leaving half of it gone; then the row goes, with the rows the kind owns; then any credential no remaining resource references is released. The history stays — the audit log and the invocation log outlive what they describe (see [Activity](./activity)).
+
+**Reach** says which agents a resource applies to. It is one allow-list of agent names: no list means every agent, and an empty list means none, which is a deliberate way to park something.
+
+```bash
+coffer scope show mcp_server filesystem
+coffer scope set mcp_server filesystem --agents claude-code,codex
+coffer scope set mcp_server filesystem --no-agents   # dormant
+coffer scope clear mcp_server filesystem             # back to every agent
+```
+
+`mcp_server`, `skill`, `provider` and `channel` take a reach; `coffer scope show` reports whether a kind supports one, and a kind that does not refuses any write other than `scope clear`. Each kind enforces the value at its own door — an out-of-reach MCP server is absent from that agent's tool list, an out-of-reach skill is not delivered to it. Reach is **this machine's own**: [Sync](./sync) neither carries it away nor writes over it.
+
 ## Gateway (daemon)
 
 The **gateway** is the long-lived FastAPI daemon that runs on `127.0.0.1:8000`. It owns all control-plane state (stored in SQLite at `~/.coffer/coffer.db`), aggregates upstream MCP servers, and re-exposes their tools through a unified `/mcp` HTTP/SSE endpoint.
 
 The port is **fixed**, not scanned: with nothing configured the daemon binds exactly 8000 and refuses to start if it cannot, telling you which process holds the port. That is what makes a bookmark to the web UI keep working — and it is why your UI preferences, which the browser keys by origin, do not silently reset. Pin a different port with `coffer daemon port set <n>`; it is stored in `~/.coffer/daemon-config.json`, the one setting that has to live in a file rather than the database, because the port is chosen before the database is even opened.
 
-Because the daemon is the single writer, all registered clients see a consistent, up-to-date view of your servers. The daemon is started with `coffer daemon start` and discovered by other processes through `~/.coffer/daemon.json` (PID + port + token, mode `0600`).
+Because the daemon is the single writer, all registered clients see a consistent, up-to-date view of your servers. It is discovered by other processes through `~/.coffer/daemon.json` (PID + port + token, mode `0600`).
+
+Any client will start one if none is running — `coffer daemon start`, the desktop app, an agent's MCP shim — but the one worth setting up is `coffer daemon service install`, which makes it a login service so it is already up before the first agent call of the day, and restarts it if it crashes. It stands down again after twelve hours with nothing using it (`coffer daemon idle set <hours>`, or `never`).
 
 ## Shim
 
@@ -36,4 +65,4 @@ When the shim starts, it checks `~/.coffer/daemon.json`. If the daemon is not ru
 
 All user state lives on the user's machine. Cloud services — LLMs, tool APIs — are providers only; they never become the system of record for any vault state. The HTTP API binds exclusively to `127.0.0.1`.
 
-This means your list of registered servers, your credentials, and your audit history are never sent to a vendor's cloud. Replicating user state to a vendor-controlled cloud is a constitutional amendment — not a configuration option.
+This means your list of registered servers, your credentials, and your audit history are never sent to a vendor's cloud. Replicating user state to a vendor-controlled cloud needs an amendment to Coffer's principles — not a configuration option.

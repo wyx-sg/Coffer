@@ -35,9 +35,11 @@ before assuming something is absent.
   **`tomlkit`**, **`pyyaml`** (agent-native config files), **`sse-starlette`** +
   **`watchfiles`** (streamed turns, file watching).
 - **`markitdown[docx,pdf,pptx,xls,xlsx]`** — inbound **channel attachment → text**
-  only. The knowledge layer converts nothing any more, so do not reach for it as
-  a "knowledge substrate"; the extras are what stop each rich format raising at
-  extraction time.
+  (`infrastructure/chat/document_extract.py`) and **uploaded document → Markdown
+  file** (`infrastructure/knowledge/converters/markitdown_converter.py`). Those
+  two modules are its only permitted importers; an importlinter contract over
+  the whole `coffer` package refuses any other. The extras are what stop each
+  rich format raising at extraction time.
 
 Coffer embeds nothing: there is no vector index and no embedding model in the
 dependency set, and knowledge search and memory recall are literal. A genuinely
@@ -57,7 +59,7 @@ infrastructure/— adapters for SQLite, keyring, and outbound I/O
 
 **Import direction is one-way**: `surfaces → application → domain`; `infrastructure` adapts to ports defined in `application`. `domain/` is pure.
 
-The layering import rules, the credential-access rule, and the "extract cross-cutting modules only after the second feature needs them" rule are invariants owned by [`.specify/memory/constitution.md`](../.specify/memory/constitution.md). The Python-specific way they land in this codebase:
+The layering import rules, the credential-access rule, and the "extract cross-cutting modules only after the second feature needs them" rule are invariants owned by [`docs/principles.md`](../docs/principles.md). The Python-specific way they land in this codebase:
 
 - `domain/` stays pure Python + Pydantic only — no FastAPI, SQLAlchemy, httpx, or other external SDKs.
 - `application/` defines ports; `infrastructure/` adapts to them.
@@ -75,7 +77,7 @@ The layering import rules, the credential-access rule, and the "extract cross-cu
 
 ### HTTP Contracts (Wire Format)
 
-The authoritative wire contract for any feature is `specs/<short-name>/contracts/api.openapi.yaml` (hand-written, PR-reviewed — one file per spec, and spec folders are named, never numbered). Backend Pydantic `BaseModel`s are HAND-WRITTEN to match the yaml. Every HTTP route declares `response_model=<Foo>Response` against a Pydantic `BaseModel` — never `dict[str, Any]`, and `scripts/check_response_models.py` (in `make lint`) enforces it.
+The authoritative wire contract for any feature is `openspec/specs/<short-name>/contracts/api.openapi.yaml` (hand-written, PR-reviewed — one file per spec, and spec folders are named, never numbered). Backend Pydantic `BaseModel`s are HAND-WRITTEN to match the yaml. Every HTTP route declares `response_model=<Foo>Response` against a Pydantic `BaseModel` — never `dict[str, Any]`, and `scripts/check_response_models.py` (in `make lint`) enforces it.
 
 CI gate: `make verify-contract` rejects PRs where the runtime OpenAPI dump structurally differs from any spec yaml.
 
@@ -98,7 +100,7 @@ unusable. The comment above the `dev:` target in the `Makefile` has the detail.
 
 The desktop shell lives in `desktop/`. It is a **native host over the same
 `frontend/dist`** the daemon serves, not a second UI: it hosts the built SPA as
-a local asset, supplies the API token over IPC (because spec daemon FR-017's injection
+a local asset, supplies the API token over IPC (because the daemon spec's "Hand the browser its token in the served page" injection
 cannot reach a document nobody served), runs detect-or-spawn for the daemon, and
 sits in the tray. It owns nothing else — file actions go through the daemon's
 HTTP routes in both hosts, and binary deployment belongs to the daemon's

@@ -18,7 +18,7 @@ resource may be scoped to an agent this machine does not have.
 
 **There is no machine axis, and there is nothing for one to say.** A resource's
 activation state is machine-local: it is set on the machine it applies to and
-does not travel (spec vault-sync ``## What does not sync``). Each machine
+does not travel (spec vault-sync "Keep reach machine-local"). Each machine
 therefore names the resources it activates by *holding* that scope, and writing
 machine ids inside the scope as well would be the same fact recorded twice —
 with two places to disagree. A resource that should be live on the desktop and

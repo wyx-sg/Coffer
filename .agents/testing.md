@@ -22,7 +22,7 @@ The suite is the safety net: **a green `make verify` (+ `verify-e2e`) must mean 
 1. **Every function is unit-tested.** Each function/method carries at least one test that exercises it and asserts its real result or effect — including its meaningful branches (error paths, empty/None, boundary values), not just the happy path.
 2. **Every HTTP endpoint is tested.** Each route (every method+path in `coffer/surfaces/http/**`) has a test asserting status, response body/shape, and side effects — plus its auth and validation-failure responses.
 3. **Every CLI command is tested.** Each Typer command/subcommand (`coffer/surfaces/cli/**`) has a test asserting exit code AND output/resulting state, plus its documented non-zero exit paths.
-4. **Every core user flow is covered e2e.** Each end-to-end flow a user relies on (and every `## Acceptance Scenarios` entry in `spec.md`) has an e2e or acceptance-tagged test driving it through real surfaces.
+4. **Every core user flow is covered e2e.** Each end-to-end flow a user relies on (and every `#### Scenario:` in an `openspec/specs/**/spec.md`) has an e2e or acceptance-tagged test driving it through real surfaces.
 
 **Tests must be genuine — never written just to move the coverage number.** A test earns its place only if it would FAIL on a real regression. Reject (and in review, call out) these anti-patterns:
 
@@ -94,23 +94,23 @@ rather than a warning.
 
 ## Acceptance Scenarios — Cross-Tier Markers
 
-Every `spec.md` scenario in `## Acceptance Scenarios` must be covered by at least one test in any tier (typically integration or e2e). Tag tests with markers so coverage can be audited.
+Every scenario in a capability spec must be covered by at least one test in any tier (typically integration or e2e). Tag tests with markers so coverage can be audited.
 
-**Spec convention** — under `## Acceptance Scenarios`, list scenarios as `### <title>` (an optional `Scenario:` prefix is stripped):
+**Spec convention** — each scenario is an OpenSpec `#### Scenario: <name>` inside the `### Requirement:` it verifies, under `## Requirements` (see [openspec.md](./openspec.md) "Writing `spec.md`"):
 
 ```markdown
-## Acceptance Scenarios
+## Requirements
 
-### register and list
+### Requirement: Register an upstream MCP server
+The system MUST ...
 
-**Given** ..., **When** ..., **Then** ...
-
-### Scenario: re-register existing
-
-...
+#### Scenario: register and list
+- **GIVEN** ...
+- **WHEN** ...
+- **THEN** ...
 ```
 
-The spec ID is the spec's path under `specs/` (`specs/foo/spec.md` → `foo`; a child spec at `specs/foo/bar/spec.md` → `foo/bar`).
+The marker quotes the scenario's name, so a name is unique within its spec. The spec ID is the spec's path under `openspec/specs/` (`openspec/specs/foo/spec.md` → `foo`; a child at `openspec/specs/foo/bar/spec.md` → `foo/bar`).
 
 **Python (pytest):**
 
@@ -158,12 +158,14 @@ These tests are gated by `.github/workflows/desktop.yml` (`make desktop-lint`,
 `make desktop-test`), **not** by `make verify`, which excludes the crate — so a
 local `make verify` proves nothing about the desktop shell.
 
-**Coverage audit** — `scripts/audit_acceptance.py` (run via `make verify-acceptance`) scans every `specs/*/spec.md` and every test file, then fails on:
+**Coverage audit** — `make verify-acceptance` runs two halves of one rule. First `openspec validate --all --strict` (the pinned CLI from the root `package.json`; `make install` fetches it) fails any requirement that owns no scenario. Then `scripts/audit_acceptance.py` scans every `openspec/specs/**/spec.md` and every test file, and fails on:
 
-- scenarios listed in spec.md without a covering marker (missing coverage)
-- markers referring to a scenario / spec ID that doesn't exist (orphan marker — usually means a spec was renamed)
+- a scenario without a covering marker (missing coverage)
+- a marker referring to a scenario / spec ID that doesn't exist (orphan marker — usually means a spec or scenario was renamed)
+- a marker on a test that can never run (`@pytest.mark.skip`, Rust `#[ignore]`)
+- a scenario name used twice in one spec
 
-Stdlib-only, runs in milliseconds — it covers all nineteen specs under `specs/`.
+The audit itself is stdlib-only and runs in milliseconds.
 
 ## Unit-Tier Purity Guardrail
 
@@ -215,7 +217,7 @@ Two consequences worth internalising:
 
 - **A docs-only edit can fail `make lint`.** `check_doc_numbering.py` rejects a
   numbered ADR/spec token and a dead link under `docs/decisions/`;
-  `check_architecture_doc.py` holds `.specify/memory/architecture.md` to the
+  `check_architecture_doc.py` holds `docs/architecture.md` to the
   code. Run `make lint` after touching markdown, not just after touching code.
 - **`lint-imports` is invoked with `PYTHONPATH=$(BACKEND)`, and that is
   load-bearing in a worktree** — a bare invocation resolves `coffer` through
@@ -230,10 +232,10 @@ Two consequences worth internalising:
 | `make verify-all`         | `verify` plus `verify-e2e`.                                                                                                                                                                  | Before merging anything that touches a surface (web UI, HTTP, CLI, shim).   |
 | `make verify-unit`        | `scripts/check_unit_purity.py` (AST-scans for forbidden I/O imports), then `pytest backend/tests/unit`, then `vitest run src` in `frontend/` when its `node_modules` is present.             | Tight TDD loop on pure domain code.                                         |
 | `make verify-integration` | `pytest backend/tests/integration` (+ `vitest run tests/integration` if `frontend/tests/integration/` exists).                                                                               | After touching application services, SQLAlchemy repos, HTTP routes, or CLI plumbing. |
-| `make verify-contract`    | `pytest backend/tests/contract` (+ the frontend contract vitest dir if it exists).                                                                                                            | After editing `specs/*/contracts/api.openapi.yaml` or Pydantic API schemas. |
+| `make verify-contract`    | `pytest backend/tests/contract` (+ the frontend contract vitest dir if it exists).                                                                                                            | After editing `openspec/specs/*/contracts/api.openapi.yaml` or Pydantic API schemas. |
 | `make verify-benchmark`   | `COFFER_RUN_BENCHMARKS=1 pytest backend/tests -m benchmark` — the perf-budget tests, which `make verify` deliberately excludes.                                                               | After touching the gateway hot path or any code a perf budget covers.       |
 | `make verify-e2e`         | `cd e2e && playwright test` — **both** projects: `web` (Chromium over the served UI, `e2e/web/specs/*.spec.ts`) and `mcp` (`e2e/mcp/specs/*.spec.ts`, a real MCP client through the shim to the daemon and upstream servers). Then `pytest e2e` if any `e2e/*.py` exist. | After touching a page, or the daemon ↔ shim ↔ MCP-client boundary.      |
-| `make verify-acceptance`  | `scripts/audit_acceptance.py`: parses every `specs/*/spec.md` `## Acceptance Scenarios` block and every `@acceptance(spec=…, scenario=…)` marker; fails on uncovered or orphan scenarios.   | Every spec.md edit. Cheap; runs without dependencies.                       |
+| `make verify-acceptance`  | `openspec validate --all --strict` (every requirement owns a scenario), then `scripts/audit_acceptance.py` (every scenario has a marker, every marker a scenario).                | Every spec.md edit. Cheap; needs the root `npm install` for the OpenSpec CLI. |
 
 ## CI Jobs
 

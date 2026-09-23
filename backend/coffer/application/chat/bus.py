@@ -8,10 +8,12 @@ The orchestrator publishes a turn's ``AgentEvent``s to the bus, which
 
   (b) **fans** each event out to every attached subscriber queue.
 
-Queue-changed events are conversation-level (the pending queue, spec chat FR-018): kept as
-a single latest snapshot replayed to new subscribers, not in the per-turn buffer.
+Queue-changed events are conversation-level (the pending queue, spec chat "Queue
+messages sent during a turn"): kept as a single latest snapshot replayed to new
+subscribers, not in the per-turn buffer.
 
-Process-global and single-daemon by design (spec chat FR-026); no cross-process fan-out.
+Process-global and single-daemon by design (spec chat "Release turn state nobody
+needs"); no cross-process fan-out.
 """
 
 from __future__ import annotations

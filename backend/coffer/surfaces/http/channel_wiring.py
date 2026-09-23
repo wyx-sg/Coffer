@@ -42,6 +42,7 @@ from coffer.infrastructure.channel.seatalk_ws_controller import SeaTalkWebSocket
 from coffer.infrastructure.channel.telegram import TelegramAdapter
 from coffer.infrastructure.channel.tunnel_spawn import TunnelController
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
+from coffer.infrastructure.daemon import activity
 from coffer.infrastructure.sync.identity import resolve_identity
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.auth import get_active_token
@@ -54,6 +55,22 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.application.resource_service import ResourceService
+
+#: The name the channel listener holds the daemon's idle clock open under.
+_CHANNEL_HOLD = "channel-listener"
+
+
+def _hold_for_channel_listener(listener_running: bool) -> None:
+    """Translate "a listener is up" into the daemon's idle-clock vocabulary.
+
+    The composition root's job, in two lines: the runtime knows whether it has
+    a listener and nothing about daemons, the clock knows about holds and
+    nothing about channels, and this says which is which.
+    """
+    if listener_running:
+        activity.hold(_CHANNEL_HOLD)
+    else:
+        activity.release(_CHANNEL_HOLD)
 
 
 def _daemon_info() -> tuple[str, str]:
@@ -112,7 +129,8 @@ def wire_channel_kind(
         # catalogue service's ``suggest`` IS the ModelSuggestionPort shape, so
         # it goes in directly rather than through a hardcoded local list.
         model_suggestions=chat.model_catalogue,
-        # `/save` (spec channels FR-014): both already satisfy the channel
+        # `/save` (spec channels "Save a sent document into a collection"): both
+        # already satisfy the channel
         # core's Protocol shape structurally (``CollectionCatalogPort`` /
         # ``IngestPort``), so the knowledge kind's own services go in
         # directly — the channel core never imports the knowledge kind itself
@@ -141,7 +159,8 @@ def wire_channel_kind(
         pairing=pairing,
         listener=listener,
         tunnel=TunnelController(),
-        # spec channels/seatalk FR-004: websocket-delivery channels converge the same way, and their
+        # spec channels/seatalk "Carry no ingress fields on websocket delivery":
+        # websocket-delivery channels converge the same way, and their
         # inbound events land on the same seam the webhook route uses —
         # ``ChannelService.ingest_event``, which does not exist yet at this point
         # in the wiring, so it is resolved at call time exactly as the daemon's
@@ -149,6 +168,11 @@ def wire_channel_kind(
         websockets=SeaTalkWebSocketController(ingest=_ingest_websocket_event),
         materialize=materialize,
         machine_id=local_machine_id,
+        # A live listener keeps the daemon from standing down as idle
+        # (spec daemon "Stand down after an idle window"): it exists to be
+        # reachable, so the hours it
+        # spends waiting for a message are exactly what it is for.
+        service_hold=_hold_for_channel_listener,
     )
 
     async def on_delete(channel: Resource) -> None:

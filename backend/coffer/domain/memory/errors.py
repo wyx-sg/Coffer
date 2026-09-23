@@ -1,6 +1,7 @@
 """The one failure mode a memory reader has: it could not parse its source.
 
-FR-005 asks for this to fail loudly and in isolation — the offending file's
+Spec memory "Fail a broken reader loudly and in isolation" asks for this to
+fail loudly and in isolation — the offending file's
 path and the reason, so the surface can say exactly what broke, while
 everything else aggregation already holds keeps standing. `CofferError`
 (rather than a bare `Exception`, which is how the spec's contract sketches it)

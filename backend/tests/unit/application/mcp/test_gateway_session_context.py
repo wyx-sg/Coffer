@@ -1,4 +1,4 @@
-"""Unit tests for the MCP gateway's session-cwd propagation (spec knowledge FR-009).
+"""Unit tests for the MCP gateway's session-cwd propagation.
 
 The shim reports its launch cwd at the ``initialize`` handshake
 (``params._meta["coffer/cwd"]``); the gateway captures it and threads it into
@@ -7,9 +7,10 @@ tools). KB tools (no ``cwd`` property) are left untouched. The gateway never
 special-cases the memory kind — it dispatches generically off the schema.
 
 The ``agent`` argument is the exception to "opt in by schema": it says who is
-calling (spec mcp-gateway FR-013), so every built-in call carries the SESSION's
-answer and never the client's — whatever the client put under ``agent`` is
-dropped before the tool sees the arguments.
+calling (spec mcp-gateway "Take the agent identity from the handshake"), so
+every built-in call carries the SESSION's answer and never the client's —
+whatever the client put under ``agent`` is dropped before the tool sees the
+arguments.
 
 Its value is the agent's NAME, resolved from the uid the shim reported. The uid
 gates what the session may see; the name labels what it did. These tests pin
@@ -95,8 +96,9 @@ async def test_initialize_without_meta_leaves_cwd_none():
 
 @pytest.mark.asyncio
 async def test_initialize_captures_agent_uid_from_meta():
-    """MCP Gateway FR-013 (amended): the shim's self-reported agent identity rides
-    the same ``_meta`` extension bag as the launch cwd, and it is the uid."""
+    """MCP Gateway "Take the agent identity from the handshake": the shim's
+    self-reported agent identity rides the same ``_meta`` extension bag as the
+    launch cwd, and it is the uid."""
     session = _session_with(BuiltinToolRegistry())
     await session.handle_initialize(
         {"protocolVersion": "x", "_meta": {"coffer/agent-uid": _CC_UID}}

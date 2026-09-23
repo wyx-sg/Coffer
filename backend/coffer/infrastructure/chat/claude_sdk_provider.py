@@ -38,13 +38,14 @@ from coffer.infrastructure.chat.transcribe import Transcriber
 #: rather than the application catalogue service itself, so infrastructure keeps
 #: no dependency on an application type it would only read one list from.
 
-#: Compose this turn's memory-context append (spec memory FR-024): given the
-#: calling agent's key and its cwd, returns the composed text, or ``None``
-#: when there is nothing to deliver (no composer wired at all, or the
-#: composer itself has nothing to say). A narrow callable — never
-#: ``application.memory.context.compose_context`` imported here directly — so
-#: this layer never reaches into the memory kind itself; the composition root
-#: builds the real closure over ``MemoryService``/``OverrideRepository``.
+#: Compose this turn's memory-context append (spec memory "Deliver to channel
+#: turns through the system prompt"): given the calling agent's key and its cwd,
+#: returns the composed text, or ``None`` when there is nothing to deliver (no
+#: composer wired at all, or the composer itself has nothing to say). A narrow
+#: callable — never ``application.memory.context.compose_context`` imported here
+#: directly — so this layer never reaches into the memory kind itself; the
+#: composition root builds the real closure over
+#: ``MemoryService``/``OverrideRepository``.
 
 #: Builds the transcriber for one turn, or ``None`` to leave audio untouched.
 #: Resolved per turn so designating (or clearing) the internal connection takes
@@ -165,10 +166,12 @@ class ClaudeSdkProvider:
             env=await self._extra_env(conversation_id),
             # Claude cannot hear audio. A voice attachment is transcribed by the
             # user's configured connection, or handed over untouched when there
-            # is none (spec channels FR-019).
+            # is none (spec channels "Transcribe inbound voice only when the
+            # user opted in").
             transcriber=await self._transcriber(),
             # A document (PDF/office file) is text-extracted so it reaches the
-            # agent as text rather than a vision/binary block (FR-031).
+            # agent as text rather than a vision/binary block (spec chat
+            # "Extract document attachments to text").
             document_extractor=default_document_extractor(),
         )
 

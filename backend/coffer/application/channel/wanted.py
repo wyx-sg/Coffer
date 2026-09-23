@@ -7,7 +7,7 @@ has three parts, each a different kind of fact:
 
 1. **enabled** — is this resource live at all, here.
 2. **the machine binding** — is this channel's `runs_on` this machine (spec
-   channels ``## Where a channel runs``). This one is about somebody else's
+   channels "Bind each channel to the one machine that runs it"). This one is about somebody else's
    machine, which is why it comes ahead of the third.
 3. **routing** — does this channel name an agent it may actually drive (ADR
    per-agent-resource-scope, read inverted for this kind).

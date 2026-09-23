@@ -45,6 +45,25 @@ class ProviderProtocolLockedWhileActive(CofferError):  # noqa: N818
         self.protocol = protocol
 
 
+class ProviderInternalOnly(CofferError):  # noqa: N818
+    """An ``ollama`` connection cannot be switched on for an agent.
+
+    It is internal-only: it has no key to project and reaches no agent whatever
+    its scope says (``application.provider.targets.scoped_targets``), so it is
+    never ``is_active`` and activating it writes nothing. Refused rather than
+    answered with a switch that did not happen. Maps to 409.
+    """
+
+    code = "PROVIDER_INTERNAL_ONLY"
+
+    def __init__(self, name: str) -> None:
+        super().__init__(
+            f"connection {name!r} uses the ollama protocol, which only Coffer's internal "
+            f"engine uses — it cannot be switched on for an agent"
+        )
+        self.name = name
+
+
 class NoActiveProvider(CofferError):  # noqa: N818
     """No active provider profile exists for the requested wire format. Maps
     to 404 — e.g. ``coffer provider key`` before any profile was activated."""

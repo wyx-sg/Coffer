@@ -111,12 +111,11 @@ async def reconcile_listener(
     if materialize is not None:
         for resource in desired.values():
             config = resource.config
-            # spec channels/seatalk FR-004: only WEBHOOK delivery needs the listener. A deployment
-            # whose
-            # only SeaTalk channel is websocket must leave it stopped — not
-            # needing an inbound HTTP surface is the whole point of that
-            # transport, and a listener nothing posts to is a port open for
-            # nothing.
+            # spec channels/seatalk "Carry no ingress fields on websocket delivery":
+            # only WEBHOOK delivery needs the listener. A deployment whose only SeaTalk
+            # channel is websocket must leave it stopped — not needing an inbound HTTP
+            # surface is the whole point of that transport, and a listener nothing posts
+            # to is a port open for nothing.
             if config.get("channel_type") == "seatalk" and delivery_of(config) == "webhook":
                 refs[resource.uid] = str(config.get("signing_secret_ref", ""))
     if refs == latch.refs and (not refs or listener.running()):
@@ -194,7 +193,8 @@ async def reconcile_websockets(
     desired: Desired,
     latch: Latch[dict[str, tuple[str, str]]],
 ) -> None:
-    """Hold one SeaTalk WebSocket per websocket-delivery channel (spec channels/seatalk FR-004).
+    """Hold one SeaTalk WebSocket per websocket-delivery channel (spec channels/seatalk
+    "Carry no ingress fields on websocket delivery").
 
     The tunnel reconciler's shape with the app's own credentials in place of a
     connector token: the register handshake authenticates with ``app_id`` and the

@@ -1,18 +1,13 @@
-"""Document ingestion: convert, describe, write both files into the sources lane.
+"""Document ingestion: convert, describe, and submit what it says as material.
 
-The contract under test (spec knowledge FR-016..FR-019): an upload becomes an
-ordinary **source** — same frontmatter, same scope enforcement, same audit
-event as a file a person typed — with the original kept beside it as a
-visible file in the same lane, and the whole thing all-or-nothing: nothing
-lands unless everything does.
-
-What changed, and what these tests now pin that the previous ones could not:
-the original is no longer hidden under ``.raw/``. Hiding it only ever bought
-keeping it out of a ranked retrieval index, and there is no retrieval surface
-left to pollute (FR-033) — so the original is a file in ``sources/`` that a
-person browsing their own lane can see, delete and re-upload on its own. That
-also means deleting the extracted Markdown no longer deletes anything else:
-two files, two lifetimes.
+The upload contract under test (spec knowledge): an upload becomes **material**
+for a collection — the same submission, frontmatter and audit event as an
+agent's ``coffer__write`` — which a curation pass merges into the documents.
+Nothing of the upload itself is kept: not the original bytes, not the extracted
+text as a file of its own. With no internal model to merge it, the material
+becomes a document as it stands (see "Promote material directly when no model
+is configured"). And the whole thing is all-or-nothing: a refusal leaves
+nothing behind.
 """
 
 from __future__ import annotations
@@ -122,17 +117,28 @@ def fake_connection() -> ResolvedConnection:
     )
 
 
+async def _can_merge() -> bool:
+    return True
+
+
 @pytest.fixture
 def knowledge(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     """A ``KnowledgeService`` over an isolated tree with one collection
-    (``shopee``); ``elsewhere`` is a name no collection answers to."""
+    (``shopee``) and a model that could merge; ``elsewhere`` is a name no
+    collection answers to."""
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     fs.create_collection_dir("shopee")
-    resources = _Resources(["shopee"])
     return KnowledgeService(
-        resources=resources,
-        audit=_Audit(),
+        resources=_Resources(["shopee"]), audit=_Audit(), merge_available=_can_merge
     )
+
+
+@pytest.fixture
+def knowledge_without_model(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
+    """The same tree, with nothing configured to merge material."""
+    monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
+    fs.create_collection_dir("shopee")
+    return KnowledgeService(resources=_Resources(["shopee"]), audit=_Audit())
 
 
 class _EmptyRegistry:
@@ -159,26 +165,27 @@ def _service(knowledge, *, models=None, completion=None, credential_resolver=Non
     )
 
 
-def _sources(collection: str = "shopee") -> list[str]:
-    """Everything actually on disk in the lane — Markdown or not.
+def _on_disk(collection: str = "shopee") -> list[str]:
+    """Everything actually on disk in the collection, hidden files included.
 
-    Deliberately not ``fs.list_level``: that answers what the tree SHOWS, and
-    an assertion that nothing landed has to look at the directory itself or a
-    stray original would slip past it.
+    Deliberately not ``catalogue.list_level``: that answers what the tree
+    SHOWS, and an assertion that nothing landed has to look at the directory
+    itself or a stray inbox item or original would slip past it.
     """
-    directory = paths.sources_dir(collection)
+    directory = paths.collection_dir(collection)
     if not directory.is_dir():
         return []
-    return sorted(p.name for p in directory.iterdir())
+    return sorted(str(p.relative_to(directory)) for p in directory.rglob("*") if p.is_file())
 
 
 # ----- the shape of a successful ingest ---------------------------------
 
 
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="an upload lands both the original and its text in sources"
+    spec="knowledge",
+    scenario="an upload is converted and submitted as material, keeping neither file",
 )
-async def test_a_markdown_upload_is_stored_once(knowledge) -> None:  # type: ignore[no-untyped-def]
+async def test_an_upload_becomes_material_and_nothing_else(knowledge) -> None:  # type: ignore[no-untyped-def]
     service = _service(knowledge)
     data = b"# Meeting Notes\n\nDiscussed the launch plan and open risks.\n"
 
@@ -187,33 +194,42 @@ async def test_a_markdown_upload_is_stored_once(knowledge) -> None:  # type: ign
     )
 
     assert isinstance(result, IngestedDocument)
-    # The lane segment is the layer's, never the caller's (FR-013): the call
-    # named only the collection.
-    assert result.path == "shopee/sources/meeting-notes.md"
+    assert result.pending is True
+    assert result.path is None
     assert result.title == "Meeting Notes"
     assert result.converter == "passthrough"
     assert result.description == "Discussed the launch plan and open risks."
 
-    written = fs.read_file(result.path)
-    assert written.actor == ACTOR_USER
-    assert written.description == result.description
-    assert written.body.strip() == data.decode().strip()
+    # One inbox item, carrying the text; no original and no document beside it.
+    assert _on_disk() == [".inbox/meeting-notes.md"]
+    material = fs.read_material("shopee", "meeting-notes.md")
+    assert material.actor == ACTOR_USER
+    assert material.description == result.description
+    assert material.body.strip() == data.decode().strip()
 
-    # Markdown converts by passthrough, so "the original" would be the bytes
-    # already in the file just written. Keeping a second copy would put one
-    # document in the lane twice and hand curation the same facts as two
-    # independent sources — two model calls to discover they agree.
-    assert result.original_path == result.path
-    assert [f.path for f in catalogue.walk_files(paths.sources_dir("shopee"))] == [result.path]
-    assert fs.pending_sources("shopee") == (result.path,)
-    assert not any(p.name.startswith(".") for p in paths.collection_dir("shopee").iterdir())
-
-    # It is a source, and it is counted as one; nothing reached the other lane.
     entry = next(c for c in catalogue.list_collections() if c.name == "shopee")
-    assert entry.topic_count == 0
+    assert (entry.document_count, entry.pending_count) == (0, 1)
 
 
-async def test_a_non_markdown_upload_converts_before_it_is_written(knowledge) -> None:  # type: ignore[no-untyped-def]
+async def test_with_no_model_an_upload_becomes_a_document_as_it_stands(  # type: ignore[no-untyped-def]
+    knowledge_without_model,
+) -> None:
+    service = _service(knowledge_without_model)
+
+    result = await service.ingest(
+        collection="shopee",
+        filename="notes.md",
+        data=b"# Meeting Notes\n\nDiscussed the launch plan.\n",
+        actor="tester",
+    )
+
+    assert result.pending is False
+    assert result.path == "shopee/meeting-notes.md"
+    assert _on_disk() == ["meeting-notes.md"]
+    assert "Discussed the launch plan." in fs.read_file(result.path).body
+
+
+async def test_a_non_markdown_upload_is_converted_and_its_original_dropped(knowledge) -> None:  # type: ignore[no-untyped-def]
     service = _service(knowledge)
     data = b"name,role\nAda,engineer\nGrace,engineer\n"
 
@@ -223,30 +239,12 @@ async def test_a_non_markdown_upload_converts_before_it_is_written(knowledge) ->
 
     assert result.converter == "csv"
     assert result.title == "team"
-    written = fs.read_file(result.path)
-    assert "| name | role |" in written.body
-    assert "| Ada | engineer |" in written.body
-
-    # The `.csv` keeps its own extension: the original is what was sent, not a
-    # renamed copy of it.
-    assert result.original_path == "shopee/sources/team.csv"
-    assert paths.resolve(result.original_path).read_bytes() == data
-
-
-async def test_a_folder_is_a_subdirectory_of_the_lane_not_beside_it(knowledge) -> None:  # type: ignore[no-untyped-def]
-    """``folder`` is nesting INSIDE ``sources/`` (FR-004), so no entrance can
-    aim an upload at ``topics/`` by spelling a path."""
-    service = _service(knowledge)
-
-    result = await service.ingest(
-        collection="shopee",
-        filename="notes.md",
-        data=b"# Notes\n\nSome prose.\n",
-        folder="runbooks",
-        actor="tester",
-    )
-
-    assert result.path == "shopee/sources/runbooks/notes.md"
+    material = fs.read_material("shopee", "team.md")
+    assert "| name | role |" in material.body
+    assert "| Ada | engineer |" in material.body
+    # The `.csv` itself is nowhere: the collection keeps knowledge, not the
+    # document it arrived in.
+    assert _on_disk() == [".inbox/team.md"]
 
 
 @pytest.mark.acceptance(
@@ -261,19 +259,21 @@ async def test_an_unsupported_type_is_refused_and_writes_nothing(knowledge) -> N
         )
 
     assert exc_info.value.doc_type == "bin"
-    # Not "no Markdown": nothing at all, original included (FR-019).
-    assert _sources() == []
+    # Nothing at all: no material, no original (see "Bound uploads and leave
+    # nothing behind on failure").
+    assert _on_disk() == []
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="a document is never stored half-converted")
 async def test_a_document_that_converts_to_nothing_is_refused_and_writes_nothing(  # type: ignore[no-untyped-def]
     knowledge,
 ) -> None:
-    """FR-019. The real case is an image-only PDF: MarkItDown extracts no text,
-    returns ``""``, and reports no error — it did its job, the document simply
-    has no text layer. Stored, that is a titled source with an empty body: it
-    would be handed to a curation pass that has nothing to fold in, and the
-    catalogue would carry a document that says nothing.
+    """See "Bound uploads and leave nothing behind on failure". The real case
+    is an image-only PDF: MarkItDown extracts no text, returns ``""``, and
+    reports no error — it did its job, the document simply has no text layer.
+    Stored, that is titled material with an empty body: it would be material a
+    curation pass has nothing to fold in from, and with no model it would
+    become a document that says nothing.
 
     Driven through a converter that returns empty markdown rather than through
     a real scanned PDF, because the rule is about ANY converter producing
@@ -291,9 +291,8 @@ async def test_a_document_that_converts_to_nothing_is_refused_and_writes_nothing
         )
 
     assert exc_info.value.doc_type == "pdf"
-    # Neither the extracted Markdown NOR the original: refusing the text but
-    # keeping the bytes would leave a file in the lane with no way to read it.
-    assert _sources() == []
+    # Nothing reached the inbox.
+    assert _on_disk() == []
 
 
 async def test_a_whitespace_only_conversion_counts_as_nothing(knowledge) -> None:  # type: ignore[no-untyped-def]
@@ -307,7 +306,7 @@ async def test_a_whitespace_only_conversion_counts_as_nothing(knowledge) -> None
     with pytest.raises(EmptyConversion):
         await service.ingest(collection="shopee", filename="blank.docx", data=b"x", actor="tester")
 
-    assert _sources() == []
+    assert _on_disk() == []
 
 
 async def test_oversize_upload_is_refused_naming_the_limit(knowledge) -> None:  # type: ignore[no-untyped-def]
@@ -319,7 +318,7 @@ async def test_oversize_upload_is_refused_naming_the_limit(knowledge) -> None:  
 
     assert str(MAX_UPLOAD_BYTES) in str(exc_info.value)
     assert exc_info.value.limit == MAX_UPLOAD_BYTES
-    assert _sources() == []
+    assert _on_disk() == []
 
 
 # ----- the description: model when available, prose otherwise ----------
@@ -379,13 +378,14 @@ async def test_description_falls_back_to_the_title_when_there_is_no_prose_at_all
 ) -> None:
     """A document can convert to real content and still contain no PROSE — a
     file that is nothing but a heading is the case. ``_fallback_description``
-    skips heading lines, so there is no paragraph left, and FR-003 makes the
-    description required: the title is the only thing left to use.
+    skips heading lines, so there is no paragraph left, and "Carry title,
+    description and actor in frontmatter" makes the description required: the
+    title is the only thing left to use.
 
     This used to be driven with a completely EMPTY CSV. That is no longer a
     stored document at all — a conversion that produces nothing is refused
-    (``EmptyConversion``, FR-019) — so the vehicle has to be a document that
-    converts to something and still yields no prose.
+    (``EmptyConversion``) — so the vehicle has to be a document that converts
+    to something and still yields no prose.
     """
     service = _service(knowledge)
 
@@ -396,48 +396,13 @@ async def test_description_falls_back_to_the_title_when_there_is_no_prose_at_all
     assert result.description == result.title == "Team"
 
 
-# ----- atomicity: nothing half-lands (FR-019) ---------------------------
-
-
-async def test_a_failure_keeping_the_original_takes_the_markdown_back(
-    knowledge, monkeypatch
-) -> None:  # type: ignore[no-untyped-def]
-    """The Markdown must not outlive the original it was meant to stand beside.
-
-    The two writes cannot both be made to fail by arranging the directory any
-    more — ``write_original`` picks a free name rather than colliding — so the
-    second write is failed at the filesystem boundary itself. The unit under
-    test is the rollback in ``IngestService``, not ``fs``.
-    """
-    service = _service(knowledge)
-
-    def _boom(collection: str, filename: str, data: bytes) -> str:
-        raise OSError("no space left on device")
-
-    monkeypatch.setattr(fs, "write_original", _boom)
-
-    # A CSV, so the conversion genuinely differs from the upload and an
-    # original is actually kept — a Markdown or plain-text upload short
-    # circuits before `write_original` is ever reached.
-    with pytest.raises(OSError):
-        await service.ingest(
-            collection="shopee",
-            filename="table.csv",
-            data=b"name,owner\nsession,account\n",
-            actor="tester",
-        )
-
-    # Not "the original is missing" — the Markdown that DID land is gone too.
-    assert _sources() == []
-
-
 # ----- an ingest is a write, and a write names a real collection --------
 
 
 async def test_ingest_into_a_collection_that_does_not_exist_fails(knowledge) -> None:  # type: ignore[no-untyped-def]
     """Refused before any conversion, and it leaves no directory behind: the
-    check is the same one ``write_source`` makes, hoisted so an unusable name
-    costs nothing."""
+    check is the same one ``submit`` makes, hoisted so an unusable name costs
+    nothing."""
     service = _service(knowledge)
 
     with pytest.raises(CollectionNotFound):
@@ -451,44 +416,16 @@ async def test_ingest_into_a_collection_that_does_not_exist_fails(knowledge) -> 
     assert not paths.collection_dir("elsewhere").exists()
 
 
-# ----- two files, two lifetimes (FR-016, FR-020) -----------------------
+# ----- deleting ("Let only a person delete a document") -----------------
 
 
-async def test_deleting_the_extracted_markdown_leaves_the_original_alone(knowledge) -> None:  # type: ignore[no-untyped-def]
-    """The symmetry the ``.raw/`` design needed is gone with it.
-
-    An original under ``.raw/`` was an invisible appendage of the Markdown, so
-    deleting one had to delete the other or it became unreachable litter. In
-    ``sources/`` it is an ordinary file a person can see, so it outlives the
-    conversion and is deleted on its own — which is also what makes
-    re-converting a bad extraction possible after deleting the bad one.
-    """
-    service = _service(knowledge)
-    result = await service.ingest(
-        collection="shopee",
-        filename="table.csv",
-        data=b"name,owner\nsession,account\n",
-        actor="tester",
-    )
-    assert result.original_path != result.path
-
-    await knowledge.delete_source(result.path, actor="tester")
-
-    with pytest.raises(KnowledgeFileNotFound):
-        fs.read_file(result.path)
-    assert paths.resolve(result.original_path).is_file()
-
-    # And the original goes the same way, by its own path.
-    await knowledge.delete_source(result.original_path, actor="tester")
-    assert _sources() == []
-
-
-async def test_deleting_a_hand_written_source_is_a_clean_delete(knowledge) -> None:  # type: ignore[no-untyped-def]
+async def test_a_person_may_delete_any_document(knowledge) -> None:  # type: ignore[no-untyped-def]
     written = fs.write_file(
-        directory="shopee/sources", title="Hand Written", description="d", body="b"
+        directory="shopee", title="Curated", description="d", body="b", curated=True
     )
 
-    await knowledge.delete_source(written.path, actor="tester")
+    await knowledge.delete_document(written.path, actor="tester")
 
     with pytest.raises(KnowledgeFileNotFound):
         fs.read_file(written.path)
+    assert _on_disk() == []

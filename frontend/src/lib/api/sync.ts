@@ -89,8 +89,13 @@ export interface ConvergeRound {
   /** Paths an agent merged — reported whether or not the round succeeded. */
   agent_resolved: string[];
   failures: RoundFailure[];
+  /** Paths that can never apply on this machine: held, not retried, and not
+   *  failures. */
+  not_applicable: string[];
   locked_refs: string[];
   pending: PendingConfirmation | null;
+  /** On an `awaiting_join` round: the join it detected and did not apply. */
+  join_report: JoinPreview | null;
   error: string | null;
 }
 
@@ -109,6 +114,18 @@ export interface SyncRunList {
   runs: RunRecord[];
 }
 
+/**
+ * The join `/adopt` would make, stated before anything is applied
+ * (`GET /sync/join`). `joining: false` means this machine already converged
+ * here and converging is an ordinary round; `case: "ambiguous"` is a returning
+ * machine whose base is gone, which joins only on the explicit `keep-local`
+ * choice.
+ */
+export type JoinPreview = Schemas["JoinPreviewOut"];
+
+/** The one answer an ambiguous join takes. */
+export type JoinChoice = "keep-local";
+
 /** The one remote this vault converges with. `credential_ref` is a NAME. */
 export type SyncRemote = Schemas["SyncRemoteOut"];
 
@@ -121,6 +138,11 @@ export interface SyncStatus {
   /** False when the id came from the local fallback file rather than the host,
    *  which means it does not survive deleting `~/.coffer`. */
   machine_id_is_derived: boolean;
+  /** False until this machine adopts the remote: until then a round reports
+   *  `awaiting_join` and applies nothing. */
+  joined: boolean;
+  /** Every path recorded as not applicable on this machine. */
+  not_applicable: string[];
 }
 
 /** One row of the registry (`GET /sync/machines`). */
@@ -162,6 +184,12 @@ export const syncApi = {
   runs: (limit = 500) => call<SyncRunList>(`/sync/runs?limit=${limit}`),
 
   run: () => call<ConvergeRound>("/sync/run", { method: "POST" }),
+  /** What joining would do, applying nothing. Asked before every join. */
+  previewJoin: (choice?: JoinChoice) =>
+    call<JoinPreview>(choice ? `/sync/join?choice=${enc(choice)}` : "/sync/join"),
+  /** Join the remote — only after the preview has been shown. */
+  adopt: (choice?: JoinChoice) =>
+    call<ConvergeRound>("/sync/adopt", { method: "POST", body: choice ? { choice } : {} }),
   confirm: () => call<ConvergeRound>("/sync/confirm", { method: "POST" }),
   reject: () => call<{ cleared: boolean }>("/sync/reject", { method: "POST" }),
   /** Replace this vault with the remote's, discarding what only it holds.

@@ -14,13 +14,32 @@ interface Props {
   live?: LiveMessage;
 }
 
-function buildToolPairs(blocks: ContentBlock[]): { use: ContentBlock; result?: ContentBlock }[] {
-  const uses = blocks.filter((b) => b.type === "tool_use");
+type Segment =
+  | { kind: "text"; key: string; text: string }
+  | { kind: "tool"; key: string; use: ContentBlock; result?: ContentBlock };
+
+/**
+ * An assistant turn's blocks as render segments, in the order the turn emitted
+ * them: each text block is its own segment (never glued to the next one), and
+ * each tool call is a card at its call's position carrying its result, wherever
+ * in the turn that result arrived. A result is drawn only inside its call's card.
+ */
+function buildSegments(blocks: ContentBlock[]): Segment[] {
   const results = blocks.filter((b) => b.type === "tool_result");
-  return uses.map((u) => ({
-    use: u,
-    result: results.find((r) => r.tool_use_id === u.tool_use_id),
-  }));
+  const segments: Segment[] = [];
+  blocks.forEach((b, i) => {
+    if (b.type === "text" && b.text) {
+      segments.push({ kind: "text", key: `text-${i}`, text: b.text });
+    } else if (b.type === "tool_use") {
+      segments.push({
+        kind: "tool",
+        key: b.tool_use_id ?? `tool-${i}`,
+        use: b,
+        result: results.find((r) => r.tool_use_id === b.tool_use_id),
+      });
+    }
+  });
+  return segments;
 }
 
 function extractText(blocks: ContentBlock[]): string {
@@ -65,9 +84,7 @@ function MessageBubbleImpl({ message, live }: Props) {
   }
 
   // Assistant (persisted or live)
-  const text = isLive ? live!.text : extractText(message?.content ?? []);
-  const toolBlocks = isLive ? live!.toolBlocks : (message?.content ?? []);
-  const pairs = buildToolPairs(toolBlocks);
+  const segments = buildSegments(isLive ? live!.blocks : (message?.content ?? []));
   const failed = !isLive && message?.status === "failed";
   // A persisted streaming placeholder (turn still running server-side, seen
   // after a reload/switch-back) renders as in-progress, not as a blank bubble.
@@ -79,15 +96,19 @@ function MessageBubbleImpl({ message, live }: Props) {
   return (
     <div className="flex justify-start">
       <div className="w-fit max-w-[min(48rem,100%)] space-y-1">
-        {pairs.map((p) => (
-          <ToolCallCard key={p.use.tool_use_id} toolUse={p.use} toolResult={p.result} />
-        ))}
-        {text && (
-          <div className="rounded-xl rounded-tl-sm bg-card px-4 py-2.5 text-sm text-foreground shadow-sm">
-            <MarkdownContent content={text} />
-          </div>
+        {segments.map((seg) =>
+          seg.kind === "tool" ? (
+            <ToolCallCard key={seg.key} toolUse={seg.use} toolResult={seg.result} />
+          ) : (
+            <div
+              key={seg.key}
+              className="rounded-xl rounded-tl-sm bg-card px-4 py-2.5 text-sm text-foreground shadow-sm"
+            >
+              <MarkdownContent content={seg.text} />
+            </div>
+          ),
         )}
-        {((isLive && live!.streaming) || serverStreaming) && !text && pairs.length === 0 && (
+        {((isLive && live!.streaming) || serverStreaming) && segments.length === 0 && (
           <div className="flex items-center gap-1 px-4 py-2 text-xs text-muted-foreground">
             <span className="animate-pulse">{t("chat.thinking")}</span>
           </div>

@@ -116,7 +116,7 @@ def _mirror_tree(
 
     * Not copied, because what lives there is derived output every machine
       regenerates for itself and no two machines render identically (spec
-      vault-sync FR-093).
+      vault-sync "Withhold derived output in both halves").
     * Not deleted, because the working tree may already carry a copy an older
       build published. Removing it would stage a deletion — and a deletion is
       the one change every machine acts on. A machine still running that older

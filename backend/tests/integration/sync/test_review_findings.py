@@ -67,7 +67,7 @@ async def _pair(tmp_path: pathlib.Path):
 async def test_a_confirmation_does_not_authorise_deletions_the_remote_added_since(
     tmp_path: pathlib.Path,
 ) -> None:
-    """spec vault-sync ``## Safety`` / ``ConvergeRound.run``:
+    """spec vault-sync "Ask the user to confirm a tripped breaker" / ``ConvergeRound.run``:
 
     "the deletion guard is skipped for exactly that tip. If the remote has moved
     since, the guard runs again and the round is held afresh, because the user's
@@ -110,8 +110,8 @@ async def test_a_confirmation_does_not_authorise_deletions_the_remote_added_sinc
 async def test_confirming_a_publish_hold_does_not_waive_the_apply_guard(
     tmp_path: pathlib.Path,
 ) -> None:
-    """spec vault-sync ``## Safety``: the circuit breaker runs "in both
-    directions", and a hold is raised in one of them. Saying "yes, publish my
+    """spec vault-sync "Guard both directions": the circuit breaker runs "in
+    both directions", and a hold is raised in one of them. Saying "yes, publish my
     deletions" is not saying "yes, delete whatever the remote has dropped"."""
     a, b = await _pair(tmp_path)
     for i in range(40):
@@ -172,7 +172,8 @@ async def test_a_lost_working_tree_does_not_wedge_every_later_round(
 async def test_a_rolled_back_round_is_not_re_applied_by_the_next_one(
     tmp_path: pathlib.Path,
 ) -> None:
-    """spec vault-sync ``## Safety`` / ``### Scenario: a round can be rolled back``.
+    """spec vault-sync "Snapshot before applying and roll back from it" /
+    ``#### Scenario: a round can be rolled back``.
 
     A rollback is the operator's remedy for an apply that should not have
     happened. A remedy the background worker undoes fifteen minutes later is
@@ -204,8 +205,9 @@ async def test_a_rolled_back_round_is_not_re_applied_by_the_next_one(
 async def test_a_resource_that_fails_to_serialize_is_not_published_as_a_deletion(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """spec vault-sync ``## Why deletion is safe``: "Export writes differentially.
-    It writes changed documents and removes documents the vault no longer holds."
+    """spec vault-sync "Export differentially": "Export MUST write
+    **differentially** — writing changed documents and removing documents the
+    vault no longer holds"
 
     A document the vault still holds and this export could not render is not a
     document the vault no longer holds.
@@ -240,8 +242,11 @@ async def test_a_resource_that_fails_to_serialize_is_not_published_as_a_deletion
     )
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="the apply-side guard counts held paths the tree dropped"
+)
 async def test_the_deletion_guard_sees_the_retry_set_too(tmp_path: pathlib.Path) -> None:
-    """spec vault-sync ``## Safety``: the circuit breaker bounds what a round
+    """spec vault-sync "Guard the retry set with the diff": the circuit breaker bounds what a round
     would *apply*, and the retry set is applied alongside the diff.
 
     A held path the tree has since dropped is absorbed as the deletion it now

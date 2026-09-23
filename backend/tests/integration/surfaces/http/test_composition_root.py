@@ -34,8 +34,9 @@ def test_app_mounts_all_kind_agnostic_routes(tmp_path, monkeypatch):
         r = c.get("/api/v1/resources", headers=headers)
         assert r.status_code == 200
         # Two rows, and both are Coffer's own: the manual it seeds for itself
-        # at every boot (spec knowledge FR-034) and the one workflow a fresh
-        # vault starts with (spec workflow FR-009). The user has made nothing,
+        # at every boot (spec knowledge "Deliver the catalogue through the
+        # coffer-guide skill") and the one workflow a fresh vault starts with
+        # (spec workflow FR-009). The user has made nothing,
         # so anything else here would be a route returning someone else's rows.
         assert [(x["kind"], x["name"]) for x in r.json()["resources"]] == [
             ("skill", "coffer-guide"),

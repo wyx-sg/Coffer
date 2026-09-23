@@ -83,11 +83,11 @@ class ProviderService:
         self._agents = agents
         self._audit = audit
         self._projector = ProviderProjector(config_store)
-        # Coffer's internal engine, told when the connection it runs on moves
-        # (spec internal-engine FR-005). The engine's model is not this kind's
-        # to reason about, so what happens to it arrives as a port the
-        # composition root satisfies; ``None`` is the test-convenience
-        # construction, where there is no engine to tell.
+        # Coffer's internal engine, told when the connection it runs on moves (spec
+        # internal-engine "Drop the engine model when its connection moves"). The
+        # engine's model is not this kind's to reason about, so what happens to it
+        # arrives as a port the composition root satisfies; ``None`` is the
+        # test-convenience construction, where there is no engine to tell.
         self._engine = engine
 
     # --- helpers -------------------------------------------------------------

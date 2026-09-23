@@ -2,7 +2,8 @@
 
 ``daemon_port_set`` left ``AuditEventType`` along with the HTTP route that was
 its only writer — the port is a CLI-only setting now, and the CLI cannot take
-the event over because it has to work with no daemon running (spec daemon FR-011). 0055 set the rule
+the event over because it has to work with no daemon running (spec daemon "Bind a
+fixed, settable port"). 0055 set the rule
 for what happens to the rows such an event already
 wrote: they go, because a row whose ``event_type`` nothing in the code can name
 is a row every reader has to cope with and none can label.

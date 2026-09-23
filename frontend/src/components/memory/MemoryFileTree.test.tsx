@@ -9,13 +9,14 @@
 // The one asymmetry the tree draws is the one that would mislead if left
 // implicit: `.raw/` is the agents' own words, the INPUT the notes were
 // distilled from, so it is reachable but marked and closed rather than offered
-// as something to read (FR-037). Only the network boundary (the hooks) is
-// mocked, per agents/frontend.md §8.
+// as something to read (see "Present partitions as a table and a file tree"). Only the network
+// boundary (the hooks) is mocked, per agents/frontend.md §8.
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { MemoryFileTree } from "@/components/memory/MemoryFileTree";
+import { acceptance } from "@/test/acceptance";
 import type { MemoryFileContentOut, MemoryFileNode } from "@/lib/api/memoryTypes";
 import { isDerivedInput } from "@/lib/memory/derived";
 
@@ -190,8 +191,8 @@ describe("MemoryFileTree", () => {
   });
 
   test("no per-note actions — a partition is a folder, and the surface looks like one", () => {
-    // FR-037 states this as a prohibition, so it is asserted as one: nothing
-    // here retires, pins or hides an individual note.
+    // "Present partitions as a table and a file tree" states this as a prohibition, so it is
+    // asserted as one: nothing here retires, pins or hides an individual note.
     stubTree(ROOT);
     stubContent({ content: "body" });
 
@@ -211,5 +212,23 @@ describe("MemoryFileTree", () => {
     fireEvent.click(screen.getByRole("button", { name: /MEMORY\.md/ }));
 
     expect(screen.getByText(/binary file/i)).toBeInTheDocument();
+  });
+
+  acceptance("memory", "browse a partition as a file tree with a read-only preview", () => {
+    // The partition page's half: a tree over the partition's own files beside
+    // a read-only preview that opens and reveals, with no per-note action.
+    stubTree(ROOT);
+    stubContent({ content: "# Worktrees\n\nalways develop in one" });
+
+    renderTree();
+    expect(screen.getByRole("button", { name: /MEMORY\.md/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^notes$/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /worktree-development\.md/ }));
+
+    expect(screen.getByRole("heading", { name: "Worktrees" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^edit$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^delete$/i })).toBeNull();
   });
 });

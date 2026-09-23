@@ -15,12 +15,12 @@
 import type { TFunction } from "i18next";
 import { Badge } from "@/components/ui/badge";
 import type { Column } from "@/components/DataTable";
-import type { DiffCounts, RunRecord } from "@/lib/api/sync";
+import type { DiffCounts } from "@/lib/api/sync";
 import { toneClass, type Tone } from "@/lib/statusColors";
 import { formatDateTime } from "@/lib/utils";
 import { SyncHeldRoundActions } from "./SyncHeldRoundActions";
 import { SyncRollbackAction } from "./SyncRollbackAction";
-import { quietSpan, type SyncRunRow } from "./syncRunRows";
+import { groupSpan, type SyncRunRow } from "./syncRunRows";
 
 /**
  * A round's status in the badge vocabulary the rest of the app uses.
@@ -39,6 +39,7 @@ const STATUS_TONE: Record<string, Tone> = {
   push_failed: "warn",
   failed: "error",
   disabled: "muted",
+  awaiting_join: "warn",
 };
 
 /** A round's status as a word, falling back to the wire value verbatim. */
@@ -51,46 +52,33 @@ function countsLabel(t: TFunction, counts: DiffCounts): string {
   return t("sync.history.countsShort", { ...counts });
 }
 
-/** What a free-text search matches against, for either kind of row.
- *
- * A folded row answers for the stretch it stands in for — its own span and the
- * words "no change" — not its members' fields. Searching for a commit should
- * not surface a fold that merely contains one, because the fold does not show
- * it and clicking it would not reveal it. */
-export function rowSearchHaystack(t: TFunction, row: SyncRunRow): string {
-  if (row.kind === "quiet") {
-    const span = quietSpan(row.runs);
-    return [formatDateTime(span.from), formatDateTime(span.to), statusLabel(t, "no_change")]
-      .join(" ")
-      .toLowerCase();
-  }
-  return runSearchHaystack(t, row.run);
-}
-
-/** What a free-text search on one round matches against. Not exported: every
- *  caller goes through `rowSearchHaystack`, which knows about folds too, and a
- *  second entry point is how a search that ignores them creeps back. */
-function runSearchHaystack(t: TFunction, run: RunRecord): string {
-  return [
-    formatDateTime(run.finished_at),
-    statusLabel(t, run.status),
-    run.status,
-    run.join ?? "",
-    run.commit ?? "",
-    ...run.conflicts,
-    ...run.agent_resolved,
-    ...run.locked_refs,
-    ...run.failures.map((f) => `${f.path} ${f.reason}`),
-    run.error ?? "",
-  ]
-    .join(" ")
-    .toLowerCase();
-}
-
 /** The status a folded row answers the filter with: every round inside it
- *  ended `no_change`, so filtering to that outcome should find it. */
+ *  ended the same way, which is what let them fold at all. */
 export function rowStatus(row: SyncRunRow): string {
-  return row.kind === "quiet" ? "no_change" : row.run.status;
+  return row.kind === "group" ? row.status : row.run.status;
+}
+
+/**
+ * The status word for a row, told whether the vault is still waiting on it.
+ *
+ * `awaiting_confirmation` is the one outcome whose name is a request. A round
+ * that was held reads "paused — waiting for you", and that is true of exactly
+ * one round at a time: the timer re-raises the same hold as a NEW round every
+ * pass, and answering one produces a further round rather than rewriting the
+ * ones that were held. So every older held round keeps a label addressed to a
+ * reader who has nothing to do about it — four rows from last Tuesday, each
+ * asking for an answer that was given, or superseded, days ago.
+ *
+ * History gets the plain word. The request belongs to the round that still
+ * carries the buttons, which `heldRoundId` already decides.
+ */
+function statusWord(t: TFunction, row: SyncRunRow, heldTarget: number | null): string {
+  const status = rowStatus(row);
+  const isLiveHold = row.kind === "run" && row.run.id === heldTarget;
+  if (status === "awaiting_confirmation" && !isLiveHold) {
+    return t("sync.round.statusLabel.awaiting_confirmation_past");
+  }
+  return statusLabel(t, status);
 }
 
 interface ColumnArgs {
@@ -115,7 +103,7 @@ export function syncRunColumns(t: TFunction, args: ColumnArgs): Column<SyncRunRo
       // distance between two spans rather than as fourteen timestamps to scan.
       cell: (row) => {
         if (row.kind === "run") return formatDateTime(row.run.finished_at);
-        const span = quietSpan(row.runs);
+        const span = groupSpan(row.runs);
         return (
           <span className="whitespace-nowrap">
             {formatDateTime(span.from)} → {formatDateTime(span.to)}
@@ -130,9 +118,9 @@ export function syncRunColumns(t: TFunction, args: ColumnArgs): Column<SyncRunRo
       cell: (row) => (
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge variant="outline" className={toneClass(STATUS_TONE[rowStatus(row)] ?? "muted")}>
-            {statusLabel(t, rowStatus(row))}
+            {statusWord(t, row, heldTarget)}
           </Badge>
-          {row.kind === "quiet" ? (
+          {row.kind === "group" ? (
             <Badge variant="outline" className={toneClass("muted")}>
               {t("sync.runs.folded", { count: row.runs.length })}
             </Badge>

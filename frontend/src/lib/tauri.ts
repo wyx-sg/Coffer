@@ -45,27 +45,90 @@ export async function getDaemonInfo(): Promise<DaemonInfo> {
 }
 
 /**
- * Do the handshake and install its result: ask the shell where the daemon is,
- * publish that on the connection globals, and drop the memoised API client.
+ * Install a connection the shell handed over: publish it on the two
+ * connection globals and drop the memoised API client.
  *
- * All three steps or none. The client captures the base URL when it is built,
- * so a handshake that skipped the reset would leave the app calling whatever
- * origin it had guessed first — for the desktop host a `tauri://` asset origin
- * with no daemon behind it. That is the kind of bug a second copy of these
- * lines grows, so both callers share this one: `main.tsx` at launch, and the
- * offline banner after a restart.
+ * Both steps or neither. The client captures the base URL when it is built,
+ * so installing without the reset would leave the app calling whatever address
+ * it had when the first query fired — for the desktop host, none at all.
  *
- * Throws whatever the IPC threw — the callers want different things from a
- * failure (log and render anyway vs. tell the user the restart half-worked),
- * so neither is served by swallowing it here.
+ * Two suppliers call this: the launch handshake below, and a restart, which
+ * returns the connection of the daemon it waited for.
  */
-export async function connectToShellDaemon(): Promise<void> {
-  const info = await getDaemonInfo();
+export function applyDaemonConnection(info: DaemonInfo): void {
   setDaemonConnection(info.baseUrl, info.token);
   resetApiClient();
 }
 
-export interface RestartResult {
+/**
+ * Do the handshake and install its result.
+ *
+ * Throws whatever the IPC threw; `credentialDesktopHost` below decides what a
+ * failure means.
+ */
+export async function connectToShellDaemon(): Promise<void> {
+  applyDaemonConnection(await getDaemonInfo());
+}
+
+/**
+ * Delays before each retry of the launch handshake, in milliseconds; the last
+ * one repeats for as long as it takes.
+ */
+export const HANDSHAKE_RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
+
+/** The delay before attempt `n + 1`, given `n` attempts have failed. */
+export function handshakeRetryDelay(failures: number): number {
+  const i = Math.min(Math.max(failures, 1), HANDSHAKE_RETRY_DELAYS_MS.length) - 1;
+  return HANDSHAKE_RETRY_DELAYS_MS[i];
+}
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Keep asking the shell for a connection until it gives one, then hand control
+ * back to `onConnected`.
+ *
+ * Retrying is the whole point. A handshake is one attempt at a thing with a
+ * deadline — the shell gives a daemon it started a bounded time to answer —
+ * and a real vault's daemon spends seconds unpacking, migrating and starting
+ * its upstreams before it accepts a request. When an attempt lost that race
+ * the page was left with no address to call and no way to get one: its own
+ * status poll had nothing to poll, so the offline banner stayed up over a
+ * daemon that had been serving happily for a minute, and the only way out was
+ * the banner's Restart button — which worked purely because it ran the
+ * handshake again. This does that, without the user.
+ *
+ * It does not stop trying. Each attempt is cheap when a daemon is up (the
+ * shell probes and attaches), and the shell refuses to start a second daemon
+ * beside a running one, so a loop that settles at one attempt every thirty
+ * seconds is also the recovery for "the user has just fixed their install".
+ *
+ * Outside Tauri there is nothing to ask: the browser hosts were credentialed
+ * by whoever served the document.
+ */
+export async function credentialDesktopHost(
+  onConnected: () => void | Promise<void>,
+  deps: { connect?: () => Promise<void>; wait?: (ms: number) => Promise<void> } = {},
+): Promise<void> {
+  if (!isTauri()) return;
+  const connect = deps.connect ?? connectToShellDaemon;
+  const wait = deps.wait ?? sleep;
+  for (let failures = 0; ; failures += 1) {
+    try {
+      await connect();
+      await onConnected();
+      return;
+    } catch (e) {
+      // Not fatal, and not silent either: the app is already on screen with
+      // its offline banner, and the shell logs its own side of the failure to
+      // ~/.coffer/logs/daemon.log.
+      console.error("Coffer: could not get daemon info from the desktop shell", e);
+    }
+    await wait(handshakeRetryDelay(failures + 1));
+  }
+}
+
+export interface RestartResult extends DaemonInfo {
   /** PID of the newly-spawned daemon process. */
   pid: number;
   /** true when the daemon was successfully spawned. */
@@ -78,6 +141,12 @@ export interface RestartResult {
  * Only the desktop host can offer this: in a browser the page is served *by*
  * the daemon, so a daemon that is down cannot serve the button that would
  * restart it. Throws outside Tauri.
+ *
+ * The shell waits for the replacement to answer and returns its connection
+ * with the PID, so the caller installs that rather than handshaking again. A
+ * second handshake here is what used to start a second daemon: it arrived
+ * before the new one had bound a port, and the handshake answers "no daemon"
+ * by spawning one.
  */
 export async function restartDaemon(): Promise<RestartResult> {
   if (!isTauri()) {

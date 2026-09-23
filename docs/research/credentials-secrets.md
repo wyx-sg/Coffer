@@ -1,7 +1,7 @@
 # Competitive Research — Credential & Secret Management for Agents & MCP
 
-> Internal competitive-research report for Coffer's credential store (constitution
-> Principle; [Envelope-Encrypted Credentials](../decisions/envelope-encrypted-credential-store.md)).
+> Internal competitive-research report for Coffer's credential store (the Credentials
+> constraint in `docs/principles.md`; [Envelope-Encrypted Credentials](../decisions/envelope-encrypted-credential-store.md)).
 > **Date:** 2026-06-16. **Method:** deep-research harness.
 > **Provenance caveat:** this run hit an API session limit during verification, so
 > claims could not be re-verified by vote — but they are drawn from primary

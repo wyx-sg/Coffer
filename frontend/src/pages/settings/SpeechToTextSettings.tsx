@@ -1,7 +1,8 @@
 // frontend/src/pages/settings/SpeechToTextSettings.tsx
 //
 // Settings → Engine: the connection and model Coffer transcribes voice with
-// (spec internal-engine FR-025, spec provider-switching `transcribe_default`).
+// (spec internal-engine "Transcribe speech on its own connection and model",
+// spec provider-switching `transcribe_default`).
 //
 // It is its own card, beside Coffer's model rather than inside it, because the
 // two halves are deliberately independent: transcription runs on a SECOND

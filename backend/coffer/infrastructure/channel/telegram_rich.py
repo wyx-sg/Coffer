@@ -1,4 +1,5 @@
-"""Rich messages: the agent's markdown, rendered as markdown (FR-046).
+"""Rich messages: the agent's markdown, rendered as markdown (see "Render
+replies in the platform's rich format").
 
 Bot API 10.1 gave Telegram a structured message format whose Markdown flavour
 is very close to what an agent already writes — headings, ordered and unordered

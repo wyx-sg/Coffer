@@ -1,5 +1,5 @@
 """Contract test: the running app's generated OpenAPI for the /api/v1/memory
-paths structurally matches specs/memory/contracts/api.openapi.yaml.
+paths structurally matches openspec/specs/memory/contracts/api.openapi.yaml.
 
 Mirrors test_chat_openapi.py and test_channel_contract.py (drive the assertions
 from the yaml itself) and test_knowledge_openapi.py (compare the route set
@@ -12,7 +12,7 @@ module is the memory half of closing it.
 
 Two deliberate notes on what is *not* asserted here:
 
-  - ``ErrorEnvelope`` (specs/memory/contracts/api.openapi.yaml:383) has no
+  - ``ErrorEnvelope`` (openspec/specs/memory/contracts/api.openapi.yaml:383) has no
     counterpart in the generated components, and neither does the app-wide
     ``ErrorResponse``. Every failure on this family is raised as a
     ``CofferError`` and mapped centrally rather than declared as a route's
@@ -40,7 +40,7 @@ import yaml
 from coffer.main import app
 
 _MEMORY_OPENAPI_PATH = (
-    Path(__file__).resolve().parents[3] / "specs/memory/contracts/api.openapi.yaml"
+    Path(__file__).resolve().parents[3] / "openspec/specs/memory/contracts/api.openapi.yaml"
 )
 
 _MEMORY_PREFIX = "/api/v1/memory"
@@ -59,7 +59,7 @@ def generated_schema() -> dict[str, Any]:
 
 @pytest.fixture(scope="module")
 def spec_doc() -> dict[str, Any]:
-    """Parse specs/memory/contracts/api.openapi.yaml once per module."""
+    """Parse openspec/specs/memory/contracts/api.openapi.yaml once per module."""
     return yaml.safe_load(_MEMORY_OPENAPI_PATH.read_text())  # type: ignore[no-any-return]
 
 
@@ -130,17 +130,18 @@ def test_no_memory_route_is_undocumented(
     declared = _declared_operations(spec_doc)
     undeclared = served - declared
     assert not undeclared, (
-        f"served by the app but absent from specs/memory/contracts/api.openapi.yaml: "
+        f"served by the app but absent from openspec/specs/memory/contracts/api.openapi.yaml: "
         f"{sorted(f'{m} {p}' for m, p in undeclared)}"
     )
 
 
 def test_the_management_plane_is_twelve_routes(spec_doc: dict[str, Any]) -> None:
     """The contract's own ``info.description`` says twelve routes and that this
-    is the whole management plane (FR-036). A thirteenth arriving is a
-    decision, not an accident, so the count is pinned. It was eleven until
-    ``/partitions/{uid}/retired`` joined it: a retirement record is not a
-    detail of the distil pass but a thing a person reads (FR-025)."""
+    is the whole management plane (see "Cover memory management on REST and the
+    CLI"). A thirteenth arriving is a decision, not an accident, so the count
+    is pinned. It was eleven until ``/partitions/{uid}/retired`` joined it: a
+    retirement record is not a detail of the distil pass but a thing a person
+    reads (see "Record retirements so they stick")."""
     assert len(_declared_operations(spec_doc)) == 12
 
 
@@ -191,8 +192,8 @@ def test_every_yaml_component_exists_with_its_required_fields(
         missing = _required_fields(schema) - _required_fields(generated[name])
         if missing:
             problems.append(f"{name}: required in the yaml but not generated: {sorted(missing)}")
-    assert not problems, "specs/memory/contracts/api.openapi.yaml drift:\n  " + "\n  ".join(
-        problems
+    assert not problems, (
+        "openspec/specs/memory/contracts/api.openapi.yaml drift:\n  " + "\n  ".join(problems)
     )
 
 
@@ -224,7 +225,8 @@ def test_the_read_only_file_shape_carries_no_fingerprint(
 def test_delivery_status_answers_only_installed_or_not(
     generated_schema: dict[str, Any],
 ) -> None:
-    """A fire is an event, not a property of an agent (FR-033, FR-039): there is
+    """A fire is an event, not a property of an agent (see "Audit every
+    delivery fire", "Show delivery state on the agent's own page"): there is
     deliberately no last-fired field, so a hook installed a minute ago is not
     flagged for its own normal state."""
     delivery = generated_schema["components"]["schemas"]["DeliveryStatusOut"]
@@ -251,21 +253,22 @@ def test_the_note_type_values_are_the_domains(spec_doc: dict[str, Any]) -> None:
 
 def test_a_note_carries_no_status_of_its_own(spec_doc: dict[str, Any]) -> None:
     """A note this layer removes leaves ``notes/`` and is recorded in
-    ``RETIRED.md`` (FR-025) — it does not sit in place marked dead. The
-    previous design kept a ``status`` / ``superseded_by`` / ``conflicts_with``
-    trio on every fact and then went on serving superseded ones from
-    ``recall`` anyway, so the absence of those fields from the wire is the
-    shape of that bug's fix and is pinned here."""
+    ``RETIRED.md`` (see "Record retirements so they stick") — it does not sit
+    in place marked dead. The previous design kept a ``status`` /
+    ``superseded_by`` / ``conflicts_with`` trio on every fact and then went on
+    serving superseded ones from ``recall`` anyway, so the absence of those
+    fields from the wire is the shape of that bug's fix and is pinned here."""
     note_summary = spec_doc["components"]["schemas"]["NoteSummaryOut"]["properties"]
     assert not {"status", "superseded_by", "conflicts_with"} & set(note_summary)
 
 
 def test_the_composed_context_has_no_layers(spec_doc: dict[str, Any]) -> None:
-    """Delivery is the whole index plus a directory path (FR-028), so there is
-    nothing left to report layers of. ``layers`` described a budgeted digest
-    that shipped L0 alone when L1 did not fit; on the live vault it shipped 8
-    of 189 lines every session. Its absence is pinned so the field cannot
-    return without the design returning with it."""
+    """Delivery is the whole index plus a directory path (see "Deliver the
+    index and the notes path at session start"), so there is nothing left to
+    report layers of. ``layers`` described a budgeted digest that shipped L0
+    alone when L1 did not fit; on the live vault it shipped 8 of 189 lines
+    every session. Its absence is pinned so the field cannot return without the
+    design returning with it."""
     composed = spec_doc["components"]["schemas"]["ComposedContextOut"]
     assert "layers" not in composed["properties"]
     assert set(composed["required"]) == {"text", "partition", "notes_included", "notes_omitted"}

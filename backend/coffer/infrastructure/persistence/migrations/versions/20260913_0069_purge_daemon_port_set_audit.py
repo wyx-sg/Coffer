@@ -2,10 +2,10 @@
 
 ``daemon_port_set`` leaves ``AuditEventType`` with the route that was its only
 writer: the daemon's port stops being reachable over HTTP and is set from the
-CLI alone (spec daemon FR-011). The CLI cannot take the event over,
-either — it has to work with no daemon running, which is exactly the state a
-port that will not bind leaves you in, and the audit table is the daemon's.
-So the event is not moved, it ends.
+CLI alone (spec daemon "Bind a fixed, settable port"). The CLI cannot take the
+event over, either — it has to work with no daemon running, which is exactly
+the state a port that will not bind leaves you in, and the audit table is the
+daemon's. So the event is not moved, it ends.
 
 The rows it already wrote have to go with it, for the reason 0055 gave when it
 purged twenty-seven retired events at once: a row whose ``event_type`` nothing

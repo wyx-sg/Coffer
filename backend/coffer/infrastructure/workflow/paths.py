@@ -2,7 +2,7 @@
 
 Mirrors ``infrastructure/knowledge/paths.py`` and ``infrastructure/memory/
 paths.py`` on purpose: one root, one guard, one override for tests. The tree
-is the one [`data-model.md`](../../../../specs/workflow/data-model.md) draws::
+is the one [`data-model.md`](../../../../openspec/specs/workflow/data-model.md) draws::
 
     ~/.coffer/workflows/<run_id>/
     ├── CATALOG.md                 # generated, never hand-edited (FR-031)

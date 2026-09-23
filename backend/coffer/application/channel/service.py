@@ -44,10 +44,10 @@ _logger = logging.getLogger(__name__)
 class ChannelDiagnostic:
     """Something about the channel that looks configured but will not work.
 
-    spec channels/telegram FR-004: the failure mode this exists for is a setting that reads
-    correctly
-    in Coffer and does nothing in the chat. A diagnostic always names the fix —
-    reporting a problem the user cannot act on is just noise.
+    spec channels "Diagnose configuration a platform setting defeats": the failure mode
+    this exists for is a setting that reads correctly in Coffer and does nothing in the
+    chat. A diagnostic always names the fix — reporting a problem the user cannot act on
+    is just noise.
     """
 
     code: str  # stable identifier, so the UI can style or link it
@@ -73,16 +73,18 @@ class ChannelStatus:
     # the pointer names a row in THIS machine's conversation store.
     peer_conversation_id: str | None
     callback: CallbackInfo | None
-    # FR-029/spec channels/telegram FR-004: contradictions between the configuration and what the
-    # platform actually permits. Empty is the healthy case.
+    # spec channels "Diagnose configuration a platform setting defeats": contradictions
+    # between the configuration and what the platform actually permits. Empty is the
+    # healthy case.
     diagnostics: tuple[ChannelDiagnostic, ...] = ()
     # The machine this channel is bound to, and whether that machine is this
-    # one (spec channels ``## Where a channel runs``). Both, because ``running``
-    # alone cannot tell "stopped" from "not mine to start", and those two need
-    # opposite reactions from the user: one is a fault to chase, the other is
-    # the system working. ``runs_on`` is the raw id — resolving it to a machine
-    # NAME needs the registry, which lives in the sync module's working tree,
-    # so the surface that has it does the resolving and the CLI prints the id.
+    # one (spec channels "Bind each channel to the one machine that runs it").
+    # Both, because ``running`` alone cannot tell "stopped" from "not mine to
+    # start", and those two need opposite reactions from the user: one is a
+    # fault to chase, the other is the system working. ``runs_on`` is the raw
+    # id — resolving it to a machine NAME needs the registry, which lives in the
+    # sync module's working tree, so the surface that has it does the resolving
+    # and the CLI prints the id.
     runs_on: str | None = None
     runs_here: bool = False
 
@@ -133,9 +135,9 @@ class ChannelService:
 
         Returns the code, its expiry, and — where the platform has a
         parameterised start link and the bot's username is known — a link that
-        carries the code (FR-051), so the owner pairs by opening it instead of
-        transcribing eight characters on a phone. The link is "" when there is
-        none; the typed code always works.
+        carries the code (see "Pair by a one-tap start link"), so the owner
+        pairs by opening it instead of transcribing eight characters on a phone.
+        The link is "" when there is none; the typed code always works.
         """
         resource = await self._channel(channel_uid)
         # The pending-code map and the running-adapter map are both keyed by the
@@ -194,7 +196,8 @@ class ChannelService:
         return (*findings, *self._privacy_mode_diagnostics(resource))
 
     def _privacy_mode_diagnostics(self, resource: Resource) -> tuple[ChannelDiagnostic, ...]:
-        """spec channels/telegram FR-004: a Telegram bot runs with privacy mode ON by default, which
+        """spec channels/telegram "Report privacy mode that defeats the group configuration":
+        a Telegram bot runs with privacy mode ON by default, which
         withholds ordinary group messages from it entirely. A channel told to
         act on unaddressed group messages under that setting looks correct in
         Coffer and does nothing in the chat."""

@@ -1,4 +1,5 @@
-"""Config-file allowlist builders — one per agent type (spec agent-registry FR-009).
+"""Config-file allowlist builders — one per agent type (spec agent-registry
+"Define a curated config-file allowlist per type").
 
 Split out of ``descriptor.py`` for the file-size limit, exactly as
 ``plugin_capability.py`` carries its facet's value objects. Each builder returns

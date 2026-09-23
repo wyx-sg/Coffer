@@ -1,4 +1,5 @@
-//! The slow poll behind spec vault-sync FR-096, and the surfaces it drives.
+//! The slow poll behind spec vault-sync "Say a vault needs a human where the
+//! user already is", and the surfaces it drives.
 //!
 //! `sync_alert.rs` decides *whether* the vault's last round needs a human and
 //! whether the user has already been told; this module asks the daemon, and
@@ -27,7 +28,7 @@ use crate::tray::{base_tray_icon, TRAY_ID};
 
 /// The tray entry this module owns: a permanent route to the `/sync` page whose
 /// label becomes the alert when a round needs a human. It is the click target
-/// FR-096 asks for — a desktop notification raised through this plugin exposes
+/// that requirement asks for — a desktop notification raised through this plugin exposes
 /// no click handler on macOS, so the thing the user reaches for after reading
 /// the notification is the tray, not the banner.
 pub const SYNC_MENU_ITEM_ID: &str = "sync_status";
@@ -39,7 +40,7 @@ pub const SYNC_MENU_IDLE_LABEL: &str = "Sync status";
 /// Long enough for the launch handshake's detect-or-spawn to have resolved, so
 /// the first tick does not race the daemon the app is still starting.
 const FIRST_POLL_DELAY: Duration = Duration::from_secs(30);
-/// Ten minutes. FR-096's condition changes at most once a converge interval and
+/// Ten minutes. The alert's condition changes at most once a converge interval and
 /// then waits for a person; polling harder buys nothing and costs a wakeup.
 const POLL_INTERVAL: Duration = Duration::from_secs(600);
 
@@ -82,8 +83,8 @@ pub fn open_sync_page(app: &AppHandle) {
 }
 
 /// The frontend is one `createBrowserRouter` over `frontend/dist` (spec
-/// desktop-app FR-002), so the shell navigates it the way the browser host's
-/// back button does — push the entry, then let the router's own `popstate`
+/// desktop-app "Consume the one frontend build the daemon serves"), so the shell navigates it the
+/// way the browser host's back button does — push the entry, then let the router's own `popstate`
 /// listener read it — rather than gaining a second code path in the page. The
 /// existing history state is carried over because React Router keys its listener
 /// on the `idx` it keeps there; dropping it would make the event a no-op.
@@ -220,8 +221,8 @@ fn mark_icon(app: &AppHandle, marked: bool) {
 }
 
 /// The Dock badge. macOS is the only platform the shell ships on (spec
-/// desktop-app FR-013) and the only one where Tauri exposes this at all, so the
-/// other builds — the Linux `cargo check` CI leg among them — get a no-op.
+/// desktop-app "Ship the desktop tier as a macOS arm64 dmg") and the only one where Tauri exposes
+/// this at all, so the other builds — the Linux `cargo check` CI leg among them — get a no-op.
 #[cfg(target_os = "macos")]
 fn set_dock_badge(app: &AppHandle, label: Option<&str>) {
     if let Some(window) = app.get_webview_window("main") {
@@ -295,7 +296,7 @@ mod tests {
 
     #[test]
     fn the_poll_is_slower_than_the_launch_and_far_slower_than_the_condition() {
-        // FR-096's condition is at most hourly and then waits for a person.
+        // The alert's condition is at most hourly and then waits for a person.
         assert!(POLL_INTERVAL >= Duration::from_secs(300));
         assert!(FIRST_POLL_DELAY < POLL_INTERVAL);
     }

@@ -1,7 +1,9 @@
 """Unit tests for built-in MCP tool dispatch + invocation logging.
 
 The built-in (``coffer__*``) path shares the invocation log surface with
-upstream tools, so it must honour the same SC-010 leak rule: an arbitrary
+upstream tools, so it must honour the same leak rule (spec credentials "Hold
+plaintext only in memory at the moment of use", spec mcp-gateway "Record
+invocations without content"): an arbitrary
 downstream exception is logged by class name only, never its message (which
 could echo args / returned content). Coffer-authored errors keep their message.
 """

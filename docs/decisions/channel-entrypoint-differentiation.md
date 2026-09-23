@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-14
 **Deciders**: Yuxing Wu
-**Spec**: [channels](../../specs/channels/spec.md)
+**Spec**: [channels](../../openspec/specs/channels/spec.md)
 
 > **Amended (2026-06-20, simplification 8.4).** The per-binding workspace
 > allowlist, the `/cwd` switch, and the peer `preferred_workspace` are
@@ -56,8 +56,8 @@ Two facts from the code shaped the design:
    back to the channel's configured `default_agent`. The auxiliary
    (vault-facing) agent is not a routing target — routing is between the
    chat-path agents the registry exposes (`builtin`, `claude_code`, `codex`, and
-   any future registered agent), with no channel-side code per agent (spec channels
-   SC-004 preserved).
+   any future registered agent), with no channel-side code per agent ([channels](../../openspec/specs/channels/spec.md)
+   "Switch the conversation's agent from chat" holds).
 
 3. ~~**Workspaces are a channel-level allowlist and the cwd security boundary.**
    A channel declares a list of **named workspaces** (`{name, path}`), validated
@@ -130,7 +130,8 @@ Two facts from the code shaped the design:
 - The command set grows by `/agent` and `/model`; both ride the existing
   slash-command seam in the channel core and select behavior from capabilities,
   so no adapter learns about them — the differentiation layer is
-  channel-agnostic and any future channel inherits it (spec channels SC-003
-  preserved). (`/cwd` is withdrawn — see amendment above.)
+  channel-agnostic and any future channel inherits it (the N + M promise of
+  [channels](../../openspec/specs/channels/spec.md)' Purpose holds: a new channel
+  type is one adapter plus one config schema). (`/cwd` is withdrawn — see amendment above.)
 - The audit log answers "who drove which agent through which channel" without a
   schema change.

@@ -84,7 +84,8 @@ class _Env:
         self.engine_model = engine_model
         # What every internal consumer asks: the connection Coffer's own engine
         # runs on. Not the provider service — that only says which row is
-        # flagged (spec internal-engine FR-005).
+        # flagged (spec internal-engine "Resolve the engine's connection and model
+        # together").
         self.engine = engine
 
 

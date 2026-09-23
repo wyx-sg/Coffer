@@ -5,7 +5,7 @@
 // it outlived the page under an honest name and lives in `agentProviders.ts`.
 //
 // Wire types are the chat contract's generated schemas
-// (`specs/chat/contracts/api.openapi.yaml` → `generated/chat.ts`), re-exported
+// (`openspec/specs/chat/contracts/api.openapi.yaml` → `generated/chat.ts`), re-exported
 // under the names the hooks and pages already import. Transport is the shared
 // `call` (.agents/frontend.md §4).
 
@@ -18,7 +18,8 @@ type Schemas = components["schemas"];
 // Types
 // ---------------------------------------------------------------------------
 
-/** `attachment` blocks carry the file's name/mime (channel media); no path (FR-034). */
+/** `attachment` blocks carry the file's name/mime (channel media); no path (spec channels
+ *  "Persist inbound attachments as references"). */
 export type ContentBlock = Schemas["ContentBlockOut"];
 
 export type Message = Schemas["MessageOut"];

@@ -18,6 +18,8 @@ from coffer.domain.chat.errors import AgentConfigRejected, TurnInProgress
 from coffer.domain.chat.events import (
     AgentEvent,
     TextDelta,
+    ToolCall,
+    ToolResult,
     TurnDone,
     TurnError,
     TurnStarted,
@@ -139,6 +141,35 @@ async def test_happy_path_persists_assistant_message() -> None:
     assert assistant.completion_tokens == 8
     texts = [b.text for b in assistant.content if isinstance(b, TextBlock)]
     assert "Paris is the capital" in "".join(texts)
+
+
+@pytest.mark.asyncio
+async def test_persisted_reply_keeps_text_and_tool_calls_in_the_order_the_turn_emitted_them() -> (
+    None
+):
+    scripted: list[AgentEvent] = [
+        TextDelta(text="Let me "),
+        TextDelta(text="look."),
+        ToolCall(tool_use_id="tu-1", tool_name="read_file", tool_input={"path": "a"}),
+        ToolResult(tool_use_id="tu-1", tool_name="read_file", output={"ok": 1}, error=None),
+        TextDelta(text="It says hi."),
+        TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn"),
+    ]
+    orchestrator, _, msg_repo, _ = make_orchestrator(scripted)
+    conv = await orchestrator._chat.create_conversation(agent_key="builtin")
+
+    await drain_queue(await orchestrator.start_turn(conv.id, "read a"))
+
+    assistant = msg_repo.all_messages()[1]
+    assert [
+        (b.type, getattr(b, "text", None) or getattr(b, "tool_use_id", None))
+        for b in assistant.content
+    ] == [
+        ("text", "Let me look."),
+        ("tool_use", "tu-1"),
+        ("tool_result", "tu-1"),
+        ("text", "It says hi."),
+    ]
 
 
 @pytest.mark.acceptance(spec="chat", scenario="token usage is recorded on the assistant message")
@@ -530,7 +561,8 @@ async def test_turn_completion_bumps_conversation_updated_at() -> None:
 async def test_in_flight_turn_leaves_a_streaming_assistant_row() -> None:
     """While a turn streams, a placeholder assistant message with
     status='streaming' must exist, so a daemon crash leaves a row the startup
-    sweep can flip to 'failed' (FR-020) rather than a silently-missing reply."""
+    sweep can flip to 'failed' (spec chat "Sweep streaming rows left by a
+    crashed daemon") rather than a silently-missing reply."""
     orchestrator, _, msg_repo, _ = make_orchestrator(
         adapter=_BlockingAdapter([TextDelta(text="partial")])
     )

@@ -261,6 +261,12 @@ class ResourceService:
 
         return await citations_of(self, credential_ref)
 
+    async def cited_credential_refs(self) -> dict[str, builtins.list[Resource]]:
+        """Every credential ref cited by any resource, mapped to its citers."""
+        from coffer.application.resource_delete_ops import all_citations
+
+        return await all_citations(self)
+
     async def update_config(
         self,
         uid: str,

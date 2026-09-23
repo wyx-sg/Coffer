@@ -44,15 +44,15 @@ async def send_text_chunks(
 ) -> SentMessage:
     """Send ``markdown`` as one or more messages; return the last one's handle.
 
-    Where the platform has rich messages (FR-046) the agent's markdown goes out
+    Where the platform has rich messages the agent's markdown goes out
     as markdown. Otherwise — or the moment the platform refuses — the text is
     rendered to the HTML subset and chunked to the plain limit instead, so the
     reply always arrives even when the formatting cannot.
     """
     if ephemeral is not None and ephemeral_feature is not None and ephemeral_feature.available:
-        # FR-049: show this to one member of the group only. Never allowed to
-        # cost the answer — a platform that refuses falls through to the
-        # ordinary send below, which is exactly the noise Coffer already made.
+        # "Keep non-answer chatter private in a group": show this to one member of the group only.
+        # Never allowed to cost the answer — a platform that refuses falls through to the ordinary
+        # send below, which is exactly the noise Coffer already made.
         sent = await _send_ephemeral(
             call,
             chat_id,

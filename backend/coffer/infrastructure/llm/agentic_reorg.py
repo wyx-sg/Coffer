@@ -1,7 +1,7 @@
 """The agentic langgraph loop the knowledge curation pass runs on.
 
 A ``create_react_agent`` loop driven by Coffer's internal model over one
-collection's ``topics/`` lane, with four internal write-capable tools. Lives in
+collection's documents, with four internal write-capable tools. Lives in
 ``infrastructure.llm`` (Contract 9a — the only place langchain/langgraph may be
 imported; ``infrastructure.chat``, where these adapters once lived, is now a
 forbidden one).

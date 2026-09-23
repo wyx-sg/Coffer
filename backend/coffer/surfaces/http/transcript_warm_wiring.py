@@ -1,4 +1,5 @@
-"""Wiring for the transcript summary cache's warm pass (spec agent-registry FR-041).
+"""Wiring for the transcript summary cache's warm pass (spec agent-registry
+"Keep the transcript summary sidecar disposable").
 
 Mirrors ``memory_wiring.py``'s ``start_distil_worker`` /
 ``stop_distil_worker`` pair: the worker itself is pure application code, and
@@ -41,7 +42,8 @@ def start_transcript_warm_worker(
         # Registered agents, enabled or not: the Conversations tab reads an
         # agent's own past sessions, which a disabled agent still has. Listing
         # resources is a read — it emits no audit event, which is what spec
-        # agent-registry FR-048 requires of anything behind a workspace listing.
+        # agent-registry "Audit every agent lifecycle event" requires of anything
+        # behind a workspace listing.
         targets: list[AgentTarget] = []
         for resource in await resource_svc.list(kind="agent"):
             cfg = AgentConfig.model_validate(resource.config)

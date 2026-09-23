@@ -9,7 +9,7 @@ The remote is a **rendezvous, not a system of record**. Every machine's vault st
 Create an empty repository wherever you like — GitHub, your own server, a bare repo on a NAS, even a `file://` path on a USB drive. Put the push token in the credential store first, so the remote names it by reference and never by value:
 
 ```bash
-coffer credentials set sync/github-token
+printf '%s' "$GITHUB_TOKEN" | coffer credentials set sync/github-token
 coffer sync remote set https://github.com/you/coffer-vault.git \
   --credential-ref sync/github-token \
   --interval 3600 \
@@ -23,12 +23,14 @@ coffer sync remote set https://github.com/you/coffer-vault.git \
 | `--with-credentials` | Carry credential **ciphertext**. Off by default. |
 | `--credential-ref` | Name of the push credential in the credential store. |
 
+`coffer credentials set` reads the secret from stdin, so the token never lands in your shell history. `--value` exists for scripts and says in its own help that it is the unsafe way.
+
 The remote is probed before it is accepted, so a typo or a token that cannot push fails here rather than an hour later. `coffer sync remote show` prints what is configured; `coffer sync remote clear` forgets it and leaves the vault exactly as it is.
 
-Then run a round by hand rather than waiting for the timer:
+Then join the remote. Joining is always explicit — the timer and `coffer sync now` never join on their own — so even the first machine adopts the repository it just named:
 
 ```bash
-coffer sync now
+coffer sync adopt --yes
 ```
 
 ```
@@ -52,14 +54,28 @@ Install Coffer there, then point it at the same repository:
 coffer sync adopt https://github.com/you/coffer-vault.git
 ```
 
-Joining reports **which kind of join this is** before it applies anything, and the two kinds get opposite treatment:
+`adopt` takes an optional URL: with one, it configures the remote with the defaults above when none is set yet. A remote that needs a push credential, a different branch or a different interval is configured with `coffer sync remote set` first, exactly as on the first machine, and then joined with a bare `coffer sync adopt`.
+
+Before it applies anything, `adopt` states the join and asks you to go ahead:
+
+```text
+Joining this remote as a returning machine: its id is in the registry, so it resumes from the base it last converged on.
+  last converged here: 2026-09-01
+  documents the remote changed since: 7
+  documents this vault holds: 42
+Join this remote? [y/N]:
+```
+
+It names **which kind of join this is**, the day this machine last converged with the remote, how many documents the remote has changed since then (everything it holds, for a new machine), and how many this vault holds. Answer `n` and nothing has changed. In a script, pass `--yes` once you have decided; without a terminal to answer the question and without `--yes`, `adopt` refuses rather than joining. On the web, the Sync page's Setup card offers **Join this remote** while this machine has not joined; it asks the same question in a dialog and joins only when you confirm. The preview is also `GET /api/v1/sync/join`.
+
+The two kinds get opposite treatment:
 
 - **A new machine takes the union.** Its id is not in the remote's machine registry, so the round's base is git's empty tree — a diff from nothing can only contain additions. Everything the remote holds is added here, everything this machine already had stays, and the next round publishes both. Deletion is structurally impossible, not merely avoided.
 - **A returning machine recovers its base.** Its id *is* in the registry, so it has converged before and merely lost its local pointer — a reinstall, a wiped `~/.coffer`, a disk restored from elsewhere. Its descriptor names the commit it last reached, that commit becomes the base, and the round proceeds as an ordinary stale-machine round: the remote's deletions are applied, this machine's edits are kept, and nothing resurrects.
 
 That distinction is the whole point. A returning machine treated as new would republish everything the others deleted while it was away — every deletion undone at once, with no conflict raised, because a union has no base to disagree with.
 
-If a returning machine's vault is *also* gone, the round stops and asks rather than publishing the loss; see [When a round asks before it deletes](#when-a-round-asks-before-it-deletes). And if its recorded base is no longer in the remote's history, there is no safe default at all, so the round refuses until you choose: `coffer sync adopt --keep-local` publishes this vault's documents as additions, and `coffer sync rebuild` takes the remote's state instead.
+If a returning machine's vault is *also* gone, the round stops and asks rather than publishing the loss; see [When a round asks before it deletes](#when-a-round-asks-before-it-deletes). And if its recorded base is no longer in the remote's history, there is no safe default at all, so `adopt` says so and stops until you choose: `coffer sync adopt --keep-local` publishes this vault's documents as additions, and `coffer sync rebuild` takes the remote's state instead. On the web, the join dialog names this case and offers only the keep-local answer, under a button that says so.
 
 ## Bring the master key over
 
@@ -77,7 +93,7 @@ coffer sync key fingerprint        # compare two machines by eye if you like
 ```
 
 ::: warning Credentials without the key stay locked
-Skip this and convergence still works, but credentials that arrived are reported as `credentials_locked` and the resources that need them will not start. The Machines tab compares key fingerprints for you and says so in words, so you do not have to notice it yourself.
+Skip this and convergence still works, but credentials that arrived are reported as `credentials_locked` and the resources that need them will not start. The machine registry on the Sync page's **Setup** tab compares key fingerprints for you and says so in words, so you do not have to notice it yourself.
 :::
 
 ## What a round does
@@ -118,9 +134,13 @@ coffer sync history --limit 20
 2026-09-13T14:02:09  no_change  applied: nothing  published: nothing  —
 ```
 
+`status` exits non-zero when the last round needs you — held for confirmation, conflicted, or failed to push or run — so a script or a cron job can notice without parsing the output.
+
 Rounds that changed nothing are listed like any other. They are the majority, and they are what makes a **gap** visible: without them, a vault that stopped converging on Tuesday looks the same as one that has had nothing to do.
 
-A path that fails to apply is reported and rejoins the next round rather than aborting this one. A path that cannot apply on this machine **at all** — an agent whose `config_dir` does not exist here — is recorded as *not applicable here*: it is preserved, not retried, and not counted as an error.
+A path that fails to apply is reported and rejoins the next round rather than aborting this one. A path that cannot apply on this machine **at all** — an agent whose `config_dir` does not exist here — is recorded as *not applicable here*: it is preserved, not retried, and not counted as an error. The round that meets it lists it under `not applicable here` rather than `could not apply`, `coffer sync status` lists every path this machine holds that way, and on the Sync page the round's row in **Runs** shows them under *Not applicable on this machine*. Each round re-checks only the cheap precondition — does that agent's config directory exist here now? — so installing the agent later brings its document in on the next round, with no error in between.
+
+Until a machine has joined, a round — the timer's or `coffer sync now` — still **detects** the join: it reads the remote's registry and works out whether this machine is new or returning, recovering a returning machine's base from its own descriptor, so a machine that forgot its pointer cannot skip the question. But it **applies** nothing and publishes nothing: it ends as `awaiting_join` and reports the join it found — the case, the day this machine last converged, how many documents the remote changed since and how many this vault holds. `coffer sync now` and `coffer sync status` print that report and point at `coffer sync adopt` (`status` exits non-zero, like any state that waits on you); the Sync page shows it on the Setup card and offers **Join this remote**, which confirms before it joins. The waiting round is recorded once, not once per interval. A pointer that no longer resolves — the working tree was deleted or moved — also waits for `adopt`, and the daemon log says so once.
 
 ## What a machine keeps to itself
 
@@ -139,7 +159,7 @@ The cost is worth knowing: a resource arriving on a machine for the first time s
 
 **Coffer's own skill does not sync.** `coffer-guide` — the manual Coffer writes for itself, carrying the catalogue of your knowledge — is regenerated on each machine at every start and whenever the catalogue moves. Part of what goes into it is which collections are *enabled*, and that is reach, which stays on the machine it was set on. So the laptop and the desktop legitimately hold different copies, and publishing either would only have them overwriting each other on every round. Neither its folder nor its registration is ever pushed; each machine writes its own. Your own imported skills converge exactly as before.
 
-**Channels do not sync at all.** A channel is an inbound surface bound to one machine — its port, its tunnel, the webhook URL the platform was told to call — so a channel arriving on a second machine would at best do nothing and at worst answer the same conversation twice. Configure channels on each machine that needs one.
+**A channel's adapter stays on one machine.** A channel is an inbound surface — a port, a tunnel, the webhook URL the platform was told to call — and two machines answering it would reply to the same conversation twice. So the channel's document travels, carrying its configuration, its credential references, its pairings and the one machine whose daemon runs its adapter, and every other machine holds it without starting anything. Moving a bot to another machine is a rebind, not a re-registration. See [Channels](/guide/channels).
 
 ## The machines in your vault
 
@@ -153,6 +173,8 @@ Laptop  (this machine) a3f21c9e  darwin  2026-09-13      ✓    claude-code, cod
 Desktop                b7c40d29  darwin  2026-09-13      ✓    claude-code
 ```
 
+The `Key` column is the comparison already made for you: `✓` means that machine's credentials decrypt here, `✗ different` means they do not, and `—` means one of the two machines has published no fingerprint yet.
+
 Rename one whenever you like — nothing in the vault references the label, or the id. Retiring one removes its descriptor and rewrites nothing else:
 
 ```bash
@@ -160,7 +182,7 @@ coffer sync machine rename "Work desktop"
 coffer sync machine remove b7c40d29e1f58a33
 ```
 
-The machine id is derived from the host — `IOPlatformUUID` on macOS, `/etc/machine-id` on Linux — so it survives reinstalling Coffer and a machine never comes back as a ghost. Where neither is readable a generated id is cached under `~/.coffer` instead; that one does **not** survive deleting the directory, and both `status` and the Machines tab say so.
+The machine id is derived from the host — `IOPlatformUUID` on macOS, `/etc/machine-id` on Linux — so it survives reinstalling Coffer and a machine never comes back as a ghost. Where neither is readable a generated id is cached under `~/.coffer` instead; that one does **not** survive deleting the directory, and both `status` and the machine registry say so.
 
 ## When a conflict stops a round
 
@@ -174,7 +196,7 @@ conflict
   resolve them with your own git tools, then run 'coffer sync now'
 ```
 
-The vault is untouched and the pointer has not moved, so nothing is lost while you decide. The working tree is an ordinary git repository:
+The vault is untouched and the pointer has not moved, so nothing is lost while you decide. That holds for a join too: a join that stops on a conflict has still joined — the machine has its base — so after resolving, the next step is the same `coffer sync now` (running `coffer sync adopt` again does the same thing on a machine that has joined). The working tree is an ordinary git repository:
 
 ```bash
 cd ~/.coffer/sync
@@ -255,11 +277,12 @@ Conversations and the audit log are excluded on purpose: they record what happen
 
 ## The Sync page and REST
 
-Everything above is also a top-level **Sync** page in the app, at `/sync`, with three tabs:
+Everything above is also a top-level **Sync** page in the app, at `/sync`, with two tabs:
 
-- **Status** — the remote's configuration, a converge-now button, and the master-key card, which saves the key as a browser download and reads it back through a file picker. A conflict or a held round appears here as a banner, at the top, because both are states you have to act on rather than records to browse.
-- **History** — every round this machine has run, as a searchable, filterable table: when it finished, how it ended, what it applied here, what it published to the remote, and the commit it landed on. Applied and published are two columns rather than one, because that is the whole point of bidirectional convergence: a machine that publishes every round and applies nothing is coming from somewhere, and one that applies every round and publishes nothing is going somewhere. Open a row for the paths an agent merged, the ones that could not be applied, any locked credential references, and the error.
-- **Machines** — the registry, with this machine marked, each machine's key fingerprint stated as a match or a mismatch in words, and the agents registered there.
+- **Runs**, where the page opens — every round this machine has run, as a searchable, filterable table: when it finished, how it ended, what it applied here, what it published to the remote, and the commit it landed on. Applied and published are two columns rather than one, because that is the whole point of bidirectional convergence: a machine that publishes every round and applies nothing is coming from somewhere, and one that applies every round and publishes nothing is going somewhere. Consecutive rounds that changed nothing fold into one row giving the span and the count. Open a row for the paths an agent merged, the ones that could not be applied, any locked credential references, and the error.
+- **Setup** — the remote's configuration and a converge-now button, the master-key card, which saves the key as a browser download and reads it back through a file picker, and the machine registry, with this machine marked, each machine's key fingerprint stated as a match or a mismatch in words, and the agents registered there.
+
+A held round carries its answers **on its own row** — confirm, naming the direction, the areas and the paths before it runs; reject; and, when this machine is the one that would publish the loss, rebuild from the remote. A conflict is a banner above the table instead, because its paths are resolved with your own git in the working tree. The newest round carries an **Undo** naming the paths it would take back — but only when it applied something here; after a quiet round there is nothing to undo, and the button does not move down to an older round, because a rollback always reverses the newest snapshot. Restoring to a point in time stays on the command line: the page has no view of the remote's history to preview it against.
 
 Over HTTP the same operations live under `/api/v1/sync/*` — `remote`, `run`, `adopt`, `status`, `runs`, `restore`, `confirm`, `reject`, `rebuild`, `rollback`, the `machines` family and the key family. The key routes carry the key **material**, never a path: the CLI does its own file I/O so the daemon never opens a path a caller named.
 

@@ -130,3 +130,62 @@ def test_a_file_from_an_older_build_keeps_its_keys_and_still_reads() -> None:
         "machine_name": "laptop",
     }
     assert daemon_config.read_machine_name() == "laptop"
+
+
+# --- the idle window (spec daemon "Stand down after an idle window") --------
+#
+# Three states, not two, and the difference matters: absent means "the default
+# applies", null means "the user turned it off", and those must not collapse.
+
+
+def test_idle_window_defaults_when_nothing_is_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert daemon_config.read_idle_shutdown_hours() == daemon_config.DEFAULT_IDLE_SHUTDOWN_HOURS
+
+
+def test_idle_window_round_trips(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    daemon_config.write_idle_shutdown_hours(3)
+    assert daemon_config.read_idle_shutdown_hours() == 3
+
+
+def test_idle_window_can_be_turned_off(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Explicitly off — for a vault whose channels must answer at any hour —
+    and distinguishable from never having been set."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    daemon_config.write_idle_shutdown_hours(None)
+    assert daemon_config.read_idle_shutdown_hours() is None
+
+
+def test_an_idle_window_too_short_to_mean_anything_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Below the floor the setting stops meaning "nobody is using it" and
+    # starts meaning "pay a cold start for every quiet minute".
+    monkeypatch.setenv("HOME", str(tmp_path))
+    with pytest.raises(daemon_config.InvalidIdleShutdown):
+        daemon_config.write_idle_shutdown_hours(0.01)
+
+
+def test_a_nonsense_idle_window_in_the_file_falls_back_to_the_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Same rule the port follows: a hand-mangled config must not stop the
+    # daemon, because an unbootable daemon cannot be repaired from the UI.
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".coffer").mkdir()
+    (tmp_path / ".coffer" / "daemon-config.json").write_text('{"idle_shutdown_hours": "soon"}')
+    assert daemon_config.read_idle_shutdown_hours() == daemon_config.DEFAULT_IDLE_SHUTDOWN_HOURS
+
+
+def test_setting_the_idle_window_keeps_the_port(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # One file, several settings: writing one must not drop another.
+    monkeypatch.setenv("HOME", str(tmp_path))
+    daemon_config.write_fixed_port(8123)
+    daemon_config.write_idle_shutdown_hours(6)
+    assert daemon_config.read_fixed_port() == 8123
+    assert daemon_config.read_idle_shutdown_hours() == 6

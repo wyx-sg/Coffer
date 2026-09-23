@@ -29,7 +29,7 @@ would make every round stage a change (so an unchanged vault would commit), and
 would make two machines meeting for the first time conflict on this file before
 they had disagreed about anything real. Determinism — the same vault serializing
 to the same bytes on every machine — is normative (spec vault-sync
-``## Determinism and path portability``), and a per-export timestamp is exactly
+"Serialize deterministically"), and a per-export timestamp is exactly
 the "machine-local field" that rule says to strip.
 """
 

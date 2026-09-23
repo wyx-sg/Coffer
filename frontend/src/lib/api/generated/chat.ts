@@ -299,7 +299,7 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             error?: string | null;
-            /** @description An `attachment` block references channel media by filename and mime only; the local path is never emitted to the wire (FR-044). */
+            /** @description An `attachment` block references channel media by filename and mime only; the local path is never emitted to the wire (see "Re-materialise attachments from persisted history"). */
             filename?: string | null;
             mime?: string | null;
         };

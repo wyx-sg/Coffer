@@ -270,19 +270,21 @@ class InternalEngineConfigModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     model: Mapped[str | None] = mapped_column(String, nullable=True)
-    #: Whether the background curation worker may run (spec knowledge FR-032).
-    #: ON by default: curation only derives ``topics/`` from sources it may not
-    #: touch, and it is the only path from a source to something an agent can
-    #: read, so a vault where it never runs has an empty readable lane forever.
+    #: Whether the background curation worker may run (spec knowledge "Curate on
+    #: one owner machine only").
+    #: ON by default: curation is what merges new material into the documents
+    #: an agent reads, so a vault where it never runs leaves that material
+    #: unread in the inbox.
     auto_curate_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     #: The one machine allowed to run the unattended curation pass once a vault
-    #: spans several (spec vault-sync ``## Unattended rewriters``). NULL means
+    #: spans several (spec vault-sync "Run an unattended rewriter on one owner machine"). NULL means
     #: "wherever this is read", which is correct for a single-machine vault.
     curate_owner_machine_id: Mapped[str | None] = mapped_column(String, nullable=True)
     #: The other two unattended passes' switches, and all three timers. An
     #: interval of NULL means "the pass's own default", so the default stays in
     #: the worker that owns the pass and raising it later reaches every vault
-    #: that never chose one (spec memory FR-007, spec knowledge FR-032).
+    #: that never chose one (spec internal-engine "Report an unchosen interval
+    #: beside its default").
     auto_aggregate_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     aggregate_interval_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
     auto_distil_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -290,11 +292,12 @@ class InternalEngineConfigModel(Base):
     curate_interval_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
     #: How long one call to Coffer's own model may take. NULL means the
     #: built-in default, for the same reason an interval's NULL does (spec
-    #: internal-engine FR-022).
+    #: internal-engine "Carry the bound on one model call").
     model_timeout_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
     #: The speech-to-text model, run on the connection marked
     #: ``transcribe_default`` rather than on the engine's own (spec
-    #: internal-engine FR-025). NULL means Coffer transcribes nothing.
+    #: internal-engine "Transcribe speech on its own connection and model").
+    #: NULL means Coffer transcribes nothing.
     transcribe_model: Mapped[str | None] = mapped_column(String, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
 

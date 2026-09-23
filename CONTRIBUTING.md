@@ -14,13 +14,13 @@ make dev                           # backend (:8000) + frontend (:5173)
 
 ## Project Anchors
 
-- **[`.specify/memory/constitution.md`](./.specify/memory/constitution.md)** — what Coffer is and what it must never become.
+- **[`docs/principles.md`](./docs/principles.md)** — what Coffer is and what it must never become.
 - **[`AGENTS.md`](./AGENTS.md)** — operating manual; humans can read it too, the rules apply equally.
 
 ## Workflow
 
 1. Branch off `main` (see [`.agents/workflow.md`](./.agents/workflow.md) for naming).
-2. Write or update `specs/<short-name>/spec.md` **first** if the change is user-visible (see [`.agents/sdd.md`](./.agents/sdd.md)).
+2. If the change is user-visible, propose an [OpenSpec](https://github.com/Fission-AI/OpenSpec) change **first** (`/opsx:propose`), and archive it (`/opsx:archive`) in the same PR (see [`.agents/openspec.md`](./.agents/openspec.md)).
 3. Implement, with tests in the right tier (see [`.agents/testing.md`](./.agents/testing.md)).
 4. `make verify-all` locally.
 5. Open a PR; title must be Conventional Commits.

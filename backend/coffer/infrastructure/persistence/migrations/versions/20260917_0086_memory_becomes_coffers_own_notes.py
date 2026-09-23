@@ -1,26 +1,28 @@
 """rebuild the memory layer around Coffer's own notes
 
 The memory layer stops storing the agents' words and starts storing its own
-(spec memory FR-020, and the ADR `aggregate-agent-memory-never-write-it`).
-Three things in the database have to move with it, and one thing on disk.
+(spec memory "Write notes in Coffer's own words", and the ADR
+`aggregate-agent-memory-never-write-it`). Three things in the database have to
+move with it, and one thing on disk.
 
 **The partitions go, and are rebuilt.** A partition used to be keyed on the
 working directory an entry was learned in; it is now keyed on the
-**repository** (FR-014), so its ``config`` changes shape — ``project_root``
-becomes ``repository_key`` plus ``repository_path`` — and its *membership*
-changes with it: a worktree and its main checkout now collapse into one
-partition, and a directory inside no repository gets none at all (FR-015). On
-the machine this was measured against, that is six of sixteen partitions
-disappearing and several others merging.
+**repository** (see "Identify a partition by its repository"), so its
+``config`` changes shape — ``project_root`` becomes ``repository_key`` plus
+``repository_path`` — and its *membership* changes with it: a worktree and its
+main checkout now collapse into one partition, and a directory inside no
+repository gets none at all (see "Create no partition for a non-repository
+directory"). On the machine this was measured against, that is six of sixteen
+partitions disappearing and several others merging.
 
-Rewriting each row in place would mean guessing, from a path that may no
-longer exist, which repository it belonged to. The rows are **derived**
-(FR-019 covers the Resource row explicitly, not only the files), so this
-migration deletes them instead and lets the next aggregation pass recreate
-them from the agents' own memory, which is the only authority on the subject.
-The cost is a scope a developer had narrowed by hand, which returns to its
-default of "the agents it was aggregated from"; the alternative is a
-half-migrated row naming a repository nobody verified.
+Rewriting each row in place would mean guessing, from a path that may no longer
+exist, which repository it belonged to. The rows are **derived** ("Keep the
+memory tree derived and local" covers the Resource row explicitly, not only the
+files), so this migration deletes them instead and lets the next aggregation
+pass recreate them from the agents' own memory, which is the only authority on
+the subject. The cost is a scope a developer had narrowed by hand, which
+returns to its default of "the agents it was aggregated from"; the alternative
+is a half-migrated row naming a repository nobody verified.
 
 **The tree goes with them**, for the same reason and with the same authority:
 ``facts/``, ``summary.md`` and ``README.md`` are a layout no code reads any
@@ -111,9 +113,9 @@ def upgrade() -> None:
     bind = op.get_bind()
 
     if "resources" in tables:
-        # Derived rows (FR-019). Aggregation recreates them keyed on the
-        # repository, which is the only thing that can decide which of them
-        # were ever really distinct.
+        # Derived rows (see "Keep the memory tree derived and local").
+        # Aggregation recreates them keyed on the repository, which is the only
+        # thing that can decide which of them were ever really distinct.
         deleted = bind.execute(
             sa.text("DELETE FROM resources WHERE kind = :kind"), {"kind": "memory"}
         ).rowcount
@@ -141,7 +143,7 @@ def upgrade() -> None:
             logger.info("migration.0086.memory_partition_removed; name=%s", partition.name)
         # The skip cache is keyed by native path, not by layout, but a rebuild
         # has to actually re-read every source to repopulate `.raw/` — and a
-        # digest match alone must never suppress that (FR-019).
+        # digest match alone must never suppress that.
         state = root / ".source_state.json"
         if state.is_file():
             state.unlink()

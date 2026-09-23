@@ -42,14 +42,14 @@ class KnowledgeFileNotFound(KnowledgeError):  # noqa: N818
 
 
 class UnsafeKnowledgePath(KnowledgeError):  # noqa: N818
-    """A path that escapes the knowledge root, names a hidden entry, or sits
-    outside a lane.
+    """A path that escapes the knowledge root, names a hidden entry, or cannot
+    name a document.
 
-    All three are refused rather than silently corrected. The lane check is
-    here rather than in each caller because "a knowledge file lives under
-    ``sources/`` or ``topics/``" is a property of path construction: it is what
-    keeps an agent write out of the curated lane and the curation pass out of
-    the sources lane (spec knowledge FR-013, FR-021).
+    All three are refused rather than silently corrected. The document check
+    is here rather than in each caller because "a document lives inside a
+    collection, and is not its README" is a property of path construction: it
+    is what keeps every write, delete and stamp off the collection itself and
+    off the inbox (spec knowledge "Guard every path through one module").
     """
 
     code = "KNOWLEDGE_PATH_UNSAFE"
@@ -61,7 +61,9 @@ class UnsafeKnowledgePath(KnowledgeError):  # noqa: N818
 
 
 class UploadTooLarge(KnowledgeError):  # noqa: N818
-    """An ingest upload past the size ceiling (FR-019).
+    """An ingest upload past the size ceiling.
+
+    Spec knowledge "Bound uploads and leave nothing behind on failure".
 
     Refused before any conversion or write is attempted, naming the limit so
     the caller knows exactly what to shrink below.
@@ -76,9 +78,11 @@ class UploadTooLarge(KnowledgeError):  # noqa: N818
 
 
 class TopicReferencesFile(KnowledgeError):  # noqa: N818
-    """A curated topic document naming another knowledge file (FR-027).
+    """A curated document naming another knowledge file.
 
-    Refused at the write rather than asked for in the prompt. Topic paths are
+    Spec knowledge "Refuse file-name references in documents".
+
+    Refused at the write rather than asked for in the prompt. Document paths are
     chosen by curation and move as the corpus is reorganised, so a file name
     written into prose is a link that rots — 343 of the corpus's 398 internal
     references were already dead when this rule was introduced. A document
@@ -96,7 +100,9 @@ class TopicReferencesFile(KnowledgeError):  # noqa: N818
 
 
 class CurationBoundExceeded(KnowledgeError):  # noqa: N818
-    """A curation pass tried to write more files than one pass may (FR-025).
+    """A curation pass tried to write more files than one pass may.
+
+    Spec knowledge "Bound a pass to eight writes".
 
     The bound is what makes a pass *incremental*: one source must never be able
     to trigger a corpus-wide rewrite, however confident the model is.

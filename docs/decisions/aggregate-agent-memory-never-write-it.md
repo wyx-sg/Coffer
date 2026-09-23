@@ -4,7 +4,7 @@
 **Date**: 2026-09-17
 **Deciders**: Yuxing Wu
 **Rewrites**: *Memory via MCP, not native projection* (2026-06-18) — this ADR replaces it, keeping its prohibition and replacing its answer. See [Revision history](#revision-history).
-**Related**: spec [memory](../../specs/memory/spec.md), spec [knowledge](../../specs/knowledge/spec.md), [Knowledge Is Plain Files](knowledge-is-plain-files.md), [One Shared Knowledge Store](agent-native-shared-memory.md), [`docs/research/memory-systems-landscape.md`](../research/memory-systems-landscape.md)
+**Related**: spec [memory](../../openspec/specs/memory/spec.md), spec [knowledge](../../openspec/specs/knowledge/spec.md), [Knowledge Is Plain Files](knowledge-is-plain-files.md), [One Shared Knowledge Store](agent-native-shared-memory.md), [`docs/research/memory-systems-landscape.md`](../research/memory-systems-landscape.md)
 
 ## Context
 
@@ -73,8 +73,8 @@ The prohibition from 2026-06-18 is not in question. Nothing here writes an agent
 ### Negative
 
 - **"Delete and rebuild" weakens from identical to equivalent.** The product is a distillation, so a rebuild gives back the same subjects from the same sources, not the same wording. Accepted: `.raw/` is still byte-reproducible, and it is what the notes' provenance points at.
-- **The distil pass is the layer's cost.** It calls a model on every changed partition, where the old organise pass was optional polish. FR-024's mechanical path keeps an installation without a connection working, but visibly worse — which is the honest trade, not a hidden one.
-- Two readers remain coupled to two undocumented private formats. A format change breaks a reader; it must break loudly and locally (spec memory FR-005).
+- **The distil pass is the layer's cost.** It calls a model on every changed partition, where the old organise pass was optional polish. The mechanical path ([memory](../../openspec/specs/memory/spec.md) "Distil mechanically with no internal connection") keeps an installation without a connection working, but visibly worse — which is the honest trade, not a hidden one.
+- Two readers remain coupled to two undocumented private formats. A format change breaks a reader; it must break loudly and locally ([memory](../../openspec/specs/memory/spec.md) "Fail a broken reader loudly and in isolation").
 - Per-agent scope governs what Coffer serves, not what a process on this machine can open. Handing an agent a path is handing it the file; the layer says so rather than implying a boundary it does not have.
 - A session's opening is measurably more expensive — an index of a hundred notes instead of eight lines. Claude Code spends ~9k tokens on exactly this, of its own accord, every session; this is the ecosystem's normal price for not searching.
 

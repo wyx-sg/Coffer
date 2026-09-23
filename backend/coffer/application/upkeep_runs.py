@@ -1,7 +1,7 @@
 """Which upkeep passes this daemon is running right now.
 
 An *upkeep pass* is one of the long, model-driven rewrites a vault does to
-itself: memory's ``organise`` over a partition, knowledge's ``tidy`` over a
+itself: memory's ``distil`` over a partition, knowledge's ``curate`` over a
 collection. Each takes minutes, rewrites files, and can be started from three
 places — a button, the CLI, a timer. Two of them over the same target at the
 same time is not a slower version of one; it is two writers racing over the

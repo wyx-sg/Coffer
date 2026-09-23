@@ -21,6 +21,7 @@ from coffer.application.provider.results import ActivateResult, DeactivateResult
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.provider.config import Protocol
+from coffer.domain.provider.errors import ProviderInternalOnly
 from coffer.domain.resource import Resource
 
 if TYPE_CHECKING:
@@ -41,19 +42,23 @@ async def activate(service: ProviderService, uid: str, *, actor: str) -> Activat
     project it into every enabled agent of those types."""
     resource = await service.get(uid)
     cfg = service._cfg(resource)
+    # ollama is internal-only: it reaches no agent, is never ``is_active`` and
+    # activating it writes nothing. Refused before anything is touched, so no
+    # other connection is switched off on its behalf either.
+    if cfg.protocol is Protocol.OLLAMA:
+        raise ProviderInternalOnly(resource.name)
     agents = await service._agents.list()
     targets = service._compat(resource, agents)
 
-    # 1) Project first. ollama (no targets) is internal-only — projects to
-    #    no agent. ``skipped`` lists in-scope agents with no registered one.
+    # 1) Project first. ``skipped`` lists in-scope agents with no registered one.
     projected = await project_connection(service, resource, cfg, targets, agents, actor=actor)
     covered = {at for at in targets if service._projector.agents_of_type(agents, at)}
     skipped = [at.value for at in targets if at not in covered]
 
     # 2) Flip activation: take over from any overlapping active connection,
     #    de-projecting it from the agents this one will not cover. The
-    #    single-process daemon serialises the clear-then-set (provider
-    #    switching / FR-011).
+    #    single-process daemon serialises the clear-then-set (spec
+    #    provider-switching "Keep at most one active connection per agent type").
     mine = set(targets)
     previous: str | None = None
     for r in await service.list():

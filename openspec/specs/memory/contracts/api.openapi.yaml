@@ -1,0 +1,878 @@
+openapi: 3.1.0
+info:
+  title: Coffer — Memory API
+  version: 0.4.0
+  description: |
+    REST surface for the one `memory` resource kind (spec memory, "Cover memory
+    management on REST and the CLI"). Twelve routes, and that is the whole
+    management plane.
+
+    ## Everything here is derived
+
+    The memory layer aggregates each **registered and enabled** agent's own
+    native memory, read-only, and never writes it
+    ([Aggregate Agent Memory, Never Write It](../../../../docs/decisions/aggregate-agent-memory-never-write-it.md)).
+    Everything under `~/.coffer/memory/` is derived from those sources: delete
+    it, `POST /sync` and distil, and an **equivalent** set comes back — the same
+    subjects from the same sources, not necessarily the same wording, because
+    what is stored is Coffer's own distillation rather than a copy ("Keep the
+    memory tree derived and local", "Write notes in Coffer's own words"). There
+    is **no memory table** — notes, raw entries, the index and the retirement
+    record are Markdown files, and the one Resource row a partition already has
+    ("Add no table of its own").
+
+    ## A partition is the only boundary
+
+    A **partition** is a top-level directory under the memory root and one
+    `memory` Resource: exactly one per **repository** plus one named `global`,
+    and no other partitioning axis exists ("Partition by repository plus
+    global"). Partitions are created by aggregation, never by a client and never
+    by an agent's working directory — so there is no `POST /partitions` on this
+    surface ("Create partitions only by aggregation").
+
+    A partition is named by a readable slug from its repository, never an opaque
+    id, and both the repository's identity and its absolute path travel on
+    `PartitionOut` ("Identify a partition by its repository"). A worktree and a
+    second clone resolve to the partition their main checkout contributes to; a
+    working directory inside no repository gets no partition at all ("Create no
+    partition for a non-repository directory").
+
+    ## Nothing here is filtered per agent
+
+    A partition carries no per-agent reach ("Serve every enabled partition to
+    every agent"): every **enabled** partition is served to every agent, on
+    `POST /context` and on `coffer__recall` alike — so the owner's own view
+    through `list_partitions` / `list_notes` / `get_note` / `list_retired` / the
+    file family is the same corpus an agent's session reaches, not a wider one.
+
+    `enabled` is the only gate, and note what it can and cannot do: the payload
+    `POST /context` returns names an absolute directory, and an agent handed a
+    path can open the file. It governs **what Coffer serves**, not what a
+    process on this machine can read.
+
+    ## The file family is read-only, and that is the design
+
+    `GET /partitions/{uid}/files` and `.../files/content` walk one partition's
+    own directory and read a file out of it ("Present partitions as a table and
+    a file tree"). There is deliberately **no write**: the tree is derived, so
+    an edit would survive exactly until the next aggregation pass, and offering
+    one would be offering a lie. `FileContentOut` therefore carries no
+    fingerprint, unlike the skill kind's equivalent — a fingerprint exists to
+    make a later write conditional, and this family has no write.
+
+    Both shapes carry `abs_path` and `folder_abs_path` on every node and every
+    read, because a browser cannot resolve a path on the user's own disk but
+    the loopback daemon can — that is what the open-in-editor and
+    reveal-in-file-manager actions hand back.
+
+    ## Why deleting a partition is not here
+
+    There is deliberately **no** `DELETE /api/v1/memory/partitions/{uid}`. A
+    partition's lifecycle is a Resource's lifecycle, so deletion goes through
+    the kind-agnostic resource route, `DELETE /api/v1/resources/{uid}`,
+    which runs the same audit and cascade as every other kind and cleans the
+    directory up through the Kind's `on_delete`.
+
+    ## Why per-agent delivery status has no last-fired field
+
+    `DeliveryStatusOut` answers exactly one question: installed or not ("Audit
+    every delivery fire", "Show delivery state on the agent's own page"). A fire
+    is an **event**, not a property of an agent — every fire writes one
+    `memory_delivery_fired` audit row, and "has it ever run" is read on the
+    vault-wide audit surface. A hook installed a minute ago has legitimately
+    never fired, so a status field flagging that would be crying wolf on its own
+    normal state. This layer carries no audit surface of its own either ("Show
+    memory events on the vault-wide audit surface").
+
+    ## Errors
+
+    Every failure is the app-wide envelope, `{"error": {"code": "...",
+    "message": "..."}}`, raised from a `CofferError` and mapped centrally — no
+    route here builds an `HTTPException` of its own. The codes this family
+    raises: `RESOURCE_NOT_FOUND` (404, no `memory` Resource by that uid),
+    `MEMORY_NOTE_NOT_FOUND` (404), `MEMORY_FILE_NOT_FOUND` (404),
+    `MEMORY_UNSAFE_PATH` (400, a path escaping the partition),
+    `MEMORY_DELIVERY_UNSUPPORTED` (the agent type has no hook adapter),
+    `MEMORY_DELIVERY_CONFIG_INVALID` (its settings file is not a JSON object
+    Coffer can edit) and `UPKEEP_ALREADY_RUNNING` (409, a second distil over a
+    partition already being distilled, see "Run one distil pass per partition at
+    a time").
+
+servers:
+  - url: http://127.0.0.1:8000
+    description: The local daemon, loopback only.
+
+security:
+  - CofferToken: []
+
+tags:
+  - name: memory
+    description: Partitions, notes, the session context, and per-agent delivery.
+
+paths:
+  /api/v1/memory/partitions:
+    get:
+      tags: [memory]
+      operationId: listMemoryPartitions
+      summary: Every partition, with its repository and note count.
+      responses:
+        "200":
+          description: The partition list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartitionListOut"
+
+  /api/v1/memory/partitions/{uid}/notes:
+    get:
+      tags: [memory]
+      operationId: listMemoryNotes
+      summary: Every note in one partition, as summaries.
+      description: |
+        Answered from the partition's `notes/` directory at call time. A
+        retired note is not filtered out of this list — it is not in it, because
+        retirement takes the file out of that directory and records it in
+        `RETIRED.md` ("Record retirements so they stick").
+      parameters:
+        - $ref: "#/components/parameters/PartitionUid"
+      responses:
+        "200":
+          description: The partition's notes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteListOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/memory/partitions/{uid}/notes/{slug}:
+    get:
+      tags: [memory]
+      operationId: getMemoryNote
+      summary: One note, whole — Coffer's own text and the entries behind it.
+      parameters:
+        - $ref: "#/components/parameters/PartitionUid"
+        - name: slug
+          in: path
+          required: true
+          description: The note's slug, which is also its file name.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The note.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/memory/partitions/{uid}/retired:
+    get:
+      tags: [memory]
+      operationId: listMemoryRetired
+      summary: What this partition retired, and why.
+      description: |
+        `RETIRED.md`, read back. It is not a bin: the material a retired note
+        was built from still lives in the agent's own memory, so without this
+        record the next distil pass would re-open the note the last one removed
+        ("Record retirements so they stick"). It is therefore part of that
+        pass's own input, and readable here for the same reason a human browsing
+        the folder can read it.
+      parameters:
+        - $ref: "#/components/parameters/PartitionUid"
+      responses:
+        "200":
+          description: The partition's retirement record, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetiredListOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/memory/partitions/{uid}/files:
+    get:
+      tags: [memory]
+      operationId: listMemoryPartitionFiles
+      summary: The partition's own directory, as a read-only tree.
+      parameters:
+        - $ref: "#/components/parameters/PartitionUid"
+      responses:
+        "200":
+          description: The tree, rooted at the partition directory.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileTreeOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/memory/partitions/{uid}/files/content:
+    get:
+      tags: [memory]
+      operationId: readMemoryPartitionFile
+      summary: One file out of the partition's directory.
+      description: |
+        Read-only. There is no `PUT` counterpart: the tree is derived, so an
+        edit would be overwritten by the next aggregation pass.
+      parameters:
+        - $ref: "#/components/parameters/PartitionUid"
+        - name: path
+          in: query
+          required: true
+          description: |
+            POSIX path relative to the partition directory, e.g.
+            `notes/python-lockfile.md`, `MEMORY.md`, `RETIRED.md` or a file
+            under the hidden `.raw/`. A path escaping the partition is refused
+            with `MEMORY_UNSAFE_PATH`.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        "200":
+          description: The file's content.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileContentOut"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/memory/sync:
+    post:
+      tags: [memory]
+      operationId: syncMemory
+      summary: Run aggregation over every registered, enabled agent's native memory.
+      description: |
+        Read-only with respect to the agents ("Never write an agent's native
+        memory"). Skips any source whose content hash is unchanged ("Skip
+        unchanged sources") and isolates one whose format it cannot parse,
+        reporting its path while the rest of the pass completes ("Fail a broken
+        reader loudly and in isolation"). Records a `memory_aggregated` audit
+        event whose actor distinguishes this requested pass from the worker's
+        scheduled one.
+      responses:
+        "200":
+          description: What the pass did.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AggregationResultOut"
+
+  /api/v1/memory/partitions/{uid}/distil:
+    post:
+      tags: [memory]
+      operationId: distilMemoryPartition
+      summary: Run the distil pass over one partition.
+      description: |
+        Turns the raw entries aggregation left under `.raw/` into Coffer's own
+        notes, and rewrites the partition's index ("Distil incrementally in two
+        stages"). Two stages, so that no single request carries the partition's
+        bodies: a **routing** request over the new entries, the existing index
+        and `RETIRED.md`, which decides one of four actions per entry — merge
+        into an existing note, open a new one, retire a note it contradicts, or
+        keep nothing — and then one small **writing** request per note actually
+        touched.
+
+        With no internal connection configured, no model is called: each entry
+        becomes a note of its own and the index is still written from their
+        frontmatter ("Distil mechanically with no internal connection"). Only
+        one pass per partition runs at a time; a second request while one is in
+        flight is refused rather than queued ("Run one distil pass per partition
+        at a time"), and the in-flight pass is readable on the shared
+        upkeep-runs surface.
+      parameters:
+        - $ref: "#/components/parameters/PartitionUid"
+      responses:
+        "200":
+          description: What the pass found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DistilResultOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: A pass over this partition is already running (`UPKEEP_ALREADY_RUNNING`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /api/v1/memory/context:
+    post:
+      tags: [memory]
+      operationId: composeMemoryContext
+      summary: Compose the session-start context — the whole index, and where the bodies are.
+      description: |
+        A `POST` despite being a read, because the query is structured rather
+        than a couple of scalar filters (knowledge's `search` is a `POST` for
+        the same reason). Nothing here changes the memory tree.
+
+        This is the one route a real agent's own session reaches. It composes
+        over every enabled partition, whichever agent is asking ("Serve every
+        enabled partition to every agent"). `record_fired` is what the installed
+        hook sets; a management surface previewing the payload leaves it false
+        so it never records a fire that did not happen ("Audit every delivery
+        fire").
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContextQuery"
+      responses:
+        "200":
+          description: The composed payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComposedContextOut"
+
+  /api/v1/memory/delivery:
+    get:
+      tags: [memory]
+      operationId: listMemoryDelivery
+      summary: Per-agent delivery installation state.
+      parameters:
+        - name: agent_uid
+          in: query
+          required: false
+          description: >-
+            Restrict to one agent, by uid. Omitted, every registered agent is
+            reported.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: One entry per agent.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryStatusListOut"
+
+  /api/v1/memory/delivery/{agent_uid}/install:
+    post:
+      tags: [memory]
+      operationId: installMemoryDelivery
+      summary: Install Coffer's session-start hook into one agent's own settings.
+      description: |
+        An **explicit** act, never a side effect of registering an agent or
+        aggregating memory ("Install delivery hooks explicitly and removably").
+        Idempotent, marker-scoped, and it leaves every hook Coffer did not write
+        exactly as it was. Writes the agent's *settings* file — never any file
+        that is an agent's memory. Records a `memory_delivery_installed` audit
+        event with the actor.
+      parameters:
+        - $ref: "#/components/parameters/AgentUid"
+      responses:
+        "200":
+          description: The resulting state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryStatusOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/memory/delivery/{agent_uid}:
+    delete:
+      tags: [memory]
+      operationId: removeMemoryDelivery
+      summary: Remove Coffer's hook from one agent's settings.
+      description: |
+        Takes out only the marked entry, dropping the event array and the
+        top-level hooks key once they are empty. With nothing installed it is a
+        clean no-op that writes no file and records no audit event.
+      parameters:
+        - $ref: "#/components/parameters/AgentUid"
+      responses:
+        "200":
+          description: The resulting state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryStatusOut"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    CofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  parameters:
+    PartitionUid:
+      name: uid
+      in: path
+      required: true
+      description: |
+        The partition Resource's immutable uid. Its name — `global` or a
+        project slug — is also its directory under the memory root and moves
+        when the partition is renamed, so the name addresses a place on disk
+        and the uid addresses the partition.
+      schema:
+        type: string
+    AgentUid:
+      name: agent_uid
+      in: path
+      required: true
+      description: |
+        The registered agent Resource's immutable uid. Spelled `agent_uid`
+        rather than `uid` because nothing else in this path is a resource:
+        the delivery routes act on one agent's own settings file, and a bare
+        `uid` here would read as the partition's.
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: The request was refused (e.g. `MEMORY_UNSAFE_PATH`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: No such partition, fact, file or agent.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+    PartitionOut:
+      type: object
+      required: [uid, name, repository_key, repository_path, note_count, unresolvable]
+      properties:
+        uid:
+          type: string
+          description: |
+            The partition Resource's immutable identity, and what every route
+            under `/partitions/{uid}/…` takes. Note it is not the partition's
+            *resolution* key: a working directory resolves to a partition
+            through `repository_key`, which is derived from the repository and
+            is the same on every machine holding that clone.
+          example: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+        name:
+          type: string
+          description: |
+            A mutable label — `global` or a project slug — which is also the
+            partition's directory name under the memory root, so renaming one
+            moves its directory. Display only; anything addressing the
+            partition holds `uid`.
+        repository_key:
+          type: string
+          description: |
+            The identity a working directory is resolved to:
+            `remote:<host>/<path>` when the repository has an `origin` remote,
+            so two clones agree, and `path:<abs>` when it has none. Empty for
+            `global` ("Identify a partition by its repository").
+        repository_path:
+          type: string
+          description: |
+            The absolute path of the repository's main working tree. Empty for
+            `global`. A worktree and a second clone of it resolve to this same
+            partition rather than to partitions of their own.
+        note_count:
+          type: integer
+          description: Counted from the partition's `notes/` directory at call time.
+        unresolvable:
+          type: boolean
+          description: |
+            True when `repository_path` no longer exists on disk. Such a
+            partition can never be resolved from any working directory again, so
+            it is delivered to nobody; it is surfaced rather than hidden because
+            only the developer can decide to delete it ("Report unresolvable
+            partitions").
+
+    PartitionListOut:
+      type: object
+      required: [partitions]
+      properties:
+        partitions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartitionOut"
+
+    OriginOut:
+      type: object
+      required: [agent, native_path, anchor, captured_at, source_written_at]
+      properties:
+        agent:
+          type: string
+          description: |
+            The registered agent this fact was read out of, by name. A name
+            and not a uid because provenance is written for a person to read
+            in a note's own frontmatter, and because the derived tree is
+            rewritten by every aggregation pass — so the label re-resolves on
+            its own rather than going stale the way a stored reference would.
+        native_path:
+          type: string
+          description: Absolute path of the agent's own file it came from.
+        anchor:
+          type: string
+          description: |
+            Where inside that file — a heading or a bullet — or empty when the
+            whole file is the fact. Part of the fact's identity ("Record
+            provenance and merge by meaning").
+        captured_at:
+          type: string
+          description: When Coffer read it.
+        source_written_at:
+          type: string
+          description: When the source itself says it was written, when it says at all.
+
+    NoteSummaryOut:
+      type: object
+      required:
+        [key, slug, partition, title, description, type, search_terms, created_at, updated_at]
+      properties:
+        key:
+          type: string
+          description: |
+            How one note is named from outside its own file — the smallest of
+            its origin keys, so gaining a second origin never moves its
+            identity ("Record provenance and merge by meaning").
+        slug:
+          type: string
+          description: Readable slug; also the file name inside `notes/`.
+        partition:
+          type: string
+        title:
+          type: string
+          description: Coffer's own, not a source's ("Write notes in Coffer's own words").
+        description:
+          type: string
+          description: |
+            One line, written to be read on its own: it *is* the index entry,
+            and the index is what a session is given ("Store each note as one
+            Markdown file with frontmatter", "Write each index line to stand on
+            its own").
+        type:
+          type: string
+          enum: [user, feedback, project]
+          description: |
+            `user` and `feedback` are about the person and file into `global`
+            whichever repository they came from ("File personal entries into
+            global").
+        search_terms:
+          type: array
+          items:
+            type: string
+          description: |
+            What the source itself says to look this material up by, carried up
+            from the entries that supplied it. Codex states them per task group;
+            Claude Code states none ("Read Claude Code and Codex memory with
+            their search terms").
+        created_at:
+          type: string
+        updated_at:
+          type: string
+          description: Moves when a later pass rewrites the note ("Keep one topic per note").
+
+    NoteOut:
+      allOf:
+        - $ref: "#/components/schemas/NoteSummaryOut"
+        - type: object
+          required: [body, origins]
+          properties:
+            body:
+              type: string
+              description: |
+                Coffer's own writing, distilled from the raw entries named in
+                `origins` — not a quote of any of them ("Write notes in Coffer's
+                own words"). The entries themselves are kept verbatim under the
+                partition's `.raw/`.
+            origins:
+              type: array
+              items:
+                $ref: "#/components/schemas/OriginOut"
+
+    NoteListOut:
+      type: object
+      required: [notes]
+      properties:
+        notes:
+          type: array
+          items:
+            $ref: "#/components/schemas/NoteSummaryOut"
+
+    RetiredNoteOut:
+      type: object
+      required: [slug, title, reason, replaced_by, retired_at]
+      properties:
+        slug:
+          type: string
+          description: The file name the note had under `notes/`.
+        title:
+          type: string
+        reason:
+          type: string
+          description: Why it is no longer true, in Coffer's words.
+        replaced_by:
+          type: string
+          description: |
+            The slug of the note that replaced it, or empty when the subject was
+            dropped rather than superseded.
+        retired_at:
+          type: string
+
+    RetiredListOut:
+      type: object
+      required: [retired]
+      properties:
+        retired:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetiredNoteOut"
+
+    AggregationResultOut:
+      type: object
+      required: [partitions, entries_written, sources_read, sources_skipped, failures]
+      properties:
+        partitions:
+          type: array
+          items:
+            type: string
+          description: The partitions this pass touched.
+        entries_written:
+          type: integer
+          description: |
+            Raw entries written under the partitions' `.raw/`. Zero on a pass
+            where nothing changed. Aggregation writes no note — turning entries
+            into notes is the distil pass's job, and only aggregation may write
+            `.raw/` ("Keep raw entries verbatim and hidden", "Keep distil out of
+            the raw directory").
+        sources_read:
+          type: integer
+        sources_skipped:
+          type: integer
+          description: Sources whose content hash was unchanged ("Skip unchanged sources").
+        failures:
+          type: array
+          items:
+            type: string
+          description: |
+            Paths of native sources that would not parse. Left standing rather
+            than deleted, so a later sync keeps retrying them ("Fail a broken
+            reader loudly and in isolation").
+
+    DistilResultOut:
+      type: object
+      required: [partition, merged, opened, retired, dropped, model_used]
+      properties:
+        partition:
+          type: string
+        merged:
+          type: integer
+          description: Raw entries folded into a note that already existed.
+        opened:
+          type: integer
+          description: Notes created for a subject the partition did not cover.
+        retired:
+          type: integer
+          description: Notes a later entry contradicted, moved to `RETIRED.md`.
+        dropped:
+          type: integer
+          description: |
+            Entries the pass kept nothing from. A first-class outcome, not a
+            failure: it is how a scratch directory's incidental material and an
+            agent's transient observations stay out of the store ("Distil
+            incrementally in two stages").
+        model_used:
+          type: boolean
+          description: |
+            False when no internal connection is configured — each entry becomes
+            a note of its own and the index is still written, from their
+            frontmatter ("Distil mechanically with no internal connection").
+
+    ContextQuery:
+      type: object
+      properties:
+        cwd:
+          type: string
+          default: ""
+          description: The session's working directory, which selects the project partition.
+        agent_uid:
+          type: [string, "null"]
+          default: null
+          description: |
+            The calling agent's uid. It narrows nothing — it is what a recorded
+            fire names as its actor ("Audit every delivery fire"). A uid rather
+            than a name because the caller is the installed hook, whose command
+            line Coffer wrote once (`--agent-uid <uid>`) and does not rewrite
+            when the agent is renamed; a name baked into that command would
+            start attributing fires to nobody the first time the label changed.
+        ceiling_tokens:
+          type: [integer, "null"]
+          default: null
+          description: Omitted or null uses the server's default.
+        record_fired:
+          type: boolean
+          default: false
+          description: |
+            Whether serving this payload counts as a real delivery ("Audit every
+            delivery fire"). The installed hook always sets it; a preview must
+            not.
+
+    ComposedContextOut:
+      type: object
+      required: [text, partition, notes_included, notes_omitted]
+      properties:
+        text:
+          type: string
+          description: |
+            The payload: what is known about the developer, the whole index of
+            the current repository's partition, and the absolute path of the
+            directory the bodies live in. It names no tool — every consumer is a
+            local process that reads files ("Deliver the index and the notes
+            path at session start"). Empty when there is nothing to deliver, so
+            a turn carries no memory header rather than an empty one ("Deliver
+            to channel turns through the system prompt").
+        partition:
+          type: string
+          description: The repository partition the cwd resolved to.
+        notes_included:
+          type: integer
+        notes_omitted:
+          type: integer
+          description: |
+            How many index lines the ceiling left out. The text names the count
+            and the directory holding them, which is what makes a trim a small
+            loss: every line that did not fit is still a file ("Bound delivery
+            and prefer the current repository").
+
+    FileNodeOut:
+      type: object
+      required: [name, path, abs_path, folder_abs_path, type, derived]
+      properties:
+        name:
+          type: string
+        derived:
+          type: boolean
+          description: |
+            True for `.raw/` and everything under it: the verbatim entries
+            aggregation read out of the agents, kept so a distillation can be
+            re-run without going back to them. Flagged rather than hidden so the
+            surface can show it as input rather than as Coffer's own writing
+            ("Keep raw entries verbatim and hidden", "Present partitions as a
+            table and a file tree").
+        path:
+          type: string
+          description: POSIX, relative to the partition directory; `""` for the root.
+        abs_path:
+          type: string
+          description: |
+            The entry's absolute path on the user's own disk — what
+            open-in-editor and reveal-in-file-manager hand back to the daemon.
+        folder_abs_path:
+          type: string
+          description: The absolute path of the folder holding it.
+        type:
+          type: string
+          enum: [file, dir]
+        size:
+          type: [integer, "null"]
+          default: null
+        truncated:
+          type: boolean
+          default: false
+          description: True on a directory whose descendants were clipped at the walk bound.
+        children:
+          type: array
+          default: []
+          items:
+            $ref: "#/components/schemas/FileNodeOut"
+
+    FileTreeOut:
+      type: object
+      required: [root]
+      properties:
+        root:
+          $ref: "#/components/schemas/FileNodeOut"
+
+    FileContentOut:
+      type: object
+      required: [path, abs_path, folder_abs_path, content, truncated, binary, size]
+      properties:
+        path:
+          type: string
+        abs_path:
+          type: string
+        folder_abs_path:
+          type: string
+        content:
+          type: string
+          description: Empty when `binary` is true.
+        truncated:
+          type: boolean
+        binary:
+          type: boolean
+        size:
+          type: integer
+
+    DeliveryStatusOut:
+      type: object
+      required: [agent_uid, agent_name, installed, command, event]
+      description: |
+        Installed or not, and nothing else. There is deliberately no last-fired
+        field — see the `info.description` above ("Audit every delivery fire",
+        "Show delivery state on the agent's own page").
+      properties:
+        agent_uid:
+          type: string
+          description: |
+            Which agent this row is about — and what the install and remove
+            routes take, so a surface rendering this list acts on a row
+            without translating anything.
+          example: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+        agent_name:
+          type: string
+          description: |
+            The same agent's label, for the row's heading. Carried beside the
+            uid rather than instead of it: the list is one row per agent and
+            has to be both readable and actionable, and a client holding only
+            one of the two would have to fetch the agent list to get the
+            other.
+        installed:
+          type: boolean
+        command:
+          type: string
+          description: |
+            The command the hook entry runs, carrying Coffer's marker so
+            detection never depends on `argv[0]`.
+        event:
+          type: string
+          description: |
+            The agent's own lifecycle event the entry is attached to —
+            `SessionStart` for Claude Code, `UserPromptSubmit` with a
+            once-per-session guard for Codex, which publishes no session-start
+            event ("Install delivery hooks explicitly and removably").
+
+    DeliveryStatusListOut:
+      type: object
+      required: [delivery]
+      properties:
+        delivery:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeliveryStatusOut"

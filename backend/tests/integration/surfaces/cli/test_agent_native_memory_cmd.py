@@ -1,6 +1,7 @@
 """Integration tests for `coffer agent native-memory`.
 
-spec agent-registry FR-044/FR-046 require every agent-workspace op to exist on BOTH REST and CLI;
+spec agent-registry "Expose every agent operation through REST, CLI and the Agents page"
+requires every agent-workspace op to exist on BOTH REST and CLI;
 this verb wraps the one read-only route:
 
   ``GET /agents/{uid}/native-memory`` → ``native-memory``
@@ -182,6 +183,6 @@ def test_native_memory_unknown_agent_exits_4(monkeypatch):
 
 
 def test_native_memory_is_registered():
-    """The read verb appears under `coffer agent` (spec agent-registry FR-044 CLI/REST parity)."""
+    """The read verb appears under `coffer agent` (spec agent-registry CLI/REST parity)."""
     help_out = _runner.invoke(cli_app, ["agent", "--help"]).output
     assert "native-memory" in help_out
