@@ -121,8 +121,8 @@ so a scope there withheld a name and nothing else. A resource's reach is
 Supply-chain / integrity threats recur in three reports — skills (ToxicSkills,
 OWASP Agentic Skills Top 10, scanner-evasion), plugins (GlassWorm, Open VSX),
 and MCP (tool-poisoning, rug-pull; mcp-scan's **Tool Pinning**; the space is
-consolidating into Snyk/SentinelOne). Coffer's SSRF-hardened ingest is a head
-start, but it does **not scan content or pin tool definitions.** A "trust/
+consolidating into Snyk/SentinelOne). Coffer's SSRF guard on provider introspection
+is a head start, but it does **not scan content or pin tool definitions.** A "trust/
 integrity layer" (skill scanning + MCP tool-definition pinning + provenance)
 is a single initiative that pays off across skills, plugins, and MCP — and is
 squarely on-mission for a "vault."
@@ -157,6 +157,10 @@ note it's still pre-GA).
   contributes **six** tools, and two of them **write**: `list`, `grep`, `read`,
   `search`, `write`, `delete`. The read-only posture the research praised is
   gone — an agent can create and delete knowledge files through the gateway.
+  **Correction (2026-09-23):** superseded again. Knowledge contributes one
+  tool, `coffer__write`, which submits material to a collection's inbox;
+  retrieval is the agent's own file tools, and no agent-facing tool deletes
+  anything ([Knowledge Is Plain Files](../decisions/knowledge-is-plain-files.md)).
 - **Eval is not a blueprint** — the eval-flywheel ADR is Accepted (2026-06-14) and a working
   local-first `evals/` harness has shipped (capture → curate → golden → CI-gate).
 

@@ -201,11 +201,12 @@ class SyncRunModel(Base):
 class ConvergenceStateModel(Base):
     """This machine's convergence pointer and any held confirmation.
 
-    Machine-local and **never synced** (spec vault-sync ``## What does not
-    sync``): ``coffer.db`` is excluded from the bundle, which is most of why
-    this state belongs in SQLite rather than beside the working tree. A pointer
-    that travelled would be a different machine's claim about what this vault
-    has absorbed, and the whole diff-based apply rests on it being this one's.
+    Machine-local and **never synced** (spec vault-sync "Keep machine-local
+    state out of the repository"): ``coffer.db`` is excluded from the bundle,
+    which is most of why this state belongs in SQLite rather than beside the
+    working tree. A pointer that travelled would be a different machine's claim
+    about what this vault has absorbed, and the whole diff-based apply rests on
+    it being this one's.
 
     Single row, pinned the same way the remote is.
     """
@@ -264,7 +265,8 @@ class InternalEngineConfigModel(Base):
     """The single, global internal-engine model selection (one row, ``id`` = 1).
 
     The internal engine takes its endpoint + key from the ``internal_default``
-    connection; only the model is stored here (spec provider-switching amendment 2026-06-22b)."""
+    connection; only the model is stored here (spec internal-engine "Resolve the
+    engine's connection and model together")."""
 
     __tablename__ = "internal_engine_config"
 

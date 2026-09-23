@@ -1,5 +1,5 @@
 """Drive one git working tree for vault convergence (spec vault-sync
-``## The converge round``).
+"Run the seven round steps in order").
 
 The adapter shells out to the real ``git`` binary rather than binding a library
 because the point of the design is that what lands on the remote is an ordinary

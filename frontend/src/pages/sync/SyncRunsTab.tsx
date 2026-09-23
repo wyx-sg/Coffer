@@ -1,7 +1,8 @@
 // frontend/src/pages/sync/SyncRunsTab.tsx — Sync → Runs.
 //
 // Every converge round this machine has run, newest first (spec vault-sync
-// `## The converge round`), and the whole of what Sync has to say about itself.
+// "Run the seven round steps in order"), and the whole of what Sync has to say
+// about itself.
 //
 // There used to be a Status tab beside this one, carrying two banners: a
 // conflict, and a round the deletion guard held. Both are gone, because

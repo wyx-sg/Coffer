@@ -191,7 +191,7 @@ class HttpUpstreamConnection:
     def _init_error(self, exc: BaseException) -> UpstreamTimeout | UpstreamUnavailable:
         """Map a lifetime-task failure onto a domain error.
 
-        CODE-039: httpx2/transport exceptions can embed the request URL (which
+        httpx2/transport exceptions can embed the request URL (which
         may carry a query-string secret) or reflected headers.  Surface only
         the exception type; callers chain the original via ``from``.
         """
@@ -288,7 +288,7 @@ class HttpUpstreamConnection:
         # The httpx2 client was created with a read timeout of 300 s; for
         # per-request control we rely on the caller to set request_timeout_seconds
         # appropriately. Despite the module-header rule, asyncio.wait_for is
-        # safe at THIS call site (CODE-L1): we await session.send_request from
+        # safe at THIS call site: we await session.send_request from
         # outside the SDK's anyio task group, so cancellation lands on our
         # coroutine, not inside the group (no cross-task cancel-scope error).
         # The connection deliberately stays cached after an UpstreamTimeout

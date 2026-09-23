@@ -132,7 +132,7 @@ class BuiltinSkillSeed:
                 config=config,
                 description=validation.frontmatter.description,
                 actor=SEED_ACTOR,
-                allow_lifecycle_kind=True,  # CODE-REG: master folder written above
+                allow_lifecycle_kind=True,  # creation seam: master folder written above
             )
             event = AuditEventType.SKILL_IMPORTED
         else:
@@ -141,7 +141,7 @@ class BuiltinSkillSeed:
                 new_config=config,
                 actor=SEED_ACTOR,
                 description=validation.frontmatter.description,
-                allow_lifecycle_kind=True,  # CODE-REG: master folder written above
+                allow_lifecycle_kind=True,  # creation seam: master folder written above
             )
             event = AuditEventType.SKILL_UPDATED
         await service._audit.record(

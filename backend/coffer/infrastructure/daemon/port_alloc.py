@@ -151,7 +151,7 @@ def _new_socket(*, reuse_addr: bool) -> socket.socket:
     two sockets bind the *same* address and port as long as neither is
     ``LISTEN``ing — and a Coffer daemon spends its whole boot window bound but
     not yet listening (uvicorn calls ``listen`` later, from the fd we hand it).
-    Setting the option there therefore dissolves CODE-041's guarantee that
+    Setting the option there therefore dissolves the guarantee that
     holding the socket holds the port: a second ``acquire()`` bound the very
     port the first was holding. macOS/BSD refuse that bind and hid it locally.
     """
@@ -184,7 +184,7 @@ def bind_free_socket(
 ) -> socket.socket:
     """Bind the first free 127.0.0.1 port in [start, end] and RETURN the socket.
 
-    CODE-041: the caller keeps the bound socket open and hands its fd to the
+    The caller keeps the bound socket open and hands its fd to the
     server (uvicorn ``fd=``), so there is no close-then-rebind gap in which
     another process could steal the port — which would otherwise leave
     ``daemon.json`` (already published with the live token) pointing at a port

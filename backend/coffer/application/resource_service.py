@@ -147,8 +147,9 @@ class ResourceService:
         is what this whole design removed.
         """
         kind_def = self._require_kind(kind)
-        # CODE-REG: a kind that owns creation invariants beyond config
-        # validation (skill master folder, agent on-disk detection) sets
+        # spec resource-framework "Keep creation a per-kind seam": a kind that
+        # owns creation invariants beyond config validation (skill master
+        # folder, agent on-disk detection) sets
         # ``generic_create_allowed=False``. The generic POST /resources path
         # calls register() with the default ``allow_lifecycle_kind=False`` and
         # is rejected here, so it can never create a row with no backing
@@ -180,8 +181,8 @@ class ResourceService:
             except ValueError as e:
                 raise ConfigValidationError(str(e)) from e
         # Probe before any DB write — a missing credential must not leave a
-        # half-created resource row behind. The spec's "credential missing"
-        # edge case requires registration to fail naming the missing ref.
+        # half-created resource row behind. Spec mcp-gateway "Manage MCP
+        # servers as resources" requires registration to fail naming the missing ref.
         await self._probe_credentials(kind_def, validated)
         now = datetime.now(tz=UTC)
         created = await self._repo.create(
@@ -275,8 +276,8 @@ class ResourceService:
     ) -> Resource:
         before = await self.get(uid)
         kind_def = self._require_kind(before.kind)
-        # CODE-REG applies to updates too: a generic PATCH rewriting a
-        # lifecycle kind's config would desync the row from the on-disk
+        # The per-kind creation seam applies to updates too: a generic PATCH
+        # rewriting a lifecycle kind's config would desync the row from the on-disk
         # artifact its owning service maintains.
         if not kind_def.generic_create_allowed and not allow_lifecycle_kind:
             raise GenericCreateNotAllowed(before.kind)
@@ -373,7 +374,7 @@ class ResourceService:
             # so a refused delete leaves the resource exactly as it was.
             kind_def.validate_delete(snapshot)
         if kind_def.on_delete is not None:
-            # CODE-033: await an async on_delete hook so side effects (e.g.
+            # Await an async on_delete hook so side effects (e.g.
             # evicting live upstream connections, tearing down skill symlinks)
             # COMPLETE before the row is removed. A sync hook still runs
             # synchronously. A hook that raises aborts the deletion (propagates

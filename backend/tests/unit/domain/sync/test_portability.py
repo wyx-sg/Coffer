@@ -1,4 +1,5 @@
-"""Path-portability pure helpers (spec vault-sync "Path portability")."""
+"""Path-portability pure helpers (spec vault-sync "Store home paths against a sentinel",
+"Store paths outside home verbatim")."""
 
 from __future__ import annotations
 

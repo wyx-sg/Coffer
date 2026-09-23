@@ -49,6 +49,7 @@ def make_agent_kind(
         on_enabled_changed=on_enabled_changed,
         # An agent row is created from detection/validation of an on-disk config
         # dir by AgentService; the generic POST /resources path must not create
-        # an undetected, folder-less agent (CODE-REG).
+        # an undetected, folder-less agent (spec resource-framework "Keep
+        # creation a per-kind seam").
         generic_create_allowed=False,
     )

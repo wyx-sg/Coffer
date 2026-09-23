@@ -264,7 +264,8 @@ def test_activate_writes_claude_settings(tmp_path, monkeypatch):
         assert data["apiKeyHelper"] == f"coffer provider key --connection-uid {uid}"
         assert data["env"]["ANTHROPIC_BASE_URL"] == "https://gw/anthropic"
         # The agent is unbound (no per-agent model) → no model env is written, so
-        # Claude Code runs on its OWN default model (spec provider-switching E3/E4).
+        # Claude Code runs on its OWN default model (spec provider-switching
+        # "Take projected model keys from the agent's binding").
         assert "ANTHROPIC_MODEL" not in data["env"]
         assert "ANTHROPIC_SMALL_FAST_MODEL" not in data["env"]
 
@@ -280,7 +281,8 @@ def test_agent_binding_drives_projected_model(tmp_path, monkeypatch):
         cc = _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
         uid = _new(c, _anthropic_body())
         # Bind this agent to its own models; activating projects them (the model
-        # lives on the binding, not the connection — spec provider-switching E3/E4).
+        # lives on the binding, not the connection — spec provider-switching
+        # "Take projected model keys from the agent's binding").
         rb = c.patch(
             f"/api/v1/agents/{cc}",
             json={"model": "bound-opus", "fast_model": "bound-haiku"},
@@ -311,7 +313,8 @@ def test_activate_writes_codex_config(tmp_path, monkeypatch):
             },
         )
         # Bind the agent's model so the projection writes a top-level model (the
-        # model lives on the binding, not the connection — spec provider-switching E3/E4).
+        # model lives on the binding, not the connection — spec provider-switching
+        # "Take projected model keys from the agent's binding").
         c.patch(f"/api/v1/agents/{cx}", json={"model": "gpt-x"})
         r = c.post(f"/api/v1/providers/{uid}/activate")
         assert r.status_code == 200, r.text

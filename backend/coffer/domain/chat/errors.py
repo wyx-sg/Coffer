@@ -1,4 +1,4 @@
-"""Chat-platform domain errors (the turn platform, spec channels).
+"""Chat-platform domain errors (the turn platform, spec chat).
 
 Split out of ``coffer.domain.errors`` for the file-size limit; that module
 re-exports everything here, so ``from coffer.domain.errors import

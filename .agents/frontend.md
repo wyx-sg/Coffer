@@ -83,7 +83,7 @@ The API token is deliberately not in that table: it is read from
 (`src/lib/auth.ts`). Persisting it would outlive the daemon that minted it.
 
 The last row matters: anything a user would expect to survive a refresh, deep-link,
-or back-button MUST be a route param (`/chat/:id`, `/agents/:name`), not local
+or back-button MUST be a route param (`/chat/:id`, `/agents/:uid`), not local
 state. "Which item is selected" is navigation, not UI state. The same holds one
 level down: which tab a page is on and which file is open in a tree are
 `?tab=` / `?file=` search params read with `useSearchParams`, so a link can land
@@ -105,8 +105,8 @@ whole subtree:
 
 ```text
 ["agents"]                       // list
-["agents", name]                 // one agent
-["agents", name, "config-files"] // a sub-resource of that agent
+["agents", uid]                  // one agent
+["agents", uid, "config-files"]  // a sub-resource of that agent
 ```
 
 - **No literal key arrays at call sites.** `queryKey: ["…"]` outside
@@ -129,9 +129,8 @@ the chat SSE stream (below).
 - **Generated types for every contract.** `npm run codegen`
   (`frontend/scripts/codegen.mjs`) runs openapi-typescript over each
   `openspec/specs/*/contracts/api.openapi.yaml` into `src/lib/api/generated/<spec>.ts`
-  — **all seven** contracts that have one (`mcp-gateway`, `agent-registry`,
-  `channels`, `knowledge`, `provider-switching`, `skill-manager`, `vault-sync`,
-  the `CONTRACTS` array in `codegen.mjs`); `src/lib/api/types.ts` re-exports the
+  — every contract that has one (the `CONTRACTS` array in `codegen.mjs` is the
+  list); `src/lib/api/types.ts` re-exports the
   mcp-gateway one so `components["schemas"][…]` keeps working. `npm run lint`
   runs `codegen:check` first, so a contract edit without a regenerate fails CI;
   never hand-edit `generated/` (it is prettier-ignored, 4-space indented).
@@ -255,11 +254,10 @@ return useMutation({
 
 When you work near these, migrate toward the target; don't extend the debt:
 
-1. **`generated/skill-manager.ts` exists but nothing imports it.** The contract
-   does define `ErrorOut` and codegen does emit the module — what is left is
-   adoption: `src/lib/api/skills.ts` still hand-writes its wire types, and the
-   unmanaged-skill types in `src/lib/api/agents-workspace.ts` say they cannot be
-   generated. Alias them onto the generated schemas instead of re-deriving them.
+1. **`src/lib/api/skills.ts` still hand-writes its wire types** although
+   `generated/skill-manager.ts` covers them (`src/lib/api/agents-workspace.ts`
+   already aliases its unmanaged-skill types onto it). Alias them onto the
+   generated schemas instead of re-deriving them.
    Same for the other hand-written wire types a contract does not match (each is
    listed in the header comment of the `src/lib/api/x.ts` that keeps one): fix
    the contract when the backend is right, then replace the type with the alias.

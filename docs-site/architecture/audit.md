@@ -58,7 +58,7 @@ Every change to any resource or capability is written to the `audit_log` table b
 
 The actor field deserves particular attention. Every surface sets it explicitly: the Typer CLI passes `X-Coffer-Actor: cli` in its HTTP calls to the daemon; REST API clients can set `X-Coffer-Actor: api` or `X-Coffer-Actor: ui`; if the header is absent, the daemon defaults to `"api"`. The daemon itself emits `system` events for automated operations like retention cleanup. This means the audit log provides an accurate picture of whether a change was initiated interactively, programmatically, or automatically.
 
-The full set of audited event types (defined as `AuditEventType` in `domain/audit.py`), grouped by domain. There are **53** at the time of writing, and the list is deliberately short — see [What is worth auditing](#what-is-worth-auditing) below. The enum is the authority; when this page and it disagree, it is this page that is wrong.
+The full set of audited event types (defined as `AuditEventType` in `domain/audit.py`), grouped by domain. There are **55** at the time of writing, and the list is deliberately short — see [What is worth auditing](#what-is-worth-auditing) below. The enum is the authority; when this page and it disagree, it is this page that is wrong.
 
 **Resource & capability:**
 
@@ -77,6 +77,7 @@ The full set of audited event types (defined as `AuditEventType` in `domain/audi
 | Event                         | Trigger                                       |
 | ----------------------------- | --------------------------------------------- |
 | `token_rotated`               | After `POST /api/v1/daemon/rotate-token`      |
+| `daemon_residency_updated`    | After `PUT /api/v1/daemon/residency` changes the login service or idle-shutdown window |
 | `retention_updated`           | When a retention policy is changed            |
 | `internal_engine_model_set`   | When the internal engine's model is chosen    |
 
@@ -128,7 +129,7 @@ The `kb_*` prefix that once appeared here is gone entirely, not merely deprecate
 | Event                                                     | Trigger                                                                |
 | --------------------------------------------------------- | ---------------------------------------------------------------------- |
 | `memory_aggregated`                                       | When an aggregation pass re-derived the tree from the agents' own memory |
-| `memory_organised`                                        | When an organise pass rewrote a partition                               |
+| `memory_distilled`                                        | When a distil pass rewrote a partition's notes                          |
 | `memory_delivery_installed` / `memory_delivery_removed`   | When Coffer's session-start hook is written into / removed from an agent's settings |
 | `memory_delivery_fired`                                   | When that hook actually ran — which is the only thing that distinguishes an installed hook from no feature at all |
 
@@ -226,7 +227,7 @@ PrunableTable(
 )
 ```
 
-`name` must appear in the SQL allowlist set. `timestamp_column` must appear in the column allowlist. These allowlists are hardcoded in `infrastructure/persistence/retention.py` and cannot be extended at runtime. This means the prune worker can only delete from tables the developer explicitly whitelisted — arbitrary SQL execution is not possible.
+`name` must appear in the SQL allowlist set. `timestamp_column` must appear in the column allowlist. The allowlist is derived from the registered `PrunableTable`s (`infrastructure/persistence/retention_repo.allowlist_from_registry`) and validated before any SQL is built; registrations are made in code at the composition root, so nothing at runtime can add a table. This means the prune worker can only delete from tables the developer explicitly whitelisted — arbitrary SQL execution is not possible.
 
 ### The retention_policies table
 

@@ -11,7 +11,8 @@ integration package is absent. Cloud connections (anthropic/openai) need an API
 key resolved at call time via the injected ``credential_resolver``; ``ollama``
 needs only its ``base_url``. Every connection carries a ``base_url`` (its
 endpoint), which is passed to the client so a custom/proxy endpoint is honoured.
-The model id lives apart from the connection (spec provider-switching E3) and arrives in the
+The model id lives apart from the connection (spec provider-switching "Take
+projected model keys from the agent's binding") and arrives in the
 ``ResolvedConnection`` alongside it.
 """
 
@@ -34,7 +35,8 @@ def build_chat_model(
     Args:
         resolved: The connection (protocol / base_url / credential_ref) paired
             with the ``model`` id to run — the model lives apart from the
-            connection (spec provider-switching E3), so both are supplied together here.
+            connection (spec internal-engine "Resolve the engine's connection
+            and model together"), so both are supplied together here.
         credential_resolver: Callable that accepts a credential reference and
             returns the resolved secret (e.g. the raw API key). The composition
             root injects this so this module stays infrastructure-pure (no

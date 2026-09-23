@@ -170,7 +170,7 @@ def write_fixed_port(port: int | None) -> None:
 #: Twelve hours is "overnight, and then some": a working day's gap in use does
 #: not cost a restart, and a machine left alone over a weekend does not keep a
 #: python process and its MCP upstreams resident for two days over nothing.
-#: The daemon is a login service now (``coffer daemon install-service``), so
+#: The daemon is a login service now (``coffer daemon service install``), so
 #: without a ceiling it would otherwise live exactly as long as the login
 #: session does.
 DEFAULT_IDLE_SHUTDOWN_HOURS = 12.0

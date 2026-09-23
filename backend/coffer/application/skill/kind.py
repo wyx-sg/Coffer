@@ -133,7 +133,8 @@ def make_skill_kind(
         converges_row=_row_converges,
         # A skill row must be backed by an imported master folder under
         # ~/.coffer/skills/. Only SkillService (which creates that folder) may
-        # register it; the generic POST /resources path is rejected (CODE-REG).
+        # register it; the generic POST /resources path is rejected (spec
+        # resource-framework "Keep creation a per-kind seam").
         generic_create_allowed=False,
         # ADR per-agent-resource-scope: scope is one half of the whole delivery rule —
         # ``enabled AND scope.is_active(scope, agent_uid)``.

@@ -136,7 +136,8 @@ beforeEach(() => {
   useActivateMock.mockReturnValue({ mutate: activateMutate, isPending: false });
   useUseBuiltinMock.mockReturnValue({ mutate: useBuiltinMutate, isPending: false });
   // The model dropdown is populated by introspecting the connection (the
-  // connection no longer carries a model — spec provider-switching E3); resolve its catalogue.
+  // connection no longer carries a model — spec provider-switching "Take
+  // projected model keys from the agent's binding"); resolve its catalogue.
   useListMock.mockReturnValue({
     mutate: (_probe: unknown, opts?: { onSuccess?: (r: { models: ProviderModel[] }) => void }) =>
       opts?.onSuccess?.({ models: text("claude-opus-4-8", "claude-haiku-4-5") }),

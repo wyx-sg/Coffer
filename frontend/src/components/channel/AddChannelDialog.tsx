@@ -8,11 +8,11 @@
 // failure is toasted, and it is also stated inline so the dialog explains
 // itself once the toast is gone.
 //
-// The channel is bound to THIS machine at creation (spec channels, "Where a
-// channel runs"): a channel that names no machine is one no daemon will start,
-// and "I filled in the form and the bot never answered" is the worst possible
-// first experience of the feature. The binding is movable afterwards from the
-// list row or the detail page.
+// The channel is bound to THIS machine at creation (spec channels "Bind each
+// channel to the one machine that runs it"): a channel that names no machine
+// is one no daemon will start, and "I filled in the form and the bot never
+// answered" is the worst possible first experience of the feature. The
+// binding is movable afterwards from the list row or the detail page.
 //
 // The form ASKS which agent the channel drives (AgentSelect). It used to send
 // a constant — the `claude_code` provider key — because the binding was

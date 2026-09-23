@@ -1,4 +1,4 @@
-"""Integration tests for the Codex app-server subprocess seam (spec channels, T2).
+"""Integration tests for the Codex app-server subprocess seam (spec chat).
 
 The real-subprocess session is exercised here, NOT in the unit tier (unit tests
 must stay pure). The lifecycle tests stand a Python child in for ``codex`` —

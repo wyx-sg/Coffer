@@ -292,7 +292,7 @@ def planned_port() -> int | None:
 def acquire() -> tuple[DaemonInfo, socket.socket]:
     """Bind the daemon's port + generate token, then write daemon.json.
 
-    Returns ``(info, sock)``. CODE-041: the caller MUST keep ``sock`` open and
+    Returns ``(info, sock)``. The caller MUST keep ``sock`` open and
     pass its fd to the server (uvicorn ``fd=sock.fileno()``) so the port is
     never released between publishing ``daemon.json`` and the server binding.
     The caller closes ``sock`` when the server stops.

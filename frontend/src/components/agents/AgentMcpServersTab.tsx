@@ -7,7 +7,8 @@
 //      file inside the size cap.
 //
 //   B. Direct servers — the agent's own MCP entries read from its config
-//      files (specs agent-registry/005 workspace amendment). Name, description, and two
+//      files (spec agent-registry "List the MCP entries in the agent's own config
+//      files"). Name, description, and two
 //      actions: adopt the entry into Coffer, or delete it from the agent's own
 //      config file (behind a confirm — the daemon writes a .bak).
 //

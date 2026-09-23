@@ -10,6 +10,12 @@
 > withdrawn: channels run in the single Coffer-managed default workspace
 > (`~/.coffer/workspace`). The `/agent` + `/model` switches and the
 > entrypoint-differentiation core stand.
+>
+> **Amended (2026-09-23).** Later changes moved three more points, each marked
+> in place below: there is no `builtin` chat agent or model registry (the
+> routing targets are `claude_code` and `codex`); the sticky agent is stored
+> per thread, not on the peer; and the completion summary is sent only for a
+> turn that did not end normally, since SeaTalk now streams its replies.
 
 ## Context
 
@@ -55,9 +61,14 @@ Two facts from the code shaped the design:
    sticky preference; `/new` and lazy creation use the sticky agent, falling
    back to the channel's configured `default_agent`. The auxiliary
    (vault-facing) agent is not a routing target — routing is between the
-   chat-path agents the registry exposes (`builtin`, `claude_code`, `codex`, and
+   chat-path agents the registry exposes (~~`builtin`,~~ `claude_code`, `codex`, and
    any future registered agent), with no channel-side code per agent ([channels](../../openspec/specs/channels/spec.md)
    "Switch the conversation's agent from chat" holds).
+   _Amended:_ `builtin` is withdrawn — there is no built-in chat agent
+   ([The Built-in Agent Is an Internal Capability](builtin-agent-is-internal-capability.md)).
+   The sticky preference is stored per thread
+   (`channel_thread_conversations.preferred_agent`, migrations 0041 and 0084),
+   not on the peer.
 
 3. ~~**Workspaces are a channel-level allowlist and the cwd security boundary.**
    A channel declares a list of **named workspaces** (`{name, path}`), validated
@@ -70,8 +81,9 @@ Two facts from the code shaped the design:
    per-channel allowlist and no `/cwd` command.
 
 4. **Model selection is a parametric passthrough, registry-backed only where a
-   registry exists.** For `builtin`, `/model <name>` resolves against Coffer's
-   model registry and sets the conversation's `model_id` override. For the
+   registry exists.** ~~For `builtin`, `/model <name>` resolves against Coffer's
+   model registry and sets the conversation's `model_id` override.~~
+   _Withdrawn:_ there is no built-in chat agent and no model registry. For the
    bridged agents, `/model <name>` writes `agent_config["model"]` — the raw model
    string the upstream CLI understands — passed through unvalidated, because
    Coffer does not own that namespace; a typo surfaces as a CLI error relayed
@@ -103,6 +115,12 @@ Two facts from the code shaped the design:
    `send_text`, not an edit, so it works identically on every platform; on
    SeaTalk (which cannot edit and showed nothing during a long bridged turn) it
    is the only end-of-turn signal the owner gets.
+   _Superseded:_ SeaTalk now grows its reply on one live surface through its
+   streaming API, so a clean success sends no summary on any channel — the reply
+   is the completion signal. Only a turn that failed, was interrupted or hit the
+   tool-iteration limit gets one ([channels](../../openspec/specs/channels/spec.md)
+   "Summarise only a turn that did not end normally", "Grow a reply in place on
+   one live surface").
 
 ## Alternatives considered
 
@@ -125,6 +143,8 @@ Two facts from the code shaped the design:
 
 - The peer gains a column for the paired sender's identity (`sender_id`) and a
   sticky agent preference (`preferred_agent`); one migration covers them.
+  (The sticky preference has since moved to the per-thread
+  `channel_thread_conversations` row — see decision 2.)
   No new table. (`preferred_workspace` and `workspaces`/`default_workspace`
   on config are withdrawn — see amendment above.)
 - The command set grows by `/agent` and `/model`; both ride the existing
@@ -133,5 +153,5 @@ Two facts from the code shaped the design:
   channel-agnostic and any future channel inherits it (the N + M promise of
   [channels](../../openspec/specs/channels/spec.md)' Purpose holds: a new channel
   type is one adapter plus one config schema). (`/cwd` is withdrawn — see amendment above.)
-- The audit log answers "who drove which agent through which channel" without a
-  schema change.
+- ~~The audit log answers "who drove which agent through which channel" without a
+  schema change.~~ Withdrawn with decision 5.

@@ -1,1 +1,1 @@
-"""Domain entities for the agent-chat feature (spec channels)."""
+"""Domain entities for the agent-chat feature (spec chat)."""

@@ -179,7 +179,7 @@ async def test_put_remote_refuses_what_git_would_read_as_an_option(client, body)
     scenario="a working tree pointed inside the vault is refused",
 )
 async def test_put_remote_refuses_a_working_tree_inside_the_vault(client, fleet, where) -> None:
-    """spec vault-sync ``## Concepts`` (working tree): the round mirrors the
+    """spec vault-sync "Keep the working tree outside the vault": the round mirrors the
     vault *into* the tree and ``reset --hard``s it, so a tree at, inside or
     above a vault directory would copy the vault into itself and then erase
     it. Coffer's own directory is refused the same way, and so is a relative
@@ -905,7 +905,8 @@ async def test_a_wrong_token_is_401(client) -> None:
 async def test_the_bundle_directory_routes_are_gone(client, tmp_path) -> None:
     """Writing a bundle to a directory and reading one back was a wholesale
     overwrite with no base — the 2026-07-10 mutual deletion — and it has no
-    place beside the diff-based round (spec ``## Out of scope``)."""
+    place beside the diff-based round (spec vault-sync ``## Purpose``, "Out of
+    scope")."""
     body = {"path": str(tmp_path / "bundle")}
 
     assert (await client.post("/api/v1/sync/export", json=body)).status_code == 404

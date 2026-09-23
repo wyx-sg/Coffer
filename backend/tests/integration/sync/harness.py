@@ -1,4 +1,4 @@
-"""A two-machine convergence harness (spec vault-sync ``## The converge round``).
+"""A two-machine convergence harness (spec vault-sync "Run the seven round steps in order").
 
 Two independent vaults — each with its own SQLite database, knowledge tree,
 skill store, credential store, master key, working tree, convergence state and

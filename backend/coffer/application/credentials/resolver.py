@@ -25,7 +25,7 @@ class CredentialResolver:
     """Resolve credential refs against the credential store.
 
     Accepts any object satisfying :class:`CredentialStorePort`; the concrete
-    adapter is wired at composition root (CODE-005).
+    adapter is wired at composition root.
     """
 
     def __init__(self, store: CredentialStorePort) -> None:

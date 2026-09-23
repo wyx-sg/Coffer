@@ -1,9 +1,10 @@
 // frontend/src/pages/sync/SyncMasterKeyCard.tsx
 //
-// Out-of-band master-key transfer (spec vault-sync `## Credentials`). It lives
-// on the Sync page rather than in Settings because its whole purpose is
-// convergence: credentials sync as Fernet ciphertext only, so another machine
-// can read what this one publishes exactly when it holds this same key.
+// Out-of-band master-key transfer (spec vault-sync "Never write the master key
+// into the repository"). It lives on the Sync page rather than in Settings
+// because its whole purpose is convergence: credentials sync as Fernet
+// ciphertext only, so another machine can read what this one publishes exactly
+// when it holds this same key.
 //
 // It uses the browser's own file mechanisms rather than a native dialog driven
 // by the daemon:

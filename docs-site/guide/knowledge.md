@@ -113,7 +113,7 @@ The answer is a status: `ok`, `up_to_date`, `no_model` when no internal connecti
 
 **With no internal model, nothing waits.** Material is promoted to a document of its own the moment it arrives, as it stands, and a pass over a collection with anything left in its inbox promotes all of it and reports `no_model` with the documents it produced. You get a less tidy collection, but never knowledge sitting where no agent can read it.
 
-Two switches govern the unattended sweep, and both are read on every tick: whether it is on, and which single machine owns it (**Settings → Engine**, under *Automatic upkeep*). A vault that spans machines must curate on exactly one of them, because two machines merging the same material produce two different documents that git would merge as two additions. With no owner chosen the switch means "here", which is the right answer for a single machine. It defaults **on**, because it is what turns new material into something an agent reads.
+Two switches govern the unattended sweep, and both are read on every tick: whether it is on, and which single machine owns it (**Settings → Coffer's model**, under *Automatic upkeep*). A vault that spans machines must curate on exactly one of them, because two machines merging the same material produce two different documents that git would merge as two additions. With no owner chosen the switch means "here", which is the right answer for a single machine. It defaults **on**, because it is what turns new material into something an agent reads.
 
 Curation also stands aside for [sync](/guide/sync): a pass never overlaps a converge round, and none starts while a round is waiting on you to resolve a conflict or confirm a change.
 

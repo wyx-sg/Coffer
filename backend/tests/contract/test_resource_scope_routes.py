@@ -298,7 +298,7 @@ async def test_put_scope_works_for_lifecycle_kind_skill(tmp_path):
     async with c:
         # Seed directly (a skill's real creation flow is owned by SkillService,
         # not exercised here) — allow_lifecycle_kind mirrors that dedicated
-        # service opting in, per CODE-REG.
+        # service opting in, per spec resource-framework "Keep creation a per-kind seam".
         skill = await svc.register(
             kind="skill",
             name="reviewer",

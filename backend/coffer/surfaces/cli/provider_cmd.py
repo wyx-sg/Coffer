@@ -45,7 +45,8 @@ def add(
     connection starts on the wire's own default scope; route it to specific
     agents (e.g. an openai gateway to claude_code) with
     `coffer scope set provider <name> --agents claude-code`. The model is chosen
-    at the point of use, not on the connection (spec provider-switching E3)."""
+    at the point of use, not on the connection (spec provider-switching "Take
+    projected model keys from the agent's binding")."""
     body: dict[str, object] = {
         "name": name,
         "protocol": protocol,

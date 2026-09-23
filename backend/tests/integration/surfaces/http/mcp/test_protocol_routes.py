@@ -224,7 +224,7 @@ async def test_post_unexpected_exception_does_not_leak_message_to_wire(
     http_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """CODE-M1: an unexpected (non-Coffer) exception raised while handling a
+    """An unexpected (non-Coffer) exception raised while handling a
     request must NOT have its ``str(e)`` echoed onto the JSON-RPC wire.
 
     Upstream errors can embed credentials (an auth failure echoing the API
@@ -624,8 +624,8 @@ async def test_downstream_response_routes_to_pending_server_request(
 ) -> None:
     """An envelope with 'id' and no 'method' is a downstream response to a
     server-initiated request.  handle_post must route it to
-    handle_response_from_downstream and ACK with an empty 202 body (CODE-029:
-    never a JSON `""` body, which the shim would forward as a stray wire line).
+    handle_response_from_downstream and ACK with an empty 202 body
+    (never a JSON `""` body, which the shim would forward as a stray wire line).
 
     We seed a pending Future in the session's ServerRequestRegistry, then POST
     the matching response envelope.  The Future must be resolved with the result.
@@ -641,7 +641,7 @@ async def test_downstream_response_routes_to_pending_server_request(
     session = _ACTIVE_SESSIONS[session_id]
 
     # Seed a pending server-initiated request (id=42) directly in the registry.
-    # CODE-031: pending requests are keyed by the STRING form of the id.
+    # Pending requests are keyed by the STRING form of the id.
     loop = asyncio.get_event_loop()
     pending_future: asyncio.Future[object] = loop.create_future()
     registry = session._server_request_registry
@@ -653,7 +653,7 @@ async def test_downstream_response_routes_to_pending_server_request(
         json={"jsonrpc": "2.0", "id": 42, "result": {"value": "ok"}},
         headers={"Mcp-Session-Id": session_id},
     )
-    # CODE-029: matched-response ack is an empty 202, not a JSON body.
+    # The matched-response ack is an empty 202, not a JSON body.
     assert r.status_code == 202, r.text
     assert r.content == b"", f"ack must have an empty body, got {r.content!r}"
 

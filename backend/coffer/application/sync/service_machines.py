@@ -45,9 +45,9 @@ class MachinesMixin:
     async def rename_self(self, registry: MachineRegistry, name: str) -> MachineView:
         """Rename this machine.
 
-        Costs nothing else: nothing outside the registry references a machine
-        at all — not by id and not by label — so no resource has to be
-        rewritten. The name reaches the other machines on the next round,
+        Costs nothing else: nothing references a machine by its label — a
+        channel's binding and the curation owner name the id — so no resource
+        has to be rewritten. The name reaches the other machines on the next round,
         inside this machine's own descriptor.
 
         Two writes, and both are needed. ``_set_machine_name`` persists it, so

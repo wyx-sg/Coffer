@@ -1,4 +1,5 @@
-"""A bounded agentic pass over a conflicted working tree (spec vault-sync ``## Conflicts``).
+"""A bounded agentic pass over a conflicted working tree (spec vault-sync
+"Resolve remaining conflicts with an agent only in the working tree").
 
 Implements ``application.sync.ports.ConflictResolverPort``. It is the middle
 layer of three: credential blobs are settled by encryption time before they get

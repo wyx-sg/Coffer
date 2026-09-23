@@ -52,7 +52,7 @@ async def put_credential_settings(
     """Relocate the master key. Idempotent; the move itself is audited.
 
     Moving to "keychain" may trigger one OS authorisation prompt — the
-    keychain write runs off the event loop (CODE-034 pattern).
+    keychain write runs off the event loop.
     """
     if body.master_key_storage != manager.location:
         await asyncio.to_thread(manager.relocate, body.master_key_storage)

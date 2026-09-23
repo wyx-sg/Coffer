@@ -68,7 +68,7 @@ def _toggle(name: str, type_: str, key: str, *, enable: bool, verbose: bool = Fa
         # such. The 404 below can therefore only mean the server exists but has
         # no such capability — which is why the two are no longer one message.
         uid = resolve_uid(c, "mcp_server", name, verbose=verbose)
-        # CODE-038: send the capability key in the request body, not the URL
+        # Send the capability key in the request body, not the URL
         # path. Resource keys are URIs containing '/' (e.g. file:///etc/hosts);
         # embedding them in the path never matches the single-segment legacy
         # route and always 404s. The body route handles arbitrary keys.

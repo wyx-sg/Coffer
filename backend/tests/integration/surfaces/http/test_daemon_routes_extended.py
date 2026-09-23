@@ -161,7 +161,7 @@ async def test_shutdown_signals_termination(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# T1 — daemon-lifecycle audit events (spec resource-framework "Audit every lifecycle
+# Daemon-lifecycle audit events (spec resource-framework "Audit every lifecycle
 # change")
 # ---------------------------------------------------------------------------
 

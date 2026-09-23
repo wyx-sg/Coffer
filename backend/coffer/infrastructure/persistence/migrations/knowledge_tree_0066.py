@@ -1,7 +1,7 @@
 """One-way rewrite of the pre-collection knowledge tree.
 
-Spec knowledge records this migration under ``## Migration history`` rather than
-as a requirement.
+Knowledge data-model records this migration under ``### What 0066 left behind``
+rather than as a requirement.
 
 The layer used to keep ``~/.coffer/knowledge/<scope>/{notes,docs,.raw}/<ULID>.md``
 and hold every document's *title* only in the ``documents`` table. Dropping that

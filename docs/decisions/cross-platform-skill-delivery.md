@@ -56,10 +56,12 @@ Concrete behaviour, per OS:
   elevation on NTFS for any local volume.
 - **Any OS, when both fail** (FAT32, certain network shares, locked-down
   CI runners): copy the master folder content into the agent target with
-  `shutil.copytree(...)`. Records `link_mode = copy_fallback` and emits an
-  audit event with `degraded=true`. The UI surfaces a warning on degraded
-  bindings; `verify` treats these as a separate drift category because
-  edits to the agent-side copy will not propagate.
+  `shutil.copytree(...)`. Records `link_mode = copy_fallback` and emits a
+  `skill_bound` audit event whose `mode` is `copy_fallback`. The UI marks
+  copied bindings, because edits to the agent-side copy will not propagate;
+  `verify` treats a copy-fallback directory that carries the skill's
+  `SKILL.md` as healthy rather than as drift, since a real directory is the
+  expected shape of that mode.
 
 The mode is determined per binding (not per OS) because a single user
 machine can mix filesystems (e.g. NTFS C: drive plus a SMB-mounted skill
@@ -93,8 +95,9 @@ the master.
 
 - The copy fallback is silently inferior: edits made through the agent's
   view of the skill do **not** land in master. This is mitigated by (a)
-  the audit `degraded=true` flag, (b) the UI warning, and (c) `verify`
-  reporting these bindings on every run. We do not auto-promote a
+  the audit event's `mode: copy_fallback` and (b) the UI marking copied
+  bindings; `verify` does not flag them, because the copy is the expected
+  shape of that mode. We do not auto-promote a
   copy-fallback to a real link when the filesystem regains support
   (v0.6+).
 - Windows users without Developer Mode get junctions, which behave
@@ -103,7 +106,7 @@ the master.
   the divergence is real.
 - Three removal code paths multiply the surface area where "delete the
   user's master folder by accident" is possible. Mitigated by a unit-test
-  matrix in `tests/infrastructure/skill/test_sync_engine.py` covering
+  matrix in `backend/tests/unit/infrastructure/test_sync_engine.py` covering
   every (create, remove) × (symlink, junction, copy_fallback) cell on
   both POSIX and a mocked Windows shim.
 

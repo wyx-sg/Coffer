@@ -79,8 +79,8 @@ class Resource:
     # allow-list of agent UIDS. None means unscoped (active for every agent) —
     # the pre-scope default, so every existing constructor keeps working
     # unchanged. Scope is machine-local: it is set on the machine it applies to
-    # and does not travel with the vault (spec vault-sync ``## What does not
-    # sync``). Interpreted via coffer.domain.scope; only kinds whose
+    # and does not travel with the vault (spec vault-sync "Keep reach
+    # machine-local"). Interpreted via coffer.domain.scope; only kinds whose
     # Kind.supports_scope is True may set it (validate_scope).
     scope: Scope | None = None
 
@@ -111,7 +111,8 @@ class Kind:
     # detection — set this False so the generic path cannot create a row with
     # no backing artifact. Their dedicated services still create rows by
     # passing ``allow_lifecycle_kind=True`` to ResourceService.register
-    # (CODE-REG, symmetric with the on_delete cleanup hook).
+    # (spec resource-framework "Keep creation a per-kind seam", symmetric
+    # with the on_delete cleanup hook).
     generic_create_allowed: bool = True
     # Whether this kind supports the framework-level per-agent activation
     # scope (ADR per-agent-resource-scope). False (the default) means the kind has no scope at all:
@@ -163,7 +164,7 @@ class Kind:
     # Optional kind-specific name validator, called BEFORE persistence by every
     # path that sets a name — registration AND rename. Raises to reject the
     # name. Used by `mcp_server` to reserve the `__` tool/prompt namespace
-    # separator (CODE-030).
+    # separator (spec mcp-gateway "Namespace every upstream capability").
     validate_name: Callable[[str], None] | None = None
     # Optional semantic config validation beyond ``config_schema`` shape,
     # applied at REGISTRATION only (already shape-validated). Given the validated
@@ -266,7 +267,7 @@ class Kind:
     # Optional kind-supplied audit redactor: given a validated config dict,
     # return an audit-safe copy with secret-bearing fields stripped. Keeps the
     # kind-agnostic ResourceService from hardcoding any one kind's config shape
-    # (e.g. mcp_server's ``transport.env``/``headers``) — resource framework / CODE-006.
+    # (e.g. mcp_server's ``transport.env``/``headers``) — resource framework.
     # A pure transform of the config consulted when the audit event is built;
     # it never rejects a write.
     audit_redactor: Callable[[dict[str, Any]], dict[str, Any]] | None = None

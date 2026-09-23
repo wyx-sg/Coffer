@@ -91,7 +91,7 @@ class _Bridge:
     async def _pump_stdin(self, client: httpx.AsyncClient) -> None:
         """Read JSON-RPC envelopes from stdin, POST to /mcp, write reply to stdout.
 
-        CODE-M3: MCP clients pipeline requests (concurrent tool calls, ping
+        MCP clients pipeline requests (concurrent tool calls, ping
         keepalives, cancellations). Each envelope is dispatched as its own task
         so a single slow ``tools/call`` cannot head-of-line-block the others —
         previously the pump awaited every POST inline, starving pings until a
@@ -150,7 +150,7 @@ class _Bridge:
                 inflight.add(task)
                 task.add_done_callback(inflight.discard)
 
-        # Drain in-flight handlers BEFORE signalling stop (CODE-R1): run()'s
+        # Drain in-flight handlers BEFORE signalling stop: run()'s
         # FIRST_COMPLETED wait cancels this task the moment _stop fires, so
         # setting it first would abort the drain mid-POST and drop replies.
         if inflight:
@@ -300,7 +300,7 @@ class _Bridge:
     async def _drain_sse(self, client: httpx.AsyncClient) -> None:
         """After the first session id is known, stream notifications, reconnecting.
 
-        CODE-046: a bounded reconnect loop around :meth:`_drain_sse_once`. The
+        A bounded reconnect loop around :meth:`_drain_sse_once`. The
         daemon may close the stream at any time (e.g. its idle-session reaper
         drops the session), and a single transient error must not silently stop
         server-initiated notifications (tools/list_changed, sampling, …) for the

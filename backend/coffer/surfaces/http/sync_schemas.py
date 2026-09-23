@@ -260,9 +260,10 @@ class MachineRenameIn(BaseModel):
 
 
 class MachineRemovedOut(BaseModel):
-    #: Retiring a machine removes its descriptor and nothing else. Nothing in
-    #: the vault references a machine id — reach is machine-local, so no scope
-    #: can name one — which is why this answer has no second half.
+    #: Retiring a machine removes its descriptor and rewrites nothing else. No
+    #: scope can name a machine (reach is machine-local); a channel's binding
+    #: and the curation owner do name one, and are then reported as naming a
+    #: machine the registry no longer holds.
     removed: bool
 
 

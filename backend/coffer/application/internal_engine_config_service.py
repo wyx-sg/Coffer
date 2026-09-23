@@ -1,4 +1,5 @@
-"""Global internal-engine model service (spec provider-switching amendment 2026-06-22b).
+"""Global internal-engine model service (spec internal-engine "Resolve the engine's
+connection and model together").
 
 Coffer's internal LLM engine (aggregation / distil / knowledge curation)
 takes its endpoint + key from the ``internal_default`` connection but its MODEL

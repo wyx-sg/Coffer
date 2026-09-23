@@ -26,18 +26,24 @@ owns its lifecycle.
 
 - The daemon is an independent process bound to `127.0.0.1:<port>`. The port is
   **the user's fixed port when one is configured** in `~/.coffer/daemon-config.json`
-  — bound exactly, never fallen back from — and otherwise is chosen at startup
-  (default 8000; falls back to the next free port if taken; small bounded range).
+  and otherwise `8000` — bound exactly, never fallen back from; a daemon that
+  cannot bind it refuses to start and names the holder. The
+  `COFFER_PORT_RANGE_*` scan survives only as a test-harness override.
 - On startup, the daemon writes `~/.coffer/daemon.json` (mode `0600`) with
-  `{pid, port, token, started_at}`.
+  `{version, pid, port, token, started_at, binary_path}`.
 - The shim and the CLI both use the same `detect-or-spawn` helper:
   1. Read `~/.coffer/daemon.json`.
-  2. If the file exists and the PID is alive, connect.
+  2. If a live daemon answers `GET /api/v1/daemon/status` on the recorded
+     port, connect.
   3. Otherwise, spawn `coffer-daemon` as a detached process (stdio
      redirected to `~/.coffer/logs/daemon.log`), wait briefly for
      `daemon.json` to appear, then connect.
-- The daemon does not auto-shutdown. It exits only on explicit
-  `coffer daemon stop` or system shutdown.
+- The daemon stands down cleanly after an idle window (twelve hours by
+  default, `coffer daemon idle`), and otherwise exits on `coffer daemon stop`
+  or system shutdown. `coffer daemon service install` makes it a macOS login
+  service that restarts it only after an unsuccessful exit, so the idle
+  stand-down is not undone (spec daemon, "Run as a login service" and "Stand
+  down after an idle window").
 - All clients carry the token from `daemon.json` in an `X-Coffer-Token` header
   on every request.
 
@@ -51,8 +57,9 @@ owns its lifecycle.
   MCP client keeps working after an unrelated `coffer` command returns, and one
   client's shim exiting does not take the daemon down for others.
 - No privileged install is required. Setup is "run any `coffer` command once".
-- A single discovery file keeps clients in sync with port changes — if 8000
-  was busy and the daemon picked 8001, every client reads the same answer.
+- A single discovery file keeps clients in sync with port changes — a port
+  the user pins in `daemon-config.json` reaches every client through the same
+  answer.
 
 **Negative**
 
@@ -90,9 +97,10 @@ owns its lifecycle.
   its package version (`coffer.__version__`) on `GET /api/v1/daemon/status`, and
   the CLI compares it against its own `coffer.__version__`. On mismatch
   `coffer daemon status` says the daemon is out of date and points at
-  `coffer daemon restart`, and the daemon-served web UI's daemon-offline banner
-  shows the same "daemon out of date — restart it" affordance; Coffer never
-  auto-kills the running daemon.
+  `coffer daemon restart`, and the desktop shell's offline banner shows the
+  same "daemon out of date — restart it" affordance (a browser host gets only
+  the CLI and shim stderr warning); Coffer never auto-kills the running
+  daemon.
 
 **Operational follow-on**
 
@@ -154,6 +162,13 @@ goes in and survives shutdown, `daemon.json` comes out and is unlinked on exit.
 
 ## Revision history
 
+- **2026-09-23** — The Decision bullets were brought up to date in place: the
+  port is fixed (8000 or the pinned one) since [The Desktop Shell
+  Returns](desktop-shell-over-a-shared-frontend.md), liveness is the status
+  probe, the daemon stands down after an idle window, `daemon.json` also carries
+  `version` and `binary_path`, and the skew banner lives in the desktop shell
+  only (the browser-served UI treats every version as matching).
+
 - **2026-09-12** — Optional fixed port. Port drift breaks the one thing a user
   is entitled to treat as stable — a browser bookmark to Coffer's own UI — and
   the range scan has no way to prefer the port the bookmark names. Self-eviction
@@ -194,10 +209,11 @@ goes in and survives shutdown, `daemon.json` comes out and is unlinked on exit.
   permits two sockets to bind the same address and port whenever neither is
   `LISTEN`ing — and a Coffer daemon is bound-but-not-listening for its entire
   boot window, since uvicorn calls `listen` later on the fd it is handed.
-  Setting it there dissolved CODE-041 outright: a second `acquire()` bound the
-  very port the first was still holding, which is the case the CODE-041 test
-  pins. macOS and the BSDs refuse that bind, so the local suite stayed green and
-  the Linux CI run was the first thing to see it. The fixed path keeps the
+  Setting it there dissolved the one-daemon guard outright: a second
+  `acquire()` bound the very port the first was still holding, which is the
+  case the socket-level test in `test_port_alloc.py` pins. macOS and the BSDs
+  refuse that bind, so the local suite stayed green and the Linux CI run was
+  the first thing to see it. The fixed path keeps the
   option because its bind is serialised by the spawn lock and its failure mode
   without it — a restart that cannot rebind — is certain rather than theoretical.
 
@@ -305,16 +321,6 @@ goes in and survives shutdown, `daemon.json` comes out and is unlinked on exit.
 
 ## Implementation notes
 
-- **Two Decision bullets above have since moved.** The default port is no longer
-  scanned: with nothing configured the daemon binds `8000` exactly and refuses to
-  start if it cannot ([The Desktop Shell Returns](desktop-shell-over-a-shared-frontend.md)
-  inverted the default; the `COFFER_PORT_RANGE_*` scan survives only as a test
-  harness override). And the daemon no longer runs until stopped: it stands down
-  cleanly after an idle window (twelve hours by default, `coffer daemon idle`),
-  and `coffer daemon service install` makes it a macOS login service that
-  restarts it only after an unsuccessful exit, so the idle stand-down is not
-  undone (spec daemon, "Run as a login service" and "Stand down after an idle
-  window").
 - **`infrastructure/daemon/` imports no surface**, which importlinter enforces.
   That is why `entry.py` reads `daemon.json` and hands the bound socket to
   uvicorn itself, and why the lifecycle phase `/daemon/status` reports is pushed

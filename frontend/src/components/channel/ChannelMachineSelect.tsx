@@ -118,8 +118,8 @@ export function ChannelMachineSelect({
             the choice is made. */}
         <div className="max-w-[18rem] space-y-1.5 border-t px-2 pb-1 pt-2">
           <p className="text-xs text-muted-foreground">{t("channels.machine.handover")}</p>
-          {/* Reach and the binding must never be merged (spec channels, "Reach
-              and the binding answer different questions"), and this menu is
+          {/* Reach and the binding must never be merged (spec channels "Limit
+              the agents a channel may drive to its scope"), and this menu is
               where they are most easily confused: the reach control sits one
               row away in the same card. */}
           <p className="text-xs text-muted-foreground">{t("channels.machine.notReach")}</p>

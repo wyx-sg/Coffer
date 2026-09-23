@@ -10,6 +10,13 @@ per agent.** The store's layout, tool list and retrieval belong to
 [Knowledge Is Plain Files](knowledge-is-plain-files.md) and are deliberately not
 restated here, so that this file cannot drift from them.
 
+> **Amended (2026-09-23).** The retrieval and write mechanics this file still
+> mentions were replaced by [Knowledge Is Plain Files](knowledge-is-plain-files.md): an agent reads the
+> store with its own `Read` and `Grep` at the paths Coffer's `coffer-guide`
+> skill catalogues, agents and people may edit documents directly with their
+> own file tools, `coffer__write` is the one knowledge tool, and the pass that
+> rewrites documents is curation. The one-store decision below is unchanged.
+
 ## Context
 
 The first memory design treated each store as a private silo queried over MCP.
@@ -48,7 +55,8 @@ What that commits to, independently of layout:
   a shared store is precisely what this decision declines to build.
 - **One tool surface, identical for every agent.** The `coffer__*` knowledge
   tools are agent-agnostic, so **adding a new agent adds no knowledge-layer code
-  at all**. That property is the whole return on the decision, and the rejected
+  at all**. (_Amended:_ that surface is now one write tool plus plain files every
+  agent reads with its own file tools — still identical for every agent.) That property is the whole return on the decision, and the rejected
   alternatives cannot have it.
 - **The caller does not classify.** With one kind and one set of tools, an agent
   never has to decide which store a fact belongs to before it can search for it.
@@ -71,7 +79,8 @@ ambient loading, were also removed: a session-start injection hook, which
 shipped and was never installed on any machine, and the one-time inward import
 of an agent's existing native memory, which shipped unused. So nothing pushes
 knowledge into a session today, and an agent reaches the shared store only by
-calling the tools itself.
+reaching for it itself — reading the files at the paths the `coffer-guide`
+skill names (see the amendment above).
 
 ## Consequences
 
@@ -94,10 +103,12 @@ calling the tools itself.
   both mechanisms that tried to answer it were removed for never having run.
 - **Facts in an agent's own native store stay there.** They do not migrate on
   their own, and with the import removed there is no path to bring them across.
-- **Coffer's tools are the only write path.** An agent that cannot speak MCP
-  cannot contribute to the shared store.
-- **What an agent wrote may later be rewritten.** The periodic tidy merges
-  duplicates and rewrites notes unattended, on a timer. One shared store is what
+- ~~**Coffer's tools are the only write path.** An agent that cannot speak MCP
+  cannot contribute to the shared store.~~ _Amended:_ an agent or a person may
+  also edit a document directly with their own file tools; `coffer__write` is
+  the one tool for filing something new.
+- **What an agent wrote may later be rewritten.** The periodic curation pass
+  merges duplicates and rewrites documents unattended, on a timer. One shared store is what
   makes that worth doing — the duplicates it heals are the same fact written by
   several agents — but it means a note an agent wrote is not a fixed artefact.
 

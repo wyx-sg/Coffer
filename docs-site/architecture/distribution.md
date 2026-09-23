@@ -23,7 +23,7 @@ So the shell came back owning **only** what a browser cannot do for itself, whic
 | Concern                  | Module                                | What it does                                                                                                   |
 | ------------------------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | A window that exists     | `lib.rs`                              | A 1200×800 Tauri window with a Dock icon and an entry in Cmd-Tab.                                              |
-| Something resident       | `tray.rs`                             | A tray icon with **Open Coffer**, **Restart daemon** and **Quit**; closing the window hides to the tray.        |
+| Something resident       | `tray.rs`                             | A tray icon with **Open Coffer**, a **Sync** entry (badged when the vault needs attention), **Restart daemon** and **Quit**; closing the window hides to the tray. |
 | Detect-or-spawn          | `resolve.rs`, `discovery.rs`, `spawn.rs`, `env_path.rs` | The five-step chain below, and the `$PATH` a spawned daemon inherits.                        |
 | Restart policy + handshake | `daemon.rs`                         | The three IPC commands the webview calls, rate-limited, plus the credential handshake a locally-hosted page cannot get any other way. |
 | Finding the binaries     | `sidecar.rs`                          | Locating a binary Tauri staged inside the app bundle.                                                          |
@@ -88,11 +88,11 @@ For end-user distribution, `make bundle-binaries` (driven by `scripts/build_bina
 
 PyInstaller bundles the Python interpreter, all dependencies, and the application code into a single-file executable. The user runs `coffer-daemon` directly; no `python` command, no `venv`, no `pip`. The shim binary is deliberately lean — it excludes all server-side dependencies because the shim only needs `httpx` to forward requests to the daemon over loopback HTTP. MCP clients that re-spawn the shim every session benefit from the shorter cold-start time a smaller binary provides.
 
-Alongside these, the release archive carries the **runtime helper binaries** the daemon spawns as child processes: `coffer-callback` (the SeaTalk callback listener, `surfaces/callback/`, spawned while a SeaTalk channel is enabled). In a source/dev run the daemon spawns the callback listener as `python -m coffer.surfaces.callback`; in a frozen build `listener_spawn.py` looks for a `coffer-callback` sibling next to the daemon binary. This sibling relationship is exactly why the daemon — not an installer — owns deploying these binaries (see [Binary deployment at frozen start](#binary-deployment-at-frozen-start)).
+Alongside these, the release archive carries the **runtime helper binaries** the daemon spawns as child processes: `coffer-callback` (the SeaTalk callback listener, `surfaces/callback/`, spawned while a SeaTalk channel on webhook delivery is enabled). In a source/dev run the daemon spawns the callback listener as `python -m coffer.surfaces.callback`; in a frozen build `listener_spawn.py` looks for a `coffer-callback` sibling next to the daemon binary. This sibling relationship is exactly why the daemon — not an installer — owns deploying these binaries (see [Binary deployment at frozen start](#binary-deployment-at-frozen-start)).
 
 Alembic migration files ship as data files inside the daemon binary via PyInstaller's `datas` mechanism. On first launch, the daemon runs `alembic upgrade head` against a fresh database before accepting connections — the end-user gets correct schema creation with no separate step.
 
-The daemon binary also bundles the heavier knowledge and engine dependencies: `markitdown` for document conversion, `openai` for the OpenAI-compatible provider calls and remote speech-to-text, and the `langchain*` / `langgraph` stack that Coffer's **internal engine** runs the knowledge tidy and memory-organise passes on. (None of these drives a chat persona — Coffer has none; chat drives the user's own Claude Code and Codex agents.) All of them are imported lazily inside functions, so PyInstaller's static analysis cannot trace them — `coffer-daemon.spec` declares them explicitly as hidden imports so the frozen daemon can convert documents, transcribe audio and run its unattended passes.
+The daemon binary also bundles the heavier knowledge and engine dependencies: `markitdown` for document conversion, `openai` for the OpenAI-compatible provider calls and remote speech-to-text, and the `langchain*` / `langgraph` stack that Coffer's **internal engine** runs the knowledge curation and memory distil passes on. (None of these drives a chat persona — Coffer has none; chat drives the user's own Claude Code and Codex agents.) All of them are imported lazily inside functions, so PyInstaller's static analysis cannot trace them — `coffer-daemon.spec` declares them explicitly as hidden imports so the frozen daemon can convert documents, transcribe audio and run its unattended passes.
 
 The built web UI also ships as data files inside the daemon binary, which is what lets the frozen daemon serve the UI from its own origin.
 
@@ -118,7 +118,7 @@ Every release publishes one binary set in two wrappers, and the wrappers carry *
 - `coffer-mcp-shim` (standalone executable)
 - the runtime helper binary the daemon spawns — `coffer-callback`
 
-`Coffer-unsigned-<triple>.dmg` contains `Coffer.app`, whose `externalBin` entries stage those same four binaries inside the bundle. On first launch the app deploys them into `~/.coffer/bin/`, so **installing the app installs the CLI**.
+`Coffer-unsigned-<triple>.dmg` contains `Coffer.app`, whose `externalBin` entries stage those same four binaries inside the bundle. On first launch the app starts its bundled daemon, whose frozen-start path deploys them into `~/.coffer/bin/`, so **installing the app installs the CLI**.
 
 The archive is what a headless server, a CI environment or a terminal-first workstation wants: extract, run `coffer-daemon` (or `coffer daemon start`), and open the UI with `coffer open` — on a headless box you simply never open it. The `.dmg` is what a workstation wants when the terminal is not the way in.
 
@@ -156,7 +156,7 @@ One more thing rides this path: before `alembic upgrade head` changes an on-disk
 
 The daemon is the natural owner of this step because it is the process that actually spawns `coffer-callback` at runtime and needs it at a known sibling path. A source install skips deployment entirely — it is not a frozen build, and `pip install` has already put the console scripts on `PATH`.
 
-The desktop app deploys the same four binaries on first launch, for the same reason in reverse: a user who only ever double-clicks `Coffer.app` still needs `coffer-mcp-shim` on disk at a path an MCP client can be pointed at.
+The desktop app's bundled daemon deploys the same four binaries on first launch, for the same reason in reverse: a user who only ever double-clicks `Coffer.app` still needs `coffer-mcp-shim` on disk at a path an MCP client can be pointed at.
 
 ## Release pipeline
 

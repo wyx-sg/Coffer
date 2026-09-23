@@ -6,8 +6,9 @@ a collection is a **directory** as much as it is a row:
 
 - ``generic_create_allowed`` is False, because the generic ``POST /resources``
   path would create the row with no folder behind it.
-  ``KnowledgeService.create_collection`` opts in explicitly (CODE-REG), the
-  same way the skill and agent kinds do.
+  ``KnowledgeService.create_collection`` opts in explicitly (spec
+  resource-framework "Keep creation a per-kind seam"), the same way the
+  skill and agent kinds do.
 - ``on_rename`` moves that folder. The row's name is the directory's name, so
   a label that changes without the directory changing with it leaves the row
   pointing at nothing (ADR resource-identity-is-an-immutable-uid: "the three

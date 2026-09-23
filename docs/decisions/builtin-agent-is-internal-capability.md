@@ -74,6 +74,11 @@ capabilities.** Three moves.
   "models used by Coffer Assistant" to **"Coffer's internal model"** that powers
   retrieval and memory reorganization.
 
+  _Amended 2026-09-23:_ that configuration now lives at **Settings → Coffer's model** (`/settings/engine`)
+  ([internal-engine](../../openspec/specs/internal-engine/spec.md)), and it
+  powers no retrieval — the passes it runs are memory distil and knowledge
+  curation.
+
 ### 3. The local model becomes the engine for internal capabilities
 
 The LLM machinery is **kept but repurposed**, never user-facing:
@@ -85,6 +90,14 @@ The LLM machinery is **kept but repurposed**, never user-facing:
   entry, and the chat-event mapping.
 - **Keep** the ReAct loop as an internal-only engine (memory reorganization,
   spec knowledge), never exposed as a chat agent.
+
+_Amended 2026-09-23:_ the consumers have since changed shape. There is no store
+merge. Memory's pass is **distil**, a one-shot completion
+([memory](../../openspec/specs/memory/spec.md)); the ReAct loop
+(`infrastructure/llm/agentic_reorg.py`) runs knowledge **curation**
+([knowledge](../../openspec/specs/knowledge/spec.md)). Knowledge ingestion's
+description step, vault-sync's conflict resolver and chat transcription use the
+same engine ([internal-engine](../../openspec/specs/internal-engine/spec.md)).
 
 One capability is delivered in this change:
 
@@ -124,7 +137,8 @@ delete only the chat-facing shell.
 
 ### C — Keep `coffer__search_tools` BM25-only; do not add an embedder path
 
-**Rejected.** The lexical recall gap is real and is exactly what Tool Retrieval's cited
+_Moot since the embedder path was removed; BM25-only is what ships._ At the
+time: **Rejected.** The lexical recall gap is real and is exactly what Tool Retrieval's cited
 evidence says embeddings fix. The `vector → keyword` fallback keeps the
 zero-config default, so adding the semantic path costs nothing for users without
 an embedder.
@@ -142,17 +156,19 @@ keeps the very "built-in agent is a thing" framing this ADR removes.
   registered chat agent.
 - The Vault Console repositioning is marked **partially superseded**: its channel-observe job
   stands; its "converse with the vault through the builtin agent" job is removed.
-- Tool Retrieval is **amended**: `coffer__search_tools` gains a semantic ranking path
-  with BM25 fallback.
+- ~~Tool Retrieval is **amended**: `coffer__search_tools` gains a semantic ranking path
+  with BM25 fallback.~~ _Withdrawn:_ the path was removed with every other use of
+  embeddings; `coffer__search_tools` stays lexical (see move 3).
 - UI: `/chat` reverts to "Chat"; the `/agents/builtin` route and the built-in
-  card are removed; Settings → Models is reframed as Coffer's internal model.
-- CLI: the `coffer chat` command (the built-in agent's terminal chat) is removed;
-  `coffer model` and the rest of the CLI are unchanged.
-- LangGraph/LangChain stay as **internal** dependencies (memory reorganization
-  + store merge); the chat-event mapping and `builtin` chat provider are
+  card are removed; Coffer's internal model is configured at Settings → Coffer's model.
+- CLI: the `coffer chat` command (the built-in agent's terminal chat) is removed.
+  `coffer model` was later removed too, when models and providers were unified
+  into one connection; the engine's model is set with `coffer engine model`.
+- LangGraph/LangChain stay as **internal** dependencies (memory distil and
+  knowledge curation); the chat-event mapping and `builtin` chat provider are
   deleted.
-- No new persisted state beyond what Settings → Models already stores; no
-  migration.
+- No new persisted state beyond what the internal model's settings already
+  stored; no migration.
 
 ## Revision history
 

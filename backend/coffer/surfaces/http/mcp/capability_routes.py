@@ -62,7 +62,7 @@ router = APIRouter(
 
 CapabilityType = Literal["tool", "resource", "prompt"]
 
-# CODE-M2: hard ceiling on the management capabilities page so a wedged
+# Hard ceiling on the management capabilities page so a wedged
 # upstream can't hang it for the supervisor's full retry ladder (~minutes).
 # Deliberately LARGER than the gateway's 5 s PER_SERVER_LIST_TIMEOUT: this
 # page may trigger a cold spawn, and spawn_timeout defaults to 30 s — a 5 s
@@ -85,7 +85,7 @@ async def _capability_list(
     This is the management view: it returns every discovered capability with
     its ``enabled`` flag (including disabled ones) so the UI can show and
     re-enable them. The three discovery calls run concurrently under a single
-    timeout budget (CODE-M2).
+    timeout budget.
 
     When the upstream can't be live-queried — a *disabled* server (the gateway
     won't connect it) or an unreachable one — fall back to the persisted
@@ -229,7 +229,7 @@ async def _toggle_capability(
 
 
 # Canonical (body-based) form — supports capability_keys containing '/' such as
-# resource URIs (e.g., file:///path/to/x). See CODE-001 in PR #14 review.
+# resource URIs (e.g., file:///path/to/x).
 @router.post(
     "/{uid}/capabilities/{capability_type}/enable",
     status_code=status.HTTP_204_NO_CONTENT,

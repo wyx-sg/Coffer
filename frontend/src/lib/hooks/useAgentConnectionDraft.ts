@@ -2,11 +2,13 @@
 // state machine behind the Agent Overview LLM-connection panel.
 //
 // Picking a connection/model is a DRAFT: it stages a choice but projects nothing
-// (spec provider-switching amendment 2026-06-23c). The user must «测试连接» (test-connection) a
-// custom connection and only then «确认切换», which PATCHes the per-agent model
+// (spec provider-switching "Offer every connection operation on REST, CLI and
+// web"). The user must «测试连接» (test-connection) a custom connection and
+// only then «确认切换», which PATCHes the per-agent model
 // binding and activates the connection — the only step that writes native config.
 // Switching to the built-in login needs no test. The model lives on the agent
-// binding, not the connection (spec provider-switching E3).
+// binding, not the connection (spec provider-switching "Take projected model
+// keys from the agent's binding").
 //
 // On the built-in login there is nothing to bind — `agent.model` is only read
 // when projecting a connection — so the panel offers NO model control at all

@@ -26,8 +26,10 @@ decide how Python code is delivered to end users.
 
 ## Decision
 
-**PyInstaller-built daemon, shim, and management CLI, shipped as a single
-download tier from one CI release job.**
+**PyInstaller-built daemon, shim, and management CLI, shipped as two
+download tiers — the CLI archive and the desktop `.dmg` that wraps the same
+frozen binaries — from one CI release job** (the second tier since
+2026-09-12; see Revision history).
 
 Concrete choices:
 
@@ -66,12 +68,15 @@ Concrete choices:
   needs `httpx`.
 - The daemon also serves the built web UI as static files at its own
   loopback origin ([daemon](../../openspec/specs/daemon/spec.md) "Serve the built web UI from the daemon's own origin"), so the web assets ride along inside
-  the daemon binary rather than in a separate shell. There is no separate
-  GUI artifact to build, sign, or install.
+  the daemon binary rather than in a separate shell. The desktop `.dmg`
+  ([The Desktop Shell Returns](desktop-shell-over-a-shared-frontend.md))
+  bundles these same binaries and renders the page the daemon serves; it
+  builds no UI of its own.
 - **The daemon deploys its sibling binaries on a frozen start**
   ([daemon](../../openspec/specs/daemon/spec.md) "Deploy frozen sibling binaries and back up the vault before migrating"). When `coffer-daemon` detects it is running from a
-  frozen build, it idempotently copies its siblings — `coffer-mcp-shim`,
-  and `coffer-callback` — into `~/.coffer/bin/<version>/`, and flips the
+  frozen build, it idempotently copies the four frozen binaries — `coffer`,
+  `coffer-daemon`, `coffer-mcp-shim` and `coffer-callback` — into
+  `~/.coffer/bin/<version>/`, and flips the
   public `~/.coffer/bin/<name>` symlinks onto that directory atomically,
   using an atomic temp-copy-then-rename and a 2-signal staleness check
   (byte size, version sentinel — not mtime). Nothing is overwritten in
@@ -109,8 +114,8 @@ Concrete choices:
   dependencies — important for MCP clients that re-spawn the shim
   every session.
 - Updating is cheap: replace the binaries, restart the daemon, hard-refresh
-  the browser. There is no separate GUI artifact that can drift from the
-  source it was built from.
+  the browser. The desktop tier reuses the binaries the CLI leg froze, so it
+  cannot drift from the source they were built from.
 - Forward-compatible with optional "system service install" (an
   [Detect-or-Spawn](daemon-detect-or-spawn.md) follow-up): launchd, systemd, and Windows service
   configs all point at the same binary paths.
@@ -179,7 +184,7 @@ Rejected.
   the daemon's runtime contract is PyInstaller-specific.
 
 **Multiple download tiers (a GUI installer alongside the CLI archive).**
-Rejected.
+Rejected at the time; reversed on 2026-09-12 (see Revision history).
 
 - A second tier means a second artifact to build, verify, and keep in
   step with the first. The single `coffer-cli-<triple>.tar.gz` tier is

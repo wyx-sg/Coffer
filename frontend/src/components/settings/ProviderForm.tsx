@@ -1,7 +1,8 @@
 // components/settings/ProviderForm.tsx — add / edit an LLM connection (spec provider-switching).
 // A connection = endpoint + key + protocol. The model lives apart from the
-// connection (amendment E1/E3) — chosen at the point of use — so the dialog has
-// no model field. On create the user picks a PROVIDER preset (OpenAI, Anthropic,
+// connection (spec provider-switching "Take projected model keys from the
+// agent's binding") — chosen at the point of use — so the dialog has no model
+// field. On create the user picks a PROVIDER preset (OpenAI, Anthropic,
 // Google Gemini, Ollama, …) which fills the endpoint + protocol; "Custom" lets
 // them enter any OpenAI-/Anthropic-compatible endpoint and pick the protocol by
 // hand. In edit mode (`initial` set) the secret is optional — left blank, the

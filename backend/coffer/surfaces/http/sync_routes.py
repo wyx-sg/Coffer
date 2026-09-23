@@ -6,9 +6,9 @@ rather than riding /resources.
 There is no export or import route. Writing a bundle to a directory and reading
 one back was a wholesale overwrite with no base — the operation that caused the
 2026-07-10 mutual deletion — and it has no place beside the diff-based round
-(spec ``## Out of scope``). What replaces it: a new machine calls ``/adopt``, an
-offline medium is a ``file://`` remote, and a hand-carried copy is a ``git
-clone`` of the working tree.
+(spec vault-sync ``## Purpose``, "Out of scope"). What replaces it: a new
+machine calls ``/adopt``, an offline medium is a ``file://`` remote, and a
+hand-carried copy is a ``git clone`` of the working tree.
 
 The master key never travels inside the repository — moving it is a separate,
 deliberate act. ``/key/export`` hands its material back over the token-guarded
@@ -339,8 +339,8 @@ async def list_machines() -> MachineListOut:
 async def rename_self(body: MachineRenameIn) -> MachineOut:
     """Rename this machine.
 
-    Free: ``scope`` references the derived id, never the label, so nothing
-    else has to change.
+    Free: nothing keys on the label — a channel's binding and the curation
+    owner name the derived id — so nothing else has to change.
     """
     view = await get_sync_service().rename_self(get_machine_registry(), body.name)
     return _machine_out(view)

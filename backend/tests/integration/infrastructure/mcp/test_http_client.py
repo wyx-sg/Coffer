@@ -655,7 +655,7 @@ async def test_initialize_httpx_timeout_wraps_as_upstream_timeout(monkeypatch) -
 async def test_initialize_generic_error_wraps_as_upstream_unavailable(monkeypatch) -> None:
     """A generic exception during session.initialize() is wrapped as
     UpstreamUnavailable (lines 142-144) exposing only the exception TYPE name,
-    never its message (CODE-039: no secret/URL leakage)."""
+    never its message (no secret/URL leakage)."""
 
     class _LeakyError(RuntimeError):
         pass

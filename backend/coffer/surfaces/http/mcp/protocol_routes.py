@@ -38,7 +38,7 @@ _QUEUE_MAXSIZE = 1000
 # when neither a POST nor an upstream notification has touched it for this
 # many seconds. Conservative default lets long-lived clients stay connected
 # while still bounding leaked-session memory. The ``start_session_reaper``
-# constructor knobs override these (CODE-022); env wiring is
+# constructor knobs override these; env wiring is
 # ``COFFER_MCP_SESSION_IDLE_S`` / ``COFFER_MCP_SESSION_REAPER_INTERVAL_S``.
 _DEFAULT_IDLE_TIMEOUT_S = 30 * 60
 
@@ -59,15 +59,15 @@ _LAST_ACTIVITY: dict[str, float] = {}
 
 # Per-session in-flight POST refcount. _drop_session() waits for this to
 # reach zero before disposing the gateway session so a concurrent POST
-# handler that is mid-request never sees a half-disposed session
-# (CODE-017). Keyed by session_id; absent entries imply 0 refs.
+# handler that is mid-request never sees a half-disposed session.
+# Keyed by session_id; absent entries imply 0 refs.
 _SESSION_REFS: dict[str, int] = {}
 # Per-session lock guarding the dispose path so only one _drop_session
 # runs at a time per session. asyncio.Lock is cheap and lives for the
 # session's lifetime.
 _SESSION_DISPOSE_LOCKS: dict[str, asyncio.Lock] = {}
 
-# CODE-040: per-session "stream should stop" signal. An idle GET /mcp SSE
+# Per-session "stream should stop" signal. An idle GET /mcp SSE
 # generator parks on ``queue.get()``; when the reaper drops the session it
 # pops the queue but the generator keeps its own reference and would block
 # forever, leaking the HTTP connection + task. _drop_session sets this event
@@ -166,8 +166,7 @@ async def handle_post(
     session = await _get_or_create_session(session_id, factory)
 
     # Hold a refcount across the request so a concurrent SSE-close-triggered
-    # _drop_session waits for us to finish before disposing the session
-    # (CODE-017).
+    # _drop_session waits for us to finish before disposing the session.
     _acquire_session_ref(session_id)
     try:
         # T-061/T-062: if the envelope has no "method" but has an "id", it is a
@@ -176,7 +175,7 @@ async def handle_post(
         if method is None and req_id is not None:
             matched = session.handle_response_from_downstream(envelope)
             if matched:
-                # CODE-029: ack with a genuinely EMPTY body. JSONResponse("")
+                # Ack with a genuinely EMPTY body. JSONResponse("")
                 # serialises to the 2-byte body `""` (a JSON empty-string),
                 # which the shim parses as valid JSON and forwards as a stray
                 # line on the MCP wire, corrupting the downstream client. A
@@ -210,7 +209,7 @@ async def handle_post(
             )
             response: dict[str, Any] = _error_response(req_id, code, str(e))
         except Exception as e:
-            # CODE-M1: never echo an arbitrary exception message onto the wire —
+            # Never echo an arbitrary exception message onto the wire —
             # upstream/library errors can embed credentials (e.g. an auth
             # failure that reflects the API key). This branch only ever catches
             # non-CofferError exceptions (CofferError is handled above), so the
@@ -258,7 +257,7 @@ async def handle_get(
         yield {"comment": "connected"}
         try:
             while True:
-                # CODE-040: race the next notification against the session-stop
+                # Race the next notification against the session-stop
                 # signal so a reaper-initiated drop wakes this parked generator
                 # instead of leaving it blocked on a queue nobody will fill.
                 getter = asyncio.ensure_future(queue.get())
@@ -315,11 +314,11 @@ async def _drop_session(session_id: str) -> None:
     Concurrent POST handlers acquire a refcount via ``_acquire_session_ref``;
     this function spins (up to ~5 s) until that count is zero and then
     swaps the session out atomically inside a per-session lock so two
-    concurrent _drop_session calls cannot double-dispose (CODE-017).
+    concurrent _drop_session calls cannot double-dispose.
     """
     lock = _SESSION_DISPOSE_LOCKS.setdefault(session_id, asyncio.Lock())
     async with lock:
-        # CODE-040: wake any parked SSE generator for this session so it
+        # Wake any parked SSE generator for this session so it
         # terminates instead of blocking forever on the about-to-be-dropped
         # queue. Set before the refcount wait so the stream unwinds promptly.
         if (ev := _SESSION_STREAM_STOP.get(session_id)) is not None:

@@ -32,7 +32,7 @@ from coffer.domain.mcp.server_config import (
 from coffer.domain.resource import Resource
 
 # A factory the composition root injects to build connections without
-# pulling the infrastructure adapters into the application layer (CODE-005).
+# pulling the infrastructure adapters into the application layer.
 # Signature: (transport, credentials_overlay, spawn_timeout, request_timeout,
 #             resource) -> UpstreamConnectionPort.
 #
@@ -76,7 +76,7 @@ _MAX_CONCURRENT_SPAWNS_ENV = "COFFER_MCP_MAX_CONCURRENT_SPAWNS"
 def _max_concurrent_spawns_from_env() -> int:
     """Read ``COFFER_MCP_MAX_CONCURRENT_SPAWNS``; invalid or non-positive → default.
 
-    Same knob style as ``reaper_kwargs_from_env`` (CODE-022): env so a
+    Same knob style as ``reaper_kwargs_from_env``: env so a
     deployment can tune it without a code change, silently ignored when it
     does not parse.
     """
@@ -121,11 +121,11 @@ class SubprocessSupervisor:
     ) -> None:
         self._resources = resource_service
         self._credentials = credential_resolver
-        # CODE-005: the caller injects the upstream factory so application
+        # The caller injects the upstream factory so application
         # code never imports infrastructure adapters. The composition root and
         # tests both inject ``coffer.infrastructure.mcp.factory.build_upstream``
-        # (the importlib-hidden fallback that used to live here was deleted —
-        # CODE-L3 — so the dependency is visible to importlinter again).
+        # (the importlib-hidden fallback that used to live here was deleted,
+        # so the dependency is visible to importlinter again).
         self._upstream_factory = upstream_factory
         self._retry_delays = retry_delays
         self._cooldown_seconds = cooldown_seconds
@@ -155,7 +155,7 @@ class SubprocessSupervisor:
         """Raise if the entry is in an active cooldown; reset an expired one.
 
         Called both BEFORE acquiring spawn_lock (cheap fast-fail for the many
-        waiters during cooldown) and AGAIN after acquiring it (CODE-H1): a
+        waiters during cooldown) and AGAIN after acquiring it: a
         concurrent caller may have exhausted the retry ladder and entered
         cooldown while we were queued on the lock. Without the second check,
         every waiter re-ran the entire ladder, amplifying the work N-fold and
@@ -189,7 +189,7 @@ class SubprocessSupervisor:
             if entry.connection is not None and entry.state == UpstreamHealth.HEALTHY:
                 return entry.connection
 
-            # Re-check cooldown under the lock (CODE-H1): a racer ahead of us may
+            # Re-check cooldown under the lock: a racer ahead of us may
             # have just entered cooldown — don't restart the retry ladder.
             self._enforce_cooldown(entry, server_name)
 
@@ -213,8 +213,8 @@ class SubprocessSupervisor:
             # subprocess/HTTP-MCP spawn legitimately produces; let unexpected
             # exceptions (e.g. programming errors, ValueError from bad config,
             # asyncio.CancelledError from shutdown) propagate so they surface
-            # to the caller instead of silently burning the retry budget
-            # (CODE-003). asyncio.CancelledError is BaseException-derived, so
+            # to the caller instead of silently burning the retry budget.
+            # asyncio.CancelledError is BaseException-derived, so
             # the `except Exception`-based clause below excludes it naturally
             # — the ladder stops on the spot, no retry sleep, no cooldown.
             last_error: Exception | None = None
@@ -272,7 +272,7 @@ class SubprocessSupervisor:
         self, resource: Resource, config: MCPServerConfig
     ) -> UpstreamConnectionPort:
         if isinstance(config.transport, StdioTransport | HttpTransport):
-            # CODE-034: materialize() is a synchronous, potentially-blocking
+            # materialize() is a synchronous, potentially-blocking
             # store read (sqlite, or the OS keychain in legacy setups).
             # Offload to a thread so a slow read can't freeze the whole
             # event loop and stall every other concurrent session.
@@ -318,7 +318,7 @@ class SubprocessSupervisor:
     async def dispose(self) -> None:
         """Close all connections owned by this supervisor. Called on session end.
 
-        CODE-037 note: closes are intentionally SEQUENTIAL. The stdio/HTTP
+        Closes are intentionally SEQUENTIAL. The stdio/HTTP
         upstreams wrap an mcp ClientSession inside an anyio task group; that
         group's cancel scope is bound to the task that opened it, and aclosing
         it from a child task (as ``asyncio.gather`` would require) raises

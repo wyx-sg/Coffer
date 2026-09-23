@@ -59,7 +59,7 @@ def include_all_routers(app: FastAPI) -> None:
         credential_router,
         settings_router,
         sync_router,  # spec vault-sync
-        internal_engine_router,  # spec provider-switching
+        internal_engine_router,  # spec internal-engine
         # agent + skill (specs agent-registry/skill-manager)
         agent_router,
         agent_config_router,
@@ -78,7 +78,7 @@ def include_all_routers(app: FastAPI) -> None:
         mcp_invocation_aggregate_router,
         knowledge_router,  # the one knowledge kind
         memory_router,  # the one memory kind
-        # the turn platform's own surfaces (spec channels's agents run on it)
+        # the turn platform's own surfaces (spec chat; spec channels's agents run on it)
         agent_provider_router,
         model_router,
         chat_conversation_router,  # the web Chat page's own REST surface

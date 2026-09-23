@@ -112,8 +112,9 @@ async def test_register_duplicate_returns_409(tmp_path):
 
 @pytest.mark.asyncio
 async def test_generic_register_rejects_lifecycle_kind_returns_409(tmp_path):
-    """CODE-REG: the generic POST /resources endpoint must refuse a kind that
-    declares ``generic_create_allowed=False`` (skill/agent), so it can't create
+    """spec resource-framework "Keep creation a per-kind seam": the generic
+    POST /resources endpoint must refuse a kind that declares
+    ``generic_create_allowed=False`` (skill/agent), so it can't create
     a row with no backing master folder / detected config dir."""
     engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     async with engine.begin() as conn:
@@ -381,7 +382,7 @@ async def test_delete_resource(tmp_path):
 
 @pytest.mark.asyncio
 async def test_resource_create_enforces_name_pattern(tmp_path):
-    """D5: POST /api/v1/resources with an invalid name returns 422."""
+    """POST /api/v1/resources with an invalid name returns 422."""
     c, engine = await _client(tmp_path)
     async with c:
         r = await c.post(
@@ -419,7 +420,7 @@ async def _client_with_mcp_kind(tmp_path, keyring: _StubKeyring):
     sm = session_maker(engine)
 
     # The production Kind wires the credential-ref extractor + audit redactor
-    # (CODE-006) that drive probing/redaction; build it the real way.
+    # that drive probing/redaction; build it the real way.
     kinds = {"mcp_server": make_mcp_kind({})}
     repo = SqlAlchemyResourceRepo(sm)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
@@ -440,9 +441,10 @@ async def _client_with_mcp_kind(tmp_path, keyring: _StubKeyring):
 
 @pytest.mark.asyncio
 async def test_register_with_missing_credential_returns_actionable_error(tmp_path):
-    """Spec edge case: registering an MCP server whose transport.credential_refs
-    cites a key absent from the keychain must fail BEFORE any DB write, name
-    the missing ref in the error body, and leave the resources table unchanged.
+    """spec mcp-gateway "Manage MCP servers as resources": registering an MCP
+    server whose transport.credential_refs cites a key absent from the keychain
+    must fail BEFORE any DB write, name the missing ref in the error body, and
+    leave the resources table unchanged.
     """
     keyring = _StubKeyring()  # empty — no credentials stored
     c, engine, repo = await _client_with_mcp_kind(tmp_path, keyring)

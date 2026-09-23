@@ -202,16 +202,16 @@ make verify-e2e          # e2e tier only (Playwright: web + mcp projects)
 make verify-acceptance   # audit spec.md scenarios vs test markers
 
 make lint                # every static gate (see below) — NOT just ruff + mypy
-make format              # ruff format
+make format              # ruff format + ruff --fix + prettier (frontend)
 ```
 
 **`make lint` is the whole static gate, not a formatter pass.** In order
 (`Makefile`): `scripts/check_file_sizes.py`, `scripts/check_response_models.py`,
-`scripts/check_doc_numbering.py`, `scripts/check_architecture_doc.py`, `ruff
-check`, `ruff format --check`, `mypy --strict`, `lint-imports` (the layering +
-cross-kind fence), and — when `frontend/node_modules` is present —
-`scripts/dump_i18n_backend_keys.py --check` plus `npm run lint` and `npm run
-typecheck` in `frontend/`.
+`scripts/check_doc_numbering.py`, `scripts/check_architecture_doc.py`,
+`scripts/check_pyinstaller_specs.py`, `ruff check`, `ruff format --check`,
+`mypy --strict`, `lint-imports` (the layering + cross-kind fence), and — when
+`frontend/node_modules` is present — `scripts/dump_i18n_backend_keys.py --check`
+plus `npm run lint`, `npm run typecheck` and `npm run knip` in `frontend/`.
 
 Two consequences worth internalising:
 
@@ -231,10 +231,10 @@ Two consequences worth internalising:
 | `make verify`             | `lint` → `verify-unit` → `verify-integration` → `verify-contract` → `verify-acceptance`. The "pre-PR" gate.                                                                                 | Before every push and PR. CI runs the same tiers in parallel.               |
 | `make verify-all`         | `verify` plus `verify-e2e`.                                                                                                                                                                  | Before merging anything that touches a surface (web UI, HTTP, CLI, shim).   |
 | `make verify-unit`        | `scripts/check_unit_purity.py` (AST-scans for forbidden I/O imports), then `pytest backend/tests/unit`, then `vitest run src` in `frontend/` when its `node_modules` is present.             | Tight TDD loop on pure domain code.                                         |
-| `make verify-integration` | `pytest backend/tests/integration` (+ `vitest run tests/integration` if `frontend/tests/integration/` exists).                                                                               | After touching application services, SQLAlchemy repos, HTTP routes, or CLI plumbing. |
-| `make verify-contract`    | `pytest backend/tests/contract` (+ the frontend contract vitest dir if it exists).                                                                                                            | After editing `openspec/specs/*/contracts/api.openapi.yaml` or Pydantic API schemas. |
+| `make verify-integration` | `pytest backend/tests/integration`.                                                                                                                                                           | After touching application services, SQLAlchemy repos, HTTP routes, or CLI plumbing. |
+| `make verify-contract`    | `pytest backend/tests/contract`.                                                                                                                                                              | After editing `openspec/specs/*/contracts/api.openapi.yaml` or Pydantic API schemas. |
 | `make verify-benchmark`   | `COFFER_RUN_BENCHMARKS=1 pytest backend/tests -m benchmark` — the perf-budget tests, which `make verify` deliberately excludes.                                                               | After touching the gateway hot path or any code a perf budget covers.       |
-| `make verify-e2e`         | `cd e2e && playwright test` — **both** projects: `web` (Chromium over the served UI, `e2e/web/specs/*.spec.ts`) and `mcp` (`e2e/mcp/specs/*.spec.ts`, a real MCP client through the shim to the daemon and upstream servers). Then `pytest e2e` if any `e2e/*.py` exist. | After touching a page, or the daemon ↔ shim ↔ MCP-client boundary.      |
+| `make verify-e2e`         | `cd e2e && playwright test` — **both** projects: `web` (Chromium over the served UI, `e2e/web/specs/*.spec.ts`) and `mcp` (`e2e/mcp/specs/*.spec.ts`, a real MCP client through the shim to the daemon and upstream servers). | After touching a page, or the daemon ↔ shim ↔ MCP-client boundary.      |
 | `make verify-acceptance`  | `openspec validate --all --strict` (every requirement owns a scenario), then `scripts/audit_acceptance.py` (every scenario has a marker, every marker a scenario).                | Every spec.md edit. Cheap; needs the root `npm install` for the OpenSpec CLI. |
 
 ## CI Jobs
@@ -245,9 +245,9 @@ Two consequences worth internalising:
 | ------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `lint`        | `make lint` — every static gate above, frontend included (it installs Node + `npm ci`)                                     |
 | `unit`        | `make verify-unit` (purity check + backend pytest + frontend vitest)                                                       |
-| `integration` | `make verify-integration` (installs `ripgrep`, which knowledge search shells out to)                                       |
+| `integration` | `make verify-integration` (installs `ripgrep`, which curation's candidate selection uses)                                  |
 | `benchmark`   | `make verify-benchmark` — the **only** place the benchmark-marked perf-budget tests execute, so a budget can't go unchecked while its acceptance marker reports green |
-| `acceptance`  | `python3 scripts/audit_acceptance.py` (stdlib only, no install needed)                                                      |
+| `acceptance`  | `openspec validate --all --strict` (needs the root `npm ci`), then `python3 scripts/audit_acceptance.py`                    |
 | `secrets`     | `gitleaks` over the full history (`fetch-depth: 0`) — a committed secret fails the PR even if the final tree is clean       |
 | `contract`    | `make verify-contract`                                                                                                     |
 | `e2e`         | `make verify-e2e` (installs Chromium; runs the `web` and `mcp` projects)                                                    |

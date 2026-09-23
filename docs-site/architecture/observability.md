@@ -16,12 +16,13 @@ Every record produced inside the daemon process leaves as one JSON object in `~/
 {
   "timestamp": "2026-05-20T14:23:01.123Z",
   "level": "info",
-  "logger": "coffer.surfaces.http.resource",
+  "logger": "coffer.application.audit_service",
   "event": "resource_registered",
   "trace_id": "b3d8e2f1-...",
-  "resource_ref": "mcp_server:filesystem",
-  "actor": "cli",
-  "duration_ms": 12
+  "resource": "filesystem",
+  "resource_kind": "mcp_server",
+  "resource_uid": "…",
+  "actor": "cli"
 }
 ```
 
@@ -55,7 +56,7 @@ Log lines never contain secret material. Secrets live only as ciphertext in the 
 
 ## Trace correlation
 
-Every HTTP response from the daemon carries an `X-Coffer-Trace` header with a request-scoped UUID. This UUID appears on every log line emitted during that request, in any audit entries produced during the request, and in any invocation records from that request. Correlation is mechanical: take the trace ID from the error response and grep `~/.coffer/logs/` for it.
+Every HTTP response from the daemon carries an `X-Coffer-Trace` header with a request-scoped UUID. This UUID appears on every log line emitted during that request — including the line each audit entry is echoed as. The `audit_log` and `mcp_invocations` rows themselves do not carry it. Correlation is mechanical: take the trace ID from the error response and grep `~/.coffer/logs/` for it.
 
 The same structured-logging and trace-id correlation now spans the rest of the vault too — chat turns, channel events, and sync runs all flow through the same `contextvar`-propagated trace IDs and land in the same JSON log lines.
 

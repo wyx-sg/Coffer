@@ -28,14 +28,14 @@ The surfaces are described below using a consistent template: **What it is · Wh
 | `/agents`                         | Agent registry, config files, workspace facets, plugins, native memory stores, transcripts. |
 | `/skills`                         | Skill master store, per-agent bindings, `verify` and `repair`.     |
 | `/knowledge`                      | `collections`, `tree`, `file` (read, delete), `material`, `upload`, and `collections/{uid}/curate`. No retrieval route. |
-| `/memory`                         | `partitions` and their facts and files, `sync`, `organise`, `context`, and per-agent `delivery`. |
+| `/memory`                         | `partitions` and their `notes`, `retired` notes, `files` and `distil`; `sync`, `context`, and per-agent `delivery`. |
 | `/channels`                       | Channel bindings (Telegram, SeaTalk), pairing.                    |
 | `/chat`                           | Conversations, their messages, and the turn surface the web Chat page drives: fire-and-return `POST .../messages`, SSE `GET .../events`, `PUT .../pending`, `POST .../interrupt`. |
 | `/agent-providers`, `/models`     | The registered agent providers with their model catalogues; connection introspection. |
 | `/providers`, `/internal-engine-config` | The `provider` kind — vendor endpoints and their keys — and the connection plus model Coffer's own engine runs on. |
 | `/credentials`, `/settings`       | Encrypted credential store; settings incl. `/settings/credentials` (master-key storage). |
 | `/sync`                           | Converge rounds against the git remote, the remote's configuration, machines, and the master-key transfer. |
-| `/upkeep`                         | `runs` — what the unattended passes (curation, organise, aggregate) are doing right now and last did. |
+| `/upkeep`                         | `runs` — what the unattended passes (curation, distil, aggregate) are doing right now and last did. |
 | `/fs`                             | Filesystem browse helper for config pickers.                      |
 | `/audit`, `/retention`, `/daemon` | Audit log, retention policies, daemon token operations, daemon logs. |
 
@@ -70,10 +70,10 @@ The REST API is the canonical interface — the CLI and the Web UI both call it.
 **What it is.** The command-line management interface. Every management operation available through the REST API is also available as a `coffer` subcommand, grouped to mirror the kinds and cross-cutting concerns:
 
 - **Per-kind groups:** `coffer mcp`, `coffer agent`, `coffer skill`, `coffer knowledge`, `coffer memory`, `coffer provider`, `coffer channel` — one per registered kind.
-- **Cross-cutting groups:** `coffer credentials`, `coffer sync`, `coffer scope`.
+- **Cross-cutting groups:** `coffer credentials`, `coffer sync`, `coffer scope`, `coffer engine` (the model Coffer's own engine runs on and its unattended passes).
 - **Kind-agnostic / operational groups:** `coffer resource`, `coffer audit`, `coffer retention`, `coffer daemon` (including the `coffer daemon port show|set|clear` subgroup), `coffer open`.
 
-Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `coffer audit`, `coffer daemon start/stop/status`. The CLI is Coffer's primary interface for scripted workflows, dotfile-based setup, and remote (headless) machines where a browser is not available. Every subcommand supports `--json` output for machine-readable integration.
+Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `coffer audit`, `coffer daemon start/stop/status`. The CLI is Coffer's primary interface for scripted workflows, dotfile-based setup, and remote (headless) machines where a browser is not available. Most read and list commands accept `--json` for machine-readable output; `coffer <group> <command> --help` says which.
 
 **Which process.** A short-lived child process. The CLI is an independent Python process, installed on `PATH` as a console script entry point (`coffer`). It exits after executing one command. It does not stay running between invocations.
 
@@ -105,11 +105,11 @@ Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `co
 
 **What it is.** The only public-reachable surface. It is a separate signed-callback process that receives inbound webhooks from chat platforms — concretely `POST /seatalk/{channel}` — verifies each request's SeaTalk signature against the channel's signing secret, answers the `event_verification` challenge, and forwards genuine events to the daemon for the channel runtime to handle. It exists because SeaTalk pushes events to a URL rather than letting Coffer long-poll (the model Telegram uses), so a reachable HTTP endpoint is required.
 
-**Which process.** A daemon-spawned child process, deliberately separate from the daemon. It runs only while at least one SeaTalk channel is enabled. Keeping it out of the main daemon means the public-reachable code path is a small, isolated surface that handles signature verification before anything reaches the stateful core.
+**Which process.** A daemon-spawned child process, deliberately separate from the daemon. It runs only while at least one SeaTalk channel on **webhook** delivery is enabled; a channel on websocket delivery holds an outbound connection from inside the daemon and needs no listener (ADR seatalk-websocket-inbound). Keeping it out of the main daemon means the public-reachable code path is a small, isolated surface that handles signature verification before anything reaches the stateful core.
 
-**Transport.** HTTP on `127.0.0.1:<callback-port>`, serving only the signed callback paths. The listener itself binds to loopback; reachability from SeaTalk's servers is provided by a **user-run tunnel** the owner stands up out-of-band — Coffer never opens a public port itself.
+**Transport.** HTTP on `127.0.0.1:<callback-port>`, serving only the signed callback paths. The listener itself binds to loopback; reachability from SeaTalk's servers is provided by a **tunnel** — the managed `cloudflared` child the daemon spawns and supervises for a channel that records a connector token, or one the owner stands up out-of-band. Coffer never opens a public port itself.
 
-**Lifecycle.** Spawned by the daemon when a SeaTalk channel is enabled; torn down when the last SeaTalk channel is disabled. Its lifetime is bound to channel state, not to any client session.
+**Lifecycle.** Spawned by the daemon when a webhook SeaTalk channel is enabled; torn down when the last webhook SeaTalk channel is disabled. Its lifetime is bound to channel state, not to any client session.
 
 **Security boundary.** Unlike the loopback surfaces, this one accepts traffic that originates off-machine, so its trust boundary is the **per-channel SeaTalk signature**: every request body is verified with `verify_seatalk_signature` against the channel's secret before it is forwarded, and unsigned or mis-signed requests are rejected. The `X-Coffer-Token` is not the gate here — the signature is.
 
@@ -139,7 +139,7 @@ No "coming soon" placeholders appear — a kind only appears once it works, and 
 
 ## Desktop shell (`Coffer.app`)
 
-**What it is.** A native host for the *same* web UI build — a macOS Tauri 2 application. It owns exactly four things a browser cannot do for itself: a window the OS treats as an application (Dock icon, Cmd-Tab entry), a resident tray with *Open Coffer* / *Restart daemon* / *Quit*, detect-or-spawn of the daemon at launch, and the credential handshake a locally-hosted page has no other way to make. It reimplements nothing the daemon already exposes over HTTP — folder picking, opening a file in an editor and revealing it in Finder are daemon routes a webview calls exactly as a browser tab does.
+**What it is.** A native host for the *same* web UI build — a macOS Tauri 2 application. It owns exactly four things a browser cannot do for itself: a window the OS treats as an application (Dock icon, Cmd-Tab entry), a resident tray with *Open Coffer* / *Sync* (badged when the vault needs attention) / *Restart daemon* / *Quit*, detect-or-spawn of the daemon at launch, and the credential handshake a locally-hosted page has no other way to make. It reimplements nothing the daemon already exposes over HTTP — folder picking, opening a file in an editor and revealing it in Finder are daemon routes a webview calls exactly as a browser tab does.
 
 **Which process.** Its own OS process, with a webview inside it. The app is not served by the daemon; it *finds or starts* one. Closing the window hides to the tray rather than exiting.
 
@@ -159,7 +159,7 @@ No "coming soon" placeholders appear — a kind only appears once it works, and 
 | MCP endpoint   | Daemon            | — (is the daemon)          | System / manual     | Daemon lifetime     |
 | CLI (`coffer`) | Short-lived child | Loopback HTTP              | User / shell        | Per-command         |
 | Stdio shim     | Per-session       | HTTP/SSE                   | MCP client          | MCP client session  |
-| Callback listener | Daemon-spawned child | Loopback HTTP (forwards to daemon) | Daemon (on SeaTalk enable) | While a SeaTalk channel is enabled |
+| Callback listener | Daemon-spawned child | Loopback HTTP (forwards to daemon) | Daemon (on webhook SeaTalk enable) | While a webhook SeaTalk channel is enabled |
 | Web UI         | Browser tab       | Loopback HTTP (REST)       | `coffer open` / browser | Browser tab session |
 | Desktop shell  | Native app + webview | Loopback HTTP (REST); local page | User (Dock / Spotlight) | Until quit from the tray |
 

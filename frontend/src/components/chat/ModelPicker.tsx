@@ -1,9 +1,10 @@
 // components/chat/ModelPicker.tsx
 //
 // Per-conversation model picker for a managed agent (the
-// builtin-agent-is-internal-capability and provider-switching ADRs, D4). The
+// builtin-agent-is-internal-capability and provider-switching ADRs). The
 // value is `agent_config.model`, passed through to the agent's CLI. The picker
-// is a FIXED dropdown — never free-text (D4).
+// is a FIXED dropdown — never free-text (spec provider-switching "Choose a
+// model from a fixed list").
 //
 // Its options are the daemon's answer, plus the current value so it always
 // stays selectable. Nothing else. `/agent-providers/{key}/models` serves
@@ -21,8 +22,8 @@
 // changed depending on whether the endpoint happened to answer at that moment.
 //
 // It does NOT read the connection's stored `model`/`fast_model` (those left the
-// connection in the E1 amendment). An empty value inherits the agent's
-// projected default.
+// connection: spec provider-switching "Take projected model keys from the
+// agent's binding"). An empty value inherits the agent's projected default.
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 

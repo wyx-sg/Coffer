@@ -17,7 +17,7 @@ features:
   - title: One MCP endpoint
     details: Aggregate every upstream MCP server and re-expose their tools namespaced as &lt;server&gt;__&lt;tool&gt;. Claude Code, Codex, and any MCP client see exactly the same tools.
   - title: Skills · Knowledge · Memory
-    details: Keep one master skill library and deliver it into each agent; keep one knowledge store — ingested documents and the entries agents write — that every agent searches and contributes to; and see what your agents have already learned, aggregated out of their own memory.
+    details: Keep one master skill library and deliver it into each agent; keep one knowledge tree of Markdown files — ingested documents and the entries agents write — that every agent reads with its own tools and adds to through coffer__write; and see what your agents have already learned, aggregated out of their own memory.
   - title: Chat with any agent
     details: Drive Claude Code or Codex from a streamed chat in the web UI — your own agents, on your own machine, with the whole vault behind them.
   - title: Reach agents anywhere

@@ -140,7 +140,7 @@ def wire_agent_and_skill_kinds(
         agent_scan_locations_resolver=_agent_scan_locations,
     )
 
-    # Agent kind (spec agent-registry-agent-registry). Detection is discovery-only (no
+    # Agent kind (spec agent-registry). Detection is discovery-only (no
     # auto-registration): AutoDetectService reports installed-but-unregistered
     # agents as candidates the user confirms on the Agents page.
     #
@@ -170,7 +170,7 @@ def wire_agent_and_skill_kinds(
         for row in await resource_svc.list(kind="agent"):
             await _sync_skill_reconcile(row.uid)
 
-    # Config-file view/edit + one-click Coffer-MCP install (spec agent-registry v2).
+    # Config-file view/edit + one-click Coffer-MCP install (spec agent-registry).
     config_file_store = ConfigFileStore()
 
     agent_svc = AgentService(

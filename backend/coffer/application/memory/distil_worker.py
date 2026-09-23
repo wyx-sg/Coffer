@@ -7,7 +7,7 @@ pending pass never blocks shutdown, because the next boot sweeps every
 partition again regardless. The switch and the interval are read **per tick**,
 not at boot, so an operator who turns the pass off or shortens its interval in
 Settings does not have to restart the daemon to be obeyed (spec
-provider-switching E3a).
+internal-engine "Apply a changed switch or interval without a restart").
 
 The delay before the first pass is the one difference from aggregation, and it
 is deliberate: aggregation is what *fills* ``.raw/``, and distilling a

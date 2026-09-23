@@ -61,7 +61,7 @@ def _refuse_if_the_port_is_taken() -> None:
     windows do it: the ordinary TOCTOU gap between this close and the daemon's
     own bind, and — on Linux specifically — a daemon that is bound but has not
     yet called ``listen``, which ``SO_REUSEADDR`` lets a second socket bind
-    straight through (the platform difference CODE-041 turns on; see
+    straight through (the platform difference held sockets turn on; see
     ``port_alloc._new_socket``). Both are safe to lose. The spawn this
     function guards goes on to take the daemon spawn lock and re-probe
     liveness, so a missed conflict resolves as "daemon already running" rather

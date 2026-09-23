@@ -1,7 +1,8 @@
 // pages/settings/InternalEngineSettings.tsx — the internal-engine selection
-// (spec provider-switching amendment 2026-06-22b). Coffer's own LLM engine — the knowledge curation
-// pass, and whatever else Coffer runs itself — uses whichever connection is picked here
-// (endpoint + key) with the model chosen here. Both live apart from the chat
+// (spec internal-engine "Show and change the engine in Settings → Engine").
+// Coffer's own LLM engine — the knowledge curation pass, and whatever else
+// Coffer runs itself — uses whichever connection is picked here (endpoint +
+// key) with the model chosen here. Both live apart from the chat
 // agents: the connection is the global `internal_default`, the model is a
 // separate singleton. Replaces the per-card star toggle that used to set it.
 //

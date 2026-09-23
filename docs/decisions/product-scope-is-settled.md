@@ -65,9 +65,12 @@ by the project owner:
    knowledge and memory, [Knowledge Is Plain Files](knowledge-is-plain-files.md),
    [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md).
 
-**Literal retrieval is a placeholder, not a verdict.** Knowledge and memory
-search is the simplest thing that answers — ripgrep where the machine has it,
-a built-in Python walk with identical semantics where it does not — because the
+**Literal retrieval is a placeholder, not a verdict.** Memory recall (a
+case-insensitive literal scan in Python) and knowledge's curation candidate
+selection (ripgrep where the machine has it, a built-in Python walk with
+identical semantics where it does not) are the simplest things that answer —
+knowledge itself has no search surface; agents read its files with their own
+tools — because the
 knowledge and memory *design* is not yet settled, and an index built on an
 unsettled design is what the 2026-09-12 audit found unused. Semantic retrieval
 (embeddings, ranking) is expected to return once that design settles, under the
@@ -85,16 +88,16 @@ carries a half-removed capability that the next reader has to reconstruct.
 
 ## Consequences
 
-- The five capabilities' ADRs stay `Accepted` and their specs stay in the
-  roadmap's Active table. Their maintenance cost — the Rust shell, the sync
+- The five capabilities' ADRs stay `Accepted` and their specs stay in
+  `openspec/specs/`. Their maintenance cost — the Rust shell, the sync
   worker and its guards, two retrieval surfaces, three log readers — is
   accepted as the cost of the product, not a debt to be repaid by deletion.
-- Roadmap status cells describe the current state only; the histories they
-  used to carry live in the roadmap's `## Revision log`, one subsection per
-  spec, in chronological order. A status cell that starts explaining a
-  reversal is the smell this ADR exists to stop.
+- Specs describe the current state only; the history of how a capability
+  changed lives in the archived OpenSpec changes (`openspec/changes/archive/`).
+  A spec that starts explaining a reversal is the smell this ADR exists to
+  stop.
 - When semantic retrieval returns it re-enters through the knowledge and
-  memory specs — a new FR, not a new ADR — and the literal search stays as the
+  memory specs — a new requirement, not a new ADR — and the literal search stays as the
   fallback that answers while the index is missing, exactly as the 2026-09-12
   restoration had it.
 - A removal PR without a stated reversal cost is incomplete and is sent back,

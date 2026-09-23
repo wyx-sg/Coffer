@@ -30,10 +30,7 @@ The data-access layer uses SQLAlchemy 2.0 in async mode (`AsyncSession`, `create
 
 All ORM models across every resource kind — both kind-agnostic core tables and MCP-specific tables — are registered against a **single central `Base.metadata`** object. This is the architectural decision that makes Alembic migrations straightforward: there is one migration history, one `alembic upgrade head` command, and no coordination between per-kind migration trees.
 
-The boundary between ORM and domain is explicit. Each ORM model provides:
-
-- `to_domain() → <DomainEntity>` — converts the ORM row to a pure Python domain object (no SQLAlchemy state).
-- `from_domain(entity) → <Model>` — creates an ORM instance from a domain object, ready to be added to the session.
+The boundary between ORM and domain is explicit. Each repository converts the ORM rows it reads into pure Python domain objects (no SQLAlchemy state) through a private `_to_domain`-style helper beside it, and builds rows from domain values when it writes.
 
 Domain objects are plain Python dataclasses; they carry no SQLAlchemy instrumentation. Application services work exclusively with domain objects; ORM models are implementation details of the infrastructure layer.
 
@@ -49,7 +46,7 @@ Pydantic fields that use types like `AnyUrl` or `datetime` must be serialised wi
 
 ## Alembic migrations
 
-Schema evolution is managed by Alembic, configured in `backend/alembic.ini` with a single migration history under `backend/coffer/infrastructure/persistence/migrations/`. Revisions accumulate as successive specs land — each spec that needs new tables adds one rather than editing an existing one, and the count only goes up, so the authoritative answer to "how many, and what is head" is `ls` on that directory, not a number written here (at the time of writing: eighty-two, head `0082`). The first three set up the MCP control plane:
+Schema evolution is managed by Alembic, configured in `backend/alembic.ini` with a single migration history under `backend/coffer/infrastructure/persistence/migrations/`. Revisions accumulate as successive specs land — each spec that needs new tables adds one rather than editing an existing one, and the count only goes up, so the authoritative answer to "how many, and what is head" is `ls` on that directory, not a number written here. The first three set up the MCP control plane:
 
 | Revision | File                                 | Creates                                         |
 | -------- | ------------------------------------ | ----------------------------------------------- |
@@ -71,7 +68,7 @@ The tables that exist after applying all revisions, grouped by domain:
 
 | Table                | Purpose                                                                                                                                                                               |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `resources`          | Kind-agnostic registry of every user-managed resource. One row per registered MCP server (or any future kind). Carries `kind`, `name`, `config_json`, `enabled` flag, and timestamps. |
+| `resources`          | Kind-agnostic registry of every user-managed resource. One row per registered MCP server (or any future kind). Carries `uid`, `kind`, `name`, `description`, `config_json`, `enabled` flag, `scope_json`, and timestamps. |
 | `audit_log`          | Append-only history of every lifecycle change to any resource or capability. Records event type, actor, resource ref, timestamp, and a structured JSON payload.                       |
 | `retention_policies` | One row per prunable table, recording the configured retention window (days or forever) and the last-prune metadata.                                                                  |
 | `internal_engine_config` | A single row: the connection and model Coffer's own unattended passes run on, plus each pass's switch and interval.                                                               |
@@ -127,14 +124,14 @@ The tables that exist after applying all revisions, grouped by domain:
 
 The control-plane tables above are the system of record for their rows. **Knowledge has no such row.** The markdown files under `~/.coffer/knowledge/` are not a projection of anything and are not projected into anything — they are the knowledge layer, whole.
 
-That is what removes the dual-source-of-truth problem outright rather than managing it. There is nothing to keep level with the disk, so a file the user edited in their editor, an agent wrote, or `git` pulled is readable and searchable the instant it lands. Search is `ripgrep` over those files, which matches bytes and therefore needs no tokenizer and no import step. Backup is one directory tree, and there is no corruption to recover from: titles and descriptions are read out of each file's own frontmatter, because there is nowhere else they could come from.
+That is what removes the dual-source-of-truth problem outright rather than managing it. There is nothing to keep level with the disk, so a file the user edited in their editor, an agent wrote, or `git` pulled is readable the instant it lands. An agent greps the files with its own tools, which needs no tokenizer and no import step; Coffer's only use of `ripgrep` is choosing a curation pass's candidates. Backup is one directory tree, and there is no corruption to recover from: titles and descriptions are read out of each file's own frontmatter, because there is nowhere else they could come from.
 
 ## Cascade and integrity rules
 
 The schema enforces several invariants that the application layer alone cannot express:
 
 - Deleting a resource cascades to `mcp_capability_preferences` (via `ON DELETE CASCADE`). It does **not** cascade to `audit_log` or `mcp_invocations` — history is preserved even after a server is deleted.
-- `kind` and `name` are immutable once written. The application layer never issues `UPDATE resources SET kind=?` or `UPDATE resources SET name=?`. Renaming means delete + re-register.
+- `uid` and `kind` are immutable once written. `name` is a mutable label, renamed through `PATCH /api/v1/resources/{uid}` (file-backed kinds move their directory in their `on_rename` hook).
 - `retention_policies` rows are upserted at daemon startup; they are never deleted. The application layer treats them as always-present configuration.
 
 ## Everything under `~/.coffer/`
@@ -145,7 +142,7 @@ The full set of files Coffer writes:
 | ----------------------------- | ------------------------------------------------------ |
 | `~/.coffer/coffer.db`         | SQLite database (WAL mode) — the system of record for control-plane state |
 | `~/.coffer/daemon.json`       | Runtime state: daemon PID, port and bearer token (mode `0600`). Unlinked on exit. |
-| `~/.coffer/daemon-config.json` | Configuration read before the database opens: the port (mode `0600`). Written only by `coffer daemon port`. |
+| `~/.coffer/daemon-config.json` | Configuration read before the database opens: the fixed port, the idle-shutdown window, this machine's name and cached id (mode `0600`). Written by `coffer daemon port`, `coffer daemon idle`, the Settings residency panel, `coffer sync machine rename`, and the daemon itself (the cached machine id). |
 | `~/.coffer/master.key`        | Credential-store master key (file-default; opt-in keychain). See [Security](/architecture/security). |
 | `~/.coffer/machine-id`        | This machine's stable identity for sync                |
 | `~/.coffer/knowledge/`        | One directory per collection of markdown files — the knowledge layer itself, one tree of documents each, plus a hidden `.inbox/` of new material waiting for curation to merge it |
@@ -175,4 +172,4 @@ The `RetentionService.initialize_defaults()` call at daemon startup seeds the `r
 | `conversations_archive` | Auto-archive chats idle for this many days      | 7 days            |
 | `conversations`         | Delete archived chats this many days after archival (with their messages) | 30 days |
 
-Conversations follow a two-stage lifecycle: idle threads are auto-archived, then archived threads are deleted later. Any policy can be changed by the user via `PATCH /api/v1/retention/{table_name}` or the equivalent CLI command; the change itself is audited.
+Conversations follow a two-stage lifecycle: idle threads are auto-archived, then archived threads are deleted later. Any policy can be changed by the user via `PATCH /api/v1/retention/policies/{table_name}` or the equivalent CLI command; the change itself is audited.

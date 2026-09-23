@@ -119,9 +119,9 @@ HEAD_REVISION = "0102"
 # ``config_json`` (the curated set a connection offers downstream; empty = no
 # restriction) — no DDL, table/column set unchanged. 0062 CREATEs
 # ``sync_remotes``, the single-row backup-remote config (spec
-# vault-sync ``## Backup``); present at head, dropped by its own
-# downgrade, and absent from every revision below it. 0068 is DATA-only: it
-# strips ``default_model`` + ``models`` from every ``kind='channel'``
+# vault-sync "Allow at most one user-owned sync remote"); present at head,
+# dropped by its own downgrade, and absent from every revision below it. 0068
+# is DATA-only: it strips ``default_model`` + ``models`` from every ``kind='channel'``
 # ``config_json`` (a channel curates no models — the bound agent's CLI default
 # opens a conversation and ``/model`` offers that agent's whole catalogue) — no
 # 0070 CREATEs ``memory_overrides`` — the developer's hide/pin/supersede/settle
@@ -759,7 +759,8 @@ def test_0040_slims_connection_to_protocol(tmp_path, monkeypatch):
     """0040 is a data migration: a connection becomes ``{protocol, base_url,
     credential_ref}`` — ``wire_format`` is renamed to ``protocol`` and
     ``model`` / ``fast_model`` / ``wire_api`` are stripped (the model leaves the
-    connection, spec provider-switching E3). The downgrade restores the keys with placeholders."""
+    connection, spec provider-switching "Take projected model keys from the agent's binding").
+    The downgrade restores the keys with placeholders."""
     db_path = tmp_path / "slim.db"
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
     cfg = _alembic_config()

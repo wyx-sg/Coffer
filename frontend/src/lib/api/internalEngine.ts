@@ -1,5 +1,5 @@
 // frontend/src/lib/api/internalEngine.ts — Coffer's own operating settings
-// (spec provider-switching amendment 2026-06-22b, E3/E3a): the MODEL its
+// (spec internal-engine): the MODEL its
 // internal engine runs (its endpoint + key come from the `internal_default`
 // connection), the switch and interval of every pass it runs unattended, how
 // long ONE call to that model may take, and the model it transcribes speech

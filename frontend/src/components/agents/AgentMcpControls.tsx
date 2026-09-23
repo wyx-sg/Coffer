@@ -1,4 +1,4 @@
-// frontend/src/components/agents/AgentMcpControls.tsx — spec agent-registry v2.
+// frontend/src/components/agents/AgentMcpControls.tsx — spec agent-registry.
 // Compact Coffer-MCP install control for the detail-page header: an "Install
 // Coffer MCP" button when not installed, an "Uninstall Coffer MCP" button
 // (behind a confirm — it cuts the agent off from the gateway) once installed.

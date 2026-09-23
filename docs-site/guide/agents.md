@@ -9,16 +9,16 @@ Coffer never registers an agent automatically. It can **detect** the agents inst
 Run detection to discover installed agents, then register the ones you want:
 
 ```bash
-coffer agent detect            # → claude_code (detected), codex (detected)
+coffer agent detect            # → detected: codex -> add with `coffer agent add codex --name codex`
 coffer agent add claude_code   # register; --name defaults to claude-code
 coffer agent add codex --name my-codex --config-dir ~/.codex --description "work laptop"
 
-coffer agent list              # → claude-code | claude_code | registered
+coffer agent list              # → claude-code | claude_code | ~/.claude
 ```
 
 - `coffer agent detect` scans for installed agents and reports what it finds. Nothing is registered by this step — it is discovery only.
 - `coffer agent add <type>` registers an agent. `<type>` is `claude_code` or `codex`. `--name` is optional and defaults to a per-type name (for example, `claude_code` → `claude-code`). Optional flags: `--config-dir PATH` (the agent's config directory — defaults to the type's standard location, e.g. `~/.claude`; Coffer delivers skills into that directory's `skills/` subfolder) and `--description TEXT`.
-- `coffer agent list` shows all registered agents with their type and status.
+- `coffer agent list` shows all registered agents with their type and config directory.
 - `coffer agent show <name>` prints a registered agent's details; `coffer agent rm <name>` removes it.
 
 Every other `coffer agent` command addresses an agent by the **name** you registered it under. The daemon identifies an agent by an immutable uid, so the CLI looks the name up once and exits with a not-found error if no agent carries it; renaming an agent never breaks what refers to it.
@@ -90,12 +90,12 @@ A child path must be relative, stay inside the directory, and end in `.md`; it i
 A single command writes (or removes) Coffer's own MCP server entry — a `coffer` stdio entry pointing at the `coffer-mcp-shim` binary — into an agent's config:
 
 ```bash
-coffer agent mcp status claude-code      # → not installed / installed
+coffer agent mcp status claude-code      # → installed: True / installed: False
 coffer agent mcp install claude-code     # write the coffer entry
 coffer agent mcp uninstall claude-code   # remove it
 ```
 
-Install is idempotent: running it again updates the existing entry in place rather than duplicating it. The entry goes into `~/.claude.json` for Claude Code and `~/.codex/config.toml` for Codex, with a `.bak` of the prior file, and its command is the shim's absolute path, so an agent launched without your shell's `PATH` still finds it. Restart the agent afterwards to pick up Coffer's tools. Once installed, the agent reaches every server you have registered with Coffer through the shim — see [Connect a client](/guide/connect-client).
+Install is idempotent: running it again updates the existing entry in place rather than duplicating it. The entry goes into `~/.claude.json` for Claude Code and `~/.codex/config.toml` for Codex, with a `.bak` of the prior file, and its command is the shim's absolute path, so an agent launched without your shell's `PATH` still finds it. Restart the agent afterwards to pick up Coffer's tools. Once installed, the agent reaches every server whose reach includes this agent through the shim — see [Connect a client](/guide/connect-client).
 
 ## The agent's own MCP entries
 
@@ -166,11 +166,11 @@ Each entry has an `id` (passed to the agent verbatim), a label, the reasoning-ef
 
 The **Agents** page in the [Web UI](/guide/web-ui) covers the same flow without the terminal:
 
-1. Open **Agents** and click **Detect** to scan for installed agents. The detect dialog lists what was found; confirm an agent to register it.
+1. Open **Agents** and click **Add agent**. The dialog detects installed agents as it opens and lists the unregistered ones, ticked; confirm with **Add selected** to register them, or use **Add manually** for an agent at a non-standard location.
 2. The agent detail page has seven tabs — **Overview**, **Skills**, **MCP servers**, **Plugins**, **Memory**, **Conversations**, and **Config files**.
 3. On the **Config files** tab, open any curated config file and edit it in place. Saving validates the file's format first — malformed JSON or TOML is rejected and the file on disk is left untouched — then writes atomically, keeping the previous contents next to the file as `.bak`. If the file changed on disk while you were editing, the save is refused rather than applied over the top, and you are offered a reload.
 4. Use the **Install Coffer MCP** toggle in the header to add or remove the `coffer` entry, with a live status indicator.
-5. On the **Skills** tab, toggle each skill on or off for this agent, or use **Install skills** to bind more. The **MCP servers** tab shows the gateway install status alongside the agent's own direct MCP entries, each with **Adopt** (bring it into Coffer as a managed resource) and **Delete** (remove it from the agent's file, keeping a `.bak`).
+5. The **Skills** tab points to the **Skills** page, where each skill's reach decides which agents receive it, and lists the unmanaged skills found in this agent's skill folder, each with open, **Adopt** and **Delete**. The **MCP servers** tab shows the gateway install status alongside the agent's own direct MCP entries, each with **Adopt** (bring it into Coffer as a managed resource) and **Delete** (remove it from the agent's file, keeping a `.bak`).
 6. **Plugins** lists the agent's own plugins with an enable/disable switch and an uninstall. **Memory** shows what this agent reaches through Coffer, its session-start **Delivery** state, and a read-only view of the agent's *own* native memory stores. **Conversations** reads the agent's own transcripts.
 
 See the [Web UI guide](/guide/web-ui#agents) for what each tab holds in detail.

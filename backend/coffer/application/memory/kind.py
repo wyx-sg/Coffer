@@ -3,8 +3,9 @@
 Mirrors ``application/knowledge/kind.py``: a partition is a directory as much
 as it is a Resource row, so ``generic_create_allowed`` is False and
 ``MemoryService.aggregate`` opts into creating one explicitly
-(``allow_lifecycle_kind=True``, CODE-REG) rather than the generic
-``POST /resources`` path being able to conjure a directory-less row.
+(``allow_lifecycle_kind=True``, spec resource-framework "Keep creation a
+per-kind seam") rather than the generic ``POST /resources`` path being able
+to conjure a directory-less row.
 
 ``supports_scope`` is left at the Kind default of False, and a partition is a Resource
 for three other things: its lifecycle (it is created by a pass and deleted through the

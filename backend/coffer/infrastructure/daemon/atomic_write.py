@@ -8,7 +8,7 @@ reading, so both need the same two properties.
 ``tempfile.mkstemp`` (``O_CREAT|O_EXCL``, mode ``0600``) stages the content, so
 the file never exists with a mode broader than ``0600`` — the older
 ``write_text`` + ``chmod`` pair widened that window depending on the caller's
-umask (CODE-018). The staging file takes a UNIQUE per-call name in the target
+umask. The staging file takes a UNIQUE per-call name in the target
 directory, so two processes racing to publish the same path never collide on a
 shared ``<name>.tmp``: a fixed name plus ``O_EXCL`` crashed the loser with
 ``FileExistsError``, or let one unlink the other's staging file. The final

@@ -35,7 +35,7 @@ async def test_status_returns_ready(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# T3 — real status + upstream_summary
+# Real status + upstream_summary
 # ---------------------------------------------------------------------------
 
 
@@ -184,7 +184,7 @@ async def test_started_at_matches_daemon_json(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# T3 — status reports "draining" during lifespan teardown
+# Status reports "draining" during lifespan teardown
 # ---------------------------------------------------------------------------
 
 

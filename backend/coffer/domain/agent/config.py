@@ -40,8 +40,9 @@ class AgentConfig(BaseModel):
     # agent is decided entirely on the skill resource (``enabled`` + ``scope``,
     # spec skill-manager "Deliver a skill only where it is enabled and in
     # scope") — the same single mechanism ``mcp_server`` uses.
-    # Per-agent model binding (spec provider-switching amendment 2026-06-22b, E3). The model the
-    # agent projects comes from HERE, not the connection: ``model`` →
+    # Per-agent model binding (spec provider-switching "Take projected model
+    # keys from the agent's binding"). The model the agent projects comes from
+    # HERE, not the connection: ``model`` →
     # ``ANTHROPIC_MODEL`` / Codex ``model``; ``fast_model`` →
     # ``ANTHROPIC_SMALL_FAST_MODEL`` (anthropic only); ``wire_api`` → the Codex
     # chat/responses choice. All optional — an unbound agent projects no model

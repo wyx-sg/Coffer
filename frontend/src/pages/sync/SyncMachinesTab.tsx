@@ -1,7 +1,7 @@
 // frontend/src/pages/sync/SyncMachinesTab.tsx — Sync → Machines.
 //
-// The registry (spec vault-sync `## The machine dimension`): every
-// installation of Coffer that has converged with this remote, as a derived
+// The registry (spec vault-sync "Derive the registry from the descriptors"):
+// every installation of Coffer that has converged with this remote, as a derived
 // view of `machines/*.yaml` rather than a synced table.
 //
 // Two notes on this tab are load-bearing rather than decorative:

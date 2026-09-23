@@ -71,8 +71,9 @@ export interface AgentOut {
   description: string | null;
   created_at: string;
   updated_at: string;
-  /** Per-agent model binding (spec provider-switching amendment 2026-06-22b). The model the
-   * agent projects — null = unbound (falls back to the active connection). */
+  /** Per-agent model binding (spec provider-switching "Take projected model
+   * keys from the agent's binding"). The model the agent projects — null =
+   * unbound (falls back to the active connection). */
   model?: string | null;
   fast_model?: string | null;
   wire_api?: string | null;
@@ -100,7 +101,7 @@ export interface AgentCreate {
 export interface AgentPatch {
   config_dir?: string | null;
   description?: string | null;
-  // Per-agent model binding (E3); explicit null fast_model clears the fast slot.
+  // Per-agent model binding; explicit null fast_model clears the fast slot.
   model?: string | null;
   fast_model?: string | null;
   wire_api?: string | null;

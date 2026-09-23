@@ -1,8 +1,8 @@
 """Differential convergence of a bundle directory (spec vault-sync).
 
 Two helpers, one rule: **write only what changed, delete only what is gone,
-never a blanket rmtree**. That rule is normative (spec vault-sync "Why deletion
-is safe"): the working tree is what git three-way-merges, so a clear-and-rewrite
+never a blanket rmtree**. That rule is normative (spec vault-sync "Export
+differentially"): the working tree is what git three-way-merges, so a clear-and-rewrite
 makes "this vault never absorbed it" indistinguishable from "this vault deleted
 it", which is the 2026-07-10 mutual-deletion incident.
 

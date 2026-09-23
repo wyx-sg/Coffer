@@ -2,7 +2,8 @@
 
 ``ProviderOut`` NEVER carries the secret — only its ``credential_ref``. A
 connection is a credentialed endpoint ``{protocol, base_url, credential_ref}``;
-the model lives apart from it (spec provider-switching E3) and is chosen at the point of use.
+the model lives apart from it (spec provider-switching "Take projected model
+keys from the agent's binding") and is chosen at the point of use.
 ``models`` is the curated set the connection OFFERS to that choice — empty means
 no restriction (every model the endpoint serves). Each entry names its
 ``modality`` — what the ENDPOINT serves, since one base URL answers for chat,
@@ -85,10 +86,10 @@ class ProviderOut(BaseModel):
     """An LLM connection as returned by the API (no secret).
 
     ``credential_ref`` is ``None`` for ``ollama`` connections (no key).
-    ``compatible_agents`` is the EFFECTIVE set of agents this connection
-    projects into, derived from the resource's per-agent scope (ADR per-agent-resource-scope)
-    intersected with the agent types Coffer knows, and empty for a disabled or
-    keyless connection — so the UI can filter agents without re-deriving it.
+    ``compatible_agents`` is the CONFIGURED reach — the agent types this
+    connection's per-agent scope (ADR per-agent-resource-scope) covers among the
+    agents Coffer knows, not narrowed by ``enabled``, and empty for a keyless
+    (ollama) connection — so the UI can filter agents without re-deriving it.
     It is READ-ONLY: it is reported here, and changed through the scope
     surface. ``models`` is the
     curated set of models this connection offers to every downstream picker, each

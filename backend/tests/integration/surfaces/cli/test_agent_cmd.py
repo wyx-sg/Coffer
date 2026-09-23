@@ -705,7 +705,8 @@ def test_plugin_uninstall_force_and_prompt(workspace_cli):
 
 
 # ---------------------------------------------------------------------------
-# agent edit — the model binding (spec provider-switching E3)
+# agent edit — the model binding (spec provider-switching "Take projected
+# model keys from the agent's binding")
 #
 # PATCH /agents/{uid} has carried `model` / `fast_model` / `wire_api` since the
 # per-agent binding landed, and the projector reads exactly those fields

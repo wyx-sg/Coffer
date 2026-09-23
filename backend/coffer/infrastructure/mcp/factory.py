@@ -3,8 +3,8 @@
 Bridges the application layer's ``UpstreamFactory`` port (see
 ``coffer.application.mcp.supervisor``) to the two infrastructure adapters.
 Lives in infrastructure so both the composition root and integration tests
-can inject it explicitly — the supervisor itself never imports adapters
-(CODE-005), and there is no hidden importlib fallback (CODE-L3).
+can inject it explicitly — the supervisor itself never imports adapters,
+and there is no hidden importlib fallback.
 """
 
 from __future__ import annotations

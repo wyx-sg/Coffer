@@ -97,10 +97,11 @@ export interface ChannelRebind {
 }
 
 /**
- * Move a channel's adapter to another machine (spec channels, "Where a channel
- * runs"). The binding is an ordinary config field, so this is an ordinary
- * config PATCH — there is no command that reaches across to the other machine
- * and none is needed: each daemon reconciles against the document it holds.
+ * Move a channel's adapter to another machine (spec channels "Bind each channel
+ * to the one machine that runs it"). The binding is an ordinary config field,
+ * so this is an ordinary config PATCH — there is no command that reaches
+ * across to the other machine and none is needed: each daemon reconciles
+ * against the document it holds.
  *
  * Both caches move: the resource list carries `config.runs_on` for the table,
  * and the channel status carries the daemon's own `runs_here` plus the

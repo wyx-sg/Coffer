@@ -105,8 +105,9 @@ second axis for consumers, and groups the sidebar by **role** rather than by
 What changed:
 
 - **Agents are a separate axis, not a resource kind.** They are surfaced at
-  `/agents` (list) and `/agents/:name` (detail) under their own **Agents**
-  sidebar group. They are NOT shown in the `/resources` kind browser, because
+  `/agents` (list) and `/agents/:uid` (detail; `:name` until
+  [Resource Identity Is an Immutable UID](resource-identity-is-an-immutable-uid.md))
+  under their own **Agents** sidebar group. They are NOT shown in the `/resources` kind browser, because
   they are not vault assets.
 - **The sidebar is grouped by role**, not on a single resource-kind axis:
   - **Agents** — the consumers (`/agents`).
@@ -126,7 +127,9 @@ What changed:
 - **List surfaces converge on one shared, searchable, paginated table.** All
   list views use a single `DataTable` component (built-in search / filter /
   pagination) where a row click opens that item's detail page and row actions
-  are compact icons. Cards are reserved for welcome / empty states only. This
+  are an icon plus its label, never a bare icon (spec
+  [web-ui](../../openspec/specs/web-ui/spec.md) "Label every row action").
+  Cards are reserved for welcome / empty states only. This
   supersedes the earlier card-grid description of resource lists.
 - **Future groups/items** (Chat, Channels, Skills, Knowledge, Memory,
   Observability) are planned but not shown today. The "no soon placeholders"

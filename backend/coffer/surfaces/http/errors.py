@@ -92,7 +92,7 @@ _STATUS: dict[str, int] = {
     "MEMORY_UNREADABLE": 422,
     "MEMORY_DELIVERY_UNSUPPORTED": 422,
     "MEMORY_DELIVERY_CONFIG_INVALID": 422,
-    # agent turns (spec channels)
+    # agent turns (spec chat)
     "CONVERSATION_NOT_FOUND": 404,
     "TURN_IN_PROGRESS": 409,
     "UNKNOWN_AGENT": 400,
@@ -106,9 +106,10 @@ _STATUS: dict[str, int] = {
     "SYNC_BUNDLE_INVALID": 422,
     "SYNC_SERIALIZATION_INVALID": 422,
     "MASTER_KEY_FILE_INVALID": 422,
-    # vault backup (spec vault-sync ## Backup). A bad remote is the
-    # caller's configuration (422); a git invocation that failed is the remote
-    # or the network refusing us, which is an upstream failure (502).
+    # vault backup (spec vault-sync "Allow at most one user-owned sync remote").
+    # A bad remote is the caller's configuration (422); a git invocation that
+    # failed is the remote or the network refusing us, which is an upstream
+    # failure (502).
     "BACKUP_REMOTE_INVALID": 422,
     "GIT_MIRROR_FAILED": 502,
     # A round the user has to answer before anything else can happen. Each is
@@ -224,7 +225,7 @@ def register(app: FastAPI) -> None:
 
     @app.exception_handler(ValidationError)
     async def _handle_pydantic(request: Request, exc: ValidationError) -> JSONResponse:
-        # CODE-023: don't echo exc.errors() to the client — per-field `input`
+        # Don't echo exc.errors() to the client — per-field `input`
         # values can include PII or credentials the client just submitted.
         # Log the structured error server-side and return a generic envelope.
         _logger.warning(
@@ -269,7 +270,7 @@ def register(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def _handle_unknown(request: Request, exc: Exception) -> JSONResponse:
-        # CODE-026: log the full exception server-side; the trace id ties the
+        # Log the full exception server-side; the trace id ties the
         # 500 response back to this stack on the operator's side.
         _logger.exception(
             "http.unhandled_exception",

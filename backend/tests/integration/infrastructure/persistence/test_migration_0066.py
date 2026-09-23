@@ -4,8 +4,8 @@ The ordering is the point. A document's title lived ONLY in ``documents.title``
 — the file on disk was named by a ULID and its frontmatter never carried one —
 so this migration reads the rows it is about to destroy, writes the titles into
 the tree, and only then drops the tables. The move is no longer a
-requirement — it ran once and is recorded in spec knowledge
-``## Migration history``.
+requirement — it ran once and is recorded in knowledge data-model
+``### What 0066 left behind``.
 """
 
 from __future__ import annotations

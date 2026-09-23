@@ -289,13 +289,14 @@ def make_channel_kind(
     (``validate_scope_for``), so the two paths cannot disagree: a channel's
     ``default_agent`` is inside its scope whichever of the two the user edits.
 
-    ``local_machine_id`` is this machine's id (spec vault-sync "Identity is
-    derived"). It buys exactly one thing: the agent checks above are skipped for
-    a channel bound to a DIFFERENT machine. Those checks ask "will this channel
-    be able to drive anything when it starts", and a channel this machine never
-    starts has no answer to give — without the skip, a converged channel whose
-    owner machine has an agent this one does not would be refused at the
-    registry door every round, for a fault on nobody's machine.
+    ``local_machine_id`` is this machine's id (spec vault-sync "Derive machine
+    identity from the host"). It buys exactly one thing: the agent checks above
+    are skipped for a channel bound to a DIFFERENT machine. Those checks ask
+    "will this channel be able to drive anything when it starts", and a channel
+    this machine never starts has no answer to give — without the skip, a
+    converged channel whose owner machine has an agent this one does not would
+    be refused at the registry door every round, for a fault on nobody's
+    machine.
     """
     return Kind(
         name="channel",

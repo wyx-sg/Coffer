@@ -1,7 +1,7 @@
 # Request Lifecycle
 
 ::: tip Mental model
-Coffer now serves **several** request lifecycles, not one. The original — and still the load-bearing — path is the **MCP `tools/call`** lifecycle: MCP client → daemon → upstream server, with the shim translating stdio to HTTP/SSE at the entry and the namespace resolver splitting `filesystem__read_file` into server `filesystem` + tool `read_file` at dispatch. Alongside it run an **agent-chat turn** lifecycle, a **channel-inbound** lifecycle, and a **knowledge search** lifecycle. This page walks the MCP path in full detail first, then sketches the other three.
+Coffer now serves **several** request lifecycles, not one. The original — and still the load-bearing — path is the **MCP `tools/call`** lifecycle: MCP client → daemon → upstream server, with the shim translating stdio to HTTP/SSE at the entry and the namespace resolver splitting `filesystem__read_file` into server `filesystem` + tool `read_file` at dispatch. Alongside it run an **agent-chat turn** lifecycle, a **channel-inbound** lifecycle, and a **knowledge (material-in)** lifecycle. This page walks the MCP path in full detail first, then sketches the other three.
 :::
 
 ## MCP tool-call lifecycle
@@ -195,7 +195,7 @@ A turn drives a different lifecycle from a gateway call: instead of forwarding a
 
 1. **Turn start.** A channel delivers a user message, or the web Chat page posts one. The `TurnOrchestrator` (`application/chat/turn_orchestrator.py`) creates or resumes the conversation, persists the user turn, and starts streaming. Only one turn runs per conversation at a time; a message arriving during a turn is enqueued rather than rejected.
 
-2. **The agent adapter.** The orchestrator asks the **agent-provider registry** for the agent named on the conversation and hands it the history. The adapter is self-contained — it carries its own model, tools, and configuration. The shipped adapters drive an external coding-agent subprocess: Claude Code through the Claude Agent SDK (`infrastructure/chat/claude_sdk_agent.py`), Codex through `codex app-server` (`infrastructure/chat/codex_agent.py`). Each maps the tool's line-delimited JSON output onto the platform's typed turn events, and persists the upstream session id so the next turn continues the same session. Coffer's own aggregated MCP capabilities reach the agent through the gateway tool provider (`infrastructure/chat/gateway_tool_provider.py`).
+2. **The agent adapter.** The orchestrator asks the **agent-provider registry** for the agent named on the conversation and hands it the history. The adapter is self-contained — it carries its own model, tools, and configuration. The shipped adapters drive an external coding-agent subprocess: Claude Code through the Claude Agent SDK (`infrastructure/chat/claude_sdk_agent.py`), Codex through `codex app-server` (`infrastructure/chat/codex_agent.py`). Each maps the tool's line-delimited JSON output onto the platform's typed turn events, and persists the upstream session id so the next turn continues the same session. Coffer's own aggregated MCP capabilities reach the driven agent the way they reach any session: through the Coffer MCP entry installed in that agent's own configuration.
 
 3. **Streaming back.** Turn events publish to a per-conversation in-process bus as the run progresses; a subscriber that attaches mid-turn is replayed the events it missed. `interrupt_turn` stops an in-flight turn, keeping its partial output, and the final assistant turn is persisted on completion. The turn itself runs as a detached task, so it completes even if the subscriber that started it goes away.
 
@@ -220,11 +220,11 @@ Because sending and consuming are separate routes, "the turn I started" and "the
 
 Messaging channels (Telegram, SeaTalk) are how a user reaches an agent away from the desktop. Each delivers user messages into the **`TurnOrchestrator` seam** described above; once a message reaches the orchestrator, nothing downstream knows which platform it came from. The inbound transport differs per platform:
 
-- **SeaTalk (webhook).** SeaTalk delivers events only by public webhook. A separate **callback-listener process** (`coffer-callback`, spawned by the daemon while any SeaTalk channel is enabled) serves `POST /seatalk/{channel}` on a loopback port. It answers the platform's verification challenge, verifies the request signature (`sha256(body + signing_secret)`), normalises the event, and forwards it to the daemon — which feeds it into the orchestrator.
+- **SeaTalk (webhook or websocket).** Each SeaTalk channel chooses one inbound delivery. On **webhook** delivery, a separate **callback-listener process** (`coffer-callback`, spawned by the daemon while any SeaTalk channel on webhook delivery is enabled) serves `POST /seatalk/{channel}` on a loopback port. It answers the platform's verification challenge, verifies the request signature (`sha256(body + signing_secret)`), normalises the event, and forwards it to the daemon — which feeds it into the orchestrator. On **websocket** delivery there is no listener and no tunnel: a worker thread inside the daemon holds one outbound connection and lands events on the same ingest seam (ADR seatalk-websocket-inbound).
 
 - **Telegram (long-poll).** Telegram inbound runs as a long-poll loop inside the daemon (no public endpoint), normalising each update into the same inbound shape before it reaches the orchestrator.
 
-Progress is rendered from the agent's capabilities, not the adapter type: Telegram streams progress by editing one message, SeaTalk degrades to ack-then-final.
+Progress is rendered from the transport's capabilities, not the adapter type: both transports keep one live surface updating during a turn — Telegram by editing a message, SeaTalk through its streaming API; the core asks `supports_live_text`, never the adapter type.
 
 ## Knowledge lifecycle
 
@@ -236,4 +236,6 @@ What does pass through Coffer is new knowledge arriving, and it takes three step
 2. **Merge.** The curation sweep, every minute, takes each pending item — inbox material first, then any document edited since curation last stamped it — and runs one bounded pass over it: at most five candidate documents, found by a literal `ripgrep` match, plus the catalogue of titles, and at most eight writes.
 3. **Settle and re-render.** A completed pass deletes the inbox item (or stamps the edited document), and the catalogue in `coffer-guide` is re-rendered so every agent can reach what changed.
 
-`coffer__recall`, memory's pull tool, is the one retrieval call Coffer still serves: a case-insensitive literal scan across the memory notes, answering with paths the calTwo consequences follow from having no index at all. **Freshness is decided from the file**, so a document the user edited in their editor, an agent edited, or `git` pulled is readable the instant it lands, with nothing to update afterwards. And **matching is byte-level**, so CJK text matches without a tokenizer and the user can grep and edit the same content with ordinary tools.ent with ordinary tools.
+`coffer__recall`, memory's pull tool, is the one retrieval call Coffer still serves: a case-insensitive literal scan across the memory notes, answering with paths the caller reads itself.
+
+Two consequences follow from having no index at all. **Freshness is decided from the file**, so a document the user edited in their editor, an agent edited, or `git` pulled is readable the instant it lands, with nothing to update afterwards. And **matching is byte-level**, so CJK text matches without a tokenizer and the user can grep and edit the same content with ordinary tools.

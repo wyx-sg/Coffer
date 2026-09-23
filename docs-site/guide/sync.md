@@ -93,7 +93,7 @@ coffer sync key fingerprint        # compare two machines by eye if you like
 ```
 
 ::: warning Credentials without the key stay locked
-Skip this and convergence still works, but credentials that arrived are reported as `credentials_locked` and the resources that need them will not start. The machine registry on the Sync page's **Setup** tab compares key fingerprints for you and says so in words, so you do not have to notice it yourself.
+Skip this and convergence still works, but credentials that arrived are reported as `locked_refs` on the round and the resources that need them will not start. The machine registry on the Sync page's **Setup** tab compares key fingerprints for you and says so in words, so you do not have to notice it yourself.
 :::
 
 ## What a round does
@@ -175,7 +175,7 @@ Desktop                b7c40d29  darwin  2026-09-13      ✓    claude-code
 
 The `Key` column is the comparison already made for you: `✓` means that machine's credentials decrypt here, `✗ different` means they do not, and `—` means one of the two machines has published no fingerprint yet.
 
-Rename one whenever you like — nothing in the vault references the label, or the id. Retiring one removes its descriptor and rewrites nothing else:
+Rename one whenever you like — nothing references the label. A channel's machine binding and the curation owner (`coffer engine curate-owner`) reference the id, and are reported if they name a retired machine. Retiring one removes its descriptor and rewrites nothing else:
 
 ```bash
 coffer sync machine rename "Work desktop"
@@ -264,8 +264,8 @@ manifest.json  knowledge/  skills/  resources/  state/  credentials/  machines/
 
 - **Knowledge** — the Markdown files under `~/.coffer/knowledge/`.
 - **Skills** — the master skill store under `~/.coffer/skills/`.
-- **Config resources** — `mcp_server`, `agent`, `skill`, `knowledge`, `provider` and `channel` definitions, serialized to one deterministic YAML each. What a resource **is** travels: its name, its description and its configuration. What it **reaches** does not — see [What a machine keeps to itself](#what-a-machine-keeps-to-itself). A channel travels too, carrying the id of the one machine whose daemon starts its adapter, so the document moves without the adapter moving with it. `memory` is the one kind that does **not** travel: a partition is derived from the agents installed on one machine, so each machine derives its own — see [Memory](/guide/memory). Paths under `$HOME` are stored against a `~` sentinel and expanded against each machine's own home.
-- **Shared state** — the areas that belong to the vault rather than to one machine: MCP capability preferences, internal engine settings, and the agent plugin inventory.
+- **Config resources** — `mcp_server`, `agent`, `skill`, `knowledge`, `provider` and `channel` definitions, serialized to one deterministic YAML each. What a resource **is** travels: its name, its description and its configuration. What it **reaches** does not — see [What a machine keeps to itself](#what-a-machine-keeps-to-itself). A channel travels too, carrying the id of the one machine whose daemon starts its adapter, so the document moves without the adapter moving with it. `memory` is the one kind that does **not** travel: a partition is derived from the agents installed on one machine, so each machine derives its own — see [Memory](/guide/memory). Paths under `$HOME` are stored against a `${HOME}` sentinel and expanded against each machine's own home.
+- **Shared state** — the areas that belong to the vault rather than to one machine: MCP capability preferences, internal engine settings, the agent plugin inventory, and channel pairings (chat and sender identity, so a rebound channel needs no re-pairing).
 - **Credentials** — Fernet **ciphertext only**, and only with `--with-credentials`.
 - **Machine descriptors** — one document per machine, at `machines/<id>.yaml`. Each machine writes only its own, so they can never conflict; the registry is simply whatever those files currently hold.
 

@@ -115,7 +115,7 @@ class ClaudeBinaryModelDiscovery:
         """
         if agent_key != _AGENT_KEY:
             return []
-        # File I/O on a very large file — off the event loop (CODE-034), the
+        # File I/O on a very large file — off the event loop, the
         # same rule the credential store follows.
         return await asyncio.to_thread(self._scan_cached)
 

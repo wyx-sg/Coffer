@@ -198,13 +198,14 @@ single highest-value thing that account would buy.
   cost, not a release one.
 - **Rust re-enters the build, and its tests are not in `make verify`.** `cargo`
   is a prerequisite for `make desktop` and for the release's desktop leg only;
-  no verification gate grows a toolchain.
-  The cost is that `tray.rs`'s close-to-tray decision and `daemon.rs`'s
-  rate-limit and port-parsing helpers — all written as pure functions precisely
-  so they could be unit-tested — are covered by `cargo test` that no gate runs.
-  They are reachable through `make desktop-test` for anyone with a toolchain.
-  Accepted because the shell is small, changes rarely, and cannot break the
-  daemon or the web host when it does; revisit if it starts accumulating logic.
+  `make verify` grows no toolchain.
+  `tray.rs`'s close-to-tray decision and `daemon.rs`'s rate-limit and
+  port-parsing helpers — all written as pure functions precisely so they could
+  be unit-tested — are covered by the crate's `cargo test`, which CI runs
+  (with clippy) as `make desktop-test` and `make desktop-lint` in
+  `.github/workflows/desktop.yml` rather than inside `make verify`. The shell
+  is small, changes rarely, and cannot break the daemon or the web host when
+  it does.
 
 ## Alternatives considered
 

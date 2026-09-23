@@ -580,7 +580,7 @@ def test_mcp_tool_enable_disable(mcp_daemon: Any) -> None:
 
 
 def test_mcp_resource_enable_disable_uri_with_slashes(mcp_daemon: Any) -> None:
-    """CODE-038: a resource capability key is a URI containing '/' (e.g.
+    """A resource capability key is a URI containing '/' (e.g.
     file:///etc/hosts). The CLI must send it in the request body, not the URL
     path — the old path-style route can't match multi-segment keys and 404s.
     """

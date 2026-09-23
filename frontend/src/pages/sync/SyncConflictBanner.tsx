@@ -1,8 +1,8 @@
 // frontend/src/pages/sync/SyncConflictBanner.tsx
 //
-// A conflict blocks convergence on BOTH machines until it is resolved (spec
-// vault-sync `## Conflicts`), so it is a banner at the top of Status rather
-// than a line in the round report.
+// A conflict blocks convergence on BOTH machines until it is resolved, so it
+// is a banner above the Runs table rather than a line in the round report
+// (spec vault-sync "Show a conflict as a banner").
 //
 // What the user needs is three things and no more: that nothing was touched,
 // which paths disagree, and where the working tree holding them is — because

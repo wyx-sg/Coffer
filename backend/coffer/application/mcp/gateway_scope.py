@@ -3,7 +3,7 @@
 Extracted from `gateway.py` to keep that file under the project's 400-LOC
 ceiling. Filters the enabled mcp_server resource list down to the servers
 this session's agent identity may see, pushing the enabled=true filter to
-SQL so we don't materialise rows we'll throw away (CODE-021).
+SQL so we don't materialise rows we'll throw away.
 """
 
 from __future__ import annotations

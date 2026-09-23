@@ -75,7 +75,7 @@ The prohibition from 2026-06-18 is not in question. Nothing here writes an agent
 - **"Delete and rebuild" weakens from identical to equivalent.** The product is a distillation, so a rebuild gives back the same subjects from the same sources, not the same wording. Accepted: `.raw/` is still byte-reproducible, and it is what the notes' provenance points at.
 - **The distil pass is the layer's cost.** It calls a model on every changed partition, where the old organise pass was optional polish. The mechanical path ([memory](../../openspec/specs/memory/spec.md) "Distil mechanically with no internal connection") keeps an installation without a connection working, but visibly worse — which is the honest trade, not a hidden one.
 - Two readers remain coupled to two undocumented private formats. A format change breaks a reader; it must break loudly and locally ([memory](../../openspec/specs/memory/spec.md) "Fail a broken reader loudly and in isolation").
-- Per-agent scope governs what Coffer serves, not what a process on this machine can open. Handing an agent a path is handing it the file; the layer says so rather than implying a boundary it does not have.
+- `enabled` governs what Coffer serves, not what a process on this machine can open (memory carries no per-agent reach since 2026-09-18; [memory](../../openspec/specs/memory/spec.md) "Serve every enabled partition to every agent"). Handing an agent a path is handing it the file; the layer says so rather than implying a boundary it does not have.
 - A session's opening is measurably more expensive — an index of a hundred notes instead of eight lines. Claude Code spends ~9k tokens on exactly this, of its own accord, every session; this is the ecosystem's normal price for not searching.
 
 ### Neutral

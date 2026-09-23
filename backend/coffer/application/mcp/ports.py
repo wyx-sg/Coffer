@@ -1,6 +1,6 @@
 """Port (Protocol) definitions for the MCP application layer.
 
-CODE-005: application code must depend on abstract Protocols, never on
+Application code must depend on abstract Protocols, never on
 infrastructure classes directly. The concrete implementations in
 ``coffer.infrastructure.{credentials,mcp}.*`` are wired at composition root
 (``coffer.surfaces.http.app``) and pass through these Protocol types.

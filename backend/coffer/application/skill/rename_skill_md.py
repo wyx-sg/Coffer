@@ -127,7 +127,7 @@ async def apply_skill_md_rewrite(
     # ``SkillConfig``). Written through the service rather than the repo: this
     # is the skill kind editing its own config, the same path a re-import takes
     # (``lifecycle_ops``), and ``allow_lifecycle_kind`` is how a kind that owns
-    # an on-disk artifact opts past the CODE-REG guard. ``description`` is
+    # an on-disk artifact opts past the per-kind creation guard. ``description`` is
     # passed explicitly because the repo overwrites that column
     # unconditionally — omitting it would erase the skill's description as a
     # side effect of a rename.

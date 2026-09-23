@@ -158,8 +158,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         repo=resource_repo,
         audit=audit,
         # Wired so register/update_config can probe credential_refs against
-        # the encrypted store BEFORE persisting (spec edge case: missing
-        # credential must fail registration with a named ref, no partial state).
+        # the encrypted store BEFORE persisting (spec mcp-gateway "Manage MCP
+        # servers as resources": a missing credential must fail registration
+        # with a named ref, no partial state).
         credentials=credential_store,
     )
 
@@ -208,7 +209,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         sync=sync_contributions,
     )
 
-    # Wire the chat feature (spec channels). Must come AFTER all other wiring so the
+    # Wire the chat feature (spec chat). Must come AFTER all other wiring so the
     # coffer-builtin-agent gateway session sees the fully-populated
     # BuiltinToolRegistry (knowledge + skill + MCP tools); the session factory
     # and the agent service are the kinds' own results.
@@ -254,7 +255,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # per-agent rendering.
     await run_builtin_guide_refresh(kinds.guide)
 
-    # CODE-020: start the batched invocation writer alongside the retention
+    # Start the batched invocation writer alongside the retention
     # worker. The repo's start() is a no-op if already started.
     await kinds.mcp.invocation_repo.start()
 
@@ -303,7 +304,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # session + per-session supervisor + upstream subprocesses indefinitely.
     reaper_task = start_session_reaper(**reaper_kwargs_from_env())
 
-    # T3: set lifecycle phase
+    # Set the lifecycle phase
     daemon_routes.set_daemon_phase("ready")
 
     try:

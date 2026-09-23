@@ -249,7 +249,7 @@ def test_resource_delete_not_found_with_force(in_proc_daemon):
 
 
 # ---------------------------------------------------------------------------
-# T2 — 5xx errors are rendered via check(), not bare raise_for_status()
+# 5xx errors are rendered via check(), not bare raise_for_status()
 # ---------------------------------------------------------------------------
 
 
