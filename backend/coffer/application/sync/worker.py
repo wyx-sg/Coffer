@@ -93,6 +93,10 @@ class ConvergeWorker:
             ConvergeStatus.OK,
             ConvergeStatus.NO_CHANGE,
             ConvergeStatus.DISABLED,
+            # Waiting for the user to join is a state, not news: the Sync
+            # page and ``coffer sync status`` say so; the log need not, every
+            # interval.
+            ConvergeStatus.AWAITING_JOIN,
         )
         if quiet or run.hold_already_reported:
             # A confirmation this vault has already reported is not news. It

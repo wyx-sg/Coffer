@@ -6,7 +6,7 @@ Coffer stores every secret you register — API keys, bot tokens — as **Fernet
 
 ```bash
 coffer credentials set openai-key            # paste the value at a hidden prompt (or pipe via stdin)
-coffer credentials list                      # → openai-key | present
+coffer credentials list                      # → openai-key | yes | provider openai
 coffer credentials get openai-key            # presence check only ([redacted])
 coffer credentials get openai-key --show     # print the real value (an audited read)
 coffer credentials delete openai-key
@@ -14,6 +14,7 @@ coffer credentials delete openai-key
 
 - Other features take a **reference**, not the secret: a model cites `--credential-ref openai-key`, a channel cites `--bot-token-ref`, and so on.
 - Prefer the prompt or stdin over `--value`, which is visible in your shell history.
+- `coffer credentials list` shows every ref any registered model, channel or MCP server cites, whether the store holds it, and who cites it — after restoring a vault without its secrets, the `no` rows are the ones to set again. `--json` carries the same fields.
 
 ## Where the master key lives
 

@@ -47,6 +47,60 @@ def is_inapplicable(error: Exception) -> bool:
     return getattr(error, "code", "") in _INAPPLICABLE_CODES
 
 
+async def apply_diff(
+    appliers: Mapping[str, VaultApplyPort],
+    state: ConvergenceStatePort,
+    diff: DiffSummary,
+    not_applicable: list[str] | None,
+) -> list[tuple[str, str]]:
+    """Step 5's body: each path independently, holding what does not apply.
+
+    A path that can never apply here is held as not applicable and appended to
+    ``not_applicable`` — it is not a failure, so it is not returned as one.
+    """
+    failures: list[tuple[str, str]] = []
+    for change in diff.vault_changes:
+        applier = applier_for(appliers, change.path)
+        if applier is None:
+            continue
+        try:
+            if change.status is ChangeStatus.DELETED:
+                await applier.remove(change.path)
+            else:
+                await applier.upsert(change.path)
+        except CofferError as e:
+            if is_inapplicable(e):
+                if not_applicable is not None:
+                    not_applicable.append(change.path)
+            else:
+                failures.append((change.path, str(e)))
+            await state.hold(change.path, applicable=not is_inapplicable(e))
+        else:
+            await state.release(change.path)
+    return failures
+
+
+async def readmit_applicable(
+    appliers: Mapping[str, VaultApplyPort], state: ConvergenceStatePort
+) -> None:
+    """Move not-applicable paths whose precondition now holds to the retry set.
+
+    A not-applicable path is not retried — but "the agent is not installed
+    here" can stop being true, and nothing else would ever bring the document
+    back. So each round re-checks the cheap precondition an applier exposes
+    (``still_inapplicable``) and hands a path that now passes to the retry set,
+    which applies it this round.
+    """
+    _retry, not_applicable = await state.held_paths()
+    for path in sorted(not_applicable):
+        applier = applier_for(appliers, path)
+        check = getattr(applier, "still_inapplicable", None)
+        if check is None or await check(path):
+            continue
+        await state.release(path)
+        await state.hold(path, applicable=True)
+
+
 def commit_message(summary: ExportSummary) -> str:
     """A message naming the counts per area.
 

@@ -3,8 +3,8 @@ info:
   title: Coffer — Vault Sync API
   version: 0.4.0
   description: |
-    REST surface for vault sync (spec vault-sync FR-083). Eighteen operations:
-    the round and its answers, the remote's configuration, the run history, the
+    REST surface for vault sync (spec vault-sync FR-083). Nineteen operations:
+    the round and its answers, the preview of a join, the remote's configuration, the run history, the
     machine registry, and the master key.
 
     Sync is a **cross-cutting service, not a resource kind**, so it has its own
@@ -16,10 +16,12 @@ info:
     Every write path here is the same round (FR-035) — apply what the remote
     has, publish what this vault has, on a diff against a recorded base.
     `POST /run` is that round; `POST /adopt` is the same round on a machine
-    joining a remote, and joining is detected by the absence of a pointer rather
-    than by the route (FR-049), so configuring a remote on a machine that forgot
-    its pointer cannot route around the new-versus-returning distinction
-    (FR-042).
+    joining a remote. Whether a machine is joining — and as new or returning —
+    is read from the absence of a pointer rather than from the route (FR-049),
+    so configuring a remote on a machine that forgot its pointer cannot route
+    around the new-versus-returning distinction (FR-042). Joining itself is
+    explicit: only `/adopt` joins, after `GET /join` has stated the join, and
+    `/run` on a machine that has not joined reports `awaiting_join`.
 
     There is deliberately **no export and no import route**. Writing a bundle to
     a directory and reading one back was a wholesale overwrite with no base — the
@@ -109,6 +111,11 @@ paths:
       tags: [sync]
       operationId: runSyncRound
       summary: Run one converge round now.
+      description: |
+        Never joins. On a machine that has not joined the remote the round
+        still detects the join — new, or returning with its recovered base —
+        and reports it in `join` and `join_report`, applying and pushing
+        nothing, with status `awaiting_join`; `POST /adopt` joins.
       responses:
         "200":
           description: The round's outcome. A held round reports `pending`.
@@ -117,13 +124,44 @@ paths:
               schema:
                 $ref: "#/components/schemas/RoundOut"
 
+  /api/v1/sync/join:
+    get:
+      tags: [sync]
+      operationId: previewSyncJoin
+      summary: State the join `/adopt` would make, applying nothing.
+      description: |
+        Joining is explicit and reported: before anything is applied, the
+        surfaces state which case it is, when this machine last converged, how
+        many documents the remote has changed since, and how many this vault
+        has. This fetches and reads the remote's registry the way the round's
+        step 0 does, and stops there — the vault and the pointer are
+        untouched. `joining: false` means this machine already converged here
+        and `/adopt` is an ordinary round. `case: ambiguous` is a returning
+        machine whose recorded base is gone; it still needs `choice`.
+      parameters:
+        - name: choice
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [keep-local]
+          description: Preview the join as `/adopt` would make it with this choice.
+      responses:
+        "200":
+          description: The join, stated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JoinPreviewOut"
+
   /api/v1/sync/adopt:
     post:
       tags: [sync]
       operationId: adoptSyncRemote
       summary: Join the configured remote.
       description: |
-        The same round as any other. `choice` is only for a returning machine
+        The same round as any other. The surfaces call `GET /join` first and
+        show its answer before calling this. `choice` is only for a returning machine
         whose recorded base is gone from the remote's history: `keep-local`
         joins as new and publishes this vault's documents as additions. Absent,
         that case is refused rather than guessed.
@@ -521,6 +559,37 @@ components:
           type: string
           format: date-time
 
+    JoinPreviewOut:
+      type: object
+      required: [joining]
+      properties:
+        joining:
+          type: boolean
+          description: False when this machine already converged with the remote.
+        case:
+          type: [string, "null"]
+          enum: [new, returning, ambiguous, null]
+          default: null
+        base:
+          type: [string, "null"]
+          default: null
+          description: The commit a returning machine recovered from its own descriptor.
+        last_converged_on:
+          type: [string, "null"]
+          format: date
+          default: null
+          description: The day this machine last converged here; null for a new machine.
+        remote_changed:
+          type: [integer, "null"]
+          default: null
+          description: |
+            Documents the remote changed since this machine's base — everything
+            it holds, for a new machine. Null when the base is gone.
+        vault_documents:
+          type: [integer, "null"]
+          default: null
+          description: Documents this vault holds.
+
     RoundOut:
       type: object
       required: [status, applied, published]
@@ -528,7 +597,8 @@ components:
       properties:
         status:
           type: string
-          enum: [ok, no_change, conflict, awaiting_confirmation, push_failed, failed, disabled]
+          enum:
+            [ok, no_change, conflict, awaiting_confirmation, push_failed, failed, disabled, awaiting_join]
           description: |
             The whole of `ConvergeStatus`, and `status` is what discriminates this
             one shape across every round-shaped operation. `no_change` and
@@ -538,6 +608,9 @@ components:
             untouched and the pointer unmoved; `awaiting_confirmation` is held at
             the deletion guard and `pending` says which way; `push_failed`
             applied everything locally and kept the commit for the next round.
+            `awaiting_join` is a machine that has not joined the remote: joining
+            is explicit, so an ordinary round applied and pushed nothing, and
+            only `POST /adopt` joins.
         join:
           type: [string, "null"]
           default: null
@@ -568,12 +641,30 @@ components:
           default: []
           items:
             $ref: "#/components/schemas/FailureOut"
+        not_applicable:
+          type: array
+          default: []
+          description: |
+            Paths this round met that can never apply on this machine (an agent
+            whose config directory does not exist here). Held and not retried,
+            and not failures.
+          items:
+            type: string
         locked_refs:
           type: array
           default: []
           description: Credential refs whose ciphertext this machine cannot decrypt.
           items:
             type: string
+        join_report:
+          description: |
+            On an `awaiting_join` round: the join the round detected — detection
+            runs on every round without a pointer — and did not apply. `join`
+            names its kind.
+          oneOf:
+            - $ref: "#/components/schemas/JoinPreviewOut"
+            - type: "null"
+          default: null
         pending:
           oneOf:
             - $ref: "#/components/schemas/PendingConfirmationOut"
@@ -727,6 +818,18 @@ components:
           description: |
             `false` when the id came from the host rather than the local fallback
             file. `true` means it does not survive deleting `~/.coffer`.
+        joined:
+          type: boolean
+          default: false
+          description: |
+            Whether this machine has joined the remote. Until it has, a round
+            reports `awaiting_join` and only `POST /adopt` joins.
+        not_applicable:
+          type: array
+          default: []
+          description: Every path recorded as not applicable on this machine, sorted.
+          items:
+            type: string
 
     MachineOut:
       type: object

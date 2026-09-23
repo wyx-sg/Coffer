@@ -96,6 +96,14 @@ class SyncableConfig(BaseModel):
     credential_ref: str = ""
 
 
+class AgentDocConfig(BaseModel):
+    """The ``agent`` kind's schema here: open, and adding no defaults of its
+    own, so a document written in the production agent shape reaches the
+    production ``AgentImportGate`` exactly as it was registered."""
+
+    model_config = ConfigDict(extra="allow")
+
+
 def _cited_credentials(config: dict[str, Any]) -> dict[str, str]:
     ref = config.get("credential_ref")
     return {"token": ref} if isinstance(ref, str) and ref else {}
@@ -143,7 +151,7 @@ def vault_kinds() -> dict[str, Kind]:
             supports_scope=True,
             converges_row=lambda config: not is_builtin(config),
         ),
-        "agent": Kind(name="agent", display_name="Agent", config_schema=SyncableConfig),
+        "agent": Kind(name="agent", display_name="Agent", config_schema=AgentDocConfig),
         "channel": Kind(
             name="channel",
             display_name="Channel",
@@ -422,6 +430,7 @@ class VaultMachine:
         self.state = ConvergenceState()
         self.state_provider = StubStateProvider()
         self.gate = RecordingGate("mcp_server")
+        self.gates: list[Any] = [self.gate]
         self.hook = RecordingHook("agent")
         self.resolver = ScriptedResolver(self.worktree)
         self.published_descriptor_commits: list[str] = []
@@ -497,7 +506,7 @@ class VaultMachine:
                 ResourceApplier(
                     self.resources,
                     worktree=self.worktree,
-                    gates=[self.gate],
+                    gates=self.gates,
                     home=str(self.home),
                 ),
                 StateApplier([self.state_provider], worktree=self.worktree, home=str(self.home)),
@@ -510,6 +519,11 @@ class VaultMachine:
             branch=BRANCH,
             post_import=[self.hook],
         )
+
+    def use_gate(self, gate: Any) -> None:
+        """Add an import gate — a production one, say — to this machine's round."""
+        self.gates.append(gate)
+        self.round = self._build_round()
 
     async def close(self) -> None:
         await self.engine.dispose()
@@ -596,14 +610,28 @@ class VaultMachine:
         return summary
 
     async def converge(
-        self, *, join_choice: str | None = None, confirmed: PendingConfirmation | None = None
+        self,
+        *,
+        join_choice: str | None = None,
+        confirmed: PendingConfirmation | None = None,
+        adopt: bool = False,
     ) -> ConvergeRun:
-        """One round, exactly as ``ConvergeService`` drives it."""
+        """One round, exactly as ``ConvergeService`` drives it.
+
+        An ordinary round never joins: on a machine with no pointer it reports
+        ``awaiting_join`` and does nothing else. ``adopt`` is the explicit join.
+        """
         await self.mirror.ensure_repo(remote_url=self.remote_url, branch=BRANCH)
-        run = await self.round.run(token=None, join_choice=join_choice, confirmed=confirmed)
+        run = await self.round.run(
+            token=None, join_choice=join_choice, confirmed=confirmed, adopt=adopt
+        )
         if run.commit:
             self.published_descriptor_commits.append(run.commit)
         return run
+
+    async def adopt(self, *, join_choice: str | None = None) -> ConvergeRun:
+        """Join the remote explicitly, as ``POST /sync/adopt`` does."""
+        return await self.converge(join_choice=join_choice, adopt=True)
 
     async def confirm(self) -> ConvergeRun:
         """Accept a held round, as ``ConvergeService.confirm`` does: clear the
@@ -935,4 +963,9 @@ async def settle(*machines: VaultMachine) -> None:
     """
     for _ in range(3):
         for machine in machines:
-            await machine.converge()
+            # Joining is explicit, so a machine that has not joined yet adopts
+            # the remote; every later round is an ordinary one.
+            if await machine.state.pointer() is None:
+                await machine.adopt()
+            else:
+                await machine.converge()

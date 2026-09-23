@@ -11,7 +11,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List every credential ref a registered resource cites, with its presence.
+         * @description Refs are gathered from every kind's credential extractor (MCP server
+         *     headers, channel bot tokens, provider API keys, ...), sorted by ref.
+         *     Presence only — no value is decrypted, so nothing is audited.
+         */
+        get: operations["listCitedCredentials"];
         put?: never;
         /** Store a secret in the Fernet-encrypted credential store under a reference key. */
         post: operations["setCredential"];
@@ -92,6 +98,21 @@ export interface components {
             /** @description Whether a secret is stored under the ref. */
             present: boolean;
         };
+        CredentialListOut: {
+            refs: components["schemas"]["CredentialRefOut"][];
+        };
+        CredentialRefOut: {
+            /** @description A credential ref cited by at least one registered resource. */
+            ref: string;
+            /** @description Whether a secret is stored under the ref. */
+            present: boolean;
+            cited_by: components["schemas"]["CredentialCiterOut"][];
+        };
+        CredentialCiterOut: {
+            uid: string;
+            kind: string;
+            name: string;
+        };
         CredentialSettingsOut: {
             /**
              * @description file = master.key beside the DB (default); keychain = OS keychain entry.
@@ -160,6 +181,27 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listCitedCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every cited ref, whether the store holds it, and who cites it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialListOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     setCredential: {
         parameters: {
             query?: never;

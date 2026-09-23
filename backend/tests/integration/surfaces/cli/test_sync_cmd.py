@@ -137,7 +137,7 @@ def _seed_and_publish(fleet: Fleet, count: int = _ROOMY) -> None:
     for i in range(count):
         fleet.a.write_knowledge("notes", f"n{i}", f"original {i}\n")
     fleet.ok("sync", "remote", "set", fleet.a.remote_url)
-    fleet.ok("sync", "now")
+    fleet.ok("sync", "adopt", "--yes")
 
 
 # --- the remote -------------------------------------------------------------
@@ -205,8 +205,9 @@ def test_sync_now_without_a_remote_reports_a_disabled_round(fleet: Fleet) -> Non
 
 
 def test_sync_now_publishes_the_vault_and_says_what_it_did(fleet: Fleet) -> None:
-    fleet.a.write_knowledge("notes", "one", "first note\n")
     fleet.ok("sync", "remote", "set", fleet.a.remote_url)
+    fleet.ok("sync", "adopt", "--yes")
+    fleet.a.write_knowledge("notes", "one", "first note\n")
 
     result = fleet.ok("sync", "now")
 
@@ -217,16 +218,54 @@ def test_sync_now_publishes_the_vault_and_says_what_it_did(fleet: Fleet) -> None
     assert "knowledge/notes/one.md" in fleet.run(fleet.a.remote_paths())
 
 
+def test_sync_now_and_status_on_a_machine_that_has_not_joined_point_at_adopt(
+    fleet: Fleet,
+) -> None:
+    fleet.b.write_knowledge("notes", "from-b", "written on the desktop\n")
+    fleet.run(fleet.b.adopt())
+    fleet.ok("sync", "remote", "set", fleet.a.remote_url)
+
+    now = fleet.ok("sync", "now")
+    status = fleet.invoke("sync", "status")
+
+    assert "awaiting_join" in now.output
+    for result in (now, status):
+        assert "has not joined this remote yet" in result.output
+        assert "coffer sync adopt" in result.output
+        # The join the round detected, reported rather than applied.
+        assert "as a new machine" in result.output
+        assert "documents the remote changed since: 1" in result.output
+    assert status.exit_code != 0
+    assert fleet.a.read_knowledge("notes", "from-b") is None
+
+
+def test_status_lists_what_cannot_apply_on_this_machine(fleet: Fleet) -> None:
+    fleet.run(fleet.b.register("mcp_server", "wrong-machine", {"value": "never"}))
+    fleet.run(fleet.b.adopt())
+    fleet.a.gate.refuse_value = "never"
+    fleet.a.gate.refuse_permanently = True
+    fleet.ok("sync", "remote", "set", fleet.a.remote_url)
+
+    joined = fleet.ok("sync", "adopt", "--yes")
+    status = fleet.invoke("sync", "status")
+
+    path = fleet.run(fleet.b.doc_path("mcp_server", "wrong-machine"))
+    assert "could not apply" not in joined.output
+    for result in (joined, status):
+        assert "not applicable here" in result.output
+        assert path in result.output
+
+
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="a new machine takes the union and deletes nothing"
 )
 def test_adopt_takes_the_union_from_a_remote_holding_other_work(fleet: Fleet) -> None:
     fleet.b.write_knowledge("notes", "from-b", "written on the desktop\n")
-    fleet.run(fleet.b.converge())
+    fleet.run(fleet.b.adopt())
     fleet.run(fleet.b.converge())
     fleet.a.write_knowledge("notes", "from-a", "written on the laptop\n")
 
-    result = fleet.ok("sync", "adopt", fleet.a.remote_url)
+    result = fleet.ok("sync", "adopt", fleet.a.remote_url, "--yes")
 
     assert "joined this remote as a" in result.output
     assert "new" in result.output
@@ -243,17 +282,81 @@ def test_adopt_keep_local_answers_an_otherwise_unrecoverable_join(fleet: Fleet) 
     that same day leaves this machine's base unrecoverable."""
     fleet.a.write_knowledge("notes", "one", "first note\n")
     fleet.ok("sync", "remote", "set", fleet.a.remote_url)
-    fleet.ok("sync", "now")
+    fleet.ok("sync", "adopt", "--yes")
     fleet.a.state.forget()
 
-    refused = fleet.ok("sync", "adopt")
-    assert "failed" in refused.output
-    assert "cannot be recovered" in refused.output
+    refused = fleet.invoke("sync", "adopt", "--yes")
+    assert refused.exit_code != 0
+    assert "gone from the remote's history" in refused.output
+    assert "--keep-local" in refused.output
+    assert "joined this remote" not in refused.output
 
-    chosen = fleet.ok("sync", "adopt", "--keep-local")
+    chosen = fleet.ok("sync", "adopt", "--keep-local", "--yes")
 
     assert "joined this remote as a" in chosen.output
     assert fleet.a.read_knowledge("notes", "one") == "first note\n"
+
+
+def _returning_after_the_remote_moved(fleet: Fleet) -> None:
+    """A converged twice, then lost its pointer; the remote moved on since.
+
+    A's descriptor records the base its second round started from — the commit
+    its first round reached — so the remote has changed three notes since:
+    ``mine`` and ``while-away`` (which A itself went on to hold) and ``later``.
+    """
+    fleet.a.write_knowledge("notes", "shared", "one\n")
+    fleet.ok("sync", "remote", "set", fleet.a.remote_url)
+    fleet.ok("sync", "adopt", "--yes")
+    fleet.a.write_knowledge("notes", "mine", "only on this machine\n")
+    fleet.run(fleet.b.adopt())
+    fleet.b.write_knowledge("notes", "while-away", "written while a was gone\n")
+    fleet.run(fleet.b.converge())
+    # A second round on the same day stamps a descriptor naming a commit, so the
+    # base is recoverable: this is the returning case, not the ambiguous one.
+    fleet.ok("sync", "now")
+    fleet.b.write_knowledge("notes", "later", "written after a's last round\n")
+    fleet.run(fleet.b.converge())
+    fleet.a.state.forget()
+
+
+def test_adopt_states_the_join_and_asks_before_applying(
+    fleet: Fleet, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _returning_after_the_remote_moved(fleet)
+    monkeypatch.setattr("coffer.surfaces.cli.sync_join.interactive", lambda: True)
+
+    declined = _runner.invoke(cli_app, ["sync", "adopt"], input="n\n")
+
+    assert declined.exit_code != 0
+    assert "returning" in declined.output
+    assert "last converged here: 2" in declined.output
+    assert "documents the remote changed since: 3" in declined.output
+    assert "documents this vault holds:" in declined.output
+    assert "Join this remote?" in declined.output
+    assert fleet.a.read_knowledge("notes", "later") is None
+    assert fleet.run(fleet.a.state.pointer()) is None
+
+    accepted = _runner.invoke(cli_app, ["sync", "adopt"], input="y\n")
+
+    assert accepted.exit_code == 0, accepted.output
+    assert "joined this remote as a" in accepted.output
+    assert fleet.a.read_knowledge("notes", "later") == "written after a's last round\n"
+
+
+def test_adopt_without_a_terminal_refuses_unless_told_yes(fleet: Fleet) -> None:
+    fleet.b.write_knowledge("notes", "from-b", "written on the desktop\n")
+    fleet.run(fleet.b.adopt())
+
+    refused = fleet.invoke("sync", "adopt", fleet.a.remote_url)
+
+    assert refused.exit_code != 0
+    assert "new" in refused.output
+    assert "refusing to join without confirmation" in refused.output
+    assert fleet.a.read_knowledge("notes", "from-b") is None
+    assert fleet.run(fleet.a.state.pointer()) is None
+
+    fleet.ok("sync", "adopt", "--yes")
+    assert fleet.a.read_knowledge("notes", "from-b") == "written on the desktop\n"
 
 
 # --- a round the deletion guard held ----------------------------------------
@@ -262,7 +365,7 @@ def test_adopt_keep_local_answers_an_otherwise_unrecoverable_join(fleet: Fleet) 
 def _hold_a_deletion(fleet: Fleet) -> Any:
     fleet.a.write_knowledge("notes", "only", "the only note\n")
     fleet.ok("sync", "remote", "set", fleet.a.remote_url)
-    fleet.ok("sync", "now")
+    fleet.ok("sync", "adopt", "--yes")
     fleet.a.delete_knowledge("notes", "only")
     held = fleet.ok("sync", "now")
     assert "awaiting_confirmation" in held.output, held.output
@@ -368,12 +471,12 @@ def test_rollback_with_nothing_to_roll_back_exits_non_zero(fleet: Fleet) -> None
 
 def test_rollback_undoes_the_round_that_was_just_applied(fleet: Fleet) -> None:
     _seed_and_publish(fleet)
-    fleet.run(fleet.b.converge())
+    fleet.run(fleet.b.adopt())
     fleet.run(fleet.b.converge())
     fleet.b.write_knowledge("notes", "n0", "rewritten by B\n")
     fleet.b.write_knowledge("notes", "extra", "new from B\n")
     fleet.run(fleet.b.converge())
-    fleet.ok("sync", "now")
+    fleet.ok("sync", "adopt", "--yes")
     assert fleet.a.read_knowledge("notes", "n0") == "rewritten by B\n"
 
     result = fleet.ok("sync", "rollback")
@@ -388,7 +491,7 @@ def test_restore_at_a_revision_brings_a_deleted_note_back(fleet: Fleet) -> None:
     before = fleet.run(fleet.a.mirror.head())
     assert before
     fleet.a.delete_knowledge("notes", "n0")
-    fleet.ok("sync", "now")
+    fleet.ok("sync", "adopt", "--yes")
     assert fleet.a.read_knowledge("notes", "n0") is None
     fleet.a.write_knowledge("notes", "since", "gained after the deletion\n")
 
@@ -414,7 +517,7 @@ def test_status_on_an_unconfigured_vault_still_prints_the_machine_id(fleet: Flee
 def test_status_after_a_round_reports_the_remote_and_that_round(fleet: Fleet) -> None:
     fleet.a.write_knowledge("notes", "one", "first note\n")
     fleet.ok("sync", "remote", "set", fleet.a.remote_url)
-    fleet.ok("sync", "now")
+    fleet.ok("sync", "adopt", "--yes")
 
     result = fleet.ok("sync", "status")
 
@@ -432,15 +535,17 @@ def test_machine_list_with_no_machines_yet_says_how_to_publish_this_one(fleet: F
     result = fleet.ok("sync", "machine", "list")
 
     assert "no machines yet" in result.output
-    assert "coffer sync now" in result.output
+    # Only a joined machine's round publishes it, and this one has not joined.
+    assert "coffer sync adopt" in result.output
+    assert "sync now" not in result.output
 
 
 def test_machine_list_marks_this_machine_and_shows_its_peers(fleet: Fleet) -> None:
     fleet.b.write_knowledge("notes", "from-b", "desktop\n")
-    fleet.run(fleet.b.converge())
+    fleet.run(fleet.b.adopt())
     fleet.run(fleet.b.converge())
     fleet.ok("sync", "remote", "set", fleet.a.remote_url)
-    fleet.ok("sync", "now")
+    fleet.ok("sync", "adopt", "--yes")
 
     result = fleet.ok("sync", "machine", "list")
 
@@ -470,11 +575,11 @@ def test_machine_remove_retires_a_peer_and_touches_nothing_else(fleet: Fleet) ->
     names a machine, because reach is machine-local, so a retirement has
     nothing else to reach for and says so by saying only one thing.
     """
-    fleet.run(fleet.b.converge())
+    fleet.run(fleet.b.adopt())
     fleet.run(fleet.b.converge())
     fleet.run(fleet.a.register("mcp_server", "shared"))
     fleet.ok("sync", "remote", "set", fleet.a.remote_url)
-    fleet.ok("sync", "now")
+    fleet.ok("sync", "adopt", "--yes")
     fleet.run(fleet.a.set_scope("mcp_server", "shared", Scope(agents=["claude-code"])))
 
     result = fleet.ok("sync", "machine", "remove", MACHINE_B)
@@ -543,3 +648,20 @@ def test_the_bundle_directory_commands_are_gone(fleet: Fleet, tmp_path) -> None:
     overwrite with no base, and it has no place beside the diff-based round."""
     assert fleet.invoke("sync", "export", str(tmp_path / "bundle")).exit_code != 0
     assert fleet.invoke("sync", "import", str(tmp_path / "bundle")).exit_code != 0
+
+
+def test_conflict_advice_names_the_step_this_machine_can_take(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from coffer.surfaces.cli import sync_cmd
+
+    monkeypatch.setenv("COLUMNS", "200")
+    conflicted = {"status": "conflict", "join": "new", "conflicts": ["knowledge/notes/x.md"]}
+
+    sync_cmd._print_round(conflicted, joined=False)
+    not_joined = capsys.readouterr().out
+    sync_cmd._print_round(conflicted, joined=True)
+    joined = capsys.readouterr().out
+
+    assert "then run 'coffer sync adopt'" in not_joined
+    assert "then run 'coffer sync now'" in joined

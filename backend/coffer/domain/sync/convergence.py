@@ -8,7 +8,7 @@ loop never has to decide what is survivable.
 from __future__ import annotations
 
 import dataclasses
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 
 from coffer.domain.sync.diff import DiffSummary
@@ -45,6 +45,10 @@ class ConvergeStatus(StrEnum):
     PUSH_FAILED = "push_failed"
     FAILED = "failed"
     DISABLED = "disabled"
+    #: This machine has no pointer, so its next round would JOIN the remote,
+    #: and joining is explicit: an ordinary round applied and pushed nothing.
+    #: Only ``adopt`` joins, after the surfaces have stated the join.
+    AWAITING_JOIN = "awaiting_join"
 
 
 class GuardDirection(StrEnum):
@@ -80,6 +84,29 @@ class PendingConfirmation:
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
+class JoinPreview:
+    """What a join would be, stated before anything is applied (spec vault-sync
+    "Report a join before applying it").
+
+    ``joining`` is False for a machine that already holds a usable pointer.
+    Otherwise ``kind`` is the case the join would take, or None with
+    ``ambiguous`` set for the one case that has no safe default. ``base`` is
+    the commit a returning machine recovered from its own descriptor.
+    ``remote_changed`` counts the remote's documents that differ from that
+    base — every document the remote holds, for a new machine — and is None
+    when the base is gone.
+    """
+
+    joining: bool
+    kind: JoinKind | None = None
+    ambiguous: bool = False
+    base: str | None = None
+    last_converged_on: date | None = None
+    remote_changed: int | None = None
+    vault_documents: int | None = None
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
 class ConvergeRun:
     """The outcome of one round."""
 
@@ -100,9 +127,17 @@ class ConvergeRun:
     agent_resolved: tuple[str, ...] = ()
     #: ``(path, reason)`` for documents that could not be applied here.
     failures: tuple[tuple[str, str], ...] = ()
+    #: Paths this round met that can never apply on this machine — an agent
+    #: whose config dir does not exist here. Recorded as not applicable here
+    #: and held, never retried and never counted as a failure.
+    not_applicable: tuple[str, ...] = ()
     #: Credential refs whose ciphertext will not decrypt on this machine.
     locked_refs: tuple[str, ...] = ()
     pending: PendingConfirmation | None = None
+    #: On an ``awaiting_join`` round: the join this machine would make, as the
+    #: round detected it. Detection runs on every round without a pointer;
+    #: only ``adopt`` acts on it.
+    join_report: JoinPreview | None = None
     #: True when ``pending`` is a hold this vault was **already** carrying and
     #: this round merely re-derived the same question. The timer looks at an
     #: unanswered confirmation every interval, and ten identical rounds carry

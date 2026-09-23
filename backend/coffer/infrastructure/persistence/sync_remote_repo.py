@@ -43,6 +43,7 @@ from coffer.domain.sync.convergence import (
 )
 from coffer.domain.sync.diff import ChangeStatus, DiffSummary, DocChange
 from coffer.infrastructure.persistence.models import SyncRemoteModel, SyncRunModel
+from coffer.infrastructure.persistence.sync_join_report_json import report_from_json, report_to_json
 
 _ROW_ID = 1
 
@@ -107,8 +108,10 @@ def _run_payload(run: ConvergeRun) -> str:
             "conflicts": list(run.conflicts),
             "agent_resolved": list(run.agent_resolved),
             "failures": [list(f) for f in run.failures],
+            "not_applicable": list(run.not_applicable),
             "locked_refs": list(run.locked_refs),
             "pending": _pending_to_json(run.pending) if run.pending else None,
+            "join_report": report_to_json(run.join_report) if run.join_report else None,
         },
         sort_keys=True,
     )
@@ -160,8 +163,10 @@ def _run_of(
         conflicts=tuple(str(p) for p in payload.get("conflicts", [])),
         agent_resolved=tuple(str(p) for p in payload.get("agent_resolved", [])),
         failures=tuple((str(p), str(r)) for p, r in payload.get("failures", [])),
+        not_applicable=tuple(str(p) for p in payload.get("not_applicable", [])),
         locked_refs=tuple(str(r) for r in payload.get("locked_refs", [])),
         pending=_pending_from_json(payload.get("pending")),
+        join_report=report_from_json(payload.get("join_report")),
         error=error,
     )
 

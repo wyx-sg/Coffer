@@ -467,10 +467,7 @@
       "title": "关于 Coffer",
       "copyDiagnostics": "复制诊断信息",
       "fields": {
-        "name": "名称",
         "version": "版本",
-        "port": "守护进程端口",
-        "startedAt": "守护进程启动时间",
         "license": "许可证",
         "source": "源代码"
       }
@@ -666,6 +663,7 @@
     "cta": "返回首页"
   },
   "errors": {
+    "AGENT_CONFIG_DIR_MISSING": "该 agent 的配置目录在本机不存在",
     "AGENT_CONFIG_DIR_REGISTERED": "该配置目录已经注册过一个 Agent 了。",
     "AGENT_CONFIG_PARSE_ERROR": "无法解析该 Agent 的配置文件",
     "AGENT_CONFIG_REJECTED": "该 Agent 配置被拒绝",
@@ -696,7 +694,7 @@
     "INGEST_REJECTED": "文档在摄入过程中被拒绝",
     "INGEST_REJECTED_scanned_pdf": "该 PDF 似乎是扫描件或纯图片——无法提取文本。请先运行 OCR（或将其转换为基于文本的 PDF）后重新上传。",
     "INGEST_REJECTED_unsupported_type": "暂不支持此文件类型。请转换为 PDF、Word（.docx）、PowerPoint（.pptx）、Excel（.xlsx）、HTML、EPUB、CSV 或纯文本/Markdown 后重新上传；旧版 .doc/.ppt 请先另存为 .docx/.pptx。",
-    "INTERNAL_ERROR": "发生意外错误",
+    "INTERNAL_ERROR": "Coffer 内部出错，详情见守护进程日志：「活动」→「守护进程」。",
     "INVALID_PREFIX": "无效的前缀",
     "KNOWLEDGE_COLLECTION_EXISTS": "同名知识集合已存在",
     "KNOWLEDGE_COLLECTION_NOT_FOUND": "未找到该知识集合",
@@ -725,6 +723,7 @@
     "PLUGIN_UNINSTALL_UNSUPPORTED": "该插件不支持卸载",
     "PRIVILEGED_PATH": "该路径受保护，无法在此使用",
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": "已保存的凭据与内联密钥，二者必须且只能提供一个",
+    "PROVIDER_INTERNAL_ONLY": "该连接使用 ollama 协议，仅供 Coffer 内部引擎使用，不能为 agent 启用",
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "该连接正在启用中，无法更改协议格式——请先让相关 agent 切回自带登录，再修改协议，然后重新启用",
     "RESOURCE_ALREADY_EXISTS": "同名资源已存在",
     "RESOURCE_NOT_FOUND": "资源未找到",
@@ -1182,7 +1181,7 @@
     }
   },
   "chat": {
-    "title": "对话",
+    "title": "聊天",
     "thinking": "思考中…",
     "message": {
       "failed": "该回复未完成。",
@@ -1485,7 +1484,7 @@
     "history": {
       "description": "这台机器执行过的每一轮收敛，最新的在最前。什么都没变的那些轮次也会列出来——正是它们说明金库一直在收敛。",
       "searchPlaceholder": "搜索轮次…",
-      "empty": "还没有执行过任何一轮。先保存远端，再点「立即收敛」。",
+      "empty": "还没有执行过任何一轮。先保存远端，再加入它，开始收敛。",
       "nothingFurther": "这一轮没有更多可报告的内容。",
       "ran": "运行于 {{from}} → {{to}}",
       "countsShort": "+{{added}} ~{{modified}} −{{deleted}}",
@@ -1502,6 +1501,28 @@
         "applied": "应用到本机",
         "published": "发布到远端",
         "commit": "提交"
+      }
+    },
+    "join": {
+      "title": "加入这个远端？",
+      "case": {
+        "new": "这台机器第一次接入这个远端。它会取并集：拿到远端已有的内容，同时保留自己的全部内容，不会删除任何东西。",
+        "returning": "这台机器之前在这里同步过，会从上次收敛的基点继续，并接收远端自那以后的改动——包括删除。",
+        "ambiguous": "这台机器之前在这里同步过，但它到达的提交已不在远端历史中，基点无法恢复。保留本机文档会把它们作为新增发布，可能让其他机器删除过的内容重新出现。若要改用远端的状态，请运行 'coffer sync rebuild'。"
+      },
+      "lastConverged": "上次在此收敛",
+      "never": "从未",
+      "remoteChanged": "远端自那以后改动的文档",
+      "vaultDocuments": "本机保险库中的文档",
+      "confirm": "加入",
+      "keepLocal": "保留本机文档",
+      "joining": "正在加入…",
+      "action": "加入这个远端",
+      "notJoined": "这台机器尚未加入这个远端。加入之前，同步轮次不会应用或发布任何内容——加入时会先告诉你加入会做什么。",
+      "detected": {
+        "new": "检测结果：这台机器会以新机器身份加入，并取并集。",
+        "returning": "检测结果：这台机器之前在这里同步过，会从上次收敛的基点继续。",
+        "ambiguous": "检测结果：这台机器之前在这里同步过，但基点已不在远端历史中——加入需要你来选择。"
       }
     },
     "key": {
@@ -1606,7 +1627,8 @@
         "awaiting_confirmation_past": "已暂停",
         "push_failed": "本地已应用，推送失败",
         "failed": "失败",
-        "disabled": "已关闭"
+        "disabled": "已关闭",
+        "awaiting_join": "等待加入"
       },
       "join": {
         "new": "以新机器身份加入——远端持有的内容全部添加过来，本机金库原有的内容也全部保留。",
@@ -1616,6 +1638,9 @@
       "agentResolvedHint": "内部模型在工作区里解决了这些路径上的冲突。如果是你自己的笔记，值得回头看一眼。",
       "failures": "本机无法应用",
       "failure": "{{path}}——{{reason}}",
+      "notApplicable": "在本机不适用",
+      "notApplicableHint": "这些内容在本机永远无法应用——例如配置目录在本机不存在的 agent。它们保留在共享树中，不会重试，也不算错误。",
+      "awaitingJoin": "这台机器尚未加入这个远端，因此没有应用或发布任何内容。请在「配置」页使用「加入这个远端」，先查看加入会做什么，再加入。",
       "lockedRefs": "本机无法解密的凭据",
       "lockedRefsHint": "本机金库拿到了它们的密文，却没有能打开它的主密钥。请从持有主密钥的那台机器导出，并在下方导入。",
       "applied": "应用到本机",

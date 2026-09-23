@@ -78,7 +78,8 @@ def test_a_registered_area_reaches_the_working_tree(
 
         r = client.put("/api/v1/sync/remote", json={"url": str(remote)}, headers=_HEADERS)
         assert r.status_code == 200, r.text
-        r = client.post("/api/v1/sync/run", json={}, headers=_HEADERS)
+        # The first round on a machine is its join, and joining is explicit.
+        r = client.post("/api/v1/sync/adopt", json={}, headers=_HEADERS)
         assert r.status_code == 200, r.text
         assert r.json()["status"] in ("ok", "no_change"), r.json()
     set_active_token(None)

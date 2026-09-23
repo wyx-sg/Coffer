@@ -19,6 +19,7 @@ from rich.console import Console
 
 from coffer.domain.sync.backup import DEFAULT_BRANCH, DEFAULT_INTERVAL_SECONDS
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli import sync_join
 from coffer.surfaces.cli.sync_machine_cmd import key_app, machine_app
 
 app = typer.Typer(help="Keep this vault converged with a git remote you own")
@@ -30,7 +31,14 @@ app.add_typer(key_app, name="key")
 _console = Console()
 
 #: Statuses that mean the user has something to do.
-_NEEDS_ATTENTION = frozenset({"conflict", "awaiting_confirmation", "push_failed", "failed"})
+_NEEDS_ATTENTION = frozenset(
+    {"conflict", "awaiting_confirmation", "push_failed", "failed", "awaiting_join"}
+)
+
+_NOT_JOINED = (
+    "  this machine has not joined this remote yet — run 'coffer sync adopt' "
+    "to see what joining would do, and join"
+)
 
 
 def _verbose(ctx: typer.Context) -> bool:
@@ -42,18 +50,26 @@ def _counts(label: str, counts: dict[str, Any]) -> str:
     return f"{label}: {', '.join(parts)}" if parts else f"{label}: nothing"
 
 
-def _print_round(run: dict[str, Any]) -> None:
+def _print_round(run: dict[str, Any], *, joined: bool = True) -> None:
+    """One round. ``joined`` is False on a machine that has not joined yet,
+    where the next step is ``adopt`` rather than another ordinary round."""
     status = run.get("status", "?")
     style = "yellow" if status in _NEEDS_ATTENTION else "green"
     _console.print(f"[{style}]{status}[/{style}]")
 
+    if status == "awaiting_join":
+        # Detected on this round and deliberately not applied.
+        if run.get("join_report"):
+            sync_join.print_join_preview(_console, run["join_report"], lead="  Would join")
+        _console.print(_NOT_JOINED)
+        return
     if run.get("join"):
-        joined = run["join"]
+        kind = run["join"]
         _console.print(
-            f"  joined this remote as a [bold]{joined}[/bold] machine"
+            f"  joined this remote as a [bold]{kind}[/bold] machine"
             + (
                 "  (its id was already in the registry, so its base came from its own descriptor)"
-                if joined == "returning"
+                if kind == "returning"
                 else ""
             )
         )
@@ -67,9 +83,12 @@ def _print_round(run: dict[str, Any]) -> None:
     for path in run.get("conflicts") or []:
         _console.print(f"  [yellow]conflict[/yellow]: {path}")
     if run.get("conflicts"):
-        _console.print("  resolve them with your own git tools, then run 'coffer sync now'")
+        then = "coffer sync now" if joined else "coffer sync adopt"
+        _console.print(f"  resolve them with your own git tools, then run '{then}'")
     for failure in run.get("failures") or []:
         _console.print(f"  [red]could not apply[/red] {failure['path']}: {failure['reason']}")
+    for path in run.get("not_applicable") or []:
+        _console.print(f"  [dim]not applicable here[/dim]: {path}")
     for ref in run.get("locked_refs") or []:
         _console.print(f"  [yellow]credential locked[/yellow]: {ref}")
     if run.get("locked_refs"):
@@ -127,8 +146,12 @@ def adopt(
             "publish this vault's documents as additions instead of refusing"
         ),
     ),
+    yes: bool = typer.Option(False, "--yes", help="Join without asking, after the report"),
 ) -> None:
-    """Join the remote. A new machine takes the union; a returning one recovers its base."""
+    """Join the remote. A new machine takes the union; a returning one recovers its base.
+
+    States the case and the counts first and asks before anything is applied.
+    """
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -136,6 +159,11 @@ def adopt(
             r = c.put("/sync/remote", json={"url": url})
             _cli_client.check(r, verbose=verbose)
         body = {"choice": "keep-local"} if keep_local else {}
+        r = c.get("/sync/join", params=body)
+        _cli_client.check(r, verbose=verbose)
+        if (preview := r.json()).get("joining"):
+            sync_join.print_join_preview(_console, preview)
+            sync_join.confirm_join(_console, preview, yes=yes)
         r = c.post("/sync/adopt", json=body)
         _cli_client.check(r, verbose=verbose)
         _print_round(r.json())
@@ -243,10 +271,16 @@ def status(ctx: typer.Context) -> None:
             "so deleting ~/.coffer makes this machine reappear as a new one"
         )
     last = payload.get("last_run")
+    # A recorded awaiting_join round says this itself, below.
+    waiting = (last or {}).get("status") == "awaiting_join"
+    if payload.get("configured") and not payload.get("joined") and not waiting:
+        _console.print(_NOT_JOINED.strip())
+    for path in payload.get("not_applicable") or []:
+        _console.print(f"not applicable here: {path}")
     if last is None:
         _console.print("no round yet")
         return
-    _print_round(last)
+    _print_round(last, joined=bool(payload.get("joined", True)))
     # Only while sync is actually on. A disabled remote makes a round return
     # DISABLED without recording it, so ``last_run`` keeps whatever it last
     # was; exiting non-zero on that would leave a vault whose sync the user

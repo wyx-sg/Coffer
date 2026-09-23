@@ -29,7 +29,7 @@ from datetime import date
 import yaml
 
 from coffer.application.sync.ports import GitMirrorPort
-from coffer.domain.sync.convergence import JoinKind
+from coffer.domain.sync.convergence import JoinKind, JoinPreview
 from coffer.domain.sync.errors import SyncJoinAmbiguous
 from coffer.domain.sync.machine import MachineDescriptor
 
@@ -41,6 +41,9 @@ class Join:
     #: The day this machine last converged, for the surfaces to report. None
     #: for a new machine.
     last_converged_on: date | None = None
+
+
+__all__ = ["Join", "JoinPreview", "JoinResolver"]
 
 
 class JoinResolver:
@@ -73,6 +76,11 @@ class JoinResolver:
         if choice == "keep-local":
             return Join(JoinKind.NEW, mirror.EMPTY_TREE, descriptor.last_converged_on)
         raise SyncJoinAmbiguous(self._machine_id)
+
+    async def last_converged_on(self, mirror: GitMirrorPort) -> date | None:
+        """The day this machine's own descriptor says it last converged."""
+        descriptor = await self._published_descriptor(mirror)
+        return descriptor.last_converged_on if descriptor is not None else None
 
     async def _published_descriptor(self, mirror: GitMirrorPort) -> MachineDescriptor | None:
         raw = await mirror.read_file(f"origin/{self._branch}", f"machines/{self._machine_id}.yaml")

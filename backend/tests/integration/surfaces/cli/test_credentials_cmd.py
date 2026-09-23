@@ -53,11 +53,13 @@ class _FakeDaemon:
     def __init__(
         self,
         store: dict[str, str] | None = None,
-        resources: list[dict] | None = None,
+        cited: dict[str, list[dict]] | None = None,
         master_key_storage: str = "file",
     ) -> None:
         self.store: dict[str, str] = dict(store or {})
-        self.resources = resources or []
+        # ref -> the resources citing it, as the daemon's GET /credentials
+        # computes it from every kind's credential extractor.
+        self.cited = cited or {}
         self.master_key_storage = master_key_storage
 
     def post(self, path: str, json: dict | None = None, **_: Any) -> _Resp:
@@ -67,8 +69,12 @@ class _FakeDaemon:
         return _Resp(204, None)
 
     def get(self, path: str, **_: Any) -> _Resp:
-        if path == "/resources":
-            return _Resp(200, {"resources": self.resources})
+        if path == "/credentials":
+            refs = [
+                {"ref": ref, "present": ref in self.store, "cited_by": rows}
+                for ref, rows in sorted(self.cited.items())
+            ]
+            return _Resp(200, {"refs": refs})
         if path == "/settings/credentials":
             return _Resp(200, {"master_key_storage": self.master_key_storage})
         if path.endswith("/exists"):
@@ -208,32 +214,45 @@ def test_set_empty_value_exits_6(daemon):
 # ---------------------------------------------------------------------------
 
 
-def test_list_reports_refs_from_resources(monkeypatch):
-    resources = [
-        {"config": {"transport": {"credential_refs": {"Authorization": "gh_pat"}}}},
-        {"config": {"transport": {"credential_refs": {"API_KEY": "openai_key"}}}},
-    ]
-    d = _FakeDaemon(store={"gh_pat": "ghp_test"}, resources=resources)
+def test_list_shows_every_cited_ref_with_its_presence(monkeypatch):
+    """Refs cited by any kind are listed — an MCP server's stored ref shows as
+    present and a provider connection's unstored ref as missing."""
+    d = _FakeDaemon(
+        store={"gh_pat": "ghp_test"},
+        cited={
+            "gh_pat": [{"uid": "u1", "kind": "mcp_server", "name": "github"}],
+            "openai_key": [{"uid": "u2", "kind": "provider", "name": "openai"}],
+        },
+    )
     _use_daemon(monkeypatch, d)
 
     result = runner.invoke(app, ["credentials", "list"])
-    assert result.exit_code == 0
-    assert "gh_pat" in result.output
-    assert "openai_key" in result.output
+    assert result.exit_code == 0, result.output
+    lines = {line.split()[1]: line for line in result.output.splitlines() if "│" in line}
+    assert "yes" in lines["gh_pat"]
+    assert "no" in lines["openai_key"].split("│")[2]
+    assert "provider" in lines["openai_key"]
+    assert "ghp_test" not in result.output
 
 
-def test_list_json(monkeypatch):
-    resources = [
-        {"config": {"transport": {"credential_refs": {"KEY": "ref_b"}}}},
-        {"config": {"transport": {"credential_refs": {"TOKEN": "ref_a"}}}},
-    ]
-    d = _FakeDaemon(resources=resources)
+def test_list_json_carries_presence(monkeypatch):
+    d = _FakeDaemon(
+        store={"ref_a": "x"},
+        cited={
+            "ref_b": [{"uid": "u2", "kind": "channel", "name": "tg"}],
+            "ref_a": [{"uid": "u1", "kind": "mcp_server", "name": "gh"}],
+        },
+    )
     _use_daemon(monkeypatch, d)
 
     result = runner.invoke(app, ["credentials", "list", "--json"])
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.output
     data = json.loads(result.output)
-    assert data["refs"] == ["ref_a", "ref_b"]
+    assert [(r["ref"], r["present"]) for r in data["refs"]] == [
+        ("ref_a", True),
+        ("ref_b", False),
+    ]
+    assert data["refs"][1]["cited_by"] == [{"uid": "u2", "kind": "channel", "name": "tg"}]
 
 
 def test_list_daemon_spawn_timeout(tmp_path, monkeypatch):

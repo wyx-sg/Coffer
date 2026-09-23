@@ -467,10 +467,7 @@
       "title": "About Coffer",
       "copyDiagnostics": "Copy diagnostics",
       "fields": {
-        "name": "Name",
         "version": "Version",
-        "port": "Daemon port",
-        "startedAt": "Daemon started",
         "license": "License",
         "source": "Source"
       }
@@ -666,6 +663,7 @@
     "cta": "Back to home"
   },
   "errors": {
+    "AGENT_CONFIG_DIR_MISSING": "This agent's config directory doesn't exist on this machine",
     "AGENT_CONFIG_DIR_REGISTERED": "An agent for this config directory is already registered.",
     "AGENT_CONFIG_PARSE_ERROR": "The agent's config file couldn't be parsed",
     "AGENT_CONFIG_REJECTED": "The agent configuration was rejected",
@@ -696,7 +694,7 @@
     "INGEST_REJECTED": "The document was rejected during ingestion",
     "INGEST_REJECTED_scanned_pdf": "This PDF appears to be scanned or image-only — no text could be extracted. Run OCR (or convert it to a text-based PDF) and re-upload.",
     "INGEST_REJECTED_unsupported_type": "This file type isn't supported. Convert it to PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), HTML, EPUB, CSV, or a text/Markdown file and re-upload. Legacy .doc/.ppt: save as .docx/.pptx first.",
-    "INTERNAL_ERROR": "An unexpected error occurred",
+    "INTERNAL_ERROR": "Coffer hit an internal error. The details are in its daemon log: Activity → Daemon.",
     "INVALID_PREFIX": "Invalid prefix",
     "KNOWLEDGE_COLLECTION_EXISTS": "A knowledge collection with that name already exists",
     "KNOWLEDGE_COLLECTION_NOT_FOUND": "Knowledge collection not found",
@@ -725,6 +723,7 @@
     "PLUGIN_UNINSTALL_UNSUPPORTED": "This plugin can't be uninstalled",
     "PRIVILEGED_PATH": "That path is privileged and can't be used here",
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": "Supply exactly one of a saved credential or an inline key",
+    "PROVIDER_INTERNAL_ONLY": "This connection uses the ollama protocol, which only Coffer's internal engine uses — it can't be switched on for an agent",
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "This connection is switched on, so its wire format can't change — put its agents back on their built-in login first, then edit the wire, then switch it on again",
     "RESOURCE_ALREADY_EXISTS": "A resource with that name already exists",
     "RESOURCE_NOT_FOUND": "Resource not found",
@@ -1485,7 +1484,7 @@
     "history": {
       "description": "Every converge round this machine has run, newest first. The rounds that changed nothing are listed too — they are what shows the vault was still converging.",
       "searchPlaceholder": "Search rounds…",
-      "empty": "No round has run yet. Save a remote, then Converge now to start one.",
+      "empty": "No round has run yet. Save a remote, then join it to start converging.",
       "nothingFurther": "This round reported nothing further.",
       "ran": "Ran {{from}} → {{to}}",
       "countsShort": "+{{added}} ~{{modified}} −{{deleted}}",
@@ -1502,6 +1501,28 @@
         "applied": "Applied here",
         "published": "Published",
         "commit": "Commit"
+      }
+    },
+    "join": {
+      "title": "Join this remote?",
+      "case": {
+        "new": "This machine is new to this remote. It takes the union: it gains what the remote holds and keeps everything it has. Nothing is deleted.",
+        "returning": "This machine synced here before, so it resumes from the base it last converged on and takes what the remote changed since — deletions included.",
+        "ambiguous": "This machine synced here before, but the commit it reached is gone from the remote's history, so its base cannot be recovered. Keeping this vault's documents publishes them as additions, which may bring back what other machines deleted. To take the remote's state instead, run 'coffer sync rebuild'."
+      },
+      "lastConverged": "Last converged here",
+      "never": "never",
+      "remoteChanged": "Documents the remote changed since",
+      "vaultDocuments": "Documents this vault holds",
+      "confirm": "Join",
+      "keepLocal": "Keep this vault's documents",
+      "joining": "Joining…",
+      "action": "Join this remote",
+      "notJoined": "This machine has not joined this remote yet. Until it does, rounds apply and publish nothing — join to see what joining would do first.",
+      "detected": {
+        "new": "Detected: this machine would join as a new machine and take the union.",
+        "returning": "Detected: this machine has synced here before and would resume from the base it last converged on.",
+        "ambiguous": "Detected: this machine synced here before, but its base is gone from the remote's history — joining needs your choice."
       }
     },
     "key": {
@@ -1606,7 +1627,8 @@
         "awaiting_confirmation_past": "Paused",
         "push_failed": "applied here, push failed",
         "failed": "failed",
-        "disabled": "turned off"
+        "disabled": "turned off",
+        "awaiting_join": "waiting to join"
       },
       "join": {
         "new": "Joined as a new machine — everything the remote held was added, and everything this vault held was kept.",
@@ -1616,6 +1638,9 @@
       "agentResolvedHint": "An internal model resolved the conflict on these paths in the working tree. Worth reading if they are your own notes.",
       "failures": "Could not be applied here",
       "failure": "{{path}} — {{reason}}",
+      "notApplicable": "Not applicable on this machine",
+      "notApplicableHint": "These can never apply here — an agent whose config directory does not exist on this machine. They are kept in the shared tree, not retried, and not errors.",
+      "awaitingJoin": "This machine has not joined this remote yet, so nothing was applied or published. Use “Join this remote” on the Setup tab to see what joining would do, and join.",
       "lockedRefs": "Credentials this machine cannot decrypt",
       "lockedRefsHint": "This vault holds their ciphertext but not the key that opens it. Import the master key from the machine that has it, below.",
       "applied": "Applied here",

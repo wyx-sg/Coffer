@@ -11,7 +11,8 @@ class Conversation:
     """A persisted chat thread.
 
     Not a Resource — stored in the dedicated ``conversations`` SQLite table.
-    ``agent_key`` identifies which agent the thread talks to; v1 always ``"builtin"``.
+    ``agent_key`` identifies which agent the thread talks to; every writer names it
+    (the store has no default to fall back on).
     ``archived_at`` is ``None`` for an active thread, or the instant it was
     archived; archived threads are hidden from the default list but restorable.
 

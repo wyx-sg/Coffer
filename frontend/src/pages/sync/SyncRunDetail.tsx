@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 
 import type { RunRecord } from "@/lib/api/sync";
 import { formatDateTime } from "@/lib/utils";
+import { SyncJoinReport } from "./SyncJoinReport";
 import { SyncRoundPathList } from "./SyncRoundPathList";
 
 /** One round opened up: everything the row could not carry. */
@@ -24,7 +25,8 @@ export function SyncRunDetail({ run }: { run: RunRecord }) {
           to: formatDateTime(run.finished_at),
         })}
       </p>
-      {run.join ? (
+      {/* On an awaiting_join round the kind is what was DETECTED, not done. */}
+      {run.join && run.status !== "awaiting_join" ? (
         <p className="text-sm text-muted-foreground">{t(`sync.round.join.${run.join}`)}</p>
       ) : null}
 
@@ -67,6 +69,23 @@ export function SyncRunDetail({ run }: { run: RunRecord }) {
         testId="sync-run-failures"
       />
       <SyncRoundPathList
+        titleKey="sync.round.notApplicable"
+        hintKey="sync.round.notApplicableHint"
+        items={run.not_applicable}
+        testId="sync-run-not-applicable"
+      />
+      {run.status === "awaiting_join" ? (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">{t("sync.round.awaitingJoin")}</p>
+          {run.join_report ? (
+            <>
+              <p className="text-sm">{t(`sync.join.detected.${run.join_report.case ?? "new"}`)}</p>
+              <SyncJoinReport report={run.join_report} />
+            </>
+          ) : null}
+        </div>
+      ) : null}
+      <SyncRoundPathList
         titleKey="sync.round.lockedRefs"
         hintKey="sync.round.lockedRefsHint"
         items={run.locked_refs}
@@ -88,6 +107,8 @@ export function SyncRunDetail({ run }: { run: RunRecord }) {
       run.conflicts.length === 0 &&
       run.agent_resolved.length === 0 &&
       run.failures.length === 0 &&
+      run.not_applicable.length === 0 &&
+      run.status !== "awaiting_join" &&
       run.locked_refs.length === 0 &&
       !run.error ? (
         <p className="text-sm text-muted-foreground">{t("sync.history.nothingFurther")}</p>

@@ -195,12 +195,28 @@ class AgentPluginService:
                 ],
             )
 
-        # cache_present for Claude = "appears in the install inventory" (we do
-        # not model its cache dirs); the domain parser owns that distinction.
-        # Per-plugin detail (description + bundled skills/commands/MCP) is read
-        # from the install path the inventory recorded, when a reader is wired.
-        items = [self._view_with_detail(p, p.install_path, p.installed) for p in plugins]
+        # cache_present for Claude = the install path the inventory recorded
+        # exists on disk. A record pointing at a deleted cache dir is flagged;
+        # a plugin with no recorded path (settings-only, or an empty record)
+        # has no cache to point at. Per-plugin detail (description + bundled
+        # skills/commands/MCP) is read from that same path, when a reader is wired.
+        items = [
+            self._view_with_detail(p, p.install_path, self._cache_at(p.install_path))
+            for p in plugins
+        ]
         return PluginsOut(items=items, marketplaces=list(marketplaces), parse_errors=[])
+
+    def _cache_at(self, install_path: str | None) -> bool:
+        """Whether the recorded install path is a cache dir on disk.
+
+        Only an absolute path can be: ``Path("")`` is the daemon's own working
+        directory, and a relative path resolves against it — both exist, and
+        neither is the plugin's cache.
+        """
+        if not install_path:
+            return False
+        path = pathlib.Path(install_path)
+        return path.is_absolute() and self._dir_exists(path)
 
     def _view_with_detail(
         self, p: PluginInfo, install_path: str | None, cache_present: bool

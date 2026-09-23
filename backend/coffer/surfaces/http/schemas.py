@@ -298,6 +298,28 @@ class CredentialExistsOut(BaseModel):
     present: bool = Field(description="Whether a secret is stored under the ref.")
 
 
+class CredentialCiterOut(BaseModel):
+    """A resource citing a credential ref — identity and label, never config."""
+
+    uid: str
+    kind: str
+    name: str
+
+
+class CredentialRefOut(BaseModel):
+    """One cited credential ref and whether the store holds it."""
+
+    ref: str
+    present: bool = Field(description="Whether a secret is stored under the ref.")
+    cited_by: list[CredentialCiterOut]
+
+
+class CredentialListOut(BaseModel):
+    """Every ref a registered resource cites, of any kind, sorted by ref."""
+
+    refs: list[CredentialRefOut]
+
+
 class CredentialGetOut(BaseModel):
     """Secret-value response for an explicit read from the credential store."""
 

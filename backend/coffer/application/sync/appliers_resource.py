@@ -19,7 +19,9 @@ from collections.abc import Mapping, Sequence
 
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.appliers_read import read_yaml
+from coffer.application.sync.convergence_ops import is_inapplicable
 from coffer.application.sync.ports import ImportGate
+from coffer.domain.error_base import CofferError
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource
 from coffer.domain.sync.errors import SyncSerializationError
@@ -101,6 +103,31 @@ class ResourceApplier:
         self._gates = {gate.kind: gate for gate in gates}
         self._home = home
         self._actor = actor
+
+    async def still_inapplicable(self, path: str) -> bool:
+        """Whether a path held as not applicable here still cannot apply.
+
+        Re-runs only the kind's import gate — the cheap, machine-local
+        precondition (for an ``agent``: its config dir exists). Any other
+        answer, a document gone from the tree included, lets the round retry
+        the path, which is where a real failure is reported.
+        """
+        try:
+            doc = await asyncio.to_thread(read_yaml, self._worktree / path)
+            _uid, kind, _name = _identity_from(doc, path)
+            gate = self._gates.get(kind)
+            if gate is None:
+                return False
+            raw = doc.get("config")
+            config: dict[str, object] = dict(raw) if isinstance(raw, Mapping) else {}
+            if self._home:
+                config = expand_home(config, self._home)
+            await gate.validate(config)
+        except CofferError as e:
+            return is_inapplicable(e)
+        except Exception:
+            return False
+        return False
 
     async def upsert(self, path: str) -> None:
         doc = await asyncio.to_thread(read_yaml, self._worktree / path)

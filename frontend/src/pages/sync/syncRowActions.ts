@@ -23,7 +23,7 @@ const SNAPSHOTTED = new Set(["ok", "no_change", "push_failed"]);
  * a round left no snapshot, so the round underneath it is still the one a
  * rollback undoes.
  */
-const PRE_SNAPSHOT = new Set(["conflict", "awaiting_confirmation", "disabled"]);
+const PRE_SNAPSHOT = new Set(["conflict", "awaiting_confirmation", "disabled", "awaiting_join"]);
 
 /** Whether a round changed anything ON THIS MACHINE — which is the only
  *  thing an undo can reverse. A round that merely published pushed local

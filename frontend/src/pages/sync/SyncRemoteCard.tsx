@@ -1,7 +1,8 @@
 // frontend/src/pages/sync/SyncRemoteCard.tsx — Sync → Status → Remote
 // (spec vault-sync). The one git repository this vault converges with: name
 // the repository and branch, say how often, say whether credential
-// ciphertext rides along, save it, and run a round now.
+// ciphertext rides along, save it, and run a round now — or, on a machine that
+// has not joined yet, see what joining would do and join (SyncConvergeAction).
 //
 // An explicit form rather than field-by-field auto-save: a half-typed URL is
 // not a remote the daemon should be handed, so the draft is checked
@@ -23,7 +24,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/components/ui/toast";
 import type { SyncStatus } from "@/lib/api/sync";
-import { useRunConverge, useSaveSyncRemote } from "@/lib/hooks/useSync";
+import { useSaveSyncRemote } from "@/lib/hooks/useSync";
+import { SyncConvergeAction } from "./SyncConvergeAction";
+import { SyncJoinReport } from "./SyncJoinReport";
 import { SyncRemoteFields } from "./SyncRemoteFields";
 import {
   DEFAULT_BRANCH,
@@ -37,7 +40,6 @@ export function SyncRemoteCard({ status }: { status: SyncStatus | null }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const save = useSaveSyncRemote();
-  const run = useRunConverge();
 
   const saved = status?.remote ?? null;
   // Primitive-by-primitive, so re-syncing the form depends on the values
@@ -132,14 +134,10 @@ export function SyncRemoteCard({ status }: { status: SyncStatus | null }) {
             <Button type="submit" disabled={!canSave}>
               {busy ? t("common.saving") : t("sync.remote.save")}
             </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => run.mutate()}
-              disabled={busy || run.isPending || !saved}
-            >
-              {run.isPending ? t("sync.remote.converging") : t("sync.remote.convergeNow")}
-            </Button>
+            <SyncConvergeAction
+              disabled={busy || !saved}
+              joined={!saved || status?.joined !== false}
+            />
             {worktreePath ? (
               <span className="text-xs text-muted-foreground">
                 {t("sync.remote.worktree", { path: worktreePath })}
@@ -150,6 +148,20 @@ export function SyncRemoteCard({ status }: { status: SyncStatus | null }) {
 
         {!saved ? (
           <p className="text-xs text-muted-foreground">{t("sync.remote.notConfigured")}</p>
+        ) : null}
+        {saved && status?.joined === false ? (
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">{t("sync.join.notJoined")}</p>
+            {/* What the last round detected, before anyone joins. */}
+            {status.last_run?.join_report ? (
+              <>
+                <p className="text-sm">
+                  {t(`sync.join.detected.${status.last_run.join_report.case ?? "new"}`)}
+                </p>
+                <SyncJoinReport report={status.last_run.join_report} />
+              </>
+            ) : null}
+          </div>
         ) : null}
       </CardContent>
     </Card>

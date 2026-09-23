@@ -44,20 +44,21 @@ from datetime import UTC, datetime
 from coffer.application.sync.conflicts import ConflictArbiter
 from coffer.application.sync.convergence_backwards import BackwardsMixin
 from coffer.application.sync.convergence_ops import (
-    applier_for,
+    apply_diff,
     breached,
     commit_message,
     diff_between,
     failed_run,
     hold_round,
-    is_inapplicable,
     outstanding_holds,
+    readmit_applicable,
     reconcile,
     refuse_newer_layout,
     release_hold,
     remote_tip,
     snapshot,
 )
+from coffer.application.sync.convergence_preview import PreviewMixin
 from coffer.application.sync.joining import JoinResolver
 from coffer.application.sync.ports import (
     ConvergenceStatePort,
@@ -73,13 +74,13 @@ from coffer.domain.sync.convergence import (
     JoinKind,
     PendingConfirmation,
 )
-from coffer.domain.sync.diff import ChangeStatus, DeletionGuard, DiffSummary
+from coffer.domain.sync.diff import DeletionGuard, DiffSummary
 from coffer.domain.sync.models import ExportSummary
 
 _logger = logging.getLogger(__name__)
 
 
-class ConvergeRound(BackwardsMixin):
+class ConvergeRound(BackwardsMixin, PreviewMixin):
     """Runs one round against one already-prepared working tree.
 
     Deliberately not the service: the service owns the remote's configuration,
@@ -117,8 +118,9 @@ class ConvergeRound(BackwardsMixin):
         token: str | None,
         join_choice: str | None = None,
         confirmed: PendingConfirmation | None = None,
+        adopt: bool = False,
     ) -> ConvergeRun:
-        """One round.
+        """One round. It joins the remote only when ``adopt`` says to.
 
         ``confirmed`` is a hold the user accepted. The round is re-derived
         rather than resumed — serialization is deterministic, so an unchanged
@@ -135,6 +137,18 @@ class ConvergeRound(BackwardsMixin):
         than raising a fresh one (``hold_round``).
         """
         started = datetime.now(tz=UTC)
+        if not adopt and await self.is_joining():
+            # Detection runs on every round without a pointer; applying is
+            # explicit (spec vault-sync). So the join is resolved and reported,
+            # read-only, and nothing is applied or pushed until ``adopt``.
+            report = await self.preview_join(token=token)
+            return ConvergeRun(
+                status=ConvergeStatus.AWAITING_JOIN,
+                started_at=started,
+                finished_at=datetime.now(tz=UTC),
+                join=report.kind,
+                join_report=report,
+            )
         pointer, join = await self._base(join_choice, token=token)
 
         # The fetch happens HERE, before anything compares against the remote.
@@ -186,6 +200,7 @@ class ConvergeRound(BackwardsMixin):
         # it too: a held path the tree has since dropped is a deletion this
         # round is about to perform, and a guard that only looked at ``D``
         # would let any number of those through unasked.
+        await readmit_applicable(self._appliers, self._state)
         retried = await outstanding_holds(self._mirror, self._state, applied)
         everything = DiffSummary.of(
             [*applied.changes, *retried.changes],
@@ -207,8 +222,9 @@ class ConvergeRound(BackwardsMixin):
         await snapshot(self._mirror, local)
 
         # --- 5 apply -------------------------------------------------------
-        failures = await self.apply(applied)
-        failures.extend(await self.apply(retried))
+        not_applicable: list[str] = []
+        failures = await self.apply(applied, not_applicable=not_applicable)
+        failures.extend(await self.apply(retried, not_applicable=not_applicable))
         failures.extend(await reconcile(self._post_import, applied))
 
         # --- 6 publish ------------------------------------------------------
@@ -232,9 +248,13 @@ class ConvergeRound(BackwardsMixin):
             commit=merged,
             agent_resolved=tuple(resolved),
             failures=tuple(failures),
+            not_applicable=tuple(not_applicable),
         )
 
     async def _reachable(self, commit: str) -> bool:
+        if commit == self._mirror.EMPTY_TREE:
+            # A new machine's base: not a commit, but a pointer all the same.
+            return True
         try:
             return bool(await self._mirror.resolve_revision(commit))
         except CofferError:
@@ -345,30 +365,18 @@ class ConvergeRound(BackwardsMixin):
         merged = await self._mirror.commit_merge("coffer converge (merge)")
         return merged, resolved, []
 
-    async def apply(self, diff: DiffSummary) -> list[tuple[str, str]]:
+    async def apply(
+        self, diff: DiffSummary, *, not_applicable: list[str] | None = None
+    ) -> list[tuple[str, str]]:
         """Step 5. Each path, independently; a failure is reported, not fatal.
 
         A path that fails is *held*: the exporter must not delete it next
         round, because "this vault could not absorb it" is not "the user
         deleted it" — which is the same confusion the whole design exists to
-        prevent, arriving through a different door.
+        prevent, arriving through a different door. A path that can never apply
+        here is held too, but it is not a failure: it goes to ``not_applicable``.
         """
-        failures: list[tuple[str, str]] = []
-        for change in diff.vault_changes:
-            applier = applier_for(self._appliers, change.path)
-            if applier is None:
-                continue
-            try:
-                if change.status is ChangeStatus.DELETED:
-                    await applier.remove(change.path)
-                else:
-                    await applier.upsert(change.path)
-            except CofferError as e:
-                failures.append((change.path, str(e)))
-                await self._state.hold(change.path, applicable=not is_inapplicable(e))
-            else:
-                await self._state.release(change.path)
-        return failures
+        return await apply_diff(self._appliers, self._state, diff, not_applicable)
 
     async def _hold(
         self,

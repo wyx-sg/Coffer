@@ -273,8 +273,10 @@ asks.
 
 The detection is a property of any round that starts with no pointer, not of the
 `adopt` command, so configuring a remote on a machine that has forgotten its
-pointer cannot route around it. Either way joining is an explicit, reported act:
-the surfaces say which case it is and what it would move before anything is
+pointer cannot route around it. Joining itself is an explicit, reported act:
+only `adopt` joins — the timer's round and `coffer sync now` on a machine with
+no pointer apply and publish nothing and report `awaiting_join` — and the
+surfaces say which case it is and what it would move before anything is
 applied.
 
 ### Local export and import are deleted

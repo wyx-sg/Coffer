@@ -39,6 +39,7 @@ const STATUS_TONE: Record<string, Tone> = {
   push_failed: "warn",
   failed: "error",
   disabled: "muted",
+  awaiting_join: "warn",
 };
 
 /** A round's status as a word, falling back to the wire value verbatim. */

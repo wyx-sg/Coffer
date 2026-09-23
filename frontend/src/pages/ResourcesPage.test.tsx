@@ -89,6 +89,16 @@ describe("ResourcesPage", () => {
     expect(screen.getByText(/kaboom/i)).toBeInTheDocument();
   });
 
+  test("a server error never reads as an unexpected error", () => {
+    stubQuery({ error: new ApiError("INTERNAL_ERROR", "internal error") });
+    const { container } = render(wrap(<ResourcesPage />));
+    expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
+    // A readable message that says where to look, not a shrug.
+    expect(screen.getByText(/activity/i)).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/unexpected error/i);
+    expect(container.textContent).not.toContain("INTERNAL_ERROR");
+  });
+
   test("shows the welcome panel (and no table) when there are no servers", () => {
     stubQuery({ data: [] });
     render(wrap(<ResourcesPage />));
