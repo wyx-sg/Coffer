@@ -339,8 +339,8 @@ async def list_machines() -> MachineListOut:
 async def rename_self(body: MachineRenameIn) -> MachineOut:
     """Rename this machine.
 
-    Free: ``scope`` references the derived id, never the label, so nothing
-    else has to change.
+    Free: nothing keys on the label — a channel's binding and the curation
+    owner name the derived id — so nothing else has to change.
     """
     view = await get_sync_service().rename_self(get_machine_registry(), body.name)
     return _machine_out(view)

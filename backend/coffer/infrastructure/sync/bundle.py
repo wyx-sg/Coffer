@@ -145,10 +145,10 @@ class Bundle:
 
     def mirror_trees_out(self) -> None:
         # Hidden entries are not filtered: with the derived indexes gone, every
-        # regular file under a mirrored root is source of truth — the two
-        # note/doc lanes plus the ``.raw/`` originals a re-conversion needs and
-        # the ``.history/`` revisions that make an unattended rewrite
-        # recoverable on the other machine too. What IS left out is anything
+        # regular file under a mirrored root is source of truth — a
+        # collection's documents and the ``.inbox/`` material a curation pass
+        # has not merged yet, which the other machine's pass must be able to
+        # finish. What IS left out is anything
         # that is not a regular file of the vault's own: a symlink (its target
         # is not vault content, and following it would publish whatever it
         # points at) and anything under a ``.git`` directory (a nested
