@@ -328,7 +328,7 @@ async def test_concurrent_get_or_spawn_yields_one_subprocess(tmp_path, monkeypat
 async def test_concurrent_get_or_spawn_on_dead_upstream_runs_one_retry_ladder(
     tmp_path, monkeypatch
 ):
-    """CODE-H1: when several callers race to reach a dead upstream, the retry
+    """When several callers race to reach a dead upstream, the retry
     ladder must run exactly once in total, not once per caller.
 
     Regression: the cooldown gate was only checked before acquiring spawn_lock.

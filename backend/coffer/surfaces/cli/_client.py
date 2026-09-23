@@ -142,7 +142,8 @@ def client_or_exit() -> tuple[httpx.Client, DaemonInfo]:
             base_url=base,
             headers={
                 "X-Coffer-Token": info.token,
-                # SPEC-005: tag every CLI-initiated mutation in audit_log.
+                # Tag every CLI-initiated mutation in audit_log (spec
+                # resource-framework "Audit every lifecycle change").
                 "X-Coffer-Actor": "cli",
             },
             timeout=15,

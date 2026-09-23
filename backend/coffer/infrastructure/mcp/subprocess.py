@@ -28,7 +28,7 @@ from coffer.infrastructure.mcp.dispatch import dispatch_method
 
 NotificationCallback = Callable[[Any], Awaitable[None]]
 
-# CODE-028: serialise the "snapshot children → spawn → diff" window across the
+# Serialise the "snapshot children → spawn → diff" window across the
 # whole process. Each session owns its own supervisor whose spawn_lock is
 # per-(supervisor, server), so without a process-wide lock two concurrent
 # spawns from different sessions can interleave their before/after snapshots
@@ -99,7 +99,7 @@ class StdioUpstreamConnection:
 
         Returns the server's capabilities as a plain dict.
         """
-        # CODE-027: build the child env from the SDK's minimal safe allowlist
+        # Build the child env from the SDK's minimal safe allowlist
         # (PATH/HOME/SHELL/… — what a server legitimately needs to run) plus
         # ONLY this server's static env and materialised credentials. We must
         # NOT inherit the daemon's full ``os.environ``: an untrusted upstream
@@ -119,14 +119,14 @@ class StdioUpstreamConnection:
 
         self._exit_stack = AsyncExitStack()
         try:
-            # --- PID snapshot (T-051, hardened in CODE-028) ---
+            # --- PID snapshot (T-051, hardened by the process-wide lock) ---
             # Snapshot this daemon's children BEFORE letting the SDK spawn the
             # upstream subprocess, then diff after stdio_client opens to learn
             # the new child PID(s). This diff-snapshot approach is used because
             # mcp.client.stdio.stdio_client manages the subprocess internally
             # and doesn't expose the PID.
             #
-            # CODE-028: serialise the snapshot+spawn+diff under a process-wide
+            # Serialise the snapshot+spawn+diff under a process-wide
             # lock so concurrent spawns from OTHER sessions' supervisors can't
             # interleave the snapshot window and steal/miss each other's PID.
             # We hold the lock only across the spawn itself (not initialize).
@@ -190,7 +190,7 @@ class StdioUpstreamConnection:
             ) from exc
         except Exception as exc:
             await self._cleanup()
-            # CODE-039: don't interpolate the raw exception into the message —
+            # Don't interpolate the raw exception into the message —
             # an upstream/transport error can embed credential-bearing argv or
             # env detail. Surface only the exception type; the original is
             # chained via ``from exc`` for a debugger but never stringified

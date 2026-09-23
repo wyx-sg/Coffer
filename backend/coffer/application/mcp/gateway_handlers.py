@@ -304,10 +304,10 @@ def _coerce_result(sdk_result: Any, method: str) -> dict[str, Any]:
 
     Raises UpstreamUnavailable when the result is neither a Pydantic model
     nor a dict — previously the tools/call path returned ``{"content": []}``
-    which silently masked SDK contract drift (CODE-009). ``method`` only
+    which silently masked SDK contract drift. ``method`` only
     flavours the error message.
 
-    CODE-040: single implementation behind the three thin wrappers below,
+    A single implementation behind the three thin wrappers below,
     which used to be byte-identical except for that message.
     """
     if hasattr(sdk_result, "model_dump"):

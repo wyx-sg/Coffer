@@ -102,7 +102,7 @@ export function DaemonTab({ enabled }: Props) {
 
   const { data, isLoading, error } = useDaemonLog({ since, level, limit: LIMIT, enabled });
 
-  // The route applies `since` and `errors_only` server-side and returns the
+  // The route applies `since` and the `level` floor server-side and returns the
   // tail newest-first; the custom-range upper bound and the free-text search
   // run client-side. No re-sort — DataTable preserves the order it is handed,
   // and an undated line is meant to stay beside the record it borrowed from.

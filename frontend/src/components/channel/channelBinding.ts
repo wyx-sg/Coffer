@@ -1,8 +1,9 @@
 // frontend/src/components/channel/channelBinding.ts
-// What is left of a channel's machine binding (spec channels, "Where a channel
-// runs") once the part two features share moved to `@/lib/machineBinding`: the
-// one rule that is the CHANNEL's and nobody else's — the daemon's own
-// `runs_here` outranks anything this code could work out for itself.
+// What is left of a channel's machine binding (spec channels "Bind each channel
+// to the one machine that runs it") once the part two features share moved to
+// `@/lib/machineBinding`: the one rule that is the CHANNEL's and nobody
+// else's — the daemon's own `runs_here` outranks anything this code could work
+// out for itself.
 //
 // The shared module owns the four states, the pick-list, and the rule that an
 // empty registry is not a fault. It does not own what those states mean here:

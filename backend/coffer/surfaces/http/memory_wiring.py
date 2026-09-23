@@ -213,10 +213,11 @@ def start_aggregate_worker(
     sources nearly free. The Sync button and ``coffer memory sync`` stay: this makes the
     layer current without being asked, it does not replace asking.
 
-    Both halves of "on a timer" are the operator's (spec provider-switching
-    E3a), and both are read PER PASS rather than captured here — the setting
-    converges from other machines through vault sync, so a value read once at
-    boot would be stale without anything on this machine having changed.
+    Both halves of "on a timer" are the operator's (spec internal-engine "Apply a
+    changed switch or interval without a restart"), and both are read PER PASS
+    rather than captured here — the setting converges from other machines
+    through vault sync, so a value read once at boot would be stale without
+    anything on this machine having changed.
     Returns the task; the lifespan cancels it at shutdown.
     """
     worker = AggregateWorker(

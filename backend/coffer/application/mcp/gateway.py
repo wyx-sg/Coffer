@@ -119,7 +119,7 @@ class MCPGatewaySession:
         # nothing — an unidentified session, which then sees only unscoped
         # servers.
         self._session_agent_uid: str | None = None
-        # CODE-035: called once when the session is disposed so the composition
+        # Called once when the session is disposed so the composition
         # root can drop this session's entry from its supervisor registry
         # (otherwise disposed-but-registered supervisors accumulate for the
         # daemon's lifetime and the on_delete hook walks dead ones).
@@ -146,7 +146,7 @@ class MCPGatewaySession:
         # Track which servers we've subscribed to notifications on so we
         # only attach the handler once per (session, server) pair.
         self._notification_subscriptions: set[str] = set()
-        # CODE-L4: the event loop holds tasks weakly — an un-referenced
+        # The event loop holds tasks weakly — an un-referenced
         # ensure_future() task can be garbage-collected mid-flight, silently
         # dropping an upstream notification. Hold strong refs until done.
         self._notification_tasks: set[asyncio.Task[None]] = set()
@@ -369,7 +369,7 @@ class MCPGatewaySession:
         await self._supervisor.dispose()
         self._notification_subscriptions.clear()
         self._initialized = False
-        # CODE-035: let the composition root drop its registry entry last, after
+        # Let the composition root drop its registry entry last, after
         # the supervisor is fully disposed.
         if self._on_dispose is not None:
             with contextlib.suppress(Exception):

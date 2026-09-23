@@ -1,5 +1,6 @@
 """Coffer's own operating settings: the engine it thinks with, and the work it
-does unattended (spec provider-switching amendment 2026-06-22b).
+does unattended (spec internal-engine "Resolve the engine's connection and
+model together").
 
 Coffer's own internal LLM engine — the knowledge curation pass, and whatever
 else Coffer runs on its own behalf — uses the connection flagged

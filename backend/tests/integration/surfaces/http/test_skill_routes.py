@@ -183,7 +183,7 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
 
 
 def test_deleting_agent_cascades_into_skill_binding_cleanup(tmp_path, monkeypatch):
-    """CODE-WIRING: exercise the real composition-root cross-kind hook.
+    """Exercise the real composition-root cross-kind hook.
 
     ``agent_skill_wiring._agent_on_delete`` (wired only in the assembled app,
     previously untested — the unit skill tests build their own wiring) must,

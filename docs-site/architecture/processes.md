@@ -1,6 +1,6 @@
 # Daemon & Processes
 
-Coffer is built around a clear separation of concerns between processes: one long-lived daemon that owns all state, short-lived entry points that talk to it, per-session subprocess trees for upstream MCP servers, and — while a SeaTalk channel is enabled — a daemon-spawned callback listener for inbound webhooks.
+Coffer is built around a clear separation of concerns between processes: one long-lived daemon that owns all state, short-lived entry points that talk to it, per-session subprocess trees for upstream MCP servers, and — while a SeaTalk channel on webhook delivery is enabled — a daemon-spawned callback listener for inbound webhooks.
 
 ## The process roles
 
@@ -82,9 +82,9 @@ The desktop shell is a native macOS process the *user* starts (Dock, Spotlight, 
 
 The callback listener is a daemon-spawned child process that exists only to accept inbound SeaTalk webhooks. Unlike the shim and CLI — which the user (or an MCP client) starts — the listener is spawned and supervised by the daemon itself. It:
 
-- Runs **only while a SeaTalk channel is enabled**. The channel reconciler starts it when the first SeaTalk channel comes up and stops it when the last one goes away.
+- Runs **only while a SeaTalk channel on webhook delivery is enabled**. The channel reconciler starts it when the first webhook SeaTalk channel comes up and stops it when the last one goes away. A channel on websocket delivery needs no listener: the daemon holds that channel's outbound connection on a worker thread of its own (ADR seatalk-websocket-inbound).
 - Serves exactly one route, `POST /seatalk/{channel}`, on a loopback port (default `8787`, overridable via `COFFER_CALLBACK_PORT`). It holds no other state and can reach nothing but the daemon.
-- Verifies each callback's SeaTalk signature, answers the platform's verification handshake, and forwards valid events to the daemon over loopback carrying the daemon token. The user points a tunnel (cloudflared/ngrok) at the listener's port; the daemon itself stays loopback-only.
+- Verifies each callback's SeaTalk signature, answers the platform's verification handshake, and forwards valid events to the daemon over loopback carrying the daemon token. A tunnel points at the listener's port — the managed `cloudflared` the daemon spawns and supervises for a channel that records a connector token, or one the owner runs (cloudflared/ngrok); the daemon itself stays loopback-only.
 - Gets its signing secrets, the daemon URL, and the daemon token injected into its environment at spawn (the upstream-subprocess pattern — secrets land only in the child's env, never on disk). Its spawn is recorded in `~/.coffer/upstream-pids/` so a daemon crash leaves nothing behind: the startup orphan sweep reaps it. A daemon-token rotation respawns the listener.
 
 ## Supervised background workers
@@ -96,12 +96,12 @@ Beyond the subprocesses above, the daemon runs a set of in-process background wo
 | Retention          | Prunes log-style tables (audit log, invocation log, sync rounds) according to the configured retention policies. |
 | Converge (sync)    | A converge round against the configured git remote on a timer, re-reading its interval from the remote. A no-op until the user configures one. Wired **first** among the vault rewriters: the curation worker takes its lock and state. |
 | Curation           | The knowledge curation pass — a sweep every minute that merges each collection's inbox into its documents, then carries out-of-band edits outward. |
-| Memory organise    | The organise pass over a memory partition.                                                                      |
+| Memory distil      | The distil pass over each memory partition — on by default, because the tree it rewrites is derived and rebuildable. |
 | Memory aggregate   | Re-derives Coffer's memory tree from the agents' own native memory: a catch-up pass at startup, then hourly. It only reads the agents' memory and only writes the derived tree, so it waits on none of the vault rewriters above. |
 | Transcript warm    | Warms the transcript-summary cache, so the first visit to an agent's Conversations tab is never the one that pays the cold read. |
-| Channel reconciler | On every tick it diffs enabled channel resources against running adapters and starts/stops/restarts to match — and starts or stops the callback listener with the SeaTalk channel set. REST/CLI/UI never start or stop adapters directly; the reconciler owns all runtime state transitions, which keeps status truthful. |
+| Channel reconciler | On every tick it diffs enabled channel resources against running adapters and starts/stops/restarts to match — and starts or stops the callback listener with the set of webhook SeaTalk channels. REST/CLI/UI never start or stop adapters directly; the reconciler owns all runtime state transitions, which keeps status truthful. |
 
-Three of these — curation, organise and aggregate — are the **unattended passes**: each has its own on/off switch and interval under **Settings → Engine**, and what they are doing right now is readable at `GET /api/v1/upkeep/runs`. An unattended rewriter should be something the user turned on, never something they discover running.
+Three of these — curation, distil and aggregate — are the **unattended passes**: each has its own on/off switch and interval under **Settings → Engine**, and what they are doing right now is readable at `GET /api/v1/upkeep/runs`. An unattended rewriter should be something the user turned on, never something they discover running.
 
 Vault sync is emphatically *not* a request-scoped operation. `coffer sync now` forces a round, but the converge worker runs rounds on its own, and the vault converges **bidirectionally** with the remote under git's own three-way merge. One-shot export and import no longer exist.
 

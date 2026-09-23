@@ -1,4 +1,4 @@
-"""Domain rules for the sync remote (spec vault-sync ``## Concepts``)."""
+"""Domain rules for the sync remote (spec vault-sync "Allow at most one user-owned sync remote")."""
 
 from __future__ import annotations
 

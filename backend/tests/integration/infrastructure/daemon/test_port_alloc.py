@@ -31,7 +31,7 @@ def test_picks_default_when_free():
 
 
 def test_bind_free_socket_returns_loopback_bound_socket():
-    """CODE-041 / spec daemon "Bind every endpoint to loopback only": bind_free_socket
+    """spec daemon "Bind every endpoint to loopback only": bind_free_socket
     hands back an OPEN socket bound to
     a loopback port in range — a daemon started under the range override keeps
     it and passes its fd to uvicorn, so the port is never released between
@@ -123,7 +123,8 @@ def test_fixed_bind_sets_so_reuseaddr_and_the_scan_does_not():
     SO_REUSEADDR also permits two sockets to bind the same port while neither
     is LISTENing, which is the whole of a daemon's boot window — setting it
     there let a second acquire() bind the port the first was still holding,
-    dissolving CODE-041. macOS/BSD refuse that bind, so only CI caught it.
+    dissolving the held-socket guarantee. macOS/BSD refuse that bind, so only
+    CI caught it.
     """
     scanned = bind_free_socket(start=58070, end=58079)
     try:
@@ -139,7 +140,7 @@ def test_fixed_bind_sets_so_reuseaddr_and_the_scan_does_not():
 
 
 def test_a_held_scan_port_cannot_be_bound_again():
-    """CODE-041, pinned at the socket level: while acquire() holds a port taken
+    """Pinned at the socket level: while acquire() holds a port taken
     under the range override, nothing else may take it — not even another
     socket of ours setting SO_REUSEADDR, which is exactly what Linux would
     otherwise allow."""

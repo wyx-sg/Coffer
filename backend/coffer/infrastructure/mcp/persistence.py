@@ -200,11 +200,12 @@ class MCPCapabilityPreferenceRepo:
     ) -> list[str]:
         """Insert new keys + touch last_seen for existing keys in one session.
 
-        Returns the list of keys that were newly inserted (so the caller can
-        emit one audit row per genuinely-new capability). Race-safe via
+        Returns the list of keys that were newly inserted; the caller treats
+        it as informational (a first sighting is recorded as the row's
+        ``first_seen_at``, not as an audit row). Race-safe via
         ``INSERT … ON CONFLICT DO NOTHING``: two concurrent reconcile() calls
         from independent sessions cannot both insert the same row, so the
-        UniqueConstraint never fires (CODE-004).
+        UniqueConstraint never fires.
         """
         if not current_keys:
             return []

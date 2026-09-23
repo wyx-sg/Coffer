@@ -1,4 +1,5 @@
-"""Integration tests for ``coffer sync ...`` (spec vault-sync ``## Surfaces``).
+"""Integration tests for ``coffer sync ...`` (spec vault-sync "Cover the sync lifecycle on
+the command line").
 
 The real CLI is driven against a minimal app carrying only the sync router, so
 these stay a test of the command surface rather than of daemon composition. The

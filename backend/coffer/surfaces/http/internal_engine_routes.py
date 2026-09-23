@@ -4,12 +4,12 @@
 Two things live on one singleton because they are one question with two halves:
 WHICH MODEL Coffer thinks with, and WHAT IT DOES unattended. The model comes
 from here while the endpoint and key come from the ``internal_default``
-connection (spec provider-switching amendment 2026-06-22b); the unattended work
-is the three passes Coffer runs on a timer — aggregation (spec memory "Aggregate
-on an interval and on demand"), distil (spec memory "Distil incrementally in two
-stages") and curate (spec knowledge "Curate through a fenced four-tool pass") —
-each with a
-switch and an interval the operator can see and change.
+connection (spec internal-engine "Resolve the engine's connection and model
+together"); the unattended work is the three passes Coffer runs on a timer —
+aggregation (spec memory "Aggregate on an interval and on demand"), distil
+(spec memory "Distil incrementally in two stages") and curate (spec knowledge
+"Curate through a fenced four-tool pass") — each with a switch and an interval
+the operator can see and change.
 
 That last part is why the surface exists at all: two of the three had no switch
 anywhere, the third's could only be changed by hand-editing a synced settings
@@ -76,7 +76,7 @@ class InternalEngineConfigOut(BaseModel):
 
     model: str | None = None
     updated_at: datetime | None = None
-    #: Keyed by pass name (``aggregate`` / ``distil`` / ``tidy``).
+    #: Keyed by pass name (``aggregate`` / ``distil`` / ``curate``).
     upkeep: dict[str, UpkeepSettingOut] = Field(default_factory=dict)
     #: The bound on one call to Coffer's own model, ``null`` while the operator
     #: has chosen none — and ``default_model_timeout_s`` is what runs then, sent

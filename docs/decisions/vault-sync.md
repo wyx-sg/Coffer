@@ -131,8 +131,8 @@ to absorb is pending, not deleted.
 The same guarantee is what lets shared state be deleted at all. Under one-way
 import a state area could only ever be upserted; under convergence a deleted
 state document is a decision some machine took back, and every area's provider
-honours it in its own terms (spec vault-sync "Let each state area define its document's deletion"): an override is cleared,
-a server's capabilities are re-enabled, the engine settings are reset to their
+honours it in its own terms (spec vault-sync "Let each state area define its document's deletion"): the channel peer pairing it
+named is removed, a server's capabilities are re-enabled, the engine settings are reset to their
 defaults, and the plugin inventory — which has no local store beyond the
 document and no uninstall path — drops nothing. One rule follows for the
 exporter: an area publishes a document only while there is a decision to carry,

@@ -5,9 +5,9 @@
 **Deciders**: Yuxing Wu
 **Amends**: [Tool Retrieval](tool-retrieval-for-overload.md) — the "nothing is
 hidden server-side" clause is replaced by budget-driven tiering
-**Related**: [Built-in Agent Is Internal](builtin-agent-is-internal-capability.md)
-(semantic ranking), [Per-Agent Resource Scope](per-agent-resource-scope.md)
-(machine × agent scope), [Capability State Model](capability-state-model.md)
+**Related**: [Built-in Agent Is Internal](builtin-agent-is-internal-capability.md),
+[Per-Agent Resource Scope](per-agent-resource-scope.md)
+(agent scope), [Capability State Model](capability-state-model.md)
 (capability preferences), the reverted per-agent MCP server scoping decision
 (ADR since removed), [spec `mcp-gateway`](../../openspec/specs/mcp-gateway/spec.md),
 [`docs/research/mcp-ecosystem.md`](../research/mcp-ecosystem.md)
@@ -53,8 +53,9 @@ relying on the client to fix it.
 Prior art matters here. A now-removed ADR built per-agent MCP server scoping and
 was reverted as over-complex; the field's "strategy 1" (ContextForge virtual servers, MetaMCP namespaces, MCPJungle tool
 groups, Docker profiles) all require the user to curate a subset by hand.
-[Per-Agent Resource Scope](per-agent-resource-scope.md) has since restored a
-machine × agent `scope` axis, but it gates whole servers and, like every
+[Per-Agent Resource Scope](per-agent-resource-scope.md) has since restored an
+agent `scope` axis (machine-local; its machine axis was removed on 2026-09-14),
+but it gates whole servers and, like every
 manual scheme, does nothing until configured. The default install is where the
 overload actually bites.
 

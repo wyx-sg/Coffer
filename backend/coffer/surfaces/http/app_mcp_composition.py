@@ -7,12 +7,11 @@ Extracted from ``app.py`` to keep that composition root under the
   per-session gateway factory and installs them on the FastAPI app +
   dependency module, returning them as :class:`McpWiring`. Supervisors get
   the concrete upstream factory
-  (:func:`coffer.infrastructure.mcp.factory.build_upstream`) injected here
-  (CODE-005).
+  (:func:`coffer.infrastructure.mcp.factory.build_upstream`) injected here.
 * :func:`build_prunable_registry` — the retention registry for the
   audit log + MCP invocation tables.
 * :func:`reaper_kwargs_from_env` — parses ``COFFER_MCP_SESSION_*``
-  environment overrides for the SSE-session reaper (CODE-022).
+  environment overrides for the SSE-session reaper.
 """
 
 from __future__ import annotations
@@ -142,7 +141,7 @@ def wire_mcp_kind(
         session_supervisors[session_id] = supervisor
 
         def _drop_supervisor() -> None:
-            # CODE-035: remove this session's supervisor from the registry on
+            # Remove this session's supervisor from the registry on
             # dispose so disposed supervisors don't accumulate and the
             # on_delete hook never walks dead ones. A plain function (not a
             # lambda) so the return type is None, matching on_dispose's type.
@@ -267,7 +266,7 @@ _REAPER_ENV_KNOBS: dict[str, str] = {
 def reaper_kwargs_from_env() -> dict[str, float]:
     """Read ``COFFER_MCP_SESSION_*`` env overrides for the SSE reaper.
 
-    CODE-022: knobs come from env so deployments can tune them without
+    Knobs come from env so deployments can tune them without
     code changes; unset env falls back to ``start_session_reaper``'s
     safe defaults. A value that does not parse as a number is logged with
     the raw text and falls back to the same default — an operator who

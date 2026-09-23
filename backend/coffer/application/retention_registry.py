@@ -3,7 +3,7 @@
 Pure value types and an in-memory registry of log-style tables that can be
 pruned by the retention worker. No infrastructure or framework dependencies
 — application code (specifically ``RetentionService``) imports from here so
-the layered-architecture contract holds (CODE-005).
+the layered-architecture contract holds.
 
 The infrastructure layer registers concrete tables at composition root by
 constructing :class:`PrunableTable` instances and calling

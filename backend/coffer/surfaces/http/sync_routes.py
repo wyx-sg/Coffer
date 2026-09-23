@@ -6,9 +6,9 @@ rather than riding /resources.
 There is no export or import route. Writing a bundle to a directory and reading
 one back was a wholesale overwrite with no base — the operation that caused the
 2026-07-10 mutual deletion — and it has no place beside the diff-based round
-(spec ``## Out of scope``). What replaces it: a new machine calls ``/adopt``, an
-offline medium is a ``file://`` remote, and a hand-carried copy is a ``git
-clone`` of the working tree.
+(spec vault-sync ``## Purpose``, "Out of scope"). What replaces it: a new
+machine calls ``/adopt``, an offline medium is a ``file://`` remote, and a
+hand-carried copy is a ``git clone`` of the working tree.
 
 The master key never travels inside the repository — moving it is a separate,
 deliberate act. ``/key/export`` hands its material back over the token-guarded

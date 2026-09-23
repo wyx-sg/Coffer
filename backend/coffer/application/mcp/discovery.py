@@ -147,7 +147,7 @@ class CapabilityDiscovery:
         self, server_name: str, *, include_disabled: bool = False
     ) -> list[DiscoveredTool]:
         cache = self._cache_for(server_name)
-        # CODE-036: fetch the resource row at most once per call and thread it
+        # Fetch the resource row at most once per call and thread it
         # through reconcile + pref-map, instead of each helper independently
         # re-querying (and re-validating) the same row on the cold path.
         resource = None
@@ -332,7 +332,7 @@ class CapabilityDiscovery:
         *,
         resource: Any = None,
     ) -> dict[str, bool]:
-        # CODE-036: reuse a resource row already fetched by the caller on the
+        # Reuse a resource row already fetched by the caller on the
         # cold path; only re-query on a cache hit (where none was fetched). The
         # preference rows themselves are always read fresh so enable/disable
         # toggles take effect immediately, independent of the list cache TTL.
@@ -354,11 +354,11 @@ class CapabilityDiscovery:
 
         Implementation: one batched UPDATE for existing rows and one batched
         INSERT … ON CONFLICT DO NOTHING for net-new rows, both inside a single
-        session (CODE-004 fixed the previous per-key-per-session N+1 plus the
+        session (this replaced the previous per-key-per-session N+1 plus the
         check-then-insert race that could trip the UniqueConstraint when two
         sessions reconciled the same upstream concurrently).
 
-        CODE-036: takes the already-fetched ``resource`` so the cold path does
+        Takes the already-fetched ``resource`` so the cold path does
         not re-query the same row that the caller just loaded.
         """
         await self._prefs.reconcile(

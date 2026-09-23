@@ -89,7 +89,7 @@ plan):
   branch/spec/worktree context (mirrors the AGENTS.md session protocol). Repo
   `skills/` (`/coffer-verify` and a spec scaffolder, since replaced by the
   checked-in OpenSpec `/opsx:*` commands and `openspec-*` skills) — *skills*,
-  because `.claude/commands/` was gitignored. A new `.agents/harness.md` (+ `.zh`) documents
+  because `.claude/commands/` was gitignored. A new `.agents/harness.md` documents
   the layer; AGENTS.md/CLAUDE.md point to it (single source of truth).
 - **B — Hermeticity.** Commit `uv.lock` + `.python-version`; add a
   `.devcontainer/` (uv + node + playwright) to kill "works on my machine" and the

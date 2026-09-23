@@ -122,7 +122,7 @@ async def register_from_validated(
                 new_config=cfg.model_dump(mode="json"),
                 actor=actor,
                 description=validation.frontmatter.description,
-                allow_lifecycle_kind=True,  # CODE-REG: master folder replaced above
+                allow_lifecycle_kind=True,  # creation seam: master folder replaced above
             )
             audit_event = AuditEventType.SKILL_UPDATED
         else:
@@ -134,7 +134,7 @@ async def register_from_validated(
                 config=cfg.model_dump(mode="json"),
                 description=validation.frontmatter.description,
                 actor=actor,
-                allow_lifecycle_kind=True,  # CODE-REG: master folder replaced above
+                allow_lifecycle_kind=True,  # creation seam: master folder replaced above
             )
             audit_event = event
     else:
@@ -147,7 +147,7 @@ async def register_from_validated(
                 config=cfg.model_dump(mode="json"),
                 description=validation.frontmatter.description,
                 actor=actor,
-                allow_lifecycle_kind=True,  # CODE-REG: master folder created above
+                allow_lifecycle_kind=True,  # creation seam: master folder created above
             )
         except Exception:
             # Best-effort rollback of master

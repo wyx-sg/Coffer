@@ -1,4 +1,4 @@
-"""Buffered-writer coverage for MCPInvocationRepo (CODE-020).
+"""Buffered-writer coverage for MCPInvocationRepo.
 
 The production composition root runs the repo in *buffered* mode: insert()
 enqueues and a background writer task drains the queue on a batch-size or

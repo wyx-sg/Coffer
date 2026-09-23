@@ -11,7 +11,7 @@ Every user-managed entity in Coffer is a **Resource**, identified by an immutabl
 | `mcp_server`     | `mcp-gateway`         | A registered upstream MCP server: transport config, credential references, and the per-server gateway policies.  |
 | `agent`          | `agent-registry`   | A registered local AI coding agent (e.g. Claude Code): its config directory, Coffer-MCP install state, and derived workspace facets. |
 | `skill`          | `skill-manager`     | A master skill bundle Coffer delivers into one or more agents' skill directories.                                |
-| `knowledge`      | `knowledge`             | One collection of what agents know: a directory of markdown files — entries they wrote plus any-format documents ingested to markdown — searched literally with `ripgrep`. |
+| `knowledge`      | `knowledge`             | One collection of what agents know: one tree of Markdown documents that people and Coffer's curation pass write together; agents read it with their own `Read`/`Grep`. |
 | `memory`         | `memory`                   | One partition of the facts Coffer aggregated out of the agents' *own* native memory — `global` plus one per project — as files under `~/.coffer/memory/`. |
 | `provider`       | `provider-switching` | A vendor endpoint and its key: `{protocol, base_url, credential_ref}`. One may be the internal default Coffer's own passes run on. |
 | `channel`        | `channels`               | A messaging-channel binding (Telegram, SeaTalk): transport config, credential refs, and a default agent.         |
@@ -102,7 +102,7 @@ The framework uses no global registry and no import side effects. Each kind expo
 
 A `Kind` carries the small set of answers the framework needs and the kind alone can give: whether the generic `POST /api/v1/resources` may create one (`generic_create_allowed`), whether it has a per-agent activation scope (`supports_scope`), and whether its rows converge with the sync remote (`converges`). The last of those exists so the sync layer has one rule rather than a list of exceptions — `memory` is the only kind that answers no, because a partition row is derived from the agents installed on one machine. A kind nobody has declared anything about converges, so the flag can only ever withhold.
 
-Adding a new kind is mechanical: create the kind's subdirectories in each layer (`domain/<kind>/`, `application/<kind>/`, `infrastructure/<kind>/`, `surfaces/http/<kind>/`, `surfaces/cli/<kind>/`), implement the kind-specific logic, write its `make_<kind>_kind()` factory, and add one wiring module the composition root calls. The audit, retention, and resource-list surfaces are inherited automatically.
+Adding a new kind is mechanical: create the kind's subdirectories in each layer (`domain/<kind>/`, `application/<kind>/`, `infrastructure/<kind>/`), its routes (a `surfaces/http/<kind>/` package or a `<kind>_routes.py` module) and a `surfaces/cli/<kind>_cmd.py` Typer group, implement the kind-specific logic, write its `make_<kind>_kind()` factory, and add one wiring module the composition root calls. The audit, retention, and resource-list surfaces are inherited automatically.
 
 ## Why "everything is a resource kind" (ADR everything-is-a-resource-kind)
 

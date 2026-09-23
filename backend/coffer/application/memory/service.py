@@ -205,7 +205,7 @@ class MemoryService:
     async def _register_partition(self, touch: PartitionTouch, *, actor: str) -> None:
         """Give a newly-filled partition its Resource row — and nothing else.
 
-        The row is created through the lifecycle opt-in (CODE-REG): the kind sets
+        The row is created through the lifecycle opt-in: the kind sets
         ``generic_create_allowed=False`` so nothing but a pass can conjure a partition,
         which is "Create partitions only by aggregation" — an agent's working directory
         must not bring one into existence merely by being read.

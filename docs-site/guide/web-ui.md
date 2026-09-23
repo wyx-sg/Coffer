@@ -1,7 +1,7 @@
 # Web UI
 
 Coffer includes a management UI for the whole vault. It lets you register and curate MCP
-servers, deliver skills, browse and search knowledge, read what your agents have learned,
+servers, deliver skills, browse knowledge, read what your agents have learned,
 chat with them, keep the vault in step with a git remote, read everything Coffer recorded,
 and adjust settings — all without touching the CLI.
 
@@ -166,9 +166,9 @@ On the server detail page, switch between tabs:
 
 Open **Agents** to manage your registered AI coding agents (`claude_code` and `codex`).
 The list is a table with a search box, a status filter, pagination, and row multi-select
-for bulk actions. Click **Detect** to scan for installed agents; the detect dialog lists
-what was found and you confirm each one before it is registered — nothing is registered
-automatically. Each agent is registered against a single **config directory** (for example
+for bulk actions. Click **Add agent**; the dialog detects installed agents as it opens and
+lists what was found, and you confirm each one before it is registered — nothing is
+registered automatically. **Add manually** covers an agent at a non-standard location. Each agent is registered against a single **config directory** (for example
 `~/.claude` or `~/.codex`); Coffer delivers skills into that directory's `skills/` subfolder.
 
 The agent detail page has seven tabs:
@@ -182,15 +182,15 @@ The agent detail page has seven tabs:
   server-side fact with no copy on your machine. Your account's own extra options (a
   1M-context variant, say) come from the CLI's config file and appear alongside them. Codex
   answers with the models its own app-server reports.
-- **Skills** — the skills Coffer manages for this agent, each with an enable/disable toggle.
-  An **Install skills** button opens a picker dialog (search, filter, pagination,
-  multi-select) to bind more skills to the agent.
+- **Skills** — which skills reach this agent is decided on each skill, so this tab links
+  to the [Skills](#skills) page and lists the *unmanaged* skills found in the agent's skill
+  folder, each with open, **Adopt** (bring it into Coffer) and **Delete**.
 - **MCP servers** — two sections. *Via Coffer gateway* shows the shim's install status and
   links to the MCP servers page. *Direct servers* lists the agent's own MCP entries, read
-  from its config files: each row shows its source, transport, and enabled state as a plain
-  badge, and the one write available is **Adopt** — pulling the entry into Coffer as a
-  managed resource. Coffer does not edit another tool's private config, so there is no
-  remove and no enable/disable toggle here.
+  from its config files, each row showing its transport. Two writes are available, per row
+  and in bulk: **Adopt** pulls the entry into Coffer as a managed resource, and **Delete**
+  removes it from the agent's config file, writing a `.bak` of the prior file first. There
+  is no enable/disable toggle here.
 - **Plugins** — the agent's *own* plugins, with an enable/disable switch and an uninstall.
   Coffer does not manage these, but it can see and toggle them, because a plugin is
   something running inside an agent Coffer is responsible for. Each write here touches a
@@ -243,8 +243,9 @@ runs on the agent's own login and model.
 - **Watch a turn started elsewhere.** A conversation a channel drives carries a badge naming
   that channel. Open it mid-turn and the turn is replayed from its start, then followed
   live; stopping it here stops it for the phone too.
-- **Change what it runs on.** The bar above the thread sets agent, model and effort; a
-  change applies from the next turn, and clearing a value reverts to the agent's default.
+- **Change what it runs on.** The bar above the thread names the agent and sets model and
+  effort; the agent is chosen when the conversation starts and stays fixed. A change applies
+  from the next turn, and clearing a value reverts to the agent's default.
 - **Rename, archive, restore, delete.** A name you give is never overwritten. Archiving moves
   a conversation to the archived list and opens it read-only with a restore control; delete
   removes it and its messages and cancels any turn still running. Left alone, an idle
@@ -265,11 +266,11 @@ as `X-Coffer-Token`.
 ### Skills
 
 Open **Skills** to manage the skills Coffer can deliver to agents. The list is a table with
-a search box, a filter, pagination, and row multi-select for bulk actions (such as bulk
-verify or bulk remove). Import a skill from a local folder — a path picker, not a URL;
-there is no Git fetcher and nothing to refresh from a remote. Verify a skill (which runs a
-drift check) per row or in bulk, repair one that drifted, or remove one. Enabling or
-disabling a skill for a specific agent happens on that **agent's** detail page, not here.
+a search box, a reach filter, pagination, and row multi-select for bulk actions (**Set
+reach…** and delete). Import a skill from a local folder — a path picker, not a URL;
+there is no Git fetcher and nothing to refresh from a remote. Which agents a skill reaches
+is chosen here: each row's **Reach** button offers Disabled, Every agent or Only selected
+agents, and the same control sits on the skill's page.
 
 On the skill detail page, switch between tabs:
 
@@ -287,7 +288,7 @@ collection** creates one; it asks for a name and a description and nothing else,
 there is nothing else to decide — a collection is a directory, and there is no index over it
 to choose a shape for.
 
-Clicking a collection opens `/knowledge/:collection`: **one tree** of documents you walk a
+Clicking a collection opens `/knowledge/:uid`: **one tree** of documents you walk a
 level at a time, with a filter box above it that matches names as you type (client-side, no
 button and no request), and the selected document rendered read-only beside it. Every
 document offers open in your external editor, reveal in your file manager, and delete —
@@ -305,7 +306,8 @@ a document you edited in your own editor, one curation just rewrote and one `git
 all show up the instant they land. There is no search box: retrieval is an agent reading the
 catalogue Coffer hands it, not a query against an index.
 
-The older `/knowledge-bases` and `/knowledge-bases/:name` URLs redirect here. `/memory` is
+The older `/knowledge-bases` URL redirects here (an old per-collection link does not; open
+the collection from the list). `/memory` is
 its own surface — see [Memory](#memory) below. The full picture, including the CLI and the
 MCP tools, is in the [Knowledge guide](/guide/knowledge).
 
@@ -315,22 +317,20 @@ Open **Memory** for what your agents have already learned, read out of their own
 memory — Claude Code's per-project notes, Codex's task groups — and normalised into facts
 by project, plus one `global` partition for what is about *you* rather than any project.
 The list is a table like every other one here: a row per partition showing the project it
-was named from, how many facts it holds, and the same **reach** control the MCP-servers and
-Skills lists carry per row, with multi-select for setting reach in bulk. Reach is one
-button labelled with where the partition currently reaches — "Every agent", "2 agents",
-"Disabled" — opening a panel where Disabled, Every agent and Only selected agents are the
-choices: on or off, and for which agents. It is **this machine's** setting and is never
-synced, so every machine you work on sets its own.
+was named from, how many facts it holds, and a **Status** control — Enabled or Disabled —
+with multi-select for setting it in bulk. There is no per-agent reach: an enabled partition
+is served to every agent.
 
 Nothing on this page is created by you, so the header action is **Read from agents**, not
 Add — and not "Sync", because that name belongs to the [Sync](/guide/sync) page, which
 converges the vault with a remote rather than reading anything out of an agent. Coffer
 re-reads the agents on its own schedule; the button just does it now. A vault with no
-partitions yet shows the same table with an empty row, and the button stays where it was.
+partitions yet shows a welcome card carrying **Read from agents** instead of the table.
 
-Clicking a partition opens `/memory/:name`: the partition's own directory as a file tree
-with a read-only preview beside it, its reach control, and an **Organise** pass that merges
-duplicate facts, proposes supersessions and rewrites the partition's digest.
+Clicking a partition opens `/memory/:uid`: the partition's own directory as a file tree
+with a read-only preview beside it, its status control, and a **Distil** pass that turns the partition's new raw entries into
+Coffer's own notes — merging into a note, opening a new one, or retiring one into
+`RETIRED.md` — and rewrites the index.
 
 That is all there is, and the absence is deliberate. Per-fact actions — hide, pin, mark
 superseded, settle a conflict — existed and were **removed**, along with the overrides
@@ -353,7 +353,7 @@ Two related surfaces live elsewhere on purpose:
 Open `/model-providers` for the vendor endpoints Coffer holds keys for. A provider is
 `{protocol, base_url, credential_ref}` — the endpoint and its key. The **model** is not
 stored here and not chosen here: an agent's model is picked on its own detail page, and
-Coffer's internal engine picks its own under **Settings → Engine**. Mark one provider
+Coffer's internal engine picks its own under **Settings → Coffer's model**. Mark one provider
 **internal default** and it becomes the connection that runs the unattended passes; mark
 one **speech-to-text default** and it becomes the connection voice messages are
 transcribed on. They are separate flags, with no fallback either way.
@@ -401,29 +401,29 @@ Open `/sync` to converge this vault with a git remote you own. It is a top-level
 SYSTEM rather than a Settings tab, because convergence is something you open deliberately
 rather than a setting you tweak once — `/settings/sync` redirects here.
 
-Three tabs, and the active one lives in the URL (`?tab=`) so a link can land on History:
+Two tabs, and the active one lives in the URL (`?tab=`) so a link can land on Setup:
 
-- **Status** — the configured remote, the master key, and anything waiting on you.
-- **History** — every round this machine has run. Status answers "what is it doing";
-  History answers "what has it been doing", which one round's worth of prose never could.
-- **Machines** — the registry of machines converging on this remote.
+- **Runs** — the landing tab: every round this machine has run. A conflict or a held round
+  is the newest row, and a held round is answered on its own row.
+- **Setup** — the configured remote, the master key, and the registry of machines
+  converging on this remote.
 
-Conflicts and held rounds appear as **banners on Status**, not as a tab of their own: they
-are states the vault passes through, and a permanent tab would read as a place you are
-meant to visit. The full picture — what converges, what stays local, and how the master key
+The full picture — what converges, what stays local, and how the master key
 travels — is in the [Sync guide](/guide/sync).
 
 ### Settings
 
 Open `/settings` for five tabs: **General** (rows per page, the external editor files open
-in), **Engine**, **Data** (retention policy, manual
+in, and the daemon's residency), **Coffer's model**, **Data** (retention policy, manual
 prune), **Security** (master-key storage) and **About** (version, license, source). Sync is
 not among them — it is a top-level page of its own under SYSTEM.
 
 **Coffer's model** is where Coffer's own machinery is configured, as opposed to anything
-served to an agent. Two cards:
+served to an agent. Three cards:
 
 - **Internal engine** — which provider connection and model Coffer's own passes run on.
+- **Speech to text** — the separate connection and model voice messages are transcribed
+  on; with none chosen, the agent receives the audio file untouched.
 - **Automatic upkeep** — the work Coffer does when nobody asked. Three passes run on a
   timer, each with its own switch and interval: **Read from agents** reads the agents'
   native memory into Coffer's derived tree with no model involved, **Distil memory** lets
@@ -439,8 +439,9 @@ served to an agent. Two cards:
   now is also readable from `GET /api/v1/upkeep/runs`.
 
 There is no "Daemon" tab and no daemon-status panel — the daemon is an implementation
-detail surfaced only by the offline banner when something goes wrong, and its one setting
-(the port) is a CLI-only concern by design. Stopping the daemon and rotating its token are
+detail surfaced only by the offline banner when something goes wrong. The **Coffer's
+daemon** card under General sets whether it starts at login and how long it stays up with
+nothing using it; its port is a CLI-only concern by design. Stopping the daemon and rotating its token are
 CLI-only too (`coffer daemon stop`, `coffer daemon rotate-token`): a button that stopped
 the daemon would take down the page it sat on.
 

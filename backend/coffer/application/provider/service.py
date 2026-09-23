@@ -143,7 +143,8 @@ class ProviderService:
         projects into is its per-agent scope, started off by the kind (dormant
         for a keyless wire, unscoped otherwise) and edited afterwards through
         the framework's scope surface. The model lives apart from
-        the connection (spec provider-switching E3) and is chosen at the point of use;
+        the connection (spec provider-switching "Take projected model keys from
+        the agent's binding") and is chosen at the point of use;
         ``models`` only curates WHICH of the endpoint's models that choice is
         offered (``None``/empty ⇒ all of them)."""
         ref: str | None

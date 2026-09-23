@@ -1,4 +1,4 @@
-"""Pydantic schemas matching the chat paths in openspec/specs/channels/contracts/api.openapi.yaml.
+"""Pydantic schemas matching the chat paths in openspec/specs/chat/contracts/api.openapi.yaml.
 
 Every request/response body the web Chat page's REST + SSE surface serves is
 modelled here. Field names, types, and nullability mirror the yaml exactly.
@@ -103,8 +103,8 @@ class AgentConfigOut(BaseModel):
 
     cwd: str | None
     model: str | None
-    #: The reasoning-effort level the turn runs at, for an agent that takes one
-    #: (Codex). ``None`` means the agent's own default.
+    #: The reasoning-effort level the turn runs at, for an agent that takes one.
+    #: ``None`` means the agent's own default.
     effort: str | None = None
 
 

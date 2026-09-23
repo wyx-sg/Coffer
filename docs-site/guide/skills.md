@@ -9,7 +9,7 @@ Add a skill to your master library from a folder on disk:
 ```bash
 coffer skill import ./my-skill      # copy a local folder in
 coffer skill list                   # → my-skill | local_import
-coffer skill show my-skill          # metadata + files
+coffer skill show my-skill          # metadata + where it is delivered
 ```
 
 - `import` takes a copy. `local_import` is the only source **you** can create: there is no Git fetcher and no `update` command. If a skill originally came from a repository, the way to refresh it is to pull that repository yourself and `import` again. The one other source is `builtin`, which only Coffer itself creates — see "Coffer's own skill" below.
@@ -78,7 +78,7 @@ It is an ordinary skill in every way that matters — listed beside yours, deliv
 
 ## In the app
 
-The **Skills** page lists your master library; import via a folder picker — a path, not a URL — and open a skill to see its metadata and browse its master folder, editing any text file in place. Delivery is set on the skill itself — the list table's enable switch, and the activation-scope control on the skill's page. Each agent's **Skills** tab shows what it currently receives, read-only. See [Agents](/guide/agents).
+The **Skills** page lists your master library; import via a folder picker — a path, not a URL — and open a skill to see its metadata and browse its master folder, editing any text file in place. Reach is set on the skill itself — one reach button in the list's **Reach** column and on the skill's page (Disabled / Every agent / Only selected agents). Each agent's **Skills** tab points back here and lists the unmanaged skills found on that agent's disk. See [Agents](/guide/agents).
 
 Editing in place is guarded against losing an edit you made elsewhere: every read returns a fingerprint of the file, and a save carrying a stale one is refused (`409`) with the file left untouched, so reload and redo the change. The editor overwrites an existing text file only — it does not create files, write outside the skill's folder, or replace a binary — and a file over 256 KiB opens truncated. For anything bigger, the viewer opens the file or reveals its folder in your own tools.
 

@@ -19,7 +19,7 @@ Seven resource kinds ship today:
 | [MCP servers](/guide/register-server)    | Aggregate upstream MCP servers; re-expose their tools namespaced through one endpoint.                   |
 | [Agents](/guide/agents)                  | Detect and register Claude Code / Codex; edit their config, deliver skills, install Coffer's MCP server. |
 | [Skills](/guide/skills)                  | One master skill library, delivered into the agents you choose.                                          |
-| [Knowledge](/guide/knowledge)            | One store, shared by every agent: the entries they write and the documents you ingest, under one search. |
+| [Knowledge](/guide/knowledge)            | One tree of Markdown files every agent reads with its own tools and adds to through `coffer__write`.     |
 | [Memory](/guide/web-ui#memory)           | The facts Coffer aggregated out of your agents' own native memory, partitioned by project.               |
 | [Model providers](/guide/web-ui#model-providers) | The vendor endpoints Coffer holds keys for, and the connection its own engine runs on.            |
 | [Channels](/guide/channels)              | Reach your agents from Telegram or SeaTalk — the way you actually talk to them.                          |

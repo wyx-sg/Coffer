@@ -1,7 +1,7 @@
 """The sync remote: the one user-owned git repository this vault converges with.
 
-Spec vault-sync ``## Concepts``; the user-owned sync remote exception to
-Principle I in ``docs/principles.md``.
+Spec vault-sync "Allow at most one user-owned sync remote"; the user-owned
+sync remote exception to Principle I in ``docs/principles.md``.
 Pure domain — no filesystem, no git, no database. Everything here is about
 what a valid remote *is*; how a round against it is carried out belongs to the
 application layer.

@@ -100,7 +100,7 @@ In a paired chat, these in-chat commands control the conversation:
 | `/model`  | Switch the model that agent runs on.                                |
 | `/effort` | Switch the thinking effort.                                         |
 | `/stop`   | Interrupt the turn in flight.                                       |
-| `/save`   | Save what the agent produced as a document.                         |
+| `/save [collection]` | Save the document you just sent into a knowledge collection (asks which one if you don't name it). |
 | `/status` | Which conversation this chat is bound to, and whether a turn is running. |
 
 Channel conversations also appear on the app's **Chat** page.

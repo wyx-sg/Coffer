@@ -1,4 +1,4 @@
-"""Shared helpers for the live agent adapters (spec channels).
+"""Shared helpers for the live agent adapters (spec chat).
 
 Small, dependency-free pieces the SDK-backed (:mod:`claude_sdk_agent`) and
 app-server-backed (:mod:`codex_agent`) adapters both need:

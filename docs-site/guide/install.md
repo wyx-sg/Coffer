@@ -237,8 +237,8 @@ unlocked environment is the usual cause.
 :::
 
 ::: tip Auto-spawn applies here too
-Either install puts `coffer`, `coffer-daemon`, and `coffer-mcp-shim` on your `PATH` as
-console scripts. The daemon auto-starts the first time you run a management command or an
+Either install puts `coffer` and `coffer-mcp-shim` on your `PATH` as console scripts (the
+daemon runs as `python -m coffer.infrastructure.daemon.entry`). The daemon auto-starts the first time you run a management command or an
 MCP client connects — `coffer daemon start` exists for explicit control but is **not** a
 required setup step. A source install skips binary deployment entirely: it is not a frozen
 build, and the console scripts are already there.
@@ -250,8 +250,8 @@ build, and the console scripts are already there.
 - **[uv](https://docs.astral.sh/uv/)** — how CI builds the environment, and the only way to
   get exactly the locked dependency set.
 - **[ripgrep](https://github.com/BurntSushi/ripgrep)** (`rg`) — recommended, on every install
-  path. Coffer's knowledge search (`coffer__grep`, `coffer__search`) runs `rg` when it is on
-  your `PATH`; without it Coffer falls back to a slower built-in search that returns the same
-  results, and notes the fallback once in the daemon log.
+  path. Coffer's `coffer__recall` and knowledge curation run `rg` when it is on your `PATH`;
+  without it Coffer falls back to a slower built-in matcher that returns the same results,
+  and notes the fallback once in the daemon log.
 
 See [Getting Started](/guide/getting-started) for the full from-source walkthrough.

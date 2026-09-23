@@ -188,7 +188,8 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
     ``finally`` so the lock is never leaked into a deadlock for the next spawn.
 
     No host/port is passed: binding is owned by the pre-bound loopback fd
-    (CODE-041), so nothing can widen the daemon off 127.0.0.1.
+    (spec daemon "Bind every endpoint to loopback only"), so nothing can
+    widen the daemon off 127.0.0.1.
     """
     config = uvicorn.Config(
         "coffer.main:app",
@@ -260,7 +261,7 @@ def main() -> None:
             info.port,
         )
         return
-    # CODE-041: acquire() binds the port and hands us the live socket; passing
+    # acquire() binds the port and hands us the live socket; passing
     # its fd to uvicorn means there is no close-then-rebind window in which the
     # port (already published in daemon.json with the token) could be stolen.
     # That also removes the old EADDRINUSE retry loop entirely — we own the

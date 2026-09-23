@@ -76,8 +76,7 @@ _GENERATED_MARKER = "Do not make direct changes"
 # The generated marker only ever appears in openapi-typescript output, which
 # is always TypeScript. Restricting the marker check to .ts/.tsx files closes
 # the evasion where any source file (e.g. a bloated backend .py) could dodge
-# the size cap merely by quoting the marker string in a top-of-file comment
-# (CODE-045).
+# the size cap merely by quoting the marker string in a top-of-file comment.
 _GENERATED_SUFFIXES = {".ts", ".tsx"}
 
 
@@ -103,7 +102,7 @@ def is_excluded(path: Path) -> bool:
     # coverage, not with the complexity of a single production module. Only
     # genuine *.test.ts/.tsx / *.spec.ts/.tsx names qualify (a bare ".test."
     # substring elsewhere does not), so a production module can't dodge the cap
-    # by smuggling ".test." into its name (CODE-045).
+    # by smuggling ".test." into its name.
     if path.suffix in _GENERATED_SUFFIXES and (
         ".test." in path.name or ".spec." in path.name
     ):

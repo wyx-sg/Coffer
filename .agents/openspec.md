@@ -22,7 +22,7 @@ rules the CLI injects into every planning request.
 ```
 openspec/
   config.yaml                    # Context + per-artifact rules for planning.
-  openspec/specs/<capability>/
+  specs/<capability>/
     spec.md                      # REQUIRED. Purpose, requirements, scenarios.
     data-model.md                # Entities, fields, relationships. — when it has state
     contracts/api.openapi.yaml   # The wire contract, hand-authored and
@@ -34,7 +34,7 @@ openspec/
     proposal.md                  # Why, and what changes.
     design.md                    # How — when the change is not obvious.
     tasks.md                     # The checklist `/opsx:apply` works through.
-    openspec/specs/<capability>/spec.md   # Deltas: ADDED / MODIFIED / REMOVED / RENAMED.
+    specs/<capability>/spec.md   # Deltas: ADDED / MODIFIED / REMOVED / RENAMED.
   changes/archive/YYYY-MM-DD-<change-id>/   # Every shipped change, kept.
 ```
 
@@ -94,7 +94,7 @@ The system SHALL <behaviour>.
 - A requirement is identified by its **title** — there are no requirement
   numbers. Renaming one is a `RENAMED` delta, so the rename is reviewed like
   any other change. Cite one from outside its spec as a link plus its title:
-  ``[skill-manager](../openspec/specs/skill-manager/spec.md) "Store each skill under its name"``.
+  ``[skill-manager](../openspec/specs/skill-manager/spec.md) "Keep one master folder per skill and carry it through a rename"``.
 - A scenario is identified by its **name**, which an acceptance marker quotes;
   renaming a scenario means renaming its markers.
 - When a capability has children, **a requirement lives at the level that owns
@@ -174,7 +174,7 @@ principles could not live there, because the principles hold rules and not
 routes, tables, entities or scenarios, so parking them would have deleted them
 as requirements and left the rest of the framework homeless inside one kind's
 spec. [`resource-framework`](../openspec/specs/resource-framework/spec.md)
-carries both readings under its own "Why this is a spec".
+carries both readings in its `## Purpose`.
 
 Two things are worth keeping from that. The gate is applied to **evidence**, so
 the same subject can honestly fail it once and pass it later without anyone

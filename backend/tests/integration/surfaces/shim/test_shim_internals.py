@@ -217,7 +217,7 @@ async def test_pump_stdin_forwards_post_and_captures_session_id(
 async def test_pump_stdin_dispatches_concurrently_no_head_of_line_block(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """CODE-M3: once a session is established, a slow tool call must not block
+    """Once a session is established, a slow tool call must not block
     subsequent envelopes (pings, cancellations, other calls) from being issued.
 
     Regression: the pump awaited each POST inline before reading the next line,
@@ -266,7 +266,7 @@ async def test_pump_stdin_dispatches_concurrently_no_head_of_line_block(
 async def test_run_drains_inflight_replies_on_stdin_eof(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """CODE-R1: when stdin closes while requests are in flight, their replies
+    """When stdin closes while requests are in flight, their replies
     must still reach stdout before the bridge exits.
 
     Regression: the EOF path set ``_stop`` BEFORE draining; ``run()``'s
@@ -692,7 +692,7 @@ async def test_drain_sse_stops_mid_stream_when_bridge_stopped(
 async def test_drain_sse_reconnects_after_stream_ends(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """CODE-046: when an SSE stream ends (e.g. the daemon reaped the session),
+    """When an SSE stream ends (e.g. the daemon reaped the session),
     _drain_sse must reconnect rather than stop forwarding for good. We count
     GET attempts and stop the bridge once it has reconnected at least once."""
     bridge = _make_bridge()

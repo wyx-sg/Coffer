@@ -70,7 +70,7 @@ class ServerRequestRegistry:
         self._next_id += 1
         req_id = self._next_id
         future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
-        # CODE-031: key the pending map by the STRING form of the id. JSON-RPC
+        # Key the pending map by the STRING form of the id. JSON-RPC
         # allows an id to be a number or a string, and a compliant client may
         # echo our integer id back as a string ("1"). Normalising both the
         # store and the lookup to str makes the match type-agnostic so the
@@ -91,7 +91,7 @@ class ServerRequestRegistry:
         req_id = envelope.get("id")
         if req_id is None:
             return False
-        # CODE-031: look up by the string form so an id echoed back as either a
+        # Look up by the string form so an id echoed back as either a
         # number or a string matches the pending request stored under str(id).
         future = self._pending.get(str(req_id))
         if future is None or future.done():

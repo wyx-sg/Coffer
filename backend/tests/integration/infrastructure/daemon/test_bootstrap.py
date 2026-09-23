@@ -29,7 +29,7 @@ def test_acquire_writes_daemon_json_with_0600(
     info, sock = bootstrap.acquire()
     self_addr = sock.getsockname()
     try:
-        # CODE-041: acquire holds the bound socket open (no probe-and-close
+        # acquire holds the bound socket open (no probe-and-close
         # TOCTOU); it is bound to the loopback port recorded in daemon.json.
         assert self_addr[0] == "127.0.0.1"
 
@@ -92,7 +92,7 @@ def test_second_daemon_picks_free_port_and_clients_discover(
             assert info_a.port != 59500, "first daemon must skip the busy port"
             assert recorded_a["port"] == info_a.port
 
-            # CODE-041: acquire() now HOLDS info_a.port (no probe-and-release),
+            # acquire() now HOLDS info_a.port (no probe-and-release),
             # so a second acquire must naturally skip it and pick another free
             # port; daemon.json must update to the live port.
             info_b, sock_b = bootstrap.acquire()

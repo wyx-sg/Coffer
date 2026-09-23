@@ -42,7 +42,7 @@ Application services receive their infrastructure dependencies as constructor ar
 
 ### infrastructure/
 
-The infrastructure layer contains all external-I/O-performing code: the SQLAlchemy ORM models and Alembic migrations (`infrastructure/persistence/`), the encrypted credential store and master-key manager (`infrastructure/credentials/` — the single place in the entire codebase allowed to import `keyring`), daemon discovery and the pre-database config file (`infrastructure/daemon/`), the MCP upstream transport implementations (`infrastructure/mcp/` — subprocess management for stdio upstreams, and an HTTP client for HTTP-transport upstreams), and per-kind I/O modules: `infrastructure/agent/` (agent config-file store), `infrastructure/skill/` (master store, drift engine), `infrastructure/channel/` (Telegram/SeaTalk transports, peer repo, render), `infrastructure/knowledge/` (the on-disk path layout, frontmatter parsing, file I/O, the document converters, and the `ripgrep` wrapper), `infrastructure/memory/` (the partition path layout and the per-agent native-memory readers), `infrastructure/provider/` (the connection introspector), and `infrastructure/chat/` (the Claude Code and Codex agent drivers, the gateway tool provider, and turn persistence). Two cross-cutting slices are not kinds: `infrastructure/sync/` (the git mirror the vault converges through, and this machine's identity) and `infrastructure/llm/` (the internal engine's model clients, remote transcription, and the agentic reorganise loop the tidy and organise passes run on).
+The infrastructure layer contains all external-I/O-performing code: the SQLAlchemy ORM models and Alembic migrations (`infrastructure/persistence/`), the encrypted credential store and master-key manager (`infrastructure/credentials/` — the single place in the entire codebase allowed to import `keyring`), daemon discovery and the pre-database config file (`infrastructure/daemon/`), the MCP upstream transport implementations (`infrastructure/mcp/` — subprocess management for stdio upstreams, and an HTTP client for HTTP-transport upstreams), and per-kind I/O modules: `infrastructure/agent/` (agent config-file store), `infrastructure/skill/` (master store, drift engine), `infrastructure/channel/` (Telegram/SeaTalk transports, peer repo, render), `infrastructure/knowledge/` (the on-disk path layout, frontmatter parsing, file I/O, the document converters, and the `ripgrep` wrapper), `infrastructure/memory/` (the partition path layout and the per-agent native-memory readers), `infrastructure/provider/` (the connection introspector), and `infrastructure/chat/` (the Claude Code and Codex agent drivers and turn persistence). Two cross-cutting slices are not kinds: `infrastructure/sync/` (the git mirror the vault converges through, and this machine's identity) and `infrastructure/llm/` (the internal engine's model clients, remote transcription, and the agentic loop the knowledge curation pass runs on).
 
 Two kind-agnostic packages sit beside the kinds. `infrastructure/agent_files/` holds readers of an agent's own on-disk transcripts, shared by the agent and memory kinds. `infrastructure/net/` holds the SSRF guard — and it is worth being exact about its reach, because the honest statement is narrower than the module's name suggests: `check_url` has exactly **one** caller, `infrastructure/provider/introspector.py`. It is not a chokepoint every outbound URL passes through, and nothing enforces that it becomes one. See [Outbound HTTP](/architecture/security#outbound-http-one-guarded-path-and-the-rest) for what is and is not covered.
 
@@ -111,8 +111,8 @@ backend/coffer/
 │   ├── agent/                    # agent services + make_agent_kind
 │   ├── skill/                    # skill services + make_skill_kind
 │   ├── channel/                  # adapter protocol, pairing, inbound runtime
-│   ├── knowledge/                # collection, file, ingest + search services
-│   ├── memory/                   # aggregation, organise, recall, context + make_memory_kind
+│   ├── knowledge/                # service, ingest, curation, guide-skill rendering
+│   ├── memory/                   # aggregation, distil, recall, context + make_memory_kind
 │   ├── chat/                     # TurnOrchestrator, turn state
 │   ├── provider/                 # provider ports, introspection + make_provider_kind
 │   ├── sync/                     # cross-cutting — vault convergence with a git remote (not a kind)
@@ -127,12 +127,12 @@ backend/coffer/
 │   ├── channel/                  # telegram/seatalk transports, peer repo, render
 │   ├── knowledge/                # path layout, frontmatter, file store, converters, ripgrep
 │   ├── memory/                   # partition path layout + per-agent native-memory readers
-│   ├── chat/                     # the Claude Code and Codex drivers, gateway tool provider
+│   ├── chat/                     # the Claude Code and Codex drivers, turn persistence
 │   ├── provider/                 # provider introspector (the one `check_url` caller)
 │   ├── net/                      # kind-agnostic — the SSRF guard (one call site; see Security)
 │   ├── agent_files/              # kind-agnostic — readers of an agent's own transcripts (agent + memory)
 │   ├── logging/                  # kind-agnostic — structlog setup, eval capture
-│   ├── llm/                      # cross-cutting — internal-engine models, transcription, reorganise loop
+│   ├── llm/                      # cross-cutting — internal-engine models, transcription, curation loop
 │   ├── sync/                     # cross-cutting — git mirror the vault converges through (not a kind)
 │   └── credentials/              # cross-cutting — encrypted credential store + master key — only place importing `keyring`
 └── surfaces/
@@ -144,7 +144,7 @@ backend/coffer/
     │   ├── resource_routes.py
     │   ├── mcp/                  # MCP HTTP/SSE routes and session handling
     │   ├── knowledge/            # collections, tree, file, material, upload, curate
-    │   ├── memory/               # partitions, facts, files, sync, organise, context, delivery
+    │   ├── memory/               # partitions, notes, files, distil, sync, context, delivery
     │   └── chat/                 # conversations, turns, agent providers
     ├── cli/
     │   ├── main.py               # composition root — Typer wiring

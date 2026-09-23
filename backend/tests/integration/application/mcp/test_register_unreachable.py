@@ -1,7 +1,8 @@
 """Edge-case coverage: register succeeds for an unreachable upstream.
 
-Per spec edge-case "Upstream unreachable on register": coffer's register
-endpoint does not probe the upstream — it stores the config and returns 201.
+Per spec mcp-gateway "Manage MCP servers as resources" (an unreachable
+upstream on register): coffer's register endpoint does not probe the upstream —
+it stores the config and returns 201.
 Discovery is what surfaces the failure.
 
 See openspec/specs/mcp-gateway/spec.md § Edge Cases.

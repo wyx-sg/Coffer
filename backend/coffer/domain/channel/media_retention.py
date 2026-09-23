@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 
-# 30-day window by file mtime, no size cap (locked design D3, 2026-07-09).
+# 30-day window by file mtime, no size cap (design locked 2026-07-09).
 MEDIA_RETENTION_DAYS = 30
 
 

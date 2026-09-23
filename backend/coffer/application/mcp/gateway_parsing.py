@@ -53,7 +53,7 @@ def _extract_method(notification: Any) -> str | None:
         return str(m)
     root = getattr(notification, "root", None)
     if root is not None:
-        # CODE-032: coerce to str like the branch above. The SDK may expose
+        # Coerce to str like the branch above. The SDK may expose
         # ``root.method`` as an enum/Pydantic value; comparing that to the
         # plain string literals in _on_upstream_notification would never match,
         # silently dropping list_changed invalidation + forwarding.

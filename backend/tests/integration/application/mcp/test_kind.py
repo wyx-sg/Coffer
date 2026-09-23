@@ -143,7 +143,7 @@ async def test_delete_evicts_active_supervisor_sessions(tmp_path: Path) -> None:
         actor="test",
     )
 
-    # Delete the resource — CODE-033: the kind hook is now an async hook that
+    # Delete the resource — the kind hook is now an async hook that
     # ResourceService.delete AWAITS before removing the row, so eviction is
     # complete the instant delete() returns (no fire-and-forget polling).
     fs = await rsvc.get_by_name("mcp_server", "fs")
@@ -157,7 +157,7 @@ async def test_delete_evicts_active_supervisor_sessions(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_on_delete_awaitable_and_suppresses_supervisor_errors() -> None:
-    """CODE-033: on_delete is an awaitable coroutine; awaiting it evicts every
+    """on_delete is an awaitable coroutine; awaiting it evicts every
     registered supervisor, and a single supervisor whose evict() raises is
     suppressed so it can't abort the others or the deletion.
     """
@@ -175,7 +175,7 @@ async def test_on_delete_awaitable_and_suppresses_supervisor_errors() -> None:
 
 
 def test_validate_name_rejects_double_underscore() -> None:
-    """CODE-030: mcp_server names may not contain '__' (reserved separator)."""
+    """mcp_server names may not contain '__' (reserved separator)."""
     mcp_kind = make_mcp_kind({})  # type: ignore[arg-type]
     assert mcp_kind.validate_name is not None
     mcp_kind.validate_name("ok_name")  # single underscore is fine

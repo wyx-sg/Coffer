@@ -29,7 +29,8 @@ export function useSetInternalEngineModel() {
   });
 }
 
-/** Change one unattended pass's switch or interval (spec provider-switching E3a).
+/** Change one unattended pass's switch or interval (spec internal-engine "Change one
+ *  unattended pass per write").
  *
  *  One pass per call, and each half omitted unless it is being changed: the
  *  settings card toggles one row at a time, and a body carrying all three would

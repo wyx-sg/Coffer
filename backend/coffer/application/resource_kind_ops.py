@@ -34,7 +34,7 @@ def audit_safe_config(kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]:
     The kind-agnostic core knows nothing about where a given kind stores
     secrets; each kind supplies its own ``audit_redactor`` (e.g. mcp_server
     strips ``transport.env``/``headers``). Kinds without one audit their
-    config verbatim. See the resource-framework-upfront ADR / CODE-006.
+    config verbatim. See the resource-framework-upfront ADR.
     """
     if kind_def.audit_redactor is None:
         return config
@@ -118,7 +118,7 @@ def check_name(kind_def: Kind, name: str) -> None:
         validate_resource_name(name)
     except ValueError as e:
         raise ConfigValidationError(str(e)) from e
-    # CODE-030: kind-specific name validation (e.g. mcp_server reserves '__'
+    # Kind-specific name validation (e.g. mcp_server reserves '__'
     # as the tool/prompt namespace separator; skill enforces the SKILL.md
     # frontmatter charset, which is stricter than the framework's).
     if kind_def.validate_name is not None:

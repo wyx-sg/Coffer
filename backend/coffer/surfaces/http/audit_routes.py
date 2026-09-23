@@ -23,7 +23,7 @@ router = APIRouter(
 # Match a *trailing* tz offset that arrived space-mangled (because the browser
 # encoded '+' as ' ' per x-www-form-urlencoded). Anchored at end-of-string with
 # look-behind so it only fires on a real timezone offset, never on internal
-# fractional-second whitespace (CODE-019). Pattern only matches when the prior
+# fractional-second whitespace. Pattern only matches when the prior
 # chars look like a time (HH:MM:SS or HH:MM:SS.ffffff).
 _TZ_SPACE_RE = re.compile(r"(\d{2}:\d{2}:\d{2}(?:\.\d+)?) (\d{2}:\d{2})$")
 

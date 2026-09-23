@@ -2,13 +2,13 @@
 // The pure half of "which machine does this?" — what a stored machine id IS
 // from where you are standing, and the option list a picker may offer for it.
 //
-// It started as the channel binding's own helper (spec channels, "Where a
-// channel runs"). It lives in `lib/` now because a second feature asks the
-// same question of the same registry: the curation pass names one machine
-// allowed to rewrite the derived documents (spec knowledge), and a vault whose
-// owner is a machine nobody claims is dead in exactly the way a channel bound
-// to one is. Two copies of this rule would let one surface call that a fault
-// and the other call it normal.
+// It started as the channel binding's own helper (spec channels "Bind each
+// channel to the one machine that runs it"). It lives in `lib/` now because a
+// second feature asks the same question of the same registry: the curation
+// pass names one machine allowed to rewrite the derived documents (spec
+// knowledge), and a vault whose owner is a machine nobody claims is dead in
+// exactly the way a channel bound to one is. Two copies of this rule would let
+// one surface call that a fault and the other call it normal.
 //
 // What it deliberately does NOT carry is what each feature MEANS by the four
 // states. A channel with no binding runs NOWHERE — answering a platform twice

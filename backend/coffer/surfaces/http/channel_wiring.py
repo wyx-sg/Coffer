@@ -7,11 +7,12 @@ AFTER ``wire_chat`` and ``wire_knowledge_kind``, whose results it takes as
 parameters.
 
 It also resolves this machine's identity, because a channel names the one
-machine whose daemon runs its adapter (spec channels ``## Where a channel
-runs``) and both the runtime's gate and the kind's validators need the same
-answer. It is read here rather than taken from the sync module because sync is
-wired LATER — and because the binding is not a sync feature: it decides which
-daemon starts an adapter whether or not this vault converges with anything.
+machine whose daemon runs its adapter (spec channels "Bind each channel to the
+one machine that runs it") and both the runtime's gate and the kind's
+validators need the same answer. It is read here rather than taken from the
+sync module because sync is wired LATER — and because the binding is not a sync
+feature: it decides which daemon starts an adapter whether or not this vault
+converges with anything.
 """
 
 from __future__ import annotations
@@ -139,7 +140,7 @@ def wire_channel_kind(
         ingest=knowledge.ingest_service,
     )
 
-    # ``materialize_async`` is the resolver's own off-the-loop path (CODE-034);
+    # ``materialize_async`` is the resolver's own off-the-loop path;
     # hand-rolling ``to_thread`` here is how the two drifted apart before.
     materialize = CredentialResolver(credential_store).materialize_async
 

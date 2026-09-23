@@ -164,7 +164,7 @@ def _atomic_write_0600(target: Path, contents: str) -> None:
     """Write `contents` to `target` atomically with mode 0600.
 
     Uses O_CREAT|O_EXCL with explicit mode bits so the file never exists
-    on-disk with broader-than-0600 permissions (CODE-018: the previous
+    on-disk with broader-than-0600 permissions (the previous
     pattern of ``write_text`` + ``chmod`` left the file readable by other
     users with a non-restrictive umask for the window between the two calls).
     """
@@ -207,7 +207,7 @@ async def rotate_token(
     info = json.loads(path.read_text())
     info["token"] = new_token
     # Same atomic-replace + 0600 pattern as bootstrap.write. Use the helper
-    # so the tmp file never exists with mode wider than 0600 (CODE-018).
+    # so the tmp file never exists with mode wider than 0600.
     _atomic_write_0600(path, json.dumps(info, indent=2))
     set_active_token(new_token)
     await audit.record(AuditEventType.TOKEN_ROTATED.value, actor=actor)

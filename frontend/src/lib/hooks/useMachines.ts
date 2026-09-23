@@ -1,8 +1,8 @@
 // frontend/src/lib/hooks/useMachines.ts
 //
-// The machine registry (spec vault-sync `## The machine dimension`): every
-// installation of Coffer that has converged with this remote, read as a
-// derived view of `machines/*.yaml` in the working tree.
+// The machine registry (spec vault-sync "Derive the registry from the
+// descriptors"): every installation of Coffer that has converged with this
+// remote, read as a derived view of `machines/*.yaml` in the working tree.
 //
 // The list is not only the Machines tab's data — it is also the pick-list the
 // channel binding control offers (spec channels, "Bind each channel to the one machine that runs it"),

@@ -1,6 +1,6 @@
 """The git adapter, against a real local bare repository — no network.
 
-Spec vault-sync ``## The converge round``. These tests shell out to the real git
+Spec vault-sync "Run the seven round steps in order". These tests shell out to the real git
 binary on purpose: the adapter's whole job is to be right about git's actual
 behaviour, and a mocked subprocess would only assert our own assumptions.
 """

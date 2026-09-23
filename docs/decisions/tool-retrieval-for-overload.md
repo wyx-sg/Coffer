@@ -1,7 +1,7 @@
 # Tool Retrieval for Aggregation Overload
 
 **Status**: Accepted
-**Amended by**: [Built-in Agent Is Internal](builtin-agent-is-internal-capability.md) (2026-06-14) — `coffer__search_tools` gains a semantic (embedding) ranking path with BM25 fallback.
+**Amended by**: [Built-in Agent Is Internal](builtin-agent-is-internal-capability.md) (2026-06-14) — once added a semantic (embedding) ranking path to `coffer__search_tools`; that path was removed on 2026-09-14 with every other use of embeddings, so ranking is BM25-lite only, as decided here.
 **Amended by**: [Budget-Driven Tool Tiering](budget-driven-tool-tiering.md) (2026-09-09) — the "nothing is hidden server-side / tool deferral stays the client's choice" clause is replaced by budget-driven tool tiering; `coffer__search_tools` still ranks the full catalogue, and unlisted tools stay callable.
 **Date**: 2026-06-14
 **Deciders**: Yuxing Wu

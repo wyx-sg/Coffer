@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 /* ---------------------------------------------------------------------------
-   Design tokens for the spec web-ui "Coffer warm" visual language.
+   Design tokens for the Coffer-warm visual language (spec web-ui "Express
+   every surface in one visual language").
 
    Palette is built around a cream paper background (#FAF9F5) and a clay
    accent (#C96442) — both chosen for an Anthropic / Claude.ai-adjacent feel

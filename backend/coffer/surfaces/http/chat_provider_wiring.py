@@ -1,4 +1,4 @@
-"""Chat agent-provider registry wiring (spec channels), split from ``wiring.py``.
+"""Chat agent-provider registry wiring (spec chat), split from ``wiring.py``.
 
 The agent-provider registry is the platform seam: chat lists only Coffer's two
 managed agents — Claude Code and Codex — and a further agent would be one more

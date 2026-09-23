@@ -117,9 +117,10 @@ class ProviderProjector:
         spec = spec_for(agent_cfg.type, config_key, agent_cfg.resolved_config_dir())
         current = self._config_store.read_text(spec.path)
         text = current or ""
-        # Model comes solely from the per-agent binding (spec provider-switching E3/E4) — the
-        # connection no longer carries one. An unbound agent projects no model so
-        # it runs on its OWN default model.
+        # Model comes solely from the per-agent binding (spec provider-switching
+        # "Take projected model keys from the agent's binding") — the connection
+        # no longer carries one. An unbound agent projects no model so it runs on
+        # its OWN default model.
         if agent_type is AgentType.CLAUDE_CODE:
             # apiKeyHelper names THIS connection by uid, so the projected agent
             # always reads exactly its key regardless of wire (the agnes case)
@@ -196,7 +197,7 @@ class ProviderProjector:
     def _write_if_changed(self, path: pathlib.Path, current: str | None, new: str) -> None:
         """Write only a real change, and only over the content that was read.
 
-        The boot sweep re-derives the projection on every start, and touching
+        The sync post-import reconcile re-derives the projection, and touching
         an agent's config file when nothing differs would churn its mtime — and
         hide, in any file audit, the one case that matters: a projection that
         had actually gone missing.

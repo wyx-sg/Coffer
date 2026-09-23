@@ -356,7 +356,7 @@ def test_cli_surfaces_same_errors(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# T2 — CLI error renderer + --verbose
+# CLI error renderer + --verbose
 # ---------------------------------------------------------------------------
 
 

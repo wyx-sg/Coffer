@@ -1,5 +1,5 @@
 // frontend/src/pages/sync/SyncPage.tsx — the top-level Sync surface
-// (spec vault-sync `## Surfaces`).
+// (spec vault-sync "Present a Sync page with Runs and Setup tabs").
 //
 // Sync is cross-cutting rather than a resource kind, and convergence is
 // something a person opens deliberately rather than a setting they tweak once,

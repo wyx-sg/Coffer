@@ -1,4 +1,4 @@
-"""Map ``codex app-server`` notifications to Coffer ``AgentEvent``s (spec channels, T3).
+"""Map ``codex app-server`` notifications to Coffer ``AgentEvent``s (spec chat).
 
 The Codex analog of ``claude_sdk_agent.map_sdk_message``: each streamed
 server→client notification ``(method, params)`` becomes zero or more

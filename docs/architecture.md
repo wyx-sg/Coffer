@@ -76,7 +76,7 @@ rewrites documents as it merges new knowledge in. There is no `documents` table
 and no chunk table, so nothing has to be reconciled and a document edited in
 the user's own editor is live on the very next read
 ([Knowledge Is Plain Files](decisions/knowledge-is-plain-files.md),
-which supersedes Files as Truth and Retrieval Mode Is Internal).
+which supersedes Files as Truth).
 
 **New knowledge arrives as material, never as a file in the tree.** Every
 entrance — `coffer__write`, `POST /api/v1/knowledge/material`, an upload
@@ -333,7 +333,7 @@ The shim and the listener discover the daemon through `~/.coffer/daemon.json`
 (PID + port + token, mode `0600`) — runtime state, written at start and unlinked at exit.
 Its counterpart `~/.coffer/daemon-config.json` holds the settings the daemon
 must read *before* it binds, and therefore before any database exists: today,
-the optional fixed port, the idle window and the cached machine id. See [Detect-or-Spawn](decisions/daemon-detect-or-spawn.md).
+the optional fixed port, the idle window, the machine name and the cached machine id. See [Detect-or-Spawn](decisions/daemon-detect-or-spawn.md).
 
 ## Persistence
 

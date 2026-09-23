@@ -4,10 +4,10 @@
 ``base_url`` and ``credential_ref``, a second place to type what the Connections
 page already holds. It now carries ``connection``: the NAME of a ``provider``
 resource. (No requirement states this any more: embeddings were removed
-outright afterwards, so what is left is the migration itself — see spec
-knowledge ``## Migration history``.) The connection the stored row MEANT is the one
-pointing at the same place, so the mapping matches on ``base_url`` first
-(normalised for a trailing slash and case) and falls back to a shared
+outright afterwards, so what is left is the migration itself.) The
+connection the stored row MEANT is the one pointing at the same place, so the
+mapping matches on ``base_url`` first (normalised for a trailing slash and
+case) and falls back to a shared
 ``credential_ref``. When nothing matches, the row keeps its dimensions and chunk
 defaults but comes out with NO connection and ``enabled = 0`` — a state the app
 already handles, where retrieval degrades to keyword/grep.

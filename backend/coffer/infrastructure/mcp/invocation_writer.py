@@ -4,7 +4,7 @@ Extracted from ``persistence.py`` to keep that module under the 400-line
 guideline. ``persistence.py`` re-exports the public names so existing
 imports continue to work.
 
-CODE-020: the original implementation committed once per ``insert`` call.
+The original implementation committed once per ``insert`` call.
 On a tool-call-heavy session that hot-path can dominate request latency
 against SQLite (each commit triggers an fsync). The repo here buffers rows
 in an in-memory queue drained by a small writer task that flushes either

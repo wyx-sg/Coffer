@@ -1,4 +1,4 @@
-"""The SSE-session reaper's env knobs (CODE-022).
+"""The SSE-session reaper's env knobs.
 
 A mistyped knob used to be dropped silently, so an operator who set
 ``COFFER_MCP_SESSION_IDLE_S=5m`` got the default idle window and no hint why.

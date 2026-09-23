@@ -114,8 +114,9 @@ async def test_register_validates_via_schema(tmp_path):
 
 @pytest.mark.asyncio
 async def test_generic_register_rejects_lifecycle_kind(tmp_path):
-    """CODE-REG: a kind that owns creation invariants (master folder, agent
-    detection) must declare ``generic_create_allowed=False`` so the generic
+    """spec resource-framework "Keep creation a per-kind seam": a kind that owns
+    creation invariants (master folder, agent detection) must declare
+    ``generic_create_allowed=False`` so the generic
     POST /resources path cannot create a half-formed row behind its back. The
     kind-owning service opts in via ``allow_lifecycle_kind=True``.
     """
@@ -162,7 +163,7 @@ async def test_generic_register_rejects_lifecycle_kind(tmp_path):
 
 @pytest.mark.asyncio
 async def test_kind_supplied_credential_extractor_and_audit_redactor(tmp_path):
-    """CODE-006 / resource framework: ResourceService must NOT hardcode the mcp_server
+    """Resource framework: ResourceService must NOT hardcode the mcp_server
     ``transport`` config shape. A kind supplies its own credential-ref
     extractor (probed before any DB write) and audit redactor (secrets stripped
     before audit), and the kind-agnostic core just calls them — proven here with

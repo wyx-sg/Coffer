@@ -3,8 +3,8 @@
 Both upstream transports (stdio in ``subprocess.py``, HTTP/SSE in
 ``http_client.py``) speak to the same ``mcp.ClientSession`` API; they used to
 carry near-byte-identical private ``_dispatch_method`` copies, which had
-already drifted once (stdio forwarded ``progress_callback``, HTTP didn't —
-CODE-L2). One table here keeps the transports in lockstep.
+already drifted once (stdio forwarded ``progress_callback``, HTTP didn't).
+One table here keeps the transports in lockstep.
 """
 
 from __future__ import annotations

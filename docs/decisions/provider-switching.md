@@ -7,12 +7,16 @@
 
 The live decision is the one below **as corrected by the amendments** at the end
 of this file (D6 onwards). Three clauses of `## Decision` were reversed there and
-not rewritten in place: a connection is a credentialed endpoint with `protocol`
-*detected*, not a `wire_format` the user picks (D9); model and effort are fields
-on the **agent**, not on the connection (D9, D10, D16); and what a connection
-projects to is its **per-agent scope**, so one record may legitimately reach both
-agents and "at most one active per wire format" is really at most one per agent
-type. Read the amendments before relying on a sentence in `## Decision`.
+not rewritten in place: a connection is a credentialed endpoint carrying a
+`protocol`, not a `wire_format` plus a model (D9 — the protocol, briefly
+detected, is chosen again through provider presets or a manual selector; see the
+note under D9); model and effort are fields on the **agent**, not on the
+connection (D9, D10, D16); and what a connection projects to is its **per-agent
+scope**, so one record may legitimately reach both agents and "at most one
+active per wire format" is really at most one per agent type. Read the
+amendments before relying on a sentence in `## Decision`.
+Each amendment's "Carried by" line names the spec requirements that now state
+it; the spec has no dated amendment sections of its own.
 
 ## Context
 
@@ -189,9 +193,9 @@ function. All I/O (file writes) is performed by `ProviderService._project`.
 
 ## Amendment 2026-06-22 — connections are optional overrides (introspection: inline secret)
 
-Authoritative design: the [spec provider-switching Amendment 2026-06-22](../../openspec/specs/provider-switching/spec.md)
-(D1–D7). This ADR section records the introspection consequence delivered first
-(D6); later D-points extend it.
+Carried by [spec provider-switching](../../openspec/specs/provider-switching/spec.md) "Revert an agent to its built-in login" and "Introspect an
+unsaved connection with an inline secret". This ADR section records the
+introspection consequence delivered first (D6); later D-points extend it.
 
 - **D6 — the connection dialog tests/fetches with a not-yet-saved key.** The kept
   introspection routes (`POST /api/v1/models/test-connection`,
@@ -230,12 +234,21 @@ Authoritative design: the [spec provider-switching Amendment 2026-06-22](../../o
   needs an anthropic-wire endpoint even for non-Anthropic models: it only speaks
   the Anthropic Messages wire, so the endpoint must present it (native or via a
   translating proxy) — verified against Claude Code's published gateway docs.
-  See spec provider-switching Amendment 2026-06-22b (E1–E5).
+  Now carried by spec provider-switching "Take projected model keys from the
+  agent's binding".
+  _Amended since:_ the protocol is no longer detected. The add dialog offers
+  provider presets (OpenAI / Anthropic / Google Gemini / DeepSeek / OpenRouter /
+  Ollama) that fill in the endpoint and protocol, plus Custom with a manual
+  protocol selector, and `coffer provider add` takes `--protocol`;
+  `POST /api/v1/models/detect-protocol` survives as a probe the dialog does not
+  call. The Agent page filters connections by the agents their scope reaches
+  (`compatible_agents`) and by `enabled`, not by protocol (spec
+  provider-switching "Offer every connection operation on REST, CLI and web").
 
 ## Amendment 2026-09-11 — the connection curates WHICH models it offers
 
-Authoritative design: the [spec provider-switching Amendment 2026-09-11](../../openspec/specs/provider-switching/spec.md)
-(J1–J3).
+Carried by [spec provider-switching](../../openspec/specs/provider-switching/spec.md) "Curate the models a connection offers" and "Carry the curated
+set through create and patch".
 
 - **D10 — `models` on the connection: the offered set, not a chosen model.** D9
   stands — no model the connection *runs* is stored on it, and every point of use
@@ -256,8 +269,9 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-11](../../o
 
 ## Amendment 2026-09-11b — the agent curates which of its own catalogue it offers
 
-Authoritative design: the [spec provider-switching Amendment 2026-09-11b](../../openspec/specs/provider-switching/spec.md)
-(K1–K4).
+Carried by [spec provider-switching](../../openspec/specs/provider-switching/spec.md) "Serve one model list to every surface" and
+[spec agent-registry](../../openspec/specs/agent-registry/spec.md) "Read the model
+catalogue back from the installed agent".
 
 - **D11 — Two tables in the CLI binary, not one.** The catalog Coffer reads is
   cumulative: it names every model the installed release has heard of. The
@@ -300,8 +314,9 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-11b](../../
 
 ## Amendment 2026-09-13 — the Claude Code picker offers tier aliases
 
-Authoritative design: the [spec provider-switching Amendment 2026-09-13](../../openspec/specs/provider-switching/spec.md)
-(M1–M3).
+Carried by [spec provider-switching](../../openspec/specs/provider-switching/spec.md) "Choose a model from a fixed list" and
+[spec agent-registry](../../openspec/specs/agent-registry/spec.md) "Read the model
+catalogue back from the installed agent".
 
 - **D14 — Offer what the CLI offers, not what its binary remembers.** D12 said
   entitlement is not locally derivable and accepted that a model this account
@@ -312,7 +327,8 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-13](../../o
   the account at turn time. Coffer now offers exactly those, read from the
   `aliases` table that sits beside the catalog in the same bundle, each labelled
   with the display name of the model it currently resolves to — so the per-release
-  distinction H1 went looking for survives, in the label instead of the id.
+  distinction an earlier amendment went looking for survives, in the label
+  instead of the id.
 - **D15 — One table in the CLI binary, not two.** D11's retirement table is no
   longer read, and its injected clock is gone with it: an alias does not retire,
   and that table's only job was pruning the versioned list nothing offers now. The
@@ -323,8 +339,9 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-13](../../o
 
 ## Amendment 2026-09-13b — the effort a Codex turn thinks at is Coffer's to offer
 
-Authoritative design: the [spec provider-switching Amendment 2026-09-13b](../../openspec/specs/provider-switching/spec.md)
-(N1–N4).
+Carried by [spec provider-switching](../../openspec/specs/provider-switching/spec.md) "Choose a model from a fixed list" and
+[spec agent-registry](../../openspec/specs/agent-registry/spec.md) "Carry
+reasoning-effort levels beside the model id".
 
 - **D16 — An effort is a field beside the model, not a name inside it.** D14 made
   the picker offer what the agent's own picker offers; for Codex that is two
@@ -338,7 +355,7 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-13b](../../
   `PATCH …/agent-config` (mention one, the other is left alone; empty clears).
   Beside rather than inside because that is how the protocol takes it — a level
   baked into the name would be four entries for one model under ids Coffer made
-  up, which J3 (ids stay opaque, never a name Coffer writes down) rules out. And nothing
+  up, which D10 (ids stay opaque, never a name Coffer writes down) rules out. And nothing
   validates the level, for the same reason nothing validates a model name: the
   namespace is Codex's, so a fifth level works the day it ships.
 - **D17 — Per turn, because the two alternatives are a lie and a dependency.**

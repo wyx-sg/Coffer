@@ -127,7 +127,7 @@ Telegram/SeaTalk" badge when one exists.
   on top of the turn platform the same spec describes; the contract lives in that
   spec's OpenAPI file.
 - The conversation schema carries no `origin` and no peer display name; the
-  channel name and peer chat id remain as the channel binding.
+  channel's uid and the peer chat id remain as the channel binding.
 - The frontend holds one persistent subscription per open conversation rather
   than a per-turn stream plus polling; the draft surface never locks and renders
   pending rows.
@@ -170,6 +170,12 @@ reason this record was gone for two days — see below.
   wants, and no channel can do it. The decision is unchanged from 2026-06-20 —
   only the routes are spelled out here now that they live in the channels spec
   rather than in a spec of their own.
+- **2026-09-23 — references updated.** The routes are contracted in spec
+  [chat](../../openspec/specs/chat/spec.md) (its own OpenAPI file) since the
+  OpenSpec migration, not in the channels spec. The channel binding is keyed on
+  the channel's uid (`channel_uid`), not its name, so "has a binding" means a
+  channel uid is set ([Resource Identity Is an Immutable
+  UID](resource-identity-is-an-immutable-uid.md)).
 
 ## Implementation notes
 

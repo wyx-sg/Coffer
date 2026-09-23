@@ -350,7 +350,7 @@ async def test_list_capabilities_times_out_on_hung_upstream(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """CODE-M2: a dead/hung upstream must not let the management capabilities
+    """A dead/hung upstream must not let the management capabilities
     page hang for the supervisor's full retry ladder. The route applies a
     per-call timeout budget and surfaces 503 within it.
     """

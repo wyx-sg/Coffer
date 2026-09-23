@@ -2,13 +2,27 @@
 
 Use `coffer-mcp-shim` as the stdio MCP server command in your AI client. The shim auto-discovers (and if needed, auto-spawns) the daemon — no port or token config required.
 
-## Claude Code
+## Recommended: install it from Coffer
+
+For a registered [agent](/guide/agents), let Coffer write the entry:
+
+```bash
+coffer agent mcp install claude-code
+```
+
+This writes a `coffer` entry that runs the shim by its absolute path with `--agent-uid <uid>`, so the daemon knows which agent the session belongs to and serves it every server whose reach includes that agent.
+
+## Manual entry
+
+A hand-written entry carries no agent identity. That session sees only the servers whose reach is every agent; a server limited to selected agents stays hidden from it.
+
+### Claude Code
 
 ```bash
 claude mcp add coffer coffer-mcp-shim
 ```
 
-## Codex
+### Codex
 
 `~/.codex/config.toml`:
 
@@ -23,7 +37,7 @@ Replace `coffer-mcp-shim` with the binary's absolute path if it is not on the cl
 
 ## Verify it works
 
-1. List the client's tools. Every enabled upstream tool appears with its server prefix — `filesystem__read_file`, `filesystem__write_file`, and so on.
+1. List the client's tools. Enabled upstream tools appear with their server prefix — `filesystem__read_file`, `filesystem__write_file`, and so on. When the catalogue is larger than the listing budget, the rest stay callable but unlisted; `coffer__search_tools` finds them by description.
 2. Ask the agent to read a file. It calls `filesystem__read_file`, and Coffer routes the call to the upstream under its original name.
 3. Run `coffer mcp invocations filesystem` — the call is there with its time, duration and outcome.
 

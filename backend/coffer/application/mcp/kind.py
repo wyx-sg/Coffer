@@ -14,7 +14,7 @@ _logger = logging.getLogger(__name__)
 
 # Keys inside ``transport`` whose values may carry auth material (custom
 # headers, raw environment overlays). credential_refs (keychain ref strings
-# only) survive audit; the raw maps are stripped. See CODE-006.
+# only) survive audit; the raw maps are stripped.
 _AUDIT_STRIP_TRANSPORT_KEYS: frozenset[str] = frozenset({"env", "headers"})
 
 
@@ -50,7 +50,7 @@ def _mcp_credential_ref_extractor(config: dict[str, Any]) -> dict[str, str]:
 def _validate_mcp_name(name: str) -> None:
     """Reject mcp_server names that would break tool/prompt namespacing.
 
-    CODE-030: capabilities are exposed downstream as ``<server>__<tool>`` and
+    Capabilities are exposed downstream as ``<server>__<tool>`` and
     parsed back by splitting on the first ``__``. A server name containing
     ``__`` makes that parse ambiguous (it would route to the wrong server, so
     the tool lists but can never be invoked). Reserve the separator.
@@ -75,7 +75,7 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
     """
 
     async def on_delete(resource: Resource) -> None:
-        # CODE-033: async hook AWAITED by ResourceService.delete BEFORE the row
+        # Async hook AWAITED by ResourceService.delete BEFORE the row
         # is removed, so every live session's upstream connection for this
         # server is fully evicted before deletion completes — no in-flight call
         # can outlive the registration and leak the subprocess.

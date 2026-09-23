@@ -85,8 +85,8 @@ predicate and the same links as any imported skill.
   inside `on_delete`, because `on_delete` is a reaction to a delete that has
   already been decided — a kind refusing from in there refuses after the
   framework has committed. Placing it in the framework is what makes the
-  kind-agnostic `DELETE /api/v1/resources/skill/{name}` and the skill kind's own
-  route refuse identically; a guard written into one route is a guard the other
+  kind-agnostic `DELETE /api/v1/resources/{uid}` and the skill kind's own
+  `DELETE /api/v1/skills/{uid}` refuse identically; a guard written into one route is a guard the other
   silently lacks.
 - **The handshake narrows to what only it can say.** What Coffer is, the four
   tool names, the per-session hidden-tool count, and a pointer to the skill.

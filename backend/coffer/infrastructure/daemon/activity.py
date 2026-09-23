@@ -1,7 +1,7 @@
 """What "nobody is using the daemon" means, and who may say otherwise.
 
 The daemon is a login service: launchd starts it when the user logs in and
-restarts it if it crashes (``coffer daemon install-service``). Resident by
+restarts it if it crashes (``coffer daemon service install``). Resident by
 default is the behaviour a vault an agent talks to has to have — a daemon that
 is only up while its window is open is a daemon that is down whenever the work
 is happening somewhere else. Resident *forever* is a different thing, though,

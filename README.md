@@ -16,7 +16,7 @@ Coffer is a daemon + CLI + web UI that gives every AI agent on your machine one 
 - **Agents** — detect and register your local AI coding agents, edit their config files in-app, and one-click install Coffer's own MCP server into any of them.
 - **Providers** — one shared registry of model-provider profiles (base URL plus credential), projected atomically into each agent's own native config, so you switch provider once instead of once per agent. Credentials stay Fernet ciphertext and are isolated per agent.
 - **Skills** — keep a master library of agent skill bundles and deliver them into one or more agents' skill directories, with drift reconciliation.
-- **Knowledge** — a directory of markdown files, not an index. You create a **collection**, nest folders in it however you like, and drop files in from your own editor or file manager; agents read and write the same bytes over MCP and find things by walking a generated catalogue and grepping, with nothing chunked, embedded or reconciled in between. Each collection is a resource, so you decide which agents may see it. A tidy pass merges duplicates into coherent documents on request, archiving every revision it replaces.
+- **Knowledge** — a directory of markdown files, not an index. You create a **collection**, nest folders in it however you like, and drop files in from your own editor or file manager; agents read the same bytes with their own file tools, find things by walking a generated catalogue and grepping, and add to it through `coffer__write`, with nothing chunked, embedded or reconciled in between. Each collection is a resource you can enable or disable; an enabled collection is served to every agent. A curation pass merges new material into coherent documents, on a sweep or on request.
 - **Memory** — Coffer aggregates each registered agent's own native memory read-only, normalises it into derived facts partitioned by project plus a `global` partition, and delivers a budgeted digest back at session start; `coffer__recall` fetches whatever the digest left out. Coffer never writes an agent's memory files, and everything under `~/.coffer/memory/` is derived and rebuildable.
 - **Channels** — chat with your registered coding agents (Claude Code, Codex) from Telegram or SeaTalk, and receive notifications from your phone.
 
@@ -203,8 +203,7 @@ e2e/                  Playwright suites — the web UI and the MCP gateway
 evals/                AI eval harness — tool-search and tool-routing suites
 scripts/              repo gates (file sizes, doc naming, acceptance audit) and maintenance
 docs-site/            VitePress source for the published documentation site
-specs/                capability specs (one per feature; a spec may nest a child)
-openspec/             OpenSpec config, changes in flight, and the archive of shipped changes
+openspec/             OpenSpec config, capability specs (`specs/<capability>/`, children nest), changes in flight, and the archive
 docs/decisions/       Architectural Decision Records (ADRs)
 .agents/              Guides: workflow, OpenSpec, stack, frontend, visual language, testing, harness
 ```

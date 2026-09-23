@@ -1,4 +1,4 @@
-"""Unit tests for the Codex app-server JSON-RPC-over-stdio client (T1).
+"""Unit tests for the Codex app-server JSON-RPC-over-stdio client (spec chat).
 
 Pure tests — no subprocess, no network. A fake reader feeds canned
 ``\\n``-delimited JSON lines and a fake writer captures the outbound NDJSON, so

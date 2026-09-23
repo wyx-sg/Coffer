@@ -41,10 +41,10 @@ make verify-all           # verify + e2e
 ```
 
 `make verify-e2e` runs the two projects `e2e/playwright.config.ts` defines. The **web**
-project is the leg that actually runs: eight browser-driven specs against the frontend,
-covering the agent workspace and the activity, agents, cold-start, knowledge, MCP-flow,
-settings and skills shells. The **mcp** project spawns the daemon and the shim as OS
-subprocesses for a gateway round-trip, and routinely skips.
+project runs eight browser-driven specs against the frontend, covering the agent workspace
+and the activity, agents, cold-start, knowledge, MCP-flow, settings and skills shells. The
+**mcp** project spawns the daemon and the shim as OS subprocesses and drives a real MCP
+client through them to upstream servers.
 
 ## Lockfile
 

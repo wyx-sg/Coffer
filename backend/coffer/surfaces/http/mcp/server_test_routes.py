@@ -59,7 +59,7 @@ async def test_mcp_server(
     start = time.monotonic()
     try:
         if isinstance(config.transport, StdioTransport):
-            # CODE-034: offload the blocking credential-store read off the event loop.
+            # Offload the blocking credential-store read off the event loop.
             overlay = await asyncio.to_thread(
                 resolver.materialize, config.transport.credential_refs
             )
