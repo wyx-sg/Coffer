@@ -5,6 +5,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
+import { acceptance } from "@/test/acceptance";
 import { Layout } from "./Layout";
 
 vi.mock("./DaemonOfflineBanner", () => ({ DaemonOfflineBanner: () => null }));
@@ -84,4 +85,22 @@ describe("Layout", () => {
     expect(screen.getByRole("link", { name: "Agents" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^language$/i })).toBeInTheDocument();
   });
+});
+
+acceptance("web-ui", "the collapsed sidebar stays collapsed after a reload", () => {
+  const first = renderShell();
+  expect(screen.getByText("Coffer")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
+  first.unmount();
+
+  // A fresh mount reads the remembered choice: it opens as the icon rail.
+  const second = renderShell();
+  expect(screen.queryByText("Coffer")).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Agents" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /expand sidebar/i }));
+  second.unmount();
+
+  // Expanding is remembered the same way.
+  renderShell();
+  expect(screen.getByText("Coffer")).toBeInTheDocument();
 });

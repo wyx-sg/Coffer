@@ -99,6 +99,10 @@ async def test_the_tier_aliases_are_what_is_offered(
     assert [m.id for m in models] == ["opus", "haiku"]
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry/claude-code",
+    scenario="offer the embedded aliases and nothing when the table is missing",
+)
 async def test_each_alias_is_labelled_with_the_model_it_is_today(
     discovery: ClaudeBinaryModelDiscovery, tmp_path: pathlib.Path
 ) -> None:
@@ -112,6 +116,13 @@ async def test_each_alias_is_labelled_with_the_model_it_is_today(
     assert models["haiku"].label == "Haiku 3.5"
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="report no default when the runtime publishes none"
+)
+@pytest.mark.acceptance(
+    spec="agent-registry/claude-code",
+    scenario="apply the SDK's effort levels to every alias without a default",
+)
 async def test_every_alias_carries_the_runtimes_reasoning_levels(
     discovery: ClaudeBinaryModelDiscovery, tmp_path: pathlib.Path
 ) -> None:
@@ -206,6 +217,10 @@ async def test_a_binary_without_the_marker_is_empty(
     assert await discovery.discover(agent_key="claude_code", config_dir=None) == []
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry/claude-code",
+    scenario="offer the embedded aliases and nothing when the table is missing",
+)
 async def test_a_bundle_without_the_alias_table_is_empty(
     discovery: ClaudeBinaryModelDiscovery, tmp_path: pathlib.Path
 ) -> None:

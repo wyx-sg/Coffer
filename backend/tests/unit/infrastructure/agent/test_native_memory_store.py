@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import pathlib
 
+import pytest
+
 from coffer.infrastructure.agent.native_memory_store import FileNativeMemoryScanner
 
 
@@ -83,6 +85,9 @@ def test_scan_skips_non_directory_entries(tmp_path: pathlib.Path) -> None:
     assert [s.slug for s in out] == ["-A"]
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry/claude-code", scenario="count an inline MEMORY.md as one item"
+)
 def test_scan_inline_memory_md_counts_as_one(tmp_path: pathlib.Path) -> None:
     projects = tmp_path / "projects"
     # No separate fact files, but MEMORY.md holds inline content (an older /
@@ -104,6 +109,9 @@ def test_scan_blank_memory_md_counts_zero(tmp_path: pathlib.Path) -> None:
     assert out[0].item_count == 0
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry/claude-code", scenario="count an inline MEMORY.md as one item"
+)
 def test_scan_index_with_facts_counts_only_facts(tmp_path: pathlib.Path) -> None:
     projects = tmp_path / "projects"
     # When fact files exist, MEMORY.md is a pure index and is NOT counted.

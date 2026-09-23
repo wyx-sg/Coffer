@@ -279,7 +279,7 @@ name: Desktop
 os: darwin
 hostname: studio.local
 coffer_version: 0.5.0
-last_converged_at: 2026-09-13
+last_converged_on: 2026-09-13
 last_converged_commit: <40-hex commit sha>
 key_fingerprint: <12-hex sha256 of the master key>
 agents: [claude-code, codex]
@@ -290,7 +290,7 @@ agents: [claude-code, codex]
 | `machine_id` | `sha256("coffer-machine:" + raw)` truncated to 16 hex characters. The raw host identifier — `IOPlatformUUID` on macOS, `/etc/machine-id` on Linux — is a hardware identifier and MUST NOT be written here. When neither is readable, the raw value is a UUID generated once into `~/.coffer/machine-id` (mode `0600`); that one does not survive deleting `~/.coffer`, and the machines page says so |
 | `name` | the user's label, defaulting from the hostname. Mutable at any time and at no cost, because nothing keys on it |
 | `os`, `hostname`, `coffer_version` | descriptive, for the machines table |
-| `last_converged_at` | a **date**, restamped at most once per calendar day, so an idle machine does not commit a heartbeat every round. The UI says "last converged day", not "last converged at" |
+| `last_converged_on` | a **date**, restamped at most once per calendar day, so an idle machine does not commit a heartbeat every round. The UI says "last converged day", not "last converged at" |
 | `last_converged_commit` | this machine's pointer, published so the remote can hand it back. Restamped every round. This is what a **returning** machine recovers its base from when its local pointer is gone |
 | `key_fingerprint` | the same short hash `GET /sync/key/fingerprint` returns, so the machines table can state that another machine's credentials cannot be decrypted here |
 | `agents` | the names of the agents registered on that machine |

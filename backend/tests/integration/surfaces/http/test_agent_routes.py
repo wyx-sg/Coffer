@@ -287,6 +287,7 @@ def test_patch_description_only_preserves_config_dir(tmp_path, monkeypatch):
         assert r.json()["config_dir"] == str(config_dir)
 
 
+@pytest.mark.acceptance(spec="agent-registry", scenario="keep an agent's uid across a rename")
 def test_uid_survives_a_rename_and_no_name_addresses_the_agent(tmp_path, monkeypatch):
     """The identity stays put when the label moves — the point of the change.
 

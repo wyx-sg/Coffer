@@ -1,6 +1,8 @@
 """Unit tests for the pure Telegram inbound parsing helpers (Task 8): group
 detection, @mention/reply addressing, and forwarded/quoted-reply framing."""
 
+import pytest
+
 from coffer.infrastructure.channel.telegram_parse import (
     _mentions_other,
     addressed_and_text,
@@ -329,3 +331,25 @@ def test_a_note_alone_still_gives_the_turn_text() -> None:
         notes=("[attachment 'clip.mov' is too large]",),
     )
     assert built.text == "[attachment 'clip.mov' is too large]"
+
+
+@pytest.mark.acceptance(
+    spec="channels/telegram", scenario="a telegram group message carries from.id and the chat title"
+)
+def test_a_group_message_carries_from_id_and_title_and_no_mention_id():
+    built = build_inbound_message(
+        _message(
+            chat={"id": -100123, "type": "supergroup", "title": "Ops room"},
+            text="@mybot status",
+            entities=[{"type": "mention", "offset": 0, "length": len("@mybot")}],
+            date=1718000000,
+        ),
+        (),
+        channel="tg",
+        bot_id=BOT_ID,
+        bot_username=BOT_USERNAME,
+    )
+    assert built.sender_id == "4242"
+    assert built.chat_title == "Ops room"
+    # Telegram spells a mention with a display name too, so the reply carries none.
+    assert built.sender_mention_id == ""

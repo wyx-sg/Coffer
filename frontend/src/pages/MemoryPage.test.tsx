@@ -14,6 +14,7 @@ import { MemoryRouter } from "react-router-dom";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { MemoryPage } from "./MemoryPage";
+import { acceptance } from "@/test/acceptance";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
 
 vi.mock("@/lib/hooks/useMemory", () => ({
@@ -183,4 +184,17 @@ describe("MemoryPage", () => {
     expect(screen.queryByText(/^delivery$/i)).toBeNull();
     expect(screen.queryByRole("button", { name: /install/i })).toBeNull();
   });
+});
+
+acceptance("memory", "browse a partition as a file tree with a read-only preview", () => {
+  // The partitions page's half: the first-run welcome with none, the table with one.
+  stubPartitions([]);
+  const { unmount } = renderPage();
+  expect(screen.getByText("Nothing distilled yet")).toBeInTheDocument();
+  expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  unmount();
+
+  stubPartitions([COFFER]);
+  renderPage();
+  expect(screen.getByRole("table")).toBeInTheDocument();
 });

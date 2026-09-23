@@ -277,6 +277,9 @@ def test_adopt_takes_the_union_from_a_remote_holding_other_work(fleet: Fleet) ->
     )
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a returning machine whose base is gone must choose"
+)
 def test_adopt_keep_local_answers_an_otherwise_unrecoverable_join(fleet: Fleet) -> None:
     """A first round publishes a descriptor naming no commit; a reinstall on
     that same day leaves this machine's base unrecoverable."""
@@ -623,6 +626,9 @@ def test_key_export_writes_a_private_file_the_import_reads_back(fleet: Fleet, tm
     assert fleet.a.master_key.export_key() == key
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="credentials this machine cannot decrypt are reported locked"
+)
 def test_key_import_names_what_it_still_cannot_read(fleet: Fleet, tmp_path) -> None:
     fleet.a.set_credential("mcp/files/token", "s3cret-value")
     fleet.run(
@@ -665,3 +671,82 @@ def test_conflict_advice_names_the_step_this_machine_can_take(
 
     assert "then run 'coffer sync adopt'" in not_joined
     assert "then run 'coffer sync now'" in joined
+
+
+# --- what the surface offers ------------------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="a remote URL or branch that git would read as an option is refused",
+)
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ("--", "--receive-pack=touch pwned"),
+        ("--", "-x"),
+        ("https://example.invalid/v.git", "--branch=-x"),
+        ("https://example.invalid/v.git", "--branch=a..b"),
+    ],
+)
+def test_remote_set_refuses_what_git_would_read_as_an_option(fleet: Fleet, argv) -> None:
+    result = fleet.invoke("sync", "remote", "set", *argv)
+
+    assert result.exit_code != 0, result.output
+    assert "no sync remote configured" in fleet.ok("sync", "remote", "show").output
+
+
+def _command_tree(command: Any, prefix: tuple[str, ...] = ()) -> dict[tuple[str, ...], Any]:
+    tree = {prefix: command}
+    for name, sub in (getattr(command, "commands", None) or {}).items():
+        tree.update(_command_tree(sub, (*prefix, name)))
+    return tree
+
+
+@pytest.mark.acceptance(spec="vault-sync", scenario="the command line covers every sync operation")
+def test_the_sync_group_offers_every_command_and_option_it_owes() -> None:
+    import typer.main
+
+    tree = _command_tree(typer.main.get_command(cli_app))
+    owed: dict[tuple[str, ...], set[str]] = {
+        ("sync", "now"): set(),
+        ("sync", "adopt"): {"--keep-local", "--yes"},
+        ("sync", "status"): set(),
+        ("sync", "history"): {"--limit"},
+        ("sync", "restore"): {"--at"},
+        ("sync", "confirm"): set(),
+        ("sync", "reject"): set(),
+        ("sync", "rebuild"): {"--yes"},
+        ("sync", "rollback"): set(),
+        ("sync", "remote", "set"): {
+            "--branch",
+            "--interval",
+            "--with-credentials",
+            "--credential-ref",
+        },
+        ("sync", "remote", "show"): set(),
+        ("sync", "remote", "clear"): set(),
+        ("sync", "machine", "list"): set(),
+        ("sync", "machine", "rename"): set(),
+        ("sync", "machine", "remove"): set(),
+        ("sync", "key", "export"): set(),
+        ("sync", "key", "import"): set(),
+        ("sync", "key", "fingerprint"): set(),
+    }
+    for path, options in owed.items():
+        assert path in tree, f"missing: coffer {' '.join(path)}"
+        offered = {opt for param in tree[path].params for opt in param.opts}
+        assert options <= offered, f"coffer {' '.join(path)} lacks {options - offered}"
+    # The positional arguments the requirement names.
+    positional = {
+        path: [p.name for p in tree[path].params if p.param_type_name == "argument"]
+        for path in (
+            ("sync", "adopt"),
+            ("sync", "remote", "set"),
+            ("sync", "machine", "rename"),
+            ("sync", "machine", "remove"),
+            ("sync", "key", "export"),
+            ("sync", "key", "import"),
+        )
+    }
+    assert all(len(args) == 1 for args in positional.values()), positional

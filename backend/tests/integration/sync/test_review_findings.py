@@ -240,6 +240,9 @@ async def test_a_resource_that_fails_to_serialize_is_not_published_as_a_deletion
     )
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="the apply-side guard counts held paths the tree dropped"
+)
 async def test_the_deletion_guard_sees_the_retry_set_too(tmp_path: pathlib.Path) -> None:
     """spec vault-sync ``## Safety``: the circuit breaker bounds what a round
     would *apply*, and the retry set is applied alongside the diff.

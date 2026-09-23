@@ -652,6 +652,9 @@ async def test_uninstall_claude_cli_failure_propagates(store, audit_svc):
     assert entries == []
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="hide the uninstall affordance when the uninstall cannot run"
+)
 async def test_list_can_uninstall_gating(store, audit_svc):
     # Claude (CLI strategy): can_uninstall follows the CLI's availability.
     store._files[_CLAUDE_INSTALLED] = _INSTALLED_JSON

@@ -23,6 +23,9 @@ from coffer.domain.sync.serialization import parse_resource_doc, resource_to_doc
 UID = "7f3a1c2e4b5d6a7f8091a2b3c4d5e6f7"
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a resource document is identity, description and config"
+)
 def test_doc_is_identity_description_and_config_and_nothing_else() -> None:
     doc = resource_to_doc(
         uid=UID,
@@ -42,6 +45,9 @@ def test_doc_is_identity_description_and_config_and_nothing_else() -> None:
     assert "updated_at" not in doc
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a resource document is identity, description and config"
+)
 def test_doc_carries_no_reach() -> None:
     """The decision, at the smallest layer it is visible on.
 

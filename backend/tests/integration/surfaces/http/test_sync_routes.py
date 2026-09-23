@@ -18,8 +18,11 @@ that they are gone is asserted, and nothing else in this file mentions them.
 from __future__ import annotations
 
 import pathlib
+import re
+import subprocess
 
 import pytest
+import yaml
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
@@ -40,6 +43,7 @@ from coffer.surfaces.http.sync_routes import (
     set_sync_service,
 )
 from tests.integration.sync.harness import (
+    BRANCH,
     MACHINE_A,
     MACHINE_B,
     VaultMachine,
@@ -153,6 +157,9 @@ async def test_put_remote_that_cannot_be_reached_is_rejected_at_the_front_door(
         {"url": "https://example.invalid/v.git", "worktree_path": ""},
     ],
 )
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a remote URL or branch that git would read as an option is refused"
+)
 async def test_put_remote_refuses_what_git_would_read_as_an_option(client, body) -> None:
     """The URL and the branch become git arguments. A value git would parse as
     an option — ``--receive-pack=<cmd>`` is a command — is a 422 at the wire,
@@ -252,6 +259,7 @@ async def test_run_publishes_the_vault_to_a_real_remote(client, fleet) -> None:
     assert await a.remote_text("knowledge/notes/one.md") == "first note\n"
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="sync stays off until a remote is configured")
 async def test_run_without_a_remote_is_a_disabled_round(client) -> None:
     r = await client.post("/api/v1/sync/run", json={})
 
@@ -308,6 +316,9 @@ async def test_a_path_that_cannot_apply_here_is_reported_as_not_applicable(clien
     assert history[0]["not_applicable"] == [path]
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a joining machine is placed from the remote's registry"
+)
 async def test_adopt_joins_as_new_when_the_registry_has_never_seen_this_machine(
     client, fleet
 ) -> None:
@@ -332,6 +343,9 @@ async def test_adopt_joins_as_new_when_the_registry_has_never_seen_this_machine(
     assert {"knowledge/notes/from-a.md", "knowledge/notes/from-b.md"} <= await a.remote_paths()
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a returning machine whose base is gone must choose"
+)
 async def test_adopt_needs_a_choice_when_a_returning_machine_has_lost_its_base(
     client, fleet
 ) -> None:
@@ -766,6 +780,9 @@ async def test_retiring_this_machine_is_refused(client, fleet) -> None:
     assert _code(r) == "SYNC_CANNOT_RETIRE_SELF"
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a retired machine leaves the registry with its descriptor"
+)
 async def test_retiring_a_machine_removes_its_descriptor_and_nothing_else(client, fleet) -> None:
     """The answer has one half, because the operation has one effect.
 
@@ -790,6 +807,10 @@ async def test_retiring_a_machine_removes_its_descriptor_and_nothing_else(client
         m["machine_id"] for m in (await client.get("/api/v1/sync/machines")).json()["machines"]
     }
     assert remaining == {MACHINE_A}
+    # The registry is the descriptors: B's is gone from the tree, and A's own
+    # is still there.
+    assert f"machines/{MACHINE_B}.yaml" not in a.tree_paths()
+    assert f"machines/{MACHINE_A}.yaml" in a.tree_paths()
     resource = await a.find("mcp_server", "shared")
     assert resource is not None
     assert resource.scope == Scope(agents=["claude-code"]), (
@@ -835,6 +856,9 @@ async def test_key_export_hands_back_material_and_import_takes_it_again(client, 
     assert a.master_key.export_key() == key
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="credentials this machine cannot decrypt are reported locked"
+)
 async def test_key_import_reports_what_it_still_cannot_read(client, fleet) -> None:
     a, b = fleet
     a.set_credential("mcp/files/token", "s3cret-value")
@@ -886,3 +910,153 @@ async def test_the_bundle_directory_routes_are_gone(client, tmp_path) -> None:
 
     assert (await client.post("/api/v1/sync/export", json=body)).status_code == 404
     assert (await client.post("/api/v1/sync/import", json=body)).status_code == 404
+
+
+# --- joining, placed from the registry ---------------------------------------
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a joining machine is placed from the remote's registry"
+)
+async def test_adopt_joins_as_returning_when_the_registry_holds_this_machine(client, fleet) -> None:
+    """The other half of the placement: this machine's id is in the registry,
+    with a base still in the history, so it rejoins as itself."""
+    a, _b = fleet
+    a.write_knowledge("notes", "one", "first note\n")
+    await _configure(client, a)
+    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    # The second round is what writes the reached commit into the descriptor.
+    await client.post("/api/v1/sync/run", json={})
+    assert "last_converged_commit: " in (await a.remote_text(f"machines/{MACHINE_A}.yaml") or "")
+    a.state.forget()  # what a reinstall does to the machine-local pointer
+
+    r = await client.post("/api/v1/sync/adopt", json={})
+
+    assert r.status_code == 200
+    assert r.json()["join"] == "returning", r.json()
+    assert a.read_knowledge("notes", "one") == "first note\n"
+
+
+def _rewrite_published_base(remote_url: str, machine_id: str, workdir: pathlib.Path) -> None:
+    """Point this machine's published descriptor at a commit the history lacks,
+    as a rewritten history would, by pushing the edit through plain git."""
+    clone = workdir / "history-rewriter"
+    subprocess.run(
+        ["git", "clone", "-b", BRANCH, remote_url, str(clone)], check=True, capture_output=True
+    )
+    path = clone / "machines" / f"{machine_id}.yaml"
+    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+    doc["last_converged_commit"] = "0123456789abcdef0123456789abcdef01234567"
+    path.write_text(yaml.safe_dump(doc, sort_keys=True), encoding="utf-8")
+    for args in (
+        ["add", "-A"],
+        ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "rewrite"],
+        ["push", "origin", BRANCH],
+    ):
+        subprocess.run(["git", "-C", str(clone), *args], check=True, capture_output=True)
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a returning machine whose base is gone must choose"
+)
+async def test_adopt_refuses_a_returning_machine_whose_base_left_the_history(
+    client, fleet, tmp_path: pathlib.Path
+) -> None:
+    a, _b = fleet
+    a.write_knowledge("notes", "one", "first note\n")
+    await _configure(client, a)
+    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    await client.post("/api/v1/sync/run", json={})
+    _rewrite_published_base(a.remote_url, MACHINE_A, tmp_path)
+    a.state.forget()
+    a.write_knowledge("notes", "local-only", "only here\n")
+    commits_before = await a.remote_commit_count()
+    paths_before = await a.remote_paths()
+
+    refused = await client.post("/api/v1/sync/adopt", json={})
+
+    assert refused.status_code == 200
+    body = refused.json()
+    assert body["status"] == "failed"
+    assert body["join"] is None
+    # The refusal names the choice to make.
+    assert "choosing either to keep this vault's own documents" in (body["error"] or "")
+    assert "rebuild this machine from the remote" in (body["error"] or "")
+    # Nothing was applied here and nothing was pushed there.
+    assert await a.remote_commit_count() == commits_before
+    assert await a.remote_paths() == paths_before
+    assert a.read_knowledge("notes", "local-only") == "only here\n"
+    assert await a.state.pointer() is None
+
+    chosen = await client.post("/api/v1/sync/adopt", json={"choice": "keep-local"})
+
+    assert chosen.status_code == 200
+    assert chosen.json()["join"] == "new"
+
+
+# --- the machines table and the key -----------------------------------------
+
+
+@pytest.mark.acceptance(spec="vault-sync", scenario="a peer holding another master key is flagged")
+async def test_the_published_fingerprint_is_the_one_the_key_route_returns(client, fleet) -> None:
+    a, b = fleet
+    await b.converge()
+    await b.converge()
+    await _configure(client, a)
+    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+
+    fingerprint = (await client.get("/api/v1/sync/key/fingerprint")).json()["fingerprint"]
+    descriptor = yaml.safe_load(await a.remote_text(f"machines/{MACHINE_A}.yaml") or "")
+
+    assert descriptor["key_fingerprint"] == fingerprint
+    rows = {
+        m["machine_id"]: m for m in (await client.get("/api/v1/sync/machines")).json()["machines"]
+    }
+    # B published a different fingerprint, and the table says so directly.
+    peer = yaml.safe_load(await a.remote_text(f"machines/{MACHINE_B}.yaml") or "")
+    assert peer["key_fingerprint"] != fingerprint
+    assert rows[MACHINE_B]["key_matches"] is False
+    assert rows[MACHINE_A]["key_matches"] is True
+
+
+# --- every operation is served ------------------------------------------------
+
+#: The requirement's list, verbatim, under ``/api/v1/sync``.
+_SYNC_OPERATIONS = {
+    ("GET", "/remote"),
+    ("PUT", "/remote"),
+    ("DELETE", "/remote"),
+    ("POST", "/run"),
+    ("POST", "/adopt"),
+    ("GET", "/status"),
+    ("GET", "/runs"),
+    ("POST", "/restore"),
+    ("POST", "/confirm"),
+    ("POST", "/reject"),
+    ("POST", "/rebuild"),
+    ("POST", "/rollback"),
+    ("GET", "/machines"),
+    ("PATCH", "/machines/self"),
+    ("DELETE", "/machines/{id}"),
+    ("GET", "/key/fingerprint"),
+    ("POST", "/key/export"),
+    ("POST", "/key/import"),
+}
+
+
+@pytest.mark.acceptance(spec="vault-sync", scenario="the HTTP API serves every sync operation")
+def test_every_sync_operation_is_served_under_api_v1_sync() -> None:
+    app = FastAPI()
+    app.include_router(sync_router)
+    served: set[tuple[str, str]] = set()
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        if not path.startswith("/api/v1/sync"):
+            continue
+        # A path parameter's name is the implementation's; the shape is the contract.
+        shape = re.sub(r"\{[^}]+\}", "{id}", path.removeprefix("/api/v1/sync"))
+        for method in getattr(route, "methods", set()) or set():
+            served.add((method, shape))
+
+    missing = _SYNC_OPERATIONS - served
+    assert not missing, f"not served: {sorted(missing)}"

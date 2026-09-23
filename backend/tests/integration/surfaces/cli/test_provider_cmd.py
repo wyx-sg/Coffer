@@ -443,3 +443,32 @@ def test_cli_rename_of_a_missing_connection_is_not_found(provider_daemon):
     combined = missing.output + (missing.stderr or "")
     assert missing.exit_code == 4, combined
     assert "ghost" in combined, combined
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="the key command refuses a call naming neither a connection nor a wire",
+)
+def test_cli_key_refuses_a_call_naming_neither_selector(provider_daemon):
+    added = _runner.invoke(
+        cli_app,
+        [
+            "provider",
+            "add",
+            "acme",
+            "--protocol",
+            "anthropic",
+            "--base-url",
+            "https://gw/anthropic",
+            "--secret",
+            "sk-never-printed",
+        ],
+    )
+    assert added.exit_code == 0, added.output
+    assert _runner.invoke(cli_app, ["provider", "switch", "acme"]).exit_code == 0
+
+    r = _runner.invoke(cli_app, ["provider", "key"])
+
+    assert r.exit_code == 6, r.output
+    assert "sk-never-printed" not in r.output
+    assert "sk-never-printed" not in (r.stderr or "")

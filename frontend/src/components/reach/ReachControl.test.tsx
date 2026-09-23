@@ -27,6 +27,9 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
+import { acceptance } from "@/test/acceptance";
+import i18n from "@/i18n";
+import { reachFilter, reachFilterOptions } from "@/lib/reachFilter";
 import { ReachControl, type ReachMode } from "./ReachControl";
 import type { Scope } from "@/lib/hooks/useScope";
 
@@ -492,5 +495,94 @@ describe("the panel stages the choice, then commits once on close", () => {
     // Closing again (already closed) must not write a second time.
     closePanel();
     expect(h.onRestricted).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("reach conventions (web-ui)", () => {
+  /** Mount one control, read its button, unmount — so four can be compared. */
+  function label(mode: ReachMode, scope?: Scope): string {
+    const { unmount } = render(<ReachControl mode={mode} initialScope={scope} {...handlers()} />);
+    const buttons = within(screen.getByTestId("scope-control")).getAllByRole("button");
+    expect(buttons).toHaveLength(1);
+    const text = buttons[0].textContent ?? "";
+    unmount();
+    return text;
+  }
+
+  acceptance("web-ui", "the reach button states the reach it holds", () => {
+    seed();
+    expect(label("everywhere")).toMatch(/^every agent$/i);
+    expect(label("restricted", only([CLAUDE, CODEX]))).toMatch(/^2 agents$/i);
+    expect(label("restricted", only([]))).toMatch(/^no agent selected/i);
+    expect(label("disabled", only([CLAUDE]))).toMatch(/^disabled$/i);
+  });
+
+  acceptance("web-ui", "the reach panel offers the reach states as one choice", () => {
+    seed();
+    const scoped = render(
+      <ReachControl mode="restricted" initialScope={only([CLAUDE])} {...handlers()} />,
+    );
+    openPanel();
+    const radios = screen.getAllByRole("radio");
+    expect(radios.map((r) => r.closest("label")?.textContent)).toEqual([
+      expect.stringMatching(/^disabled$/i),
+      expect.stringMatching(/every agent/i),
+      expect.stringMatching(/only selected agents/i),
+    ]);
+    // One choice: exactly the live state is chosen.
+    expect(radios.filter((r) => (r as HTMLInputElement).checked)).toHaveLength(1);
+    expect(choice(/only selected agents/i)).toBeChecked();
+    expect(screen.getByTestId("scope-agent-axis")).toBeInTheDocument();
+    closePanel();
+    scoped.unmount();
+
+    render(<ReachControl mode="everywhere" supportsScope={false} {...handlers()} />);
+    openPanel();
+    expect(screen.getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual([
+      expect.stringMatching(/^disabled$/i),
+      expect.stringMatching(/^enabled$/i),
+    ]);
+    expect(screen.queryByTestId("scope-agent-axis")).not.toBeInTheDocument();
+  });
+
+  acceptance("web-ui", "the reach filter offers the panel's states under the reach name", () => {
+    seed();
+    render(<ReachControl mode="everywhere" {...handlers()} />);
+    openPanel();
+    const panelLabels = screen.getAllByRole("radio").map((r) => r.closest("label")?.textContent);
+
+    const t = i18n.t.bind(i18n);
+    const options = reachFilterOptions(t);
+    expect(options.map((o) => o.value)).toEqual(["disabled", "everywhere", "restricted"]);
+    expect(options.map((o) => o.label)).toEqual(panelLabels);
+    expect(options.map((o) => o.label)).toEqual([
+      "Disabled",
+      "Every agent",
+      "Only selected agents",
+    ]);
+
+    const filter = reachFilter(t, (row: { on: boolean }) => ({ enabled: row.on, scope: null }));
+    expect(filter.label).toBe("Reach");
+    expect(filter.label).toBe(t("resources.cols.reach"));
+  });
+
+  acceptance("web-ui", "a dismissed reach panel writes nothing", () => {
+    seed();
+    const h = mount("everywhere");
+
+    openPanel();
+    closePanel();
+    expect(h.onDisabled).not.toHaveBeenCalled();
+    expect(h.onEverywhere).not.toHaveBeenCalled();
+    expect(h.onRestricted).not.toHaveBeenCalled();
+
+    openPanel();
+    fireEvent.click(choice(/only selected agents/i));
+    fireEvent.click(agentRow("claude").getByRole("checkbox"));
+    fireEvent.click(agentRow("codex").getByRole("checkbox"));
+    expect(h.onRestricted).not.toHaveBeenCalled(); // nothing while it is open
+    closePanel();
+    expect(h.onRestricted).toHaveBeenCalledOnce();
+    expect(h.onRestricted).toHaveBeenCalledWith(only([CLAUDE, CODEX]));
   });
 });

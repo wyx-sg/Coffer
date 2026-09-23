@@ -380,3 +380,110 @@ def test_cli_curate_takes_one_document(knowledge_cli_daemon):
 def test_cli_curate_on_an_unknown_collection_is_an_error(knowledge_cli_daemon):
     result = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "curate", "typo"])
     assert result.exit_code != 0
+
+
+# ----- spec scenarios added with the OpenSpec rewrite ----------------------
+
+
+def _daemon() -> TestClient:
+    """The in-process daemon the fixture plumbed behind the CLI."""
+    client, _ = _cli_client.client_or_exit()
+    return client  # type: ignore[return-value]
+
+
+def _hold_material(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Report an internal model as configured, so material waits to be merged."""
+    from coffer.surfaces.http.knowledge.dependencies import get_knowledge_service
+
+    async def _yes() -> bool:
+        return True
+
+    monkeypatch.setattr(get_knowledge_service(), "_merge_available", _yes)
+
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="the CLI and the material route leave material in the inbox"
+)
+def test_cli_and_route_both_leave_material_in_the_inbox(
+    knowledge_cli_daemon, tmp_path, monkeypatch
+):
+    _make_collection("shopee")
+    _hold_material(monkeypatch)
+
+    line = _write("shopee", "From the CLI")
+    assert line.startswith("queued in shopee")
+
+    resp = _daemon().post(
+        "/knowledge/material",
+        json={"collection": "shopee", "title": "From the route", "description": "d", "body": "b"},
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["status"] == "pending"
+    assert resp.json()["path"] is None
+
+    collection = tmp_path / "knowledge" / "shopee"
+    assert sorted(p.name for p in (collection / ".inbox").iterdir()) == [
+        "from-the-cli.md",
+        "from-the-route.md",
+    ]
+    visible = [
+        p for p in collection.rglob("*.md") if ".inbox" not in p.parts and p.name != "README.md"
+    ]
+    assert visible == []
+
+
+@pytest.mark.acceptance(spec="knowledge", scenario="delete a document an agent wrote")
+def test_a_person_deletes_agent_written_documents_on_both_surfaces(knowledge_cli_daemon, tmp_path):
+    _make_collection("shopee")
+    _document(tmp_path, "shopee/by-route.md", "b")
+    _document(tmp_path, "shopee/by-cli.md", "b")
+    for name in ("by-route.md", "by-cli.md"):
+        assert "actor: agent" in (tmp_path / "knowledge" / "shopee" / name).read_text()
+
+    resp = _daemon().delete("/knowledge/file", params={"path": "shopee/by-route.md"})
+    assert resp.status_code == 204, resp.text
+    removed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "delete", "shopee/by-cli.md"])
+    assert removed.exit_code == 0, removed.output
+
+    assert not (tmp_path / "knowledge" / "shopee" / "by-route.md").exists()
+    assert not (tmp_path / "knowledge" / "shopee" / "by-cli.md").exists()
+    audit = _daemon().get("/audit", params={"event_type": "knowledge_deleted"})
+    assert audit.status_code == 200, audit.text
+    deleted = sorted(e["details"]["path"] for e in audit.json()["entries"])
+    assert deleted == ["shopee/by-cli.md", "shopee/by-route.md"]
+
+
+_KNOWLEDGE_OPERATIONS = {
+    ("POST", "/api/v1/knowledge/collections"),
+    ("GET", "/api/v1/knowledge/tree"),
+    ("GET", "/api/v1/knowledge/file"),
+    ("POST", "/api/v1/knowledge/material"),
+    ("POST", "/api/v1/knowledge/upload"),
+    ("DELETE", "/api/v1/knowledge/file"),
+    ("POST", "/api/v1/knowledge/collections/{uid}/curate"),
+}
+_KNOWLEDGE_COMMANDS = {"create", "ls", "read", "write", "upload", "delete", "curate"}
+_FORBIDDEN_ROUTE_WORDS = ("index", "reindex", "source", "embedding", "scope", "reach")
+
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="expose every collection operation and no document write"
+)
+def test_rest_and_cli_cover_every_operation_and_write_no_document(knowledge_cli_daemon):
+    from coffer.surfaces.cli.knowledge_cmd import app as knowledge_app
+
+    routes = {
+        (method, route.path)
+        for route in _daemon()._inner.app.routes  # type: ignore[attr-defined]
+        if getattr(route, "path", "").startswith("/api/v1/knowledge")
+        for method in getattr(route, "methods", ())
+    }
+    assert routes >= _KNOWLEDGE_OPERATIONS
+
+    commands = {command.name for command in knowledge_app.registered_commands}
+    assert commands >= _KNOWLEDGE_COMMANDS
+
+    assert not any(method in {"PUT", "PATCH"} for method, _ in routes)
+    for _, path in routes:
+        tail = path.removeprefix("/api/v1/knowledge").lower()
+        assert not any(word in tail for word in _FORBIDDEN_ROUTE_WORDS), path

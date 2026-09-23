@@ -27,6 +27,9 @@ def _provider(env: ChannelEnv) -> ChannelPeerSyncState:
     return ChannelPeerSyncState(env.resources, env.peers)
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="the active conversation pointer is not published"
+)
 async def test_the_exported_document_carries_platform_identity_only(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     peer = await env.pair(resource, chat_id="chat-42", sender_id="sender-7")

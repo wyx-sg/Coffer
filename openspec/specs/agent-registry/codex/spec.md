@@ -1,120 +1,130 @@
-# Feature Specification: Agent Registry — Codex
+# Agent Registry — Codex
 
-**Status**: Accepted
-**Input**: How the `codex` agent type realises each facet its parent spec defines: where its config directory is, which of its files Coffer may read and write and which it must never touch, the shape of the MCP entry Coffer installs, where its plugin entries and cache live, how its model catalogue and reasoning levels are read back, the one value its `wire_api` binding accepts, where it keeps its own memory, and where it writes its transcripts.
+## Purpose
+This child of [`agent-registry`](../spec.md) says how the `codex` agent type realises each facet its parent defines: where its config directory is, which of its files Coffer may read and write and which it must never touch, the shape of the MCP entry Coffer installs, where its plugin entries and cache live, how its model catalogue and reasoning levels are read back, the one value its `wire_api` binding accepts, where it keeps its own memory, and where it writes its transcripts. It is the prose reading of that type's one `AGENT_DESCRIPTORS` record — default config dir `~/.codex/`, its allowlist and credential exclusion, its injection spec, a `PluginCapability` whose uninstall strategy is a config edit, its native-memory layout, its transcript location and its catalogue sources. Everything the two supported types share, and everything the parent assumes, lives in the parent and is not restated here.
 
-> **Parent spec.** [`agent-registry`](../spec.md) owns everything the two supported agent types share — the resource model, discovery, lifecycle, the config-file read/write contract, MCP install, MCP entries, plugins, directory entries, the model-catalogue contract, the native-memory scan, transcripts and the surfaces. This spec holds only what is specific to OpenAI Codex, and is the prose reading of that type's one `AGENT_DESCRIPTORS` record. Cite a requirement here as `agent-registry/codex FR-00N`.
-
-> **Scope note.** "Codex" here is the product: its CLI and its IDE form together, because they read one shared config directory.
-
-## User Scenarios & Testing
-
-### User Story 1 — Register the Codex that is already installed (Priority: P1)
-
-The user has Codex installed. Coffer finds it by the presence of its config directory, offers it as a candidate, and after one confirm manages that directory's curated files.
-
-**Independent Test**: With `~/.codex/` present and no agent registered, run discovery and observe a `codex` candidate whose `config_dir` is `~/.codex`; confirm it and observe the agent registered.
-
-### User Story 2 — Edit the files Codex actually reads, and none of the ones it hides (Priority: P2)
-
-The user opens the agent's Config files tab and finds its TOML config, its instructions file and its hooks file — and does not find its credential file, which never enters any listing.
-
-**Independent Test**: List the agent's config files and observe exactly three entries; request the credential file by key and observe a 404 with no filesystem read.
-
-### User Story 3 — Manage the plugins Codex installed (Priority: P2)
-
-Codex keeps both its plugin entries and its marketplaces in the same TOML file it keeps everything else in, with the plugin's content in a cache directory. Coffer toggles one documented field and, on uninstall, removes the entry and the cache together.
-
-**Independent Test**: With plugins configured, list them; disable one and observe `enabled = false` written to `config.toml` with the rest of the file's comments and ordering intact; uninstall one and observe its entry and its cache directory gone.
-
-### Edge Cases
-
-- **`config.toml` fails to parse**: Every facet that reads it — MCP entries, plugins, the configured-models catalogue source — degrades to the parse-error state of agent-registry FR-023 at once, because they all read one file.
-- **`wire_api` set to anything but `responses`**: Rejected at the moment it is set, with a 422 the user sees then rather than a CLI that will not start later.
-- **`memories/MEMORY.md` absent**: The native-memory scan returns an empty list; the global document is the only store this type has.
-- **A Task Group with no `applies_to: cwd=` line**: It routes to no project and therefore produces no store row; nothing is invented for it.
-
-## Acceptance Scenarios
-
-Every scenario here is referenced by at least one test marked `@pytest.mark.acceptance(spec="agent-registry/codex", scenario="…")` (Python) or `acceptance("agent-registry/codex", "…", …)` (TypeScript).
-
-### Scenario: uninstall a Codex plugin
-
-- **Given** a registered `codex` agent with an installed plugin,
-- **When** the user uninstalls it,
-- **Then** the `[plugins."…"]` entry is removed from `config.toml` (atomic + `.bak`), the plugin's cache directory under `~/.codex/plugins/cache/` is deleted, and an `agent_plugin_uninstalled` audit entry is recorded.
-
-### Scenario: the native memory scan lists Codex's global memory by project
-
-- **Given** a registered `codex` agent whose `<config_dir>/memories/MEMORY.md` holds `# Task Group` blocks, each with an `applies_to: cwd=…` line routing it to one or more project working directories,
-- **When** the user scans the agent's native memory,
-- **Then** Coffer parses the single global document into one store row per distinct routed cwd — `project`/`path` the cwd, `item_count` the number of Task Groups routed there, and `memory_dir` the one shared global store — read-only and emitting no audit event; with no `memories/MEMORY.md` the list is empty.
+"Codex" is the product: its CLI and its IDE form together, because they read one shared config directory. `config.toml` is the single file behind most of this type's facets — MCP entries, plugins, marketplaces, configured models — so one parse failure degrades all of them at once to the parent's parse-error state. Codex keeps its plugin entries and marketplaces in that same file, with each plugin's content in a cache directory; Coffer toggles one documented field and, on uninstall, removes the entry and the cache together.
 
 ## Requirements
 
-### Functional Requirements
+### Requirement: Locate Codex at ~/.codex
+The `codex` type's standard config directory MUST be `~/.codex/`, which is the value `config_dir` defaults to under [agent-registry](../spec.md) "Validate agent configuration against the agent schema". The presence of that directory MUST be the install marker [agent-registry](../spec.md) "Discover installed agents as candidates without registering them"'s discovery scans for, and [agent-registry](../spec.md) "Allow one agent per name and per config directory"'s one-agent-per-config-directory rule follows from it: Codex is registrable once unless the user overrides the path.
 
-**Identity and location**
+#### Scenario: discover Codex by its config directory
+- **GIVEN** a home directory containing `~/.codex/` and no agent registered
+- **WHEN** the user runs discovery
+- **THEN** a `codex` candidate is reported whose `config_dir` is `~/.codex`
+- **AND** a `codex` agent registered without a `config_dir` resolves to `~/.codex`
 
-- **FR-001**: The `codex` type's standard config directory MUST be `~/.codex/`, which is the value `config_dir` defaults to under agent-registry FR-002. The presence of that directory MUST be the install marker agent-registry FR-004's discovery scans for, and agent-registry FR-008's one-agent-per-config-directory rule follows from it: Codex is registrable once unless the user overrides the path.
+### Requirement: Allowlist exactly Codex's config, instructions and hooks files
+The curated allowlist ([agent-registry](../spec.md) "Define a curated config-file allowlist per type") for `codex` MUST be exactly: `config.toml` (format `toml`), `AGENTS.md` under the key `instructions`, and `hooks.json`. This type has no directory entry. `AGENTS.md` is human-authored instructions and its key says so; the agent's own written memory is the scan of "Scan Codex's global task-grouped memory" and memory's domain, not this file.
 
-**Config files**
+#### Scenario: list exactly Codex's three config files
+- **GIVEN** a registered `codex` agent
+- **WHEN** the user lists its config files
+- **THEN** exactly three entries are returned — `config.toml` (format `toml`), `AGENTS.md` under the key `instructions`, and `hooks.json`
+- **AND** none of them is a directory entry
 
-- **FR-002**: The curated allowlist (agent-registry FR-009) for `codex` MUST be exactly: `config.toml` (format `toml`), `AGENTS.md` under the key `instructions`, and `hooks.json`. This type has no directory entry. `AGENTS.md` is human-authored instructions and its key says so; the agent's own written memory is FR-012's scan and spec memory's domain, not this file.
-- **FR-003**: `<config_dir>/auth.json` MUST never enter the allowlist, any config-file listing, or any facet's parse. It is a credential file: it is not readable through agent-registry FR-011 because it is not an allowlisted key, and neither the MCP-entry nor the plugin parser opens it.
+### Requirement: Never expose Codex's credential file
+`<config_dir>/auth.json` MUST never enter the allowlist, any config-file listing, or any facet's parse. It is a credential file: it is not readable through [agent-registry](../spec.md) "Read allowlisted config files without creating them" because it is not an allowlisted key, and neither the MCP-entry nor the plugin parser opens it.
 
-**Coffer MCP install**
+#### Scenario: refuse to read auth.json
+- **GIVEN** a registered `codex` agent whose config directory holds an `auth.json`
+- **WHEN** the user lists the agent's config files and then requests `auth.json` by key
+- **THEN** the listing does not include it
+- **AND** the request is `not_found` (404) with no filesystem read
 
-- **FR-004**: The `McpInjectionSpec` agent-registry FR-015 installs through MUST write `[mcp_servers.coffer]` in `config.toml`, a typed-array entry whose first element is the resolved absolute shim path and whose `--agent-uid <uid>` argument is APPENDED to that `command` array. Edits to this file MUST preserve the user's comments and key ordering, which is why it is edited as TOML rather than reserialized.
+### Requirement: Install Coffer's MCP entry into config.toml preserving its layout
+The `McpInjectionSpec` [agent-registry](../spec.md) "Install Coffer's MCP server into an agent in one action" installs through MUST write `[mcp_servers.coffer]` in `config.toml`, whose `command` is the resolved absolute shim path and whose `args` are `["--agent-uid", "<uid>"]` — the same command-map shape Claude Code's entry uses. Edits to this file MUST preserve the user's comments and key ordering, which is why it is edited as TOML rather than reserialized.
 
-**Agent MCP entries**
+#### Scenario: install Coffer's MCP into config.toml keeping the user's comments
+- **GIVEN** a registered `codex` agent whose `config.toml` carries comments and other tables
+- **WHEN** the user installs Coffer's MCP
+- **THEN** `[mcp_servers.coffer]` is written with `command` set to the absolute shim path and `args` set to `--agent-uid` and the agent's uid
+- **AND** the user's comments and the other tables are preserved
 
-- **FR-005**: The entries agent-registry FR-019 lists MUST be parsed from `config.toml` `[mcp_servers.*]`, the one source file for this type. This format defines a per-entry `enabled` flag, so `enabled` MUST be reported for these entries — and MUST NOT be written: flipping it duplicates a switch Codex's own UI already owns, and agent-registry's "Not provided: toggling an entry's `enabled` flag" is the rule this obeys.
+### Requirement: Report but never write Codex MCP entries' enabled flag
+The entries [agent-registry](../spec.md) "List the MCP entries in the agent's own config files" lists MUST be parsed from `config.toml` `[mcp_servers.*]`, the one source file for this type. This format defines a per-entry `enabled` flag, so `enabled` MUST be reported for these entries — and MUST NOT be written: flipping it duplicates a switch Codex's own UI already owns, and the parent's refusal to toggle an entry's `enabled` flag is the rule this obeys.
 
-**Plugins**
+#### Scenario: report the enabled flag of Codex MCP entries
+- **GIVEN** a registered `codex` agent whose `config.toml` has one `[mcp_servers.*]` entry with `enabled = false` and one without the key
+- **WHEN** the user lists the agent's MCP entries
+- **THEN** both entries are labelled with `config.toml` as their source
+- **AND** the first reports `enabled=false` and the second `enabled=true`
 
-- **FR-006**: The inventory agent-registry FR-024 lists MUST be derived from `config.toml`'s `[plugins."<name>@<marketplace>"]` tables and `[marketplaces.*]` tables, with `cache_present` from the presence of the documented cache directory `<config_dir>/plugins/cache/<marketplace>/<plugin>/`.
-- **FR-007**: The toggle of agent-registry FR-025 MUST write only the plugin entry's own `enabled` field in `config.toml`. No other table in that file, and no file under `plugins/`, may change.
-- **FR-008**: The uninstall strategy of agent-registry FR-026 for this type MUST be a config edit: remove the `[plugins."…"]` entry from `config.toml` (atomic, with the `.bak` of agent-registry FR-013) and delete that plugin's cache directory. There is no CLI to delegate to and none is required, so `can_uninstall` is true whenever the entry exists.
+### Requirement: Read Codex plugins from config.toml and the cache directory
+The inventory [agent-registry](../spec.md) "List an agent's installed plugins without writing anything" lists MUST be derived from `config.toml`'s `[plugins."<name>@<marketplace>"]` tables and `[marketplaces.*]` tables, with `cache_present` from the presence of the documented cache directory `<config_dir>/plugins/cache/<marketplace>/<plugin>/`.
 
-**The model catalogue**
+#### Scenario: flag a Codex plugin without its cache directory
+- **GIVEN** a registered `codex` agent whose `config.toml` declares two plugins of one marketplace, only one of which has its `plugins/cache/<marketplace>/<plugin>/` directory
+- **WHEN** the user lists the agent's plugins
+- **THEN** both plugins are listed with that marketplace
+- **AND** only the one with a cache directory reports `cache_present=true`
 
-- **FR-009**: The catalogue sources of agent-registry FR-033 for this type MUST be Codex's own `model/list` app-server RPC, plus the models configured in `config.toml` as the native-config contribution of agent-registry FR-035. An unauthenticated or wedged agent answers nothing over RPC and costs exactly those entries.
+### Requirement: Toggle a Codex plugin's own enabled field only
+The toggle of [agent-registry](../spec.md) "Toggle a plugin through the documented location only" MUST write only the plugin entry's own `enabled` field in `config.toml`. No other table in that file, and no file under `plugins/`, may change.
 
-**Reasoning effort levels**
+#### Scenario: toggle a Codex plugin by its enabled field
+- **GIVEN** a registered `codex` agent with an enabled plugin in `config.toml`
+- **WHEN** the user disables it
+- **THEN** that plugin's table carries `enabled = false`
+- **AND** every other table in `config.toml` is unchanged
 
-- **FR-010**: The runtime source of agent-registry FR-037 for this type MUST be per model: `model/list` reports `supportedReasoningEfforts` and a `defaultReasoningEffort` per entry, so each catalogue entry carries its own levels and its own default. The default is kept only when it is one of the levels that entry offers.
+### Requirement: Uninstall a Codex plugin by editing config.toml
+The uninstall strategy of [agent-registry](../spec.md) "Uninstall a plugin by the type's own strategy" for this type MUST be a config edit: remove the `[plugins."…"]` entry from `config.toml` (atomic, with the `.bak` of [agent-registry](../spec.md) "Write config files atomically with a backup and an audit entry") and delete that plugin's cache directory. There is no CLI to delegate to and none is required, so `can_uninstall` is true whenever the entry exists.
 
-**The model binding's `wire_api`**
+#### Scenario: uninstall a Codex plugin
+- **GIVEN** a registered `codex` agent with an installed plugin
+- **WHEN** the user uninstalls it
+- **THEN** the `[plugins."…"]` entry is removed from `config.toml` (atomic + `.bak`), the plugin's cache directory under `~/.codex/plugins/cache/` is deleted, and an `agent_plugin_uninstalled` audit entry is recorded
 
-- **FR-011**: `responses` MUST be the only accepted value of the `wire_api` field agent-registry FR-031 puts on the agent record, enforced where the binding is validated so that anything else is a 422 the user sees at the moment they set it. Codex does not merely ignore another value — it **refuses to load `config.toml`**, so an agent Coffer projected into would have a CLI that will not start. This MUST NOT be fixed by remapping the value at projection time: rewriting it on the way out would leave the stored value, and every read of the agent reporting it, saying something other than what Coffer projects, and a setting must not lie about itself. With one legal value the per-agent override can only hold its own default, which makes the field vestigial; retiring it is a separate change, since it is on the public API and the contract.
+### Requirement: Read Codex models from model/list and config.toml
+The catalogue sources of [agent-registry](../spec.md) "Read the model catalogue back from the installed agent" for this type MUST be Codex's own `model/list` app-server RPC, plus the models configured in `config.toml` as the native-config contribution of [agent-registry](../spec.md) "Contribute models from the type's native config read-only". The RPC is reachable only when the CLI is installed and authenticated, so it is one degradable source, never a precondition of the response: an unauthenticated or wedged agent answers nothing over RPC and costs exactly those entries.
 
-**Native memory**
+#### Scenario: fall back to configured models when model/list answers nothing
+- **GIVEN** a `codex` config directory whose `config.toml` names a model, and a Codex CLI whose `model/list` RPC cannot be reached
+- **WHEN** the Codex catalogue sources are read in order
+- **THEN** the configured model is offered
+- **AND** no RPC entry appears and the read does not fail
 
-- **FR-012**: The native-memory layout of agent-registry FR-039 for this type MUST be a single GLOBAL task-grouped document at `<config_dir>/memories/MEMORY.md`, where each `# Task Group` block carries an `applies_to: cwd=…` line routing it to one or more project working directories. The scan MUST parse it into one row per distinct routed cwd, with `path` and `project` that cwd, `item_count` the number of Task Groups routed there, and `memory_dir` the one shared global store repeated on every row. An absent document yields an empty list.
+### Requirement: Carry each Codex model's own effort levels and default
+The runtime source of [agent-registry](../spec.md) "Read reasoning-effort levels from the agent runtime" for this type MUST be per model: `model/list` reports `supportedReasoningEfforts` and a `defaultReasoningEffort` per entry, so each catalogue entry carries its own levels and its own default. The default is kept only when it is one of the levels that entry offers.
 
-**Transcripts**
+#### Scenario: drop a default effort the model does not offer
+- **GIVEN** a `model/list` answer with two models, the first reporting levels `low` and `high` with default `low`, the second reporting only `medium` with a default of `xhigh`
+- **WHEN** the Codex catalogue is read
+- **THEN** each entry carries its own reported levels
+- **AND** the first keeps `low` as its default while the second reports no default
 
-- **FR-013**: The transcript location of agent-registry FR-040 for this type MUST be `<config_dir>/sessions/**/*.jsonl`.
+### Requirement: Accept only responses as Codex's wire_api
+`responses` MUST be the only accepted value of the `wire_api` field [agent-registry](../spec.md) "Carry the model binding on the agent record" puts on the agent record, enforced where the binding is validated so that anything else is a 422 the user sees at the moment they set it, with nothing persisted or projected. Codex does not merely ignore another value — it **refuses to load `config.toml`**, so an agent Coffer projected into would have a CLI that will not start. This MUST NOT be fixed by remapping the value at projection time: rewriting it on the way out would leave the stored value, and every read of the agent reporting it, saying something other than what Coffer projects, and a setting must not lie about itself. With one legal value the per-agent override can only hold its own default, which makes the field vestigial; retiring it is a separate change, since it is on the public API and the contract.
 
-**Internal state, never written**
+#### Scenario: reject a wire_api other than responses
+- **GIVEN** a registered `codex` agent
+- **WHEN** the user sets its `wire_api` to `chat`
+- **THEN** the request is rejected with `unprocessable_entity` (422)
+- **AND** the agent's stored `wire_api` is unchanged
 
-- **FR-014**: The internal-state tables this type keeps in `config.toml` — `[marketplaces.*]`, `[hooks.state.*]` and `[projects.*]` — are the Codex side of the parent spec's "internal state files are read as inputs and never written". They MUST be read where a facet needs them (FR-006 reads the marketplaces) and MUST be byte-identical before and after every write Coffer makes to that file.
+### Requirement: Scan Codex's global task-grouped memory
+The native-memory layout of [agent-registry](../spec.md) "Scan an agent's own native memory stores read-only" for this type MUST be a single GLOBAL task-grouped document at `<config_dir>/memories/MEMORY.md`, where each `# Task Group` block carries an `applies_to: cwd=…` line routing it to one or more project working directories. The scan MUST parse it into one row per distinct routed cwd, with `path` and `project` that cwd, `item_count` the number of Task Groups routed there, and `memory_dir` the one shared global store repeated on every row. An absent document yields an empty list, and a Task Group with no `applies_to: cwd=` line routes to no project and produces no row.
 
-### Key Entities
+#### Scenario: the native memory scan lists Codex's global memory by project
+- **GIVEN** a registered `codex` agent whose `<config_dir>/memories/MEMORY.md` holds `# Task Group` blocks, each with an `applies_to: cwd=…` line routing it to one or more project working directories
+- **WHEN** the user scans the agent's native memory
+- **THEN** Coffer parses the single global document into one store row per distinct routed cwd — `project`/`path` the cwd, `item_count` the number of Task Groups routed there, and `memory_dir` the one shared global store — read-only and emitting no audit event; with no `memories/MEMORY.md` the list is empty
 
-- **`codex` descriptor**: The `AGENT_DESCRIPTORS` record this spec reads — default config dir `~/.codex/`, the FR-002 allowlist with FR-003's exclusion, the FR-004 injection spec, a `PluginCapability` whose uninstall strategy is the config edit of FR-008, the FR-012 native-memory layout, the FR-013 transcript location, and the FR-009 catalogue sources.
+### Requirement: Read Codex transcripts from the sessions directory
+The transcript location of [agent-registry](../spec.md) "List an agent's transcript sessions read-only" for this type MUST be `<config_dir>/sessions/**/*.jsonl`.
 
-## Success Criteria
+#### Scenario: list Codex sessions from the sessions directory
+- **GIVEN** a registered `codex` agent with a session `.jsonl` nested under `<config_dir>/sessions/`
+- **WHEN** the user lists the agent's transcripts
+- **THEN** that session is listed with its file's absolute path as `source_path`
 
-### Measurable Outcomes
+### Requirement: Leave Codex's internal-state tables untouched
+The internal-state tables this type keeps in `config.toml` — `[marketplaces.*]`, `[hooks.state.*]` and `[projects.*]` — are the Codex side of the parent's "internal state files are read as inputs and never written". They MUST be read where a facet needs them ("Read Codex plugins from config.toml and the cache directory" reads the marketplaces) and MUST be byte-identical before and after every write Coffer makes to that file; every such write also preserves the user's comments and key ordering.
 
-- **SC-001**: Every Acceptance Scenario in this spec is covered by at least one test marked `acceptance(spec="agent-registry/codex", scenario="…")`, and `make verify-acceptance` reports zero uncovered scenarios.
-- **SC-002**: Every write Coffer makes to `config.toml` preserves the user's comments, key ordering and every table FR-014 names, verified by a test that diffs the file around each write.
-- **SC-003**: Setting `wire_api` to any value other than `responses` is refused with a 422 and nothing is persisted or projected.
-
-## Assumptions
-
-- `config.toml` is the single file behind most of this type's facets — MCP entries, plugins, marketplaces, configured models — so one parse failure degrades all of them at once, which the parse-error state of agent-registry FR-023 already covers.
-- Codex's `model/list` app-server RPC is reachable only when the CLI is installed and authenticated; the catalogue treats it as one degradable source, never a precondition of the response.
-- Everything the parent spec assumes applies here unchanged; this spec restates none of it.
+#### Scenario: keep internal-state tables byte-identical across every write
+- **GIVEN** a registered `codex` agent whose `config.toml` carries `[marketplaces.*]`, `[hooks.state.*]` and `[projects.*]` tables beside a plugin and a direct MCP entry
+- **WHEN** Coffer installs its MCP, toggles the plugin, uninstalls the plugin and removes the MCP entry
+- **THEN** after each write the text of those three tables is byte-identical to the original

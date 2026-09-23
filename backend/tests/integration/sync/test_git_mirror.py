@@ -702,6 +702,9 @@ async def test_a_remote_url_that_looks_like_an_option_is_a_url_to_git(
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a remote URL or branch that git would read as an option is refused"
+)
 async def test_push_names_the_branch_as_an_explicit_refspec(
     worktree: pathlib.Path, remote: pathlib.Path
 ) -> None:
@@ -751,6 +754,9 @@ def _seed_foreign_repo(worktree: pathlib.Path, origin: str) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a foreign checkout at the working tree is refused, not repointed"
+)
 async def test_a_foreign_checkout_pointing_elsewhere_is_not_adopted(
     worktree: pathlib.Path, remote: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
@@ -796,6 +802,9 @@ async def test_a_foreign_repository_with_no_commits_is_adopted(
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a working tree Coffer made follows a new remote URL"
+)
 async def test_a_tree_coffer_made_can_be_repointed_at_a_new_remote(
     worktree: pathlib.Path, remote: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
@@ -821,3 +830,33 @@ async def test_a_tree_coffer_made_can_be_repointed_at_a_new_remote(
         text=True,
     )
     assert out.stdout.strip() == str(other)
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a foreign checkout at the working tree is refused, not repointed"
+)
+async def test_a_repository_already_pointing_at_the_configured_remote_is_adopted(
+    worktree: pathlib.Path, remote: pathlib.Path
+) -> None:
+    """A clone of the configured remote that Coffer did not make is the user's
+    own copy of the vault: adopted, with its history and files intact."""
+    _seed_foreign_repo(worktree, str(remote))
+
+    await GitMirror(worktree).ensure_repo(remote_url=str(remote), branch="main")
+
+    log = subprocess.run(
+        ["git", "-C", str(worktree), "log", "--oneline"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "their history" in log.stdout
+    assert (worktree / "theirs.txt").read_text() == "not ours"
+    out = subprocess.run(
+        ["git", "-C", str(worktree), "remote", "get-url", "origin"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert out.stdout.strip() == str(remote)

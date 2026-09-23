@@ -153,3 +153,23 @@ def test_child_relpath_ok_bare_and_normalised() -> None:
 def test_child_relpath_requires_absolute_root() -> None:
     with pytest.raises(ValueError):
         validate_child_relpath(pathlib.Path("rel"), "x.md")
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="key each type's instructions file as instructions"
+)
+def test_every_type_keys_one_markdown_instructions_file(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    formats = {"json", "toml", "markdown", "text"}
+    types = list(AgentType)
+    assert types, "no agent types to check"
+    for agent_type in types:
+        specs = config_files_for(agent_type)
+        assert specs, agent_type
+        for spec in specs:
+            assert spec.key and spec.display_name, (agent_type, spec)
+            assert spec.path.is_absolute(), (agent_type, spec)
+            assert spec.format.value in formats, (agent_type, spec)
+        instructions = [s for s in specs if s.key == "instructions"]
+        assert len(instructions) == 1, agent_type
+        assert instructions[0].format is ConfigFileFormat.MARKDOWN, agent_type

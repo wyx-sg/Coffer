@@ -111,7 +111,7 @@ describe("SkillsPage", () => {
     expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
   });
 
-  test("a copy_fallback delivery is badged as degraded on the row (FR-011)", () => {
+  acceptance("skill-manager", "fall back to a copy where a directory link cannot be made", () => {
     // The agent Skills tab no longer repeats the delivered skills, so this list
     // is where the degradation has to show.
     stubHooks({

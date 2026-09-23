@@ -93,6 +93,7 @@ def test_a_summary_is_falsy_only_when_nothing_changed() -> None:
     assert DiffSummary.of([DocChange("manifest.json", ChangeStatus.MODIFIED)])
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="the registry and manifest are never applied")
 def test_vault_changes_drops_registry_and_manifest_entries() -> None:
     summary = DiffSummary.of(
         [
@@ -217,6 +218,7 @@ def test_only_deletions_count_towards_the_guard() -> None:
     assert guard.breached_areas(changes, {"knowledge": 3}) == []
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="the registry and manifest are never applied")
 def test_registry_and_manifest_deletions_never_trip_the_guard() -> None:
     guard = DeletionGuard(share=0.2, floor=1)
     changes = [
@@ -412,3 +414,26 @@ def test_a_relayout_beside_a_real_deletion_is_held_for_the_deletion_alone() -> N
     assert guard.breached_areas(summary.vault_changes, {"knowledge": 81}) == [("knowledge", 25, 81)]
     assert summary.lost_paths() == tuple(sorted(c.path for c in lost))
     assert len(summary.paths(ChangeStatus.DELETED)) == 81
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="the guard trips above a fifth of an area or at twenty documents"
+)
+def test_the_fixed_guard_trips_above_a_fifth_or_at_twenty() -> None:
+    """The guard the daemon actually runs with: no arguments, so the published
+    constants — and those constants are the spec's 20% and 20."""
+    assert (DEFAULT_DELETION_SHARE, DEFAULT_DELETION_FLOOR) == (0.2, 20)
+    guard = DeletionGuard()
+
+    # Exactly a fifth is still an ordinary round.
+    assert guard.breached_areas(_deletions("knowledge", 2), {"knowledge": 10}) == []
+    # More than a fifth is not.
+    assert guard.breached_areas(_deletions("knowledge", 3), {"knowledge": 10}) == [
+        ("knowledge", 3, 10)
+    ]
+    # Twenty from a large area breaches although it is a tiny share of it...
+    assert guard.breached_areas(_deletions("knowledge", 20), {"knowledge": 1000}) == [
+        ("knowledge", 20, 1000)
+    ]
+    # ...and nineteen does not.
+    assert guard.breached_areas(_deletions("knowledge", 19), {"knowledge": 1000}) == []

@@ -578,6 +578,7 @@ async def test_adapter_asks_the_sdk_for_partial_messages():
     assert factory.last_options.include_partial_messages is True
 
 
+@pytest.mark.acceptance(spec="chat", scenario="a streamed reply reaches the consumer exactly once")
 @pytest.mark.asyncio
 async def test_a_streamed_turn_reaches_a_consumer_exactly_once():
     messages = [

@@ -417,6 +417,9 @@ def test_missing_sidecar_still_lists_correctly(tmp_path: Path) -> None:
         '{"/gone.jsonl": {"mtime": "yesterday"}}',  # right shape, unusable entry
     ],
 )
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="list transcripts correctly with an unusable sidecar"
+)
 def test_unusable_sidecar_still_lists_correctly(tmp_path: Path, content: str) -> None:
     """Never a wrong answer, only a slower one — the sidecar is disposable."""
     _make_codex_tree(tmp_path)

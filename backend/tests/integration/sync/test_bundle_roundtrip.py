@@ -171,6 +171,9 @@ async def _populate(machine: VaultMachine) -> None:
 # --- export ----------------------------------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="each shared state area reaches the working tree"
+)
 async def test_export_writes_every_area_and_counts_it(vault: VaultMachine) -> None:
     await _populate(vault)
 
@@ -238,6 +241,9 @@ async def test_export_leaves_reach_behind(vault: VaultMachine) -> None:
     assert "scope" not in raw
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a channel document names the machine that runs it"
+)
 async def test_export_writes_a_channel_document_like_any_other(vault: VaultMachine) -> None:
     """A channel is exported now, and counted as exported.
 
@@ -322,6 +328,9 @@ async def test_export_removes_a_derived_document_an_older_build_published(
     assert (root / await vault.doc_path("mcp_server", "files")).is_file()
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an unchanged vault serializes to an identical tree"
+)
 async def test_a_second_export_of_an_unchanged_vault_is_identical_and_rewrites_nothing(
     vault: VaultMachine,
 ) -> None:
@@ -343,6 +352,9 @@ async def test_a_second_export_of_an_unchanged_vault_is_identical_and_rewrites_n
     assert _mtimes(root) == before_mtimes
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a locally deleted resource removes exactly its document"
+)
 async def test_a_locally_deleted_resource_removes_exactly_its_document(
     vault: VaultMachine,
 ) -> None:
@@ -467,6 +479,9 @@ async def test_home_paths_leave_the_vault_as_a_portable_token(vault: VaultMachin
     assert home not in document.read_text(encoding="utf-8")
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a round publishes this machine's descriptor and no other"
+)
 async def test_a_machine_publishes_its_own_descriptor_and_no_other(vault: VaultMachine) -> None:
     await _populate(vault)
     await vault.register("agent", "writer", {"value": "writer"})
@@ -514,6 +529,9 @@ async def test_a_machine_publishes_its_own_descriptor_and_no_other(vault: VaultM
 # --- apply: knowledge/ and skills/ -----------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an arriving file is written and a deleted one removed"
+)
 async def test_tree_applier_copies_files_in_and_prunes_emptied_collections(
     vault: VaultMachine,
 ) -> None:
@@ -538,6 +556,9 @@ async def test_tree_applier_copies_files_in_and_prunes_emptied_collections(
     assert vault.knowledge_root.is_dir()
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an arriving file is written and a deleted one removed"
+)
 async def test_tree_applier_also_carries_the_skill_store(vault: VaultMachine) -> None:
     applier = TreeApplier("skills/", worktree=vault.worktree, live_root=vault.skills_root)
     _stage(vault.worktree, "skills/demo/SKILL.md", "# demo\n")
@@ -584,6 +605,9 @@ async def test_tree_applier_refuses_a_path_that_is_not_a_file(vault: VaultMachin
 # --- apply: resources/ ------------------------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an arriving resource document is upserted through the import gate"
+)
 async def test_resource_applier_registers_then_updates_a_row(vault: VaultMachine) -> None:
     applier = ResourceApplier(
         vault.resources, worktree=vault.worktree, gates=[], home=str(vault.home)
@@ -773,6 +797,9 @@ async def test_bundle_reads_a_whole_document_and_refuses_a_field_it_does_not_kno
         vault.bundle.read_resource_docs()
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an arriving resource document is upserted through the import gate"
+)
 async def test_resource_applier_runs_the_gate_before_it_writes_anything(
     vault: VaultMachine,
 ) -> None:
@@ -976,6 +1003,9 @@ async def test_resource_applier_removes_a_row_and_agrees_when_it_is_already_gone
 # --- apply: state/ ----------------------------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a state document is applied by the provider that claims its area"
+)
 async def test_state_applier_routes_to_the_provider_that_claims_the_area(
     vault: VaultMachine,
 ) -> None:
@@ -1014,6 +1044,9 @@ async def test_state_docs_carry_home_as_a_sentinel_both_ways(vault: VaultMachine
     }
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a state document is applied by the provider that claims its area"
+)
 async def test_state_applier_skips_an_area_no_module_claims(vault: VaultMachine) -> None:
     applier = StateApplier([vault.state_provider], worktree=vault.worktree)
     vault.state_provider.docs["peer-1"] = {"paired": True}
@@ -1031,6 +1064,10 @@ async def test_state_applier_skips_an_area_no_module_claims(vault: VaultMachine)
 # --- apply: credentials/ ----------------------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync",
+    scenario="a credential blob is written as ciphertext and its deletion deletes the credential",
+)
 async def test_credential_applier_writes_ciphertext_and_refuses_a_staler_blob(
     vault: VaultMachine,
 ) -> None:

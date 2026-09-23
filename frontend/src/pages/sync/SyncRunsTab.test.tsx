@@ -271,6 +271,29 @@ describe("SyncRunsTab — undoing a round", () => {
     ],
   };
 
+  acceptance("vault-sync", "the undo sits on one round and never moves down", () => {
+    // Several rounds applied something here; only the newest offers Undo.
+    seed([
+      run({ id: 3, applied: APPLIED }),
+      run({ id: 2, applied: APPLIED }),
+      run({ id: 1, applied: APPLIED }),
+    ]);
+    const view = render(<SyncRunsTab enabled />);
+
+    expect(undoButtons()).toHaveLength(1);
+    fireEvent.click(within(rows()[0]).getByRole("button", { name: /undo this round/i }));
+    // It names the paths it would take back.
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("knowledge/notes/a.md");
+    expect(dialog).toHaveTextContent("resources/channel/seatalk.yaml");
+    view.unmount();
+
+    // A quiet round on top: no row offers Undo, rather than an older one.
+    seed([run({ id: 4, status: "no_change" }), run({ id: 3, applied: APPLIED })]);
+    render(<SyncRunsTab enabled />);
+    expect(undoButtons()).toHaveLength(0);
+  });
+
   test("offers the undo on exactly one round — the one a rollback would undo", () => {
     seed([run({ id: 3, applied: APPLIED }), run({ id: 2 }), run({ id: 1 })]);
     render(<SyncRunsTab enabled />);
@@ -418,6 +441,29 @@ describe("SyncRunsTab — quiet rounds", () => {
     deleted: 0,
     changes: [{ path: "a.md", status: "added" as const }],
   };
+
+  acceptance("vault-sync", "consecutive quiet rounds fold into one counted row", () => {
+    const from = "2026-09-13T17:41:43Z";
+    const to = "2026-09-13T23:29:47Z";
+    seed([
+      run({ id: 5, applied: MOVED }),
+      run({ id: 4, status: "no_change", finished_at: to }),
+      run({ id: 3, status: "no_change" }),
+      run({ id: 2, status: "no_change", started_at: from }),
+    ]);
+    render(<SyncRunsTab enabled />);
+
+    // The stretch of three is one row, counted, reporting its span.
+    expect(rows()).toHaveLength(2);
+    const fold = rows()[1];
+    expect(within(fold).getByText("×3")).toBeInTheDocument();
+    expect(fold.textContent).toContain(formatDateTime(from));
+    expect(fold.textContent).toContain(formatDateTime(to));
+
+    // Nothing is dropped: opening the fold names the rounds it stands for.
+    fireEvent.click(fold);
+    expect(screen.getByText(/3 rounds between/i)).toBeInTheDocument();
+  });
 
   test("a stretch of rounds that changed nothing is one row, counted", () => {
     seed([
@@ -580,7 +626,36 @@ describe("SyncRunsTab — a held round", () => {
     expect(screen.getAllByRole("button", { name: /^confirm$/i })).toHaveLength(1);
   });
 
-  test("a conflict stays a banner — its paths need a working tree the table has no column for", () => {
+  acceptance("vault-sync", "only the round the vault is waiting on carries its answers", () => {
+    // The newest round is the hold the vault is waiting on; an older round
+    // was once held too. Only the newest carries the answers.
+    seed([
+      run({ id: 9, status: "awaiting_confirmation", pending: PENDING }),
+      run({ id: 8, status: "awaiting_confirmation", pending: PENDING }),
+    ]);
+    seedStatus({ last_run: { pending: PENDING, conflicts: [] } });
+    const view = render(<SyncRunsTab enabled />);
+
+    const [newest, older] = rows();
+    expect(within(newest).getByRole("button", { name: /^confirm$/i })).toBeInTheDocument();
+    expect(within(newest).getByRole("button", { name: /^reject$/i })).toBeInTheDocument();
+    // PENDING is a publish hold, so rebuild-from-remote is offered too.
+    expect(within(newest).getByRole("button", { name: /rebuild/i })).toBeInTheDocument();
+    expect(within(older).queryByRole("button", { name: /^confirm$/i })).toBeNull();
+    expect(within(older).queryByRole("button", { name: /^reject$/i })).toBeNull();
+    expect(within(older).queryByRole("button", { name: /rebuild/i })).toBeNull();
+    expect(screen.getAllByRole("button", { name: /^confirm$/i })).toHaveLength(1);
+    view.unmount();
+
+    // Once the vault is no longer waiting, no round carries them.
+    seedStatus({ last_run: { pending: null, conflicts: [] } });
+    render(<SyncRunsTab enabled />);
+    expect(screen.queryByRole("button", { name: /^confirm$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^reject$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /rebuild/i })).toBeNull();
+  });
+
+  acceptance("vault-sync", "a conflict is shown as a banner above the runs", () => {
     seed([run({ id: 9, status: "conflict", conflicts: ["knowledge/notes/plan.md"] })]);
     seedStatus({
       last_run: { pending: null, conflicts: ["knowledge/notes/plan.md"] },
