@@ -4,7 +4,8 @@ Two things, and they are not the same kind of thing at all:
 
 * ``machine_id`` is **derived from the host** by
   :mod:`coffer.infrastructure.sync.machine_id`. It keys this machine's
-  descriptor and its registry row — nothing else references a machine — and it
+  descriptor and its registry row (a channel's binding and the curation owner
+  name it too) — and it
   must survive reinstalling Coffer, because an id that changed would make a
   returning machine look like a brand-new one to the remote.
   ``daemon-config.json`` only **caches** it — a

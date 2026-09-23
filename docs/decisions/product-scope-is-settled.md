@@ -65,11 +65,12 @@ by the project owner:
    knowledge and memory, [Knowledge Is Plain Files](knowledge-is-plain-files.md),
    [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md).
 
-**Literal retrieval is a placeholder, not a verdict.** Memory recall (and
-knowledge's curation candidate selection — knowledge itself has no search
-surface; agents read its files with their own tools) is the simplest thing
-that answers — ripgrep where the machine has it,
-a built-in Python walk with identical semantics where it does not — because the
+**Literal retrieval is a placeholder, not a verdict.** Memory recall (a
+case-insensitive literal scan in Python) and knowledge's curation candidate
+selection (ripgrep where the machine has it, a built-in Python walk with
+identical semantics where it does not) are the simplest things that answer —
+knowledge itself has no search surface; agents read its files with their own
+tools — because the
 knowledge and memory *design* is not yet settled, and an index built on an
 unsettled design is what the 2026-09-12 audit found unused. Semantic retrieval
 (embeddings, ranking) is expected to return once that design settles, under the

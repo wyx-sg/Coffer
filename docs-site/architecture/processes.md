@@ -101,7 +101,7 @@ Beyond the subprocesses above, the daemon runs a set of in-process background wo
 | Transcript warm    | Warms the transcript-summary cache, so the first visit to an agent's Conversations tab is never the one that pays the cold read. |
 | Channel reconciler | On every tick it diffs enabled channel resources against running adapters and starts/stops/restarts to match — and starts or stops the callback listener with the set of webhook SeaTalk channels. REST/CLI/UI never start or stop adapters directly; the reconciler owns all runtime state transitions, which keeps status truthful. |
 
-Three of these — curation, distil and aggregate — are the **unattended passes**: each has its own on/off switch and interval under **Settings → Engine**, and what they are doing right now is readable at `GET /api/v1/upkeep/runs`. An unattended rewriter should be something the user turned on, never something they discover running.
+Three of these — curation, distil and aggregate — are the **unattended passes**: each has its own on/off switch and interval under **Settings → Coffer's model** (`/settings/engine`), and what they are doing right now is readable at `GET /api/v1/upkeep/runs`. An unattended rewriter should be something the user turned on, never something they discover running.
 
 Vault sync is emphatically *not* a request-scoped operation. `coffer sync now` forces a round, but the converge worker runs rounds on its own, and the vault converges **bidirectionally** with the remote under git's own three-way merge. One-shot export and import no longer exist.
 

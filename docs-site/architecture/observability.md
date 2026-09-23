@@ -16,14 +16,13 @@ Every record produced inside the daemon process leaves as one JSON object in `~/
 {
   "timestamp": "2026-05-20T14:23:01.123Z",
   "level": "info",
-  "logger": "coffer.surfaces.http.resource",
+  "logger": "coffer.application.audit_service",
   "event": "resource_registered",
   "trace_id": "b3d8e2f1-...",
   "resource": "filesystem",
   "resource_kind": "mcp_server",
   "resource_uid": "…",
-  "actor": "cli",
-  "duration_ms": 12
+  "actor": "cli"
 }
 ```
 

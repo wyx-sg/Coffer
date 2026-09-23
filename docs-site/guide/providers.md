@@ -188,9 +188,9 @@ coffer engine timeout default    # back to the built-in bound
 
 A value outside the permitted range is refused rather than silently adjusted.
 
-### Settings → Engine, HTTP, and other machines
+### Settings → Coffer's model, HTTP, and other machines
 
-**Settings → Engine** in the app carries the same controls: the connection and model, one row per pass, and the call bound. Edits save as you make them; there is no Save button. Over HTTP the settings are `GET`/`PUT /api/v1/internal-engine-config`, with one route per value beside it — `/upkeep` (one pass per request), `/timeout`, `/transcribe-model` and `/curation-owner`.
+**Settings → Coffer's model** (`/settings/engine`) in the app carries the same controls: the connection and model, one row per pass, and the call bound. Edits save as you make them; there is no Save button. Over HTTP the settings are `GET`/`PUT /api/v1/internal-engine-config`, with one route per value beside it — `/upkeep` (one pass per request), `/timeout`, `/transcribe-model` and `/curation-owner`.
 
 These settings travel with the rest of your vault when it syncs, so every machine's passes run on the same model with the same switches. A machine that has chosen nothing publishes nothing, and removing the synced settings document returns every machine to the defaults.
 

@@ -250,8 +250,8 @@ build, and the console scripts are already there.
 - **[uv](https://docs.astral.sh/uv/)** — how CI builds the environment, and the only way to
   get exactly the locked dependency set.
 - **[ripgrep](https://github.com/BurntSushi/ripgrep)** (`rg`) — recommended, on every install
-  path. Coffer's `coffer__recall` and knowledge curation run `rg` when it is on your `PATH`;
-  without it Coffer falls back to a slower built-in matcher that returns the same results,
+  path. Knowledge curation runs `rg` to choose a pass's candidate documents when it is on
+  your `PATH`; without it Coffer falls back to a slower built-in matcher that returns the same results,
   and notes the fallback once in the daemon log.
 
 See [Getting Started](/guide/getting-started) for the full from-source walkthrough.

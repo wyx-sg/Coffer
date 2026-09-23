@@ -74,7 +74,7 @@ capabilities.** Three moves.
   "models used by Coffer Assistant" to **"Coffer's internal model"** that powers
   retrieval and memory reorganization.
 
-  _Amended 2026-09-23:_ that configuration now lives at **Settings → Engine**
+  _Amended 2026-09-23:_ that configuration now lives at **Settings → Coffer's model** (`/settings/engine`)
   ([internal-engine](../../openspec/specs/internal-engine/spec.md)), and it
   powers no retrieval — the passes it runs are memory distil and knowledge
   curation.
@@ -160,7 +160,7 @@ keeps the very "built-in agent is a thing" framing this ADR removes.
   with BM25 fallback.~~ _Withdrawn:_ the path was removed with every other use of
   embeddings; `coffer__search_tools` stays lexical (see move 3).
 - UI: `/chat` reverts to "Chat"; the `/agents/builtin` route and the built-in
-  card are removed; Coffer's internal model is configured at Settings → Engine.
+  card are removed; Coffer's internal model is configured at Settings → Coffer's model.
 - CLI: the `coffer chat` command (the built-in agent's terminal chat) is removed.
   `coffer model` was later removed too, when models and providers were unified
   into one connection; the engine's model is set with `coffer engine model`.

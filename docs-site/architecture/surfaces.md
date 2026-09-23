@@ -73,7 +73,7 @@ The REST API is the canonical interface — the CLI and the Web UI both call it.
 - **Cross-cutting groups:** `coffer credentials`, `coffer sync`, `coffer scope`, `coffer engine` (the model Coffer's own engine runs on and its unattended passes).
 - **Kind-agnostic / operational groups:** `coffer resource`, `coffer audit`, `coffer retention`, `coffer daemon` (including the `coffer daemon port show|set|clear` subgroup), `coffer open`.
 
-Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `coffer audit`, `coffer daemon start/stop/status`. The CLI is Coffer's primary interface for scripted workflows, dotfile-based setup, and remote (headless) machines where a browser is not available. Read and list commands accept `--json` for machine-readable output.
+Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `coffer audit`, `coffer daemon start/stop/status`. The CLI is Coffer's primary interface for scripted workflows, dotfile-based setup, and remote (headless) machines where a browser is not available. Most read and list commands accept `--json` for machine-readable output; `coffer <group> <command> --help` says which.
 
 **Which process.** A short-lived child process. The CLI is an independent Python process, installed on `PATH` as a console script entry point (`coffer`). It exits after executing one command. It does not stay running between invocations.
 

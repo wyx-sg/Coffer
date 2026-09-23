@@ -245,7 +245,7 @@ Two consequences worth internalising:
 | ------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `lint`        | `make lint` — every static gate above, frontend included (it installs Node + `npm ci`)                                     |
 | `unit`        | `make verify-unit` (purity check + backend pytest + frontend vitest)                                                       |
-| `integration` | `make verify-integration` (installs `ripgrep`, which recall and curation shell out to)                                     |
+| `integration` | `make verify-integration` (installs `ripgrep`, which curation's candidate selection uses)                                  |
 | `benchmark`   | `make verify-benchmark` — the **only** place the benchmark-marked perf-budget tests execute, so a budget can't go unchecked while its acceptance marker reports green |
 | `acceptance`  | `openspec validate --all --strict` (needs the root `npm ci`), then `python3 scripts/audit_acceptance.py`                    |
 | `secrets`     | `gitleaks` over the full history (`fetch-depth: 0`) — a committed secret fails the PR even if the final tree is clean       |
