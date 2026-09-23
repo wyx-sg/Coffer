@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-20 (page removed 2026-09-10, restored 2026-09-12; see Revision history)
 **Deciders**: Yuxing Wu
-**Related**: spec [`channels`](../../specs/channels/spec.md) — the turn platform (spec chat FR-001…spec chat FR-012) and the web Chat page (spec chat FR-029…spec chat FR-041);
+**Related**: spec [`channels`](../../openspec/specs/channels/spec.md) — the turn platform (spec chat FR-001…spec chat FR-012) and the web Chat page (spec chat FR-029…spec chat FR-041);
 [Built-in Agent Is Internal](builtin-agent-is-internal-capability.md) (chat talks to managed agents only),
 [Remove Tool Approval](remove-tool-approval.md) (full permissions, no approval seat),
 [Channel Adapter Framework](channel-adapter-framework.md) (the channel turn seams)
@@ -123,7 +123,7 @@ Telegram/SeaTalk" badge when one exists.
 
 ## Consequences
 
-- The page and its routes are described in spec [`channels`](../../specs/channels/spec.md)
+- The page and its routes are described in spec [`channels`](../../openspec/specs/channels/spec.md)
   section G (spec chat FR-029…spec chat FR-041), on top of the turn platform (spec chat FR-001…spec chat FR-012); the
   contract lives in that spec's OpenAPI file.
 - The conversation schema carries no `origin` and no peer display name; the

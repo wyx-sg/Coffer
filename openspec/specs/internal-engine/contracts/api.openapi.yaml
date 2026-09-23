@@ -1,0 +1,406 @@
+openapi: 3.1.0
+info:
+  title: Coffer — Internal Engine API
+  version: "0.1.0"
+  description: |
+    Coffer's own operating settings: the model its internal engine runs on, the
+    switch and timer of every pass it runs unattended, how long one call to
+    that model may take, and the model it transcribes speech with. Merged into
+    the main Coffer Management API at runtime; this document scopes only the
+    routes the internal-engine spec adds.
+
+    The engine's ENDPOINT and key come from the connection flagged
+    `internal_default`, and transcription's from the one flagged
+    `transcribe_default`; spec provider-switching owns both and serves them
+    under `/api/v1/providers`. Only the models and the unattended work are
+    here.
+
+    All routes use the same `X-Coffer-Token` authentication from
+    `openspec/specs/mcp-gateway/contracts/api.openapi.yaml`.
+
+    Hand-written; NOT contract-test-gated. Sync with the implementation manually.
+
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    variables:
+      port:
+        default: "8000"
+
+security:
+  - cofferToken: []
+
+tags:
+  - name: internal-engine
+    description: >
+      The model Coffer thinks with, and what it does when nobody asked. One
+      global singleton, converged between machines as the `settings` state area.
+
+paths:
+  /internal-engine-config:
+    get:
+      tags: [internal-engine]
+      operationId: getInternalEngineConfig
+      summary: Get Coffer's own operating settings
+      description: |
+        The single global row: the model Coffer's internal engine runs on, and
+        every unattended pass's switch and timer. The engine takes its endpoint
+        and key from the `internal_default` connection but its MODEL from here
+        (internal-engine FR-004); `model` is `null` until one is chosen, and
+        while it is, every internal pass is a clean no-op (FR-005).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalEngineConfigOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+    put:
+      tags: [internal-engine]
+      operationId: updateInternalEngineConfig
+      summary: Set the model the internal engine runs on
+      description: |
+        Sets the engine model (`null` or empty clears it). Overlaid onto the
+        resolved `internal_default` connection before the engine builds its chat
+        model. Emits an `internal_engine_model_set` audit entry naming the actor
+        (internal-engine FR-002, FR-003).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InternalEngineConfigUpdate" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalEngineConfigOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /internal-engine-config/upkeep:
+    put:
+      tags: [internal-engine]
+      operationId: updateUpkeep
+      summary: Change one unattended pass's switch or timer
+      description: |
+        Coffer runs three passes on its own behalf — `aggregate` (spec memory
+        FR-007), `distil` (spec memory FR-030) and `curate` (spec knowledge FR-021) — each with a switch and an interval.
+
+        ONE pass per request, and each half left alone when it is not sent: a
+        settings page toggles one row at a time, and a body carrying all three
+        would make every toggle a chance to write back a stale copy of the other
+        two (internal-engine FR-010). `use_default_interval` returns a pass to
+        its own built-in interval, which a null `interval_s` cannot express
+        (FR-011). An interval below the floor and an unknown pass name are both
+        refused (FR-012). A running worker picks the change up without a restart
+        (FR-013). Emits an `internal_engine_model_set` audit entry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpkeepUpdate" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalEngineConfigOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /internal-engine-config/curation-owner:
+    put:
+      tags: [internal-engine]
+      operationId: updateCurationOwner
+      summary: Name the machine that runs the curation pass
+      description: |
+        Curation rewrites a collection's documents with no diff anyone
+        approved, so once a vault spans machines exactly one may run it: two
+        machines fold the same material into two DIFFERENT documents, git merges
+        that cleanly as two additions at different paths, and the vault ends up
+        holding the same knowledge twice with nothing in conflict (spec
+        vault-sync `## Unattended rewriters`).
+
+        This is how that machine is chosen — the counterpart of binding a
+        channel, and it exists for the same reason: the owner travels with the
+        settings document, so a machine that is retired leaves an owner nobody
+        claims, curation stops on every machine, and until this route there was
+        no way to say so or to take it back.
+
+        `null` clears the owner, which returns the vault to "curate wherever
+        this is read". That is the right answer for a vault down to one
+        machine and the wrong one for a vault that still spans several, so it
+        is an explicit choice rather than a repair anything performs on its own.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CurationOwnerUpdate" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalEngineConfigOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /internal-engine-config/timeout:
+    put:
+      tags: [internal-engine]
+      operationId: updateModelTimeout
+      summary: Bound one call to Coffer's own model
+      description: |
+        How long ONE call to the internal engine's model may take before the
+        caller gives up (internal-engine FR-022). The right number is a
+        property of the operator's endpoint, not of Coffer: against a gateway
+        whose typical answer takes 25-30 seconds the built-in 60 leaves barely
+        a factor of two, and a pass that times out defers its work and reports
+        success — so the layer converges at a fraction of its rate while
+        nothing looks broken.
+
+        `null` returns the bound to `default_model_timeout_s`, which is the
+        only way back and keeps the default in one place. A value outside the
+        allowed range is REFUSED here rather than clamped, because this is the
+        operator asking for a number; the background passes clamp instead, so
+        a row written by an older build cannot take a pass down.
+
+        A value outside the range is refused by this route and by the CLI with
+        the same error (FR-024). One setting per request, for the reason
+        `UpkeepUpdate` records (FR-027). Emits an `internal_engine_model_set`
+        audit entry naming the actor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ModelTimeoutUpdate" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalEngineConfigOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /internal-engine-config/transcribe-model:
+    put:
+      tags: [internal-engine]
+      operationId: updateTranscribeModel
+      summary: Set the model Coffer transcribes speech with
+      description: |
+        The speech-to-text model (internal-engine FR-025). Its ENDPOINT and key
+        come from the connection flagged `transcribe_default`, which spec
+        provider-switching serves under `/api/v1/providers` — NOT from the
+        `internal_default` one, and there is deliberately no fallback between
+        them: they are different models, and a chat gateway commonly serves no
+        `/audio/transcriptions` at all.
+
+        `null` or empty stops transcription, which is a real answer rather than
+        an unset one — with no model, or no connection marked, a turn carrying
+        audio hands the agent the file untouched and the recording never leaves
+        the machine. Emits an `internal_engine_model_set` audit entry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TranscribeModelUpdate" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InternalEngineConfigOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+components:
+  securitySchemes:
+    cofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  schemas:
+    CurationOwnerUpdate:
+      type: object
+      description: >-
+        The machine that may run the curation pass. `null` clears the owner and
+        returns the vault to curating wherever the setting is read.
+      properties:
+        machine_id:
+          type: string
+          nullable: true
+          description: >-
+            A machine id as `GET /sync/machines` reports it. Not validated
+            against the registry: a vault that has never converged has no
+            registry, and must still be able to name its own machine.
+
+    InternalEngineConfigOut:
+      type: object
+      description: >-
+        Coffer's own operating settings: the model its internal engine runs on
+        (the connection used is the `internal_default` — endpoint + key), and
+        the switch and timer of every pass it runs unattended.
+      properties:
+        model:
+          type: string
+          nullable: true
+          description: The chosen model id, or null when unset.
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        upkeep:
+          type: object
+          description: >-
+            Keyed by pass name (`aggregate`, `distil`, `curate`).
+          additionalProperties: { $ref: "#/components/schemas/UpkeepSettingOut" }
+        curate_owner_machine_id:
+          type: string
+          nullable: true
+          description: >-
+            The one machine allowed to run the curation pass, or null on a
+            vault that has never named one (which curates wherever it is read —
+            a vault with no owner is a vault with one machine). Resolve it
+            against `GET /sync/machines`, the same way a channel's `runs_on`
+            is resolved: an id no entry there claims is a FAULT, because the
+            pass then runs on no machine at all and nothing else in the product
+            reports it. An empty registry is not that fault — a vault that has
+            never converged has no registry to be absent from.
+        model_timeout_s:
+          type: integer
+          nullable: true
+          description: >-
+            The chosen bound on one model call, or null while none has been
+            chosen.
+        default_model_timeout_s:
+          type: integer
+          description: >-
+            What bounds a call while `model_timeout_s` is null — reported for
+            the same reason `default_interval_s` is, so a settings surface can
+            name the default rather than show a blank.
+        transcribe_model:
+          type: string
+          nullable: true
+          description: >-
+            The speech-to-text model, or null when Coffer transcribes nothing
+            and hands the agent the audio file untouched.
+
+    UpkeepSettingOut:
+      type: object
+      required: [enabled, default_interval_s]
+      description: One unattended pass's switch and timer.
+      properties:
+        enabled:
+          type: boolean
+        interval_s:
+          type: integer
+          nullable: true
+          description: The chosen interval, or null while none has been chosen.
+        default_interval_s:
+          type: integer
+          description: >-
+            What runs while `interval_s` is null — reported so a settings
+            surface can name the default rather than show a blank.
+
+    UpkeepUpdate:
+      type: object
+      required: [pass]
+      description: >-
+        Change one pass. An omitted field leaves that half of the pass alone.
+      properties:
+        pass:
+          type: string
+          enum: [aggregate, distil, curate]
+        enabled:
+          type: boolean
+          nullable: true
+        interval_s:
+          type: integer
+          nullable: true
+          minimum: 60
+          description: >-
+            Seconds between runs of this pass. The minimum is the floor below
+            which a pass would busy-loop a model over the user's files.
+        use_default_interval:
+          type: boolean
+          default: false
+          description: Return this pass to its own built-in interval.
+
+    InternalEngineConfigUpdate:
+      type: object
+      description: Set the internal-engine model; null/empty clears it.
+      properties:
+        model:
+          type: string
+          nullable: true
+
+    ModelTimeoutUpdate:
+      type: object
+      description: >-
+        Bound one call to Coffer's own model; null returns it to the default.
+      properties:
+        seconds:
+          type: integer
+          nullable: true
+          minimum: 5
+          maximum: 600
+          description: >-
+            Seconds one model call may take. The floor is not politeness —
+            below it the bound would expire before a healthy endpoint could
+            answer — and the ceiling bounds the damage a typo does, since an
+            unattended pass holding a wedged connection for an hour is the
+            failure the bound exists to prevent.
+
+    TranscribeModelUpdate:
+      type: object
+      description: >-
+        Set the speech-to-text model; null/empty stops transcription.
+      properties:
+        model:
+          type: string
+          nullable: true
+
+    ErrorOut:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          description: Machine-readable error code.
+        message:
+          type: string
+          description: Human-readable description.
+        details:
+          type: object
+          additionalProperties: true
+          description: Optional structured error details.
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid X-Coffer-Token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    UnprocessableEntity:
+      description: |
+        Validation failure. The cases this surface has:
+        - an unknown `pass` name
+        - an `interval_s` below the floor
+        - a `seconds` outside the allowed bound range
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    InternalError:
+      description: >-
+        Server error while reading or writing the settings row. Check the audit
+        log for what was recorded.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }

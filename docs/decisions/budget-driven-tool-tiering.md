@@ -9,7 +9,7 @@ hidden server-side" clause is replaced by budget-driven tiering
 (semantic ranking), [Per-Agent Resource Scope](per-agent-resource-scope.md)
 (machine × agent scope), [Capability State Model](capability-state-model.md)
 (capability preferences), the reverted per-agent MCP server scoping decision
-(ADR since removed), [spec `mcp-gateway`](../../specs/mcp-gateway/spec.md),
+(ADR since removed), [spec `mcp-gateway`](../../openspec/specs/mcp-gateway/spec.md),
 [`docs/research/mcp-ecosystem.md`](../research/mcp-ecosystem.md)
 
 ## Context

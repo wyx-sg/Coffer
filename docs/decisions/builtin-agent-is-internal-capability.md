@@ -3,9 +3,9 @@
 **Status**: Accepted
 **Date**: 2026-06-14
 **Deciders**: Yuxing Wu
-**Spec**: [channels](../../specs/channels/spec.md) and [agent-registry](../../specs/agent-registry/spec.md) (repositioning + capability move — no new spec; both `spec.md` files are updated before implementation)
+**Spec**: [channels](../../openspec/specs/channels/spec.md) and [agent-registry](../../openspec/specs/agent-registry/spec.md) (repositioning + capability move — no new spec; both `spec.md` files are updated before implementation)
 **Supersedes**: the "converse with the vault through the `builtin` agent" half of the since-removed ADR that repositioned Agent Chat as the Vault Console; **amends** [Tool Retrieval](./tool-retrieval-for-overload.md) (search-tools ranking)
-**Related**: [knowledge](../../specs/knowledge/spec.md) (the Knowledge Layer spec), [Files as Truth](./files-as-truth-sqlite-retrieval.md)
+**Related**: [knowledge](../../openspec/specs/knowledge/spec.md) (the Knowledge Layer spec), [Files as Truth](./files-as-truth-sqlite-retrieval.md)
 
 ## Context
 

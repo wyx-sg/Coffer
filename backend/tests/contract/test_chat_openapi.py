@@ -1,5 +1,5 @@
 """Contract test: the running app's generated OpenAPI for the /api/v1/chat paths
-structurally matches specs/chat/contracts/api.openapi.yaml.
+structurally matches openspec/specs/chat/contracts/api.openapi.yaml.
 
 The web Chat page's REST + SSE surface lives in the channels contract because it
 drives the same turn platform the channels do — a conversation started from a
@@ -25,7 +25,7 @@ import yaml
 
 from coffer.main import app
 
-_CHAT_OPENAPI_PATH = Path(__file__).resolve().parents[3] / "specs/chat/contracts/api.openapi.yaml"
+_CHAT_OPENAPI_PATH = Path(__file__).resolve().parents[3] / "openspec/specs/chat/contracts/api.openapi.yaml"
 
 
 @pytest.fixture(scope="module")
@@ -36,7 +36,7 @@ def generated_schema() -> dict[str, Any]:
 
 @pytest.fixture(scope="module")
 def spec_doc() -> dict[str, Any]:
-    """Parse specs/channels/contracts/api.openapi.yaml once per module."""
+    """Parse openspec/specs/channels/contracts/api.openapi.yaml once per module."""
     return yaml.safe_load(_CHAT_OPENAPI_PATH.read_text())  # type: ignore[no-any-return]
 
 

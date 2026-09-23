@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-13
 **Deciders**: Yuxing Wu
-**Spec**: [vault-sync](../../specs/vault-sync/spec.md)
+**Spec**: [vault-sync](../../openspec/specs/vault-sync/spec.md)
 **Principles**: Principle I in [`docs/principles.md`](../principles.md) (the user-owned sync remote exception — bidirectional convergence)
 
 ## Context

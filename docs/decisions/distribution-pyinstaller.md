@@ -40,7 +40,7 @@ Concrete choices:
 - Each spec pins the `hiddenimports` empirically required at runtime —
   FastAPI, SQLAlchemy 2 / aiosqlite, Pydantic 2, `mcp`, `keyring`, and
   (daemon only) Alembic. The list is recorded in
-  `specs/mcp-gateway/research.md`.
+  `openspec/specs/mcp-gateway/research.md`.
 - Alembic migrations ship as data files inside the daemon binary so
   first-launch can run `upgrade head` against a fresh DB.
 - **Lazily-imported dependencies must be pinned in `hiddenimports`,** because

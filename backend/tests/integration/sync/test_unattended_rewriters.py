@@ -6,7 +6,7 @@ spec's ``## Unattended rewriters`` section states three normative rules to make
 it safe:
 
 The acceptance scenario titles below still read "tidy" because that is what
-`specs/vault-sync/spec.md` calls the pass; curation is what replaced it, and
+`openspec/specs/vault-sync/spec.md` calls the pass; curation is what replaced it, and
 the rules and the fields are the same three. The titles are matched as strings
 by `scripts/audit_acceptance.py`, so they follow the spec rather than the code.
 

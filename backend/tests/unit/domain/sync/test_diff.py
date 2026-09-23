@@ -1,6 +1,6 @@
 """What a converge round changes, and the deletion guard over it.
 
-Covers `specs/vault-sync/spec.md` "Applying a diff" and "Safety" (the
+Covers `openspec/specs/vault-sync/spec.md` "Applying a diff" and "Safety" (the
 oversized-deletion hold), for the pure domain in `coffer.domain.sync.diff`.
 """
 

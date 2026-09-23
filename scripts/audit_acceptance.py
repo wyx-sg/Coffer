@@ -6,7 +6,7 @@ Convention (see .agents/testing.md "Acceptance Scenarios — Cross-Tier Markers"
     `#### Scenario: <title>` headings, each inside the `### Requirement:` block
     it verifies, under `## Requirements`.
   * While the migration to OpenSpec is in flight, a spec may still sit at the
-    legacy `specs/<id>/spec.md` with a trailing '## Acceptance Scenarios'
+    legacy `openspec/specs/<id>/spec.md` with a trailing '## Acceptance Scenarios'
     section of `### <title>` (or `### Scenario: <title>`) headings.
   * Spec ID is the spec directory's path relative to its spec root, so it is
     the folder name for a top-level spec (`openspec/specs/mcp-gateway/spec.md`

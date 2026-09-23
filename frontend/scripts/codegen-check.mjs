@@ -56,7 +56,7 @@ try {
 }
 
 if (drifted.length > 0) {
-  console.error("codegen:check — src/lib/api/generated/ is out of step with specs/*/contracts:");
+  console.error("codegen:check — src/lib/api/generated/ is out of step with openspec/specs/*/contracts:");
   for (const line of drifted) console.error(`  - ${line}`);
   process.exit(1);
 }

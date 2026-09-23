@@ -11,7 +11,7 @@ and ``superseded_by``, and the wire carried them too; when retirement stopped
 being a flag on a live record and became a file leaving ``notes/`` plus a line
 in ``RETIRED.md`` (FR-025), the two fields had to go from both sides — and the
 contract test comparing this module against
-``specs/memory/contracts/api.openapi.yaml`` field name by field name is what
+``openspec/specs/memory/contracts/api.openapi.yaml`` field name by field name is what
 makes "both sides" checkable rather than remembered.
 """
 

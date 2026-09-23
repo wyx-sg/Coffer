@@ -209,7 +209,7 @@ Commentary:
   deleted. Its number has since been reused twice over in spec skill-manager, so this
   passage names the requirement rather than a number that now means something else.)
   [`repo:backend/coffer/domain/skill/source.py`,
-  `repo:specs/skill-manager/{spec,plan}.md`]
+  `repo:openspec/specs/skill-manager/{spec,plan}.md`]
 - **SKILL.md frontmatter is now aligned to the agentskills.io constraints
   (PR #105, 2026-06-18) — partially.** As of #105, `SkillFrontmatter`
   enforces the standard's caps (`name` ≤64, `description` ≤1024) and now
@@ -219,7 +219,7 @@ Commentary:
   consumes). Two gaps the report flagged remain by design, not omission: it
   still does **not** enforce `name == parent-directory`, and the `name` regex
   still tolerates underscores (see ✏️ below). [`repo:backend/coffer/domain/skill/frontmatter.py`,
-  `repo:specs/skill-manager/{spec,data-model,plan}.md`, spec skill-manager FR-004 / FR-005]
+  `repo:openspec/specs/skill-manager/{spec,data-model,plan}.md`, spec skill-manager FR-004 / FR-005]
 - **Reversec "Skill Issues" post is real and as described.** "Skill Issues:
   Compromising Claude Code with malicious skills & agents — Part 1," James
   Henderson, published **May 5, 2026** (report's "May 2026" is correct). Thesis

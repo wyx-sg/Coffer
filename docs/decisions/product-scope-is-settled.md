@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-14
 **Deciders**: Yuxing Wu (project owner)
-**Related**: [`docs/principles.md`](../principles.md) (Principle I's user-owned sync remote exception); [The Desktop Shell Returns](desktop-shell-over-a-shared-frontend.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), [Vault Sync](vault-sync.md), [Knowledge Is Plain Files](knowledge-is-plain-files.md), [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md); specs [mcp-gateway](../../specs/mcp-gateway/spec.md), [channels](../../specs/channels/spec.md), [vault-sync](../../specs/vault-sync/spec.md), [web-ui](../../specs/web-ui/spec.md), [knowledge](../../specs/knowledge/spec.md), [memory](../../specs/memory/spec.md)
+**Related**: [`docs/principles.md`](../principles.md) (Principle I's user-owned sync remote exception); [The Desktop Shell Returns](desktop-shell-over-a-shared-frontend.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), [Vault Sync](vault-sync.md), [Knowledge Is Plain Files](knowledge-is-plain-files.md), [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md); specs [mcp-gateway](../../openspec/specs/mcp-gateway/spec.md), [channels](../../openspec/specs/channels/spec.md), [vault-sync](../../openspec/specs/vault-sync/spec.md), [web-ui](../../openspec/specs/web-ui/spec.md), [knowledge](../../openspec/specs/knowledge/spec.md), [memory](../../openspec/specs/memory/spec.md)
 
 ## Context
 

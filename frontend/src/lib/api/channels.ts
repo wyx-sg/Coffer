@@ -6,7 +6,7 @@
 // resource. What a person reads on those surfaces is still `ResourceOut.name`.
 //
 // Wire types are the channels contract's generated schemas
-// (`specs/channels/contracts/api.openapi.yaml` → `generated/channels.ts`),
+// (`openspec/specs/channels/contracts/api.openapi.yaml` → `generated/channels.ts`),
 // re-exported under the names the hooks and pages already import. Transport is
 // the shared `call` (.agents/frontend.md §4).
 

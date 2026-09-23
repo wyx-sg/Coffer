@@ -22,7 +22,7 @@ this script holds the line:
      place numbers survive, and they are what every other spec, every ADR and
      every code comment cites. Two requirements under one id is the recycled
      number all over again, at the granularity that actually gets referenced:
-     `specs/vault-sync/spec.md` carried two different FR-093s for four days
+     `openspec/specs/vault-sync/spec.md` carried two different FR-093s for four days
      after two PRs landed in the same week, and seventeen references across
      the tree pointed at one of them with nothing to say so.
 
@@ -38,7 +38,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DECISIONS = REPO_ROOT / "docs" / "decisions"
-SPECS = REPO_ROOT / "specs"
+SPECS = REPO_ROOT / "openspec" / "specs"
 
 NUMBERED_ADR = re.compile(r"ADR-\d+")
 #: `spec 001`, `Specs 004`, `spec-009` — every shape the prose used to take.
@@ -89,8 +89,8 @@ def check_no_numbers(files: list[str]) -> list[str]:
                 )
     for path in DECISIONS.glob("ADR-*"):
         errors.append(f"{path.relative_to(REPO_ROOT)}: filename still carries a number")
-    # Every directory at every depth, not just `specs/*`: a spec may be a child
-    # of another (`specs/channels/telegram/`), and a numbered child is the same
+    # Every directory at every depth, not just `openspec/specs/*`: a spec may be a child
+    # of another (`openspec/specs/channels/telegram/`), and a numbered child is the same
     # recycling hazard as a numbered parent. `rglob` also reaches `contracts/`,
     # the one subfolder a spec owns, which is intended — it may not carry an
     # ordinal either.

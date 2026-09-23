@@ -171,7 +171,7 @@ Primary:
   `/conversations/{id}/approvals` route, and the `CHANNEL_APPROVAL_RESOLVED`
   audit event; `backend/coffer/application/chat/approvals.py` is gone; no
   `ApprovalGate`/"approval gate" symbols remain under `backend/coffer/` or
-  `specs/channels/`; agents now run with full permissions. The commit's
+  `openspec/specs/channels/`; agents now run with full permissions. The commit's
   rationale is the report's own framing turned against it: the relay was
   "redundant with owner-pairing (only the paired owner can drive a channel, and
   the web console is the owner too)." The other two legs of local claim #1

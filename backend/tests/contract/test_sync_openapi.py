@@ -1,5 +1,5 @@
 """Contract test: the running app's generated OpenAPI for the /api/v1/sync
-paths structurally matches specs/vault-sync/contracts/api.openapi.yaml.
+paths structurally matches openspec/specs/vault-sync/contracts/api.openapi.yaml.
 
 Same shape as test_memory_openapi.py: routes are checked in both directions
 (nothing declared is unserved, nothing served is undeclared) and every
@@ -31,7 +31,7 @@ from coffer.domain.sync.diff import ChangeStatus
 from coffer.main import app
 
 _SYNC_OPENAPI_PATH = (
-    Path(__file__).resolve().parents[3] / "specs/vault-sync/contracts/api.openapi.yaml"
+    Path(__file__).resolve().parents[3] / "openspec/specs/vault-sync/contracts/api.openapi.yaml"
 )
 
 _SYNC_PREFIX = "/api/v1/sync"
@@ -67,7 +67,7 @@ def generated_schema() -> dict[str, Any]:
 
 @pytest.fixture(scope="module")
 def spec_doc() -> dict[str, Any]:
-    """Parse specs/vault-sync/contracts/api.openapi.yaml once per module."""
+    """Parse openspec/specs/vault-sync/contracts/api.openapi.yaml once per module."""
     return yaml.safe_load(_SYNC_OPENAPI_PATH.read_text())  # type: ignore[no-any-return]
 
 
@@ -121,7 +121,7 @@ def test_no_sync_route_is_undocumented(
     contract fails too."""
     undeclared = _operations(generated_schema) - _operations(spec_doc)
     assert not undeclared, (
-        f"served by the app but absent from specs/vault-sync/contracts/api.openapi.yaml: "
+        f"served by the app but absent from openspec/specs/vault-sync/contracts/api.openapi.yaml: "
         f"{sorted(f'{m} {p}' for m, p in undeclared)}"
     )
 
@@ -187,7 +187,7 @@ def test_every_yaml_component_exists_with_its_required_fields(
         missing = _required_fields(schema) - _required_fields(generated[name])
         if missing:
             problems.append(f"{name}: required in the yaml but not generated: {sorted(missing)}")
-    assert not problems, "specs/vault-sync/contracts/api.openapi.yaml drift:\n  " + "\n  ".join(
+    assert not problems, "openspec/specs/vault-sync/contracts/api.openapi.yaml drift:\n  " + "\n  ".join(
         problems
     )
 

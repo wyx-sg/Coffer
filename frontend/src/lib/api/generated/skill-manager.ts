@@ -294,7 +294,7 @@ export interface components {
             updated_at: string;
             bindings: components["schemas"]["SkillBindingOut"][];
         };
-        /** @description Which agents this skill is delivered to, on THIS machine. `agents: null` means every agent; `[]` matches nothing, i.e. dormant. Shape is shared with every other kind — it is the resource framework's scope, not a skill-specific one — so it MUST stay identical to `ScopeOut` in `specs/resource-framework/contracts/api.openapi.yaml` and to `ScopeOut` in `backend/coffer/surfaces/http/schemas.py`. It was previously declared here as a bare `string[]`, which is the agent list one level down; the wire has always carried the object. */
+        /** @description Which agents this skill is delivered to, on THIS machine. `agents: null` means every agent; `[]` matches nothing, i.e. dormant. Shape is shared with every other kind — it is the resource framework's scope, not a skill-specific one — so it MUST stay identical to `ScopeOut` in `openspec/specs/resource-framework/contracts/api.openapi.yaml` and to `ScopeOut` in `backend/coffer/surfaces/http/schemas.py`. It was previously declared here as a bare `string[]`, which is the agent list one level down; the wire has always carried the object. */
         ScopeOut: {
             /**
              * @description Agent resource UIDS, not names. A scope is a reference to another resource and a name is a label its owner may change; while this held names, renaming an agent silently emptied every scope naming it — which for a skill means it stops being delivered to the agent the user picked, with nothing said.

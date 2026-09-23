@@ -65,7 +65,7 @@ The mode is determined per binding (not per OS) because a single user
 machine can mix filesystems (e.g. NTFS C: drive plus a SMB-mounted skill
 dir). `SyncEngine.classify_target` re-reads the on-disk shape on `verify`
 and is the basis for drift categorisation — see
-`specs/skill-manager/data-model.md` `DriftKind` table.
+`openspec/specs/skill-manager/data-model.md` `DriftKind` table.
 
 Removal mirrors creation: `SyncEngine.remove_directory_link` inspects the
 on-disk type before removing (`os.unlink` for symlinks, `os.rmdir` for

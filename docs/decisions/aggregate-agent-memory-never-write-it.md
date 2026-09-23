@@ -4,7 +4,7 @@
 **Date**: 2026-09-17
 **Deciders**: Yuxing Wu
 **Rewrites**: *Memory via MCP, not native projection* (2026-06-18) — this ADR replaces it, keeping its prohibition and replacing its answer. See [Revision history](#revision-history).
-**Related**: spec [memory](../../specs/memory/spec.md), spec [knowledge](../../specs/knowledge/spec.md), [Knowledge Is Plain Files](knowledge-is-plain-files.md), [One Shared Knowledge Store](agent-native-shared-memory.md), [`docs/research/memory-systems-landscape.md`](../research/memory-systems-landscape.md)
+**Related**: spec [memory](../../openspec/specs/memory/spec.md), spec [knowledge](../../openspec/specs/knowledge/spec.md), [Knowledge Is Plain Files](knowledge-is-plain-files.md), [One Shared Knowledge Store](agent-native-shared-memory.md), [`docs/research/memory-systems-landscape.md`](../research/memory-systems-landscape.md)
 
 ## Context
 

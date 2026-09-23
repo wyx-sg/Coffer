@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-21
 **Deciders**: Yuxing Wu
-**Spec**: [specs/provider-switching/spec.md](../../specs/provider-switching/spec.md)
+**Spec**: [openspec/specs/provider-switching/spec.md](../../openspec/specs/provider-switching/spec.md)
 
 The live decision is the one below **as corrected by the amendments** at the end
 of this file (D6 onwards). Three clauses of `## Decision` were reversed there and
@@ -169,13 +169,13 @@ function. All I/O (file writes) is performed by `ProviderService._project`.
 
 ## Alternatives considered
 
-See [specs/provider-switching/research.md](../../specs/provider-switching/research.md)
+See [openspec/specs/provider-switching/research.md](../../openspec/specs/provider-switching/research.md)
 for the full enumeration of alternatives (A1/A2/A3, B1/B2/B3, C1/C2) and the
 rationale for rejecting each alternative.
 
 ## Amendment 2026-06-22 — connections are optional overrides (introspection: inline secret)
 
-Authoritative design: the [spec provider-switching Amendment 2026-06-22](../../specs/provider-switching/spec.md)
+Authoritative design: the [spec provider-switching Amendment 2026-06-22](../../openspec/specs/provider-switching/spec.md)
 (D1–D7). This ADR section records the introspection consequence delivered first
 (D6); later D-points extend it.
 
@@ -220,7 +220,7 @@ Authoritative design: the [spec provider-switching Amendment 2026-06-22](../../s
 
 ## Amendment 2026-09-11 — the connection curates WHICH models it offers
 
-Authoritative design: the [spec provider-switching Amendment 2026-09-11](../../specs/provider-switching/spec.md)
+Authoritative design: the [spec provider-switching Amendment 2026-09-11](../../openspec/specs/provider-switching/spec.md)
 (J1–J3).
 
 - **D10 — `models` on the connection: the offered set, not a chosen model.** D9
@@ -242,7 +242,7 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-11](../../s
 
 ## Amendment 2026-09-11b — the agent curates which of its own catalogue it offers
 
-Authoritative design: the [spec provider-switching Amendment 2026-09-11b](../../specs/provider-switching/spec.md)
+Authoritative design: the [spec provider-switching Amendment 2026-09-11b](../../openspec/specs/provider-switching/spec.md)
 (K1–K4).
 
 - **D11 — Two tables in the CLI binary, not one.** The catalog Coffer reads is
@@ -286,7 +286,7 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-11b](../../
 
 ## Amendment 2026-09-13 — the Claude Code picker offers tier aliases
 
-Authoritative design: the [spec provider-switching Amendment 2026-09-13](../../specs/provider-switching/spec.md)
+Authoritative design: the [spec provider-switching Amendment 2026-09-13](../../openspec/specs/provider-switching/spec.md)
 (M1–M3).
 
 - **D14 — Offer what the CLI offers, not what its binary remembers.** D12 said
@@ -309,7 +309,7 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-13](../../s
 
 ## Amendment 2026-09-13b — the effort a Codex turn thinks at is Coffer's to offer
 
-Authoritative design: the [spec provider-switching Amendment 2026-09-13b](../../specs/provider-switching/spec.md)
+Authoritative design: the [spec provider-switching Amendment 2026-09-13b](../../openspec/specs/provider-switching/spec.md)
 (N1–N4).
 
 - **D16 — An effort is a field beside the model, not a name inside it.** D14 made
@@ -341,8 +341,8 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-13b](../../
 
 ## Amendment 2026-09-17 — speech-to-text gets a flag of its own
 
-Authoritative design: [spec provider-switching](../../specs/provider-switching/spec.md)
-FR-035 and [spec internal-engine](../../specs/internal-engine/spec.md) FR-025 –
+Authoritative design: [spec provider-switching](../../openspec/specs/provider-switching/spec.md)
+FR-035 and [spec internal-engine](../../openspec/specs/internal-engine/spec.md) FR-025 –
 FR-027.
 
 - **D18 — A second global flag, `transcribe_default`, not a second use of the

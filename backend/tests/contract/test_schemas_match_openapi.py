@@ -1,4 +1,4 @@
-"""The schemas in ``specs/mcp-gateway`` that no route exposes, pinned by name.
+"""The schemas in ``openspec/specs/mcp-gateway`` that no route exposes, pinned by name.
 
 This module used to hand-enumerate ~30 schemas and check field *presence* in
 both directions. :mod:`test_schema_types_match_openapi` now discovers every
@@ -47,7 +47,7 @@ from coffer.surfaces.http import schemas
 
 from .test_schema_types_match_openapi import _compare, route_reachable_schemas
 
-_CONTRACT = "specs/mcp-gateway/contracts/api.openapi.yaml"
+_CONTRACT = "openspec/specs/mcp-gateway/contracts/api.openapi.yaml"
 _OPENAPI_PATH = Path(__file__).resolve().parents[3] / _CONTRACT
 
 

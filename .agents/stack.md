@@ -77,7 +77,7 @@ The layering import rules, the credential-access rule, and the "extract cross-cu
 
 ### HTTP Contracts (Wire Format)
 
-The authoritative wire contract for any feature is `specs/<short-name>/contracts/api.openapi.yaml` (hand-written, PR-reviewed — one file per spec, and spec folders are named, never numbered). Backend Pydantic `BaseModel`s are HAND-WRITTEN to match the yaml. Every HTTP route declares `response_model=<Foo>Response` against a Pydantic `BaseModel` — never `dict[str, Any]`, and `scripts/check_response_models.py` (in `make lint`) enforces it.
+The authoritative wire contract for any feature is `openspec/specs/<short-name>/contracts/api.openapi.yaml` (hand-written, PR-reviewed — one file per spec, and spec folders are named, never numbered). Backend Pydantic `BaseModel`s are HAND-WRITTEN to match the yaml. Every HTTP route declares `response_model=<Foo>Response` against a Pydantic `BaseModel` — never `dict[str, Any]`, and `scripts/check_response_models.py` (in `make lint`) enforces it.
 
 CI gate: `make verify-contract` rejects PRs where the runtime OpenAPI dump structurally differs from any spec yaml.
 

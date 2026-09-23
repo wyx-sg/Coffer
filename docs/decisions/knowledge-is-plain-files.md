@@ -4,7 +4,7 @@
 **Date**: 2026-09-12 (revised 2026-09-14, 2026-09-17, 2026-09-18 and 2026-09-23; see Revision history)
 **Deciders**: Yuxing Wu
 **Supersedes**: [Retrieval Stack — Markdown Files as Truth, SQLite FTS5 + sqlite-vec](files-as-truth-sqlite-retrieval.md)
-**Related**: spec [knowledge](../../specs/knowledge/spec.md); [Everything Is a Resource Kind](everything-is-a-resource-kind.md) and [Per-Agent Resource Scope](per-agent-resource-scope.md), both of which survive; [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md); [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md)
+**Related**: spec [knowledge](../../openspec/specs/knowledge/spec.md); [Everything Is a Resource Kind](everything-is-a-resource-kind.md) and [Per-Agent Resource Scope](per-agent-resource-scope.md), both of which survive; [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md); [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md)
 
 ## Context
 

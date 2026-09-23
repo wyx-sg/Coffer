@@ -22,7 +22,7 @@ rules the CLI injects into every planning request.
 ```
 openspec/
   config.yaml                    # Context + per-artifact rules for planning.
-  specs/<capability>/
+  openspec/specs/<capability>/
     spec.md                      # REQUIRED. Purpose, requirements, scenarios.
     data-model.md                # Entities, fields, relationships. — when it has state
     contracts/api.openapi.yaml   # The wire contract, hand-authored and
@@ -34,7 +34,7 @@ openspec/
     proposal.md                  # Why, and what changes.
     design.md                    # How — when the change is not obvious.
     tasks.md                     # The checklist `/opsx:apply` works through.
-    specs/<capability>/spec.md   # Deltas: ADDED / MODIFIED / REMOVED / RENAMED.
+    openspec/specs/<capability>/spec.md   # Deltas: ADDED / MODIFIED / REMOVED / RENAMED.
   changes/archive/YYYY-MM-DD-<change-id>/   # Every shipped change, kept.
 ```
 

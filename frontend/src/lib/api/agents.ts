@@ -7,7 +7,7 @@
 // and a table row show — so a caller that has an agent has both.
 //
 // Wire types are the agent-registry contract's generated schemas
-// (`specs/agent-registry/contracts/api.openapi.yaml` → `generated/agent-registry.ts`),
+// (`openspec/specs/agent-registry/contracts/api.openapi.yaml` → `generated/agent-registry.ts`),
 // re-exported under the names the hooks and pages already import. Transport is
 // the shared `call` (.agents/frontend.md §4).
 import { call, enc } from "@/lib/api/call";

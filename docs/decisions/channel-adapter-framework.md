@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-12
 **Deciders**: Yuxing Wu
-**Spec**: [channels](../../specs/channels/spec.md)
+**Spec**: [channels](../../openspec/specs/channels/spec.md)
 
 ## Context
 

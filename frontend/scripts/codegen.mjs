@@ -1,7 +1,7 @@
 // frontend/scripts/codegen.mjs — `npm run codegen`.
 //
 // Generates one TypeScript module per OpenAPI contract under
-// `specs/<spec-id>/contracts/api.openapi.yaml` into
+// `openspec/specs/<spec-id>/contracts/api.openapi.yaml` into
 // `src/lib/api/generated/<spec-id>.ts`, through the openapi-typescript CLI so
 // the output (and its "auto-generated" header the file-size gate keys on) is
 // byte-identical to what the CLI would write by hand. A spec id may be a
@@ -56,7 +56,7 @@ function specSegments(id) {
 }
 
 export function contractPath(id) {
-  return path.join(REPO_ROOT, "specs", ...specSegments(id), "contracts", "api.openapi.yaml");
+  return path.join(REPO_ROOT, "openspec", "specs", ...specSegments(id), "contracts", "api.openapi.yaml");
 }
 
 /** Where a spec id's generated module lands under `dir`. */
