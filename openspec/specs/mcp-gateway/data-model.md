@@ -75,9 +75,8 @@ Pydantic `BaseModel` — this is what `Resource.config` holds for an `mcp_server
 | `transport`               | `Annotated[StdioTransport \| HttpTransport, Field(discriminator="type")]` | tagged union                                                          |
 | `spawn_timeout_seconds`   | `int`                                                                     | default `30`; range `5–120`                                           |
 | `request_timeout_seconds` | `int`                                                                     | default `120`; range `5–1800`; reset on progress                      |
-| `idle_timeout_seconds`    | `int`                                                                     | default `600`; range `60–86400`; subprocess GC after this idle period |
 
-All three timeouts are editable in the web UI's edit-server dialog, not only
+Both timeouts are editable in the web UI's edit-server dialog, not only
 over the API. Before they had a UI every registered server ran on the defaults
 regardless of its upstream — and measured latency across one vault's servers
 spanned three orders of magnitude (9ms to 10.9s average), with the slowest
@@ -175,7 +174,7 @@ CREATE INDEX idx_prefs_resource ON mcp_capability_preferences(resource_id, capab
 -- MCP-specific: invocation log
 CREATE TABLE mcp_invocations (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    timestamp        TIMESTAMP NOT NULL,
     resource_uid     TEXT      NOT NULL,                    -- a resource uid, or 'coffer' / 'deleted:<name>'
     capability_type  TEXT      NOT NULL,
     capability_key   TEXT      NOT NULL,
@@ -206,12 +205,12 @@ registered against the same `Base.metadata` as every other spec's:
 | ------------------------------ | ---------------------------- | ----------------------------------------- |
 | `MCPCapabilityPreferenceModel` | `mcp_capability_preferences` | `infrastructure/mcp/persistence.py`       |
 | `MCPInvocationModel`           | `mcp_invocations`            | `infrastructure/mcp/invocation_writer.py` |
-| `McpServerHealthModel`         | `mcp_server_health`          | `infrastructure/mcp/health_repo.py`       |
+| `MCPServerHealthModel`         | `mcp_server_health`          | `infrastructure/mcp/health_repo.py`       |
 
-Each ORM model provides:
-
-- `to_domain() -> <DomainEntity>` for conversion outward
-- A module-level `from_domain(entity) -> <Model>` helper for inward conversion
+Conversion between rows and domain entities is by private module functions:
+`_pref_to_domain` in `persistence.py`, and `_inv_to_domain` / `_inv_to_model`
+in `invocation_writer.py`. The health model has no domain entity; its repository
+reads a row as a `(status, checked_at)` tuple.
 
 ## Cascade and integrity rules
 

@@ -64,7 +64,7 @@ any framework-level adapter.
 | `display_name`              | `str`                                                                      | UI label                                                                                                |
 | `config_schema`             | `type[pydantic.BaseModel]`                                                 | Pydantic schema used to validate `Resource.config`                                                      |
 | `generic_create_allowed`    | `bool`                                                                     | whether the kind-agnostic `POST /resources` may create this kind; False for kinds that own a creation invariant beyond config validation (a skill's master folder, an agent's on-disk detection) |
-| `supports_scope`            | `bool`                                                                     | whether the kind takes a per-agent scope at all; False (the default) makes `update_scope` reject a non-null payload with 422. True for every kind but `agent` |
+| `supports_scope`            | `bool`                                                                     | whether the kind takes a per-agent scope at all; False (the default) makes `update_scope` reject a non-null payload with 422. True for `mcp_server`, `skill`, `provider` and `channel`; False for `agent`, `knowledge` and `memory` |
 | **Pre-write validators**    |                                                                            | run BEFORE persistence; raising rejects the write                                                       |
 | `validate_name`             | `Callable[[str], None] \| None`                                            | kind-specific name rule (`mcp_server` reserves the `__` namespace separator)                            |
 | `validate_config`           | `Callable[[dict], None] \| None`                                           | semantic config validation at REGISTRATION only, beyond the schema's shape                              |
@@ -74,6 +74,10 @@ any framework-level adapter.
 | `credential_ref_extractor`  | `Callable[[dict], dict[str, str]] \| None`                                 | `{logical_key: keychain_ref}` so the service can probe refs before any DB write                          |
 | `audit_redactor`            | `Callable[[dict], dict] \| None`                                           | audit-safe copy of a config, so the core hardcodes no kind's secret fields                               |
 | `default_scope`             | `Callable[[dict], Scope \| None] \| None`                                  | the scope a new row is created with, consulted once at register (`provider` pre-fills the wire's own default) |
+| `validate_delete`           | `Callable[[Resource], None] \| None`                                       | pre-write guard for `delete`: raising refuses the deletion before anything is torn down, on the kind's own DELETE and the kind-agnostic one alike (spec resource-framework "Let a kind refuse a deletion before anything is torn down"). Only `skill` supplies one, refusing its builtin skill with `RESOURCE_PROTECTED` |
+| **Sync publication**        |                                                                            | read by spec vault-sync's exporter and applier                                                          |
+| `converges`                 | `bool`                                                                     | default True: the kind's rows travel to the user's other machines. False for a kind whose rows are derived from one machine's installs; only `memory` sets it |
+| `converges_row`             | `Callable[[dict], bool] \| None`                                           | per-row refinement of `converges`, consulted only when that is True, given a row's config; `skill` supplies one so Coffer's own generated builtin skill stays local |
 | **Post-write reactions**    |                                                                            | run AFTER persistence + audit; cannot reject                                                            |
 | `on_delete`                 | `Callable[[Resource], Awaitable[None] \| None] \| None`                    | cleanup hook, awaited BEFORE the row is removed so it can still resolve it; a reaction, not a veto       |
 | `on_scope_changed`          | `Callable[[Resource], Awaitable[None] \| None] \| None`                    | keeps delivery/reclaim in step with a scope edit; handed the row AFTER the write                        |
@@ -104,7 +108,7 @@ Plain dataclass.
 | `resource_id`   | `int \| None`    | the resource's stable row id — what makes a trail survive a rename; `None` for an event naming no resource, and for rows written before the column existed |
 | `resource_kind` | `str \| None`    | nullable; the LABEL the resource carried at the time    |
 | `resource_name` | `str \| None`    | nullable; daemon-lifecycle events have no resource     |
-| `actor`         | `str`            | `"cli" \| "api" \| "ui" \| "system"`                   |
+| `actor`         | `str`            | free string: `"cli"`, `"api"` or `"ui"` from the `X-Coffer-Actor` header (`"api"` when it is absent), `"system"` for the daemon's own work, `"sync"` for a change applied from the sync remote, a named worker such as `"system:memory-aggregate-worker"` or `"system:memory-distil-worker"`, or a domain actor a kind names itself (`"user"`, `"channel"`, an agent's name, or `"agent"` for a knowledge write whose session reported no agent) |
 | `details`       | `dict[str, Any]` | JSON-serialisable payload                              |
 
 ### `AuditEventType` (`domain/audit.py`)
@@ -257,15 +261,17 @@ but leave it empty; the daemon upserts the per-table defaults at boot so that a
 prunable table introduced by a later spec can register its own default without
 requiring a new migration.
 
-```python
-defaults = [
-    ("audit_log",         365),   # this spec's own
-    ("mcp_invocations",    30),   # spec mcp-gateway's, registered through the registry
-]
-for table_name, days in defaults:
-    if not exists(table_name):
-        upsert(table_name=table_name, retention_days=days, updated_at=utcnow())
-```
+The seed is one row per registered `PrunableTable`, at that table's
+`default_retention_days`, inserted only where no policy for the table exists
+yet. The registrations today (`surfaces/http/app_mcp_composition.py`):
+
+| Table                   | Default (days) | Owning spec                                   |
+| ----------------------- | -------------- | --------------------------------------------- |
+| `audit_log`             | 365            | resource-framework                            |
+| `mcp_invocations`       | 30             | mcp-gateway                                   |
+| `sync_runs`             | 90             | vault-sync                                    |
+| `conversations_archive` | 7              | chat — idle conversations are archived        |
+| `conversations`         | 30             | chat — archived conversations are deleted     |
 
 ## API authentication
 

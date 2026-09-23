@@ -139,10 +139,15 @@ paths:
         claims, curation stops on every machine, and until this route there was
         no way to say so or to take it back.
 
-        `null` clears the owner, which returns the vault to "curate wherever
-        this is read". That is the right answer for a vault down to one
-        machine and the wrong one for a vault that still spans several, so it
-        is an explicit choice rather than a repair anything performs on its own.
+        `null` (or a blank id) clears the owner, which returns the vault to
+        "curate wherever this is read". That is the right answer for a vault
+        down to one machine and the wrong one for a vault that still spans
+        several, so it is an explicit choice rather than a repair anything
+        performs on its own. Only the owner changes; the rest of the row is
+        left as it stands. Emits an `internal_engine_model_set` audit entry
+        naming the actor, whose details carry the owner after the write
+        (spec internal-engine "Report and change the curation owner from
+        every surface").
       requestBody:
         required: true
         content:
@@ -258,6 +263,7 @@ components:
         Coffer's own operating settings: the model its internal engine runs on
         (the connection used is the `internal_default` — endpoint + key), and
         the switch and timer of every pass it runs unattended.
+      required: [default_model_timeout_s]
       properties:
         model:
           type: string
@@ -380,18 +386,23 @@ components:
 
     ErrorOut:
       type: object
-      required: [error, message]
+      required: [error]
+      description: "The app-wide error envelope `{error: {code, message, details}}`."
       properties:
         error:
-          type: string
-          description: Machine-readable error code.
-        message:
-          type: string
-          description: Human-readable description.
-        details:
           type: object
-          additionalProperties: true
-          description: Optional structured error details.
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Machine-readable error code.
+            message:
+              type: string
+              description: Human-readable description.
+            details:
+              type: object
+              additionalProperties: true
+              description: Optional structured error details.
 
   responses:
     Unauthorized:

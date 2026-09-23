@@ -261,8 +261,7 @@ export interface paths {
         head?: never;
         /**
          * Rename this machine.
-         * @description Free — `scope` references the derived id, never the label, so nothing
-         *     else has to change.
+         * @description Free — nothing keys on the label, so nothing else has to change.
          */
         patch: operations["renameSelfMachine"];
         trace?: never;
@@ -277,7 +276,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Retire a machine from the registry. */
+        /**
+         * Retire a machine from the registry.
+         * @description Idempotent: retiring an id the registry does not hold answers
+         *     `removed: true` as well.
+         */
         delete: operations["retireSyncMachine"];
         options?: never;
         head?: never;
@@ -569,8 +572,9 @@ export interface components {
             /** @description This machine's own id, so a surface can mark its row in the registry. */
             machine_id: string;
             /**
-             * @description `false` when the id came from the host rather than the local fallback
-             *     file. `true` means it does not survive deleting `~/.coffer`.
+             * @description `true` when the id was derived from the host; `false` when it came
+             *     from the local fallback file (`~/.coffer/machine-id`), which does
+             *     not survive deleting `~/.coffer`.
              */
             machine_id_is_derived: boolean;
             /**
@@ -612,9 +616,10 @@ export interface components {
             name: string;
         };
         /**
-         * @description Retiring a machine removes its descriptor and nothing else — nothing in
-         *     the vault references a machine id, which is why this answer has no
-         *     second half.
+         * @description Retiring a machine removes its descriptor and rewrites nothing else; a
+         *     channel binding or curation owner that named it is then reported as
+         *     naming a machine the registry does not hold. That is why this answer
+         *     has no second half.
          */
         MachineRemovedOut: {
             removed: boolean;
@@ -642,8 +647,8 @@ export interface components {
         };
     };
     responses: {
-        /** @description No such machine. */
-        NotFound: {
+        /** @description `GIT_MIRROR_FAILED` — a git operation against the working tree or the remote failed. */
+        GitFailed: {
             headers: {
                 [name: string]: unknown;
             };
@@ -651,7 +656,11 @@ export interface components {
                 "application/json": components["schemas"]["ErrorEnvelope"];
             };
         };
-        /** @description The URL or branch was refused at the wire. */
+        /**
+         * @description The remote was refused: a malformed URL or branch at the wire, or
+         *     `BACKUP_REMOTE_INVALID` when the working tree is refused or the remote
+         *     cannot be reached.
+         */
         Unprocessable: {
             headers: {
                 [name: string]: unknown;
@@ -753,6 +762,15 @@ export interface operations {
                     "application/json": components["schemas"]["RoundOut"];
                 };
             };
+            /** @description `SYNC_NOTHING_PENDING` — no round is held for confirmation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     rejectHeldSyncRound: {
@@ -771,6 +789,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncRemoteClearedOut"];
+                };
+            };
+            /** @description `SYNC_NOTHING_PENDING` — no round is held for confirmation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -793,6 +820,20 @@ export interface operations {
                     "application/json": components["schemas"]["RoundOut"];
                 };
             };
+            /**
+             * @description `SYNC_NOTHING_TO_ROLL_BACK` when no remote is configured;
+             *     `SYNC_BUNDLE_TOO_NEW` when the remote's layout is newer than this
+             *     build understands.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            502: components["responses"]["GitFailed"];
         };
     };
     rollbackLastSyncRound: {
@@ -804,13 +845,25 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The rollback round's outcome. */
+            /**
+             * @description The rollback round's outcome. The pointer does not move: the
+             *     reverted vault is an ordinary local change the next round publishes.
+             */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+            /** @description `SYNC_NOTHING_TO_ROLL_BACK` — no remote, no pointer, or no pre-apply snapshot to return to. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };
@@ -837,6 +890,20 @@ export interface operations {
                     "application/json": components["schemas"]["RoundOut"];
                 };
             };
+            /**
+             * @description `SYNC_NOTHING_TO_ROLL_BACK` when no remote is configured or this
+             *     machine has no pointer; `SYNC_BUNDLE_TOO_NEW` when the revision's
+             *     layout is newer than this build understands.
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            502: components["responses"]["GitFailed"];
         };
     };
     getSyncRemote: {
@@ -991,6 +1058,15 @@ export interface operations {
                     "application/json": components["schemas"]["MachineOut"];
                 };
             };
+            /** @description `BACKUP_REMOTE_INVALID` — the name is empty. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     retireSyncMachine: {
@@ -1004,7 +1080,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Removed. Nothing else in the vault referenced it. */
+            /** @description Removed. Nothing else in the vault is rewritten. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1013,7 +1089,19 @@ export interface operations {
                     "application/json": components["schemas"]["MachineRemovedOut"];
                 };
             };
-            404: components["responses"]["NotFound"];
+            /**
+             * @description `SYNC_CANNOT_RETIRE_SELF` when the id is this machine's own;
+             *     `BACKUP_REMOTE_INVALID` when no sync remote is configured, so there
+             *     is no registry to retire from.
+             */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     getMasterKeyFingerprint: {
@@ -1054,6 +1142,15 @@ export interface operations {
                     "application/json": components["schemas"]["KeyMaterialOut"];
                 };
             };
+            /** @description `MASTER_KEY_FILE_INVALID` — this machine holds no master key to export. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
         };
     };
     importMasterKey: {
@@ -1079,6 +1176,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KeyImportOut"];
+                };
+            };
+            /** @description `MASTER_KEY_FILE_INVALID` — no material was supplied, or it is not a valid Fernet key. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };

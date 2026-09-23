@@ -20,7 +20,8 @@ export interface paths {
          *     - For `anthropic`/`openai`, exactly one credential source must be
          *       supplied:
          *       - `secret_value`: the raw API key — stored to the Fernet vault under
-         *         `provider/<name>/key` and kept only as a `credential_ref`.
+         *         a freshly minted opaque ref `provider/<uuid4>/key` and kept only as
+         *         a `credential_ref`.
          *       - `credential_ref`: reuse an existing vault ref.
          *       Supplying both or neither is rejected with 422.
          *     - For `ollama`, the credential is OPTIONAL — supply NEITHER
@@ -61,8 +62,10 @@ export interface paths {
          * Update a provider profile
          * @description All fields are optional. Supplying `secret_value` rotates the stored
          *     secret (overwrites the vault entry at the existing `credential_ref`).
-         *     `protocol` and `credential_ref` are immutable (identity) — change
-         *     them by recreating the profile.
+         *     `credential_ref` is immutable. `protocol` may be corrected, but not
+         *     while the connection is active: that is refused with 409
+         *     `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` (spec provider-switching
+         *     "Refuse to move the wire of a live connection").
          */
         patch: operations["updateProvider"];
         trace?: never;
@@ -81,17 +84,26 @@ export interface paths {
         put?: never;
         /**
          * Activate (switch to) a provider profile
-         * @description Sets this profile as the active one for its `protocol` (at most one
-         *     active per wire at any time). Atomically clears `is_active` on all
-         *     other profiles of the same `protocol`.
+         * @description Makes this connection the active one for every AGENT TYPE its scope
+         *     reaches (at most one active connection per agent type; spec
+         *     provider-switching "Keep at most one active connection per agent
+         *     type", "Activate a connection into the agents its scope reaches").
          *
-         *     For each ENABLED registered agent whose native wire matches the
-         *     profile's `protocol`, projects (writes native config):
-         *     - `anthropic` → `~/.claude/settings.json` (apiKeyHelper + env keys)
-         *     - `openai` → `~/.codex/config.toml` (model + model_providers.coffer)
+         *     Projects first, into every ENABLED registered agent the scope reaches,
+         *     choosing the writer by agent type rather than by protocol:
+         *     - `claude_code` → `~/.claude/settings.json` (anthropic shape:
+         *       `apiKeyHelper = "coffer provider key --connection-uid <uid>"` + env keys)
+         *     - `codex` → `~/.codex/config.toml` (model + model_providers.coffer)
          *
-         *     If no matching agent is registered, the profile is still activated and
-         *     the response carries the agent in `skipped` — NOT an error.
+         *     Then clears `is_active` on the connections that held those agent types
+         *     (de-projecting each from the agents this one does not cover) and sets
+         *     it on this one, in sequential updates serialised by the single-process
+         *     daemon. A failed projection aborts the switch with the registry
+         *     unchanged.
+         *
+         *     If no agent the scope reaches is registered, the connection is still
+         *     activated and the response lists those agent types in `skipped` — NOT
+         *     an error.
          *
          *     An `ollama` connection is internal-only: it is refused with 409
          *     `PROVIDER_INTERNAL_ONLY`, never becomes `is_active`, and no native
@@ -185,19 +197,21 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                /** @description Wire format whose active profile's key to resolve. */
-                wire: "anthropic" | "openai";
+                /** @description Wire whose agent's active connection key to resolve. `ollama` and `unknown` map to no agent, so they always answer 404. */
+                wire: components["schemas"]["Protocol"];
             };
             cookie?: never;
         };
         /**
          * Resolve the active provider's API key for a wire format
-         * @description Returns the decrypted API key of the active profile for `wire`, over the
-         *     local token-protected daemon API. This is what Claude Code's
-         *     `apiKeyHelper = "coffer provider key --wire anthropic"` invokes, so the
-         *     raw key never has to be written into `settings.json`. Not audited —
-         *     `apiKeyHelper` polls it frequently. 404 when no profile is active for
-         *     that wire.
+         * @description Returns the decrypted API key of the connection active for the agent
+         *     behind `wire`, over the local token-protected daemon API. The legacy
+         *     form, kept for `settings.json` files written before the projected
+         *     helper named the connection
+         *     (`apiKeyHelper = "coffer provider key --wire anthropic"`); new
+         *     projections write the uid helper served by `GET /providers/{uid}/key`.
+         *     Not audited — `apiKeyHelper` polls it frequently. 404 when nothing is
+         *     active for that wire.
          */
         get: operations["activeProviderKey"];
         put?: never;
@@ -246,8 +260,8 @@ export interface paths {
             query?: never;
             header?: never;
             path: {
-                /** @description Wire format whose agent(s) to switch back to built-in. */
-                wire: "anthropic" | "openai";
+                /** @description Wire whose agent(s) to switch back to built-in. `ollama` and `unknown` map to no agent, so they answer 200 with nothing undone. */
+                wire: components["schemas"]["Protocol"];
             };
             cookie?: never;
         };
@@ -259,7 +273,8 @@ export interface paths {
          *     native config (the inverse of activate) and clears `is_active` on the
          *     wire's active connection, so the agent runs on its OWN built-in
          *     model/login. A Coffer LLM connection is an optional override, not a
-         *     prerequisite (spec provider-switching D1).
+         *     prerequisite (spec provider-switching "Revert an agent to its built-in
+         *     login").
          *
          *     Idempotent — a no-op when nothing is active for the wire. Emits a
          *     `PROVIDER_SWITCHED` audit event `{from, to: null, protocol, agents}`
@@ -323,7 +338,7 @@ export interface paths {
         put?: never;
         /**
          * Classify an endpoint's wire protocol
-         * @description Lets the connection dialog drop its manual type selector — the endpoint is asked what it speaks.
+         * @description Classifies an endpoint's wire by asking it what it speaks. The add-connection dialog asks for the protocol (a preset, or a manual selector) rather than calling this; no web surface calls it today.
          */
         post: operations["detectProviderProtocol"];
         delete?: never;
@@ -386,23 +401,23 @@ export interface components {
             protocol: string;
         };
         /**
-         * @description The connection's detected upstream protocol; determines which native
-         *     agent it projects to:
-         *     - `anthropic` → Claude Code (`~/.claude/settings.json`)
-         *     - `openai` → Codex (`~/.codex/config.toml`)
-         *     - `ollama` → internal-only; projected to NO agent (`target_for`
-         *       returns null). Used solely by Coffer's internal engine when this
-         *       connection is the internal default. Has no API key, so its
-         *       `credential_ref` is absent.
-         *     - `unknown` → the probe was inconclusive; the connection starts open to
-         *       every agent and the user decides.
-         *
-         *     The wire supplies only the scope a NEW connection starts with; which
-         *     agents it projects into afterwards is its framework per-agent `scope`.
+         * @description The connection's upstream wire, chosen when the connection is added (a
+         *     preset fills it, or the user picks it). It does NOT choose the agent a
+         *     connection projects into — that is the framework per-agent `scope`,
+         *     and the writer is chosen by agent type. The wire drives how the
+         *     endpoint is introspected, whether a key is required, the scope a NEW
+         *     connection starts with, and the wire→agent mapping of `use-builtin`
+         *     and the legacy `active-key` route (`anthropic` → Claude Code,
+         *     `openai` → Codex):
+         *     - `ollama` → internal-only; reaches NO agent and cannot be activated.
+         *       Used solely by Coffer's internal engine when this connection is the
+         *       internal default. Has no API key, so its `credential_ref` is absent.
+         *     - `unknown` → the wire could not be classified; the connection starts
+         *       unscoped, open to every agent, and the user decides.
          * @enum {string}
          */
         Protocol: "anthropic" | "openai" | "ollama" | "unknown";
-        /** @description A provider connection — a credentialed endpoint `{protocol, base_url, credential_ref}`. Never includes the raw secret. The model lives apart from the connection (spec provider-switching E3) and is chosen at the point of use. */
+        /** @description A provider connection — a credentialed endpoint `{protocol, base_url, credential_ref}`. Never includes the raw secret. The model lives apart from the connection (spec provider-switching "Take projected model keys from the agent's binding") and is chosen at the point of use. */
         ProviderOut: {
             /**
              * @description The connection Resource's immutable identity, and what every route in this document addressing a connection takes — including the one the projected `apiKeyHelper` calls on every turn.
@@ -418,7 +433,7 @@ export interface components {
             credential_ref: string | null;
             /** @description READ-ONLY. The CONFIGURED agents this connection covers, derived from the resource's framework-level per-agent `scope` (ADR per-agent-resource-scope) intersected with the agent types Coffer knows. Empty for a keyless (ollama) connection, which covers no agent even in principle. It is deliberately NOT narrowed by `enabled` — that rides the same payload, so a client wanting the effective projection intersects the two itself, while a management surface can still render the agent list of a connection the user switched off. The projection writer is chosen by agent type, not protocol; the Agent Overview picker filters on this AND on `enabled`. To CHANGE it, edit the scope (`PUT /api/v1/resources/{uid}/scope`). */
             compatible_agents: components["schemas"]["AgentType"][];
-            /** @description The curated set of models this connection OFFERS downstream — which of the endpoint's models the user intends to use, each with the modality saying WHICH KIND of model it is. EMPTY means no restriction (every model the endpoint serves), which is the default. Not a chosen model: the choice still happens at the point of use (spec provider-switching E3). Ids are opaque and passed verbatim to the vendor. The modality returned here is the STORED one — nothing re-derives it on read. */
+            /** @description The curated set of models this connection OFFERS downstream — which of the endpoint's models the user intends to use, each with the modality saying WHICH KIND of model it is. EMPTY means no restriction (every model the endpoint serves), which is the default. Not a chosen model: the choice still happens at the point of use (spec provider-switching "Curate the models a connection offers"). Ids are opaque and passed verbatim to the vendor. The modality returned here is the STORED one — nothing re-derives it on read. */
             models: components["schemas"]["ProviderModel"][];
             /** @description Whether this connection is the active override for its compatible agents. At most one active connection per agent type. Always false for ollama (internal-only, never projected). */
             is_active: boolean;
@@ -429,7 +444,7 @@ export interface components {
             /** @description The user's switch on the resource itself. A disabled connection projects into nothing and resolves no key, while still reporting the reach it is configured for (see `compatible_agents`). Changed through the shared resource enable/disable surface, not here. */
             enabled: boolean;
             /** @description The connection's own description, as stored on the resource row. */
-            description?: string | null;
+            description: string | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -443,14 +458,14 @@ export interface components {
             base_url: string;
             /** @description Reuse an existing vault ref. Mutually exclusive with `secret_value`. For anthropic/openai/unknown exactly one of the two must be supplied; for ollama supply neither. */
             credential_ref?: string | null;
-            /** @description Raw API key. Stored to the vault under `provider/<name>/key`. Mutually exclusive with `credential_ref`. For anthropic/openai/unknown exactly one of the two must be supplied; for ollama supply neither. Never echoed in any response. */
+            /** @description Raw API key. Stored to the vault under a freshly minted opaque ref `provider/<uuid4>/key`. Mutually exclusive with `credential_ref`. For anthropic/openai/unknown exactly one of the two must be supplied; for ollama supply neither. Never echoed in any response. */
             secret_value?: string | null;
             /** @description Curate which of the endpoint's models this connection offers downstream, each entry naming its modality. Null ⇒ empty ⇒ no restriction. Ids are opaque strings (non-blank, deduplicated preserving order, at most 200 of at most 200 characters); they are never checked against a list of model names Coffer writes down. An omitted `modality` stores `text`. */
             models?: components["schemas"]["ProviderModel"][] | null;
             /** @description Free text stored on the resource row. */
             description?: string | null;
         };
-        /** @description All fields optional. `credential_ref` is immutable — it is the vault address the connection owns — but `protocol` is not: the probe that guessed the wire can be wrong, and nothing keys off it for projection. Re-targeting which agents the connection projects into is a SCOPE edit (`PUT /api/v1/resources/{uid}/scope`), not a patch field — re-target then re-activate to re-project. No CHOSEN model is on the connection (spec provider-switching E3); `models` only curates which of the endpoint's models it offers. */
+        /** @description All fields optional. `credential_ref` is immutable — it is the vault address the connection owns — but `protocol` is not: the probe that guessed the wire can be wrong. Two things key off it: the ollama internal-only rule, and the wire→agent mapping `use-builtin` and the legacy `active-key` route take — which is why it cannot move while the connection is active (409 `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`). Re-targeting which agents the connection projects into is a SCOPE edit (`PUT /api/v1/resources/{uid}/scope`), not a patch field — re-target then re-activate to re-project. No CHOSEN model is on the connection (spec provider-switching "Take projected model keys from the agent's binding"); `models` only curates which of the endpoint's models it offers. */
         ProviderPatchRequest: {
             protocol?: components["schemas"]["Protocol"];
             base_url?: string | null;
@@ -473,7 +488,7 @@ export interface components {
             protocol: components["schemas"]["Protocol"];
             /** @description Agent names whose native config was updated. */
             projected: string[];
-            /** @description Agent type(s) matching this protocol that have no registered enabled agent to project into. Not an error — the profile is still activated. (A genuine native-config write failure aborts the switch with a 5xx and leaves the registry unchanged, rather than skipping.) */
+            /** @description Agent types in the connection's reach that have no enabled registered agent here to project into. Not an error — the profile is still activated. (A genuine native-config write failure aborts the switch with a 5xx and leaves the registry unchanged, rather than skipping.) */
             skipped: string[];
         };
         /** @description Result of switching a wire back to the agent's built-in login. */
@@ -487,19 +502,22 @@ export interface components {
         ProviderListOut: {
             providers: components["schemas"]["ProviderOut"][];
         };
-        /** @description The decrypted API key of the active profile for a wire format, served for Claude Code's apiKeyHelper. Never logged or audited. */
+        /** @description A connection's decrypted API key — the one named by uid, or the one active for a wire — served for Claude Code's apiKeyHelper. Never logged or audited. */
         ActiveKeyOut: {
             /** @description The decrypted provider API key. */
             value: string;
         };
+        /** @description The app-wide error envelope `{error: {code, message, details}}`. */
         ErrorOut: {
-            /** @description Machine-readable error code. */
-            error: string;
-            /** @description Human-readable description. */
-            message: string;
-            /** @description Optional structured error details. */
-            details?: {
-                [key: string]: unknown;
+            error: {
+                /** @description Machine-readable error code. */
+                code: string;
+                /** @description Human-readable description. */
+                message: string;
+                /** @description Optional structured error details. */
+                details?: {
+                    [key: string]: unknown;
+                };
             };
         };
     };
@@ -531,7 +549,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorOut"];
             };
         };
-        /** @description A provider with this name already exists */
+        /** @description A resource of kind `provider` with this name already exists */
         Conflict: {
             headers: {
                 [name: string]: unknown;
@@ -557,7 +575,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorOut"];
             };
         };
-        /** @description Server error during projection (e.g. config file write failed). The profile's `is_active` state reflects the transaction outcome; check the audit log for details. */
+        /** @description Server error during projection (e.g. a config file write failed; a concurrent edit is the 409 `CONFIG_FILE_STALE` instead). The profile's `is_active` state reflects the transaction outcome; check the audit log for details. */
         InternalError: {
             headers: {
                 [name: string]: unknown;
@@ -699,6 +717,15 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            /** @description `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` — the patch changes the wire of a connection that is active; switch its agents back to their built-in login first. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
             422: components["responses"]["UnprocessableEntity"];
         };
     };
@@ -725,7 +752,15 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
+            /** @description `PROVIDER_INTERNAL_ONLY` — the connection is `ollama`, which reaches no agent. `CONFIG_FILE_STALE` — an agent's native config changed on disk under the projection; nothing is written or flipped, and the refusal is audited as `provider_projection_refused`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
             500: components["responses"]["InternalError"];
         };
     };
@@ -786,8 +821,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Wire format whose active profile's key to resolve. */
-                wire: "anthropic" | "openai";
+                /** @description Wire whose agent's active connection key to resolve. `ollama` and `unknown` map to no agent, so they always answer 404. */
+                wire: components["schemas"]["Protocol"];
             };
             cookie?: never;
         };
@@ -838,8 +873,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Wire format whose agent(s) to switch back to built-in. */
-                wire: "anthropic" | "openai";
+                /** @description Wire whose agent(s) to switch back to built-in. `ollama` and `unknown` map to no agent, so they answer 200 with nothing undone. */
+                wire: components["schemas"]["Protocol"];
             };
             cookie?: never;
         };

@@ -40,7 +40,7 @@ The system MUST store each managed skill's content under `~/.coffer/skills/<name
 - **AND** when a folder already occupies the destination the rename is refused with the row, the master folder and the link all left under the old name
 
 ### Requirement: Validate imported skill folders against AgentSkills
-The system MUST validate every imported skill folder against the AgentSkills specification: `SKILL.md` present; frontmatter `name` present and non-empty (lowercase alphanumerics, hyphen, or underscore, ≤64 chars) and `description` present, non-empty, and ≤1024 chars; no path-escape symlinks; total size within a configurable limit (default 50 MB). A folder that violates any of these MUST be rejected with `unprocessable_entity` (422) and nothing persisted. A folder over the size limit is rejected with the configured cap and a hint to adjust settings.
+The system MUST validate every imported skill folder against the AgentSkills specification: `SKILL.md` present; frontmatter `name` present and non-empty (lowercase alphanumerics, hyphen, or underscore, ≤64 chars) and `description` present, non-empty, and ≤1024 chars; no path-escape symlinks; total size at most 50 MB, a fixed cap. A folder that violates any of these MUST be rejected with `unprocessable_entity` (422) and nothing persisted. A folder over the size limit is rejected as `SKILL_INVALID` with `details.reason` `size_limit_exceeded`.
 
 #### Scenario: reject import of an invalid skill folder
 - **GIVEN** the daemon is running,
@@ -123,7 +123,7 @@ When symlinks/directory junctions are unavailable (e.g., FAT32, network share), 
 A skill MUST be delivered to an agent if and only if the skill resource is enabled AND the skill's scope admits that agent — `skill.enabled AND is_active(skill.scope, agent=<agent>)`, one allow-list, left `null` admitting anything ([ADR per-agent-resource-scope](../../../docs/decisions/per-agent-resource-scope.md)). This is the same shape `mcp_server` uses, where scope alone decides which agents see a server's tools. The scope states:
 
 - `None` — every registered agent receives the skill (the default for a fresh import).
-- `{"agents": ["claude_code"]}` — only the named agents receive it; names that are not registered yet are legal and simply never match.
+- `{"agents": ["<agent uid>"]}` — only those agents receive it. The scope holds agent uids ([ADR resource-identity-is-an-immutable-uid](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)); the CLI and web UI let the user pick agents by name and store their uids. A uid that matches no agent registered here is legal and simply never matches.
 - `{"agents": []}` — nobody receives it, while the skill stays in the library, converged and visible.
 
 Those two together are the skill's REACH, and reach is machine-local: it is set on the machine it applies to, a converge round neither carries it away nor writes over it (spec vault-sync, "Keep reach machine-local"), and the predicate therefore takes no machine argument and has no machine to take. What converges is the skill — its files, its metadata — unless it is Coffer's own generated one (see "Regenerate Coffer's builtin skill from the build"). A skill can still be delivered here and dormant on another machine — that is two machines each holding their own `enabled` flag and their own scope, not one scope naming machines. The surface that sets reach MUST say that the setting stops at this machine.
@@ -151,7 +151,7 @@ No other flag decides which agents a skill is FOR: neither the delivery bookkeep
 - **THEN** it is redelivered to both agents — links re-created, delivery records restored — with no per-agent action.
 
 #### Scenario: scoping a skill away from an agent reclaims the delivered copy
-- **GIVEN** an enabled skill currently delivered to an agent whose name its scope includes,
+- **GIVEN** an enabled skill currently delivered to an agent whose uid its scope includes,
 - **WHEN** the user edits the skill's scope to exclude this agent and the next reconcile runs,
 - **THEN** the delivered symlink is removed and the delivery record is cleared — scope is a hard grant, and no per-agent state can hold the copy against it.
 
@@ -224,11 +224,11 @@ Users MUST be able to delete an unmanaged entry as an explicit, confirmed action
 - **THEN** the folder is removed from disk, an audit entry is recorded, and no master content or binding is touched.
 
 ### Requirement: Reconcile deliveries per agent on every trigger
-The system MUST reconcile deliveries per agent from the predicate of "Deliver a skill only where it is enabled and in scope" alone. A reconcile computes the agent's wanted set as `{s.name for s in skills if s.enabled and is_active(s.scope, agent_name)}` — a free function over the agent alone, with no evaluator object to build and no machine to bind into one. The same skill row can still be wanted here and unwanted on another machine, because the `enabled` flag and the scope this predicate reads are this machine's own, and the round that brought the skill here brought neither. It delivers every wanted skill the agent does not hold, and reclaims every held copy that is no longer wanted. It MUST run on: a skill being enabled or disabled, a skill's scope being edited, a skill being imported, a skill being removed, an agent being registered, an agent being enabled or disabled, an agent's `config_dir` changing, and the post-import hook after a sync import. A disabled agent's wanted set is empty, so the same reconcile reclaims its copies and restores them when it is enabled again. Conflicts at target paths follow "Report a foreign target instead of overwriting it" (report, never overwrite). The agent resource carries no skill-delivery policy of any kind — no follow flag, no exclusion list, no per-agent opt-out; the only inputs are the skill's `enabled` flag and its `scope`.
+The system MUST reconcile deliveries per agent from the predicate of "Deliver a skill only where it is enabled and in scope" alone. A reconcile computes the agent's wanted set as `{s.uid for s in skills if s.enabled and is_active(s.scope, agent.uid)}` — a free function over the agent alone, with no evaluator object to build and no machine to bind into one. The same skill row can still be wanted here and unwanted on another machine, because the `enabled` flag and the scope this predicate reads are this machine's own, and the round that brought the skill here brought neither. It delivers every wanted skill the agent does not hold, and reclaims every held copy that is no longer wanted. It MUST run on: a skill being enabled or disabled, a skill's scope being edited, a skill being imported, a skill being removed, an agent being registered, an agent being enabled or disabled, an agent's `config_dir` changing, and the post-import hook after a sync import. A disabled agent's wanted set is empty, so the same reconcile reclaims its copies and restores them when it is enabled again. Conflicts at target paths follow "Report a foreign target instead of overwriting it" (report, never overwrite). The agent resource carries no skill-delivery policy of any kind — no follow flag, no exclusion list, no per-agent opt-out; the only inputs are the skill's `enabled` flag and its `scope`.
 
 #### Scenario: import delivers a skill only where its scope grants it
 - **GIVEN** two registered agents, `claude_code` and `codex`,
-- **WHEN** the user imports a skill scoped to `["claude_code"]`,
+- **WHEN** the user imports a skill whose scope names only the `claude_code` agent's uid,
 - **THEN** the post-import reconcile delivers it to `claude_code` only, and `codex` receives nothing.
 
 ### Requirement: Expose unmanaged-skill operations under the skill surfaces

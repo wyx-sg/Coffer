@@ -336,3 +336,36 @@ async def test_the_bound_and_the_transcribe_model_leave_the_rest_of_the_row_alon
         ).json()["entries"]
     )
     assert audit_after == audit_before + 2
+
+
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="the route names and clears the curation owner",
+)
+async def test_the_curation_owner_route_names_and_clears_the_owner(api: AsyncClient) -> None:
+    await api.put("/internal-engine-config", json={"model": "brain"})
+    assert (await _config(api))["curate_owner_machine_id"] is None
+
+    # Not validated against the registry: this vault has none, and the id is
+    # still written.
+    r = await api.put("/internal-engine-config/curation-owner", json={"machine_id": "laptop-1"})
+    assert r.status_code == 200, r.text
+    assert r.json()["curate_owner_machine_id"] == "laptop-1"
+    after_set = await _config(api)
+    assert after_set["curate_owner_machine_id"] == "laptop-1"
+    assert after_set["model"] == "brain"
+
+    r = await api.put("/internal-engine-config/curation-owner", json={"machine_id": None})
+    assert r.status_code == 200, r.text
+    assert r.json()["curate_owner_machine_id"] is None
+    assert (await _config(api))["model"] == "brain"
+
+    entries = (
+        await api.get("/audit", params={"event_type": "internal_engine_model_set", "limit": 50})
+    ).json()["entries"]
+    owner_writes = [e for e in entries if set(e["details"]) == {"curate_owner_machine_id"}]
+    assert {e["actor"] for e in owner_writes} == {"tester"}
+    assert sorted((e["details"]["curate_owner_machine_id"] or "") for e in owner_writes) == [
+        "",
+        "laptop-1",
+    ]

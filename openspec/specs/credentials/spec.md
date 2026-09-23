@@ -28,10 +28,7 @@ this is where they become operable behaviour with routes, commands and tests.
 The store is not a password manager: it has no sharing model, no expiry, no per-agent scope and no
 notion of a secret for something Coffer does not manage. The master key can be moved but not
 rotated; re-encrypting every row under a new key is not offered, and a user who needs a new key
-re-enters their secrets. Known gap: `coffer credentials list` today enumerates refs from
-`mcp_server` resources only, so a channel bot token or a provider API key does not appear although
-both kinds declare extractors; "List every cited reference with its presence" states the intended
-behaviour.
+re-enters their secrets.
 
 ## Requirements
 

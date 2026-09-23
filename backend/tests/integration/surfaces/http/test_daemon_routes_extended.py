@@ -381,3 +381,71 @@ async def test_the_idle_window_is_required_on_the_put(tmp_path, monkeypatch):
     async with c:
         r = await c.put("/api/v1/daemon/residency", json={"login_service_installed": False})
         assert r.status_code == 422
+
+
+@pytest.mark.acceptance(
+    spec="daemon", scenario="the settings page changes residency in one request"
+)
+@pytest.mark.asyncio
+async def test_the_settings_page_changes_residency_in_one_request(tmp_path, monkeypatch):
+    """Both halves in one PUT, against a faked launchd: the login service is
+    installed at once, the idle window lands where the next start reads it,
+    and the audit row carries what became true."""
+    from coffer.infrastructure.daemon import login_service
+
+    installed = {"value": False}
+
+    def _install():
+        installed["value"] = True
+        return tmp_path / "fake.plist"
+
+    def _uninstall():
+        was = installed["value"]
+        installed["value"] = False
+        return was
+
+    monkeypatch.setattr(login_service, "is_supported", lambda: True)
+    monkeypatch.setattr(login_service, "is_installed", lambda: installed["value"])
+    monkeypatch.setattr(login_service, "install", _install)
+    monkeypatch.setattr(login_service, "uninstall", _uninstall)
+
+    c, audit, engine = await _client_with_audit(tmp_path)
+    home = tmp_path / "home"
+    try:
+        async with c:
+            before = await c.get("/api/v1/daemon/residency")
+            assert before.status_code == 200
+            assert before.json() == {
+                "login_service_supported": True,
+                "login_service_installed": False,
+                "idle_shutdown_hours": 12,
+            }
+
+            r = await c.put(
+                "/api/v1/daemon/residency",
+                json={"login_service_installed": True, "idle_shutdown_hours": 6},
+            )
+            assert r.status_code == 200
+            assert r.json() == {
+                "login_service_supported": True,
+                "login_service_installed": True,
+                "idle_shutdown_hours": 6,
+            }
+            assert installed["value"] is True
+
+            omitted = await c.put(
+                "/api/v1/daemon/residency", json={"login_service_installed": False}
+            )
+            assert omitted.status_code == 422
+            # The refused request changed nothing.
+            assert installed["value"] is True
+
+        config = json.loads((home / ".coffer" / "daemon-config.json").read_text())
+        assert config["idle_shutdown_hours"] == 6
+
+        entries = await audit.query(event_type="daemon_residency_updated")
+        assert len(entries) == 1
+        assert entries[0].details == {"login_service_installed": True, "idle_shutdown_hours": 6}
+    finally:
+        await engine.dispose()
+        set_active_token(None)

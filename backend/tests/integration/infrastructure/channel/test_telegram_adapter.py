@@ -1071,6 +1071,10 @@ async def test_a_rejected_rich_message_does_not_latch_the_feature_off(
     assert adapter.capabilities.max_message_chars == 32000
 
 
+@pytest.mark.acceptance(
+    spec="channels/telegram",
+    scenario="a selection card on a rich-message server takes its title as a heading",
+)
 async def test_a_rich_send_carries_buttons_and_the_reply_pointer(
     fake_telegram: FakeTelegram,
 ) -> None:

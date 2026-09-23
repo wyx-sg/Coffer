@@ -76,7 +76,7 @@ credentials, is never probed at register time, and releases nothing on delete.
 | ---------------------- | ------------------------------------------------------------------ | ----------- |
 | `CREDENTIAL_MISSING`   | A ref a configuration cites does not resolve                        | 400 / startup failure at the citing surface |
 | `CREDENTIAL_IN_USE`    | Delete attempted while a resource config still cites the ref | 409, with `details.references` naming each citer by kind and current label (`channel 'my-bot'`) — never by uid, which is not what the user sees on the page they must visit next |
-| `CREDENTIAL_LOCKED`    | The OS keychain refused or could not be read                        | 4xx; the legacy migration treats it as "skip and retry next start" |
+| `CREDENTIAL_LOCKED`    | The OS keychain refused or could not be read                        | 503; the legacy migration treats it as "skip and retry next start" |
 | `CREDENTIAL_UNREADABLE`| Ciphertext will not decrypt with the current key                   | 5xx, naming the ref |
 | `MASTER_KEY_MISSING`   | Ciphertext exists and no key resolves, or the key is corrupt | Fatal at daemon startup, naming the path |
 

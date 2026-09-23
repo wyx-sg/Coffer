@@ -128,3 +128,42 @@ acceptance("chat", "a channel's conversation is listed beside the web's with a b
   expect(im).toHaveTextContent(/via telegram/i);
   expect(web).not.toHaveTextContent(/via /i);
 });
+
+// spec chat "Search the conversation list by title".
+acceptance("chat", "search narrows the conversation list by title", () => {
+  renderList([conv("1", "Alpha rollout"), conv("2", "beta notes"), conv("3", "Gamma")]);
+
+  fireEvent.change(screen.getByRole("textbox", { name: /search conversations/i }), {
+    target: { value: "  ALP " },
+  });
+
+  // Case-insensitive substring of the title, with the query trimmed.
+  const items = screen.getAllByRole("listitem");
+  expect(items).toHaveLength(1);
+  expect(items[0]).toHaveTextContent("Alpha rollout");
+
+  // Clearing the query brings every conversation back.
+  fireEvent.change(screen.getByRole("textbox", { name: /search conversations/i }), {
+    target: { value: "" },
+  });
+  expect(screen.getAllByRole("listitem")).toHaveLength(3);
+});
+
+acceptance("chat", "a search that matches nothing is not an empty list", () => {
+  renderList([conv("1", "Alpha rollout")]);
+  fireEvent.change(screen.getByRole("textbox", { name: /search conversations/i }), {
+    target: { value: "zzz" },
+  });
+  expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+  expect(screen.getByText("No matching conversations")).toBeInTheDocument();
+  expect(screen.queryByText(/no conversations yet/i)).not.toBeInTheDocument();
+  // The search box stays, so the query can be changed.
+  expect(screen.getByRole("textbox", { name: /search conversations/i })).toHaveValue("zzz");
+});
+
+acceptance("chat", "an empty conversation list offers no search", () => {
+  renderList([]);
+  expect(screen.getByText(/no conversations yet/i)).toBeInTheDocument();
+  expect(screen.queryByText("No matching conversations")).not.toBeInTheDocument();
+  expect(screen.queryByRole("textbox", { name: /search conversations/i })).not.toBeInTheDocument();
+});

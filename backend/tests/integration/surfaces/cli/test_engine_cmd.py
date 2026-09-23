@@ -495,6 +495,38 @@ def test_an_empty_registry_is_never_reported_as_a_fault(engine_cli_daemon):
     assert json.loads(shown.output)["state"] == "other"
 
 
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="the command line shows, sets and clears the curation owner",
+)
+def test_curate_owner_show_set_clear(engine_cli_daemon):
+    """show → set (this machine) → show --json → clear, read back over the route."""
+    http = engine_cli_daemon
+    here = _machine_id(http)
+
+    r = _runner.invoke(cli_app, ["engine", "curate-owner", "show"])
+    assert r.exit_code == 0, r.output
+    assert r.output.strip() == "curation owner: none — the pass runs wherever this vault is read"
+
+    r = _runner.invoke(cli_app, ["engine", "curate-owner", "set"])
+    assert r.exit_code == 0, r.output
+    assert r.output.strip() == f"curation owner: {here} (this machine)"
+    assert http.get("/internal-engine-config").json()["curate_owner_machine_id"] == here
+
+    r = _runner.invoke(cli_app, ["engine", "curate-owner", "show", "--json"])
+    assert r.exit_code == 0, r.output
+    assert json.loads(r.output) == {
+        "curate_owner_machine_id": here,
+        "state": "self",
+        "this_machine_id": here,
+    }
+
+    r = _runner.invoke(cli_app, ["engine", "curate-owner", "clear"])
+    assert r.exit_code == 0, r.output
+    assert r.output.strip() == "curation owner: none — the pass runs wherever this vault is read"
+    assert http.get("/internal-engine-config").json()["curate_owner_machine_id"] is None
+
+
 def test_curate_owner_clear_returns_the_pass_to_every_machine(engine_cli_daemon):
     """Clearing is an operating decision, never a repair anything performs."""
     http = engine_cli_daemon

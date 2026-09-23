@@ -267,7 +267,11 @@ export interface components {
         };
         /** @description PUT .../scope body. `scope: null` clears back to unscoped — every agent. */
         ResourceScopeUpdate: {
-            scope?: components["schemas"]["ScopeOut"];
+            /** @description The shape of `ScopeOut`, except that `agents` may be omitted on the way in: an absent `agents` is read as null, i.e. every agent. Unknown properties are still rejected (422). */
+            scope?: {
+                /** @description Agent resource UIDs, not names. */
+                agents?: string[] | null;
+            } | null;
         };
         ResourceOut: {
             /**
@@ -315,8 +319,8 @@ export interface components {
             event_type: string;
             resource_kind?: string | null;
             resource_name?: string | null;
-            /** @enum {string} */
-            actor: "cli" | "api" | "ui" | "system";
+            /** @description Who made the change: `cli`, `ui` or `api` from the `X-Coffer-Actor` header (`api` when it is absent), `system` for the daemon's own work, `sync` for a change applied from the sync remote, a named worker such as `system:memory-aggregate-worker` or `system:memory-distil-worker`, or a domain actor a kind names itself — `user`, `channel`, an agent's name, or `agent` for a knowledge write whose session reported no agent. A free string, not an enum. */
+            actor: string;
             details?: {
                 [key: string]: unknown;
             } | null;
@@ -528,6 +532,15 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            /** @description `RESOURCE_PROTECTED` — the kind's pre-write delete guard refused before anything was torn down (spec resource-framework "Let a kind refuse a deletion before anything is torn down"); Coffer's builtin skill is the case today. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     updateResource: {
@@ -558,6 +571,15 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            /** @description `RESOURCE_ALREADY_EXISTS` — a rename onto a name another resource of the same kind already carries (spec resource-framework "Treat a resource's name as a mutable label"). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             422: components["responses"]["UnprocessableEntity"];
         };
     };
@@ -673,6 +695,8 @@ export interface operations {
                 /** @description One resource's whole trail, including rows written while it carried a different name. Filtering by name was removed with the identity change: a label cannot tell a renamed resource from a deleted one whose name was later reused. */
                 resource_uid?: string;
                 event_type?: string;
+                /** @description Only events whose type starts with this prefix — `skill_` for one kind's own events, for instance. */
+                event_prefix?: string;
                 since?: string;
                 limit?: number;
             };
@@ -692,6 +716,16 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            /** @description `resource_uid` names no resource — a different answer from "that resource has no events", which is an empty list. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listRetentionPolicies: {

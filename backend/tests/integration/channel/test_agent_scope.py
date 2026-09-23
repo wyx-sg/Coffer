@@ -113,6 +113,7 @@ async def test_an_unscoped_channel_offers_every_agent(env: ChannelEnv) -> None:
     assert "codex" in text
 
 
+@pytest.mark.acceptance(spec="channels", scenario="/new starts a fresh conversation")
 async def test_a_sticky_agent_narrowed_out_falls_back_to_the_channel_default(
     env: ChannelEnv,
 ) -> None:

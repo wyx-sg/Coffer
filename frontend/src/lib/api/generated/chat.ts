@@ -33,7 +33,7 @@ export interface paths {
         put?: never;
         /**
          * Create a conversation
-         * @description Creates a conversation for the named Coffer-managed agent. `agent_key` is required; `agent_config` is an opaque, agent-specific configuration object the named agent validates and stores. For a managed agent it accepts an optional `cwd` and an optional `model` (the agent's own model, free-text). An unknown `agent_key` or an invalid `agent_config` is rejected with 400.
+         * @description Creates a conversation for the named Coffer-managed agent. `agent_key` is required; `agent_config` is an opaque, agent-specific configuration object the named agent validates and stores. For a managed agent it accepts an optional `cwd`, an optional `model` (the agent's own model, free-text) and an optional `effort` (its reasoning level). An unknown `agent_key` or an invalid `agent_config` is rejected with 400.
          */
         post: operations["createConversation"];
         delete?: never;
@@ -63,7 +63,7 @@ export interface paths {
         delete: operations["deleteConversation"];
         options?: never;
         head?: never;
-        /** Rename a conversation or change its model */
+        /** Rename a conversation */
         patch: operations["updateConversation"];
         trace?: never;
     };
@@ -77,7 +77,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Read a conversation's agent config (cwd, model) */
+        /** Read a conversation's agent config (cwd, model, effort) */
         get: operations["getAgentConfig"];
         put?: never;
         post?: never;
@@ -85,8 +85,8 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Set a conversation's agent model (managed agents)
-         * @description Sets `agent_config.model` — the managed agent's own model, passed through to its CLI (Claude Code `--model`, Codex `model`) — preserving `cwd` and `session_id`. An empty or null `model` clears the override so the conversation inherits the active provider profile's projected default. Mirrors the channel `/model` command. It is unrelated to the `model_id` recorded on each message, which reports the model a turn actually ran on and is never read back as configuration.
+         * Set a conversation's model and reasoning effort (managed agents)
+         * @description Sets `agent_config.model` — the managed agent's own model, passed through to its CLI (Claude Code `--model`, Codex `model`) — and `agent_config.effort`, how hard that model thinks, preserving `cwd` and `session_id`. Each field is written only when the body mentions it. An empty or null `model` clears the override so the conversation inherits the active provider profile's projected default; an empty or null `effort` clears it so the agent runs at its own configured level. The agent itself is fixed at creation and cannot be changed here. Mirrors the channel `/model` and `/effort` commands. It is unrelated to the `model_id` recorded on each message, which reports the model a turn actually ran on and is never read back as configuration.
          */
         patch: operations["setAgentConfig"];
         trace?: never;
@@ -240,7 +240,7 @@ export interface components {
         ConversationCreate: {
             /** @description Which registered agent the conversation talks to. */
             agent_key: string;
-            /** @description Opaque, agent-specific configuration validated by the named agent. For a managed agent (Claude Code / Codex): an optional `cwd` and an optional `model` (the agent's own model, free-text, passed through to its CLI). */
+            /** @description Opaque, agent-specific configuration validated by the named agent. For a managed agent (Claude Code / Codex): an optional `cwd`, an optional `model` (the agent's own model, free-text, passed through to its CLI) and an optional `effort` (its reasoning level). */
             agent_config?: {
                 [key: string]: unknown;
             } | null;
@@ -261,7 +261,7 @@ export interface components {
              * @description Null for an active conversation; the instant it was archived otherwise.
              */
             archived_at?: string | null;
-            /** @description The IM channel this conversation is also driven from; null for a conversation started on the web page. Present iff the conversation carries a channel name. */
+            /** @description The IM channel this conversation is also driven from; null for a conversation started on the web page. Present iff the conversation stores a channel uid. */
             channel_binding?: components["schemas"]["ChannelBindingOut"] | null;
         };
         ConversationListOut: {
@@ -278,7 +278,7 @@ export interface components {
         AgentConfigPatch: {
             /** @description The managed agent's model (free-text, passed through to its CLI). Empty or null clears the override; `cwd` and `session_id` are preserved. */
             model?: string | null;
-            /** @description How hard that model should think, for an agent that takes a reasoning effort of its own (Codex). Empty or null clears it, so the agent runs at whatever its own config says. A body that mentions only one of the two fields leaves the other where it was. */
+            /** @description How hard that model should think, for an agent that takes a reasoning effort of its own (Claude Code and Codex both do). Empty or null clears it, so the agent runs at whatever its own config says. A body that mentions only one of the two fields leaves the other where it was. */
             effort?: string | null;
         };
         AgentConfigOut: {

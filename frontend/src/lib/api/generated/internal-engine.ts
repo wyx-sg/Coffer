@@ -97,10 +97,15 @@ export interface paths {
          *     claims, curation stops on every machine, and until this route there was
          *     no way to say so or to take it back.
          *
-         *     `null` clears the owner, which returns the vault to "curate wherever
-         *     this is read". That is the right answer for a vault down to one
-         *     machine and the wrong one for a vault that still spans several, so it
-         *     is an explicit choice rather than a repair anything performs on its own.
+         *     `null` (or a blank id) clears the owner, which returns the vault to
+         *     "curate wherever this is read". That is the right answer for a vault
+         *     down to one machine and the wrong one for a vault that still spans
+         *     several, so it is an explicit choice rather than a repair anything
+         *     performs on its own. Only the owner changes; the rest of the row is
+         *     left as it stands. Emits an `internal_engine_model_set` audit entry
+         *     naming the actor, whose details carry the owner after the write
+         *     (spec internal-engine "Report and change the curation owner from
+         *     every surface").
          */
         put: operations["updateCurationOwner"];
         post?: never;
@@ -203,7 +208,7 @@ export interface components {
             /** @description The chosen bound on one model call, or null while none has been chosen. */
             model_timeout_s?: number | null;
             /** @description What bounds a call while `model_timeout_s` is null — reported for the same reason `default_interval_s` is, so a settings surface can name the default rather than show a blank. */
-            default_model_timeout_s?: number;
+            default_model_timeout_s: number;
             /** @description The speech-to-text model, or null when Coffer transcribes nothing and hands the agent the audio file untouched. */
             transcribe_model?: string | null;
         };
@@ -241,14 +246,17 @@ export interface components {
         TranscribeModelUpdate: {
             model?: string | null;
         };
+        /** @description The app-wide error envelope `{error: {code, message, details}}`. */
         ErrorOut: {
-            /** @description Machine-readable error code. */
-            error: string;
-            /** @description Human-readable description. */
-            message: string;
-            /** @description Optional structured error details. */
-            details?: {
-                [key: string]: unknown;
+            error: {
+                /** @description Machine-readable error code. */
+                code: string;
+                /** @description Human-readable description. */
+                message: string;
+                /** @description Optional structured error details. */
+                details?: {
+                    [key: string]: unknown;
+                };
             };
         };
     };

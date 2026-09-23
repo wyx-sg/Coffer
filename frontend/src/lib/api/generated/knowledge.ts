@@ -987,7 +987,22 @@ export interface operations {
                     "application/json": components["schemas"]["CurationOut"];
                 };
             };
-            404: components["responses"]["CollectionNotFound"];
+            /**
+             * @description `RESOURCE_NOT_FOUND` for a uid no resource answers to, the same as
+             *     every other uid-addressed route; `KNOWLEDGE_COLLECTION_NOT_FOUND`
+             *     for a disabled collection, or a uid naming a resource that is not
+             *     a collection. An unknown uid is always an error — nothing is
+             *     conjured into existence by being asked for (see "Create
+             *     collections only deliberately").
+             */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
             409: components["responses"]["UpkeepAlreadyRunning"];
             422: components["responses"]["ValidationFailed"];
         };

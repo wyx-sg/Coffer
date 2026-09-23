@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import type { RunRecord } from "@/lib/api/sync";
 import { collapseRepeats, isQuiet, groupSpan } from "./syncRunRows";
 import { heldRoundId } from "./syncRowActions";
+import { acceptance } from "@/test/acceptance";
 
 const NO_COUNTS = { added: 0, modified: 0, deleted: 0, changes: [] };
 
@@ -71,6 +72,38 @@ describe("collapseRepeats", () => {
     expect(rows[1].kind === "group" && rows[1].status).toBe("failed");
     expect(rows[1].kind === "group" && rows[1].runs.map((r) => r.id)).toEqual([8, 7]);
   });
+
+  acceptance(
+    "vault-sync",
+    "repeated failures fold into one row and the newest round stands alone",
+    () => {
+      const published = { ...NO_COUNTS, added: 1, changes: [{ path: "a.md", status: "added" }] };
+      const rows = collapseRepeats([
+        run({ id: 9, status: "failed", error: "git fetch failed" }),
+        run({ id: 8, status: "failed", error: "git fetch failed" }),
+        run({ id: 7, status: "failed", error: "git fetch failed" }),
+        run({ id: 6, status: "ok", published } as Partial<RunRecord> & { id: number }),
+      ]);
+      // The newest failure stands alone; the two before it are one row of two;
+      // the round that published is its own row.
+      expect(rows.map((r) => r.kind)).toEqual(["run", "group", "run"]);
+      expect(rows[0].kind === "run" && rows[0].run.id).toBe(9);
+      expect(rows[1].kind === "group" && rows[1].status).toBe("failed");
+      expect(rows[1].kind === "group" && groupSpan(rows[1].runs).count).toBe(2);
+      expect(rows[1].kind === "group" && rows[1].runs.map((r) => r.id)).toEqual([8, 7]);
+      expect(rows[2].kind === "run" && rows[2].run.id).toBe(6);
+
+      // Held rounds fold by outcome the same way beneath a newer round.
+      const held = collapseRepeats([
+        run({ id: 4, status: "ok" }),
+        run({ id: 3, status: "awaiting_confirmation" }),
+        run({ id: 2, status: "awaiting_confirmation" }),
+      ]);
+      expect(held.map((r) => r.kind)).toEqual(["run", "group"]);
+      expect(held[1].kind === "group" && held[1].status).toBe("awaiting_confirmation");
+      expect(held[1].kind === "group" && held[1].runs.map((r) => r.id)).toEqual([3, 2]);
+    },
+  );
 
   test("a hold re-raised every hour folds too", () => {
     const rows = collapseRepeats([

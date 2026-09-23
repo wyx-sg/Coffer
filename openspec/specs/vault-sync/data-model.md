@@ -43,9 +43,12 @@ response or a log line without redaction.
 
 `last_status` gains the round's whole vocabulary, written verbatim from
 `ConvergeStatus`: `ok`, `no_change`, `conflict`, `awaiting_confirmation`,
-`push_failed`, `failed`, `disabled`. Two of those are successes rather than
-skips — `no_change` means there was nothing to do on either side, and `disabled`
-that no remote is configured or it is switched off. Whether the round *joined* a
+`push_failed`, `failed`, `disabled`, `awaiting_join`. Two of those are
+successes rather than skips — `no_change` means there was nothing to do on
+either side, and `disabled` that no remote is configured or it is switched off.
+`awaiting_join` means this machine has no pointer and has not adopted the
+remote, so an ordinary round applied and pushed nothing; like an outstanding
+confirmation it is recorded once and re-stamped rather than appended again. Whether the round *joined* a
 remote is a different question, answered by `last_join` (`new` / `returning`),
 not a status of its own. The `last_*`
 columns are the most recent round denormalised onto the remote, so a status
@@ -264,7 +267,7 @@ The migration is idempotent: a row with no `machines` key is left untouched, so
 a re-run matches nothing. It is one-way and leaves no load-time shim —
 `Scope.from_json` accepts the single-axis shape only.
 
-An unknown agent name is legal and simply never matches, so a resource can be
+An unknown agent uid is legal and simply never matches, so a resource can be
 scoped to an agent that has not been registered here yet.
 
 ### Machine descriptor (`machines/<machine_id>.yaml`)
@@ -274,10 +277,12 @@ occupy disjoint paths and cannot conflict; git merges them trivially. The
 registry is whatever `machines/*.yaml` currently holds — a derived view, not a
 synced table.
 
+The id is the file name, not a key inside the document (here
+`machines/a3f21c9e4b7d2610.yaml`):
+
 ```yaml
-machine_id: a3f21c9e4b7d2610
 name: Desktop
-os: darwin
+os: Darwin 24.6.0
 hostname: studio.local
 coffer_version: 0.5.0
 last_converged_on: 2026-09-13
@@ -288,17 +293,17 @@ agents: [claude-code, codex]
 
 | Field | Notes |
 | --- | --- |
-| `machine_id` | `sha256("coffer-machine:" + raw)` truncated to 16 hex characters. The raw host identifier — `IOPlatformUUID` on macOS, `/etc/machine-id` on Linux — is a hardware identifier and MUST NOT be written here. When neither is readable, the raw value is a UUID generated once into `~/.coffer/machine-id` (mode `0600`); that one does not survive deleting `~/.coffer`, and the machines page says so |
+| `machine_id` (the file name) | `sha256("coffer-machine:" + raw)` truncated to 16 hex characters. The raw host identifier — `IOPlatformUUID` on macOS, `/etc/machine-id` on Linux — is a hardware identifier and MUST NOT be written here. When neither is readable, the raw value is a UUID generated once into `~/.coffer/machine-id` (mode `0600`); that one does not survive deleting `~/.coffer`, and the machines page says so |
 | `name` | the user's label, defaulting from the hostname. Mutable at any time and at no cost, because nothing keys on it |
-| `os`, `hostname`, `coffer_version` | descriptive, for the machines table |
+| `os`, `hostname`, `coffer_version` | descriptive, for the machines table; `os` is the platform name and release (`Darwin 24.6.0`) |
 | `last_converged_on` | a **date**, restamped at most once per calendar day, so an idle machine does not commit a heartbeat every round. The UI says "last converged day", not "last converged at" |
-| `last_converged_commit` | this machine's pointer, published so the remote can hand it back. Restamped every round. This is what a **returning** machine recovers its base from when its local pointer is gone |
+| `last_converged_commit` | this machine's pointer, published so the remote can hand it back. Restamped with `last_converged_on`, so at most once per calendar day — and filled in once if the day's first descriptor carried none. This is what a **returning** machine recovers its base from when its local pointer is gone |
 | `key_fingerprint` | the same short hash `GET /sync/key/fingerprint` returns, so the machines table can state that another machine's credentials cannot be decrypted here |
 | `agents` | the names of the agents registered on that machine |
 
 The id is cached in `daemon-config.json` and recomputed if lost; the name lives
 here, so it syncs. The asymmetry matters: `machine_id` is the descriptor
-filename, the tidy owner's reference and a table key, and a machine that comes
+filename, the curation owner's reference and a table key, and a machine that comes
 back under a new identity becomes a ghost — it rejoins as a stranger, its old
 descriptor lingers with nobody to update it, and anything that named it stops
 meaning this machine.
@@ -313,18 +318,20 @@ Module-owned shared state that belongs to the vault rather than to one machine.
 Each module implements `SyncedStatePort` and the composition root registers the
 providers — the sync slice never imports kind modules. Current areas:
 
-- `mcp-preferences/<server>.yaml` — the DISABLED capabilities per server
-  (enabled is the default; seen-timestamps stay machine-local).
+- `mcp-preferences/<server_uid>.yaml` — the DISABLED capabilities per server,
+  keyed by the server's uid (enabled is the default; seen-timestamps stay
+  machine-local).
 - `agent-plugins/<agent>.yaml` — the plugin inventory: which plugins and
   marketplaces each agent has on each machine. An **inventory, not a
   replicator** — applying one writes nothing into any agent's configuration.
-- `channel-peers/<channel>/<chat>.yaml` — one channel pairing: the chat id, the
-  sender id the owner gate checks, the display name and the chat's sticky
-  agent. Platform identity, all of it, which is why it travels: a channel moves
+- `channel-peers/<channel_uid>/<chat>.yaml` — one channel pairing, keyed by the
+  channel's uid: the chat id, the sender id the owner gate checks, the display
+  name and the pairing time. Platform identity, all of it, which is why it travels: a channel moves
   between machines now, and one that arrived without its pairings would make
   the owner re-pair from their phone on every rebind. The **active conversation
-  pointer is not in the document** — conversations are machine-local, so an
-  incoming pairing keeps whatever pointer this machine already held. The file
+  pointer is not in the document**, and neither is the agent a thread has stuck
+  to — conversations are machine-local and that agent is one this machine has
+  installed, so an incoming pairing keeps whatever this machine already held. The file
   name is a sanitised chat id and therefore only an address; the payload
   carries the true ids.
 - `settings/internal-engine.yaml` — the internal-engine singleton: `model`, the
@@ -395,7 +402,7 @@ in cleartext, so two ciphertexts for one ref can be ordered **without the key**,
 and the fresher encryption wins. That rule applies here and nowhere else.
 
 Ciphertext applied onto a machine that does not hold the matching master key is
-stored as-is and reported as `credentials_locked`; the affected resources refuse
+stored as-is and reported as `locked_refs` on the round; the affected resources refuse
 to spawn rather than failing decryption silently. The key is bootstrapped
 out-of-band (`coffer sync key export` / `coffer sync key import`) and never
 enters the repository. Those commands move the key **material** over the
@@ -430,14 +437,20 @@ would be a different feature with a different shape.
 
 ## Derived files (excluded + regenerated)
 
-The exclusion set is **empty today**, and that is worth stating rather than
-leaving implicit: everything under `knowledge/` and `skills/` is source of
-truth, hidden entries included — a collection's `.raw/` originals and the
-revisions a tidy pass moved into `.history/` are as much the other machine's
-business as the notes themselves. The knowledge layer's catalogue is generated
-per call and is not a file, so there is nothing there to exclude.
+A file *regenerated* from source-of-truth files is excluded from the mirror,
+because carrying it would let a stale copy overwrite a freshly rebuilt one. The
+set is `NON_CONVERGING_TREE_PATHS` in `infrastructure/sync/paths.py`, beside the
+tree layout, and both the exporter and the applier consult it.
 
-The rule stands for when one appears: a file *regenerated* from source-of-truth
-files is excluded from the mirror, because carrying it would let a stale copy
-overwrite a freshly rebuilt one. The set lives in `infrastructure/sync/`
-alongside the tree layout.
+Today it holds one entry, `skills/coffer-guide/` — Coffer's own generated skill,
+which each machine renders from its own build, the knowledge files and its own
+reach (see "Withhold derived output in both halves" and "Leave the paths of
+withheld derived output inert"). The name is a literal in the sync layer because
+import-linter's cross-kind fences keep that layer from reading it off the skill
+kind; `backend/tests/contract/test_non_converging_tree_paths.py` pins it to the spelling
+the kind uses.
+
+Everything else under `knowledge/` and `skills/` is source of truth, hidden
+entries included — today that means each collection's `.inbox/` material, which
+converges like the notes beside it. The knowledge layer's catalogue is generated
+per call and is not a file, so there is nothing there to exclude.

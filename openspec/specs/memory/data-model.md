@@ -170,15 +170,17 @@ second origin on a later pass keeps the identity it had.
 
 ## Retirement
 
-`RETIRED.md` is a list, one record per retired note:
+`RETIRED.md` is a list: one record per retired note, and one per entry a
+pass kept nothing from (empty `slug`):
 
 | Field | Notes |
 |---|---|
-| `slug` | The file name the note had under `notes/`. |
+| `slug` | The file name the note had under `notes/`; empty on a record that accounts for a dropped entry rather than for a note. |
 | `title` | So the record reads as prose rather than as filenames. |
 | `reason` | Why it is no longer true, in Coffer's words. |
 | `replaced_by` | The slug of the note that replaced it, or empty when the subject was simply dropped. |
 | `retired_at` | When. |
+| `entry_ids` | The raw entries the record accounts for — the retired note's own sources, or the one entry kept nothing from — so no later pass routes them to the model again. What the distil pass matches on. |
 
 It is not a bin. **It is the mechanism** ("Record retirements so they stick"):
 the sources a note was built from still live in the agents' own memory, so
@@ -225,7 +227,7 @@ entry:
 | merge | an existing note's body is rewritten to cover the entry; its `origins` gains the entry; `updated_at` moves |
 | open | a new note file |
 | retire | a note leaves `notes/` and gains a record in `RETIRED.md` |
-| keep nothing | nothing is written; the entry stays in `.raw/` |
+| keep nothing | no note is written; a `RETIRED.md` record names the entry so no later pass re-routes it; the entry stays in `.raw/` |
 
 With no internal connection configured, no model is called: each raw entry
 becomes a note of its own and `MEMORY.md` is written from their frontmatter
@@ -251,7 +253,7 @@ directory holds them.
 
 Its two unattended passes are switched and timed from the shared
 installation-wide singleton `internal_engine_config` (spec
-[vault-sync](../vault-sync/spec.md) carries that row's own description), read
+[internal-engine](../internal-engine/spec.md) carries that row's own description), read
 **per pass** rather than at boot so a change takes effect without a daemon
 restart:
 
@@ -281,7 +283,7 @@ a leading no-op shell command, so detection never depends on `argv[0]`:
 | Codex | `hooks.json` | `UserPromptSubmit` | once-per-session, keyed on the agent process, since Codex publishes no session id |
 
 The per-agent status answers exactly one question — installed or not — and
-carries `agent`, `installed`, `command` and `event`. It has **no last-fired
+carries `agent_uid`, `agent_name`, `installed`, `command` and `event`. It has **no last-fired
 timestamp**, on purpose: a fire is an event, not a property, so every fire is
 one `memory_delivery_fired` audit row and "has it ever run" is read on the
 vault-wide audit surface ("Audit every delivery fire", "Show delivery state on

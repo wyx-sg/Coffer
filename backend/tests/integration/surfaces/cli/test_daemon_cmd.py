@@ -311,3 +311,71 @@ def test_port_show_reports_the_port_the_daemon_is_actually_on(
     res = runner.invoke(app, ["daemon", "port", "show"])
     assert "running on 8000" in res.output
     assert "coffer daemon restart" in res.output
+
+
+@pytest.mark.acceptance(
+    spec="daemon", scenario="the command line changes residency with no daemon running"
+)
+def test_the_command_line_changes_residency_with_no_daemon_running(
+    home: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`idle` and `service` write straight to their files with no daemon and
+    no database. launchd is faked: nothing here may touch the real one."""
+    from coffer.infrastructure.daemon import login_service
+
+    installed = {"value": False}
+    plist = home / "Library" / "LaunchAgents" / "fake.plist"
+
+    def _install() -> Path:
+        installed["value"] = True
+        return plist
+
+    def _uninstall() -> bool:
+        was = installed["value"]
+        installed["value"] = False
+        return was
+
+    monkeypatch.setattr(login_service, "is_supported", lambda: True)
+    monkeypatch.setattr(login_service, "is_installed", lambda: installed["value"])
+    monkeypatch.setattr(login_service, "install", _install)
+    monkeypatch.setattr(login_service, "uninstall", _uninstall)
+    monkeypatch.setattr(login_service, "plist_path", lambda: plist)
+
+    res = runner.invoke(app, ["daemon", "idle", "show"])
+    assert res.exit_code == 0, res.output
+    assert "stands down after 12h" in res.output
+
+    res = runner.invoke(app, ["daemon", "idle", "set", "3"])
+    assert res.exit_code == 0, res.output
+    assert "stands down after 3h" in res.output
+    assert "takes effect at the next daemon start" in res.output
+    assert _config(home)["idle_shutdown_hours"] == 3
+
+    res = runner.invoke(app, ["daemon", "idle", "set", "0.1"])
+    assert res.exit_code != 0
+    assert "at least 0.25" in res.output
+    assert _config(home)["idle_shutdown_hours"] == 3
+
+    res = runner.invoke(app, ["daemon", "idle", "never"])
+    assert res.exit_code == 0, res.output
+    assert "never stands down" in res.output
+    assert "takes effect at the next daemon start" in res.output
+    assert _config(home)["idle_shutdown_hours"] is None
+
+    res = runner.invoke(app, ["daemon", "service", "install"])
+    assert res.exit_code == 0, res.output
+    assert f"login service installed: {plist}" in res.output
+    assert installed["value"] is True
+
+    res = runner.invoke(app, ["daemon", "service", "status"])
+    assert res.exit_code == 0, res.output
+    assert f"installed: {plist}" in res.output
+
+    res = runner.invoke(app, ["daemon", "service", "uninstall"])
+    assert res.exit_code == 0, res.output
+    assert "login service removed" in res.output
+    assert installed["value"] is False
+
+    # No daemon, so no database and no audit table was ever reached.
+    assert not (home / ".coffer" / "coffer.db").exists()
+    assert not (home / ".coffer" / "daemon.json").exists()

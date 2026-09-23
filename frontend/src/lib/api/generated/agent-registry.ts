@@ -84,7 +84,7 @@ export interface paths {
          *     with its key, display name, resolved absolute path, containing-folder
          *     absolute path (`folder_path`), format, and existence metadata. The set
          *     is fixed per agent type; files that do not exist yet are listed with
-         *     `exists=false`. The `path`/`folder_path` pair backs the read-only UI's
+         *     `exists=false`. The `path`/`folder_path` pair backs the UI's
          *     open-in-external-editor / reveal-in-file-manager
          *     affordances (see "Open config files in an external editor or reveal them").
          */
@@ -115,7 +115,8 @@ export interface paths {
          *     containing-folder path (`folder_path`), format, existence, and a content
          *     fingerprint for optimistic-concurrency writes
          *     (see "Reject stale config-file writes by fingerprint"). The in-app UI
-         *     renders this content read-only; the `path`/`folder_path` pair backs the
+         *     renders this content in a viewer that becomes editable behind an
+         *     explicit Edit and saves through the PUT below; the `path`/`folder_path` pair backs the
          *     open-in-external-editor / reveal affordances
          *     (see "Open config files in an external editor or reveal them"). A
          *     file that does not exist returns empty content with `exists=false` and
@@ -163,7 +164,8 @@ export interface paths {
          * @description Returns the child file's text content, its resolved absolute path and
          *     containing-folder path (`folder_path`), format, existence, and content
          *     fingerprint, like the single-file read. The in-app UI renders this
-         *     content read-only (`path`/`folder_path` back open-in-editor / reveal).
+         *     content in a viewer that becomes editable behind an explicit Edit
+         *     (`path`/`folder_path` back open-in-editor / reveal).
          *     A child that does not exist returns empty content
          *     with `exists=false` and is not created.
          */
@@ -633,7 +635,7 @@ export interface components {
             type: components["schemas"]["AgentType"];
             /** @description Resolved config directory (the type's standard location unless overridden) — where the agent's config files live and skills are delivered under <config_dir>/skills. */
             config_dir: string;
-            description?: string | null;
+            description: string | null;
             /** @description The agent's model binding; null = unbound, so the agent runs on its own default. */
             model: string | null;
             fast_model: string | null;
@@ -661,7 +663,7 @@ export interface components {
          * @description Validation/format of a config file.
          * @enum {string}
          */
-        ConfigFileFormat: "json" | "toml" | "markdown" | "text";
+        ConfigFileFormat: "json" | "toml" | "markdown";
         /**
          * @description Whether an allowlist entry is a single file or a directory of files (see "List directory config entries"). For directory entries, `format` describes the CHILD files.
          * @enum {string}
@@ -681,24 +683,24 @@ export interface components {
             display_name: string;
             /** @description Resolved absolute path of the file (or directory, for kind=directory entries). */
             path: string;
-            /** @description Absolute path of the file's containing folder (its parent directory). The in-app viewer is read-only; the `path`/`folder_path` pair backs open-in-external-editor / reveal-in-file-manager (see "Open config files in an external editor or reveal them"). */
+            /** @description Absolute path of the file's containing folder (its parent directory). The in-app viewer is editable behind an explicit Edit; the `path`/`folder_path` pair backs open-in-external-editor / reveal-in-file-manager (see "Open config files in an external editor or reveal them"). */
             folder_path: string;
             format: components["schemas"]["ConfigFileFormat"];
             kind: components["schemas"]["ConfigFileKind"];
             exists: boolean;
             /** @description Byte size when the file exists; null otherwise. */
-            size?: number | null;
+            size: number | null;
             /**
              * Format: date-time
              * @description Last-modified time when the file exists; null otherwise.
              */
-            modified_at?: string | null;
+            modified_at: string | null;
             /** @description Child files for kind=directory entries (recursive `.md` listing, sorted by relpath); null for kind=file entries. A missing directory lists as exists=false with no files. */
             files?: components["schemas"]["DirChild"][] | null;
         };
         ConfigFileContent: {
             key: string;
-            /** @description Resolved absolute path of the file on disk (for a directory child, the resolved absolute path of that child). The in-app viewer is read-only; this path backs open-in-external-editor / reveal-in-file-manager. */
+            /** @description Resolved absolute path of the file on disk (for a directory child, the resolved absolute path of that child). The in-app viewer is editable behind an explicit Edit; this path backs open-in-external-editor / reveal-in-file-manager. */
             path: string;
             /** @description Absolute path of the file's containing folder, for reveal-in-file-manager. */
             folder_path: string;
@@ -737,7 +739,7 @@ export interface components {
             args: string[];
             /** @description Env variable KEY NAMES only (sorted); values stay on disk. */
             env_keys: string[];
-            /** @description Env/header key names that look secret-like (TOKEN, SECRET, PASSWORD, API_KEY, CREDENTIAL, AUTHORIZATION patterns). These must be mapped to credential refs on adopt. */
+            /** @description Env/header key names that look secret-like (TOKEN, SECRET, PASSWORD, PASSWD, API_KEY/APIKEY, CREDENTIAL, AUTHORIZATION patterns, case-insensitive, non-empty value). These must be mapped to credential refs on adopt. */
             secret_keys: string[];
             url: string | null;
             /** @description HTTP header KEY NAMES only (sorted); values stay on disk. */
@@ -801,8 +803,8 @@ export interface components {
         };
         Marketplace: {
             name: string;
-            source_type?: string | null;
-            source?: string | null;
+            source_type: string | null;
+            source: string | null;
         };
         PluginsOut: {
             items: components["schemas"]["Plugin"][];
@@ -919,12 +921,12 @@ export interface components {
             /** @description Whether a `coffer` MCP-server entry is present in the agent's MCP config. */
             installed: boolean;
             /** @description The resolved coffer-mcp-shim command written/found, when installed. */
-            command?: string | null;
+            command: string | null;
         };
         AgentModelOut: {
             /** @description The id passed verbatim to the agent's CLI — whatever that agent calls the choice, which for Claude Code is a tier alias and for Codex a versioned model name. */
             id: string;
-            label?: string;
+            label: string;
             description?: string;
             /** @description The reasoning-effort levels this model runs at, in the agent's own order; empty for an agent that takes no such setting. An effort is not part of the model name — it is its own field on a turn — so it is chosen beside the model, not instead of one. */
             efforts?: string[];
@@ -936,9 +938,9 @@ export interface components {
         };
         ErrorOut: {
             error: {
-                /** @example AGENT_NOT_FOUND */
+                /** @example RESOURCE_NOT_FOUND */
                 code: string;
-                /** @example agent not found: agent:claude-code */
+                /** @example resource not found: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920 */
                 message: string;
                 details?: {
                     [key: string]: unknown;
@@ -974,7 +976,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorOut"];
             };
         };
-        /** @description Duplicate name within the agent kind, or a stale config-file write (`CONFIG_FILE_STALE` — the on-disk content changed since the read) */
+        /** @description Duplicate name within the agent kind, a second agent for an already-registered config directory (`AGENT_CONFIG_DIR_REGISTERED`), or a stale config-file write (`CONFIG_FILE_STALE` — the on-disk content changed since the read) */
         Conflict: {
             headers: {
                 [name: string]: unknown;
@@ -1045,7 +1047,6 @@ export interface operations {
                     "application/json": components["schemas"]["AgentOut"];
                 };
             };
-            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
@@ -1124,7 +1125,6 @@ export interface operations {
                     "application/json": components["schemas"]["AgentOut"];
                 };
             };
-            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["UnprocessableEntity"];

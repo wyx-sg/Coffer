@@ -98,6 +98,14 @@ paths:
           description: No Content
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: >-
+            `RESOURCE_PROTECTED` — the skill is Coffer's builtin skill, which is
+            rewritten from the running build at every start; disable it or
+            narrow its scope instead (see "Refuse deleting a builtin skill").
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorOut" }
 
   /skills/{uid}/files:
     parameters:
@@ -353,10 +361,10 @@ components:
           properties:
             code:
               type: string
-              example: SKILL_NOT_FOUND
+              example: RESOURCE_NOT_FOUND
             message:
               type: string
-              example: "skill not found: reviewer"
+              example: "resource not found: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920"
             details:
               type: object
               additionalProperties: true
@@ -426,6 +434,7 @@ components:
           scope,
           version_hash,
           master_path,
+          last_synced_from_source_at,
           created_at,
           updated_at,
           bindings,
@@ -528,7 +537,7 @@ components:
 
     DriftEntry:
       type: object
-      required: [skill_name, agent_name, kind, suggested_remedy]
+      required: [skill_name, agent_name, kind, target_path, suggested_remedy]
       description: >-
         One disagreement between what Coffer believes it delivered and what is
         on disk. Reported by NAME, not by uid, and deliberately so: an entry is

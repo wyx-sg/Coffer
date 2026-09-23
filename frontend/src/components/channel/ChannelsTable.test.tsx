@@ -108,6 +108,7 @@ function status(
     channel_type: "telegram",
     enabled: true,
     running: true,
+    pending_pairing: false,
     peer: null,
     callback: null,
     runs_on: HERE,

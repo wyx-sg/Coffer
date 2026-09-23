@@ -49,6 +49,7 @@ newer build survives being touched by an older one.
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `port` | int or absent | The port the user pinned. Absent, unreadable or nonsensical all mean "no usable instruction", which resolves to the default of `8000` — never to some other port. Validated to `1024 ≤ port ≤ 65535`, because below 1024 needs privileges the daemon does not have and must not acquire. |
+| `idle_shutdown_hours` | number, `null` or absent | How long the daemon serves nothing before standing down (spec daemon "Stand down after an idle window"). Absent means the default of `12`; `null` means never stand down, which a bare absent key could not say. At least `0.25`: below that the setting stops meaning "nobody is using it" and starts meaning "restart constantly". A value that is not a number or is below the floor is warned about and read as the default. Read once at start, so a change takes effect at the next one. |
 | `machine_name` | string or absent | This machine's display label. Defaults to the hostname with a `.local` suffix stripped. Free to change: nothing references it. |
 | `machine_id` | string or absent | A **cache** of the derived machine id (spec vault-sync). Never authoritative — deleting it recomputes the same value, and a cached value that disagrees with the host loses. |
 
@@ -139,6 +140,7 @@ hiding at the bottom of a severity filter.
 | Event | Emitted by |
 | --- | --- |
 | `token_rotated` | A rotation through either surface (spec daemon "Rotate the token from REST or the command line"). |
+| `daemon_residency_updated` | `PUT /api/v1/daemon/residency` (spec daemon "Change residency from the settings page or the command line"). Details `{login_service_installed, idle_shutdown_hours}`, read back after the change, so they record what became true rather than what was asked for. The `coffer daemon idle` and `coffer daemon service` commands write the same settings with no daemon involved and record nothing, for the reason the port records nothing. |
 
 The fixed-port setting deliberately emits nothing — see spec daemon "Bind a fixed, settable port" for
 why recording it only when a daemon happens to be running would be less honest

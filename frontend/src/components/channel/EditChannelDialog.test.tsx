@@ -14,6 +14,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { EditChannelDialog } from "./EditChannelDialog";
+import { acceptance } from "@/test/acceptance";
 import { mockApiClient, type ApiClientMock } from "@/test/mockApiClient";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
@@ -118,7 +119,11 @@ describe("EditChannelDialog", () => {
     );
   });
 
-  test("rotating the bot token writes the existing ref first, then PATCHes config", async () => {
+  acceptance("channels", "rotating a channel secret keeps its refs and pairing", async () => {
+    // spec channels "Manage channels from the Channels page and the CLI": a
+    // rotation writes the new value under the ref the channel already cites,
+    // then PATCHes the same channel with every ref unchanged — so the binding,
+    // the pairing and the synced ciphertext address all stay where they were.
     const api = installApi(mockApiClient());
     renderDialog();
 
@@ -142,6 +147,10 @@ describe("EditChannelDialog", () => {
         },
       },
     });
+    // Secret first: the PATCHed config must never cite a ref whose value is stale.
+    expect(api.POST.mock.invocationCallOrder[0]).toBeLessThan(
+      api.PATCH.mock.invocationCallOrder[0],
+    );
   });
 
   test("a blank token rotates nothing — only the config PATCH runs", async () => {
