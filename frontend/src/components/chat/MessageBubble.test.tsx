@@ -2,6 +2,7 @@
 import { describe, expect, test } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MessageBubble } from "./MessageBubble";
+import { acceptance } from "@/test/acceptance";
 import type { ContentBlock, Message } from "@/lib/api/chat";
 
 const makeAssistant = (overrides: Partial<Message>): Message => ({
@@ -113,7 +114,7 @@ describe("MessageBubble", () => {
         .map((n) => (n === before ? "BEFORE" : n === after ? "AFTER" : "card"));
     }
 
-    test("a persisted message", () => {
+    acceptance("chat", "a tool call renders as a card between the text around it", () => {
       const { container } = render(
         <MessageBubble message={makeAssistant({ content: orderedBlocks })} />,
       );

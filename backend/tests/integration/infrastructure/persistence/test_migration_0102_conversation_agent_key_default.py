@@ -38,6 +38,9 @@ def _upgrade(tmp_path, monkeypatch, revision: str):
     return db_path, cfg
 
 
+@pytest.mark.acceptance(
+    spec="chat", scenario="a conversation row with no agent is refused by the store"
+)
 def test_a_conversation_without_an_agent_is_refused_by_the_store_at_head(tmp_path, monkeypatch):
     db_path, _cfg = _upgrade(tmp_path, monkeypatch, "head")
     with sqlite3.connect(db_path) as conn:

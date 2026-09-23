@@ -9,6 +9,7 @@
 // that it requests only mcp_server resources.
 
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { acceptance } from "@/test/acceptance";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -89,7 +90,7 @@ describe("ResourcesPage", () => {
     expect(screen.getByText(/kaboom/i)).toBeInTheDocument();
   });
 
-  test("a server error never reads as an unexpected error", () => {
+  acceptance("web-ui", "a server error never reads as an unexpected error", () => {
     stubQuery({ error: new ApiError("INTERNAL_ERROR", "internal error") });
     const { container } = render(wrap(<ResourcesPage />));
     expect(screen.getByText(/failed to load/i)).toBeInTheDocument();

@@ -536,6 +536,9 @@ def test_create_ollama_without_credential(tmp_path, monkeypatch):
         assert r2.status_code == 422, r2.text
 
 
+@pytest.mark.acceptance(
+    spec="provider-switching", scenario="activating an ollama connection writes no native config"
+)
 def test_activating_an_ollama_connection_is_refused_and_writes_nothing(tmp_path, monkeypatch):
     """An ollama connection is internal-only: even scoped to a registered
     Claude Code agent, activating it writes no native config, never makes it

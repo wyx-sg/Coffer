@@ -36,6 +36,9 @@ async def _seeded(a: VaultMachine, b: VaultMachine) -> None:
     await settle(a, b)
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a join states its case and its counts before applying"
+)
 async def test_a_returning_join_states_its_case_and_counts_before_applying(pair) -> None:
     a, b = pair
     await _seeded(a, b)

@@ -12,6 +12,11 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, test } from "vitest";
+import { acceptance } from "@/test/acceptance";
+
+// The zh bundle is where the two names once diverged, so it carries the marker.
+const acceptanceZh = (_title: string, fn: () => void) =>
+  acceptance("web-ui", "a surface carries one name in the sidebar and on its page", fn);
 
 import en from "./locales/en.json";
 import zh from "./locales/zh.json";
@@ -66,7 +71,8 @@ describe("a surface carries one name in the sidebar and on its page", () => {
     ["en", en],
     ["zh", zh],
   ] as const) {
-    test(`${name}: each sidebar label equals its page title`, () => {
+    const check = name === "zh" ? acceptanceZh : test;
+    check(`${name}: each sidebar label equals its page title`, () => {
       const mismatches = entries
         .map(({ to, labelKey }) => ({
           to,

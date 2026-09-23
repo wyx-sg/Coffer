@@ -212,8 +212,15 @@ async def test_an_ordinary_round_without_a_pointer_still_detects_the_join(roomy)
     await b.remote_config()
     run = await b.service().run_once()
 
+    # Detected and reported, not applied: only an explicit adopt joins.
     assert run.join is JoinKind.RETURNING, (run.status, run.error)
-    assert run.status is ConvergeStatus.OK, run.error
+    assert run.status is ConvergeStatus.AWAITING_JOIN, run.error
+    assert run.join_report is not None and run.join_report.base is not None
+    assert b.has_skill_files("shared-skill")
+
+    joined = await b.service().run_once(adopt=True)
+    assert joined.join is JoinKind.RETURNING, (joined.status, joined.error)
+    assert joined.status is ConvergeStatus.OK, joined.error
     # The base came from B's descriptor, so A's deletion is applied, not undone.
     assert not b.has_skill_files("shared-skill")
     assert "skills/shared-skill/SKILL.md" not in await b.remote_paths()

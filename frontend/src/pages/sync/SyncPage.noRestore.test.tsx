@@ -21,6 +21,8 @@ vi.mock("@/lib/hooks/useSync", () => ({
   useRebuildFromRemote: vi.fn(),
   useSaveSyncRemote: vi.fn(),
   useRunConverge: vi.fn(),
+  usePreviewJoin: vi.fn(),
+  useAdoptRemote: vi.fn(),
   useExportMasterKey: vi.fn(),
   useImportMasterKey: vi.fn(),
   useKeyFingerprint: vi.fn(),
@@ -50,6 +52,8 @@ const STATUS: SyncStatus = {
   last_run: null,
   machine_id: "a3f21c9e4b7d2610",
   machine_id_is_derived: true,
+  joined: true,
+  not_applicable: [],
 };
 
 const APPLIED = {
@@ -73,6 +77,8 @@ function round(id: number, over: Partial<RunRecord> = {}): RunRecord {
     conflicts: [],
     agent_resolved: [],
     failures: [],
+    not_applicable: [],
+    join_report: null,
     locked_refs: [],
     pending: null,
     error: null,
@@ -95,6 +101,8 @@ function seed() {
     sync.useRebuildFromRemote,
     sync.useSaveSyncRemote,
     sync.useRunConverge,
+    sync.usePreviewJoin,
+    sync.useAdoptRemote,
     sync.useExportMasterKey,
     sync.useImportMasterKey,
     machines.useRenameSelf,

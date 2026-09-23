@@ -214,6 +214,9 @@ def test_set_empty_value_exits_6(daemon):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="credentials", scenario="the command line lists every cited ref with its presence"
+)
 def test_list_shows_every_cited_ref_with_its_presence(monkeypatch):
     """Refs cited by any kind are listed — an MCP server's stored ref shows as
     present and a provider connection's unstored ref as missing."""
