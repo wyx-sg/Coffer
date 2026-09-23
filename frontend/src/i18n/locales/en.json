@@ -105,7 +105,8 @@
     "activity": "Activity",
     "chat": "Chat",
     "modelProviders": "Model providers",
-    "sync": "Sync"
+    "sync": "Sync",
+    "needsAttention": "Needs your attention"
   },
   "resources": {
     "title": "MCP servers",
@@ -1611,6 +1612,7 @@
         "no_change": "nothing changed",
         "conflict": "stopped on a conflict",
         "awaiting_confirmation": "held, waiting for you",
+        "awaiting_confirmation_past": "Paused",
         "push_failed": "applied here, push failed",
         "failed": "failed",
         "disabled": "turned off"

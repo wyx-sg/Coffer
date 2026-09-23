@@ -6,20 +6,38 @@
 // that claim is what this pins down — a kind that grows a surface and never
 // reaches the rail is reachable only by typing its URL, and a row that outlives
 // its feature leads to a 404.
-import { describe, expect, test } from "vitest";
-import { render, within } from "@testing-library/react";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { acceptance } from "@/test/acceptance";
+import { render, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarNav } from "./SidebarNav";
 
-function renderNav(at = "/") {
+// The Sync entry carries an attention dot, which asks the daemon for the
+// vault's last round. Stub it; the dot's own rules live in
+// `lib/hooks/useSyncAttention`.
+const syncStatus = vi.fn(() => ({ data: undefined, isError: false }));
+vi.mock("@/lib/hooks/useSync", () => ({
+  useSyncStatus: () => syncStatus(),
+}));
+
+afterEach(() => {
+  syncStatus.mockReturnValue({ data: undefined, isError: false });
+  localStorage.clear();
+});
+
+function renderNav(at = "/", collapsed = false) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={[at]}>
-      <TooltipProvider>
-        <SidebarNav collapsed={false} />
-      </TooltipProvider>
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={[at]}>
+        <TooltipProvider>
+          <SidebarNav collapsed={collapsed} />
+        </TooltipProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -57,5 +75,64 @@ describe("SidebarNav", () => {
       ["Agents", "/agents"],
       ["Chat", "/chat"],
     ]);
+  });
+});
+
+// --- the attention dot (spec vault-sync FR-096) ---------------------------
+//
+// It replaced a banner that floated over whatever page the user was on. The
+// dot has to keep the property that mattered — a vault nobody is looking at
+// still gets noticed — without the one that did not: arguing on every page
+// until the underlying state changes.
+
+const HELD = {
+  status: "awaiting_confirmation",
+  conflicts: [],
+  error: null,
+  pending: { direction: "publish", breaches: [] },
+};
+
+describe("the Sync attention dot", () => {
+  test("is absent while the vault is converging", () => {
+    syncStatus.mockReturnValue({
+      data: { last_run: { status: "ok", conflicts: [], error: null, pending: null } },
+      isError: false,
+    } as never);
+    const { queryByTestId } = renderNav();
+    expect(queryByTestId("nav-dot-sync")).toBeNull();
+  });
+
+  test("appears when the last round needs answering", async () => {
+    syncStatus.mockReturnValue({ data: { last_run: HELD }, isError: false } as never);
+    const { findByTestId } = renderNav();
+    expect(await findByTestId("nav-dot-sync")).toBeInTheDocument();
+  });
+
+  acceptance("vault-sync", "a held vault says so where the user already is", async () => {
+    syncStatus.mockReturnValue({ data: { last_run: HELD }, isError: false } as never);
+    // On /sync the user is looking at the thing itself: no dot over their own
+    // reading, and the situation is marked seen.
+    const onPage = renderNav("/sync");
+    expect(onPage.queryByTestId("nav-dot-sync")).toBeNull();
+    await waitFor(() => expect(localStorage.getItem("coffer.sync.attentionSeen")).not.toBeNull());
+    onPage.unmount();
+
+    // Back on any other page, the same situation no longer asks.
+    const elsewhere = renderNav("/agents");
+    await waitFor(() => expect(elsewhere.queryByTestId("nav-dot-sync")).toBeNull());
+  });
+
+  test("a daemon that cannot answer raises no sync dot", () => {
+    // That is the offline banner's job, and a stale cached round must not
+    // outlive it into a second claim on the same screen.
+    syncStatus.mockReturnValue({ data: { last_run: HELD }, isError: true } as never);
+    const { queryByTestId } = renderNav();
+    expect(queryByTestId("nav-dot-sync")).toBeNull();
+  });
+
+  test("survives a collapsed rail, where the label is gone", async () => {
+    syncStatus.mockReturnValue({ data: { last_run: HELD }, isError: false } as never);
+    const { findByTestId } = renderNav("/", true);
+    expect(await findByTestId("nav-dot-sync")).toBeInTheDocument();
   });
 });
