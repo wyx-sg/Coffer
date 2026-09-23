@@ -25,11 +25,8 @@ class IngestPort(Protocol):
     """Saves one already-downloaded chat attachment into a knowledge
     collection (spec knowledge FR-016/FR-018), satisfied structurally by
     ``IngestService.ingest`` (same kind-isolation reason as above). The return
-    value is duck-typed ``Any`` — only ``.title``/``.path`` are read.
-
-    ``folder`` is a subdirectory inside the collection's ``sources/`` lane. The
-    lane segment is never spelled by a caller: which lane an upload lands in is
-    the knowledge layer's rule, not a channel's choice (spec knowledge FR-013)."""
+    value is duck-typed ``Any`` — only ``.title``/``.path`` are read, and
+    ``.path`` is empty while the document waits to be merged."""
 
     async def ingest(
         self,
@@ -37,7 +34,6 @@ class IngestPort(Protocol):
         collection: str,
         filename: str,
         data: bytes,
-        folder: str | None = None,
         actor: str,
     ) -> Any: ...
 

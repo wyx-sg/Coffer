@@ -546,9 +546,11 @@ class FakeModelSuggestions:
 @dataclass
 class FakeIngestedDocument:
     """Duck-typed stand-in for the real ``IngestedDocument`` (spec channels FR-014) — only the two
-    attributes `/save`'s confirmation message reads."""
+    attributes `/save`'s confirmation message reads. ``path`` is ``None`` while
+    the upload waits in the collection's inbox to be merged (spec knowledge
+    FR-013)."""
 
-    path: str
+    path: str | None
     title: str
 
 
@@ -578,6 +580,9 @@ class FakeIngestService:
         self.calls: list[dict[str, Any]] = []
         #: Set by a test to make the next ``ingest`` raise instead of succeed.
         self.fails_with: Exception | None = None
+        #: Set by a test to answer as a knowledge layer with a model would: the
+        #: upload waits in the inbox, so there is no document path yet.
+        self.pending = False
 
     async def ingest(
         self,
@@ -585,7 +590,6 @@ class FakeIngestService:
         collection: str,
         filename: str,
         data: bytes,
-        directory: str | None = None,
         actor: str,
     ) -> FakeIngestedDocument:
         self.calls.append(
@@ -593,13 +597,13 @@ class FakeIngestService:
                 "collection": collection,
                 "filename": filename,
                 "data": data,
-                "directory": directory,
                 "actor": actor,
             }
         )
         if self.fails_with is not None:
             raise self.fails_with
-        return FakeIngestedDocument(path=f"{collection}/{filename}.md", title=filename)
+        path = None if self.pending else f"{collection}/{filename}.md"
+        return FakeIngestedDocument(path=path, title=filename)
 
 
 class StubListenerController:

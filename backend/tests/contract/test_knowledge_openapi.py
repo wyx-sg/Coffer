@@ -29,8 +29,11 @@ _EXPECTED_ROUTES = {
     ("POST", "/api/v1/knowledge/collections"),
     ("GET", "/api/v1/knowledge/tree"),
     ("GET", "/api/v1/knowledge/file"),
-    ("PUT", "/api/v1/knowledge/file"),
     ("DELETE", "/api/v1/knowledge/file"),
+    # New knowledge arrives as material, never as a file write: there is no
+    # ``PUT /file``, because a person edits a document in their own editor and
+    # the next sweep carries the edit through (FR-013, FR-022).
+    ("POST", "/api/v1/knowledge/material"),
     # The collection by its uid — a pass runs for minutes and must keep meaning
     # the same collection across a rename. The file routes above stay
     # name-addressed on purpose: their arguments are filesystem paths.
@@ -102,20 +105,33 @@ def test_no_builtin_tool_takes_a_scope_or_a_mode(builtin_registry) -> None:  # t
         assert not properties & {"scope", "mode", "top_k", "cwd"}, tool.name
 
 
-def test_the_write_tool_never_lets_a_caller_name_a_lane(builtin_registry) -> None:  # type: ignore[no-untyped-def]
-    """FR-020: the ``sources/`` segment is the layer's. A tool that accepted a
-    ``path`` or a ``lane`` would be a way to aim a write at ``topics/``."""
+def test_the_write_tool_never_lets_a_caller_choose_where_it_lands(builtin_registry) -> None:  # type: ignore[no-untyped-def]
+    """FR-013: what an agent writes is material, and where it belongs in the
+    collection is curation's call. A tool that accepted a ``path`` or a
+    ``folder`` would be a way to write a document around the pass."""
     [tool] = builtin_registry.list()
     properties = set(tool.input_schema.get("properties", {}))
-    assert properties == {"collection", "title", "description", "body", "folder"}
+    assert properties == {"collection", "title", "description", "body"}
     assert tool.input_schema["required"] == ["collection", "title", "description"]
 
 
-def test_a_write_payload_requires_a_description() -> None:
-    """The skill's catalogue is how a document is ever found, so a file that
+def test_a_material_payload_requires_a_description() -> None:
+    """The skill's catalogue is how a document is ever found, so material that
     fails to describe itself is unfindable (FR-003)."""
     with pytest.raises(ValueError):
-        schemas.FileWrite(title="t", description="", body="b", collection="shopee")
+        schemas.MaterialIn(title="t", description="", body="b", collection="shopee")
+
+
+def test_a_material_payload_names_a_collection_and_nothing_finer() -> None:
+    """Material goes to a collection's inbox; no field aims it at a path."""
+    assert set(schemas.MaterialIn.model_fields) == {"collection", "title", "description", "body"}
+    assert not hasattr(schemas, "FileWrite")
+
+
+def test_a_submission_says_whether_it_became_a_document() -> None:
+    """``pending`` while it waits for a pass, ``written`` with the document's
+    path when no model could merge it (FR-029)."""
+    assert set(schemas.SubmissionOut.model_fields) == {"status", "collection", "title", "path"}
 
 
 def test_no_wire_model_carries_a_retrieval_payload() -> None:
@@ -125,21 +141,27 @@ def test_no_wire_model_carries_a_retrieval_payload() -> None:
         assert not hasattr(schemas, gone), gone
 
 
-def test_an_ingested_document_reports_both_files_relatively() -> None:
-    """FR-023: the original is an ordinary visible file in ``sources/``, so the
-    surface that browses the lane can name it — which an absolute path into a
-    hidden directory could not."""
-    fields = schemas.IngestedDocumentOut.model_fields
-    assert "original_path" in fields
-    assert "raw_path" not in fields
+def test_an_ingested_document_names_no_original() -> None:
+    """FR-016: neither the uploaded bytes nor a separate extracted file is
+    kept, so there is no original to report — only the document the upload
+    became, or that it is still pending."""
+    fields = set(schemas.IngestedDocumentOut.model_fields)
+    assert {"path", "pending", "title", "description", "converter"} == fields
+    assert not fields & {"original_path", "raw_path"}
 
 
-def test_a_collection_reports_its_two_lanes_apart() -> None:
-    """A collection with sources and no topics is one curation has not reached
-    yet, and the single ``file_count`` this replaced hid exactly that."""
-    fields = schemas.CollectionOut.model_fields
-    assert {"source_count", "topic_count"} <= set(fields)
-    assert "file_count" not in fields
+def test_a_collection_reports_documents_and_pending_material_apart() -> None:
+    """Material waiting in the inbox is what an agent cannot read yet, and a
+    single total would hide exactly that (FR-005)."""
+    fields = set(schemas.CollectionOut.model_fields)
+    assert {"document_count", "pending_count"} <= fields
+    assert not fields & {"file_count", "source_count", "topic_count"}
+
+
+def test_a_curation_report_names_its_item_and_what_it_promoted() -> None:
+    fields = set(schemas.CurationOut.model_fields)
+    assert {"item", "documents_before", "documents_after", "promoted"} <= fields
+    assert schemas.CurationRequest.model_fields.keys() == {"document"}
 
 
 def test_collection_config_carries_nothing() -> None:

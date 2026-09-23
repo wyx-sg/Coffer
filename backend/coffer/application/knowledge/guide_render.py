@@ -108,7 +108,7 @@ def _subject(entry: CollectionEntry) -> str:
 def render_description(catalogue: Catalogue) -> str:
     """The frontmatter description: the one part always in a model's context."""
     subjects = [
-        _subject(entry) for entry, _ in catalogue if entry.topic_count or entry.source_count
+        _subject(entry) for entry, _ in catalogue if entry.document_count or entry.pending_count
     ]
     while subjects:
         joined = "; ".join(subjects)
@@ -124,42 +124,44 @@ def _static_body() -> str:
     return resources.files(__package__).joinpath("skill_assets", _ASSET).read_text(encoding="utf-8")
 
 
-def _catalogue_lines(root: str, entry: CollectionEntry, topics: Sequence[FileEntry]) -> list[str]:
+def _catalogue_lines(
+    root: str, entry: CollectionEntry, documents: Sequence[FileEntry]
+) -> list[str]:
     lines = [f"### {entry.name}"]
     if entry.description:
         lines += ["", " ".join(entry.description.split())]
-    if not topics:
+    if not documents:
         lines += [
             "",
-            "_Nothing curated here yet._ Material has been filed but Coffer has not "
+            "_No documents here yet._ Material has been submitted but Coffer has not "
             "folded it into documents; there is nothing to read in this collection "
             "right now.",
         ]
         return lines
-    lines += ["", f"Files live under `{root}/{entry.name}/topics/`.", ""]
-    for topic in topics:
-        relative = topic.path.split("/", 2)[-1]
-        description = " ".join(topic.description.split())
+    lines += ["", f"Files live under `{root}/{entry.name}/`.", ""]
+    for document in documents:
+        relative = document.path.split("/", 1)[-1]
+        description = " ".join(document.description.split())
         lines.append(
-            f"- `{relative}` — **{topic.title}**" + (f": {description}" if description else "")
+            f"- `{relative}` — **{document.title}**" + (f": {description}" if description else "")
         )
     return lines
 
 
 def render_catalogue(root: str, catalogue: Catalogue) -> str:
-    """The generated half: every collection, every topic document."""
-    total = sum(len(topics) for _, topics in catalogue)
+    """The generated half: every collection, every document."""
+    total = sum(len(documents) for _, documents in catalogue)
     lines = [
         "## What is in this developer's knowledge",
         "",
         f"Every document, {total} in all. Read one at "
-        f"`{root}/<collection>/topics/<path>` with your own file tool.",
+        f"`{root}/<collection>/<path>` with your own file tool.",
         "",
     ]
     if not catalogue:
         lines.append("_No collections have been created yet._")
-    for entry, topics in catalogue:
-        lines += _catalogue_lines(root, entry, topics)
+    for entry, documents in catalogue:
+        lines += _catalogue_lines(root, entry, documents)
         lines.append("")
     return "\n".join(lines).rstrip()
 

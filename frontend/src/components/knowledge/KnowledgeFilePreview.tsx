@@ -1,16 +1,15 @@
 // frontend/src/components/knowledge/KnowledgeFilePreview.tsx
 //
-// The pane beside a lane's tree: one file, rendered read-only, with the actions
-// that file is allowed (spec knowledge FR-040).
+// The pane beside a collection's tree: one document, rendered read-only, with
+// what may be done to it (spec knowledge FR-040). Every document is the same
+// here, whoever wrote it last: it can be handed to the user's own editor,
+// revealed in their file manager, and deleted (FR-020). Editing happens in
+// that editor, never in this pane — the file on disk is the document, and an
+// edit there is live on the next read.
 //
-// Reading is lane-agnostic — a topic document previews exactly as a source
-// does. What the LANE decides is what may be done to the file: a source can be
-// handed to the user's own editor, revealed, and deleted; a topic document can
-// only be opened and revealed, because curation is the only writer of
-// `topics/` and the next pass would undo anything else (invariant 2).
-//
-// `ingested_at` is shown on a source because it answers the one question a
-// person has about a note they just wrote: is it in the topics yet?
+// `curated_at` says when a curation pass last had the document in front of
+// it. A document edited since is what the sweep comes back for, so the line
+// answers "has Coffer seen my change yet?" by comparing it with the edit.
 import { useTranslation } from "react-i18next";
 
 import { FileActions } from "@/components/FileActions";
@@ -20,19 +19,16 @@ import { KnowledgePreviewBody } from "@/components/knowledge/KnowledgePreviewBod
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
 import { useKnowledgeFile } from "@/lib/hooks/useKnowledge";
-import type { KnowledgeLane } from "@/lib/knowledge/lanes";
 import { cn, formatDateTime } from "@/lib/utils";
 
 interface Props {
   /** Knowledge-root-relative path of the file on screen, `null` for none. */
   path: string | null;
-  /** Which lane the tree beside this pane is showing. */
-  lane: KnowledgeLane;
-  /** Called once a source has been removed, so the page can leave the pane. */
+  /** Called once the document has been removed, so the page can leave the pane. */
   onDeleted: () => void;
 }
 
-export function KnowledgeFilePreview({ path, lane, onDeleted }: Props) {
+export function KnowledgeFilePreview({ path, onDeleted }: Props) {
   const { t } = useTranslation();
   const file = useKnowledgeFile(path);
 
@@ -68,25 +64,19 @@ export function KnowledgeFilePreview({ path, lane, onDeleted }: Props) {
       <div className="flex items-center justify-between gap-3 border-b px-4 py-2">
         <div className="min-w-0">
           <p className="truncate text-sm text-muted-foreground">{file.data.path}</p>
-          {lane === "sources" ? (
-            <p className="truncate text-xs text-muted-foreground">
-              {file.data.ingested_at
-                ? t("knowledge.detail.curatedAt", {
-                    when: formatDateTime(file.data.ingested_at),
-                  })
-                : t("knowledge.detail.notCuratedYet")}
-            </p>
-          ) : null}
+          <p className="truncate text-xs text-muted-foreground">
+            {file.data.curated_at
+              ? t("knowledge.detail.curatedAt", { when: formatDateTime(file.data.curated_at) })
+              : t("knowledge.detail.notCuratedYet")}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <FileActions filePath={file.data.file_path} />
           {/* Last, after the actions that take the file elsewhere — the same
-              order every detail page puts delete in. It is mounted only on a
-              SOURCE being previewed, which is what makes the path it names
-              certain and keeps `topics/` unreachable from here (FR-020). */}
-          {lane === "sources" ? (
-            <KnowledgeFileDelete path={file.data.path} onDeleted={onDeleted} />
-          ) : null}
+              order every detail page puts delete in. It names the document
+              being previewed, which is the one path the page knows for
+              certain. */}
+          <KnowledgeFileDelete path={file.data.path} onDeleted={onDeleted} />
         </div>
       </div>
       {/* `overflow-auto` is what keeps a wide table or an unbreakable code span

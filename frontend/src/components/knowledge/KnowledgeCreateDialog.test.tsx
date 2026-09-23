@@ -51,8 +51,8 @@ describe("KnowledgeCreateDialog", () => {
       uid: "kn-9b04",
       name: "team-notes",
       description: "what we know",
-      source_count: 0,
-      topic_count: 0,
+      document_count: 0,
+      pending_count: 0,
     });
     const onOpenChange = renderDialog();
 

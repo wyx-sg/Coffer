@@ -335,17 +335,17 @@ converged day" rather than implying a timestamp they do not have.
 ### An unattended rewriter of synced content names one owner machine
 
 A worker that rewrites vault content with no human approving the diff is safe
-on one machine and unsafe on several. The knowledge tidy pass is the case that
-exists today: run over one corpus on two machines, each merges the same two
-notes into a topic document — but into *different* documents. The merge is
-perfectly clean (both agree the two notes are deleted; the two topic documents
-are additions at different paths) and the vault ends up holding the same
+on one machine and unsafe on several. The knowledge curation pass is the case
+that exists today: run over one corpus on two machines, each merges the same
+inbox material into a document — but into *different* documents. The merge is
+perfectly clean (both agree the material is gone from the inbox; the two
+documents are additions at different paths) and the vault ends up holding the same
 knowledge twice. Git cannot see this, because nothing conflicted.
 
-So such a rewriter names one owner machine and is a no-op everywhere else. Tidy
-is already off by default and installation-wide, so this costs a field rather
-than a concept, and "the owner is off, so no tidy happens" is the right trade
-for a background nicety. A pass and a converge round also take the same lock —
+So such a rewriter names one owner machine and is a no-op everywhere else. The
+switch is already installation-wide, so this costs a field rather than a
+concept, and "the owner is off, so no pass happens" is the right trade for work
+that only has to happen somewhere. A pass and a converge round also take the same lock —
 an export taken mid-rewrite is a torn snapshot — and delete-versus-edit
 resolves toward the edit, because an edit is something a person or an agent
 just decided while the deletion is a housekeeping judgement the next pass will
@@ -371,7 +371,7 @@ invented for it, because a reader should not have to learn the same fact twice.
 One state is deliberately NOT shared. An unbound channel runs **nowhere**,
 because answering a platform twice cannot be walked back; an unowned pass runs
 **here**, because a vault that never named an owner is a vault with one
-machine, and the cost of being wrong is a duplicated topic document rather than
+machine, and the cost of being wrong is a duplicated document rather than
 a bot answering itself.
 
 ## Alternatives considered

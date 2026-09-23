@@ -14,15 +14,16 @@ export interface paths {
         /**
          * List collections
          * @description Every collection: the top-level folders under the knowledge root, each
-         *     with the first paragraph of its `README.md` as `description` and the
-         *     two lanes counted apart. Hidden entries (anything dot-prefixed) are
-         *     excluded, and `README.md` itself is neither listed nor counted
+         *     with the first paragraph of its `README.md` as `description`, its
+         *     documents counted, and the material waiting in its inbox counted
+         *     apart. Hidden entries (anything dot-prefixed) are excluded from the
+         *     document count, and `README.md` itself is neither listed nor counted
          *     (FR-007).
          *
-         *     The two counts answer different questions — how much a person has
-         *     contributed, and how much of it an agent can read today. A collection
-         *     with sources and no topics is one curation has not reached yet, which a
-         *     single total would hide.
+         *     The two counts answer different questions — how much an agent can
+         *     read today, and how much has arrived that it cannot read yet. A
+         *     collection with pending material is one curation has not reached,
+         *     which a single total would hide.
          *
          *     The list can legitimately be empty — nothing auto-provisions, so a
          *     fresh installation has no collections until someone creates one.
@@ -31,10 +32,9 @@ export interface paths {
         put?: never;
         /**
          * Create a collection
-         * @description Creates one collection: a directory under the knowledge root holding
-         *     both lanes (`sources/` and `topics/`), and one `knowledge` Resource for
-         *     it — which is what gives the collection a lifecycle, an audit trail and
-         *     its one `enabled` switch.
+         * @description Creates one collection: a directory under the knowledge root, and one
+         *     `knowledge` Resource for it — which is what gives the collection a
+         *     lifecycle, an audit trail and its one `enabled` switch.
          *     Nothing else creates one — not a read, not a write, not an agent's
          *     working directory (FR-008).
          *
@@ -59,16 +59,16 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List one level of one lane
+         * List one level of one collection
          * @description One level, not the whole tree: the immediate subdirectories of `path`
-         *     and the files directly in it, each with the `title` and `description`
-         *     from its frontmatter.
+         *     and the documents directly in it, each with the `title` and
+         *     `description` from its frontmatter.
          *
-         *     `path` is relative to the knowledge root and **carries the lane** —
-         *     `shopee/sources` or `shopee/topics`, `shopee/sources/account` for a
-         *     folder inside one. The page asks once per tree (FR-040). The listing is
-         *     generated at call time by walking the directory and reading frontmatter,
-         *     never materialized (FR-001). Hidden entries are absent.
+         *     `path` is relative to the knowledge root — `shopee` for a collection's
+         *     top level, `shopee/account` for a folder inside it. The listing is
+         *     generated at call time by walking the directory and reading
+         *     frontmatter, never materialized (FR-001). Hidden entries — the inbox
+         *     included — are absent, and so is the collection's `README.md`.
          */
         get: operations["readKnowledgeTree"];
         put?: never;
@@ -87,50 +87,71 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Read a file
-         * @description The file's full text, plus its frontmatter fields and the two absolute
-         *     on-disk paths the UI needs to offer open-in-editor and
+         * Read a document
+         * @description The document's full text, plus its frontmatter fields and the two
+         *     absolute on-disk paths the UI needs to offer open-in-editor and
          *     reveal-in-file-manager on the file and on its folder (FR-041).
+         *     `curated_at` says when curation last had it in front of it.
          *
-         *     Reading is **lane-agnostic** on purpose: the page previews a topic
-         *     document exactly as it previews a source, and refuses to *edit* it
-         *     instead (FR-040). Whole file, always: no chunking, no passage
-         *     granularity, no `top_k`. Bytes come off disk at call time, so an edit
-         *     made in the person's own editor is what comes back.
+         *     Whole file, always: no chunking, no passage granularity, no `top_k`.
+         *     Bytes come off disk at call time, so an edit made in the person's own
+         *     editor is what comes back.
          */
         get: operations["readKnowledgeFile"];
-        /**
-         * Write a source
-         * @description Creates a source, or replaces an existing one. Exactly one of
-         *     `collection` and `path` must be given: `collection` (plus an optional
-         *     `folder` inside it) creates a new file there, with a human-readable
-         *     slug derived from `title` (a collision appends a short suffix); `path`
-         *     replaces the source already at that path. Giving both, or neither, is a
-         *     400.
-         *
-         *     **Neither names the `sources/` segment** — the service adds it (FR-013,
-         *     FR-021). A `path` that names `topics/` is refused as
-         *     `KNOWLEDGE_PATH_UNSAFE`: `topics/` is curation's to write and no one
-         *     else's, and a correction goes in as a new source instead.
-         *
-         *     A write is a plain file write — no LLM, no conversion, no indexing step
-         *     (FR-014). `description` is required, not optional: the delivered
-         *     skill's catalogue is how a document is ever found, so a file that fails
-         *     to describe itself is unfindable (FR-003).
-         */
-        put: operations["writeKnowledgeFile"];
+        put?: never;
         post?: never;
         /**
-         * Delete a source
-         * @description Removes the file from disk. There is nothing else to remove — no index
-         *     row, no chunks, no embedding — so the deletion is complete when the
-         *     file is gone. Recorded in the audit log with the actor.
+         * Delete a document
+         * @description Removes the document from disk. There is nothing else to remove — no
+         *     index row, no chunks, no embedding — so the deletion is complete when
+         *     the file is gone. Recorded in the audit log with the actor.
          *
-         *     A **source** only (FR-020). A topic document is derived and is removed
-         *     by being retired in a pass, never from here, so a `topics/` path is
-         *     refused rather than offering a delete the next pass would undo.
+         *     **Any** document, whoever wrote it (FR-020): the tree is the person's
+         *     as much as curation's. No agent-facing tool deletes anything. A path
+         *     that is not a document — the collection itself, its `README.md`, or
+         *     anything hidden — is refused as `KNOWLEDGE_PATH_UNSAFE`.
          */
         delete: operations["deleteKnowledgeFile"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/material": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit new knowledge to a collection
+         * @description Submits **material** — a title, a description and a Markdown body —
+         *     into the collection's inbox, for a curation pass to merge into the
+         *     documents (FR-013). It takes no path and no folder, and replaces
+         *     nothing: where the knowledge belongs, and what in it is new, is
+         *     curation's to decide. Two submissions of the same title are two pieces
+         *     of material.
+         *
+         *     The submission itself is a plain file write — no LLM, no conversion,
+         *     no indexing step (FR-014). `description` is required, not optional: it
+         *     is what curation reads first when deciding where material belongs, and
+         *     what the skill's catalogue shows if the material becomes a document of
+         *     its own (FR-003).
+         *
+         *     `status` says what became of it: `pending` while it waits in the inbox,
+         *     with no `path` — an inbox address vanishes once the material is
+         *     merged — or `written`, with the document's `path`, when no internal
+         *     model is configured and the material was promoted to a document as it
+         *     stood (FR-029).
+         *
+         *     This is the route the CLI's `coffer knowledge write` calls; an agent
+         *     reaches the same service through `coffer__write`.
+         */
+        post: operations["submitKnowledgeMaterial"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -146,31 +167,29 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Convert a document and file it into a collection's sources
+         * Convert a document and submit it to a collection
          * @description The entrance for a document the person did not write as Markdown
-         *     (FR-016…FR-019). The file is converted, named from a readable slug of
-         *     its title, given FR-003's frontmatter — `title` from the document
-         *     falling back to its file name, `description` from the internal
-         *     connection where one is configured and from the document's opening
-         *     prose where not — and written into `collection`'s `sources/`
-         *     (optionally into `folder` inside that lane). Afterwards it is an
-         *     ordinary source, indistinguishable from one written by hand.
+         *     (FR-016…FR-019). The file is converted to Markdown, given FR-003's
+         *     frontmatter — `title` from the document falling back to its file name,
+         *     `description` from the internal connection where one is configured and
+         *     from the document's opening prose where not — and **submitted as
+         *     material** into `collection`'s inbox, exactly as `POST /material` does.
+         *     What is new in it is then appended to the collection's knowledge by the
+         *     next pass; with no internal model, it becomes a document of its own on
+         *     the spot (FR-029).
          *
-         *     The bytes that were sent land **beside it in `sources/`**, under their
-         *     own name and extension and byte-identical to what was sent, so a bad
-         *     conversion can be redone from an original the person can see. There is
-         *     no hidden `.raw/` any more, no re-conversion on a schedule and no
-         *     external-source tracking.
-         *
-         *     `folder` is a subdirectory inside that `sources/` lane, never the lane
-         *     itself: an upload is a source like any other and cannot be aimed at
-         *     `topics/`.
+         *     **Neither file is kept.** The original bytes are not stored anywhere,
+         *     and the extracted Markdown lives only as the inbox item until a pass
+         *     merges it: the upload is the carrier of its knowledge, not the
+         *     knowledge. There is no `folder` — where the knowledge lands is
+         *     curation's to decide — no hidden `.raw/`, no re-conversion on a
+         *     schedule and no external-source tracking.
          *
          *     Supported inputs are exactly what `markitdown` handles (PDF, `.docx`,
          *     `.pptx`, `.xlsx`, `.xls`, HTML, EPUB) plus plain text, Markdown and
          *     CSV. The call is bounded: **one file**, a size ceiling, and a refusal
          *     that names the limit. All-or-nothing — a conversion failure leaves
-         *     neither the Markdown nor the original behind.
+         *     nothing behind, not even an inbox item.
          *
          *     Upload is deliberately **not** an agent tool (FR-033): a document
          *     enters through a human surface — this route, the CLI, or a channel that
@@ -195,30 +214,33 @@ export interface paths {
         /**
          * Run one curation pass over one collection
          * @description One bounded agentic pass, driven by the internal model connection,
-         *     whose tool surface is **four** operations — `list_topics`,
-         *     `read_topic`, `write_topic`, `retire_topic`. None of them can reach
-         *     `sources/`: a pass reads the sources it is handed and writes only
-         *     `topics/` (FR-021).
+         *     whose tool surface is **four** operations — `list_documents`,
+         *     `read_document`, `write_document`, `retire_document` — fenced to this
+         *     collection's documents: none of them can reach the inbox, the
+         *     collection's `README.md` or another collection (FR-021).
          *
-         *     The pass takes **one source**. Name it in the body to fold in a
-         *     particular file; omit the body and the pass takes the oldest source
-         *     whose `coffer_ingested_at` is behind its own modification time
-         *     (FR-022) — which is what the page's "Curate now" button wants. One
-         *     source either way: a trigger is never a corpus-wide rewrite (FR-025).
+         *     The pass takes **one item**. Name a `document` in the body to carry
+         *     one edited document through; omit the body and the pass takes the
+         *     oldest pending item — inbox material first, then a document whose
+         *     modification time is newer than its `coffer_curated_at` (FR-022) —
+         *     which is what the page's "Curate now" button wants. One item either
+         *     way: a trigger is never a corpus-wide rewrite (FR-025).
          *
-         *     Its context is bounded — the source in full, at most five candidate
-         *     topic documents in full, and the collection's catalogue of titles and
+         *     Its context is bounded — the item in full, at most five candidate
+         *     documents in full, and the collection's catalogue of titles and
          *     descriptions (FR-023) — and its writes are bounded to eight, with
          *     `refused` reporting what the bound or the no-file-references rule
-         *     (FR-027) turned away.
+         *     (FR-027) turned away. New material that contradicts a document wins;
+         *     a document a person edited is never reverted (FR-026).
          *
-         *     `status` is `ok` when a pass ran, `no_model` when no internal
-         *     connection is configured (a clean no-op), `up_to_date` when no source
-         *     is pending, `too_large` when the source does not fit the model's
-         *     context (`limit` then names the ceiling), and `failed` when the pass
-         *     did not complete — in which case the watermark is left unset so the
-         *     material is curated later rather than lost (FR-028). All of them are
-         *     **200**: none is a fault of the request (FR-029).
+         *     `status` is `ok` when a pass ran; `no_model` when no internal
+         *     connection is configured, in which case every inbox item was promoted
+         *     to a document as it stood and `promoted` lists them; `up_to_date` when
+         *     nothing is pending; `too_large` when the item does not fit the model's
+         *     context (`limit` then names the ceiling); and `failed` when the pass
+         *     did not complete — in which case the item is left as it was, so it is
+         *     curated later rather than lost (FR-028). All of them are **200**: none
+         *     is a fault of the request (FR-029).
          *
          *     **One pass per collection at a time** (FR-030). A request that arrives
          *     while a pass over the same collection is still running is refused with
@@ -245,8 +267,8 @@ export interface components {
          *       "uid": "9f2c1a7b4e8d4c1fa0b3d5e6f7081920",
          *       "name": "shopee",
          *       "description": "Internal systems at Shopee — services, data plane, the chains between them.",
-         *       "source_count": 61,
-         *       "topic_count": 23
+         *       "document_count": 23,
+         *       "pending_count": 2
          *     }
          */
         CollectionOut: {
@@ -261,9 +283,9 @@ export interface components {
              * @description A mutable label, unique among collections, which is also the
              *     directory name under the knowledge root — a rename moves the
              *     directory. Use it to display the collection and to build the
-             *     `path` and `collection` arguments of the file routes, which are
-             *     filesystem paths; use `uid` for anything that has to keep pointing
-             *     at this collection.
+             *     `path` and `collection` arguments of the file, material and upload
+             *     routes, which are filesystem values; use `uid` for anything that
+             *     has to keep pointing at this collection.
              */
             name: string;
             /**
@@ -272,16 +294,18 @@ export interface components {
              */
             description: string;
             /**
-             * @description Files under `sources/`, counted recursively, hidden entries and the
-             *     collection's own `README.md` excluded.
+             * @description Documents in the collection's tree, counted recursively, hidden
+             *     entries and the collection's own `README.md` excluded — what an
+             *     agent can read today.
              */
-            source_count: number;
+            document_count: number;
             /**
-             * @description Documents under `topics/`, counted the same way. Counted apart from
-             *     the sources because the two answer different questions: how much a
-             *     person has contributed, and how much of it an agent can read today.
+             * @description Material waiting in the collection's inbox to be merged (FR-005) —
+             *     what has arrived and an agent cannot read yet. Counted apart
+             *     because a single total would hide a collection curation has not
+             *     reached.
              */
-            topic_count: number;
+            pending_count: number;
         };
         CollectionListOut: {
             collections: components["schemas"]["CollectionOut"][];
@@ -316,7 +340,7 @@ export interface components {
          *     reading the body.
          */
         FileSummaryOut: {
-            /** @description Path relative to the knowledge root, lane included. The file's identity. */
+            /** @description Path relative to the knowledge root. The document's identity. */
             path: string;
             title: string;
             /** @description What the file says it is about. Required on write (FR-003). */
@@ -329,7 +353,7 @@ export interface components {
             /** @description ISO-8601 timestamp from frontmatter. */
             updated_at: string;
         };
-        /** @description One level of one lane — never the whole tree. */
+        /** @description One level of one collection — never the whole tree. */
         TreeOut: {
             /** @description The level that was listed, relative to the knowledge root. */
             path: string;
@@ -337,12 +361,11 @@ export interface components {
             files: components["schemas"]["FileSummaryOut"][];
         };
         /**
-         * @description One file in full, from either lane: its frontmatter, its body, and the
-         *     absolute paths the UI needs for open-in-editor and
-         *     reveal-in-file-manager.
+         * @description One document in full: its frontmatter, its body, and the absolute
+         *     paths the UI needs for open-in-editor and reveal-in-file-manager.
          */
         FileOut: {
-            /** @description Path relative to the knowledge root, lane included. The file's identity. */
+            /** @description Path relative to the knowledge root. The document's identity. */
             path: string;
             title: string;
             description: string;
@@ -357,32 +380,34 @@ export interface components {
             /** @description Absolute on-disk path of its containing folder (FR-041). */
             folder_path: string;
             /**
-             * @description When curation last consumed this source (`coffer_ingested_at`).
-             *     Empty for a topic document and for a source no pass has reached yet
-             *     (FR-028) — it is what answers "is this note in the topics yet?".
+             * @description When curation last had this document in front of it
+             *     (`coffer_curated_at`), empty when it never has (FR-028). A document
+             *     modified since is what the sweep comes back for (FR-022).
              */
-            ingested_at: string;
+            curated_at: string;
         };
         /**
-         * @description Create a source, or replace one. Exactly one of `collection` and
-         *     `path`. Neither names the `sources/` segment — the service adds it, so
-         *     no caller can aim a write at `topics/` by spelling a path (FR-013,
-         *     FR-021).
+         * @description New knowledge for a collection (FR-013). No path, no folder and no
+         *     lane: where it belongs is curation's to decide.
          * @example {
+         *       "collection": "shopee",
          *       "title": "Session ownership",
          *       "description": "Which service owns a login session, and what reads it.",
-         *       "body": "Login state is owned by `account.session`.\n",
-         *       "collection": "shopee",
-         *       "folder": "account"
+         *       "body": "Login state is owned by `account.session`.\n"
          *     }
          */
-        FileWrite: {
-            /** @description Also the source of the file name when creating — a readable slug, not a ULID. */
+        MaterialIn: {
+            /**
+             * @description The collection's directory name — a filesystem value, like every
+             *     path on this family. Must exist and be enabled.
+             */
+            collection: string;
+            /** @description Names the subject; also the slug of the document it becomes if promoted. */
             title: string;
             /**
-             * @description Required. The delivered skill's catalogue is how a document is ever
-             *     found, so a file that fails to describe itself is unfindable
-             *     (FR-003).
+             * @description Required. What curation reads first when deciding where material
+             *     belongs, and what the catalogue shows if it becomes a document of
+             *     its own (FR-003).
              */
             description: string;
             /**
@@ -390,33 +415,43 @@ export interface components {
              * @default
              */
             body: string;
-            /**
-             * @description The collection to create the source in. Its `sources/` lane is
-             *     added by the service.
-             */
-            collection?: string | null;
-            /**
-             * @description A folder inside that collection's `sources/`. Only meaningful
-             *     beside `collection`.
-             */
-            folder?: string | null;
-            /**
-             * @description An existing source to replace, relative to the knowledge root. A
-             *     path naming `topics/` is refused.
-             */
-            path?: string | null;
         };
         /**
-         * @description Which source to fold in. The whole body is optional — omitted, the pass
-         *     takes the oldest source whose `coffer_ingested_at` is behind its own
-         *     modification time (FR-022), which is what the page's button wants.
+         * @description What became of submitted material. `pending`: it waits in the inbox
+         *     for a pass to merge, and there is no path to report. `written`: no
+         *     internal model is configured, so it was promoted to a document as it
+         *     stood, and `path` is that document (FR-029).
          * @example {
-         *       "source": "shopee/sources/session-ownership.md"
+         *       "status": "pending",
+         *       "collection": "shopee",
+         *       "title": "Session ownership",
+         *       "path": null
+         *     }
+         */
+        SubmissionOut: {
+            /** @enum {string} */
+            status: "pending" | "written";
+            /** @description The collection's name. */
+            collection: string;
+            title: string;
+            /** @description The document it became, with `status` `written`; null while pending. */
+            path: string | null;
+        };
+        /**
+         * @description Which item to take. The whole body is optional — omitted, the pass
+         *     takes the oldest pending item: inbox material first, then a document
+         *     whose modification time is newer than its `coffer_curated_at`
+         *     (FR-022), which is what the page's button wants.
+         * @example {
+         *       "document": "shopee/account/login-sessions.md"
          *     }
          */
         CurationRequest: {
-            /** @description One source's path, relative to the knowledge root. */
-            source?: string | null;
+            /**
+             * @description One document to carry through, relative to the knowledge root. An
+             *     inbox item cannot be named: the inbox is not addressable.
+             */
+            document?: string | null;
         };
         /**
          * @description What one pass did. Every status is a 200 — a collection with no model
@@ -425,70 +460,79 @@ export interface components {
          * @example {
          *       "status": "ok",
          *       "collection": "shopee",
-         *       "source": "shopee/sources/session-ownership.md",
+         *       "item": "shopee/.inbox/session-ownership.md",
          *       "model": "internal-model",
          *       "written": 2,
          *       "retired": 1,
          *       "refused": 0,
-         *       "topics_before": 22,
-         *       "topics_after": 23,
-         *       "limit": 0
+         *       "documents_before": 22,
+         *       "documents_after": 23,
+         *       "limit": 0,
+         *       "promoted": []
          *     }
          */
         CurationOut: {
             /**
-             * @description `no_model` when no internal connection is configured — a clean
-             *     no-op, never an error. `up_to_date` when no source is pending.
-             *     `too_large` when the source does not fit, `limit` naming the
-             *     ceiling. `failed` leaves the watermark unset so the material is
-             *     curated later rather than lost.
+             * @description `no_model` when no internal connection is configured — every inbox
+             *     item was promoted to a document as it stood, never an error.
+             *     `up_to_date` when nothing is pending. `too_large` when the item
+             *     does not fit, `limit` naming the ceiling. `failed` leaves the item
+             *     as it was so it is curated later rather than lost.
              * @enum {string}
              */
             status: "ok" | "no_model" | "up_to_date" | "too_large" | "failed";
+            /** @description The collection's NAME, not its uid — this is what a surface renders. */
             collection: string;
-            /** @description The source the pass took, when it took one. */
-            source: string;
+            /**
+             * @description The item the pass took, when it took one: an inbox item's path, or
+             *     the edited document's.
+             */
+            item: string;
             /**
              * @description The internal model that ran it, so a surprising rewrite is
              *     traceable to a model rather than to Coffer.
              */
             model: string;
-            /** @description Topic documents this pass wrote. */
+            /** @description Documents this pass wrote. */
             written: number;
-            /** @description Topic documents this pass retired, their content written elsewhere. */
+            /** @description Documents this pass retired, their content written elsewhere. */
             retired: number;
             /**
-             * @description Writes the pass refused — a topic naming another file (FR-027), or
-             *     the eight-write bound (FR-025). Reported rather than swallowed,
-             *     because a pass that hit its bound has more to absorb than it
-             *     managed.
+             * @description Writes the pass refused — a document naming another file (FR-027),
+             *     the eight-write bound (FR-025), or a path outside the collection's
+             *     documents. Reported rather than swallowed, because a pass that hit
+             *     its bound has more to absorb than it managed.
              */
             refused: number;
-            topics_before: number;
-            topics_after: number;
-            /** @description The source-size ceiling, present only with `status` `too_large`. */
+            documents_before: number;
+            documents_after: number;
+            /** @description The item-size ceiling, present only with `status` `too_large`. */
             limit: number;
+            /**
+             * @description The documents the inbox was promoted into as it stood, present only
+             *     with `status` `no_model` (FR-029).
+             */
+            promoted: string[];
         };
         /**
-         * @description The converted document, as an ordinary source in the collection. Note
-         *     `converter` is reported here and written **nowhere on disk** — a file
-         *     that has landed is just a file, and FR-003's frontmatter carries its
-         *     five keys and nothing else.
+         * @description What an upload became. Note `converter` is reported here and written
+         *     **nowhere on disk**, and nothing of the upload itself is kept: the
+         *     extracted Markdown is material, and the original bytes are gone
+         *     (FR-016).
          */
         IngestedDocumentOut: {
-            /** @description The converted Markdown file, relative to the knowledge root. */
-            path: string;
+            /**
+             * @description The document the upload became when it was promoted on the spot
+             *     (no internal model to merge it), relative to the knowledge root;
+             *     null while it waits in the inbox.
+             */
+            path: string | null;
             title: string;
             description: string;
-            /** @description Which converter produced this file. */
+            /** @description Which converter produced the Markdown. */
             converter: string;
-            /**
-             * @description The original the upload sent, relative to the knowledge root like
-             *     `path`: an ordinary visible file in `sources/` beside the Markdown
-             *     extracted from it (FR-016), so the surface that browses the lane
-             *     can name it — which a hidden absolute location could not.
-             */
-            original_path: string;
+            /** @description True when the upload waits in the inbox for a pass to merge it. */
+            pending: boolean;
         };
         /**
          * @description The app-wide error shape (`surfaces/http/errors.py`). Contract-only
@@ -505,10 +549,10 @@ export interface components {
     };
     responses: {
         /**
-         * @description A path that escapes the knowledge root, names a hidden entry, or aims a
-         *     write or a delete at `topics/` (`KNOWLEDGE_PATH_UNSAFE`) — or a write
-         *     that named both `path` and `collection`, or neither. The lane rule
-         *     lives in path construction rather than in a check each handler
+         * @description A path that escapes the knowledge root, names a hidden entry — the
+         *     inbox included — or cannot name a document because it is the
+         *     collection itself or its `README.md` (`KNOWLEDGE_PATH_UNSAFE`). The
+         *     rule lives in path construction rather than in a check each handler
          *     remembers to make, which is why it is reported here (FR-006).
          */
         UnsafePath: {
@@ -570,8 +614,8 @@ export interface components {
          *     the format it will not take instead of failing vaguely. Legacy
          *     `.doc`/`.ppt`, `.rtf` and `.odt` reach this case deliberately: no
          *     converter claims them, so they are refused cleanly rather than turned
-         *     into a misleading conversion failure. Nothing half-converted is stored,
-         *     and neither the Markdown nor the original is left behind.
+         *     into a misleading conversion failure. Nothing half-converted is stored:
+         *     no inbox item, no document and no original is left behind.
          */
         IngestRejected: {
             headers: {
@@ -628,16 +672,15 @@ export interface components {
          */
         CollectionUid: string;
         /**
-         * @description A directory path relative to the knowledge root, carrying the lane: a
-         *     collection's `sources` or `topics`, or a folder nested inside one.
-         *     Required — there is a dedicated route for the collection list, so this
-         *     one always names a level.
+         * @description A directory path relative to the knowledge root: a collection, or a
+         *     folder nested inside one. Required — there is a dedicated route for the
+         *     collection list, so this one always names a level.
          */
         TreePath: string;
         /**
-         * @description A file path relative to the knowledge root, carrying the lane —
-         *     `<collection>/sources/…` or `<collection>/topics/…`. This is the
-         *     file's identity; there is no id.
+         * @description A document path relative to the knowledge root —
+         *     `<collection>/…/<name>.md`. This is the document's identity; there is
+         *     no id.
          */
         FilePath: string;
         /**
@@ -711,10 +754,9 @@ export interface operations {
         parameters: {
             query: {
                 /**
-                 * @description A directory path relative to the knowledge root, carrying the lane: a
-                 *     collection's `sources` or `topics`, or a folder nested inside one.
-                 *     Required — there is a dedicated route for the collection list, so this
-                 *     one always names a level.
+                 * @description A directory path relative to the knowledge root: a collection, or a
+                 *     folder nested inside one. Required — there is a dedicated route for the
+                 *     collection list, so this one always names a level.
                  */
                 path: components["parameters"]["TreePath"];
             };
@@ -742,9 +784,9 @@ export interface operations {
         parameters: {
             query: {
                 /**
-                 * @description A file path relative to the knowledge root, carrying the lane —
-                 *     `<collection>/sources/…` or `<collection>/topics/…`. This is the
-                 *     file's identity; there is no id.
+                 * @description A document path relative to the knowledge root —
+                 *     `<collection>/…/<name>.md`. This is the document's identity; there is
+                 *     no id.
                  */
                 path: components["parameters"]["FilePath"];
             };
@@ -768,47 +810,13 @@ export interface operations {
             422: components["responses"]["ValidationFailed"];
         };
     };
-    writeKnowledgeFile: {
-        parameters: {
-            query?: never;
-            header?: {
-                /**
-                 * @description Who is writing, for the audit trail and for the file's `actor`
-                 *     frontmatter. `agent` is recorded as such; anything else, an absent
-                 *     header included, is recorded as `user`.
-                 */
-                "X-Coffer-Actor"?: components["parameters"]["ActorHeader"];
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FileWrite"];
-            };
-        };
-        responses: {
-            /** @description Written */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FileOut"];
-                };
-            };
-            400: components["responses"]["UnsafePath"];
-            404: components["responses"]["FileNotFound"];
-            422: components["responses"]["ValidationFailed"];
-        };
-    };
     deleteKnowledgeFile: {
         parameters: {
             query: {
                 /**
-                 * @description A file path relative to the knowledge root, carrying the lane —
-                 *     `<collection>/sources/…` or `<collection>/topics/…`. This is the
-                 *     file's identity; there is no id.
+                 * @description A document path relative to the knowledge root —
+                 *     `<collection>/…/<name>.md`. This is the document's identity; there is
+                 *     no id.
                  */
                 path: components["parameters"]["FilePath"];
             };
@@ -837,10 +845,51 @@ export interface operations {
             422: components["responses"]["ValidationFailed"];
         };
     };
+    submitKnowledgeMaterial: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Who is writing, for the audit trail and for the file's `actor`
+                 *     frontmatter. `agent` is recorded as such; anything else, an absent
+                 *     header included, is recorded as `user`.
+                 */
+                "X-Coffer-Actor"?: components["parameters"]["ActorHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaterialIn"];
+            };
+        };
+        responses: {
+            /** @description Submitted */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmissionOut"];
+                };
+            };
+            400: components["responses"]["UnsafePath"];
+            404: components["responses"]["CollectionNotFound"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
     uploadKnowledgeDocument: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /**
+                 * @description Who is writing, for the audit trail and for the file's `actor`
+                 *     frontmatter. `agent` is recorded as such; anything else, an absent
+                 *     header included, is recorded as `user`.
+                 */
+                "X-Coffer-Actor"?: components["parameters"]["ActorHeader"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -852,18 +901,16 @@ export interface operations {
                      * @description The document to convert. One per call.
                      */
                     file: string;
-                    /** @description The collection it belongs in. Must already exist. */
-                    collection: string;
                     /**
-                     * @description A folder inside that collection's `sources/`. Omitted, the
-                     *     lane's top level.
+                     * @description The collection's directory name. Must already exist and be
+                     *     enabled.
                      */
-                    folder?: string;
+                    collection: string;
                 };
             };
         };
         responses: {
-            /** @description Converted and filed */
+            /** @description Converted and submitted */
             201: {
                 headers: {
                     [name: string]: unknown;

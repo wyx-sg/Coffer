@@ -21,7 +21,7 @@ whatever writes it (FR-001).
 | `aggregate_interval_s` | `int \| None` | `None` = the pass's own default interval (FR-011). |
 | `auto_distil_enabled` | `bool` | The `distil` pass's switch. Ships **ON** — it rewrites a derived digest that deleting and re-running reproduces. |
 | `distil_interval_s` | `int \| None` | As above. |
-| `auto_curate_enabled` | `bool` | The `curate` pass's switch. Ships **ON**: it derives `topics/` from sources it never rewrites, and is the only path from a source to something an agent can read (FR-014). |
+| `auto_curate_enabled` | `bool` | The `curate` pass's switch. Ships **ON**: it merges each collection's inbox of new material into the documents an agent reads, and carries a person's out-of-band edit outward without ever reverting it (FR-014). |
 | `curate_interval_s` | `int \| None` | As above. |
 | `model_timeout_s` | `int \| None` | How long ONE call to Coffer's own model may take (FR-022). `None` = the built-in default, meaning exactly what an unchosen interval's `None` means and for the same reason — the default stays in one place, so raising it later reaches every vault that never chose. Between `MIN_MODEL_TIMEOUT_S` and `MAX_MODEL_TIMEOUT_S`: refused outside that range by the surfaces, clamped into it by the passes (FR-024). |
 | `transcribe_model` | `str \| None` | The speech-to-text model, run on the connection flagged `transcribe_default` rather than on the engine's own (FR-025). `None` until chosen, and while it is `None` Coffer transcribes nothing and the agent receives the audio file. Normalised from blank to `None` like `model`. |

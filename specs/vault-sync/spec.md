@@ -978,7 +978,7 @@ reported as a conflict.
   the owner,
 - **When** the tidy interval elapses on both,
 - **Then** a pass runs on the owner and is a no-op on the other, and the vault
-  holds one rewritten topic document rather than two.
+  holds one rewritten document rather than two.
 
 ### Scenario: a tidy pass and a converge round do not overlap
 

@@ -53,9 +53,6 @@ def _tree(root: pathlib.Path) -> set[str]:
     return {str(p.relative_to(root).as_posix()) for p in root.rglob("*")}
 
 
-@pytest.mark.acceptance(
-    spec="knowledge", scenario="migration moves the corpus into sources and clears topics"
-)
 def test_content_files_move_into_sources_keeping_their_nesting(root: pathlib.Path) -> None:
     tree.migrate()
 

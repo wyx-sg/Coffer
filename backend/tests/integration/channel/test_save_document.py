@@ -60,7 +60,7 @@ async def _card_channel(env: ChannelEnv, *, sender_id: str = "owner-1") -> FakeC
     spec="channels", scenario="a document sent to a channel is saved into a collection"
 )
 # The same call proves the knowledge layer's half of that entrance: the phone
-# and the Knowledge page are two ends of one path into `sources/`.
+# and the Knowledge page are two ends of one path into a collection's inbox.
 @pytest.mark.acceptance(
     spec="knowledge", scenario="a document forwarded to a channel lands in a collection"
 )
@@ -84,6 +84,25 @@ async def test_named_existing_collection_saves_directly(env: ChannelEnv, tmp_pat
     # The confirmation names the title, the collection, and the path — never a
     # stack trace, and never silence.
     assert any("note.txt" in text and "research" in text for _chat, text in adapter.sent)
+
+
+async def test_a_save_that_waits_to_be_merged_says_so(env: ChannelEnv, tmp_path: Any) -> None:
+    """With a model configured the upload is material in the collection's
+    inbox, not a document yet — so the confirmation names no path and says the
+    document is being merged rather than claiming a file that does not exist."""
+    _resource, adapter = await env.paired_channel(sender_id="owner-1")
+    env.collections.names = ["research"]
+    env.ingest.pending = True
+    attachment = _attach(tmp_path)
+
+    await _send_document(env, adapter, attachment, sender_id="owner-1")
+    await env.processor.on_message(inbound("tg", "owner", "/save research", sender_id="owner-1"))
+
+    assert len(env.ingest.calls) == 1
+    [confirmation] = [text for _chat, text in adapter.sent if "note.txt" in text]
+    assert "research" in confirmation
+    assert "merging" in confirmation
+    assert "→" not in confirmation and "None" not in confirmation
 
 
 async def test_non_owner_message_stores_nothing(env: ChannelEnv, tmp_path: Any) -> None:

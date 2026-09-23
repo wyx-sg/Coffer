@@ -24,23 +24,22 @@ from coffer.domain.knowledge.entry import CollectionEntry, FileEntry
 from coffer.domain.skill.validator import ValidationOk, validate_skill_folder
 
 
-def _collection(name: str, description: str, topics: int = 1):  # type: ignore[no-untyped-def]
+def _collection(name: str, description: str, documents: int = 1):  # type: ignore[no-untyped-def]
     entry = CollectionEntry(
         uid=f"uid-{name}",
         name=name,
         description=description,
-        source_count=1,
-        topic_count=topics,
+        document_count=documents,
     )
     files = [
         FileEntry(
-            path=f"{name}/topics/doc{i}.md",
+            path=f"{name}/doc{i}.md",
             title=f"Doc {i}",
             description="What it answers.",
             actor="curation",
             updated_at=None,
         )
-        for i in range(topics)
+        for i in range(documents)
     ]
     return entry, files
 
@@ -119,7 +118,7 @@ def test_the_body_carries_both_halves() -> None:
     text = render("~/.coffer/knowledge", [_collection("shopee", "Shopee's account system.")])
     assert "never writes it" in text  # the manual half
     assert "`doc0.md` — **Doc 0**" in text  # the catalogue half
-    assert "~/.coffer/knowledge/shopee/topics/" in text
+    assert "~/.coffer/knowledge/shopee/" in text
 
 
 # --- the frontmatter is not ours to interpolate ------------------------------

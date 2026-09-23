@@ -271,9 +271,9 @@ class InternalEngineConfigModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     model: Mapped[str | None] = mapped_column(String, nullable=True)
     #: Whether the background curation worker may run (spec knowledge FR-032).
-    #: ON by default: curation only derives ``topics/`` from sources it may not
-    #: touch, and it is the only path from a source to something an agent can
-    #: read, so a vault where it never runs has an empty readable lane forever.
+    #: ON by default: curation is what merges new material into the documents
+    #: an agent reads, so a vault where it never runs leaves that material
+    #: unread in the inbox.
     auto_curate_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     #: The one machine allowed to run the unattended curation pass once a vault
     #: spans several (spec vault-sync ``## Unattended rewriters``). NULL means

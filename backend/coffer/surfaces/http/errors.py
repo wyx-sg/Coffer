@@ -131,9 +131,8 @@ _STATUS: dict[str, int] = {
     "KNOWLEDGE_COLLECTION_NOT_FOUND": 404,
     "KNOWLEDGE_COLLECTION_EXISTS": 409,
     "KNOWLEDGE_FILE_NOT_FOUND": 404,
-    # Also the answer for a write aimed at the wrong lane: ``sources/`` and
-    # ``topics/`` have different writers (spec knowledge FR-013, FR-021), and
-    # which lane a path names is a property of the path.
+    # Also the answer for a path that cannot name a document — the
+    # collection itself, its README, or anything hidden (spec knowledge FR-006).
     "KNOWLEDGE_PATH_UNSAFE": 400,
     # Ingestion (spec knowledge FR-016..FR-019): named the limit, refused
     # before any conversion or write.

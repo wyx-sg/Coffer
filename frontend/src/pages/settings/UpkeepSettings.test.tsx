@@ -5,10 +5,10 @@
 // the interval are independent, and an interval nobody chose is shown as the
 // default rather than as a blank.
 //
-// The third pass is `curate`, not `tidy`. It no longer rewrites the knowledge
-// files the user wrote: it reads them and derives the documents agents read
-// (spec knowledge FR-021), which is why it ships ON and why its note is about
-// what switching it OFF costs.
+// The third pass is `curate`: it merges new material into a collection's
+// documents and carries a person's edit through the rest (spec knowledge
+// FR-021), which is why it ships ON and why its note is about what switching
+// it OFF costs.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 
@@ -53,7 +53,7 @@ vi.mock("@/lib/hooks/useSync", () => ({
 
 const hooks = await import("@/lib/hooks/useInternalEngine");
 
-const CURATE_SWITCH = "Derive documents from sources";
+const CURATE_SWITCH = "Merge new knowledge into documents";
 
 const CONFIG: InternalEngineConfig = {
   model: "some-model",
@@ -61,9 +61,8 @@ const CONFIG: InternalEngineConfig = {
   upkeep: {
     aggregate: { enabled: true, interval_s: null, default_interval_s: 3600 },
     distil: { enabled: true, interval_s: 900, default_interval_s: 21600 },
-    // On, unlike the pass it replaced: curation is the only path from a source
-    // to something an agent can read, so a vault where it never runs has an
-    // empty topics lane forever.
+    // On: curation is what merges new material into the documents an agent
+    // reads, so a vault where it never runs leaves that material unread.
     curate: { enabled: true, interval_s: null, default_interval_s: 21600 },
   },
   // The machine allowed to run curation — this one, in the fixture, which is
@@ -96,25 +95,23 @@ afterEach(() => vi.clearAllMocks());
 
 describe("UpkeepSettings", () => {
   test("names every pass by what it actually writes", () => {
-    // The difference that matters between them: what each one puts on disk,
-    // and — for curation — what it explicitly does not touch.
+    // The difference that matters between them: what each one puts on disk.
     stub(CONFIG);
     renderCard();
 
     expect(screen.getByText(/reads your agents' own memory files/i)).toBeInTheDocument();
     expect(screen.getByText(/turns the entries read from your agents into/i)).toBeInTheDocument();
-    expect(screen.getByText(/derives the documents your agents read/i)).toBeInTheDocument();
-    expect(screen.getByText(/never changes a source/i)).toBeInTheDocument();
+    expect(screen.getByText(/merges new material/i)).toBeInTheDocument();
+    expect(screen.getByText(/carries a document you edited through/i)).toBeInTheDocument();
   });
 
   test("says what switching curation off costs", () => {
-    // Not "this rewrites your files" — curation writes only the derived lane.
-    // The consequence worth a warning is the opposite one: off, nothing an
-    // agent reads is ever derived.
+    // The consequence worth a warning: off, new material waits unmerged and an
+    // edit is not carried through.
     stub(CONFIG);
     renderCard();
 
-    expect(screen.getByText(/the documents agents read stay empty/i)).toBeInTheDocument();
+    expect(screen.getByText(/new material waits unmerged/i)).toBeInTheDocument();
   });
 
   test("an interval nobody chose reads as the default, with its real value", () => {
@@ -173,7 +170,7 @@ describe("UpkeepSettings", () => {
 
   test("only curation says which machine runs it", () => {
     // The other two passes read and write this machine's own files; only
-    // curation derives documents a second machine would derive differently,
+    // curation writes documents a second machine would write differently,
     // so only curation names an owner.
     stub(CONFIG);
     renderCard();

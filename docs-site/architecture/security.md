@@ -134,7 +134,7 @@ The daemon makes outbound calls today. Naming them precisely matters, because th
 | ------------------------------------------- | ------------------------------------------- | ----------------------------------------- |
 | **Provider introspection** — asking a configured vendor endpoint what it offers | `infrastructure/provider/introspector.py` | **Yes.** The one caller of `check_url`.   |
 | **Remote speech-to-text** for voice input   | `infrastructure/llm/transcription.py`       | No — the endpoint is a configured provider. |
-| **The internal engine's LLM calls** (the tidy and organise passes) | `infrastructure/llm/langchain_models.py` | No — same. |
+| **The internal engine's LLM calls** (the curation and organise passes) | `infrastructure/llm/langchain_models.py` | No — same. |
 | **The Telegram and SeaTalk APIs**           | `infrastructure/channel/`                   | No — fixed, well-known hosts.             |
 | **HTTP-transport MCP servers**              | the MCP SDK's `create_mcp_http_client`      | No — and this is the gap that matters.    |
 | **`git` fetch/push for vault sync**         | `infrastructure/sync/`                      | Not HTTP from Coffer's own client at all — a `git` subprocess against a remote the user configured. |

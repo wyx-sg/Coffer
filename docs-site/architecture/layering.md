@@ -143,7 +143,7 @@ backend/coffer/
     │   ├── dependencies.py       # kind-agnostic getters; per-kind *_dependencies.py sit beside the routes
     │   ├── resource_routes.py
     │   ├── mcp/                  # MCP HTTP/SSE routes and session handling
-    │   ├── knowledge/            # collections, tree, file, grep, search, upload, tidy
+    │   ├── knowledge/            # collections, tree, file, material, upload, curate
     │   ├── memory/               # partitions, facts, files, sync, organise, context, delivery
     │   └── chat/                 # conversations, turns, agent providers
     ├── cli/

@@ -1,6 +1,8 @@
 // frontend/src/components/knowledge/KnowledgeUploadButton.test.tsx
 //
-// Upload into the collection (and folder) in view (spec knowledge FR-040).
+// Upload into the collection in view (spec knowledge FR-040). An upload is
+// material: it either waits to be merged or, with no internal model, becomes a
+// document on the spot — and the toast must say which.
 // `useUploadKnowledgeFile` runs as a REAL react-query mutation against the
 // mocked wire layer (`@/lib/api/knowledge`), so a successful call really
 // does invalidate `["knowledge"]` — the mechanism a mounted tree query relies
@@ -41,7 +43,7 @@ function renderButton(onFetch: () => void = () => {}) {
     <QueryClientProvider client={qc}>
       <ToastProvider>
         <TreeSentinel onFetch={onFetch} />
-        <KnowledgeUploadButton collection="shopee" folder={null} />
+        <KnowledgeUploadButton collection="shopee" />
       </ToastProvider>
     </QueryClientProvider>,
   );
@@ -56,11 +58,11 @@ function chooseFile(name: string, type: string) {
 describe("KnowledgeUploadButton", () => {
   test("a successful upload refreshes the knowledge tree", async () => {
     uploadFileMock.mockResolvedValue({
-      path: "shopee/notes.md",
+      path: null,
       title: "Notes",
       description: "converted notes",
       converter: "markitdown",
-      original_path: "shopee/sources/notes.pdf",
+      pending: true,
     });
     const onFetch = vi.fn();
     renderButton(onFetch);
@@ -72,13 +74,31 @@ describe("KnowledgeUploadButton", () => {
 
     await waitFor(() =>
       expect(uploadFileMock).toHaveBeenCalledWith(
-        expect.objectContaining({ collection: "shopee", folder: null }),
+        expect.objectContaining({ collection: "shopee" }),
       ),
     );
     // Success invalidates ["knowledge"], so the sentinel refetches — the
     // mechanism the tree relies on to show the new file with no manual reload.
     await waitFor(() => expect(onFetch).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText(/Notes/)).toBeInTheDocument();
+    // Waiting in the inbox: the tree has nothing new to show, so the toast
+    // says the upload will be merged rather than naming a document.
+    expect(await screen.findByText(/Notes.*merged into the documents/)).toBeInTheDocument();
+  });
+
+  test("an upload promoted on the spot names the document it became", async () => {
+    uploadFileMock.mockResolvedValue({
+      path: "shopee/notes.md",
+      title: "Notes",
+      description: "converted notes",
+      converter: "markitdown",
+      pending: false,
+    });
+    renderButton();
+
+    chooseFile("notes.pdf", "application/pdf");
+
+    expect(await screen.findByText(/saved as shopee\/notes\.md/)).toBeInTheDocument();
+    expect(screen.queryByText(/merged into the documents/)).toBeNull();
   });
 
   test("an unsupported file type is named, never a raw error code", async () => {

@@ -78,8 +78,17 @@ def wire_knowledge_kind(
     on_catalogue_changed: CatalogueChanged,
 ) -> KnowledgeWiring:
     """Wire the ``knowledge`` kind into the app and return what it built."""
+
+    async def _merge_available() -> bool:
+        # A pass needs the internal model and nothing else to merge material;
+        # without one, material is promoted to a document on the spot (FR-029).
+        return await models.get_default() is not None
+
     service = KnowledgeService(
-        resources=resource_svc, audit=audit, on_catalogue_changed=on_catalogue_changed
+        resources=resource_svc,
+        audit=audit,
+        on_catalogue_changed=on_catalogue_changed,
+        merge_available=_merge_available,
     )
     set_knowledge_service(service)
 

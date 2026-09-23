@@ -9,8 +9,10 @@ reduction, including the audits of the live installation that
 motivated it, lives in
 [Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md).
 
-Two of the conclusions below have since moved. They are kept as they were
-decided, with what moved them recorded underneath, because a decision that was
+Several of the conclusions below have since moved — most recently on
+2026-09-23, when a collection became one tree of documents co-written by people
+and curation. They are kept as they were decided, with what moved them recorded
+underneath, because a decision that was
 reversed is more useful than one quietly overwritten: what is worth carrying
 forward is not the answer but why the evidence changed.
 
@@ -33,6 +35,14 @@ that is a different question from LLM-at-write is that the model never touches
 what was written: it derives a second copy, and the source it derived from is
 still there to derive it again.
 
+**Moved 2026-09-23.** A write is still no model, no conversion and no index — but
+it no longer lands as a file anyone reads. `coffer__write` submits **material**
+into the collection's hidden `.inbox/`, and the curation pass merges it into the
+documents and deletes the item; with no internal model it becomes a document of
+its own on the spot. There is no second copy any more: the user decided that
+knowledge is co-created by AI and people — documents arrive in different formats, are parsed into Markdown on upload, and are then edited by both, and each upload appends the new knowledge in it to the collection, so a collection is one tree people and the model edit together
+rather than a lane of truth and a lane derived from it.
+
 ## 2. One shared store, not a per-agent silo
 
 **Question**: where does an agent's knowledge live?
@@ -54,11 +64,12 @@ one store, regenerated from it, never a copy that can drift.
 **Decision**: one Markdown file per note, with a `---`-fenced YAML frontmatter
 block carrying its metadata.
 
-The format survived every redesign; the field list did not. Frontmatter is now
-exactly `title`, `description`, `actor`, `created_at`, `updated_at` — there is
-no `id`, because the path is the identity, and no field describing an index,
-a lane or an external source — and none describing a conversion either, although
-a converted document keeps its original: which converter ran is reported on the
+The format survived every redesign; the field list did not. The keys Coffer
+writes are now `title`, `description`, `actor`, `created_at`, `updated_at` and
+`coffer_curated_at` — and a key a person adds in their own editor survives
+Coffer's rewrites of the file. There is no `id`, because the path is the identity, and no field describing an index,
+a lane or an external source — and none describing a conversion either: which
+converter ran is reported on the
 upload response and nowhere on disk, because a file that has landed is just a
 file. Every derived index is gone too: a generated `MEMORY.md`, then a generated
 `INDEX.md`, then the database index itself.
@@ -74,6 +85,15 @@ needs to know.
 The lane, notably, is **not** a key. Which lane a file is in says who may write
 it, and that is the one thing a value inside a file cannot enforce — hence two
 directories.
+
+**Moved 2026-09-23.** The lanes are gone, and the watermark with them. A
+collection is one tree, and the one key Coffer adds is `coffer_curated_at` on a
+*document*: when curation last had it in front of it. The sweep compares it with
+the file's mtime to find documents a person (or an agent) edited since, and hands
+each to a pass that carries the edit through the rest of the collection. It is
+still in the frontmatter for the same reason — the answer cannot disagree with
+the disk — and a pass sets the file's mtime to the stamp it writes, so its own
+output never comes back as an edit.
 
 ## 4. Sharing is MCP-only
 
@@ -108,7 +128,7 @@ carries the whole catalogue with absolute paths.
 What did not survive is "MCP-only". Reading no longer goes through MCP at all —
 the agent uses the file tools it already has. MCP keeps exactly one knowledge
 tool, `coffer__write`, because writing is the one operation where an agent
-genuinely needs Coffer: the collection, the lane, the frontmatter and the audit
+genuinely needs Coffer: the collection, the inbox, the frontmatter and the audit
 entry are Coffer's to decide.
 
 ## 5. Retrieval: why no index at all
@@ -202,6 +222,14 @@ original is an ordinary visible file beside the text extracted from it — which
 also the truer description of what it is. A PDF somebody chose to upload is the
 most source-like thing in the collection.
 
+**Moved 2026-09-23.** Neither the original nor the extracted text is kept. An
+upload is converted to Markdown and **submitted as material**, exactly as an
+agent's note is, and the curation pass appends what is new in it to the
+collection's documents; the inbox item is deleted once merged. The user's framing
+is that knowledge is co-created by AI and people — documents arrive in different formats, are parsed into Markdown on upload, and are then edited by both, and each upload appends the new knowledge in it to the collection. The document was the carrier, and what the collection
+holds is the knowledge in it, merged. A failed conversion still submits nothing
+(FR-019).
+
 ## 7. Boundaries: one, and it is the human's filing
 
 **Question**: how is knowledge separated?
@@ -266,6 +294,16 @@ pass that fails leaves its material to a later sweep instead of losing it.
 `.history/` goes with the reason it existed — recovery is re-running curation
 from sources, not reading back a revision.
 
+**Moved 2026-09-23.** There is no lane the rewriter cannot reach any more. A
+collection is one tree of documents that people and curation both edit, because
+knowledge is co-created by AI and people — documents arrive in different formats, are parsed into Markdown on upload, and are then edited by both, and each upload appends the new knowledge in it to the collection. The bounds above all stand — eight writes, one item per pass, one
+pass per collection, the item settled last — and two rules take the place of the
+untouchable lane: where new material contradicts a document the newer statement
+wins and the old one stays legible with its date, and a person's edit is
+deliberate, so a pass carries it outward and never reverts it. What a pass
+replaced is recoverable from the vault's own git history (spec
+[vault-sync](../vault-sync/spec.md)), not from a lane of sources.
+
 ## 10. What this layer deliberately does not do
 
 - Expose any tool for reading, listing, grepping or searching knowledge. The
@@ -278,18 +316,19 @@ from sources, not reading back a revision.
 - Push anything into a session, or write into any agent's own memory files.
   Knowledge is pulled; session-start delivery belongs to spec
   [memory](../memory/spec.md), which carries its own budget and its own consent.
-- Watch the filesystem. The sweep compares a source's modification time with its
-  own frontmatter stamp, which needs nothing resident and cannot drift from the
+- Watch the filesystem. The sweep lists the inbox and compares each document's
+  modification time with its own frontmatter stamp, which needs nothing resident and cannot drift from the
   disk.
 - Converge its own corpus across machines. The files do travel — spec
   [vault-sync](../vault-sync/spec.md) converges the vault bidirectionally with a
   git remote the user owns — but nothing here knows about it. The one thing this
   layer owes that mechanism is that an unattended rewriter runs on exactly one
   machine (FR-032).
-- Keep a revision of what a pass replaced. `sources/` is the safety net, and an
-  archive of derived files would be a second thing to reconcile.
-- Categorize beyond what a file's own `title` and `description` say, and beyond
-  the one division that means who may write it.
+- Keep a revision of what a pass replaced. The vault's git history is the record,
+  and an archive inside the collection would be a second thing to reconcile.
+- Keep an upload's original. Its text is merged; the file was only a carrier.
+- Categorize beyond what a file's own `title` and `description` say. The tree has
+  no division that carries meaning; its nesting is whoever filed the document.
 - Accept a document as an agent tool call. Upload is a human surface — the
   Knowledge page, the CLI, or a channel confirming the collection with its
   paired owner (FR-018).

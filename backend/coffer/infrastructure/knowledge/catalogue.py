@@ -4,16 +4,10 @@ Nothing here is materialized (spec knowledge FR-001): a catalogue is produced
 by walking the tree and reading frontmatter when someone asks, so it cannot
 drift from what is on disk — there is no second copy to keep in sync.
 
-Two rules decide what a walk sees, and keeping them apart is the point of this
-module:
-
-* :func:`is_listed` — what a **person** browsing the folder should see. Every
-  visible file except a ``README.md``, deliberately including an uploaded
-  document's original: a lane that showed the extracted text and hid the PDF
-  the person actually sent would be lying about its own contents (FR-016).
-* :func:`is_markdown` — what **this layer** can read, curate or catalogue. A
-  ``.pdf`` in ``sources/`` is a thing a person can see and delete, not a thing
-  curation or a skill's catalogue can use.
+A walk sees every visible Markdown document under a collection. It never sees
+the hidden ``.inbox/`` — material there is not knowledge yet (FR-005) — and it
+never lists a ``README.md``, which describes the directory it sits in rather
+than being content in it (FR-007).
 """
 
 from __future__ import annotations
@@ -37,43 +31,30 @@ MARKDOWN_SUFFIX = ".md"
 
 
 def visible(entry: pathlib.Path) -> bool:
-    """Excludes any dot-prefixed entry. Coffer itself writes none (FR-005)."""
+    """Excludes any dot-prefixed entry — the inbox included (FR-005)."""
     return not entry.name.startswith(".")
 
 
 def is_listed(name: str) -> bool:
     """Whether a person browsing this folder should see the file.
 
-    Everything visible except a ``README.md``, which describes the directory it
-    sits in rather than being content in it. A collection's README lives
-    outside both lanes (FR-007), but a person may put one inside a ``sources/``
-    folder too, and it is a blurb there for the same reason.
-
-    Deliberately NOT restricted to Markdown: an uploaded document's original
-    lands in ``sources/`` beside the text extracted from it (FR-016), and a
-    lane that shows the extraction but hides the PDF the person actually sent
-    would be lying about its own contents.
+    Every visible file except a ``README.md``, which describes the directory it
+    sits in rather than being content in it (FR-007). Not restricted to
+    Markdown: a file a person drops in by hand is theirs to see and delete,
+    whatever it is.
     """
     return not name.startswith(".") and name != paths.README_NAME
 
 
 def is_markdown(name: str) -> bool:
-    """Whether a file is text this layer can read, curate or catalogue.
-
-    The narrower of the two: curation reads bodies, and the catalogue a skill
-    carries lists documents an agent can open. A ``.pdf`` in ``sources/`` is a
-    thing a person can see and delete, not a thing either of those can use.
-    """
+    """Whether a file is a document this layer can read, curate or catalogue."""
     return name.endswith(MARKDOWN_SUFFIX) and is_listed(name)
 
 
 def count_files(directory: pathlib.Path, *, markdown_only: bool = False) -> int:
     """Files under ``directory``, recursively, skipping hidden ones.
 
-    ``markdown_only`` narrows it to what this layer can read — which is the
-    right count for ``topics/``, where every file is a document, and the wrong
-    one for ``sources/``, where a person's uploaded original counts as much as
-    the text extracted from it.
+    ``markdown_only`` narrows it to the documents this layer can read.
     """
     if not directory.is_dir():
         return 0
@@ -110,7 +91,8 @@ def readme_description(collection: str) -> str:
 
 
 def list_collections() -> tuple[CollectionEntry, ...]:
-    """Every collection directory present on disk, with both lanes counted."""
+    """Every collection directory present on disk, with its documents and its
+    unmerged material counted."""
     root = paths.knowledge_root()
     if not root.is_dir():
         return ()
@@ -124,18 +106,25 @@ def list_collections() -> tuple[CollectionEntry, ...]:
             uid="",
             name=d.name,
             description=readme_description(d.name),
-            source_count=count_files(paths.sources_dir(d.name)),
-            topic_count=count_files(paths.topics_dir(d.name), markdown_only=True),
+            document_count=count_files(d, markdown_only=True),
+            pending_count=_count_inbox(d.name),
         )
         for d in found
     )
 
 
+def _count_inbox(collection: str) -> int:
+    inbox = paths.inbox_dir(collection)
+    if not inbox.is_dir():
+        return 0
+    return sum(1 for f in inbox.iterdir() if f.is_file() and is_markdown(f.name))
+
+
 def _file_entry(path: pathlib.Path) -> FileEntry:
     if not is_markdown(path.name):
-        # An uploaded original: bytes, not prose. It has no frontmatter to read
-        # and may be large, so it is described by its own name rather than
-        # opened (FR-016).
+        # A file a person dropped in that is not Markdown: bytes, not prose. It
+        # has no frontmatter to read and may be large, so it is described by
+        # its own name rather than opened.
         return FileEntry(
             path=paths.relative_of(path),
             title=path.name,
@@ -156,7 +145,7 @@ def _file_entry(path: pathlib.Path) -> FileEntry:
 
 
 def list_level(relpath: str) -> CatalogueLevel:
-    """One level of one lane: this directory's children and nothing deeper."""
+    """One level of one collection: this directory's children and nothing deeper."""
     directory = paths.resolve(relpath)
     if not directory.is_dir():
         raise KnowledgeFileNotFound(relpath)
@@ -185,7 +174,7 @@ def list_level(relpath: str) -> CatalogueLevel:
 def walk_files(directory: pathlib.Path) -> tuple[FileEntry, ...]:
     """Every content file under ``directory``, recursively, in path order.
 
-    The catalogue a skill carries is the whole of one lane at once (FR-037),
+    The catalogue a skill carries is a whole collection at once (FR-037),
     unlike the level-at-a-time listing a human surface pages through — so this
     is the shape that builds it, and the one curation reads a collection with.
     """

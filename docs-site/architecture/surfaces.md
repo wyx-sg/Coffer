@@ -27,7 +27,7 @@ The surfaces are described below using a consistent template: **What it is · Wh
 | `/resources/mcp_server`, `/mcp`   | Per-server capability preferences and invocations; `/mcp/invocations` is the cross-server view. |
 | `/agents`                         | Agent registry, config files, workspace facets, plugins, native memory stores, transcripts. |
 | `/skills`                         | Skill master store, per-agent bindings, `verify` and `repair`.     |
-| `/knowledge`                      | `collections`, `tree`, `file`, `grep`, `search`, `upload`, and `collections/{name}/tidy`. |
+| `/knowledge`                      | `collections`, `tree`, `file` (read, delete), `material`, `upload`, and `collections/{uid}/curate`. No retrieval route. |
 | `/memory`                         | `partitions` and their facts and files, `sync`, `organise`, `context`, and per-agent `delivery`. |
 | `/channels`                       | Channel bindings (Telegram, SeaTalk), pairing.                    |
 | `/chat`                           | Conversations, their messages, and the turn surface the web Chat page drives: fire-and-return `POST .../messages`, SSE `GET .../events`, `PUT .../pending`, `POST .../interrupt`. |
@@ -35,7 +35,7 @@ The surfaces are described below using a consistent template: **What it is · Wh
 | `/providers`, `/internal-engine-config` | The `provider` kind — vendor endpoints and their keys — and the connection plus model Coffer's own engine runs on. |
 | `/credentials`, `/settings`       | Encrypted credential store; settings incl. `/settings/credentials` (master-key storage). |
 | `/sync`                           | Converge rounds against the git remote, the remote's configuration, machines, and the master-key transfer. |
-| `/upkeep`                         | `runs` — what the unattended passes (tidy, organise, aggregate) are doing right now and last did. |
+| `/upkeep`                         | `runs` — what the unattended passes (curation, organise, aggregate) are doing right now and last did. |
 | `/fs`                             | Filesystem browse helper for config pickers.                      |
 | `/audit`, `/retention`, `/daemon` | Audit log, retention policies, daemon token operations, daemon logs. |
 

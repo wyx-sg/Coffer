@@ -234,27 +234,29 @@ On the skill detail page, switch between tabs:
 
 ### Knowledge
 
-Open **Knowledge** to see your **collections**, each a row with its description and a file
-count. **New collection** creates one; it asks for a name and a description and nothing
-else, because there is nothing else to decide — a collection is a directory, and there is
-no index over it to choose a shape for.
+Open **Knowledge** to see your **collections**, each a row with its description, how many
+documents it holds and how much new material is still waiting to be merged. **New
+collection** creates one; it asks for a name and a description and nothing else, because
+there is nothing else to decide — a collection is a directory, and there is no index over it
+to choose a shape for.
 
-Clicking a collection opens `/knowledge/:collection`: a folder tree you walk a level at a
-time with a filter box above it that matches names as you type (client-side, no button and
-no request), the selected file rendered beside it, a search box over that collection, and
-two buttons — **Upload** to convert a document into the tree, and **Tidy** to run the
-[tidy pass](/guide/knowledge#the-tidy-pass) on demand.
+Clicking a collection opens `/knowledge/:collection`: **one tree** of documents you walk a
+level at a time, with a filter box above it that matches names as you type (client-side, no
+button and no request), and the selected document rendered read-only beside it. Every
+document offers open in your external editor, reveal in your file manager, and delete —
+naming the exact path first. The header carries **Upload**, which converts a document and
+submits it as new material, and **Curate**, which runs a
+[curation pass](/guide/knowledge#curation) now and says so if one is already in flight.
 
-There are no tabs, because there is no distinction left to tab between: an uploaded
-document is converted to Markdown and filed as an ordinary knowledge file, with the same
-frontmatter and the same place in the tree as one an agent typed. The original bytes are
-kept in a hidden `.raw/`, and revisions the tidy pass superseded in a hidden `.history/`.
+There are no tabs, because there is no distinction left to tab between: you and your agents
+edit the same documents, and new knowledge — an upload, an agent's note — waits in a hidden
+inbox until curation merges it in. Neither an upload's original bytes nor its extracted text
+is kept as a file; what the collection holds is the knowledge, merged.
 
-Nothing is built, rebuilt or kept fresh here. Search is `ripgrep` over the files
-themselves, so a file you edited in your own editor, one an agent just wrote and one `git`
-pulled in are all searchable the instant they land. Coffer used to embed these files and
-rank retrieval by meaning; that was removed deliberately, and with it the reindex action
-and the embedding settings that fed it.
+Nothing is built, rebuilt or kept fresh here. The tree is read off disk on every request, so
+a document you edited in your own editor, one curation just rewrote and one `git` pulled in
+all show up the instant they land. There is no search box: retrieval is an agent reading the
+catalogue Coffer hands it, not a query against an index.
 
 The older `/knowledge-bases` and `/knowledge-bases/:name` URLs redirect here. `/memory` is
 its own surface — see [Memory](#memory) below. The full picture, including the CLI and the
@@ -377,12 +379,13 @@ served to an agent. Two cards:
 - **Automatic upkeep** — the work Coffer does when nobody asked. Three passes run on a
   timer, each with its own switch and interval: **Read from agents** reads the agents'
   native memory into Coffer's derived tree with no model involved, **Distil memory** lets
-  the model turn those entries into Coffer's own notes, and **Derive documents from
-  sources** lets it write the `topics/` documents your agents read. Each row says what its
-  pass actually *writes*, because that is the difference that matters: all three write
-  derived files that deleting and re-running reproduces, and none of them edits something
-  you wrote — the curation row carries a caution for the opposite reason, that switching it
-  off means nothing is ever derived and the lane agents read stays empty. Something that
+  the model turn those entries into Coffer's own notes, and the **curation** row lets it
+  merge new knowledge into the documents your agents read. Each row says what its pass
+  actually *writes*, because that is the difference that matters: the two memory passes
+  write derived files that deleting and re-running reproduces, while curation rewrites
+  documents you also edit — it carries your edits outward and never reverts them. Its row
+  carries a caution for the opposite reason too: switching it off means new material waits
+  in the inbox, unmerged, where no agent reads it. Something that
   rewrites files on a timer should be something you can see and stop, which is why the card
   exists. Edits auto-save, like every settings surface here. What the passes are doing right
   now is also readable from `GET /api/v1/upkeep/runs`.
