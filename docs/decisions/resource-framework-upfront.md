@@ -97,3 +97,38 @@ realistic third-party plugin ecosystem to serve at this scope.
 future kinds with high confidence, all of which share identity, lifecycle,
 audit, and surface-level CRUD. Building those four times would be both more
 code and more drift risk than one framework.
+
+## Implementation notes
+
+How the framework held its boundary once built (spec
+[resource-framework](../../openspec/specs/resource-framework/spec.md)):
+
+- **The core knows no kind.** `Resource`, `Kind`, `ResourceService`,
+  `AuditService` and the retention trio are exercised against a `fake_kind`
+  registered only for tests, and the import-linter contract "Kind-agnostic core
+  does not import kind-specific code" (`backend/pyproject.toml`) keeps them
+  from importing any real one. A core that needed `mcp_server` to be testable
+  would already have leaked.
+- **A kind plugs in through one frozen descriptor**, `Kind` in
+  `domain/resource.py`, and the plug-in contract is an asymmetry: pre-write
+  validators may reject a change; post-write reactions (`on_enabled_changed`,
+  `on_scope_changed`, …) run after persistence and audit and may not.
+  Validation decides whether a change happens; a reaction only catches up with
+  one that already did, so a reaction that raises cannot undo a persisted,
+  audited change. `on_delete` is the one reaction that runs before the row is
+  removed — so its cleanup can still resolve the resource — but it is still a
+  reaction to a delete already decided; refusing one is `validate_delete`'s job.
+- **Creation is the one operation not generalised.** A kind whose creation
+  carries an invariant beyond config validation sets
+  `generic_create_allowed = False` and registers through its own surface, so
+  there is no `coffer resource create`. Everything after creation is generic.
+- **Reach is written by the framework and enforced by each kind**, at the
+  choke point where the asking identity is known; one central gate would have
+  to sit on every kind's read path.
+- **REST and CLI are parity surfaces** answering through the same services;
+  the parity is asserted by a test over the whole CLI tree rather than left to
+  habit, and covers every capability's commands, not only the framework's.
+- **The passes in flight live in an in-process registry**
+  (`application/upkeep_runs.py`) with no table and no lease: a pass belongs to
+  the process running it, a daemon restart ends it, and a persisted claim that
+  outlived its runner would wedge its target forever.

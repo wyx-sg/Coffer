@@ -118,3 +118,11 @@ browser at that origin.
 - **Rely on loopback binding alone and skip the `Host` check.** Rejected: that
   is precisely the gap DNS rebinding walks through, and it is the gap the
   injection would have opened.
+
+## Implementation notes
+
+- **Reserved roots are matched by whole path segment, never by prefix**
+  (`_RESERVED_ROOTS` in `surfaces/http/webui.py`). The SPA fallback that
+  answers client-side routes with the token-bearing `index.html` must not
+  swallow `/api`, `/mcp` and the other daemon roots, and a prefix test such as
+  `startswith("mcp")` would instead claim the UI's own `/mcp-servers` route.

@@ -11,31 +11,31 @@
 - [x] 1.9 Replace `.agents/sdd.md` with `.agents/openspec.md`; update every inbound link
 - [x] 1.10 Delete `.claude/skills/coffer-spec/`; update `.agents/harness.md`
 - [x] 1.11 Rewrite the Speckit passages in `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`, `README.md`, `.agents/stack.md`, `.agents/testing.md`, `docs-site/contributing/index.md`, `docs-site/architecture/principles.md`, the nine ADRs and `docs/research/*` that mention it
-- [ ] 1.12 Run `make verify`; open PR 1
+- [x] 1.12 Run `make verify`; open PR 1
 
 ## 2. Spec rewrite and new tests (PR 2)
 
-- [ ] 2.1 `git mv specs openspec/specs`; update the contract tests, `frontend/scripts/codegen{,-check}.mjs`, generated clients, schema modules and `frontend/src/test/acceptance.ts` that name `specs/`; re-run codegen
-- [ ] 2.2 Rewrite `resource-framework/spec.md` into OpenSpec format; record its FR→title map in the scratchpad
-- [ ] 2.3 Rewrite `mcp-gateway/spec.md`
-- [ ] 2.4 Rewrite `agent-registry/spec.md`, `agent-registry/claude-code/spec.md`, `agent-registry/codex/spec.md`
-- [ ] 2.5 Rewrite `channels/spec.md`, `channels/telegram/spec.md`, `channels/seatalk/spec.md`
-- [ ] 2.6 Rewrite `chat/spec.md`
-- [ ] 2.7 Rewrite `credentials/spec.md`
-- [ ] 2.8 Rewrite `daemon/spec.md`
-- [ ] 2.9 Rewrite `desktop-app/spec.md`
-- [ ] 2.10 Rewrite `internal-engine/spec.md`
-- [ ] 2.11 Rewrite `knowledge/spec.md`
-- [ ] 2.12 Rewrite `memory/spec.md`
-- [ ] 2.13 Rewrite `provider-switching/spec.md`
-- [ ] 2.14 Rewrite `skill-manager/spec.md`
-- [ ] 2.15 Rewrite `vault-sync/spec.md`
-- [ ] 2.16 Rewrite `web-ui/spec.md`
-- [ ] 2.17 For every capability, check that each old scenario appears exactly once and each requirement owns at least one scenario
-- [ ] 2.18 Fold each `plan.md` and `research.md` into `docs/architecture.md` or an ADR, then delete them
-- [ ] 2.19 Merge each `quickstart.md` into its `docs-site/guide/` page, then delete them
+- [x] 2.1 `git mv specs openspec/specs`; update the contract tests, `frontend/scripts/codegen{,-check}.mjs`, generated clients, schema modules and `frontend/src/test/acceptance.ts` that name `specs/`; re-run codegen
+- [x] 2.2 Rewrite `resource-framework/spec.md` into OpenSpec format; record its FR→title map in the scratchpad
+- [x] 2.3 Rewrite `mcp-gateway/spec.md`
+- [x] 2.4 Rewrite `agent-registry/spec.md`, `agent-registry/claude-code/spec.md`, `agent-registry/codex/spec.md`
+- [x] 2.5 Rewrite `channels/spec.md`, `channels/telegram/spec.md`, `channels/seatalk/spec.md`
+- [x] 2.6 Rewrite `chat/spec.md`
+- [x] 2.7 Rewrite `credentials/spec.md`
+- [x] 2.8 Rewrite `daemon/spec.md`
+- [x] 2.9 Rewrite `desktop-app/spec.md`
+- [x] 2.10 Rewrite `internal-engine/spec.md`
+- [x] 2.11 Rewrite `knowledge/spec.md`
+- [x] 2.12 Rewrite `memory/spec.md`
+- [x] 2.13 Rewrite `provider-switching/spec.md`
+- [x] 2.14 Rewrite `skill-manager/spec.md`
+- [x] 2.15 Rewrite `vault-sync/spec.md`
+- [x] 2.16 Rewrite `web-ui/spec.md`
+- [x] 2.17 For every capability, check that each old scenario appears exactly once and each requirement owns at least one scenario
+- [x] 2.18 Fold each `plan.md` and `research.md` into `docs/architecture.md` or an ADR, then delete them
+- [x] 2.19 Merge each `quickstart.md` into its `docs-site/guide/` page, then delete them
 - [ ] 2.20 Write an acceptance-marked test for every scenario added in 2.2–2.16; list any that exposes a real defect under section 4
-- [ ] 2.21 Repoint or drop every link inside `openspec/specs/` to a file phase 1 removed (`.specify/…`, `.agents/sdd.md`)
+- [x] 2.21 Repoint or drop every link inside `openspec/specs/` to a file phase 1 removed (`.specify/…`, `.agents/sdd.md`)
 - [ ] 2.22 Run `openspec validate --all --strict` and `make verify`; open PR 2
 
 ## 3. Requirement numbers out (PR 3)

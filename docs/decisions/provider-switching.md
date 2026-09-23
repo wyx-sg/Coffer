@@ -169,9 +169,23 @@ function. All I/O (file writes) is performed by `ProviderService._project`.
 
 ## Alternatives considered
 
-See [openspec/specs/provider-switching/research.md](../../openspec/specs/provider-switching/research.md)
-for the full enumeration of alternatives (A1/A2/A3, B1/B2/B3, C1/C2) and the
-rationale for rejecting each alternative.
+- **One record driving both agents at once (vs. A).** Rejected: it forces every
+  agent's fields onto one record and leaves "active" undefined when one agent's
+  write succeeds and the other's fails. The per-agent scope (see the preamble)
+  later delivered the useful half — one gateway account reaching both agents —
+  without collapsing two agents' activation into one flag.
+- **A per-agent provider list with no shared registry (vs. A).** Rejected: it
+  loses the unified audit, sync and encryption that are the point of the kind;
+  it is the status quo this ADR replaces.
+- **Writing the raw key into the native config (vs. B).** Rejected: plaintext
+  keys in config files leak into backups, sync and git history, and it breaks
+  the `credential_refs` pattern MCP servers already follow.
+- **A local proxy that injects the key (vs. B).** Rejected: a new resident
+  component, added latency, and clients reconfigured to hit it — and a proxy is
+  also what protocol translation and failover would need, both non-goals.
+- **Hot-switch in the first delivery (vs. C).** Rejected: detecting and
+  signalling running agent processes, with partial failures, is substantially
+  more work, while `apiKeyHelper` already gives Claude Code most of the effect.
 
 ## Amendment 2026-06-22 — connections are optional overrides (introspection: inline secret)
 
@@ -369,3 +383,41 @@ FR-027.
   engine's own model, and it follows the same both-halves-or-neither rule —
   unset means Coffer transcribes nothing, which is an answer rather than a
   failure.
+
+## Implementation notes
+
+Where the code stands against the clauses above, beyond the amendments:
+
+- **Activation is per agent type.** A first tied a connection to one wire and
+  made activation per wire; neither held. The wire was never the thing being
+  taken over, so the single-active invariant is per agent type, and which agent
+  types a connection covers is its per-agent scope. The projection writer is
+  chosen by the agent type, not by the connection's protocol.
+- **The helper cites the connection's uid.** Claude Code's `apiKeyHelper` is
+  `coffer provider key --connection-uid <uid>`, not `--wire anthropic`, so the
+  agent reads exactly the activated connection's key and a rename rewrites
+  nothing. The `--wire` form survives for files written before that change.
+- **Three non-goals shipped in narrow form.** Reverting an agent to its
+  built-in login is `use-builtin/{wire}` (idempotent, ownership-aware). Coffer
+  materialises `COFFER_PROVIDER_KEY` for every Codex process it spawns itself
+  (`CODEX_ENV_KEY` lives in `domain/connection.py` so the provider kind and the
+  chat kind's Codex adapter share it without importing each other); only a
+  Codex started from the user's own shell needs the export. And drift-verify
+  exists as a boot self-check that clears `is_active` when the projection is no
+  longer in the file — it never re-projects.
+- **A native config file is shared with its agent.** Atomic writes plus a
+  fingerprint of the text read make a concurrent edit a refusal
+  (`CONFIG_FILE_STALE`) rather than a silent overwrite, but cannot serialise the
+  other program (`application/provider/projector.py`). The Codex merge goes
+  through `tomlkit`'s dict API so comments and ordering survive.
+- **The Codex model catalogue is a contract with another program.** A malformed
+  `model_catalog_json` does not fail loudly — Codex warns and falls back to its
+  built-in list — so the document's required fields are pinned by a test
+  (`backend/tests/integration/providers/test_codex_model_catalog.py`).
+- **Sync costs one post-import hook.** The kind converges through the
+  framework's resource serialisation; what it adds is `sync_reconcile.py`, which
+  re-derives each agent's projection after a converge round, because writing a
+  native config file is a machine-local side effect no document can carry.
+  Credentials travel only as Fernet ciphertext.
+- **`provider_switched` is its own audit event** carrying `{from, to, protocol,
+  agents}`, so the switch history can be read without diffing resource updates.

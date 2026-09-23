@@ -14,9 +14,9 @@ Equivalent, not identical. The product is a distillation rather than a copy, so 
 | --- | --- | --- |
 | Where it comes from | your agents' native memories, read-only | you write it, or upload it, or an agent files it |
 | Partitioned by | repository (and `global`) | collection |
-| Who writes the stored text | **Coffer**, distilling | you or an agent, directly |
+| Who writes the stored text | **Coffer**, distilling | you and Coffer's curation pass, together |
 | How an agent gets it | **push** — the whole index, at session start | **pull** — the agent opens the skill and reads |
-| Can an entry be removed | yes, and it must be: retirement | no; a wrong document is answered with a new source |
+| How a wrong entry is fixed | retirement, recorded so it sticks | you edit or delete the document |
 | If the store is lost | rebuilt, equivalently, from the agents' own copies | gone |
 
 ## Where the notes come from
@@ -164,10 +164,10 @@ A **ceiling** applies — `12000` tokens, sized for an index rather than for a h
 (12 older line(s) not shown — those notes are files in /Users/you/.coffer/memory/coffer/notes)
 ```
 
-That notice is reserved before any note line is considered, so a trim can never crowd out the line announcing it. With nothing to deliver the payload is empty rather than a bare header. See exactly what an agent would get:
+That notice is reserved before any note line is considered, so a trim can never crowd out the line announcing it. With nothing to deliver the payload is empty rather than a bare header. See exactly what an agent would get — the same command the installed hook runs, which takes the agent's uid (`coffer agent show claude-code` prints it):
 
 ```bash
-coffer memory context --agent claude-code --cwd "$PWD"
+coffer memory context --agent-uid <agent uid> --cwd "$PWD"
 ```
 
 **A channel-driven turn needs no setup at all.** Coffer composes that turn's system prompt itself, so the index travels with it — and when there is nothing to deliver the turn carries no memory header rather than an empty one.
@@ -197,7 +197,7 @@ coffer memory delivery-remove claude-code
 ```
 Memory delivery
 agent         installed   event              command
-claude-code   True        SessionStart       : coffer-memory; coffer memory context --agent claude-code --cwd "$PWD"
+claude-code   True        SessionStart       : coffer-memory; coffer memory context --agent-uid 01J… --cwd "$PWD"
 codex         False       UserPromptSubmit   : coffer-memory; f="${TMPDIR:-/tmp}/.coffer-memory-fired-$PPID"; …
 ```
 
@@ -210,7 +210,7 @@ Every entry carries Coffer's own marker (`: coffer-memory;`) as the argument of 
 The delivery listing answers exactly one thing — installed or not. It carries **no last-fired timestamp**, on purpose. Whether the hook has run is not a property of the agent but a stream of events, and it is recorded as one, on the vault-wide audit surface:
 
 ```bash
-coffer audit list --event-type memory_delivery_fired --name claude-code
+coffer audit list --event-type memory_delivery_fired --kind agent --name claude-code
 ```
 
 That split is a reaction to a specific failure. Coffer shipped a session-context injection layer once, it worked, it was never actually installed on the maintainer's own machine, and nothing said so for two months. The fix is not a warning light on the agent's page: a hook installed a minute ago has legitimately never fired, and a surface that flags that is crying wolf about its own normal state. The fix is that every fire is an event you can go and read, recorded with the agent as both the resource and the actor. `memory_aggregated`, `memory_distilled`, `memory_delivery_installed` and `memory_delivery_removed` are recorded the same way, each with the actor that caused it — so a scheduled pass is distinguishable from one you asked for.
@@ -251,21 +251,21 @@ Deleting a partition is a Resource operation: `coffer resource delete memory <na
 | Route | Purpose |
 | --- | --- |
 | `GET /api/v1/memory/partitions` | Every partition, with its repository, note count and whether it still resolves. |
-| `GET /api/v1/memory/partitions/{name}/notes` | The notes in one partition. |
-| `GET /api/v1/memory/partitions/{name}/notes/{slug}` | One note, with its body and origins. |
-| `GET /api/v1/memory/partitions/{name}/retired` | `RETIRED.md`, read back, newest first. |
-| `GET /api/v1/memory/partitions/{name}/files` | The partition's own directory, as a tree. |
-| `GET /api/v1/memory/partitions/{name}/files/content?path=…` | One file out of it. |
+| `GET /api/v1/memory/partitions/{uid}/notes` | The notes in one partition. |
+| `GET /api/v1/memory/partitions/{uid}/notes/{slug}` | One note, with its body and origins. |
+| `GET /api/v1/memory/partitions/{uid}/retired` | `RETIRED.md`, read back, newest first. |
+| `GET /api/v1/memory/partitions/{uid}/files` | The partition's own directory, as a tree. |
+| `GET /api/v1/memory/partitions/{uid}/files/content?path=…` | One file out of it. |
 | `POST /api/v1/memory/sync` | Run aggregation now. |
-| `POST /api/v1/memory/partitions/{name}/distil` | Run the distil pass now. |
+| `POST /api/v1/memory/partitions/{uid}/distil` | Run the distil pass now. |
 | `POST /api/v1/memory/context` | Compose the session-start payload. |
 | `GET /api/v1/memory/delivery` | Per-agent installation state. |
-| `POST /api/v1/memory/delivery/{agent}/install` | Install the hook. |
-| `DELETE /api/v1/memory/delivery/{agent}` | Remove it. |
+| `POST /api/v1/memory/delivery/{agent_uid}/install` | Install the hook. |
+| `DELETE /api/v1/memory/delivery/{agent_uid}` | Remove it. |
 
-The file family is read-only — a write is refused with 405, and a path escaping the partition with `MEMORY_UNSAFE_PATH`. A read answers with the file's absolute path and its containing folder's absolute path, so whatever you hand the answer to can open it directly. Deleting a partition is the kind-agnostic `DELETE /api/v1/resources/memory/{name}`; there is no memory-specific route for it.
+The file family is read-only — a write is refused with 405, and a path escaping the partition with `MEMORY_UNSAFE_PATH`. A read answers with the file's absolute path and its containing folder's absolute path, so whatever you hand the answer to can open it directly. Deleting a partition is the kind-agnostic `DELETE /api/v1/resources/{uid}`; there is no memory-specific route for it.
 
-These routes are the *owner's* view. Nothing here is filtered per agent, and neither is what an agent's own session reaches through `POST /context` and `coffer__recall` — a partition is either enabled for everyone or served to nobody. `POST /context` still takes an agent name, but only so a fire can be recorded against it; it decides nothing about the content.
+These routes are the *owner's* view. Nothing here is filtered per agent, and neither is what an agent's own session reaches through `POST /context` and `coffer__recall` — a partition is either enabled for everyone or served to nobody. `POST /context` still takes an agent uid, but only so a fire can be recorded against it; it decides nothing about the content.
 
 ## In the web UI
 

@@ -194,6 +194,62 @@ itself in its own `README.md`; the `knowledge` Resource kind; no table in
   tools can read any file under `~/.coffer/knowledge/`; a disabled collection is
   one no skill names, not one no process can open.
 
+## Implementation notes
+
+- **Candidate selection is crude on purpose.** A pass is shown at most five
+  documents in full, picked by pulling distinctive strings out of the item —
+  backticked identifiers, dotted service names, shouted constants, headings,
+  CJK runs — and asking ripgrep which documents contain them
+  (`application/knowledge/candidates.py`; a pure-Python fallback stands in on a
+  machine without `rg`). That is allowed to miss because the whole catalogue of
+  titles and descriptions is in the prompt too: a model handed five wrong
+  candidates can still see that none is the right home and open a new document.
+  This is the only place the literal matcher survives, reachable by nothing
+  outside the process.
+- **The sweep is shaped like the retention worker.** One catch-up sweep a
+  minute after boot, then every 60 s by default, the interval re-read on every
+  sweep. Each sweep takes inbox material first, oldest first, then documents
+  whose mtime is newer than their stamp, and runs at most five passes per
+  collection, so a freshly migrated vault fills in visibly rather than in one
+  long batch. It runs only when the switch is on *and* names this machine (null
+  meaning a single-machine vault), and not while a converge round waits on the
+  user; it takes the same vault-write lock a converge round takes, and claims a
+  collection in the kind-agnostic upkeep-run registry the manual trigger also
+  claims, so a second pass is refused (`UPKEEP_ALREADY_RUNNING`, 409) or skipped
+  rather than queued (`surfaces/http/curation_wiring.py`,
+  `application/knowledge/curate_worker.py`).
+- **The item is settled last, and curation's own writes are pre-stamped.**
+  Material leaves the inbox, or an edited document gets its `coffer_curated_at`
+  stamp, only after the loop returns, so a pass that raises leaves the item for a
+  later sweep. Every write a pass makes sets the file's mtime to the stamp it
+  carries, so the sweep never hands a pass its own output back as an edit.
+- **The guide join is one module, and it cannot fail anything.** The knowledge
+  and skill kinds may not import each other; `surfaces/http/guide_wiring.py` is
+  the one place the catalogue renderer and the skill kind's built-in seed meet,
+  and the seam is a Markdown string. The seed is idempotent — an unchanged
+  catalogue writes, audits and delivers nothing — and a render or write that
+  fails is logged and swallowed, leaving the previous master in place. The
+  worker refreshes the guide on every tick, outside the enabled check, because a
+  collection created, deleted, enabled or disabled changes what every agent must
+  be told even on a machine that is not the curation owner. The rendered text
+  differs per machine (it lists the *enabled* collections, and `enabled` is
+  machine-local), so the skill kind declares that one row derived and vault sync
+  leaves it alone in both directions.
+- **Dependencies are fenced by contract.** `markitdown` is confined by an
+  importlinter contract to the knowledge converters and the channel's document
+  extraction; conversion covers what it handles plus plain text and CSV, and
+  nothing else. `mem0`, `llama_index`, `chromadb` and the embedding SDKs are
+  banned everywhere by another contract — mem0 in particular because its
+  LLM-at-write default (`llm_provider="none"`) made `add_memory` answer 503 out
+  of the box, and a write here is a plain file write with no model in it.
+  PyYAML is imported only by `infrastructure/knowledge/frontmatter.py`, and
+  path construction lives only in `infrastructure/knowledge/paths.py`.
+- **The ceiling on "no index".** A catalogue entry costs roughly 40 tokens, so
+  hundreds of documents fit comfortably. Past that the answer is a real semantic
+  stack built for the need, not FTS5 alone, which offers BM25 ordering and chunk
+  granularity that an agent reading whole files does for itself — the worst
+  ratio of cost to capability in that range.
+
 ## Revision history
 
 - **2026-09-12** — Initial decision: knowledge is a directory of Markdown files

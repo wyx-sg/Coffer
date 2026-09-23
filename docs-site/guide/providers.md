@@ -39,18 +39,18 @@ added provider my-gateway (openai)
 | `ollama` | A local Ollama. **Internal-only**: it projects into no agent whatever its scope says, because there is no key to write, and switching it on is refused (`PROVIDER_INTERNAL_ONLY`). | None | nothing |
 | `unknown` | A probe was inconclusive. Coffer hides nothing — it starts open and you decide. | Required | both agents |
 
-Supply exactly one of `--secret` (stored encrypted under `provider/<name>/key`, only the ref is kept) or `--credential-ref` (reuse a vault entry you already have). Both, or neither, is rejected — except for `ollama`, which must supply neither.
+Supply exactly one of `--secret` (stored encrypted under an opaque ref of its own; only the ref is kept) or `--credential-ref` (reuse a vault entry you already have). Both, or neither, is rejected — except for `ollama`, which must supply neither. A reused entry stays owned by the connection that created it: removing the connection that borrowed it leaves it alone, and `coffer provider rm` deletes a connection's own entry only when nothing else still cites it.
 
 ```bash
 coffer provider list            # name · protocol · base URL · active · internal
 coffer provider list --json
-coffer provider show my-gateway
+coffer provider show my-gateway      # JSON, including the connection's uid
 coffer provider edit my-gateway --base-url https://gateway.internal/v1
 coffer provider edit my-gateway --secret "<new-key>"   # rotate; the ref stays
 coffer provider rm my-gateway
 ```
 
-The credential ref is not editable — it is the vault address this connection owns. The protocol is, because the probe that guessed the wire can be wrong and correcting it in place beats deleting the connection and re-entering the key: `coffer provider edit <name> --protocol <wire>`. That one edit is refused while the connection is **active**, because the wire decides whether it covers any agent at all and which wire `use-builtin` reverts — so changing it live could leave a projection behind that nothing would ever take off. Put the agents back on their own login first (`coffer provider use-builtin <wire>`), edit, then switch again. Renaming is its own operation — it moves the vault entry, the row and any live projection together — and lives on the connection's detail page or at `POST /api/v1/providers/{name}/rename`.
+The credential ref is not editable — it is the vault address this connection owns. The protocol is, because the probe that guessed the wire can be wrong and correcting it in place beats deleting the connection and re-entering the key: `coffer provider edit <name> --protocol <wire>`. That one edit is refused while the connection is **active**, because the wire decides whether it covers any agent at all and which wire `use-builtin` reverts — so changing it live could leave a projection behind that nothing would ever take off. Put the agents back on their own login first (`coffer provider use-builtin <wire>`), edit, then switch again. Renaming is an ordinary label change — `coffer resource rename provider my-gateway my-gateway-eu`, or the Name field on the connection's detail page. Nothing moves: the vault entry, the audit trail and any live projection all follow the connection's uid, not its name.
 
 ## Which agents it reaches
 
@@ -109,11 +109,12 @@ De-projection is ownership-aware in both directions. An `apiKeyHelper` is remove
 
 The raw key stays Fernet-encrypted in the credential store and is materialised on demand. It is never written into `settings.json`, `config.toml`, or any other file Coffer touches.
 
-- **Claude Code** gets a helper command: `apiKeyHelper = "coffer provider key --connection <name>"`. The helper names the **connection**, not the wire, so a projected agent always fetches exactly the key of the connection that was activated.
+- **Claude Code** gets a helper command: `apiKeyHelper = "coffer provider key --connection-uid <uid>"`. The helper names the **connection**, not the wire, so a projected agent always fetches exactly the key of the connection that was activated — and it names it by uid, so renaming the connection leaves the line working.
 - **Codex** gets `env_key = "COFFER_PROVIDER_KEY"`. Coffer fills that variable for any Codex process it spawns itself; a Codex you start in your own shell needs it exported there — the accepted cost of credential isolation, since Codex offers no helper-command seam:
 
 ```bash
-export COFFER_PROVIDER_KEY="$(coffer provider key --connection my-gateway)"
+export COFFER_PROVIDER_KEY="$(coffer provider key --connection-uid \
+  "$(coffer provider show my-gateway | jq -r .uid)")"
 ```
 
 `coffer provider key --wire <wire>` is the legacy form, kept for `settings.json` files written before helpers named connections; it resolves whichever connection is active for that wire's agent. Either way the raw value goes to stdout and is never logged.
@@ -124,11 +125,11 @@ A gateway account often serves dozens of models when its owner uses two. `models
 
 Each entry is `{id, modality}`, where the modality is `text`, `embedding`, `image`, `video` or `audio`, because one endpoint answers for more than chat. Every chat picker narrows to `text`, so an embedding model can never be bound as the model an agent runs on. Ids stay opaque: Coffer validates their shape and passes them to the vendor verbatim, so an id the endpoint stops serving is a stale menu entry rather than a config error.
 
-Curating is done on the connection's **Models** tab, or over `PATCH /api/v1/providers/{name}`, whose `models` field replaces the whole set (`null` leaves it alone, `[]` clears the restriction).
+Curating is done on the connection's **Models** tab, or over `PATCH /api/v1/providers/{uid}`, whose `models` field replaces the whole set (`null` leaves it alone, `[]` clears the restriction).
 
 ## Coffer's own engine
 
-At most one connection, globally, is the endpoint Coffer's own passes run on:
+Coffer does some work on its own behalf: it aggregates what your agents have learned into a derived memory tree, lets a model rewrite that digest, derives the knowledge documents agents read from the sources you write, and attempts a merge when a [sync](/guide/sync) conflict needs one. All of it runs on **one** connection, flagged globally:
 
 ```bash
 coffer provider internal-default local-ollama
@@ -138,14 +139,69 @@ coffer provider internal-default local-ollama
 internal engine now uses local-ollama [ollama]
 ```
 
-Setting it clears the flag from any previous holder and audits `provider_internal_default_set`. It is what knowledge curation, memory aggregation and distillation, and the machine-merge attempt on a [sync](/guide/sync) conflict all run on. With nothing marked, each of those is a clean no-op rather than an error.
+Setting it clears the flag from any previous holder and audits `provider_internal_default_set`. A local `ollama` endpoint is a good choice: it costs nothing and reaches no agent. A connection may also be both active for your agents and the internal default at once: one key, two uses.
 
-The **model** those passes use is a separate global setting — `GET`/`PUT /api/v1/internal-engine-config`, or **Settings → Engine** in the app, alongside each pass's own switch and interval and the bound on how long one call may take. A connection may be both active for your agents and the internal default at once: one key, two uses.
+None of this is required. With no connection flagged, or no model chosen, every one of those passes is a clean no-op — nothing errors, and the rest of Coffer works exactly as before.
 
-Voice transcription is **not** on that connection. It has a flag of its own:
+### Choose the model
+
+The model is Coffer's own setting, not a field on the connection:
+
+```bash
+coffer engine model set qwen2.5:7b
+coffer engine model show
+coffer engine model clear        # every pass becomes a no-op
+```
+
+Because it is not on the connection, moving the flag can drop it. When you flag a different connection, the model is kept only if the new connection curates it (see [What a connection offers](#what-a-connection-offers)); otherwise it is cleared rather than left aimed at an endpoint that has never heard of it. Nothing is probed to decide this.
+
+### The unattended passes
+
+Three passes run on a timer, and all three ship switched on:
+
+| Pass | What it does | Default interval |
+| --- | --- | --- |
+| `aggregate` | Reads the agents' own memory into the derived memory tree. | 1 hour |
+| `distil` | Lets the model rewrite that derived digest. | 6 hours |
+| `curate` | Derives the knowledge documents agents read from the sources you write. It never rewrites a source. | 1 minute |
+
+```bash
+coffer engine upkeep list                              # switch, chosen interval, default
+coffer engine upkeep set distil --off
+coffer engine upkeep set curate --on --interval 300    # seconds
+coffer engine upkeep set aggregate --default-interval
+```
+
+Each command changes one pass and leaves the others exactly as they stand. A running daemon picks the change up within a short slice of its current wait — no restart. An interval below the floor, or a pass name Coffer does not run, is refused.
+
+If your vault syncs to more than one machine, `coffer engine curate-owner set [machine-id]` names the one machine allowed to run `curate` (no argument means this machine); `show` and `clear` report and remove it.
+
+### Bound one model call
+
+How long a single call to the engine's model may take depends on your endpoint, so it is yours to set:
+
+```bash
+coffer engine timeout show       # the chosen bound beside the built-in default
+coffer engine timeout set 120    # seconds
+coffer engine timeout default    # back to the built-in bound
+```
+
+A value outside the permitted range is refused rather than silently adjusted.
+
+### Settings → Engine, HTTP, and other machines
+
+**Settings → Engine** in the app carries the same controls: the connection and model, one row per pass, and the call bound. Edits save as you make them; there is no Save button. Over HTTP the settings are `GET`/`PUT /api/v1/internal-engine-config`, with one route per value beside it — `/upkeep` (one pass per request), `/timeout`, `/transcribe-model` and `/curation-owner`.
+
+These settings travel with the rest of your vault when it syncs, so every machine's passes run on the same model with the same switches. A machine that has chosen nothing publishes nothing, and removing the synced settings document returns every machine to the defaults.
+
+### Speech-to-text
+
+Voice transcription is **not** on the engine's connection. It has a flag and a model of its own:
 
 ```bash
 coffer provider transcribe-default my-openai
+coffer engine transcribe-model set whisper-1
+coffer engine transcribe-model clear
 ```
 
 Speech-to-text needs an OpenAI-shaped `/audio/transcriptions` endpoint, and the gateway you point Coffer's engine at often does not have one — borrowing it would answer 404 on every voice message. So the two flags move independently, with no fallback either way, and the speech-to-text model is its own setting beside the engine's. With no connection marked here, or no model chosen, Coffer uploads nothing: the agent receives the audio file and the recording stays on your machine.
@@ -156,6 +212,17 @@ Speech-to-text needs an OpenAI-shaped `/audio/transcriptions` endpoint, and the 
 
 It heals in one direction only. It never writes the projection back: a flag left over from an earlier session is no warrant to re-route your agent through a gateway you are not currently using. Run `coffer provider switch <name>` again if you did want it. The reverse drift — Coffer's keys present while the registry says inactive — is reported, never silently removed.
 
+## Troubleshooting
+
+- **`invalid provider config`** — an `anthropic`, `openai` or `unknown` connection needs exactly one of `--secret` / `--credential-ref`; an `ollama` one needs neither.
+- **`no active provider for wire …`** — `coffer provider key --wire` found nothing active for that wire's agent. Switch a connection first, or use `--connection-uid`.
+- **The agent is back on its built-in login** — something rewrote its native config and Coffer cleared the flag at boot (see above). Run `coffer provider switch <name>` again.
+- **Claude Code rejects every model** — the connection reaches Claude Code but the agent's binding names a model that endpoint does not serve. Curate the connection's models, bind one of them, and test before confirming.
+- **A switch writes into fewer agents than its reach** — `switch` prints the agents it projected into (`(no matching agent)` when none); a reached agent type with no agent registered on this machine is skipped, not an error. Register one; the connection is still active.
+- **A pass never runs** — check, in order, `coffer engine model show` (no model means every pass is a no-op), `coffer engine upkeep list` (the pass's switch) and whether any connection is flagged `internal_default` in `coffer provider list --json`.
+- **The engine model went blank** — you flagged a different connection as the internal default and it does not curate the model you had. Pick one it serves.
+- **`settings.json` has keys you did not expect** — Coffer merges only its managed keys and removes nothing else. Compare with `~/.claude/settings.json.bak`, the copy taken before the last projection.
+
 ## The pages and REST
 
 **Model providers**, at `/model-providers` in the sidebar's RESOURCES group, is the library: a table of name, vendor (derived from the base URL by matching it against the presets — OpenAI, Anthropic, Google Gemini, DeepSeek, OpenRouter, Ollama, or Custom), base URL and reach, with Add in the header and Delete per row. There is deliberately **no per-row switch**: activation is per agent, and it lives on the agent.
@@ -164,6 +231,6 @@ A connection's own page has **Overview** and **Models** tabs, with the shared re
 
 The switch itself is on the **agent** detail page's Overview tab, filtered to the connections that reach that agent. Picking a connection or a model there is a **draft**: it stages a choice, makes you test it against the endpoint, and only the confirm step patches the binding and activates the connection. On the built-in login the panel offers no model control at all — only a line saying where the model is chosen instead.
 
-Over HTTP the connections live under `/api/v1/providers` — the collection, `{name}`, `{name}/activate`, `use-builtin/{wire}`, `{name}/rename`, `{name}/internal-default`, `{name}/key` and the legacy `active-key/{wire}`. Endpoint introspection is `POST /api/v1/models/list-models`, `/test-connection` and `/detect-protocol`, each accepting an inline secret so a connection can be tested before it is saved. Reach is the framework's own surface, `GET`/`PUT /api/v1/resources/provider/{name}/scope`.
+Over HTTP the connections live under `/api/v1/providers` — the collection, `{uid}`, `{uid}/activate`, `use-builtin/{wire}`, `{uid}/internal-default`, `{uid}/transcribe-default`, `{uid}/key` and the legacy `active-key/{wire}`; renaming is the framework's `PATCH /api/v1/resources/{uid}`. Endpoint introspection is `POST /api/v1/models/list-models`, `/test-connection` and `/detect-protocol`, each accepting an inline secret so a connection can be tested before it is saved. Reach is the framework's own surface, `GET`/`PUT /api/v1/resources/{uid}/scope`.
 
 [Skills →](/guide/skills)

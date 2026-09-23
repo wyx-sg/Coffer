@@ -39,8 +39,7 @@ Concrete choices:
   script on a macOS arm64 runner.
 - Each spec pins the `hiddenimports` empirically required at runtime —
   FastAPI, SQLAlchemy 2 / aiosqlite, Pydantic 2, `mcp`, `keyring`, and
-  (daemon only) Alembic. The list is recorded in
-  `openspec/specs/mcp-gateway/research.md`.
+  (daemon only) Alembic.
 - Alembic migrations ship as data files inside the daemon binary so
   first-launch can run `upgrade head` against a fresh DB.
 - **Lazily-imported dependencies must be pinned in `hiddenimports`,** because
@@ -289,3 +288,10 @@ Rejected.
   directory is kept (two newest survive), and mtime is no longer a
   staleness signal. Rollback is pointing the links back by hand; the paths
   every caller uses are unchanged.
+
+## Open questions
+
+- **Signing and notarisation.** The frozen binaries and the `.dmg` remain
+  unsigned; the quarantine-clearing step is documentation, and it bites hardest
+  on the desktop tier, where macOS reports a browser-downloaded app as damaged.
+  This stays open until a paid Apple Developer ID exists.

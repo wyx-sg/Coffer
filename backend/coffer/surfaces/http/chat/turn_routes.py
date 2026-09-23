@@ -92,7 +92,7 @@ async def subscribe_events(
                 yield {"event": event.type, "data": json.dumps(dataclasses.asdict(event))}
         finally:
             # Client disconnect or stream end — detach this subscriber. The turn
-            # task keeps running for other subscribers (research.md §7).
+            # task keeps running for other subscribers (ADR chat-single-owner-live-mirror).
             orchestrator.unsubscribe(id, queue)
             _logger.debug("events subscriber detached for conversation %s", id)
 

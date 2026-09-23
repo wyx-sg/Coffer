@@ -115,13 +115,19 @@ Vite only starts once the daemon is confirmed reachable (up to 30 seconds). Open
 
 ### First-run welcome
 
-The first time you open the UI with no servers registered, the Resources page shows a
-welcome card with a short pitch and one primary action: **Add MCP server**. There is no
-empty table or placeholder row.
+Opening the UI lands on **Agents**. A list with nothing in it yet shows a welcome card with
+a short pitch and one primary action instead of an empty table — **Add agent** on Agents,
+**Add MCP server** on MCP servers, and the same on the other resource pages.
 
 If the daemon is not running, the UI shows a "Daemon not running" view with a copyable
-`coffer daemon start` command instead. The view recovers automatically once the daemon
-becomes reachable — no manual reload needed.
+`coffer daemon start` command instead. In a browser there is no button — a page cannot start
+a daemon — and the view clears itself within 30 seconds of the daemon becoming reachable, no
+reload needed. The desktop app can start one, so there the view carries a **Restart**
+control.
+
+The sidebar collapses to icons from its handle, and the choice sticks across reloads. UI
+preferences — language, sidebar state, rows per page, preferred editor — live only in this
+browser's `localStorage`; everything else lives in the daemon (`~/.coffer/`).
 
 ### MCP servers (Resources)
 
@@ -139,9 +145,14 @@ block from any vendor's README — one server or many at once:
 }
 ```
 
-A review step lets you mark which `env` values are secrets; those are encrypted into
-Coffer's credential store (only their refs are kept in the resource config) rather than
-stored as plaintext in the resource config.
+A review step, one screen per server, lets you confirm each name and mark which `env`
+values are secrets; those are encrypted into Coffer's credential store (only their refs are
+kept in the resource config) rather than stored as plaintext in the resource config. The
+server is registered first and its secrets written after, so a failed registration never
+leaves orphan credentials behind. JSON that does not parse, or is not an `mcpServers`
+block, keeps the dialog open with a readable error and sends nothing. Adding a single
+server takes you to its detail page; its health reads "unknown" until the first check,
+seconds later.
 
 On the server detail page, switch between tabs:
 
@@ -214,6 +225,42 @@ same thread. Replies stream as they are produced, and a turn in flight can be in
 
 These are the same conversations a [channel](/guide/channels) opens, whichever surface
 started them — a thread begun from Telegram on your phone is here when you sit down.
+
+You need Claude Code or Codex installed and on the daemon's `PATH`; with neither, the page
+says so and offers no composer. A Coffer model provider is optional — without one, a turn
+runs on the agent's own login and model.
+
+- **Start a conversation.** Chat opens on a draft: pick the agent, optionally a model (empty
+  means the agent's own default) and, when the model reports reasoning levels, an effort.
+  Your first send is what creates the conversation; it is named after what you typed, and
+  tool calls render as their own cards in the order the agent made them.
+- **Keep typing while a turn runs.** The composer never locks. A message sent mid-turn
+  becomes a pending row — remove it to drop it, or edit it to pull it back into the
+  composer (re-sending puts it at the tail). When the running turn ends, the head of the
+  queue runs next. Every open tab, and a paired channel, sees the same queue.
+- **Stop a turn.** Stop keeps whatever the turn already wrote and **pauses the queue**:
+  nothing queued behind it starts until you send again.
+- **Watch a turn started elsewhere.** A conversation a channel drives carries a badge naming
+  that channel. Open it mid-turn and the turn is replayed from its start, then followed
+  live; stopping it here stops it for the phone too.
+- **Change what it runs on.** The bar above the thread sets agent, model and effort; a
+  change applies from the next turn, and clearing a value reverts to the agent's default.
+- **Rename, archive, restore, delete.** A name you give is never overwritten. Archiving moves
+  a conversation to the archived list and opens it read-only with a restore control; delete
+  removes it and its messages and cancels any turn still running. Left alone, an idle
+  conversation is auto-archived after 7 days and an archived one deleted 30 days later —
+  both windows are under **Settings → Data**.
+- **When a turn fails**, one inline banner above the composer offers **Retry**, which
+  re-sends the message that failed. A turn cut short by a daemon restart is marked failed
+  on the next start rather than left waiting.
+
+There is no `coffer chat` command. For scripting, the same operations are HTTP routes:
+`/api/v1/agent-providers` lists the agents and `…/{agent_key}/models` what each can run on;
+`POST /api/v1/chat/conversations` with `{"agent_key": "claude_code"}` creates a
+conversation; `POST …/{id}/messages` with `{"text": "…"}` answers `202` — the reply is not
+in the response, it arrives only on the `GET …/{id}/events` server-sent-event stream; and
+`POST …/{id}/interrupt` stops the turn. Send the daemon token (from `~/.coffer/daemon.json`)
+as `X-Coffer-Token`.
 
 ### Skills
 
@@ -368,7 +415,8 @@ travels — is in the [Sync guide](/guide/sync).
 
 ### Settings
 
-Open `/settings` for five tabs: **General**, **Engine**, **Data** (retention policy, manual
+Open `/settings` for five tabs: **General** (rows per page, the external editor files open
+in), **Engine**, **Data** (retention policy, manual
 prune), **Security** (master-key storage) and **About** (version, license, source). Sync is
 not among them — it is a top-level page of its own under SYSTEM.
 
@@ -392,7 +440,9 @@ served to an agent. Two cards:
 
 There is no "Daemon" tab and no daemon-status panel — the daemon is an implementation
 detail surfaced only by the offline banner when something goes wrong, and its one setting
-(the port) is a CLI-only concern by design.
+(the port) is a CLI-only concern by design. Stopping the daemon and rotating its token are
+CLI-only too (`coffer daemon stop`, `coffer daemon rotate-token`): a button that stopped
+the daemon would take down the page it sat on.
 
 ### Language
 

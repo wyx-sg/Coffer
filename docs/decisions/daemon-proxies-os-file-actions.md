@@ -123,3 +123,13 @@ because the browser deliberately withholds absolute paths.
 - Consistent with the personal-tool, local-first posture (Principle I in `docs/principles.md`): the
   daemon already performs local filesystem work on the user's behalf; opening a path
   the UI surfaced is benign and single-user.
+
+## Implementation notes
+
+- **No caller-supplied string reaches a shell.** The `application/fs/` services
+  build fixed argument vectors (`open`, `open -R`, `osascript`, `zenity`,
+  `kdialog`, …) and pass the validated path as one element of them.
+- **The folder picker degrades to "unavailable", not to an error.** On Windows,
+  and on a Linux host with neither `zenity` nor `kdialog`, there is no argv-only
+  native dialog, so `POST /fs/pick-folder` answers `available: false` and the UI
+  falls back to the in-app folder browser. That path is not exercised in CI.

@@ -97,3 +97,33 @@ of memory.
 Equivalent in spirit to multiplexing; same rejection reasons. Additionally, a
 daemon-restart would invalidate every session's state at once, which the
 per-session model already isolates better.
+
+## Implementation notes
+
+What one session forwards, as the gateway implements it today:
+
+- **Coffer is the server downstream and a client upstream** — two separate
+  `initialize` handshakes. Coffer answers the client's `initialize` itself and
+  issues its own to each upstream on first need.
+- **Requests forwarded upstream**: `tools/list`, `tools/call`, `resources/list`,
+  `resources/read`, `prompts/list` and `prompts/get`
+  (`infrastructure/mcp/dispatch.py`, one table both transports share). Any
+  other method is refused rather than passed through blind.
+- **Names are rewritten both ways**: a tool or prompt is presented as
+  `<server>__<name>`, a resource URI as `coffer://<server>/<uri>`
+  (`domain/mcp/namespace.py`). The `__` separator was chosen because `:`,
+  `.`, `/` and `-` are all legal inside upstream tool names.
+- **Upstream → client requests** (`sampling/createMessage`, `roots/list`) are
+  relayed to the session's own client; sampling is relayed only when that
+  client declared `sampling` in its handshake, and refused otherwise
+  (`application/mcp/gateway_server_requests.py`).
+- **Upstream notifications**: the three `list_changed` notifications and
+  `resources/updated` invalidate the session's discovery cache and are
+  forwarded (the URI rewritten); `notifications/message` and
+  `notifications/progress` are dropped rather than forwarded
+  (`application/mcp/gateway_notifications.py`). Public MCP gateways make the
+  same progress choice. A long `tools/call` is still protected: it is issued
+  with a per-request read timeout and a progress callback, so a tool that
+  reports progress is not cut off.
+- An upstream's stderr goes to its own file, `~/.coffer/logs/upstream/<name>.log`,
+  not to the daemon's log.

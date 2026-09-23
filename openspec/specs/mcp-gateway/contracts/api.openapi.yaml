@@ -15,7 +15,8 @@ info:
     random token written to `~/.coffer/daemon.json`).
 
     The MCP protocol surface (`/mcp`) is a JSON-RPC endpoint and is **not**
-    covered by this OpenAPI document — see `openspec/specs/mcp-gateway/research.md`.
+    covered by this OpenAPI document — see `docs/decisions/session-subprocess-model.md`
+    ("Implementation notes").
   contact:
     name: Coffer
     url: https://github.com/wyx-sg/Coffer

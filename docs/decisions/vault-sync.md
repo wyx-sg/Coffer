@@ -398,6 +398,29 @@ a bot answering itself.
   Hence the deterministic text serialization, which is also what lets a round
   with nothing to say produce no commit.
 
+- **Other user-owned transports** — a peer-to-peer file sync
+  (Syncthing-style) has no history and resolves by last writer wins; a
+  user-owned object store (S3-style) has no history or merge either and weak
+  conflict handling. Git was chosen for a developer audience that already holds
+  git credentials, and because it brings diff, history and three-way merge for
+  free. Peer-to-peer was deferred rather than rejected outright.
+- **Commit `~/.coffer/` in place instead of serializing into a separate working
+  tree** — rejected. The live directory mixes the vault's truth (knowledge and
+  skill files) with rebuildable or machine-local state (`coffer.db`, logs,
+  `daemon-config.json`), and the database is binary and unmergeable. A
+  dedicated tree the vault is serialized *into* keeps git's diffs meaningful
+  and leaves SQLite the local system of record. The tree was first built for
+  one-shot export; the argument for it never depended on that verb.
+- **Manual convergence by default, automatic as an opt-in** — the earlier
+  research's answer, reversed. A vault that converges only when someone
+  remembers to ask is the island problem with an extra step. The worker
+  converges on the remote's interval as soon as a remote is configured and
+  enabled; the interval is the knob, `enabled` the off switch, and `coffer sync
+  now` a way not to wait. The surprises opt-in was meant to prevent are handled
+  where they occur: egress is only `git fetch` / `git push` to the user's own
+  remote, an unchanged vault makes no commit, a conflict stops the round with
+  the vault untouched, and an oversized deletion is held in both directions.
+
 ## Consequences
 
 - The `sync/` slice keeps its serializer, path portability and credential
@@ -434,3 +457,51 @@ a bot answering itself.
 - Conversations, the audit log and MCP invocation records stay machine-local.
   They record what happened *on a machine*; merging them is a different feature
   with a different shape.
+- Credentials travel as **ciphertext only**, with the master key moved out of
+  band once per machine: a key in the repository would make the ciphertext
+  pointless, and ciphertext alone means even a hosted remote holds nothing
+  usable. Until the key is present, arrived credentials are reported as locked
+  rather than failing silently.
+
+## Implementation notes
+
+- **Sync is a cross-cutting service, not a resource kind.** The only
+  user-entered row it owns is the single `sync_remotes` config row, beside the
+  `sync_runs` history. The pointer, the retry set, the not-applicable set and a
+  held round live in machine-local SQLite
+  (`infrastructure/persistence/convergence_state_repo.py`), not a file of their
+  own: `coffer.db` is already machine-local and already outside the bundle, so
+  the state adds no second store to write atomically or to explain.
+- **Removal is its own operation at the apply seam.** Each area's applier
+  exposes exactly `upsert` and `remove`, because removal is the operation that
+  had to be authorised, and it belongs at the seam rather than inside a branch.
+- **The conflict pass never sees the vault.** `ConflictArbiter`
+  (`application/sync/conflicts.py`) is handed paths and the working tree and
+  nothing else, so "attempt the merge in the working tree only" is structural
+  rather than remembered.
+- **A confirmation is scoped to one diff.** A held round records the remote tip
+  it was raised against, and a confirmed round is re-derived rather than
+  resumed; the deletion guard is waived only while the remote tip is unchanged
+  (`application/sync/convergence.py`). If the remote moved, the guard runs again
+  and the round is held afresh — a "yes" that outlived the diff it was given for
+  is the shape of an accident. The tip stays off the wire: a caller cannot act on
+  a revision, and confirming means "yes, that one". Confirm, reject and rebuild
+  are three routes rather than one `decision` field because they are three
+  different operations: confirming re-derives a round, rebuilding runs a
+  different one, and rejecting only resets the tree to the pointer, since the
+  guard ran before anything was applied.
+- **One lock for every rewriter of vault content.** The converge service's lock
+  is injected into the knowledge curation pass, because an export taken
+  half-way through a rewrite is a torn snapshot git would read as a deliberate
+  change.
+- **Egress is bounded and the credential redacted twice.** The only outbound
+  traffic is `git fetch` / `git push` from the single git adapter, with the push
+  credential resolved for one call and scrubbed from every recorded error both
+  in the adapter and again in the service. The sync package imports no kind:
+  kinds reach it through ports registered by the composition root.
+- **Two lessons from the 2026-07-10 fixes still stand in the code.** git is run
+  with `core.quotepath=false`, because a conflicted file with a non-ASCII name
+  came back C-quoted from `git diff` and crashed conflict handling into a retry
+  loop; and installing a master key first backs the existing one up to a
+  timestamped `master.key.bak-*` sibling, because truncating the only copy in
+  place orphaned everything encrypted under it.

@@ -159,3 +159,72 @@ supplies rather than something this repository carries.**
   for an owner who cannot obtain the SDK. The cost of the second transport is
   therefore a second path to maintain — paid because the new one removes the
   public surface entirely, which no amount of polishing the old one can do.
+
+## SeaTalk platform facts
+
+The SeaTalk wire contract the channel code is written against, recorded here
+because the platform docs sit behind a login and an unrecorded detail has
+cost a debugging round more than once. Read from the official `cs-bot`
+repository and open.seatalk.io (July and September 2026) and verified against a
+live app unless marked otherwise. The requirements they support are in spec
+[channels/seatalk](../../openspec/specs/channels/seatalk/spec.md).
+
+**Inbound.** Both delivery methods carry the same body,
+`{event_id, event_type, timestamp, app_id, event}`; a DM sender is identified by
+`employee_code`. The websocket SDK is synchronous and thread-based, registers
+with `app_id` + `app_secret`, acks by `callback_id`, does not reconnect, and a
+new registration of the same app kicks the previous holder. The webhook URL must
+be publicly reachable; saving it sends an `event_verification` whose
+`event.seatalk_challenge` must be echoed within 5 s; every callback carries a
+`Signature` header equal to the hex `sha256(raw_body + signing_secret)`; a non-200
+is retried up to three times. Group text lives at `text.plain_text`, not
+`text.content`. A group message reaches the bot only when it @mentions the bot
+(`new_mentioned_message_received_from_group_chat`, with `thread_id` set when it
+is inside a thread); non-@ group-main messages and emoji reactions are never
+delivered, and the group-main history endpoint needs a permission a self-built
+app is not granted, so group-main context is never read.
+
+**Sending.** `POST /auth/app_access_token` returns a token valid for 7200 s;
+error 100 means expired (refresh and retry), 101 means rate-limited. Messages
+are Markdown with `format: 1`, plain with `format: 2`, 4096 characters at most.
+`thread_id` and `quoted_message_id` go **inside** the `message` object — a
+top-level `thread_id` is silently ignored and the reply lands in the group main
+chat; inside `message` it threads the reply, rooting a new thread at that id if
+none exists. A thread is read with
+`GET /messaging/v2/group_chat/get_thread_by_thread_id`, whose list key is
+`thread_messages`.
+
+**Cards.** An interactive card is `tag: "interactive_message"` with
+`button_type: "callback"` buttons carrying a custom `value`; a tap comes back as
+an `interactive_message_click` event with that `value` and the `message_id`. A
+DM tap names the tapper by `employee_code`; a group tap also carries `group_id`
+and names the tapper under `sender`.
+
+**Streaming.** `init_stream` and `update_stream` each take the target
+(`employee_code` or `group_id`). `init_stream` requires a `message` whose `tag`
+fixes the kind (`text` or `interactive_message`) and returns `stream_id`;
+`update_stream` carries content only, with `seq` starting at 1, and each update
+is the whole accumulated text — the client replaces rather than animates, so
+visible smoothness is update frequency alone. Consecutive updates more than 30 s
+apart terminate the stream; a terminated `stream_id` is rejected. The docs
+suggest buffering to about one call per 200 ms and publish no rate limit;
+Coffer buffers at 100 ms (`COFFER_SEATALK_STREAM_INTERVAL`) because 200 ms reads
+as sentence-sized jumps. Clients older than 3.67 see only the final message.
+Unverified: whether a group-main stream is accepted without a `thread_id`.
+
+**Mentions.** A mention is a self-closing
+`<mention-tag target="seatalk://user?id=ID"/>` (or `?email=…`) inside Markdown
+content; `id=0` means everyone and Coffer never builds it. The id is the
+`seatalk_id` — an inference from the inbound `mentioned_list`, which uses the
+same id space — and it is the only sender id guaranteed present, since
+`employee_code` and `email` are empty for a sender outside the bot's
+organisation. The @ notification is decided when the message is created, so a
+streamed reply must carry the mention in what `init_stream` posts; every
+snapshot is therefore `format: 1` with in-flight text escaped, and mention tags
+are lifted out of every escaping pass because ids and emails may contain `_`.
+
+**Typing.** `single_chat_typing` takes `employee_code`; `group_chat_typing` takes
+`group_id` and an optional `thread_id` (an unthreaded root message under 7 days
+old may be passed as the thread). The cue lasts 4 s, so it is re-sent on a
+heartbeat; the limit is 300 per minute, it needs SeaTalk 3.55+, and error 7003
+means a group over 200 members, where no indicator exists.
