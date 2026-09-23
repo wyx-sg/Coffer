@@ -240,6 +240,9 @@ def _older_build_publishes(remote_url: str, files: dict[str, str]) -> None:
         subprocess.run(["git", "-C", str(clone), *args], check=True, capture_output=True)
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a derived document an older build published is left in place"
+)
 async def test_a_guide_an_older_build_published_is_ignored_and_left_alone(pair) -> None:
     """The mid-upgrade fleet, which is where this could still have gone wrong.
 

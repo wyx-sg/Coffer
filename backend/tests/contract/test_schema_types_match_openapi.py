@@ -5,7 +5,7 @@ the set of paths and operations lines up in both directions;
 :mod:`test_schemas_match_openapi` checks that a property the contract declares
 exists on the model. Neither has ever compared a property's **type**, and that
 is how four divergences shipped: ``SkillOut.scope`` was ``array of string`` in
-``specs/skill-manager`` while the route served an object, ``ConversationOut``
+``openspec/specs/skill-manager`` while the route served an object, ``ConversationOut``
 kept ``model_id`` as *required* after the column was dropped,
 ``DaemonStatusOut.vec_available`` outlived its field, and
 ``MCPServerConfig.idle_timeout_seconds`` was declared, validated and
@@ -99,7 +99,7 @@ import pytest
 import yaml
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_SPECS_DIR = _REPO_ROOT / "specs"
+_SPECS_DIR = _REPO_ROOT / "openspec" / "specs"
 _CONTRACT_GLOB = "**/contracts/api.openapi.yaml"
 
 _OPERATION_METHODS = frozenset({"get", "post", "put", "patch", "delete"})
@@ -143,7 +143,7 @@ _ANNOTATION_KEYS = frozenset(
 #: ``dict[str, Any]`` on the wire, so no route schema can reference it; it is
 #: reached by name from ``test_schemas_match_openapi._DOMAIN_SCHEMAS`` instead.
 _ORPHANS_BY_DESIGN = {
-    "specs/mcp-gateway/contracts/api.openapi.yaml": {"MCPServerConfig"},
+    "openspec/specs/mcp-gateway/contracts/api.openapi.yaml": {"MCPServerConfig"},
 }
 
 _MAX_DEPTH = 12

@@ -12,7 +12,7 @@
 // them to the OS file actions (FR-041).
 //
 // These are the knowledge contract's generated schemas
-// (`specs/knowledge/contracts/api.openapi.yaml` → `generated/knowledge.ts`)
+// (`openspec/specs/knowledge/contracts/api.openapi.yaml` → `generated/knowledge.ts`)
 // under the names the hooks and pages already import.
 //
 // There is no search or grep type in this file because the layer exposes no

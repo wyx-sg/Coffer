@@ -16,6 +16,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { MemoryFileTree } from "@/components/memory/MemoryFileTree";
+import { acceptance } from "@/test/acceptance";
 import type { MemoryFileContentOut, MemoryFileNode } from "@/lib/api/memoryTypes";
 import { isDerivedInput } from "@/lib/memory/derived";
 
@@ -211,5 +212,23 @@ describe("MemoryFileTree", () => {
     fireEvent.click(screen.getByRole("button", { name: /MEMORY\.md/ }));
 
     expect(screen.getByText(/binary file/i)).toBeInTheDocument();
+  });
+
+  acceptance("memory", "browse a partition as a file tree with a read-only preview", () => {
+    // The partition page's half: a tree over the partition's own files beside
+    // a read-only preview that opens and reveals, with no per-note action.
+    stubTree(ROOT);
+    stubContent({ content: "# Worktrees\n\nalways develop in one" });
+
+    renderTree();
+    expect(screen.getByRole("button", { name: /MEMORY\.md/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^notes$/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /worktree-development\.md/ }));
+
+    expect(screen.getByRole("heading", { name: "Worktrees" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^edit$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^delete$/i })).toBeNull();
   });
 });

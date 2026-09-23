@@ -64,10 +64,11 @@ terminal — all three binaries are available.
 ### Verify the download
 
 Every release publishes **one aggregated `SHA256SUMS`** covering every artifact in that
-release. The installer verifies the download automatically. To check manually:
+release. The installer verifies the download automatically. To check manually, in the directory
+holding the archive and `SHA256SUMS` (`--ignore-missing` skips the artifacts you did not download):
 
 ```sh
-shasum -a 256 -c SHA256SUMS
+shasum -a 256 -c SHA256SUMS --ignore-missing
 ```
 
 ### Post-install: connect an MCP client
@@ -97,8 +98,9 @@ Either command auto-starts the daemon if it is not already running.
 coffer open
 ```
 
-This starts your browser at the daemon's own address and hands the page a token via a
-single-use, short-lived code. See the [Web UI guide](/guide/web-ui).
+This starts a daemon if none is running and opens your browser at the daemon's own address.
+You are already signed in: the daemon puts its live API token into the page it serves, so there
+is nothing to paste and nothing stored in the browser. See the [Web UI guide](/guide/web-ui).
 
 ### Next steps
 
@@ -111,15 +113,17 @@ single-use, short-lived code. See the [Web UI guide](/guide/web-ui).
 
 `Coffer-unsigned-<triple>.dmg` on the
 [GitHub Releases page](https://github.com/wyx-sg/Coffer/releases/latest) is the same web UI
-in a native window: a Dock icon, an entry in Cmd-Tab, and a resident tray item with **Open
-Coffer**, **Restart daemon** and **Quit**. Closing the window leaves the app in the tray
-rather than quitting it.
+in a native window: a Dock icon, an entry in Cmd-Tab and Spotlight, and a resident tray item
+with **Open Coffer**, a sync status entry, **Restart daemon** and **Quit Coffer**. Closing the
+window leaves the app in the tray rather than quitting it, and quitting leaves the daemon
+running, because your agents are still using it.
 
 Drag `Coffer.app` into `/Applications` and open it. You do not start a daemon first — the
 app resolves one for itself, in a fixed order: an already-running daemon named by
 `~/.coffer/daemon.json` is taken over rather than duplicated; otherwise it spawns the
 `coffer-daemon` it carries inside its own bundle, or the one in `~/.coffer/bin/`, or one on
-your `PATH`.
+your `PATH`. The window appears once a daemon answers, or once the attempt has failed — in
+which case it opens on a banner that says why.
 
 The `.dmg` is **self-contained**: it embeds `coffer`, `coffer-daemon`, `coffer-mcp-shim` and
 `coffer-callback`, and deploys them into `~/.coffer/bin/` on first launch. Installing the
@@ -132,7 +136,23 @@ The app is unsigned and un-notarised, so macOS quarantines it after the drag:
 xattr -dr com.apple.quarantine /Applications/Coffer.app
 ```
 
-See [Distribution](/architecture/distribution) for what the shell owns and what it
+When the UI cannot reach the daemon, the offline banner in the app carries a **Restart**
+button (a browser tab cannot offer one: a daemon that is down cannot serve the page). It and
+the tray's **Restart daemon** ask a running daemon to shut down and wait for its port to free
+before starting a new one, so a daemon that is listening but stuck is really replaced. A second
+restart within five seconds of a successful one is refused with the time left; after a failed
+start you can retry at once.
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| "Coffer is damaged and can't be opened" | Quarantine attribute on a browser download | `xattr -dr com.apple.quarantine /Applications/Coffer.app` |
+| The window opens on the offline banner | No daemon could be found or started | Press **Restart**; the reason is in `~/.coffer/logs/daemon.log`. |
+| An MCP server fails with "command not found" only when the daemon was started by the app | An app launched from Finder has a minimal `PATH` | The app reads your login shell's `PATH` (`$SHELL -lc`), so export it from `~/.zprofile`, not only `~/.zshrc`. |
+| A warning about mismatched versions | A daemon from a previous install is still running | **Restart daemon** from the tray. |
+
+The app writes its own records — which daemon it found, a restart that failed — into
+`~/.coffer/logs/daemon.log` under the logger `coffer.desktop`; there is no separate desktop
+log. See [Distribution](/architecture/distribution) for what the shell owns and what it
 deliberately leaves to the daemon.
 
 ---
@@ -154,11 +174,12 @@ Verify the download against the release's aggregated `SHA256SUMS` — it covers 
 in the release, the `.dmg` included — then extract it:
 
 ```sh
-shasum -a 256 -c SHA256SUMS
+shasum -a 256 -c SHA256SUMS --ignore-missing
 tar -xzf coffer-cli-<triple>.tar.gz -C ~/.coffer/bin
 ```
 
-Add `~/.coffer/bin` to your `PATH` so MCP clients can find `coffer-mcp-shim`.
+Keep the four binaries in one directory: a frozen `coffer` looks for `coffer-daemon` beside
+itself. Add `~/.coffer/bin` to your `PATH` so MCP clients can find `coffer-mcp-shim`.
 
 ### macOS Gatekeeper (unsigned — signing pending)
 

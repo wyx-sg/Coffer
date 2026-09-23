@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-14
 **Deciders**: Yuxing Wu
-**Spec**: [channels](../../specs/channels/spec.md)
+**Spec**: [channels](../../openspec/specs/channels/spec.md)
 
 > **Amended (2026-06-20, simplification 8.4).** The per-binding workspace
 > allowlist, the `/cwd` switch, and the peer `preferred_workspace` are

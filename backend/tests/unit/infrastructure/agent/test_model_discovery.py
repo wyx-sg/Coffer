@@ -15,7 +15,10 @@ from __future__ import annotations
 import json
 import pathlib
 
+import pytest
+
 from coffer.domain.agent.model_catalogue import AgentModel
+from coffer.infrastructure.agent.codex_rpc_models import CodexRpcModelDiscovery
 from coffer.infrastructure.agent.model_discovery import (
     ChainedModelDiscovery,
     NativeConfigModelDiscovery,
@@ -216,6 +219,7 @@ async def test_chain_keeps_duplicates_for_the_service_to_dedupe(tmp_path: pathli
     ]
 
 
+@pytest.mark.acceptance(spec="agent-registry", scenario="lose only a failing source's models")
 async def test_chain_survives_a_source_that_raises(tmp_path: pathlib.Path) -> None:
     survivor = _Source([AgentModel("kept")])
 
@@ -228,3 +232,88 @@ async def test_chain_survives_a_source_that_raises(tmp_path: pathlib.Path) -> No
 
 async def test_chain_with_no_sources_is_empty() -> None:
     assert await ChainedModelDiscovery([]).discover(agent_key="codex", config_dir=None) == []
+
+
+# --- acceptance: the native-config source is read, never written -------------
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="read native-config models without writing the config"
+)
+async def test_native_config_models_are_read_and_the_file_is_untouched(
+    tmp_path: pathlib.Path,
+) -> None:
+    config_dir = tmp_path / ".codex"
+    config_dir.mkdir()
+    config = config_dir / "config.toml"
+    config.write_text(
+        '# my models\nmodel = "gpt-5-codex"\n\n[profiles.fast]\nmodel = "gpt-5-mini"\n',
+        encoding="utf-8",
+    )
+    before = config.read_bytes()
+    mtime_before = config.stat().st_mtime_ns
+
+    models = await NativeConfigModelDiscovery().discover(agent_key="codex", config_dir=config_dir)
+
+    assert [m.id for m in models] == ["gpt-5-codex", "gpt-5-mini"]
+    assert config.read_bytes() == before
+    assert config.stat().st_mtime_ns == mtime_before
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry/claude-code",
+    scenario="read the account's extra model options from ~/.claude.json",
+)
+async def test_additional_model_options_cache_is_read_and_never_written(
+    tmp_path: pathlib.Path,
+) -> None:
+    config_dir = tmp_path / ".claude"
+    config_dir.mkdir()
+    claude_json = tmp_path / ".claude.json"
+    claude_json.write_text(
+        json.dumps(
+            {
+                "numStartups": 3,
+                "mcpServers": {"x": {"command": "x"}},
+                "additionalModelOptionsCache": [
+                    {"value": "claude-extra-1", "label": "Extra", "description": "account extra"}
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    before = claude_json.read_bytes()
+    mtime_before = claude_json.stat().st_mtime_ns
+
+    models = await NativeConfigModelDiscovery().discover(
+        agent_key="claude_code", config_dir=config_dir
+    )
+
+    assert [(m.id, m.label, m.description) for m in models] == [
+        ("claude-extra-1", "Extra", "account extra")
+    ]
+    assert claude_json.read_bytes() == before
+    assert claude_json.stat().st_mtime_ns == mtime_before
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry/codex",
+    scenario="fall back to configured models when model/list answers nothing",
+)
+async def test_codex_configured_models_answer_when_the_rpc_cannot_be_reached(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The production order for Codex: model/list first, then config.toml. A CLI
+    that cannot be started costs the RPC's entries and nothing else."""
+    config_dir = tmp_path / ".codex"
+    config_dir.mkdir()
+    (config_dir / "config.toml").write_text('model = "gpt-5-codex"\n', encoding="utf-8")
+
+    def _no_codex(cwd: str, env: dict[str, str] | None) -> object:
+        raise RuntimeError("codex binary not found on PATH")
+
+    models = await ChainedModelDiscovery(
+        [CodexRpcModelDiscovery(_no_codex), NativeConfigModelDiscovery()]
+    ).discover(agent_key="codex", config_dir=config_dir)
+
+    assert [m.id for m in models] == ["gpt-5-codex"]

@@ -237,11 +237,11 @@ class SeaTalkAdapter:
             return
         elif event_type == "interactive_message_click" and self._callbacks.on_callback is not None:
             # A selection-card button tap; the custom ``value`` we set on the
-            # button comes back here (research.md). A group card tap carries a
-            # ``group_id`` and a DM tap does not — derive chat_kind from that so
-            # the core replies into the group/thread and owner-gates on the right
-            # peer (FR-036). DMs are 1:1 so the sender IS the employee_code; a
-            # group tap names the tapper under ``sender``, like the @mention.
+            # button comes back here (ADR seatalk-websocket-inbound, "Cards").
+            # A group tap carries a ``group_id`` and a DM tap does not, so the
+            # core replies into the group/thread and owner-gates on the right
+            # peer (FR-036). A DM's sender IS the employee_code; a group tap
+            # names the tapper under ``sender``, like the @mention.
             group_id = str(event.get("group_id", ""))
             sender = event.get("sender") or {}
             sender_id = str(sender.get("employee_code", "") or event.get("employee_code", ""))

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-18
 **Deciders**: Yuxing Wu
-**Related**: spec [skill-manager](../../specs/skill-manager/spec.md), spec [knowledge](../../specs/knowledge/spec.md), spec [resource-framework](../../specs/resource-framework/spec.md); [The knowledge layer is a directory of files, not an index](knowledge-is-plain-files.md) (whose "delivered as an independent copy per agent" clause this replaces); [Budget-Driven Tool Tiering at the Gateway](budget-driven-tool-tiering.md); [Vault Sync](vault-sync.md); [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md)
+**Related**: spec [skill-manager](../../openspec/specs/skill-manager/spec.md), spec [knowledge](../../openspec/specs/knowledge/spec.md), spec [resource-framework](../../openspec/specs/resource-framework/spec.md); [The knowledge layer is a directory of files, not an index](knowledge-is-plain-files.md) (whose "delivered as an independent copy per agent" clause this replaces); [Budget-Driven Tool Tiering at the Gateway](budget-driven-tool-tiering.md); [Vault Sync](vault-sync.md); [Cross-Platform Skill Delivery](cross-platform-skill-delivery.md)
 
 ## Context
 

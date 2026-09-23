@@ -4,7 +4,7 @@
 module in this directory names its OpenAPI yaml **by hand** — test_chat_openapi
 points at the channels contract, test_schemas_match_openapi at the mcp-gateway
 one, and so on. That enumeration is invisible to anything: a new
-``specs/**/contracts/api.openapi.yaml`` used to land with no test naming it, and
+``openspec/specs/**/contracts/api.openapi.yaml`` used to land with no test naming it, and
 nothing failed and nothing noticed. Two contracts (memory and vault-sync) sat in
 exactly that state.
 
@@ -53,7 +53,7 @@ import pytest
 import yaml
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-_SPECS_DIR = _REPO_ROOT / "specs"
+_SPECS_DIR = _REPO_ROOT / "openspec" / "specs"
 _CONTRACT_GLOB = "**/contracts/api.openapi.yaml"
 
 _OPERATION_METHODS = frozenset({"get", "post", "put", "patch", "delete"})
@@ -64,19 +64,19 @@ _OPERATION_METHODS = frozenset({"get", "post", "put", "patch", "delete"})
 #: here; the value is a promise about where a reader looks next, so it is a
 #: module name in this directory or nothing.
 _CONTRACTS: dict[str, str | None] = {
-    "specs/agent-registry/contracts/api.openapi.yaml": None,
-    "specs/channels/contracts/api.openapi.yaml": "test_channel_contract.py",
-    "specs/chat/contracts/api.openapi.yaml": "test_chat_openapi.py",
-    "specs/credentials/contracts/api.openapi.yaml": None,
-    "specs/daemon/contracts/api.openapi.yaml": None,
-    "specs/internal-engine/contracts/api.openapi.yaml": None,
-    "specs/knowledge/contracts/api.openapi.yaml": "test_knowledge_openapi.py",
-    "specs/mcp-gateway/contracts/api.openapi.yaml": "test_schemas_match_openapi.py",
-    "specs/memory/contracts/api.openapi.yaml": "test_memory_openapi.py",
-    "specs/provider-switching/contracts/api.openapi.yaml": None,
-    "specs/resource-framework/contracts/api.openapi.yaml": None,
-    "specs/skill-manager/contracts/api.openapi.yaml": None,
-    "specs/vault-sync/contracts/api.openapi.yaml": "test_sync_openapi.py",
+    "openspec/specs/agent-registry/contracts/api.openapi.yaml": None,
+    "openspec/specs/channels/contracts/api.openapi.yaml": "test_channel_contract.py",
+    "openspec/specs/chat/contracts/api.openapi.yaml": "test_chat_openapi.py",
+    "openspec/specs/credentials/contracts/api.openapi.yaml": None,
+    "openspec/specs/daemon/contracts/api.openapi.yaml": None,
+    "openspec/specs/internal-engine/contracts/api.openapi.yaml": None,
+    "openspec/specs/knowledge/contracts/api.openapi.yaml": "test_knowledge_openapi.py",
+    "openspec/specs/mcp-gateway/contracts/api.openapi.yaml": "test_schemas_match_openapi.py",
+    "openspec/specs/memory/contracts/api.openapi.yaml": "test_memory_openapi.py",
+    "openspec/specs/provider-switching/contracts/api.openapi.yaml": None,
+    "openspec/specs/resource-framework/contracts/api.openapi.yaml": None,
+    "openspec/specs/skill-manager/contracts/api.openapi.yaml": None,
+    "openspec/specs/vault-sync/contracts/api.openapi.yaml": "test_sync_openapi.py",
 }
 
 
@@ -84,7 +84,7 @@ def _discover() -> list[str]:
     """Every contract file in the tree, repo-relative, recursively.
 
     Recursive by design: the spec tree is nesting, so
-    ``specs/<parent>/<child>/contracts/api.openapi.yaml`` must be found too.
+    ``openspec/specs/<parent>/<child>/contracts/api.openapi.yaml`` must be found too.
     """
     return sorted(
         path.relative_to(_REPO_ROOT).as_posix() for path in _SPECS_DIR.glob(_CONTRACT_GLOB)
@@ -198,7 +198,7 @@ def test_no_module_names_a_contract_that_is_gone() -> None:
     rather than import them, so one bad path is reported rather than crashing
     collection.
     """
-    pattern = re.compile(r"specs/[\w./-]*contracts/api\.openapi\.yaml")
+    pattern = re.compile(r"openspec/specs/[\w./-]*contracts/api\.openapi\.yaml")
     dangling: list[str] = []
     for module in sorted(Path(__file__).parent.glob("test_*.py")):
         if module.name == Path(__file__).name:

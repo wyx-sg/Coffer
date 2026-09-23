@@ -302,3 +302,35 @@ goes in and survives shutdown, `daemon.json` comes out and is unlinked on exit.
   build and print a one-line WARNING to stderr on mismatch — never refuse.
   `/daemon/status` additionally reports the daemon's `executable` so the
   warning can say which build answered.
+
+## Implementation notes
+
+- **Two Decision bullets above have since moved.** The default port is no longer
+  scanned: with nothing configured the daemon binds `8000` exactly and refuses to
+  start if it cannot ([The Desktop Shell Returns](desktop-shell-over-a-shared-frontend.md)
+  inverted the default; the `COFFER_PORT_RANGE_*` scan survives only as a test
+  harness override). And the daemon no longer runs until stopped: it stands down
+  cleanly after an idle window (twelve hours by default, `coffer daemon idle`),
+  and `coffer daemon service install` makes it a macOS login service that
+  restarts it only after an unsuccessful exit, so the idle stand-down is not
+  undone (spec daemon, "Run as a login service" and "Stand down after an idle
+  window").
+- **`infrastructure/daemon/` imports no surface**, which importlinter enforces.
+  That is why `entry.py` reads `daemon.json` and hands the bound socket to
+  uvicorn itself, and why the lifecycle phase `/daemon/status` reports is pushed
+  into the route module by the composition root rather than read out of the app.
+- **The port is chosen before anything opens the database.**
+  `infrastructure/daemon/config.py` imports no persistence code, and nothing on
+  the bind path assumes a migration has run — the reason `daemon-config.json` is a
+  file and not a row.
+- **The CLI's port pre-flight may err in one direction only.** Before spawning,
+  `coffer daemon start` does a real bind of the planned port and lets it go, so a
+  squatted port gets the actionable refusal instead of a ten-second timeout. It
+  can report "free" when the port is not — a `TIME_WAIT` port from the daemon a
+  `restart` just stopped is bindable, and on Linux `SO_REUSEADDR` lets it bind
+  through a bound-but-not-listening daemon — and that is safe, because the spawn
+  still takes the lock and re-probes liveness. It must never report a conflict
+  that is not there, because that would block a legitimate start.
+- **Windows degrades quietly and is not exercised.** Without `fcntl` the spawn
+  lock is a bare open descriptor, leaving the liveness refusal and the atomic
+  publish as the only guards.

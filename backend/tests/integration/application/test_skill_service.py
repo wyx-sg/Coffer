@@ -885,6 +885,10 @@ async def test_boot_heal_repairs_missing_link_and_leaves_foreign_dir(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="renaming a skill carries its master folder, links and frontmatter name",
+)
 async def test_rename_moves_master_and_redelivers_under_the_new_name(tmp_path):
     """A skill's name is a label, but it is also two directories on disk.
 
@@ -991,6 +995,10 @@ async def test_rename_onto_a_taken_name_moves_nothing(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="renaming a skill carries its master folder, links and frontmatter name",
+)
 async def test_rename_aborts_when_the_master_folder_cannot_move(tmp_path):
     """An orphan master folder occupies the destination: no row answers to
     that name, so the framework's collision check passes and the hook is the
@@ -1060,6 +1068,10 @@ async def test_rename_does_not_clobber_foreign_content_at_the_new_link_path(tmp_
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="renaming a skill carries its master folder, links and frontmatter name",
+)
 async def test_rename_rewrites_only_the_frontmatter_name(tmp_path):
     """The agent product reads SKILL.md's ``name:``, so a rename must move it.
 
@@ -1126,6 +1138,10 @@ async def test_a_renamed_skill_still_validates_as_a_skill(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="refuse a skill name its own SKILL.md could not carry",
+)
 async def test_rename_to_a_framework_legal_but_frontmatter_illegal_name_is_refused(tmp_path):
     """The framework's name rule is a superset of the frontmatter's.
 
@@ -1212,4 +1228,120 @@ async def test_rename_puts_the_master_back_when_the_config_write_fails(tmp_path)
     assert store.paths_for("before").skill_md.read_bytes() == original_bytes
     assert (await skill_svc.get_skill(skill.uid)).name == "before"
     assert (skill_dir / "before").exists()
+    await engine.dispose()
+
+
+# ----- config schema -----
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="store a skill's config without restating its name"
+)
+async def test_skill_config_holds_provenance_and_never_the_name(tmp_path):
+    """The config carries source + metadata; the name lives only on the row."""
+    from pydantic import ValidationError
+
+    from coffer.domain.errors import ConfigValidationError
+    from coffer.domain.skill.config import SkillConfig
+
+    skill_svc, _, _, _, engine = await _setup(tmp_path)
+    src = tmp_path / "src"
+    _write_skill_folder(src, name="provenance")
+    skill = await skill_svc.import_local(path=str(src), actor="cli")
+
+    stored = (await skill_svc.get_skill(skill.uid)).config
+    assert set(stored) == {
+        "source",
+        "skill_md_description",
+        "version_hash",
+        "last_synced_from_source_at",
+    }
+    assert stored["source"]["type"] == "local_import"
+    assert stored["source"]["original_path"] == str(src)
+    assert stored["skill_md_description"] == "A test skill named provenance."
+    assert stored["version_hash"]
+    assert "provenance" not in {str(v) for v in stored.values() if not isinstance(v, dict)}
+
+    # A field that restates the name is not in the schema, so it is refused —
+    # both by the schema itself and by the resource write path that runs it.
+    with pytest.raises(ValidationError):
+        SkillConfig.model_validate({**stored, "skill_md_name": "provenance"})
+    with pytest.raises(ConfigValidationError):
+        await skill_svc._rs.update_config(
+            skill.uid,
+            {**stored, "skill_md_name": "provenance"},
+            actor="cli",
+            allow_lifecycle_kind=True,
+        )
+    # The builtin variant carries nothing but its name: even handed a path, the
+    # validated config holds none.
+    for source in ({"type": "builtin"}, {"type": "builtin", "original_path": "/somewhere"}):
+        validated = SkillConfig.model_validate({**stored, "source": source})
+        assert validated.model_dump(mode="json")["source"] == {"type": "builtin"}
+    assert "skill_md_name" not in (await skill_svc.get_skill(skill.uid)).config
+    await engine.dispose()
+
+
+# ----- copy fallback -----
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="fall back to a copy where a directory link cannot be made"
+)
+async def test_delivery_falls_back_to_a_copy_without_links(tmp_path, monkeypatch):
+    """No symlink and no junction on this filesystem: deliver a real copy.
+
+    Drives the real ``make_directory_link`` down its Windows branch with both
+    link primitives failing — the FAT32 / network-share case — rather than
+    faking the engine.
+    """
+    import subprocess
+    import types
+
+    from coffer.domain.skill.binding import LinkMode
+    from coffer.infrastructure.skill import sync_engine
+
+    skill_svc, agent_svc, audit, store, engine = await _setup(tmp_path)
+    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="fat32")
+
+    class _NoLinkOs:
+        def __getattr__(self, item):  # type: ignore[no-untyped-def]
+            return getattr(os, item)
+
+        @staticmethod
+        def symlink(*_a, **_k):
+            raise OSError("symlinks unsupported on this filesystem")
+
+    def _no_junction(*_a, **_k):
+        raise subprocess.CalledProcessError(1, "mklink")
+
+    src = tmp_path / "src"
+    _write_skill_folder(src, name="copied", body="copied body")
+    with monkeypatch.context() as m:
+        m.setattr(sync_engine, "sys", types.SimpleNamespace(platform="win32"))
+        m.setattr(sync_engine, "os", _NoLinkOs())
+        m.setattr(
+            sync_engine,
+            "subprocess",
+            types.SimpleNamespace(
+                run=_no_junction, CalledProcessError=subprocess.CalledProcessError
+            ),
+        )
+        skill = await skill_svc.import_local(path=str(src), actor="cli")
+
+    delivered = skill_dir / "copied"
+    assert delivered.is_dir() and not delivered.is_symlink()
+    assert (delivered / "SKILL.md").read_bytes() == store.paths_for("copied").skill_md.read_bytes()
+
+    bindings = await skill_svc.bindings_for(skill.uid)
+    assert len(bindings) == 1
+    assert bindings[0].link_mode is LinkMode.COPY_FALLBACK
+
+    bound = await audit.query(event_type=AuditEventType.SKILL_BOUND.value)
+    assert [e.details["mode"] for e in bound] == ["copy_fallback"]
+
+    # A copy is the expected shape of this delivery, not drift.
+    assert (await skill_svc.verify()).entries == []
     await engine.dispose()

@@ -5,14 +5,14 @@
 // writes instead is a folder per repository holding `MEMORY.md` (the index),
 // `notes/` (Coffer's own notes, one topic per file), `RETIRED.md` (what left
 // and why) and a hidden `.raw/` of the verbatim entries it read. See
-// specs/memory/spec.md and
+// openspec/specs/memory/spec.md and
 // docs/decisions/aggregate-agent-memory-never-write-it.md.
 //
 // The UI writes none of it: a partition is shown as what it literally is on
 // disk, a folder under `~/.coffer/memory/`, so the file types below carry no
 // fingerprint and there is no write shape to send.
 //
-// These are hand-written rather than generated: `specs/memory`'s contract
+// These are hand-written rather than generated: `openspec/specs/memory`'s contract
 // names the file shapes `FileNodeOut` / `FileTreeOut` / `FileContentOut`,
 // while every consumer here imports the `Memory…`-prefixed names below, so the
 // memory contract is deliberately absent from `CONTRACTS` in

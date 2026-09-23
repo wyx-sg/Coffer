@@ -5,7 +5,7 @@
 // it outlived the page under an honest name and lives in `agentProviders.ts`.
 //
 // Wire types are the chat contract's generated schemas
-// (`specs/chat/contracts/api.openapi.yaml` → `generated/chat.ts`), re-exported
+// (`openspec/specs/chat/contracts/api.openapi.yaml` → `generated/chat.ts`), re-exported
 // under the names the hooks and pages already import. Transport is the shared
 // `call` (.agents/frontend.md §4).
 

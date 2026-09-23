@@ -127,3 +127,30 @@ keychain opt-in already covers users who want the key off the disk.
 re-prompt wall as the out-of-box experience on the most common developer
 platform. The mode that works painlessly under an unsigned binary must be the
 default; hardening is the opt-in.
+
+## Implementation notes
+
+- **The store is synchronous on purpose.** `EncryptedCredentialStore` opens a
+  short-lived stdlib `sqlite3` connection per call, because MCP spawn and
+  register-time probing are synchronous and have no event loop. Loop callers go
+  through the `aget`/`aexists`/`aset`/`adelete` facade, which runs each call
+  under `asyncio.to_thread`; a sync call made on the loop would deadlock against
+  the aiosqlite connection holding the write lock. An async-only store was
+  rejected because it would force every sync caller to create a loop.
+- **One key manager, one `keyring` importer.** `MasterKeyManager` is the only
+  code that reads or writes key material, and `keyring_adapter.py` the only
+  module that imports `keyring`; the importlinter contract "keyring confined to
+  infrastructure" enforces it. The CLI goes through the daemon for everything,
+  so each machine has a single reader of the key.
+- **Startup order is a correctness property.** `init_credential_store` counts
+  the `credentials` rows *before* resolving the key, so a key is created only
+  for an empty store. A key that fails to construct a Fernet is reported as
+  `MASTER_KEY_MISSING` naming the path, never silently regenerated.
+- **Deletion is refused from the citing side.** `find_credential_citations`
+  walks registered resource configs through each kind's extractor. No foreign
+  key can do this: the reference lives inside another kind's JSON config.
+- **Rollback lives at the writing surface.** A secret written just before a
+  registration that then fails is deleted by the surface that wrote it (the MCP
+  import and edit dialogs, the channel register flow), because only that caller
+  knows whether the registration succeeded. It is best-effort and logs rather
+  than raising a second error over the first.

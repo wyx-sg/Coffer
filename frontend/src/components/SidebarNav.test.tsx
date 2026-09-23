@@ -9,11 +9,13 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { acceptance } from "@/test/acceptance";
 import { render, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { isValidElement } from "react";
+import { MemoryRouter, Navigate, matchRoutes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarNav } from "./SidebarNav";
+import { routes } from "@/router";
 
 // The Sync entry carries an attention dot, which asks the daemon for the
 // vault's last round. Stub it; the dot's own rules live in
@@ -55,7 +57,7 @@ function group(label: string): [string, string | null][] {
 }
 
 describe("SidebarNav", () => {
-  test("Resources lists one entry per resource kind that has a list UI", () => {
+  acceptance("web-ui", "resources holds one entry per kind with a list", () => {
     renderNav();
 
     expect(group("Resources").map(([name]) => name)).toEqual([
@@ -76,6 +78,66 @@ describe("SidebarNav", () => {
       ["Chat", "/chat"],
     ]);
   });
+});
+
+/** The leaf route a path resolves to in the app's real route table. */
+function leafRoute(path: string): string | undefined {
+  const matches = matchRoutes(routes, path) ?? [];
+  return matches[matches.length - 1]?.route.path;
+}
+
+/** Whether the leaf route a path resolves to only redirects somewhere else. */
+function isRedirect(path: string): boolean {
+  const matches = matchRoutes(routes, path) ?? [];
+  const element = matches[matches.length - 1]?.route.element;
+  return isValidElement(element) && element.type === Navigate;
+}
+
+function groupLabels(): string[] {
+  return Array.from(document.querySelectorAll(".nav-group-label")).map((n) => n.textContent ?? "");
+}
+
+acceptance("web-ui", "the sidebar groups agents, resources and system by role", () => {
+  renderNav();
+
+  expect(groupLabels()).toEqual(["Agents", "Resources", "System"]);
+  expect(group("Agents").map(([name]) => name)).toEqual(["Agents", "Chat"]);
+  expect(group("Resources").map(([, href]) => href)).not.toContain("/agents");
+  expect(group("Resources").map(([name]) => name)).not.toContain("Agents");
+  expect(group("System").map(([name]) => name)).toEqual(["Activity", "Sync", "Settings"]);
+});
+
+acceptance("web-ui", "every resource entry opens a list page of its own", () => {
+  renderNav();
+
+  const hrefs = group("Resources").map(([, href]) => href!);
+  expect(hrefs).toHaveLength(6);
+  // The check below can tell a redirect apart: the retired /resources is one.
+  expect(isRedirect("/resources")).toBe(true);
+  const resolved = hrefs.map((href) => leafRoute(href));
+  // Each entry is its own list route — the path itself, never the catch-all.
+  resolved.forEach((route, i) => {
+    expect(route).not.toBe("*");
+    expect(`/${route}`).toBe(hrefs[i]);
+    // A route that only redirects is not a list page of its own.
+    expect(isRedirect(hrefs[i])).toBe(false);
+  });
+  expect(new Set(resolved).size).toBe(hrefs.length);
+});
+
+acceptance("web-ui", "the sidebar carries no placeholder entries", () => {
+  renderNav();
+
+  const links = Array.from(document.querySelectorAll("nav a"));
+  expect(links.length).toBe(11);
+  for (const link of links) {
+    const href = link.getAttribute("href");
+    expect(href).toBeTruthy();
+    expect(leafRoute(href!)).not.toBe("*");
+    expect(link.textContent ?? "").not.toMatch(/soon|not yet|coming/i);
+    expect(link).not.toHaveAttribute("aria-disabled", "true");
+  }
+  expect(document.body.textContent ?? "").not.toMatch(/coming soon|not yet implemented/i);
 });
 
 // --- the attention dot (spec vault-sync FR-096) ---------------------------

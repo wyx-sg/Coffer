@@ -3,7 +3,7 @@
 **Status**: Superseded by [Knowledge Is Plain Files](knowledge-is-plain-files.md) — kept only for the one constraint the live design inherits, below.
 **Date**: 2026-06-09
 **Deciders**: Yuxing Wu
-**Related**: spec [knowledge](../../specs/knowledge/spec.md), [Layer-First Code Layout](code-layout-layer-first.md), [One Shared Knowledge Store](agent-native-shared-memory.md)
+**Related**: spec [knowledge](../../openspec/specs/knowledge/spec.md), [Layer-First Code Layout](code-layout-layer-first.md), [One Shared Knowledge Store](agent-native-shared-memory.md)
 
 ## Why this ADR is still here
 

@@ -86,6 +86,9 @@ def test_url_and_branch_are_stripped() -> None:
         "del\x7f",
     ],
 )
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a remote URL or branch that git would read as an option is refused"
+)
 def test_a_branch_git_would_refuse_or_read_as_an_option_is_refused(branch: str) -> None:
     with pytest.raises(BackupRemoteInvalid):
         validate_branch(branch)
@@ -100,6 +103,9 @@ def test_an_ordinary_branch_name_is_accepted_unchanged(branch: str) -> None:
 
 
 @pytest.mark.parametrize("url", ["-x", "--receive-pack=x", "--upload-pack=x", " -f"])
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a remote URL or branch that git would read as an option is refused"
+)
 def test_a_url_git_would_read_as_an_option_is_refused(url: str) -> None:
     with pytest.raises(BackupRemoteInvalid) as excinfo:
         validate_url(url)

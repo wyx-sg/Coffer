@@ -2,7 +2,7 @@
 
 Implements ``application.sync.ports.ConvergenceStatePort`` over SQLite. The
 storage choice is the design: ``coffer.db`` is already excluded from the bundle
-(spec vault-sync ``## What does not sync``), so state kept here cannot
+(spec vault-sync "Keep reach machine-local"), so state kept here cannot
 accidentally be published the way a file beside the working tree could be. A
 pointer that travelled would be some other machine's claim about what this
 vault has absorbed, and every diff the round takes rests on it being this

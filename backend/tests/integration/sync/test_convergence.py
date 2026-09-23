@@ -468,6 +468,9 @@ async def test_an_agent_resolution_that_validates_is_applied_and_named(pair) -> 
 @pytest.mark.acceptance(
     spec="vault-sync", scenario="an agent resolution that fails validation is not applied"
 )
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a resolution that fails is still reported with its path"
+)
 async def test_an_agent_resolution_leaving_a_conflict_marker_is_refused(pair) -> None:
     a, b = pair
     await a.register("mcp_server", "contested", {"value": "original"})
@@ -599,6 +602,9 @@ async def test_a_path_that_can_never_apply_here_is_recorded_as_not_applicable(pa
     assert path in not_applicable and path not in retry
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="an agent whose config directory is missing here is not applicable"
+)
 async def test_an_agent_whose_config_dir_is_missing_here_is_not_applicable(
     pair, tmp_path: pathlib.Path
 ) -> None:

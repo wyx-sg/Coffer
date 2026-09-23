@@ -387,6 +387,7 @@ async def test_agent_config_model_and_effort_do_not_clobber_each_other() -> None
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.acceptance(spec="chat", scenario="sending a message returns before the turn's output")
 def test_send_message_returns_202_fire_and_return() -> None:
     """POST /conversations/{id}/messages is fire-and-return (ADR
     chat-single-owner-live-mirror): 202 with queued=false when the turn starts

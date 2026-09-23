@@ -175,3 +175,25 @@ Consequence: "skills appear in the sidebar's Resources group" (the 2026-05-30
 amendment's future-groups list) is now shipped — the Resources group contains
 **MCP servers** (`/mcp-servers`, registry-driven) and **Skills** (`/skills`,
 bespoke).
+
+## Amendment (2026-09-15) — frontend kind registry retired
+
+The scoped frontend kind registry above is gone. Only three kinds ever
+registered with it, the detail routes bypassed it and dispatched on `kind`
+directly, and its shared list view had no callers. Every kind now follows one
+layout instead of registering anything: list and detail pages in `pages/`,
+components in `components/<kind>/`, hooks in `lib/hooks/`, API modules in
+`lib/api/`, and a lazy route in `router.tsx`, with `ResourceDetailPage`
+dispatching on `kind`. `frontend/src/kinds/` no longer exists;
+[`.agents/frontend.md`](../../.agents/frontend.md) is the canonical statement
+of the layout.
+
+## Implementation note — agents are stored as resources
+
+"Not a resource kind" in the 2026-05-30 amendment is an information-architecture
+statement. In storage an agent *is* a resource of kind `agent` in the generic
+`resources` table, and it gets the framework's CRUD, validation and audit
+(`make_agent_kind` in `application/agent/kind.py`); it is only kept out of the
+kind browser and surfaced on its own axis. Its detail route is `/agents/:uid`,
+not `/agents/:name`, because resources are addressed by their immutable uid and
+the name is a label.

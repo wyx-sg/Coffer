@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
+import { acceptance } from "@/test/acceptance";
 import { MarkdownContent } from "./MarkdownContent";
+import { MessageBubble } from "./MessageBubble";
 
 describe("MarkdownContent code-block copy", () => {
   afterEach(() => {
@@ -87,4 +89,45 @@ describe("MarkdownContent", () => {
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
   });
+});
+
+acceptance("chat", "assistant text keeps its line breaks and every code block copies", () => {
+  const reply = [
+    "first fact",
+    "second fact",
+    "",
+    "| name | size |",
+    "| --- | --- |",
+    "| a.txt | 3 |",
+    "",
+    "```sh",
+    "ls -la",
+    "```",
+    "",
+    "```py",
+    "print(1)",
+    "```",
+  ].join("\n");
+  const { container } = render(
+    <MessageBubble
+      message={{
+        id: "m-1",
+        conversation_id: "c-1",
+        seq: 1,
+        role: "assistant",
+        status: "complete",
+        created_at: "2026-01-01T00:00:00Z",
+        content: [{ type: "text", text: reply }],
+      }}
+    />,
+  );
+
+  const firstParagraph = container.querySelector("p")!;
+  expect(firstParagraph.querySelector("br")).not.toBeNull();
+  expect(firstParagraph.textContent).toContain("first fact");
+  expect(firstParagraph.textContent).toContain("second fact");
+  expect(container.querySelector("table")).not.toBeNull();
+  expect(container.querySelectorAll("td")[0].textContent).toBe("a.txt");
+  expect(container.querySelectorAll("pre")).toHaveLength(2);
+  expect(screen.getAllByRole("button", { name: /^copy$/i })).toHaveLength(2);
 });

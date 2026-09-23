@@ -1,4 +1,4 @@
-"""Pydantic schemas matching the chat paths in specs/channels/contracts/api.openapi.yaml.
+"""Pydantic schemas matching the chat paths in openspec/specs/channels/contracts/api.openapi.yaml.
 
 Every request/response body the web Chat page's REST + SSE surface serves is
 modelled here. Field names, types, and nullability mirror the yaml exactly.

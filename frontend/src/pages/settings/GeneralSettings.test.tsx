@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { GeneralSettings } from "./GeneralSettings";
+import { DataTable, type Column } from "@/components/DataTable";
 import { acceptance } from "@/test/acceptance";
 
 // The daemon-residency card is General's second card and has its own tests
@@ -111,4 +112,27 @@ acceptance("web-ui", "general tab persists the preferred editor", () => {
   openEditorPicker();
   pickOption(/system default/i);
   expect(localStorage.getItem("coffer.preferredEditor")).toBeNull();
+});
+
+acceptance("web-ui", "the default page size seeds every list table", () => {
+  type Row = { id: string; name: string };
+  const rows: Row[] = Array.from({ length: 25 }, (_, i) => ({ id: String(i), name: `row-${i}` }));
+  const cols: Column<Row>[] = [{ key: "name", header: "Name", cell: (r) => r.name }];
+  render(
+    <>
+      <GeneralSettings />
+      <DataTable rows={rows} columns={cols} rowKey={(r) => r.id} emptyMessage="none" />
+    </>,
+  );
+  // The default of 20 rows per page: row-19 shows, row-20 is on page 2.
+  expect(screen.getByText("row-19")).toBeInTheDocument();
+  expect(screen.queryByText("row-20")).not.toBeInTheDocument();
+
+  const pageSize = screen.getByRole("combobox", { name: /default rows per page/i });
+  fireEvent.keyDown(pageSize, { key: "ArrowDown" });
+  fireEvent.click(screen.getByRole("option", { name: "10" }));
+
+  expect(localStorage.getItem("coffer.pageSize")).toBe("10");
+  expect(screen.getByText("row-9")).toBeInTheDocument();
+  expect(screen.queryByText("row-10")).not.toBeInTheDocument();
 });

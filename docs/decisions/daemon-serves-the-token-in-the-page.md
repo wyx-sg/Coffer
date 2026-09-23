@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-11
 **Deciders**: Yuxing Wu
-**Spec**: [daemon](../../specs/daemon/spec.md) FR-016 / FR-017 / FR-015
+**Spec**: [daemon](../../openspec/specs/daemon/spec.md) FR-016 / FR-017 / FR-015
 **Related**: [Detect-or-Spawn](./daemon-detect-or-spawn.md) (the daemon's port moves between restarts, which is the other half of why a browser could not find its way back)
 **Amended by**: [The Desktop Shell Returns](./desktop-shell-over-a-shared-frontend.md) (2026-09-12) — a third case now exists; the decision below is unchanged for browsers
 
@@ -118,3 +118,11 @@ browser at that origin.
 - **Rely on loopback binding alone and skip the `Host` check.** Rejected: that
   is precisely the gap DNS rebinding walks through, and it is the gap the
   injection would have opened.
+
+## Implementation notes
+
+- **Reserved roots are matched by whole path segment, never by prefix**
+  (`_RESERVED_ROOTS` in `surfaces/http/webui.py`). The SPA fallback that
+  answers client-side routes with the token-bearing `index.html` must not
+  swallow `/api`, `/mcp` and the other daemon roots, and a prefix test such as
+  `startswith("mcp")` would instead claim the UI's own `/mcp-servers` route.

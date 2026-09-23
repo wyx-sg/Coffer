@@ -1,0 +1,538 @@
+openapi: 3.1.0
+info:
+  title: Coffer MCP Gateway API
+  version: "0.1.0"
+  description: |
+    The MCP-server-specific half of the management plane: capability
+    curation, upstream discovery and health, and the invocation log.
+
+    The kind-agnostic routes an `mcp_server` is otherwise managed through —
+    `/resources`, `/resources/{uid}` and its enable / disable / scope
+    operations — are spec resource-framework's contract, as are `/audit`,
+    `/retention/*` and `/upkeep/runs`.
+
+    Authentication: every request must carry `X-Coffer-Token` (a per-daemon
+    random token written to `~/.coffer/daemon.json`).
+
+    The MCP protocol surface (`/mcp`) is a JSON-RPC endpoint and is **not**
+    covered by this OpenAPI document — see `docs/decisions/session-subprocess-model.md`
+    ("Implementation notes").
+  contact:
+    name: Coffer
+    url: https://github.com/wyx-sg/Coffer
+
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    description: Local daemon
+    variables:
+      port:
+        default: "8000"
+        description: >-
+          Port from `~/.coffer/daemon.json`. The daemon binds exactly one
+          port and refuses to start rather than moving; the daemon's own
+          lifecycle, discovery file and token are spec daemon's.
+
+security:
+  - cofferToken: []
+
+# Every mutating endpoint accepts an optional `X-Coffer-Actor` request header
+# (values: cli, api, ui, system). The audit log records the supplied value so
+# downstream tooling can attribute actions back to the originating surface.
+# Absent header defaults to "api". Documented once here rather than repeated
+# on every operation.
+
+tags:
+  - name: mcp
+    description: MCP-server-specific operations
+
+paths:
+  /resources/mcp_server/{uid}/capabilities:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The MCP server resource's immutable identity.
+        schema: { type: string }
+    get:
+      tags: [mcp]
+      operationId: listMcpCapabilities
+      summary: List tools/resources/prompts (live + preference-filtered)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CapabilityListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/UpstreamUnavailable" }
+
+  /resources/mcp_server/{uid}/capabilities/{capability_type}/enable:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The MCP server resource's immutable identity.
+        schema: { type: string }
+      - in: path
+        name: capability_type
+        required: true
+        schema:
+          type: string
+          enum: [tool, resource, prompt]
+    post:
+      tags: [mcp]
+      operationId: enableMcpCapability
+      summary: |
+        Enable a capability for the MCP server this uid names. The capability_key is
+        carried in the request body (not the URL) so that keys containing '/'
+        (resource URIs such as `file:///path`) route correctly.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CapabilityKeyBody" }
+      responses:
+        "204": { description: No Content }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /resources/mcp_server/{uid}/capabilities/{capability_type}/disable:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The MCP server resource's immutable identity.
+        schema: { type: string }
+      - in: path
+        name: capability_type
+        required: true
+        schema:
+          type: string
+          enum: [tool, resource, prompt]
+    post:
+      tags: [mcp]
+      operationId: disableMcpCapability
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CapabilityKeyBody" }
+      responses:
+        "204": { description: No Content }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /resources/mcp_server/{uid}/refresh:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The MCP server resource's immutable identity.
+        schema: { type: string }
+    post:
+      tags: [mcp]
+      operationId: refreshMcpCapabilities
+      summary: Invalidate the in-memory capability cache and re-query upstream
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CapabilityListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/UpstreamUnavailable" }
+
+  /resources/mcp_server/{uid}/test:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The MCP server resource's immutable identity.
+        schema: { type: string }
+    post:
+      tags: [mcp]
+      operationId: testMcpServer
+      summary: Open a transient upstream session and run initialize
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpTestResultOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /mcp/invocations:
+    get:
+      tags: [mcp]
+      operationId: listAllMcpInvocations
+      summary: Every server's invocations on one timeline, newest-first.
+      parameters:
+        - in: query
+          name: uid
+          required: false
+          description: >-
+            Narrow to one upstream server, by the uid its rows were written
+            under. Filtering by name was removed with the identity change: the
+            log stores the uid, so a name filter would have to be resolved
+            against today's labels — which would hide every row belonging to a
+            server whose name has since changed, and silently hand a reused
+            name the previous holder's history. The two reserved forms are
+            filterable too: `coffer` for Coffer's own built-in tools, and
+            `deleted:<name>` for rows whose server was already gone when the
+            log was re-keyed.
+          schema: { type: string }
+        - in: query
+          name: since
+          required: false
+          schema: { type: string, format: date-time }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, default: 50, minimum: 1, maximum: 500 }
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [ok, error, timeout, denied]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvocationListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /resources/mcp_server/{uid}/invocations:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The MCP server resource's immutable identity.
+        schema: { type: string }
+      - in: query
+        name: since
+        required: false
+        schema: { type: string, format: date-time }
+      - in: query
+        name: limit
+        required: false
+        schema: { type: integer, default: 50, maximum: 500 }
+      - in: query
+        name: status
+        required: false
+        schema:
+          type: string
+          enum: [ok, error, timeout, denied]
+    get:
+      tags: [mcp]
+      operationId: listMcpInvocations
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InvocationListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /resources/mcp_server/{uid}/status:
+    get:
+      tags: [mcp]
+      operationId: getMcpServerStatus
+      summary: Cheap per-server status from persisted state — no spawn.
+      parameters:
+        - in: path
+          name: uid
+          required: true
+          description: The MCP server resource's immutable identity.
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpServerStatusOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  securitySchemes:
+    cofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    UnprocessableEntity:
+      description: Validation error
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    UpstreamUnavailable:
+      description: Upstream MCP server unreachable
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+  schemas:
+    CapabilityKeyBody:
+      type: object
+      required: [capability_key]
+      properties:
+        capability_key:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: |
+            The tool name, resource URI, or prompt name. Sent in the body so
+            keys containing '/' (e.g. resource URIs) are routed correctly.
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: RESOURCE_NOT_FOUND
+            message:
+              type: string
+              example: "resource not found: no mcp_server named 'filesystem'"
+            details:
+              type: object
+              additionalProperties: true
+
+    StdioTransport:
+      type: object
+      required: [type, command]
+      properties:
+        type: { type: string, enum: [stdio] }
+        command: { type: string }
+        args:
+          type: array
+          items: { type: string }
+          default: []
+        env:
+          type: object
+          additionalProperties: { type: string }
+          default: {}
+        credential_refs:
+          type: object
+          additionalProperties: { type: string }
+          default: {}
+        cwd:
+          type: string
+          nullable: true
+
+    HttpTransport:
+      type: object
+      required: [type, url]
+      properties:
+        type: { type: string, enum: [http] }
+        url: { type: string, format: uri }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+          default: {}
+        credential_refs:
+          type: object
+          additionalProperties: { type: string }
+          default: {}
+
+    MCPServerConfig:
+      type: object
+      required: [transport]
+      properties:
+        transport:
+          oneOf:
+            - $ref: "#/components/schemas/StdioTransport"
+            - $ref: "#/components/schemas/HttpTransport"
+          discriminator:
+            propertyName: type
+        spawn_timeout_seconds:
+          { type: integer, default: 30, minimum: 5, maximum: 120 }
+        request_timeout_seconds:
+          { type: integer, default: 120, minimum: 5, maximum: 1800 }
+
+    MCPToolView:
+      type: object
+      required: [prefixed_name, original_name, enabled]
+      properties:
+        prefixed_name: { type: string, example: filesystem__read_file }
+        original_name: { type: string, example: read_file }
+        description:
+          type: string
+          nullable: true
+        input_schema:
+          type: object
+          additionalProperties: true
+        enabled: { type: boolean }
+
+    MCPResourceView:
+      type: object
+      required: [prefixed_uri, original_uri, enabled]
+      properties:
+        prefixed_uri: { type: string }
+        original_uri: { type: string }
+        name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        mime_type:
+          type: string
+          nullable: true
+        enabled: { type: boolean }
+
+    MCPPromptView:
+      type: object
+      required: [prefixed_name, original_name, enabled]
+      properties:
+        prefixed_name: { type: string }
+        original_name: { type: string }
+        description:
+          type: string
+          nullable: true
+        arguments:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              description: { type: string, nullable: true }
+              required: { type: boolean }
+        enabled: { type: boolean }
+
+    CapabilityListOut:
+      type: object
+      required: [server_name, tools, resources, prompts, fetched_at]
+      properties:
+        server_name:
+          type: string
+          description: >-
+            The server's label, for the page heading. It is resolved from the
+            uid in the path, not the path segment echoed back — a capabilities
+            page headed by a UUID would be unreadable.
+        tools:
+          type: array
+          items: { $ref: "#/components/schemas/MCPToolView" }
+        resources:
+          type: array
+          items: { $ref: "#/components/schemas/MCPResourceView" }
+        prompts:
+          type: array
+          items: { $ref: "#/components/schemas/MCPPromptView" }
+        fetched_at: { type: string, format: date-time }
+        from_cache: { type: boolean }
+
+    McpTestResultOut:
+      type: object
+      required: [ok, latency_ms]
+      properties:
+        ok: { type: boolean }
+        latency_ms: { type: integer }
+        protocol_version:
+          type: string
+          nullable: true
+        server_capabilities:
+          type: object
+          additionalProperties: true
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+
+    InvocationOut:
+      type: object
+      required:
+        [
+          timestamp,
+          resource_uid,
+          resource_name,
+          capability_type,
+          capability_key,
+          duration_ms,
+          status,
+        ]
+      properties:
+        timestamp: { type: string, format: date-time }
+        resource_uid:
+          type: string
+          description: >-
+            Which upstream server the call went to — the value actually
+            recorded in the log, and what to filter or link by. Two forms are
+            not resource uids and resolve to nothing: `coffer`, the sentinel
+            Coffer's own built-in tools log under, and `deleted:<name>`, the
+            marker given to rows whose server was already gone when the log was
+            re-keyed from names to uids.
+        resource_name:
+          type: string
+          nullable: true
+          description: >-
+            The same server's label, resolved at read time, so the timeline is
+            readable without a client holding the whole resource list. Null
+            when `resource_uid` resolves to no resource — a deleted server, or
+            the built-in sentinel — which is where a client falls back to
+            showing the uid's own text. Note the consequence of resolving
+            rather than storing: a renamed server's past rows all read under
+            its CURRENT name. That is the deliberate trade. The log is keyed by
+            identity, so one server's history stays one history across a
+            rename; the label is presentation, and presenting the name the user
+            uses today beats presenting one they have already stopped using.
+        capability_type:
+          type: string
+          enum: [tool, resource, prompt]
+        capability_key: { type: string }
+        duration_ms: { type: integer }
+        status:
+          type: string
+          enum: [ok, error, timeout, denied]
+        error_message:
+          type: string
+          nullable: true
+        session_id:
+          type: string
+          nullable: true
+
+    InvocationListOut:
+      type: object
+      required: [invocations]
+      properties:
+        invocations:
+          type: array
+          items: { $ref: "#/components/schemas/InvocationOut" }
+
+    McpServerStatusOut:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [healthy, failing, unknown]
+        missing_runner:
+          type: string
+          nullable: true
+          description: >-
+            The stdio launcher's basename when it does not resolve on THIS
+            machine (a synced server referencing e.g. uvx where uv is not
+            installed). The UI renders "missing <runner>" and names the
+            command to install; Coffer does not install it.

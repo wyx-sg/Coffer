@@ -173,6 +173,7 @@ def test_agent_list_table_default(agent_cli_daemon):
     assert "cur" in result.output
 
 
+@pytest.mark.acceptance(spec="agent-registry", scenario="agent reads print JSON with --json")
 def test_agent_list_shows_registered_json(agent_cli_daemon):
     """`agent list --json` includes a previously-registered agent."""
     config_dir = agent_cli_daemon / "cfg"
@@ -287,6 +288,7 @@ def test_agent_show_existing_text(agent_cli_daemon):
     assert keys[:3] == ["name", "uid", "type"], result.output
 
 
+@pytest.mark.acceptance(spec="agent-registry", scenario="agent reads print JSON with --json")
 def test_agent_show_existing_json(agent_cli_daemon):
     config_dir = agent_cli_daemon / "cfg"
     config_dir.mkdir()
@@ -731,6 +733,9 @@ def test_agent_edit_binds_a_model(agent_cli_daemon):
     assert shown["model"] == "gpt-5-codex"
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="bind a model to an agent from the command line"
+)
 def test_agent_edit_binds_a_fast_model_and_can_clear_it(agent_cli_daemon):
     """The route distinguishes "absent" from "explicitly null" via
     ``model_fields_set``; the CLI needs a way to say the second one, otherwise
@@ -782,3 +787,19 @@ def test_agent_show_reports_the_model_binding(agent_cli_daemon):
     shown = _runner.invoke(cli_app, ["agent", "show", "cur"])
     assert shown.exit_code == 0, shown.output
     assert "gpt-5-codex" in shown.output
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="list discovery candidates from the command line"
+)
+def test_agent_detect_json_lists_the_candidate_and_registers_nothing(agent_cli_daemon):
+    (agent_cli_daemon / ".codex").mkdir()
+
+    result = _runner.invoke(cli_app, ["agent", "detect", "--json"])
+
+    assert result.exit_code == 0, result.output
+    cands = {c["type"]: c for c in json.loads(result.output)}
+    assert cands["codex"]["config_dir"] == str(agent_cli_daemon / ".codex")
+    assert cands["codex"]["suggested_name"]
+    listed = _runner.invoke(cli_app, ["agent", "list", "--json"])
+    assert json.loads(listed.output) == []

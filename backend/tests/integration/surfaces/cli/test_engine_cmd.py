@@ -504,3 +504,46 @@ def test_curate_owner_clear_returns_the_pass_to_every_machine(engine_cli_daemon)
     assert r.exit_code == 0, r.output
     assert "wherever this vault is read" in r.output
     assert http.get("/internal-engine-config").json()["curate_owner_machine_id"] is None
+
+
+@pytest.mark.acceptance(
+    spec="internal-engine",
+    scenario="the bound and the speech-to-text model change one value at a time",
+)
+def test_engine_timeout_and_transcribe_model_set_leave_the_rest_of_the_row(engine_cli_daemon):
+    """Each terminal write touches its own value only, and is audited like the route's."""
+    http = engine_cli_daemon
+    assert http.put("/internal-engine-config", json={"model": "brain"}).status_code == 200
+    assert (
+        http.put(
+            "/internal-engine-config/upkeep", json={"pass": "distil", "enabled": False}
+        ).status_code
+        == 200
+    )
+
+    def _entries() -> list[dict]:
+        return http.get(
+            "/audit", params={"event_type": "internal_engine_model_set", "limit": 50}
+        ).json()["entries"]
+
+    before = len(_entries())
+
+    r = _runner.invoke(cli_app, ["engine", "timeout", "set", "90"])
+    assert r.exit_code == 0, r.output
+    body = http.get("/internal-engine-config").json()
+    assert body["model_timeout_s"] == 90
+    assert body["transcribe_model"] is None
+    assert body["model"] == "brain"
+    assert body["upkeep"]["distil"]["enabled"] is False
+
+    r = _runner.invoke(cli_app, ["engine", "transcribe-model", "set", "hears"])
+    assert r.exit_code == 0, r.output
+    body = http.get("/internal-engine-config").json()
+    assert body["transcribe_model"] == "hears"
+    assert body["model_timeout_s"] == 90
+    assert body["model"] == "brain"
+    assert body["upkeep"]["distil"]["enabled"] is False
+
+    after = _entries()
+    assert len(after) == before + 2
+    assert {e["actor"] for e in after[: len(after) - before]} == {"cli"}

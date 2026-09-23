@@ -1,0 +1,1575 @@
+openapi: 3.1.0
+info:
+  title: Coffer — Agent Registry API
+  version: "0.1.0"
+  description: |
+    Agent registry endpoints. Merged into the main Coffer Management API at
+    runtime; this document scopes only the agent-specific routes added by
+    spec agent-registry.
+
+    All routes use the same `X-Coffer-Token` authentication from
+    `openspec/specs/mcp-gateway/contracts/api.openapi.yaml`.
+
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    variables:
+      port:
+        default: "8000"
+
+security:
+  - cofferToken: []
+
+tags:
+  - name: agents
+    description: Local AI agent registry
+  - name: agent-providers
+    description: >-
+      What an agent can be put on. The model catalogue is read back from the
+      installed agent on every request and never written down in Coffer.
+
+paths:
+  /agents:
+    get:
+      tags: [agents]
+      operationId: listAgents
+      summary: List registered agents
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AgentOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [agents]
+      operationId: registerAgent
+      summary: Register a new agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{uid}:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The agent Resource's immutable identity.
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: getAgent
+      summary: Get one agent
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [agents]
+      operationId: updateAgent
+      summary: Update an agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentPatch" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [agents]
+      operationId: deleteAgent
+      summary: Remove an agent
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/candidates:
+    get:
+      tags: [agents]
+      operationId: listAgentCandidates
+      summary: Discover installed-but-unregistered agents
+      description: |
+        Read-only discovery: scans known install markers for each supported
+        agent type and returns the ones that are installed but not yet
+        registered, as candidates. Registers nothing — the user reviews the
+        candidates and chooses which to add (discovery + confirm). A removed
+        agent re-appears here on the next scan; there is no suppression list.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentCandidatesOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /agents/{uid}/config-files:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The agent Resource's immutable identity.
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: listAgentConfigFiles
+      summary: List an agent's curated config files
+      description: |
+        Returns the curated config-file allowlist for the agent's type, each
+        with its key, display name, resolved absolute path, containing-folder
+        absolute path (`folder_path`), format, and existence metadata. The set
+        is fixed per agent type; files that do not exist yet are listed with
+        `exists=false`. The `path`/`folder_path` pair backs the read-only UI's
+        open-in-external-editor / reveal-in-file-manager
+        affordances (FR-038).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ConfigFileInfo" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{uid}/config-files/{key}:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The agent Resource's immutable identity.
+        schema: { type: string }
+      - in: path
+        name: key
+        required: true
+        schema: { type: string }
+        description: Allowlisted config-file key (e.g. settings, global, instructions, config).
+    get:
+      tags: [agents]
+      operationId: readAgentConfigFile
+      summary: Read one config file's content
+      description: |
+        Returns the file's text content, its resolved absolute path and
+        containing-folder path (`folder_path`), format, existence, and a content
+        fingerprint for optimistic-concurrency writes (FR-036). The in-app UI
+        renders this content read-only; the `path`/`folder_path` pair backs the
+        open-in-external-editor / reveal affordances (FR-038). A
+        file that does not exist returns empty content with `exists=false` and
+        `fingerprint=""` and is not created. A key outside the agent type's
+        allowlist returns 404.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigFileContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [agents]
+      operationId: writeAgentConfigFile
+      summary: Save one config file's content
+      description: |
+        Validates the content against the file's format, then writes it
+        atomically (temp file + rename), keeping a `.bak` of the prior content.
+        Malformed `json`/`toml` content returns 422 and leaves the on-disk file
+        unchanged. A key outside the agent type's allowlist returns 404 and
+        performs no filesystem access. When `expected_fingerprint` is supplied
+        and the on-disk content changed since the read, the write is rejected
+        with 409 (`CONFIG_FILE_STALE`) and the file is left untouched (FR-036).
+        Records an `agent_config_file_written` audit entry on success. Returns
+        the refreshed metadata view.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConfigFileWrite" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigFileInfo" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{uid}/config-files/{key}/files/{relpath}:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The agent Resource's immutable identity.
+        schema: { type: string }
+      - in: path
+        name: key
+        required: true
+        schema: { type: string }
+        description: Allowlisted directory-entry key (e.g. subagents).
+      - in: path
+        name: relpath
+        required: true
+        schema: { type: string }
+        description: >-
+          Entry-relative POSIX path of the child file (nested paths allowed,
+          e.g. `review/security.md`). Validated server-side before any
+          filesystem access: no `..`, no absolute paths, no backslashes, no
+          hidden segments, `.md` extension required (FR-035). An invalid path
+          returns 404 or 422 without touching disk.
+    get:
+      tags: [agents]
+      operationId: readAgentConfigDirFile
+      summary: Read one child file of a directory config entry
+      description: |
+        Returns the child file's text content, its resolved absolute path and
+        containing-folder path (`folder_path`), format, existence, and content
+        fingerprint, like the single-file read. The in-app UI renders this
+        content read-only (`path`/`folder_path` back open-in-editor / reveal,
+        FR-038). A child that does not exist returns empty content
+        with `exists=false` and is not created.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigFileContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    put:
+      tags: [agents]
+      operationId: writeAgentConfigDirFile
+      summary: Save (create-on-write) one child file of a directory config entry
+      description: |
+        Same machinery as the single-file write: format validation, atomic
+        write + `.bak`, optional `expected_fingerprint` (stale → 409), audited
+        as `agent_config_file_written`. A missing child file is created
+        (create-on-write), including intermediate subdirectories.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConfigFileWrite" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigFileInfo" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [agents]
+      operationId: deleteAgentConfigDirFile
+      summary: Delete one child file of a directory config entry
+      description: |
+        Removes the child file from disk, preserving the prior content as
+        `<path>.bak`. Audited as `agent_config_file_deleted`. Deleting a child
+        that does not exist returns 404.
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{uid}/mcp-entries:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The agent Resource's immutable identity.
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: listAgentMcpEntries
+      summary: List the MCP server entries in the agent's own config files
+      description: |
+        Derived at read time from the agent's MCP-bearing config files
+        (claude_code: `~/.claude.json` + `settings.json` `mcpServers`; codex:
+        `config.toml` `[mcp_servers.*]`) — nothing is stored (FR-025). Env and
+        header VALUES never cross HTTP: each entry exposes key names only,
+        plus which keys look secret-like. A file that fails to parse degrades
+        to an entry in `parse_errors` instead of failing the view (FR-030).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpEntriesOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{uid}/mcp-entries/{entry}:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The agent Resource's immutable identity.
+        schema: { type: string }
+      - in: path
+        name: entry
+        required: true
+        schema: { type: string }
+        description: MCP entry name as it appears in the agent's config file.
+    delete:
+      tags: [agents]
+      operationId: deleteAgentMcpEntry
+      summary: Remove one MCP entry from the agent's config file
+      description: |
+        Edits only the entry's source file with the atomic-write + `.bak`
+        machinery and records an `agent_mcp_entry_removed` audit entry
+        (FR-026). When the same name exists in several files (claude_code),
+        the `source` query parameter disambiguates; omitting it then is
+        rejected with 422 (`MCP_ENTRY_SOURCE_AMBIGUOUS`). The `coffer` entry
+        is not removable here (422, `MCP_ENTRY_PROTECTED`) — it is managed by
+        the `/mcp-install` operations.
+      parameters:
+        - in: query
+          name: source
+          required: false
+          schema: { type: string }
+          description: Config-file key the entry lives in, when ambiguous.
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{uid}/mcp-entries/{entry}/adopt:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The agent Resource's immutable identity.
+        schema: { type: string }
+      - in: path
+        name: entry
+        required: true
+        schema: { type: string }
+    post:
+      tags: [agents]
+      operationId: adoptAgentMcpEntry
+      summary: Adopt a direct MCP entry into Coffer as a managed mcp_server resource
+      description: |
+        Registers the entry as an `mcp_server` resource, verifies the resource
+        reads back, then removes the source entry — strictly in that order;
+        any failure rolls back a created resource and leaves the agent's
+        config byte-identical (FR-028). Secret-looking env/header keys MUST be
+        mapped to keychain refs via `secrets`, or the request is rejected with
+        422 (`ADOPT_SECRET_UNRESOLVED`) listing the unresolved keys; mapped
+        values go into the OS keychain, never into resource config (FR-029).
+        A name collision returns 409 with `details.suggested_name`. The
+        `coffer` entry is never adoptable. Audited as
+        `agent_mcp_entry_adopted`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/McpEntryAdopt" }
+      responses:
+        "201":
+          description: Adopted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdoptedResource" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: >-
+            Name collision with an existing mcp_server resource; the error
+            envelope's `details.suggested_name` carries a suggested
+            alternative.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorOut" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{uid}/plugins:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The agent Resource's immutable identity.
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: listAgentPlugins
+      summary: List the agent's installed plugins and known marketplaces
+      description: |
+        Derived at read time, never stored (FR-031). For `codex` the listing
+        comes from `config.toml` (`[plugins.*]`, `[marketplaces.*]`) plus
+        presence of the documented cache directory; for `claude_code` the
+        inventory is read-only from `installed_plugins.json` /
+        `known_marketplaces.json`, with enabled state from `settings.json`
+        `enabledPlugins`. Parse failures degrade to `parse_errors` (FR-030).
+        Backs the agent detail page's Plugins tab: the listing's
+        `can_uninstall` says whether in-app uninstall can run for this agent
+        right now (the capability allows it and, for CLI-strategy agents, the
+        agent's own plugin CLI is on PATH), so the UI shows the uninstall
+        affordance on capability rather than on agent type.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PluginsOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{uid}/plugins/{plugin_id}:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The agent Resource's immutable identity.
+        schema: { type: string }
+      - in: path
+        name: plugin_id
+        required: true
+        schema: { type: string }
+        description: "Plugin identifier as the listing reports it (`<name>@<marketplace>`)."
+    patch:
+      tags: [agents]
+      operationId: setAgentPluginEnabled
+      summary: Enable or disable one of the agent's plugins
+      description: |
+        Writes the enabled flag to the agent's own documented write surface —
+        `settings.json` `enabledPlugins` for `claude_code` (created when
+        missing), `config.toml` `[plugins.*]` for `codex` — with the atomic
+        write + `.bak` machinery, and records an `agent_plugin_toggled` audit
+        entry. Agent types whose plugin capability does not allow toggling are
+        rejected with 422 (`PLUGIN_TOGGLE_UNSUPPORTED`); an id that matches no
+        installed plugin is 404 (`PLUGIN_NOT_FOUND`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PluginPatch" }
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [agents]
+      operationId: uninstallAgentPlugin
+      summary: Uninstall one of the agent's plugins
+      description: |
+        Dispatches on the agent's plugin capability. CLI-strategy agents
+        (`claude_code`) delegate to the agent's own `claude plugin uninstall`
+        — Coffer never hand-writes that agent's internal inventory — while the
+        rest edit their documented config surface directly and remove the
+        plugin's cache directory (`codex`). Audited as
+        `agent_plugin_uninstalled`. Agent types whose capability does not allow
+        uninstall, and CLI-strategy agents whose CLI is not on PATH, are
+        rejected with 422 (`PLUGIN_UNINSTALL_UNSUPPORTED`); a CLI invocation
+        that ran and failed is 422 (`PLUGIN_UNINSTALL_FAILED`). An id that
+        matches no installed plugin is 404 (`PLUGIN_NOT_FOUND`).
+      responses:
+        "204":
+          description: No Content
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{uid}/mcp-install:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The agent Resource's immutable identity.
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: getAgentMcpInstallStatus
+      summary: Whether Coffer's MCP is installed in this agent
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpInstallStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [agents]
+      operationId: installAgentMcp
+      summary: Install Coffer's MCP server into this agent
+      description: |
+        Writes a `coffer` stdio MCP-server entry (command = absolute path to
+        coffer-mcp-shim, argument `--agent-uid <uid>`) into the agent's MCP
+        config file, atomically and with a `.bak` backup. The shim reports
+        that uid on every call and the gateway matches it against each
+        resource's `scope.agents`, which is why the argument is the uid and
+        not the agent's name: this line is written once into a file Coffer
+        does not own and then read on every turn, so a label in it would stop
+        matching any scope the first time the user renamed the agent — and a
+        reference that resolves to nothing in an allow-list is the silent
+        widening this change exists to remove. Idempotent — re-installing
+        updates the entry in place. Returns 422 if the coffer-mcp-shim binary
+        cannot be resolved.
+      responses:
+        "200":
+          description: Installed (or already installed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpInstallStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+    delete:
+      tags: [agents]
+      operationId: uninstallAgentMcp
+      summary: Remove Coffer's MCP server entry from this agent
+      description: Removes the `coffer` entry. No-op success when not installed.
+      responses:
+        "200":
+          description: Uninstalled (or was not installed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpInstallStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{uid}/native-memory:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The agent Resource's immutable identity.
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: listAgentNativeMemory
+      summary: List the agent's OWN native per-project memory stores
+      description: |
+        Read-only scan of the memory the coding agent itself writes —
+        `claude_code`'s `<config_dir>/projects/<slug>/memory`, `codex`'s
+        global `memories/MEMORY.md` sliced by routed cwd. Coffer never writes
+        these: the agent detail page's Memory tab only opens or reveals the
+        directory. Stores come back most populated first. An agent type with
+        no native memory layout — and one whose projects directory is absent —
+        returns an empty list; an unknown agent uid is 404.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NativeMemoryListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{uid}/transcripts:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The agent Resource's immutable identity.
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: listAgentTranscripts
+      summary: List the agent's own local conversation transcripts
+      description: |
+        Read-only browse over the `.jsonl` transcripts the agent itself wrote:
+        title, project, message count, start and last-activity times, plus the
+        source path so a row can offer open-in-editor / reveal. Nothing is
+        written and no message text crosses the wire. Searches title + project
+        path (`q`), filters to an exact `project`, and sorts by `sort`/`order`;
+        paged by `limit`/`offset` against the matched `total`. Backed by the
+        reader's mtime-aware cache, so an agent with thousands of past
+        sessions stays responsive. An agent type with no known transcript
+        layout is the caller's request going wrong and comes back as 400
+        (`BAD_REQUEST`).
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+        - in: query
+          name: offset
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+        - in: query
+          name: q
+          required: false
+          schema: { type: string, nullable: true }
+          description: Search title or project path.
+        - in: query
+          name: project
+          required: false
+          schema: { type: string, nullable: true }
+          description: Filter to this exact `project_path`.
+        - in: query
+          name: sort
+          required: false
+          schema:
+            type: string
+            enum: [started_at, last_activity_at, message_count]
+            default: last_activity_at
+        - in: query
+          name: order
+          required: false
+          schema: { type: string, enum: [asc, desc], default: desc }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscriptSessionListOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{uid}/native-memory/files:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The agent Resource's immutable identity.
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: listAgentNativeMemoryFiles
+      summary: One native-memory store's directory, as a read-only tree
+      description: |
+        The tree of one store the listing handed out (FR-049). `dir` MUST be a
+        `memory_dir` that listing returned — any other path under the agent's
+        config dir (its transcripts, its settings, a sibling project) is 404,
+        the same answer as a store that is gone, so the difference cannot be
+        used to probe the filesystem. The walk is depth-bounded and says so on
+        the node it clipped rather than silently truncating. Read-only: Coffer
+        never writes an agent's own memory, so there is no fingerprint here and
+        no write to pair it with.
+      parameters:
+        - in: query
+          name: dir
+          required: true
+          schema: { type: string }
+          description: A `memory_dir` from the native-memory listing.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemoryFileTreeOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{uid}/native-memory/files/content:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The agent Resource's immutable identity.
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: readAgentNativeMemoryFile
+      summary: Read one file inside a native-memory store
+      description: |
+        One file's text, for the read-only preview (FR-049). `dir` is bounded
+        exactly as the tree read bounds it, and `path` must resolve inside that
+        store — a store that is not this agent's, a path escaping the store and
+        a file that does not exist are one answer, 404. Reads are size-capped
+        and a binary file comes back flagged with empty content rather than as
+        bytes. The absolute path travels alongside so the viewer can offer
+        open / reveal (FR-038).
+      parameters:
+        - in: query
+          name: dir
+          required: true
+          schema: { type: string }
+          description: A `memory_dir` from the native-memory listing.
+        - in: query
+          name: path
+          required: true
+          schema: { type: string, minLength: 1 }
+          description: File path relative to the store directory.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MemoryFileContentOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agents/{uid}/transcripts/session:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The agent Resource's immutable identity.
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: readAgentTranscriptSession
+      summary: Read one of the agent's conversations
+      description: |
+        The ONE place a transcript body crosses the wire (FR-048), so every
+        guard is concentrated here. `path` is an absolute `source_path` the
+        listing gave out and must resolve inside this agent's own transcript
+        directory; anything else is 404 rather than a file read — the same
+        answer as a transcript since deleted. Bounded twice over, because one
+        transcript can be tens of megabytes: at most `limit` turns come back,
+        and each turn's text is cut at the per-turn cap with `truncated` set.
+        Every turn is secret-scrubbed before it leaves the parser. The whole
+        file's turn count comes back as `message_count` alongside the window,
+        so a reader is never shown 200 turns and left to assume that is all of
+        them. Read-only: nothing is written, nothing is retained, no audit
+        event. An agent type with no known transcript layout is 400
+        (`BAD_REQUEST`).
+      parameters:
+        - in: query
+          name: path
+          required: true
+          schema: { type: string }
+          description: Absolute `source_path` of a session, as the listing gave it.
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
+        - in: query
+          name: offset
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TranscriptSessionDetailOut" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /agent-providers/{agent_key}/models:
+    get:
+      tags: [agent-providers]
+      operationId: listAgentModels
+      summary: List the models a picker should offer for an agent
+      description: |
+        On the agent's own built-in login, what the installed agent itself
+        offers, in the order its own sources offer it (FR-032/FR-033). With a
+        Coffer connection projected into this agent, that connection's curated
+        ids are the list instead, in the user's own order — the turns go to
+        that endpoint, so the agent's own names would be rejected. A connection
+        that curates nothing narrows nothing. The read never touches the
+        network. Every entry — id, label, description — is
+        read back from the agent, never written into Coffer, because a list
+        written down here goes stale on the next CLI release. Each source
+        degrades to nothing on its own: a missing CLI, a changed bundle
+        layout, an unauthenticated or wedged agent costs the models that
+        source would have added and nothing else. Reasoning levels travel
+        beside the id, never inside it (FR-036). Read-only; emits no audit
+        event.
+      parameters:
+        - in: path
+          name: agent_key
+          required: true
+          schema: { type: string }
+          description: The agent type key (`claude_code`, `codex`).
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentModelsOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  securitySchemes:
+    cofferToken:
+      type: apiKey
+      in: header
+      name: X-Coffer-Token
+
+  schemas:
+    AgentType:
+      type: string
+      enum: [claude_code, codex]
+      description: >
+        Supported agent product identifiers (the capability manifest). Each
+        value covers both the CLI and the app/IDE form of that product (shared
+        config directory).
+
+    AgentCreate:
+      type: object
+      required: [type]
+      additionalProperties: false
+      properties:
+        type: { $ref: "#/components/schemas/AgentType" }
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[a-zA-Z0-9_-]+$"
+          description: >-
+            Optional. When omitted the server derives a stable default from the
+            type (underscores become hyphens, e.g. claude_code -> claude-code).
+        config_dir:
+          type: string
+          description: >-
+            Optional absolute path overriding the type's standard config
+            directory (~/.claude, ~/.codex). Skills are delivered to
+            <config_dir>/skills, which is auto-created at registration.
+        description:
+          type: string
+          nullable: true
+
+    AgentPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        config_dir: { type: string }
+        description: { type: string, nullable: true }
+        model: { type: string, nullable: true, description: "The agent's model binding (FR-031); spec provider-switching projects it into the native config." }
+        fast_model: { type: string, nullable: true, description: "The binding's fast slot (FR-031). Explicit null clears it." }
+        wire_api: { type: string, nullable: true, description: "The binding's wire (FR-031). Only \"responses\" is accepted — see agent-registry/codex FR-011." }
+
+    AgentOut:
+      type: object
+      required:
+        [
+          uid,
+          name,
+          type,
+          config_dir,
+          model,
+          fast_model,
+          wire_api,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        uid:
+          type: string
+          description: >-
+            The agent Resource's immutable identity, and what every route in
+            this document addressing an agent takes. It is also the value
+            every cross-resource reference to this agent holds — a resource
+            `scope`'s agent list, a channel's `default_agent`, a skill
+            binding, the `--agent-uid` Coffer writes into the agent's own
+            MCP and hook entries — so a client can compare those against this
+            field directly, with nothing in between.
+          example: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+        name:
+          type: string
+          description: >-
+            A mutable label, unique among agents, editable through the
+            kind-agnostic `PATCH /api/v1/resources/{uid}`. For display. Note it
+            is NOT `type`: `type` (`claude_code`, `codex`) is the product this
+            agent is, fixed at registration, and the two were compared against
+            each other for long enough to need a translation table — which the
+            uid retires, because references now hold neither.
+        type: { $ref: "#/components/schemas/AgentType" }
+        config_dir:
+          {
+            type: string,
+            description: "Resolved config directory (the type's standard location unless overridden) — where the agent's config files live and skills are delivered under <config_dir>/skills.",
+          }
+        description: { type: string, nullable: true }
+        model: { type: string, nullable: true, description: "The agent's model binding (FR-031); null = unbound, so the agent runs on its own default." }
+        fast_model: { type: string, nullable: true }
+        wire_api: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    AgentCandidate:
+      type: object
+      required:
+        [type, display_name, config_dir, default_skill_dir, suggested_name]
+      description: >-
+        An installed-but-unregistered agent surfaced by discovery. Derived at
+        scan time, never stored; the user confirms it to register.
+      properties:
+        type: { $ref: "#/components/schemas/AgentType" }
+        display_name: { type: string }
+        config_dir:
+          {
+            type: string,
+            description: "The type's standard config directory on disk (~/.claude, ~/.codex).",
+          }
+        default_skill_dir:
+          {
+            type: string,
+            description: "Where skills are delivered for this candidate: <config_dir>/skills.",
+          }
+        suggested_name:
+          {
+            type: string,
+            description: "Default resource name (e.g. claude-code).",
+          }
+
+    AgentCandidatesOut:
+      type: object
+      required: [candidates]
+      properties:
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/AgentCandidate" }
+
+    ConfigFileFormat:
+      type: string
+      enum: [json, toml, markdown, text]
+      description: Validation/format of a config file.
+
+    ConfigFileKind:
+      type: string
+      enum: [file, directory]
+      description: >-
+        Whether an allowlist entry is a single file or a directory of files
+        (FR-034). For directory entries, `format` describes the CHILD files.
+
+    DirChild:
+      type: object
+      required: [relpath, size, modified_at]
+      description: One child file of a directory-type config entry.
+      properties:
+        relpath:
+          {
+            type: string,
+            description: "POSIX path relative to the entry's directory root.",
+          }
+        size: { type: integer }
+        modified_at: { type: string, format: date-time }
+
+    ConfigFileInfo:
+      type: object
+      required: [key, display_name, path, folder_path, format, kind, exists]
+      properties:
+        key:
+          {
+            type: string,
+            description: "Stable allowlist key (e.g. settings, global, instructions, subagents, config, hooks).",
+          }
+        display_name: { type: string }
+        path:
+          {
+            type: string,
+            description: "Resolved absolute path of the file (or directory, for kind=directory entries).",
+          }
+        folder_path:
+          type: string
+          description: >-
+            Absolute path of the file's containing folder (its parent
+            directory). The in-app viewer is read-only; the `path`/`folder_path`
+            pair backs open-in-external-editor / reveal-in-file-manager
+            (FR-038).
+        format: { $ref: "#/components/schemas/ConfigFileFormat" }
+        kind: { $ref: "#/components/schemas/ConfigFileKind" }
+        exists: { type: boolean }
+        size:
+          type: integer
+          nullable: true
+          description: "Byte size when the file exists; null otherwise."
+        modified_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Last-modified time when the file exists; null otherwise."
+        files:
+          type: array
+          nullable: true
+          items: { $ref: "#/components/schemas/DirChild" }
+          description: >-
+            Child files for kind=directory entries (recursive `.md` listing,
+            sorted by relpath); null for kind=file entries. A missing
+            directory lists as exists=false with no files.
+
+    ConfigFileContent:
+      type: object
+      required:
+        [
+          key,
+          path,
+          folder_path,
+          format,
+          exists,
+          content,
+          fingerprint,
+          memory_block,
+        ]
+      properties:
+        key: { type: string }
+        path:
+          type: string
+          description: >-
+            Resolved absolute path of the file on disk (for a directory child,
+            the resolved absolute path of that child). The in-app viewer is
+            read-only; this path backs open-in-external-editor /
+            reveal-in-file-manager (FR-038).
+        folder_path:
+          type: string
+          description: "Absolute path of the file's containing folder (FR-038)."
+        format: { $ref: "#/components/schemas/ConfigFileFormat" }
+        exists: { type: boolean }
+        content:
+          type: string
+          description: "File text; empty string when the file does not exist."
+        fingerprint:
+          type: string
+          description: >-
+            Content fingerprint for optimistic-concurrency writes (FR-036);
+            empty string when the file does not exist.
+        memory_block:
+          type: boolean
+          description: >-
+            True when the file contains the managed memory-projection block
+            marker owned by spec knowledge (FR-037) — the editor surfaces a notice,
+            never parses the block.
+
+    ConfigFileWrite:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+          description: "New file text. Validated against the file's format before writing."
+        expected_fingerprint:
+          type: string
+          nullable: true
+          description: >-
+            Fingerprint from the prior read. When supplied and the on-disk
+            content changed since, the write is rejected with 409
+            (`CONFIG_FILE_STALE`) and the file is left untouched (FR-036).
+
+    ParseError:
+      type: object
+      required: [source, path, error]
+      description: >-
+        One agent config file that failed to parse — the facet degrades to
+        this explicit state instead of failing the view (FR-030).
+      properties:
+        source: { type: string, description: "Allowlist key of the file." }
+        path: { type: string, description: "Resolved absolute path." }
+        error: { type: string, description: "Parser error message." }
+
+    McpEntry:
+      type: object
+      required:
+        [
+          name,
+          source,
+          transport,
+          command,
+          args,
+          env_keys,
+          secret_keys,
+          url,
+          header_keys,
+          enabled,
+          is_coffer,
+          matches_resource,
+        ]
+      description: >-
+        One MCP server entry as configured in the agent's own file — derived
+        at read time, never stored. Env/header VALUES never cross HTTP; only
+        key names are exposed.
+      properties:
+        name: { type: string }
+        source:
+          { type: string, description: "Allowlist key of the source file." }
+        transport: { type: string, enum: [stdio, http] }
+        command: { type: string, nullable: true }
+        args:
+          type: array
+          items: { type: string }
+        env_keys:
+          type: array
+          items: { type: string }
+          description: "Env variable KEY NAMES only (sorted); values stay on disk."
+        secret_keys:
+          type: array
+          items: { type: string }
+          description: >-
+            Env/header key names that look secret-like (TOKEN, SECRET,
+            PASSWORD, API_KEY, CREDENTIAL, AUTHORIZATION patterns). These must
+            be mapped to keychain refs on adopt.
+        url: { type: string, nullable: true }
+        header_keys:
+          type: array
+          items: { type: string }
+          description: "HTTP header KEY NAMES only (sorted); values stay on disk."
+        enabled:
+          type: boolean
+          nullable: true
+          description: >-
+            Per-entry enabled flag where the format defines one (Codex);
+            null for claude_code, whose format has no per-entry flag.
+        is_coffer:
+          type: boolean
+          description: "True for Coffer's own gateway entry (never adoptable)."
+        matches_resource:
+          type: string
+          nullable: true
+          description: >-
+            Name of an equivalent registered mcp_server resource, when one
+            exists — the user can remove the duplicate instead of adopting.
+
+    McpEntriesOut:
+      type: object
+      required: [items, parse_errors]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/McpEntry" }
+        parse_errors:
+          type: array
+          items: { $ref: "#/components/schemas/ParseError" }
+
+    McpEntryAdopt:
+      type: object
+      additionalProperties: false
+      properties:
+        source:
+          type: string
+          nullable: true
+          description: "Config-file key the entry lives in, when ambiguous."
+        new_name:
+          type: string
+          nullable: true
+          description: "Register the resource under this name instead (e.g. after a 409)."
+        secrets:
+          type: object
+          nullable: true
+          additionalProperties: { type: string }
+          description: >-
+            Maps secret-looking env/header KEY names to keychain refs; the
+            VALUES go into the OS keychain server-side, never into the
+            resource config (FR-029).
+
+    AdoptedResource:
+      type: object
+      description: >-
+        The resource adoption just created, in the three plain fields a
+        resource has: `uid`, `kind`, `name`. All three, because the caller
+        needs two different things from this response and they are not the
+        same field — somewhere to go, and something to say.
+      required: [uid, kind, name]
+      properties:
+        uid:
+          type: string
+          description: >-
+            The new resource's immutable identity — what the caller follows to
+            `/resources/{uid}` and its kind's routes. A name would have been
+            enough to look it up once and wrong to keep, and this is the one
+            moment the client learns the uid of something it did not create by
+            name.
+          example: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
+        kind: { type: string, example: mcp_server }
+        name:
+          type: string
+          description: >-
+            The label it was registered under — which may not be the entry's
+            own name, since `new_name` in the request overrides it after a
+            collision. That is what makes it worth returning: it tells the user
+            what the thing ended up being called.
+
+    Plugin:
+      type: object
+      required: [id, name, marketplace, enabled, cache_present]
+      description: One installed plugin — derived at read time, never stored.
+      properties:
+        id: { type: string, description: "`<name>@<marketplace>`." }
+        name: { type: string }
+        marketplace: { type: string }
+        enabled: { type: boolean }
+        cache_present:
+          type: boolean
+          description: >-
+            Whether the plugin's cache directory is present on disk; false
+            flags a configured-without-cache plugin (no repair is attempted).
+        version:
+          type: string
+          nullable: true
+          description: Installed version, when the inventory records one (Claude).
+        description:
+          type: string
+          nullable: true
+          description: From the plugin's `.claude-plugin/plugin.json` manifest.
+        author:
+          type: string
+          nullable: true
+          description: Author name from the manifest (object `name` or bare string).
+        homepage:
+          type: string
+          nullable: true
+          description: Manifest `homepage`, falling back to `repository`.
+        skills:
+          type: array
+          items: { type: string }
+          description: Names of skills the plugin bundles (its `skills/` subfolders).
+        commands:
+          type: array
+          items: { type: string }
+          description: Names of slash-commands the plugin bundles (`commands/*.md`).
+        mcp_servers:
+          type: array
+          items: { type: string }
+          description: Names of MCP servers the plugin bundles (its `.mcp.json`).
+
+    Marketplace:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        source_type: { type: string, nullable: true }
+        source: { type: string, nullable: true }
+
+    PluginsOut:
+      type: object
+      required: [items, marketplaces, parse_errors]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Plugin" }
+        marketplaces:
+          type: array
+          items: { $ref: "#/components/schemas/Marketplace" }
+        parse_errors:
+          type: array
+          items: { $ref: "#/components/schemas/ParseError" }
+        can_uninstall:
+          type: boolean
+          default: false
+          description: >-
+            Whether in-app uninstall is available for this agent right now —
+            the plugin capability allows it AND, for CLI-strategy agents
+            (`claude_code`), the agent's plugin CLI is on PATH. The UI shows
+            the uninstall affordance on this, not on agent type.
+
+    PluginPatch:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+          description: Desired enabled state for the plugin.
+
+    NativeMemoryStore:
+      type: object
+      required: [project, path, memory_dir, item_count]
+      description: >-
+        One native per-project memory store the agent itself owns. `memory_dir`
+        is the store's real identity; `project` / `path` are a best-effort
+        label for it.
+      properties:
+        project:
+          type: string
+          description: >-
+            Display label for the project — the project directory's basename
+            when the real path is known, else decoded from the on-disk slug.
+        path:
+          type: string
+          nullable: true
+          description: >-
+            Absolute project directory, when it could be resolved; null when
+            the lossy slug encoding could not be decoded to an existing dir.
+        memory_dir:
+          type: string
+          description: Absolute path of the store's memory directory.
+        item_count:
+          type: integer
+          description: Number of memory items found in the store.
+
+    NativeMemoryListOut:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/NativeMemoryStore" }
+          description: Stores, most populated first.
+
+    TranscriptSession:
+      type: object
+      required: [session_id, message_count, source_path]
+      description: One transcript session as the list shows it — no message text.
+      properties:
+        session_id: { type: string }
+        title:
+          type: string
+          nullable: true
+          description: First-message-derived title, when the transcript records one.
+        project_path:
+          type: string
+          nullable: true
+          description: Absolute cwd the session ran in, when recorded.
+        message_count: { type: integer }
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_activity_at:
+          type: string
+          format: date-time
+          nullable: true
+        source_path:
+          type: string
+          description: >-
+            Absolute path of the `.jsonl` file, so the row can open/reveal it.
+
+    TranscriptSessionListOut:
+      type: object
+      required: [sessions, total, limit, offset]
+      properties:
+        sessions:
+          type: array
+          items: { $ref: "#/components/schemas/TranscriptSession" }
+          description: One page of sessions.
+        total:
+          type: integer
+          description: >-
+            Sessions matching the search/filter, so the UI can page and show
+            "N of total".
+        limit: { type: integer }
+        offset: { type: integer }
+
+    MemoryFileNode:
+      type: object
+      required: [name, path, type]
+      description: >-
+        One entry in a native-memory store's tree. `path` is relative to the
+        store directory.
+      properties:
+        name: { type: string }
+        path:
+          type: string
+          description: Path relative to the store directory.
+        type:
+          type: string
+          enum: [file, dir]
+        size:
+          type: integer
+          nullable: true
+          description: Bytes, for a file.
+        truncated:
+          type: boolean
+          default: false
+          description: >-
+            A directory whose descendants were clipped at the walk-depth bound.
+        children:
+          type: array
+          items: { $ref: "#/components/schemas/MemoryFileNode" }
+          description: Directories before files, each group sorted by name.
+
+    MemoryFileTreeOut:
+      type: object
+      required: [root]
+      properties:
+        root: { $ref: "#/components/schemas/MemoryFileNode" }
+
+    MemoryFileContentOut:
+      type: object
+      required: [path, abs_path, content, truncated, binary, size]
+      description: One file's contents. No fingerprint — this surface has no write.
+      properties:
+        path:
+          type: string
+          description: Path relative to the store directory.
+        abs_path:
+          type: string
+          description: Absolute path on disk, so the viewer can offer open / reveal.
+        content:
+          type: string
+          description: Empty when `binary`.
+        truncated:
+          type: boolean
+          description: True when the read hit the size cap.
+        binary:
+          type: boolean
+        size: { type: integer }
+
+    TranscriptMessage:
+      type: object
+      required: [role, text]
+      description: One conversational turn, as the session page renders it.
+      properties:
+        role: { type: string }
+        text:
+          type: string
+          description: >-
+            Secret-scrubbed, and cut to the per-turn cap when `truncated` is
+            true.
+        timestamp:
+          type: string
+          format: date-time
+          nullable: true
+        truncated:
+          type: boolean
+          default: false
+
+    TranscriptSessionDetailOut:
+      type: object
+      required: [session_id, message_count, source_path, messages, limit, offset]
+      description: >-
+        One session's summary fields (the listing's, so a deep link shows the
+        same title and project the row did) plus a window of its turns.
+      properties:
+        session_id: { type: string }
+        title:
+          type: string
+          nullable: true
+        project_path:
+          type: string
+          nullable: true
+        message_count:
+          type: integer
+          description: >-
+            The WHOLE file's turn count, while `messages` is the `limit` turns
+            from `offset`.
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_activity_at:
+          type: string
+          format: date-time
+          nullable: true
+        source_path: { type: string }
+        messages:
+          type: array
+          items: { $ref: "#/components/schemas/TranscriptMessage" }
+        limit: { type: integer }
+        offset: { type: integer }
+
+    McpInstallStatus:
+      type: object
+      required: [installed]
+      properties:
+        installed:
+          type: boolean
+          description: "Whether a `coffer` MCP-server entry is present in the agent's MCP config."
+        command:
+          type: string
+          nullable: true
+          description: "The resolved coffer-mcp-shim command written/found, when installed."
+
+    AgentModelOut:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          description: >-
+            The id passed verbatim to the agent's CLI — whatever that agent
+            calls the choice, which for Claude Code is a tier alias and for
+            Codex a versioned model name.
+        label:
+          type: string
+        description:
+          type: string
+        efforts:
+          type: array
+          items: { type: string }
+          description: >-
+            The reasoning-effort levels this model runs at, in the agent's own
+            order; empty for an agent that takes no such setting. An effort is
+            not part of the model name — it is its own field on a turn — so it
+            is chosen beside the model, not instead of one.
+        default_effort:
+          type: string
+          nullable: true
+          description: >-
+            The level the agent itself would use when none is chosen, kept
+            only when it is one of the offered levels. Null when the runtime
+            publishes no machine-readable default.
+
+    AgentModelsOut:
+      type: object
+      required: [models]
+      properties:
+        models:
+          type: array
+          items: { $ref: "#/components/schemas/AgentModelOut" }
+
+    ErrorOut:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: AGENT_NOT_FOUND
+            message:
+              type: string
+              example: "agent not found: agent:claude-code"
+            details:
+              type: object
+              additionalProperties: true
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid X-Coffer-Token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    BadRequest:
+      description: Malformed request
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    NotFound:
+      description: Agent not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    Conflict:
+      description: >-
+        Duplicate name within the agent kind, or a stale config-file write
+        (`CONFIG_FILE_STALE` — the on-disk content changed since the read)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }
+    UnprocessableEntity:
+      description: Validation failure (config_dir not writable, privileged path, unknown type, malformed content, protected/ambiguous MCP entry, unresolved adopt secrets, unparseable config file, ...)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorOut" }

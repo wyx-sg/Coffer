@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-18
 **Deciders**: Yuxing Wu
-**Spec**: [channels](../../specs/channels/spec.md) (removal — no new spec; the `spec.md` is updated alongside this ADR)
+**Spec**: [channels](../../openspec/specs/channels/spec.md) (removal — no new spec; the `spec.md` is updated alongside this ADR)
 **Supersedes**: the **"approval seat"** job of the since-removed ADR that repositioned Agent Chat as the Vault Console; removes the per-tool approval relay introduced by the retired Agent Chat spec and bridged to IM by the Channels spec ([Channel Adapter Framework](./channel-adapter-framework.md), [Channel Entrypoint Differentiation](./channel-entrypoint-differentiation.md))
 
 ## Context

@@ -1,5 +1,5 @@
 """Contract test: the running app's generated OpenAPI for the /api/v1/memory
-paths structurally matches specs/memory/contracts/api.openapi.yaml.
+paths structurally matches openspec/specs/memory/contracts/api.openapi.yaml.
 
 Mirrors test_chat_openapi.py and test_channel_contract.py (drive the assertions
 from the yaml itself) and test_knowledge_openapi.py (compare the route set
@@ -12,7 +12,7 @@ module is the memory half of closing it.
 
 Two deliberate notes on what is *not* asserted here:
 
-  - ``ErrorEnvelope`` (specs/memory/contracts/api.openapi.yaml:383) has no
+  - ``ErrorEnvelope`` (openspec/specs/memory/contracts/api.openapi.yaml:383) has no
     counterpart in the generated components, and neither does the app-wide
     ``ErrorResponse``. Every failure on this family is raised as a
     ``CofferError`` and mapped centrally rather than declared as a route's
@@ -40,7 +40,7 @@ import yaml
 from coffer.main import app
 
 _MEMORY_OPENAPI_PATH = (
-    Path(__file__).resolve().parents[3] / "specs/memory/contracts/api.openapi.yaml"
+    Path(__file__).resolve().parents[3] / "openspec/specs/memory/contracts/api.openapi.yaml"
 )
 
 _MEMORY_PREFIX = "/api/v1/memory"
@@ -59,7 +59,7 @@ def generated_schema() -> dict[str, Any]:
 
 @pytest.fixture(scope="module")
 def spec_doc() -> dict[str, Any]:
-    """Parse specs/memory/contracts/api.openapi.yaml once per module."""
+    """Parse openspec/specs/memory/contracts/api.openapi.yaml once per module."""
     return yaml.safe_load(_MEMORY_OPENAPI_PATH.read_text())  # type: ignore[no-any-return]
 
 
@@ -130,7 +130,7 @@ def test_no_memory_route_is_undocumented(
     declared = _declared_operations(spec_doc)
     undeclared = served - declared
     assert not undeclared, (
-        f"served by the app but absent from specs/memory/contracts/api.openapi.yaml: "
+        f"served by the app but absent from openspec/specs/memory/contracts/api.openapi.yaml: "
         f"{sorted(f'{m} {p}' for m, p in undeclared)}"
     )
 
@@ -191,8 +191,8 @@ def test_every_yaml_component_exists_with_its_required_fields(
         missing = _required_fields(schema) - _required_fields(generated[name])
         if missing:
             problems.append(f"{name}: required in the yaml but not generated: {sorted(missing)}")
-    assert not problems, "specs/memory/contracts/api.openapi.yaml drift:\n  " + "\n  ".join(
-        problems
+    assert not problems, (
+        "openspec/specs/memory/contracts/api.openapi.yaml drift:\n  " + "\n  ".join(problems)
     )
 
 

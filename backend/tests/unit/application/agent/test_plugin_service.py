@@ -402,6 +402,10 @@ async def test_list_claude_inventory_and_enabled(store, audit_svc):
     assert any(m.name == "npm" for m in out.marketplaces)
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry/claude-code",
+    scenario="read enabled state from settings.json and cache from the inventory",
+)
 async def test_list_claude_cache_present_follows_the_recorded_install_path(store, audit_svc):
     """cache_present is whether the installPath the inventory records exists on
     disk — a record pointing at a deleted cache dir is flagged, while enabled
@@ -652,6 +656,9 @@ async def test_uninstall_claude_cli_failure_propagates(store, audit_svc):
     assert entries == []
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="hide the uninstall affordance when the uninstall cannot run"
+)
 async def test_list_can_uninstall_gating(store, audit_svc):
     # Claude (CLI strategy): can_uninstall follows the CLI's availability.
     store._files[_CLAUDE_INSTALLED] = _INSTALLED_JSON

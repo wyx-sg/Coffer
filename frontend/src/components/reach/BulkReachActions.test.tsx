@@ -18,6 +18,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 
+import { acceptance } from "@/test/acceptance";
 import { BulkReachActions } from "./BulkReachActions";
 import { ApiError } from "@/lib/api/errors";
 
@@ -235,3 +236,32 @@ describe("BulkReachActions", () => {
     expect(keys).toContain(JSON.stringify(["skills"]));
   });
 });
+
+acceptance(
+  "web-ui",
+  "a bulk reach write starts blank and reports failures in one summary",
+  async () => {
+    resources.disable.mockImplementation((uid: string) =>
+      uid === REVIEWING_UID
+        ? Promise.reject(new ApiError("RESOURCE_NOT_FOUND", "gone"))
+        : Promise.resolve(undefined),
+    );
+    mount();
+
+    expect(trigger()).toHaveTextContent("Set reach…");
+    openPanel();
+    const radios = screen.getAllByRole("radio");
+    expect(radios).toHaveLength(3);
+    expect(radios.filter((r) => (r as HTMLInputElement).checked)).toHaveLength(0);
+
+    fireEvent.click(choice(/^disabled$/i));
+
+    await waitFor(() => expect(resources.disable).toHaveBeenCalledTimes(2));
+    expect(resources.disable.mock.calls.map((c) => c[0]).sort()).toEqual(
+      [WRITING_UID, REVIEWING_UID].sort(),
+    );
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
+    expect(toastError.mock.calls[0][0]).toMatch(/1 succeeded, 1 failed/i);
+    expect(toastSuccess).not.toHaveBeenCalled();
+  },
+);

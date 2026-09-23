@@ -1,6 +1,6 @@
 """Pydantic API schemas (kind-agnostic).
 
-Wire-compatible with specs/mcp-gateway/contracts/api.openapi.yaml.
+Wire-compatible with openspec/specs/mcp-gateway/contracts/api.openapi.yaml.
 MCP-kind-specific schemas live in surfaces/http/mcp/schemas.py (Phase 3).
 """
 

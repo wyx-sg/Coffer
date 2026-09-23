@@ -2,7 +2,7 @@
 //
 // Zod schema driving the add-channel form, plus the pure planning step that
 // turns validated form values into the resource config + the list of
-// credential-store writes. Field names mirror specs/channels/data-model.md:
+// credential-store writes. Field names mirror openspec/specs/channels/data-model.md:
 // secrets never live in the config — only `*_ref` references do. Every issue
 // message is an i18n KEY (`channels.dialog.errors.*`): the dialog renders
 // `t(issue.message)` under the field the path names, never zod's own English.

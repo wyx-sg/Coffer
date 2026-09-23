@@ -469,6 +469,9 @@ def _retire_tools(**kwargs: Any) -> dict[str, Any]:
 
 
 @pytest.mark.anyio
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="refuse a retire before the pass has written anything"
+)
 async def test_a_retire_before_the_pass_has_written_anything_is_refused(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     # "Preserve every fact a pass is shown": a document may be retired only
     # once this pass has written its content somewhere else.

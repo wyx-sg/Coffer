@@ -4,7 +4,7 @@
 **Date**: 2026-09-18
 **Deciders**: Yuxing Wu
 **Supersedes**: [Resource Identifier Format](resource-identifier-format.md) — wholly; the `<kind>:<name>` string form is deleted, not demoted
-**Related**: spec [resource-framework](../../specs/resource-framework/spec.md), spec [vault-sync](../../specs/vault-sync/spec.md), [Everything Is a Resource Kind](everything-is-a-resource-kind.md), [Per-Agent Resource Scope](per-agent-resource-scope.md)
+**Related**: spec [resource-framework](../../openspec/specs/resource-framework/spec.md), spec [vault-sync](../../openspec/specs/vault-sync/spec.md), [Everything Is a Resource Kind](everything-is-a-resource-kind.md), [Per-Agent Resource Scope](per-agent-resource-scope.md)
 
 ## Context
 

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-12
 **Deciders**: Yuxing Wu
-**Spec**: [daemon](../../specs/daemon/spec.md) FR-016 / FR-011; [desktop-app](../../specs/desktop-app/spec.md) FR-001 … FR-011
+**Spec**: [daemon](../../openspec/specs/daemon/spec.md) FR-016 / FR-011; [desktop-app](../../openspec/specs/desktop-app/spec.md) FR-001 … FR-011
 **Supersedes in part**: the "A desktop shell" explicit non-goal recorded in the roadmap on 2026-09-09
 **Related**: [The Daemon Serves Its Token in the Page](./daemon-serves-the-token-in-the-page.md) (which this amends — its "there is no third case" now has one), [Detect-or-Spawn](./daemon-detect-or-spawn.md), [PyInstaller Distribution](./distribution-pyinstaller.md), [The Daemon Proxies OS File Actions](./daemon-proxies-os-file-actions.md)
 
@@ -232,3 +232,43 @@ single highest-value thing that account would buy.
   the reason the shell is being restored at all, which is that reaching Coffer
   should not require knowing what a daemon is. The quarantine step is one
   documented command; needing the CLI first is a permanent second product.
+
+## Implementation notes
+
+- **The page paints at once; the window waits.** The frontend still starts the
+  handshake alongside the first render, never before it (`main.tsx`). What
+  changed since this ADR was written is the window: `tauri.conf.json` creates it
+  hidden, and `reveal_main_window` in `daemon.rs` shows it once — when the
+  handshake reaches a daemon, or when it fails, in which case it opens on the
+  offline banner and its Restart. A window shown only on success would never
+  appear when no daemon can be started. With the daemon usually resident as a
+  login service, the wait is normally imperceptible (spec desktop-app, "Host
+  the UI locally in an application window").
+- **Two probes for two questions.** `discovery.rs` keeps a bare TCP connect for
+  "is the socket gone" (after a shutdown request) and an HTTP status probe for
+  "is a Coffer daemon here". Using the first for the second turns a port squatter
+  into a phantom daemon.
+- **Restart holds one lock across the decision.** `restart_daemon` takes the
+  rate-limit mutex for the check, the stop, the spawn and the timestamp
+  together, so a concurrent second restart sees either the recorded timestamp
+  or the now-running daemon. The timestamp is written only after a spawn
+  succeeds, so a failure never consumes the window, and the lock is released
+  before the ready-wait (`ready.rs`). The rate-limit arithmetic and the stop
+  sequence are pure functions in `restart.rs`.
+- **Spawning bypasses Tauri's sidecar API on purpose.** The managed sidecar is
+  torn down with the app, which is wrong for a daemon that serves agents with
+  no window open. `spawn.rs` starts a plain detached process, appends its output
+  to `~/.coffer/logs/daemon.log`, and hands it the login shell's `PATH`
+  (`env_path.rs`, `$SHELL -lc`, merged with well-known directories): a
+  Finder-launched app inherits a minimal `PATH`, and hard-coding common
+  locations breaks on every version manager.
+- **The shell writes nothing under `~/.coffer/` but log lines.** It reads
+  `daemon.json`, appends `coffer.desktop` records to `daemon.log`, and consumes
+  `frontend/dist`; binary deployment stays with the daemon.
+- **Files beyond the original split.** Besides `resolve.rs`, `discovery.rs`,
+  `daemon.rs`, `spawn.rs`, `env_path.rs`, `sidecar.rs`, `tray.rs` and
+  `logging.rs`, the shell now has `ready.rs` (the ready-wait budget shared by
+  launch and restart), `restart.rs` (the pure restart policy) and
+  `sync_watch.rs` / `sync_presentation.rs` / `sync_alert.rs`, which repaint the
+  tray's sync entry and icon and raise notifications from the vault's sync
+  state (spec vault-sync).

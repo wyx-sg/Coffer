@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
+import { acceptance } from "@/test/acceptance";
 import { ConversationList } from "./ConversationList";
 import type { Conversation } from "@/lib/api/chat";
 
@@ -109,4 +110,21 @@ describe("ConversationListItem keyboard reachability", () => {
       expect(btn.className).toContain("group-focus-within:opacity-100");
     }
   });
+});
+
+acceptance("chat", "a channel's conversation is listed beside the web's with a badge", () => {
+  renderList([
+    conv("web", "Started on the web"),
+    {
+      ...conv("im", "Started on the phone"),
+      channel_binding: { channel_uid: "ch-1", channel: "telegram", chat_id: "c-9" },
+    },
+  ]);
+
+  const items = screen.getAllByRole("listitem");
+  expect(items).toHaveLength(2);
+  const web = items.find((li) => li.textContent?.includes("Started on the web"))!;
+  const im = items.find((li) => li.textContent?.includes("Started on the phone"))!;
+  expect(im).toHaveTextContent(/via telegram/i);
+  expect(web).not.toHaveTextContent(/via /i);
 });

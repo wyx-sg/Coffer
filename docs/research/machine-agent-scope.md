@@ -3,7 +3,7 @@
 > **Historical record.** This note designed a machine × agent scope **matrix**
 > on top of continuous multi-machine sync. Multi-machine sync is back — as a
 > converge round against a git rendezvous the user owns
-> ([Vault Sync](../../specs/vault-sync/spec.md)) — and the machine axis briefly
+> ([Vault Sync](../../openspec/specs/vault-sync/spec.md)) — and the machine axis briefly
 > returned with it, as two independent allow-lists rather than the matrix
 > designed here. It was **withdrawn again on 2026-09-14**, and this time the
 > question this note was investigating is settled rather than deferred: a

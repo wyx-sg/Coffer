@@ -151,6 +151,9 @@ async def test_uninstall_removes_entry(agent_bundle, tmp_path, monkeypatch):
     assert len(rows) == 1
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="uninstall Coffer's MCP when it is not installed"
+)
 async def test_uninstall_when_absent_is_noop(agent_bundle, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     agent = await _register_claude(agent_bundle, tmp_path)
@@ -164,6 +167,9 @@ async def test_uninstall_when_absent_is_noop(agent_bundle, tmp_path, monkeypatch
     assert rows == []
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="refuse the Coffer MCP install when the shim cannot be resolved"
+)
 async def test_install_raises_when_shim_unresolvable(agent_bundle, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     agent = await _register_claude(agent_bundle, tmp_path)
@@ -177,7 +183,7 @@ async def test_install_raises_when_shim_unresolvable(agent_bundle, tmp_path, mon
         store=ConfigFileStore(),
         shim_resolver=_boom,
     )
-    with pytest.raises(ShimNotFound):
+    with pytest.raises(ShimNotFound, match="coffer-mcp-shim"):
         await svc.install(agent.uid, actor="ui")
     # Nothing written.
     assert not (tmp_path / ".claude.json").exists()

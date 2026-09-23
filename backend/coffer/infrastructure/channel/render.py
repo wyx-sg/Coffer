@@ -1,7 +1,7 @@
 """Outbound rendering: one markdown subset → each platform's own text format,
 plus chunking.
 
-Telegram MarkdownV2 is an escaping minefield; the proven pattern (research.md)
+Telegram MarkdownV2 is an escaping minefield; the proven pattern (ADR channel-adapter-framework)
 is rendering a small markdown subset to HTML ``parse_mode`` and retrying as
 plain text if the platform rejects it. Only tags Telegram documents are
 emitted: b / i / code / pre / a.

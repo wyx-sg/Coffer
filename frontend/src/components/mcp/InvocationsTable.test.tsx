@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { InvocationsTable } from "./InvocationsTable";
+import { acceptance } from "@/test/acceptance";
 
 vi.mock("@/lib/api/client", () => ({
   getApiClient: vi.fn(),
@@ -374,3 +375,31 @@ describe("InvocationsTable across every server", () => {
     expect(screen.queryByRole("columnheader", { name: "Server" })).not.toBeInTheDocument();
   });
 });
+
+acceptance(
+  "web-ui",
+  "a server's invocations tab is the Activity calls table scoped to it",
+  async () => {
+    const get = vi.fn().mockResolvedValue({
+      data: { invocations: sampleInvocations },
+      error: undefined,
+    });
+    getApiClientMock.mockReturnValue({ GET: get } as unknown as ReturnType<typeof getApiClient>);
+
+    // Scoped to one server: that server's calls, and no server column.
+    const scoped = render(wrap(<InvocationsTable serverUid="u-filesystem" />));
+    await waitFor(() => expect(screen.getByText("read_file")).toBeInTheDocument());
+    expect(get.mock.calls.every((c) => c[1]?.params?.path?.uid === "u-filesystem")).toBe(true);
+    expect(get.mock.calls[0][0]).toBe("/resources/mcp_server/{uid}/invocations");
+    expect(screen.queryByRole("columnheader", { name: "Server" })).not.toBeInTheDocument();
+    scoped.unmount();
+
+    // Unscoped, as Activity mounts it: every server's calls, each row named.
+    get.mockClear();
+    render(wrap(<InvocationsTable />));
+    await waitFor(() => expect(screen.getAllByText("read_file").length).toBeGreaterThan(0));
+    expect(get.mock.calls[0][0]).toBe("/mcp/invocations");
+    expect(screen.getByRole("columnheader", { name: "Server" })).toBeInTheDocument();
+    expect(screen.getAllByText("fs").length).toBeGreaterThan(0);
+  },
+);

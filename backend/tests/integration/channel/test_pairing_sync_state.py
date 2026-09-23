@@ -1,4 +1,6 @@
-"""Channel pairings as a synced state area (spec vault-sync ``## What syncs``).
+"""Channel pairings as a synced state area.
+
+Spec vault-sync "Carry channel pairings as platform identity".
 
 A channel travels now, so rebinding it to another machine is a thing that
 happens — and a channel that arrived without its pairings would make the owner
@@ -27,6 +29,9 @@ def _provider(env: ChannelEnv) -> ChannelPeerSyncState:
     return ChannelPeerSyncState(env.resources, env.peers)
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="the active conversation pointer is not published"
+)
 async def test_the_exported_document_carries_platform_identity_only(env: ChannelEnv) -> None:
     resource = await env.register_channel("tg")
     peer = await env.pair(resource, chat_id="chat-42", sender_id="sender-7")

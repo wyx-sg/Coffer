@@ -67,6 +67,7 @@ async def test_set_then_get_round_trips_every_field(sm: async_sessionmaker) -> N
     assert await repo.get() == remote
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="sync stays off until a remote is configured")
 async def test_set_twice_keeps_one_row(sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
     repo = SqlAlchemySyncRemoteRepo(sm)
     await repo.set(BackupRemote(url="https://example.invalid/one.git"))

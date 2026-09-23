@@ -3,8 +3,8 @@
 **Status**: Accepted
 **Date**: 2026-09-09
 **Deciders**: Yuxing Wu
-**Spec**: [vault-sync](../../specs/vault-sync/spec.md) (also amends [mcp-gateway](../../specs/mcp-gateway/spec.md) and [skill-manager](../../specs/skill-manager/spec.md))
-**Amends**: [Everything Is a Resource Kind](./everything-is-a-resource-kind.md) (resources now carry a scope), [Tool Retrieval](./tool-retrieval-for-overload.md) / [Built-in Agent Is Internal](./builtin-agent-is-internal-capability.md) (`coffer__search_tools` ranking is scope-aware), and — since the 2026-09-13 revision — [Provider Switching](./provider-switching.md) (a connection's `compatible_agents` field is replaced by this scope) and spec [channels](../../specs/channels/spec.md) (a channel's scope names the agents it may drive). See [Revision history](#revision-history).
+**Spec**: [vault-sync](../../openspec/specs/vault-sync/spec.md) (also amends [mcp-gateway](../../openspec/specs/mcp-gateway/spec.md) and [skill-manager](../../openspec/specs/skill-manager/spec.md))
+**Amends**: [Everything Is a Resource Kind](./everything-is-a-resource-kind.md) (resources now carry a scope), [Tool Retrieval](./tool-retrieval-for-overload.md) / [Built-in Agent Is Internal](./builtin-agent-is-internal-capability.md) (`coffer__search_tools` ranking is scope-aware), and — since the 2026-09-13 revision — [Provider Switching](./provider-switching.md) (a connection's `compatible_agents` field is replaced by this scope) and spec [channels](../../openspec/specs/channels/spec.md) (a channel's scope names the agents it may drive). See [Revision history](#revision-history).
 
 ## Context
 
@@ -82,7 +82,7 @@ resource's **reach**, and reach is machine-local.
 2. **Reach is machine-local.** `scope` and `enabled` are one thing — the
    resource's *reach*, written by one control — and neither is serialized into
    the sync bundle or written by a converge round (spec
-   [vault-sync](../../specs/vault-sync/spec.md) `## What does not sync`). What
+   [vault-sync](../../openspec/specs/vault-sync/spec.md) "Keep reach machine-local"). What
    travels between machines is the resource: what it *is*, and how it is
    configured. What it reaches, here, stays here.
 

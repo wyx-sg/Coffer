@@ -17,7 +17,7 @@ Covers: branch naming, Conventional Commits, AI co-author signatures, pull-reque
 Rules:
 
 - Kebab-case throughout.
-- The short name typically mirrors (or describes) the affected spec folder (`specs/mcp-gateway/` → `feature/mcp-gateway-...`).
+- The short name typically mirrors (or describes) the affected spec folder (`openspec/specs/mcp-gateway/` → `feature/mcp-gateway-...`).
 - Branch from up-to-date `main`: `git checkout main && git pull --ff-only && git checkout -b <prefix>/<name>`.
 - Branch deleted automatically after merge (squash merge strategy).
 

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-21
 **Deciders**: Yuxing Wu
-**Spec**: the `/fs` router (now spec daemon FR-021) and the shared FileActions bar (now spec [agent-registry](../../specs/agent-registry/spec.md) FR-047) are new here; this touches the open/reveal fallback clause on three other viewers — the skill file viewer and the "添加 Skill" folder picker, both of which spec [skill-manager](../../specs/skill-manager/spec.md) now states as assumptions rather than requirements of its own; the document viewer (now spec [knowledge](../../specs/knowledge/spec.md) FR-040); and the fact viewer (now spec [memory](../../specs/memory/spec.md) FR-029) — no new spec; the `spec.md` files are updated before implementation.
+**Spec**: the `/fs` router (now spec daemon FR-021) and the shared FileActions bar (now spec [agent-registry](../../openspec/specs/agent-registry/spec.md) FR-047) are new here; this touches the open/reveal fallback clause on three other viewers — the skill file viewer and the "添加 Skill" folder picker, both of which spec [skill-manager](../../openspec/specs/skill-manager/spec.md) now states as assumptions rather than requirements of its own; the document viewer (now spec [knowledge](../../openspec/specs/knowledge/spec.md) FR-040); and the fact viewer (now spec [memory](../../openspec/specs/memory/spec.md) FR-029) — no new spec; the `spec.md` files are updated before implementation.
 **Supersedes**: the "on the web, open/reveal falls back to copy-path" stance in spec agent-registry FR-044 / FR-047, in the skill file viewer's open/reveal clause (spec skill-manager, since restated as an assumption), in the retired Knowledge Base spec's document-viewer requirement (now spec knowledge FR-040) and in the retired Memory spec's fact-viewer requirement (now spec memory FR-029).
 
 ## Context
@@ -88,7 +88,7 @@ not run; now that open/reveal always run it serves no purpose, and a personal,
 local-first tool keeps the surface minimal. The `copyPath` / `copyFolderPath` actions
 and their i18n strings are deleted, not demoted.
 
-### 3. "添加 Skill" gets the folder picker (spec skill-manager, `## Assumptions`)
+### 3. "添加 Skill" gets the folder picker (spec skill-manager, `## Purpose`)
 
 The skill import dialog reuses the existing `FolderPicker` (the daemon-backed folder
 browser — spec agent-registry FR-050 / spec daemon FR-019). The folder is **picked**, not typed; the resolved absolute
@@ -123,3 +123,13 @@ because the browser deliberately withholds absolute paths.
 - Consistent with the personal-tool, local-first posture (Principle I in `docs/principles.md`): the
   daemon already performs local filesystem work on the user's behalf; opening a path
   the UI surfaced is benign and single-user.
+
+## Implementation notes
+
+- **No caller-supplied string reaches a shell.** The `application/fs/` services
+  build fixed argument vectors (`open`, `open -R`, `osascript`, `zenity`,
+  `kdialog`, …) and pass the validated path as one element of them.
+- **The folder picker degrades to "unavailable", not to an error.** On Windows,
+  and on a Linux host with neither `zenity` nor `kdialog`, there is no argv-only
+  native dialog, so `POST /fs/pick-folder` answers `available: false` and the UI
+  falls back to the in-app folder browser. That path is not exercised in CI.

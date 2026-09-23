@@ -40,7 +40,7 @@ A collection is **one tree of Markdown documents**, and it is what an agent read
 
 New knowledge does not land in the tree directly. It waits in the collection's hidden `.inbox/` until a pass folds it into the documents, and the inbox item is deleted the moment that happens. The inbox is the one hidden directory Coffer writes; nothing lists it, no catalogue names it, and no surface can address a path inside it.
 
-Every document carries frontmatter with `title`, `description`, `actor` and timestamps, plus `coffer_curated_at` — when curation last had it in front of it. Any other key you put there is kept. A file's **path is its identity** — names are readable slugs derived from the title, and there is no id anywhere. The stamp is also how a sweep knows what it owes: a document whose modification time is newer than its stamp is one somebody edited since, with no state file anywhere.
+Every document carries frontmatter with `title`, `description`, `actor` and timestamps, plus `coffer_curated_at` — when curation last had it in front of it. Any other key you put there is kept. A file's **path is its identity** — names are readable slugs derived from the title (up to 80 characters, CJK kept as-is, `-2`, `-3`, … on a collision), and there is no id anywhere. The stamp is also how a sweep knows what it owes: a document whose modification time is newer than its stamp is one somebody edited since, with no state file anywhere.
 
 ## Adding knowledge
 
@@ -59,6 +59,20 @@ coffer knowledge delete handbook/package-manager.md
 
 Editing a document directly is an equally complete way to add knowledge. Change a line in your editor, add a section, drop in a new Markdown file — nothing has to be imported or registered. The next sweep notices the edit by its modification time and carries it into the rest of the collection: a correction you made in one document reaches the others that say the same thing. It never reverts what you wrote.
 
+A document you add by hand should carry the same frontmatter Coffer writes, or it is catalogued with an empty description — and the description is what an agent picks a document by:
+
+```markdown
+---
+title: Session ownership
+description: Which service owns a login session, and what reads it.
+actor: user
+created_at: '2026-09-12T04:18:33Z'
+updated_at: '2026-09-12T04:18:33Z'
+---
+
+Login state is owned by `account.session`.
+```
+
 Deleting is a person's action, and any document may be deleted. No agent-facing tool deletes anything.
 
 ## Uploading documents
@@ -69,11 +83,11 @@ Hand Coffer a file in any format and it converts it to Markdown and submits the 
 coffer knowledge upload ./onboarding.pdf --collection handbook
 ```
 
-- Conversion covers what [markitdown](https://github.com/microsoft/markitdown) handles — pdf, docx, pptx, xlsx, html and more — plus plain text and CSV. An unsupported type is refused by name, never stored half-converted, and a failed conversion leaves nothing behind.
+- Conversion covers what [markitdown](https://github.com/microsoft/markitdown) handles — pdf, docx, pptx, xlsx, html, epub and more — plus plain text, Markdown and CSV. Legacy `.doc`/`.ppt`, `.rtf` and `.odt` are deliberately not among them: save as `.docx`/`.pptx` first. An unsupported type is refused by name, never stored half-converted, and a failed conversion leaves nothing behind — including an image-only PDF, which converts without error into no text at all and is refused for saying so.
 - One file per call, a 20 MB ceiling, and a refusal that names the limit.
 - The description is optional input but never optional output. With no internal model connection configured, Coffer draws one from the document's own opening prose rather than leaving it blank.
 
-A document sent to a Coffer channel with `/save` rides the same entrance, so your phone and the Knowledge page are two ends of one path into a collection.
+A document forwarded to a Coffer channel and followed by `/save <collection>` rides the same entrance — accepted only from the channel's paired owner — so your phone and the Knowledge page are two ends of one path into a collection.
 
 ## Curation
 
@@ -99,7 +113,9 @@ The answer is a status: `ok`, `up_to_date`, `no_model` when no internal connecti
 
 **With no internal model, nothing waits.** Material is promoted to a document of its own the moment it arrives, as it stands, and a pass over a collection with anything left in its inbox promotes all of it and reports `no_model` with the documents it produced. You get a less tidy collection, but never knowledge sitting where no agent can read it.
 
-Two switches govern the unattended sweep, and both are read on every tick: whether it is on, and which single machine owns it. A vault that spans machines must curate on exactly one of them, because two machines merging the same material produce two different documents that git would merge as two additions. It defaults **on**, because it is what turns new material into something an agent reads.
+Two switches govern the unattended sweep, and both are read on every tick: whether it is on, and which single machine owns it (**Settings → Engine**, under *Automatic upkeep*). A vault that spans machines must curate on exactly one of them, because two machines merging the same material produce two different documents that git would merge as two additions. With no owner chosen the switch means "here", which is the right answer for a single machine. It defaults **on**, because it is what turns new material into something an agent reads.
+
+Curation also stands aside for [sync](/guide/sync): a pass never overlaps a converge round, and none starts while a round is waiting on you to resolve a conflict or confirm a change.
 
 ## How an agent reads it
 
@@ -127,6 +143,8 @@ Everything above lives under one group, `coffer knowledge`:
 | Collections | `collections` · `create`                     |
 | Files       | `ls` · `read` · `write` · `delete` · `upload` |
 | Curation    | `curate`                                     |
+
+`--json` works on `collections`, `ls` and `read`; `curate` always prints its result as JSON, because the status is the answer. There is deliberately no `grep` or `search` command: the corpus is plain Markdown at a path the group's help names, so your own `grep` is already better than anything this group could wrap.
 
 Deleting a collection is a Resource operation: `coffer resource delete knowledge <name>`. So is switching one off: `coffer resource disable knowledge <name>`.
 

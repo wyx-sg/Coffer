@@ -9,6 +9,7 @@ import {
   turnDomId,
 } from "@/components/agents/AgentTranscriptOutline";
 import type { TranscriptMessage } from "@/lib/api/agentTranscripts";
+import { acceptance } from "@/test/acceptance";
 
 function turn(role: string, text: string): TranscriptMessage {
   return { role, text, timestamp: null, truncated: false };
@@ -111,4 +112,17 @@ describe("AgentTranscriptOutline", () => {
     expect(screen.getByText(/no prompts/i)).toBeInTheDocument();
     expect(screen.queryByTestId("transcript-outline")).toBeNull();
   });
+});
+
+acceptance("agent-registry", "index a turn by the person's words, not the harness's blocks", () => {
+  const messages = [
+    turn(
+      "user",
+      "<system-reminder>\nYou are in a worktree.\n</system-reminder>\n\nwhy does the build fail?\nsecond line",
+    ),
+    turn("assistant", "Because the lockfile is stale."),
+    turn("user", "<task-notification>\nbuild finished\n</task-notification>"),
+  ];
+
+  expect(outlineOf(messages)).toEqual([{ index: 0, label: "why does the build fail?" }]);
 });

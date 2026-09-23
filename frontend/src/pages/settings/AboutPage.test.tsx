@@ -1,5 +1,6 @@
 // frontend/src/pages/settings/AboutPage.test.tsx
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { acceptance } from "@/test/acceptance";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
@@ -44,7 +45,7 @@ describe("AboutPage", () => {
     expect(screen.getByText(/github\.com\/wyx-sg\/Coffer/)).toBeInTheDocument();
   });
 
-  test("shows version, license and source only — no daemon port or start time", async () => {
+  acceptance("web-ui", "settings shows no daemon tab and no daemon status", async () => {
     mockStatus();
     const { container } = render(<AboutPage />, { wrapper: wrap });
 

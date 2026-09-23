@@ -225,6 +225,7 @@ async def test_scope_on_a_lifecycle_kind_that_declares_none_is_reported_and_refu
     spec="resource-framework",
     scenario="set a resource's reach from the kind-agnostic surface",
 )
+@pytest.mark.acceptance(spec="agent-registry", scenario="an agent cannot be given a scope")
 async def test_put_scope_on_agent_kind_returns_422_scope_invalid(tmp_path):
     """The `agent` kind declares no scope: scope names the agents a resource
     is active for, so an agent scoping itself is meaningless."""
@@ -243,6 +244,9 @@ async def test_put_scope_on_agent_kind_returns_422_scope_invalid(tmp_path):
         )
         assert r.status_code == 422, r.text
         assert r.json()["error"]["code"] == "SCOPE_INVALID"
+        # Refused, not half-applied: the agent still has no scope.
+        after = await c.get(f"/api/v1/resources/{agent.uid}/scope")
+        assert after.json()["scope"] is None
     await engine.dispose()
 
 

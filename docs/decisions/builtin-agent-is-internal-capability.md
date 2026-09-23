@@ -3,9 +3,9 @@
 **Status**: Accepted
 **Date**: 2026-06-14
 **Deciders**: Yuxing Wu
-**Spec**: [channels](../../specs/channels/spec.md) and [agent-registry](../../specs/agent-registry/spec.md) (repositioning + capability move — no new spec; both `spec.md` files are updated before implementation)
+**Spec**: [channels](../../openspec/specs/channels/spec.md) and [agent-registry](../../openspec/specs/agent-registry/spec.md) (repositioning + capability move — no new spec; both `spec.md` files are updated before implementation)
 **Supersedes**: the "converse with the vault through the `builtin` agent" half of the since-removed ADR that repositioned Agent Chat as the Vault Console; **amends** [Tool Retrieval](./tool-retrieval-for-overload.md) (search-tools ranking)
-**Related**: [knowledge](../../specs/knowledge/spec.md) (the Knowledge Layer spec), [Files as Truth](./files-as-truth-sqlite-retrieval.md)
+**Related**: [knowledge](../../openspec/specs/knowledge/spec.md) (the Knowledge Layer spec), [Files as Truth](./files-as-truth-sqlite-retrieval.md)
 
 ## Context
 
@@ -88,19 +88,13 @@ The LLM machinery is **kept but repurposed**, never user-facing:
 
 One capability is delivered in this change:
 
-**`coffer__search_tools` gains semantic ranking (amends [Tool Retrieval](./tool-retrieval-for-overload.md)).** The
-BM25-lite ranker has a real recall gap: it is purely lexical, so an intent like
-"notify someone" misses a `send_message` tool, and cross-language queries miss
-English tool names. Tool Retrieval's _own cited evidence_ found the winning
-selector was an **embedding** index (Copilot: embedding 94.5% > LLM 87.5%) — embeddings, not
-keywords. So `coffer__search_tools` now ranks semantically **when an embedder is
-configured, and falls back to the BM25-lite ranker when it is not** — the same
-`vector → keyword` degradation the knowledge base already uses (ADR files-as-truth-sqlite-retrieval). This
-keeps the zero-config, offline, deterministic path intact (and still guarded by
-the `tool_search` eval), while fixing recall for users who have an embedder.
-Note this does **not** reverse Tool Retrieval's rejection of an _LLM router_ for tool
-selection: the downstream agent still does the select-and-call; we only improve
-which candidates it sees.
+**`coffer__search_tools` stays lexical.** This decision once added an
+embedding path to `coffer__search_tools`, falling back to the BM25-lite ranker
+when no embedder was configured. That path was never wired to a real embedder
+and was removed with every other use of embeddings in Coffer, so the tool ranks
+with BM25-lite alone ([Tool Retrieval](./tool-retrieval-for-overload.md)). The
+downstream agent still does the select-and-call; Coffer only chooses which
+candidates it sees.
 
 ### Invariants
 
@@ -109,9 +103,7 @@ which candidates it sees.
   chat agent or a thing the UI presents as an assistant.
 - **Additive, auditable tools.** The upgraded `coffer__search_tools` is
   advertised in `tools/list` like any `coffer__` built-in, logged in the
-  invocation log (who/when/how-long/outcome, no args/results), and degrades
-  gracefully (it falls back to BM25 when no embedder is configured, never a
-  crash).
+  invocation log (who/when/how-long/outcome, no args/results).
 - **Seam parity preserved.** Removing the `builtin` chat provider does
   not touch the `ConversationPort` / `TurnPort` machinery that
   channels and managed-agent chat share.
@@ -179,3 +171,55 @@ keeps the very "built-in agent is a thing" framing this ADR removes.
   model than the one that asked. Usage bore that out — four calls in thirty
   days, one of them a failure. The retrieval tools the loop wrapped remain
   directly callable, so nothing is lost but the wrapper.
+
+## Implementation notes — the engine's settings
+
+The "local model" of move 3 is now [spec internal-engine](../../openspec/specs/internal-engine/spec.md):
+one global settings row naming the model, each unattended pass's switch and
+interval, the bound on one call and the speech-to-text model, while the
+endpoint and key are borrowed from the connection flagged `internal_default`
+([Provider Switching](provider-switching.md)). The choices behind its shape:
+
+- **The model is not a field on the connection.** A connection answers "which
+  gateway account"; which model runs on it is a property of each use (an
+  agent's binding, a conversation, Coffer's own passes). The cost is that two
+  independent settings can disagree, and a live vault did pair one provider with
+  another's model. The repair is the drop rule: when the flag moves, the engine
+  model is kept only if the new connection curates it, and dropped otherwise.
+  Probing the new endpoint was rejected because a settings write must not
+  depend on an endpoint being reachable. Re-flagging the connection that
+  already holds the flag changes nothing.
+- **A missing half resolves to `None`, not an error.** Coffer with no
+  connection is its first-run state, and the most frequent caller — voice
+  transcription, on every inbound message — would otherwise be the loudest
+  error in the log. Both halves answer the same `None`, so no consumer encodes
+  which one was missing.
+- **Passes are switched per pass, not per collection or partition.** The
+  question is what Coffer's one engine may do unattended; a per-target setting
+  would multiply rows, surfaces and defaults.
+- **One pass per write.** A body carrying all three passes would make every
+  toggle a read-modify-write over state another machine may be changing through
+  sync. `use_default_interval` exists because JSON cannot tell "use the
+  default" from "not sent".
+- **Defaults are reported, not stored.** An unchosen interval or bound is
+  `NULL` in the row and reported beside the default that applies
+  (`application/upkeep_schedule.py`), so raising a default later reaches every
+  vault that never chose.
+- **The schedule polls in slices instead of subscribing.** A settings change
+  arrives as often through a converge round from another machine as from a
+  local write, and only a wait that re-reads the interval each slice covers
+  both.
+- **The synced state area publishes a decision, not the row.** A singleton row
+  has no "absent" state, so exporting it would make a fresh machine and a
+  configured one delete and re-add the document forever. Publishing only a
+  non-default choice gives the area a fixed point; deleting the document means
+  "back to the defaults" everywhere.
+- **The engine is kind-agnostic substrate.** `application/engine/` sits in the
+  kind-agnostic-core import-linter contract; the provider kind declares
+  `EngineNotifyPort` for the flag moving, and the composition root is the only
+  place that sees both. `ResolvedConnection` is the provider kind's value
+  object; the engine owns only the conjunction of a flagged connection and a
+  chosen model.
+- **Known defect.** The `internal_engine_model_set` audit event fires for every
+  write to the row, not only for a model change; renaming it is a migration
+  over the audit enum.
