@@ -1,4 +1,4 @@
-"""The document→Markdown conversion contract (spec knowledge FR-024..FR-026).
+"""The document→Markdown conversion contract (spec knowledge).
 
 Pure: this module describes what the knowledge layer needs from a converter,
 so ``domain/`` never imports ``markitdown`` or any other conversion engine —
@@ -21,7 +21,7 @@ class Conversion:
 
     markdown: str
     #: The document's own title (its first Markdown H1) when it has one, else
-    #: the uploaded file's own name (FR-025).
+    #: the uploaded file's own name ("Fill frontmatter on converted material").
     title: str
     #: Which converter produced this. Reported on the successful upload
     #: response (``IngestedDocumentOut.converter``) so the caller knows which
@@ -32,7 +32,10 @@ class Conversion:
 
 
 class UnsupportedDocument(Exception):  # noqa: N818 - carries the rejected type, not an "...Error"
-    """No converter handles this file type; nothing was written (FR-024)."""
+    """No converter handles this file type; nothing was written.
+
+    Spec knowledge "Convert uploads into material without keeping them".
+    """
 
     def __init__(self, doc_type: str) -> None:
         self.doc_type = doc_type
@@ -40,14 +43,16 @@ class UnsupportedDocument(Exception):  # noqa: N818 - carries the rejected type,
 
 
 class EmptyConversion(Exception):  # noqa: N818 - carries the rejected type, not an "...Error"
-    """A converter ran and produced nothing; nothing was written (FR-028).
+    """A converter ran and produced nothing; nothing was written.
+
+    Spec knowledge "Bound uploads and leave nothing behind on failure".
 
     The case that matters is an image-only PDF: MarkItDown extracts no text
     from it, returns ``""``, and reports no error — it did its job, the
     document simply has no text layer. Stored, that is a knowledge file with a
-    title and an empty body, which FR-028's "never half-converted" forbids and
-    which is worse than a refusal: search will never find it and nothing says
-    why.
+    title and an empty body, which that requirement's "no inbox item, no
+    document" forbids and which is worse than a refusal: search will never
+    find it and nothing says why.
 
     A sibling of :class:`UnsupportedDocument` and, like it, deliberately NOT a
     ``CofferError``: both are refusals of one upload that the route turns into
@@ -74,7 +79,9 @@ class Converter(Protocol):
 
 
 def derive_title(markdown: str, filename: str) -> str:
-    """The document's own title, else the uploaded file's own name (FR-025).
+    """The document's own title, else the uploaded file's own name.
+
+    Spec knowledge "Fill frontmatter on converted material".
 
     Only the first non-blank line is treated as a heading candidate: an H1
     appearing lower in the document introduces a section, not the document.

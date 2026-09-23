@@ -1,4 +1,5 @@
-"""Which connection Coffer's own engine runs on (spec internal-engine FR-005).
+"""Which connection Coffer's own engine runs on (spec internal-engine "Resolve the
+engine's connection and model together").
 
 The engine runs on the connection the operator MARKED — the ``internal_default``
 one — paired with a model chosen apart from it. Both halves are required, and a

@@ -18,7 +18,7 @@ export interface paths {
          *     documents counted, and the material waiting in its inbox counted
          *     apart. Hidden entries (anything dot-prefixed) are excluded from the
          *     document count, and `README.md` itself is neither listed nor counted
-         *     (FR-007).
+         *     (see "Keep the collection README out of the corpus").
          *
          *     The two counts answer different questions — how much an agent can
          *     read today, and how much has arrived that it cannot read yet. A
@@ -36,7 +36,7 @@ export interface paths {
          *     `knowledge` Resource for it — which is what gives the collection a
          *     lifecycle, an audit trail and its one `enabled` switch.
          *     Nothing else creates one — not a read, not a write, not an agent's
-         *     working directory (FR-008).
+         *     working directory (see "Create collections only deliberately").
          *
          *     `name` is a single path segment. Names that would escape the root
          *     (containing `/`, `\` or `..`, or dot-only) are rejected, as is a name
@@ -66,9 +66,10 @@ export interface paths {
          *
          *     `path` is relative to the knowledge root — `shopee` for a collection's
          *     top level, `shopee/account` for a folder inside it. The listing is
-         *     generated at call time by walking the directory and reading
-         *     frontmatter, never materialized (FR-001). Hidden entries — the inbox
-         *     included — are absent, and so is the collection's `README.md`.
+         *     generated at call time by walking the directory and reading frontmatter,
+         *     never materialized (see "Store each collection as one tree of Markdown
+         *     files"). Hidden entries — the inbox included — are absent, and so is the
+         *     collection's `README.md`.
          */
         get: operations["readKnowledgeTree"];
         put?: never;
@@ -90,8 +91,9 @@ export interface paths {
          * Read a document
          * @description The document's full text, plus its frontmatter fields and the two
          *     absolute on-disk paths the UI needs to offer open-in-editor and
-         *     reveal-in-file-manager on the file and on its folder (FR-041).
-         *     `curated_at` says when curation last had it in front of it.
+         *     reveal-in-file-manager on the file and on its folder (see "Return
+         *     absolute paths on reads"). `curated_at` says when curation last had it
+         *     in front of it.
          *
          *     Whole file, always: no chunking, no passage granularity, no `top_k`.
          *     Bytes come off disk at call time, so an edit made in the person's own
@@ -106,10 +108,11 @@ export interface paths {
          *     index row, no chunks, no embedding — so the deletion is complete when
          *     the file is gone. Recorded in the audit log with the actor.
          *
-         *     **Any** document, whoever wrote it (FR-020): the tree is the person's
-         *     as much as curation's. No agent-facing tool deletes anything. A path
-         *     that is not a document — the collection itself, its `README.md`, or
-         *     anything hidden — is refused as `KNOWLEDGE_PATH_UNSAFE`.
+         *     **Any** document, whoever wrote it (see "Let only a person delete a
+         *     document"): the tree is the person's as much as curation's. No
+         *     agent-facing tool deletes anything. A path that is not a document — the
+         *     collection itself, its `README.md`, or anything hidden — is refused as
+         *     `KNOWLEDGE_PATH_UNSAFE`.
          */
         delete: operations["deleteKnowledgeFile"];
         options?: never;
@@ -128,24 +131,25 @@ export interface paths {
         put?: never;
         /**
          * Submit new knowledge to a collection
-         * @description Submits **material** — a title, a description and a Markdown body —
-         *     into the collection's inbox, for a curation pass to merge into the
-         *     documents (FR-013). It takes no path and no folder, and replaces
-         *     nothing: where the knowledge belongs, and what in it is new, is
-         *     curation's to decide. Two submissions of the same title are two pieces
-         *     of material.
+         * @description Submits **material** — a title, a description and a Markdown body — into
+         *     the collection's inbox, for a curation pass to merge into the documents
+         *     (see "Submit every entrance's input as material"). It takes no path and
+         *     no folder, and replaces nothing: where the knowledge belongs, and what
+         *     in it is new, is curation's to decide. Two submissions of the same title
+         *     are two pieces of material.
          *
-         *     The submission itself is a plain file write — no LLM, no conversion,
-         *     no indexing step (FR-014). `description` is required, not optional: it
-         *     is what curation reads first when deciding where material belongs, and
-         *     what the skill's catalogue shows if the material becomes a document of
-         *     its own (FR-003).
+         *     The submission itself is a plain file write — no LLM, no conversion, no
+         *     indexing step (see "Submit material through coffer__write").
+         *     `description` is required, not optional: it is what curation reads first
+         *     when deciding where material belongs, and what the skill's catalogue
+         *     shows if the material becomes a document of its own (see "Carry title,
+         *     description and actor in frontmatter").
          *
          *     `status` says what became of it: `pending` while it waits in the inbox,
          *     with no `path` — an inbox address vanishes once the material is
          *     merged — or `written`, with the document's `path`, when no internal
          *     model is configured and the material was promoted to a document as it
-         *     stood (FR-029).
+         *     stood (see "Promote material directly when no model is configured").
          *
          *     This is the route the CLI's `coffer knowledge write` calls; an agent
          *     reaches the same service through `coffer__write`.
@@ -168,15 +172,15 @@ export interface paths {
         put?: never;
         /**
          * Convert a document and submit it to a collection
-         * @description The entrance for a document the person did not write as Markdown
-         *     (FR-016…FR-019). The file is converted to Markdown, given FR-003's
-         *     frontmatter — `title` from the document falling back to its file name,
+         * @description The entrance for a document the person did not write as Markdown. The
+         *     file is converted to Markdown and given its frontmatter (see "Fill
+         *     frontmatter on converted material") — `title` from the document falling back to its file name,
          *     `description` from the internal connection where one is configured and
          *     from the document's opening prose where not — and **submitted as
          *     material** into `collection`'s inbox, exactly as `POST /material` does.
          *     What is new in it is then appended to the collection's knowledge by the
          *     next pass; with no internal model, it becomes a document of its own on
-         *     the spot (FR-029).
+         *     the spot (see "Promote material directly when no model is configured").
          *
          *     **Neither file is kept.** The original bytes are not stored anywhere,
          *     and the extracted Markdown lives only as the inbox item until a pass
@@ -191,9 +195,10 @@ export interface paths {
          *     that names the limit. All-or-nothing — a conversion failure leaves
          *     nothing behind, not even an inbox item.
          *
-         *     Upload is deliberately **not** an agent tool (FR-033): a document
-         *     enters through a human surface — this route, the CLI, or a channel that
-         *     confirms the collection with its paired owner.
+         *     Upload is deliberately **not** an agent tool (see "Expose exactly one
+         *     knowledge tool"): a document enters through a human surface — this
+         *     route, the CLI, or a channel that confirms the collection with its
+         *     paired owner.
          */
         post: operations["uploadKnowledgeDocument"];
         delete?: never;
@@ -213,42 +218,47 @@ export interface paths {
         put?: never;
         /**
          * Run one curation pass over one collection
-         * @description One bounded agentic pass, driven by the internal model connection,
-         *     whose tool surface is **four** operations — `list_documents`,
-         *     `read_document`, `write_document`, `retire_document` — fenced to this
-         *     collection's documents: none of them can reach the inbox, the
-         *     collection's `README.md` or another collection (FR-021).
+         * @description One bounded agentic pass, driven by the internal model connection, whose
+         *     tool surface is **four** operations — `list_documents`, `read_document`,
+         *     `write_document`, `retire_document` — fenced to this collection's
+         *     documents: none of them can reach the inbox, the collection's
+         *     `README.md` or another collection (see "Curate through a fenced
+         *     four-tool pass").
          *
-         *     The pass takes **one item**. Name a `document` in the body to carry
-         *     one edited document through; omit the body and the pass takes the
-         *     oldest pending item — inbox material first, then a document whose
-         *     modification time is newer than its `coffer_curated_at` (FR-022) —
-         *     which is what the page's "Curate now" button wants. One item either
-         *     way: a trigger is never a corpus-wide rewrite (FR-025).
+         *     The pass takes **one item**. Name a `document` in the body to carry one
+         *     edited document through; omit the body and the pass takes the oldest
+         *     pending item — inbox material first, then a document whose modification
+         *     time is newer than its `coffer_curated_at` (see "Run curation on a sweep
+         *     and on demand") — which is what the page's "Curate now" button wants.
+         *     One item either way: a trigger is never a corpus-wide rewrite (see
+         *     "Bound a pass to eight writes").
          *
          *     Its context is bounded — the item in full, at most five candidate
          *     documents in full, and the collection's catalogue of titles and
-         *     descriptions (FR-023) — and its writes are bounded to eight, with
-         *     `refused` reporting what the bound or the no-file-references rule
-         *     (FR-027) turned away. New material that contradicts a document wins;
-         *     a document a person edited is never reverted (FR-026).
+         *     descriptions (see "Assemble a pass from a bounded context") — and its
+         *     writes are bounded to eight, with `refused` reporting what the bound or
+         *     the no-file-references rule (see "Refuse file-name references in
+         *     documents") turned away. New material that contradicts a document wins;
+         *     a document a person edited is never reverted (see "Let newer statements
+         *     win and a person's edit stand").
          *
-         *     `status` is `ok` when a pass ran; `no_model` when no internal
-         *     connection is configured, in which case every inbox item was promoted
-         *     to a document as it stood and `promoted` lists them; `up_to_date` when
-         *     nothing is pending; `too_large` when the item does not fit the model's
-         *     context (`limit` then names the ceiling); and `failed` when the pass
-         *     did not complete — in which case the item is left as it was, so it is
-         *     curated later rather than lost (FR-028). All of them are **200**: none
-         *     is a fault of the request (FR-029).
+         *     `status` is `ok` when a pass ran; `no_model` when no internal connection
+         *     is configured, in which case every inbox item was promoted to a document
+         *     as it stood and `promoted` lists them; `up_to_date` when nothing is
+         *     pending; `too_large` when the item does not fit the model's context
+         *     (`limit` then names the ceiling); and `failed` when the pass did not
+         *     complete — in which case the item is left as it was, so it is curated
+         *     later rather than lost (see "Settle an item only after its pass
+         *     completes"). All of them are **200**: none is a fault of the request.
          *
-         *     **One pass per collection at a time** (FR-030). A request that arrives
-         *     while a pass over the same collection is still running is refused with
-         *     `409` rather than queued: the caller asked to start a pass, and no pass
-         *     is going to start. Which collections are being curated right now is
-         *     readable at `GET /api/v1/upkeep/runs` (spec mcp-gateway's contract), so
-         *     a surface that mounts mid-pass shows the button as already running
-         *     instead of inviting the second click.
+         *     **One pass per collection at a time** (see "Run one pass per collection
+         *     at a time"). A request that arrives while a pass over the same
+         *     collection is still running is refused with `409` rather than queued:
+         *     the caller asked to start a pass, and no pass is going to start. Which
+         *     collections are being curated right now is readable at
+         *     `GET /api/v1/upkeep/runs` (spec mcp-gateway's contract), so a surface
+         *     that mounts mid-pass shows the button as already running instead of
+         *     inviting the second click.
          */
         post: operations["curateKnowledgeCollection"];
         delete?: never;
@@ -290,7 +300,8 @@ export interface components {
             name: string;
             /**
              * @description The first paragraph of the collection's `README.md`, empty when
-             *     there is none. Never stored in the database (FR-011).
+             *     there is none. Never stored in the database (see "Read a
+             *     collection's description from its README").
              */
             description: string;
             /**
@@ -300,10 +311,10 @@ export interface components {
              */
             document_count: number;
             /**
-             * @description Material waiting in the collection's inbox to be merged (FR-005) —
-             *     what has arrived and an agent cannot read yet. Counted apart
-             *     because a single total would hide a collection curation has not
-             *     reached.
+             * @description Material waiting in the collection's inbox to be merged (see "Hide
+             *     dot-prefixed entries except the inbox") — what has arrived and an
+             *     agent cannot read yet. Counted apart because a single total would
+             *     hide a collection curation has not reached.
              */
             pending_count: number;
         };
@@ -343,7 +354,7 @@ export interface components {
             /** @description Path relative to the knowledge root. The document's identity. */
             path: string;
             title: string;
-            /** @description What the file says it is about. Required on write (FR-003). */
+            /** @description What the file says it is about. Required on write (see "Carry title, description and actor in frontmatter"). */
             description: string;
             /**
              * @description Who last wrote it.
@@ -375,20 +386,23 @@ export interface components {
             updated_at: string;
             /** @description The Markdown body, frontmatter stripped. */
             body: string;
-            /** @description Absolute on-disk path of the file (FR-041). */
+            /** @description Absolute on-disk path of the file (see "Return absolute paths on reads"). */
             file_path: string;
-            /** @description Absolute on-disk path of its containing folder (FR-041). */
+            /** @description Absolute on-disk path of its containing folder (see "Return absolute paths on reads"). */
             folder_path: string;
             /**
              * @description When curation last had this document in front of it
-             *     (`coffer_curated_at`), empty when it never has (FR-028). A document
-             *     modified since is what the sweep comes back for (FR-022).
+             *     (`coffer_curated_at`), empty when it never has (see "Settle an item
+             *     only after its pass completes"). A document modified since is what
+             *     the sweep comes back for (see "Run curation on a sweep and on
+             *     demand").
              */
             curated_at: string;
         };
         /**
-         * @description New knowledge for a collection (FR-013). No path, no folder and no
-         *     lane: where it belongs is curation's to decide.
+         * @description New knowledge for a collection (see "Submit every entrance's input as
+         *     material"). No path, no folder and no lane: where it belongs is
+         *     curation's to decide.
          * @example {
          *       "collection": "shopee",
          *       "title": "Session ownership",
@@ -407,7 +421,7 @@ export interface components {
             /**
              * @description Required. What curation reads first when deciding where material
              *     belongs, and what the catalogue shows if it becomes a document of
-             *     its own (FR-003).
+             *     its own (see "Carry title, description and actor in frontmatter").
              */
             description: string;
             /**
@@ -417,10 +431,11 @@ export interface components {
             body: string;
         };
         /**
-         * @description What became of submitted material. `pending`: it waits in the inbox
-         *     for a pass to merge, and there is no path to report. `written`: no
-         *     internal model is configured, so it was promoted to a document as it
-         *     stood, and `path` is that document (FR-029).
+         * @description What became of submitted material. `pending`: it waits in the inbox for
+         *     a pass to merge, and there is no path to report. `written`: no internal
+         *     model is configured, so it was promoted to a document as it stood, and
+         *     `path` is that document (see "Promote material directly when no model is
+         *     configured").
          * @example {
          *       "status": "pending",
          *       "collection": "shopee",
@@ -438,10 +453,11 @@ export interface components {
             path: string | null;
         };
         /**
-         * @description Which item to take. The whole body is optional — omitted, the pass
-         *     takes the oldest pending item: inbox material first, then a document
-         *     whose modification time is newer than its `coffer_curated_at`
-         *     (FR-022), which is what the page's button wants.
+         * @description Which item to take. The whole body is optional — omitted, the pass takes
+         *     the oldest pending item: inbox material first, then a document whose
+         *     modification time is newer than its `coffer_curated_at` (see "Run
+         *     curation on a sweep and on demand"), which is what the page's button
+         *     wants.
          * @example {
          *       "document": "shopee/account/login-sessions.md"
          *     }
@@ -455,8 +471,9 @@ export interface components {
         };
         /**
          * @description What one pass did. Every status is a 200 — a collection with no model
-         *     configured, or with nothing pending, is an ordinary state of the
-         *     feature and not a fault of the request (FR-029).
+         *     configured, or with nothing pending, is an ordinary state of the feature
+         *     and not a fault of the request (see "Promote material directly when no
+         *     model is configured").
          * @example {
          *       "status": "ok",
          *       "collection": "shopee",
@@ -498,10 +515,11 @@ export interface components {
             /** @description Documents this pass retired, their content written elsewhere. */
             retired: number;
             /**
-             * @description Writes the pass refused — a document naming another file (FR-027),
-             *     the eight-write bound (FR-025), or a path outside the collection's
-             *     documents. Reported rather than swallowed, because a pass that hit
-             *     its bound has more to absorb than it managed.
+             * @description Writes the pass refused — a document naming another file (see
+             *     "Refuse file-name references in documents"), the eight-write bound
+             *     (see "Bound a pass to eight writes"), or a path outside the
+             *     collection's documents. Reported rather than swallowed, because a
+             *     pass that hit its bound has more to absorb than it managed.
              */
             refused: number;
             documents_before: number;
@@ -510,7 +528,8 @@ export interface components {
             limit: number;
             /**
              * @description The documents the inbox was promoted into as it stood, present only
-             *     with `status` `no_model` (FR-029).
+             *     with `status` `no_model` (see "Promote material directly when no
+             *     model is configured").
              */
             promoted: string[];
         };
@@ -518,7 +537,7 @@ export interface components {
          * @description What an upload became. Note `converter` is reported here and written
          *     **nowhere on disk**, and nothing of the upload itself is kept: the
          *     extracted Markdown is material, and the original bytes are gone
-         *     (FR-016).
+         *     (see "Convert uploads into material without keeping them").
          */
         IngestedDocumentOut: {
             /**
@@ -549,11 +568,12 @@ export interface components {
     };
     responses: {
         /**
-         * @description A path that escapes the knowledge root, names a hidden entry — the
-         *     inbox included — or cannot name a document because it is the
-         *     collection itself or its `README.md` (`KNOWLEDGE_PATH_UNSAFE`). The
-         *     rule lives in path construction rather than in a check each handler
-         *     remembers to make, which is why it is reported here (FR-006).
+         * @description A path that escapes the knowledge root, names a hidden entry — the inbox
+         *     included — or cannot name a document because it is the collection itself
+         *     or its `README.md` (`KNOWLEDGE_PATH_UNSAFE`). The rule lives in path
+         *     construction rather than in a check each handler remembers to make,
+         *     which is why it is reported here (see "Guard every path through one
+         *     module").
          */
         UnsafePath: {
             headers: {
@@ -566,7 +586,8 @@ export interface components {
         /**
          * @description A curation pass over this collection is already in flight
          *     (`UPKEEP_ALREADY_RUNNING`). Refused rather than queued — the caller
-         *     asked to start a pass, and no pass is going to start (FR-030).
+         *     asked to start a pass, and no pass is going to start (see "Run one pass
+         *     per collection at a time").
          */
         UpkeepAlreadyRunning: {
             headers: {
@@ -588,7 +609,7 @@ export interface components {
         /**
          * @description No such collection (`KNOWLEDGE_COLLECTION_NOT_FOUND`). An unknown uid
          *     is always an error — nothing is conjured into existence by being asked
-         *     for (FR-008).
+         *     for (see "Create collections only deliberately").
          */
         CollectionNotFound: {
             headers: {
@@ -627,8 +648,9 @@ export interface components {
         };
         /**
          * @description The upload is past the size ceiling (`KNOWLEDGE_UPLOAD_TOO_LARGE`).
-         *     Refused before any conversion or write is attempted, naming the limit
-         *     so the caller knows what to shrink below (FR-019).
+         *     Refused before any conversion or write is attempted, naming the limit so
+         *     the caller knows what to shrink below (see "Bound uploads and leave
+         *     nothing behind on failure").
          */
         UploadTooLarge: {
             headers: {

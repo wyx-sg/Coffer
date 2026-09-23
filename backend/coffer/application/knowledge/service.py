@@ -1,13 +1,14 @@
 """The knowledge layer's one service.
 
-Every operation resolves to a filesystem operation over
-``~/.coffer/knowledge/``. A collection is one tree of documents that a person
-and Coffer's curation pass write together (spec knowledge FR-001). What this
-layer adds on top of the directory is the one rule about *how new knowledge
-arrives*: every entrance — an upload, an agent's ``coffer__write``, the CLI —
-submits **material**, which waits in the collection's hidden inbox until a
-pass folds it into the documents (FR-013). With no internal model to fold it,
-the material becomes a document of its own on the spot (FR-029).
+Every operation resolves to a filesystem operation over ``~/.coffer/knowledge/``. A
+collection is one tree of documents that a person and Coffer's curation pass write
+together (spec knowledge "Store each collection as one tree of Markdown files"). What
+this layer adds on top of the directory is the one rule about *how new knowledge
+arrives*: every entrance — an upload, an agent's ``coffer__write``, the CLI — submits
+**material**, which waits in the collection's hidden inbox until a pass folds it into
+the documents (see "Submit every entrance's input as material"). With no internal model
+to fold it, the material becomes a document of its own on the spot (see "Promote
+material directly when no model is configured").
 
 What it does *not* add is a per-caller view of the corpus. Every enabled
 collection is served to every caller, agent or person alike; ``enabled`` is the
@@ -45,12 +46,13 @@ from coffer.infrastructure.knowledge.grep import DEFAULT_MAX_MATCHES, RipgrepSea
 logger = logging.getLogger(__name__)
 
 #: Called when the set of collections changes, so the skill that carries
-#: the catalogue can be re-rendered (spec knowledge FR-035).
+#: the catalogue can be re-rendered (spec knowledge "Deliver the guide as the shared-master link").
 CatalogueChanged = Callable[[], Awaitable[object]]
 
-#: Whether a curation pass could merge material now — an internal model is
-#: configured. When it cannot, material is promoted to a document as it stands
-#: rather than waiting for a connection that may never come (FR-029).
+#: Whether a curation pass could merge material now — an internal model is configured.
+#: When it cannot, material is promoted to a document as it stands rather than waiting
+#: for a connection that may never come (see "Promote material directly when no model is
+#: configured").
 MergeAvailable = Callable[[], Awaitable[bool]]
 
 
@@ -97,9 +99,9 @@ class KnowledgeService:
     async def enabled_collections(self) -> list[str]:
         """Every registered, enabled collection, in name order.
 
-        The registry is the authority, not the directory: a folder nobody
-        registered is not a collection (FR-008), and a disabled row's folder is
-        one Coffer serves to no one until it is switched back on.
+        The registry is the authority, not the directory: a folder nobody registered is
+        not a collection (see "Create collections only deliberately"), and a disabled
+        row's folder is one Coffer serves to no one until it is switched back on.
         """
         return sorted(r.name for r in await self._enabled_rows())
 
@@ -115,7 +117,7 @@ class KnowledgeService:
         ``CollectionNotFound`` for a row that exists but is switched off —
         which is the same answer :meth:`require_enabled` gives, because
         "disabled" and "not a collection as far as this layer is concerned" are
-        one state here (FR-008).
+        one state here (see "Create collections only deliberately").
         """
         row = await self._resources.get(uid)
         if not row.enabled or row.kind != KIND_KNOWLEDGE:
@@ -146,8 +148,9 @@ class KnowledgeService:
     ) -> CollectionEntry:
         """Register a collection and create its directory.
 
-        Deliberate creation is the whole point (FR-008): nothing here is
-        reachable from a read or a write, so a typo cannot conjure a collection.
+        Deliberate creation is the whole point (see "Create collections only
+        deliberately"): nothing here is reachable from a read or a write, so a typo
+        cannot conjure a collection.
         """
         directory = paths.collection_dir(name)
         if directory.exists():
@@ -157,7 +160,8 @@ class KnowledgeService:
             name=name,
             config={},
             actor=actor,
-            # Deliberately not the description (FR-011): for this kind it lives
+            # Deliberately not the description (see "Read a collection's description from
+            # its README"): for this kind it lives
             # in the collection's own README, where the person browsing the
             # folder can see and change it. A copy in the row would be written
             # once, read by nothing, and wrong the moment they edited the file.
@@ -208,7 +212,8 @@ class KnowledgeService:
 
         This serves the web page and the CLI. It is **not** an agent's
         retrieval path — an agent reads the files themselves at the absolute
-        paths its delivered skill carries (FR-033, FR-037).
+        paths its delivered skill carries (see "Expose exactly one knowledge tool" and
+        "Merge the manual and the catalogue in the skill body").
         """
         await self.require_enabled(relpath)
         return catalogue.list_level(relpath)
@@ -220,11 +225,11 @@ class KnowledgeService:
     async def catalogue(self) -> list[tuple[CollectionEntry, tuple[FileEntry, ...]]]:
         """Every enabled collection with every document in it.
 
-        The one place the corpus is read all at once. It exists for skill
-        rendering (FR-037), where handing the agent the entire catalogue is the
-        point — the alternative, a level at a time through a tool, is what 448
-        sessions demonstrated an agent never reaches for. One reading serves
-        every agent, because every agent is told the same thing.
+        The one place the corpus is read all at once. It exists for skill rendering (see
+        "Merge the manual and the catalogue in the skill body"), where handing the agent
+        the entire catalogue is the point — the alternative, a level at a time through a
+        tool, is what 448 sessions demonstrated an agent never reaches for. One reading
+        serves every agent, because every agent is told the same thing.
         """
         enabled = set(await self.enabled_collections())
         return [
@@ -245,13 +250,14 @@ class KnowledgeService:
         actor_kind: str = ACTOR_AGENT,
         actor: str,
     ) -> Submission:
-        """Add new knowledge to a collection (FR-013).
+        """Add new knowledge to a collection (see "Submit every entrance's input as
+        material").
 
-        The material goes into the collection's inbox for a curation pass to
-        fold into the documents. When no pass could — there is no internal
-        model — it is promoted to a document of its own immediately, because
-        knowledge that sits in a hidden directory waiting for a connection
-        nobody configured is knowledge no agent can read (FR-029).
+        The material goes into the collection's inbox for a curation pass to fold into
+        the documents. When no pass could — there is no internal model — it is promoted
+        to a document of its own immediately, because knowledge that sits in a hidden
+        directory waiting for a connection nobody configured is knowledge no agent can
+        read (see "Promote material directly when no model is configured").
         """
         row = await self.require_enabled(collection)
         name = fs.submit_material(
@@ -307,11 +313,11 @@ class KnowledgeService:
     ) -> GrepOutcome:
         """Literal matches among one collection's documents.
 
-        Ripgrep survives the removal of ``coffer__grep`` as an *internal*
-        mechanism: it is how a curation pass finds which existing documents a
-        new material might belong to (FR-023). It is not reachable by any caller
-        outside this process. The inbox is never searched: ripgrep skips hidden
-        directories, and material there is not a document yet.
+        Ripgrep survives the removal of ``coffer__grep`` as an *internal* mechanism: it
+        is how a curation pass finds which existing documents a new material might
+        belong to (see "Assemble a pass from a bounded context"). It is not reachable by
+        any caller outside this process. The inbox is never searched: ripgrep skips
+        hidden directories, and material there is not a document yet.
         """
         roots: list[pathlib.Path] = [paths.collection_dir(collection)]
         return await self._search.grep(roots, pattern, max_matches=max_matches)

@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-05-29
 **Deciders**: Yuxing Wu
-**Related**: spec `skill-manager` (FR-008, FR-011, SC-007), spec `agent-registry` (`AgentConfig.skill_dir`), [Everything Is a Resource Kind](everything-is-a-resource-kind.md)
+**Related**: [skill-manager](../../openspec/specs/skill-manager/spec.md) "Deliver a skill as a directory link" and "Fall back to copying where links are unavailable", spec `agent-registry` (`AgentConfig.skill_dir`), [Everything Is a Resource Kind](everything-is-a-resource-kind.md)
 
 ## Context
 
@@ -11,7 +11,7 @@ Spec `skill-manager` introduces a canonical store at
 `~/.coffer/skills/<name>/` and requires each registered agent's skill
 directory to "see" the managed skills under its own normal layout — i.e.
 `~/.claude/skills/<name>/`, `~/.codex/skills/<name>/`, etc. The store must
-be the **single editable source of truth** (FR-003) while every agent reads
+be the **single editable source of truth** ("Keep one master folder per skill and carry it through a rename") while every agent reads
 through its own pre-existing path conventions.
 
 Three obvious mechanisms were on the table:

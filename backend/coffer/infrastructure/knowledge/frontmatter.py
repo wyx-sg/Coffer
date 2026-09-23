@@ -41,7 +41,8 @@ def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     metadata into the body. Nothing in the vault trips it today only because
     every field a knowledge file carries is short: that is a property of the
     data, not of the parser, and an ingested document's generated description
-    (spec knowledge FR-034) is the field with no such guarantee.
+    (spec knowledge "Fill frontmatter on converted material") is the field
+    with no such guarantee.
     """
     if not text.startswith(_FENCE):
         return {}, text

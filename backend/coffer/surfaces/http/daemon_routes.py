@@ -216,7 +216,8 @@ async def rotate_token(
 
 # === residency: what starts the daemon, and what ends it ===
 #
-# This pair has a REST surface where the port (FR-011) deliberately does not,
+# This pair has a REST surface where the port ("Bind a fixed, settable port")
+# deliberately does not,
 # and the difference is which state each setting is reached from. A port is
 # changed when the daemon CANNOT start, so a route the daemon would have to
 # serve is useless exactly then. Residency is changed while Coffer is working

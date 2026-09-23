@@ -1,4 +1,7 @@
-"""/api/v1/agents/{uid}/unmanaged-skills routes (spec skill-manager FR-016/023).
+"""/api/v1/agents/{uid}/unmanaged-skills routes.
+
+Spec skill-manager "List unmanaged skills in an agent's skill locations" and
+"Expose unmanaged-skill operations under the skill surfaces".
 
 Unmanaged skills are skill-shaped folders discovered in an agent's workspace
 that are not yet part of the Coffer master store. Routes here let the caller

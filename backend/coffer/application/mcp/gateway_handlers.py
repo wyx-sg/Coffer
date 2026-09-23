@@ -52,7 +52,9 @@ def _safe_error_summary(e: BaseException) -> str:
     Why: upstream MCP servers can include user-controlled or secret content
     inside their error messages (e.g., an auth failure that echoes the API
     key back). Persisting ``str(e)`` for arbitrary exceptions would leak
-    those into the invocation log, defeating SC-010.
+    those into the invocation log, defeating the rule that no secret value
+    appears in any invocation record (spec credentials "Hold plaintext only in
+    memory at the moment of use").
 
     Rule: for Coffer-internal exceptions (CofferError subclasses) the message
     is authored by Coffer and safe to keep. For everything else, store only
@@ -183,16 +185,16 @@ async def _invoke(
     # addressed.
     resource = await resources.get_by_name("mcp_server", server_name)
 
-    # Activation scope (FR-012): tools/list already hides a server this
-    # session's scope excludes (gateway._enabled_mcp_servers),
-    # but that is only a listing-side filter — nothing on the call-routing
-    # path re-checked it, so a caller that already knows (or guesses) a
-    # hidden server's namespaced tool name could invoke it directly. The
-    # supervisor's spawn gate has no session context, so this check lives
-    # here, at the session's invocation seam, where the session's agent uid is
-    # known. Both sides of the comparison are uids: ``scope.agents`` holds agent
-    # uids and the shim reports one, so there is nothing to translate and no
-    # label that can go stale under a rename.
+    # Activation scope (see "Gate server exposure by scope per session"): tools/list
+    # already hides a server this session's scope excludes
+    # (gateway._enabled_mcp_servers), but that is only a listing-side filter — nothing
+    # on the call-routing path re-checked it, so a caller that already knows (or
+    # guesses) a hidden server's namespaced tool name could invoke it directly. The
+    # supervisor's spawn gate has no session context, so this check lives here, at the
+    # session's invocation seam, where the session's agent uid is known. Both sides of
+    # the comparison are uids: ``scope.agents`` holds agent uids and the shim reports
+    # one, so there is nothing to translate and no label that can go stale under a
+    # rename.
     if not is_active(resource.scope, session_agent_uid):
         await record_invocation(
             invocations,
@@ -205,9 +207,10 @@ async def _invoke(
             status="denied",
             error_message=None,
         )
-        # Same "indistinguishable from a disabled capability" shape FR-012
-        # specifies for a hidden server: ToolDisabled, not UpstreamUnavailable
-        # (that stays reserved for an upstream that genuinely won't start).
+        # Same "indistinguishable from a disabled capability" shape "Gate server
+        # exposure by scope per session" specifies for a hidden server: ToolDisabled,
+        # not UpstreamUnavailable (that stays reserved for an upstream that genuinely
+        # won't start).
         raise ToolDisabled(f"{server_name!r} is not in scope here")
 
     try:
@@ -239,7 +242,8 @@ async def _invoke(
         # connection is healthy, but the tool failed. Record an honest `error`
         # status so the invocation log distinguishes success from failure. The
         # error text is upstream-controlled (may echo secrets), so persist only
-        # a fixed Coffer-authored marker, never the result content (SC-010).
+        # a fixed Coffer-authored marker, never the result content (spec
+        # mcp-gateway "Record invocations without content").
         if spec.detects_inband_error and isinstance(coerced, dict) and coerced.get("isError"):
             status = "error"
             error_msg = "upstream tool returned an error result (isError)"

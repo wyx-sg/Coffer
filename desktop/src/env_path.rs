@@ -250,8 +250,9 @@ mod tests {
         assert!(path_candidates("", "coffer-daemon").is_empty());
     }
 
-    // --- FR-010's second half: the probe is bounded in time and degrades to
-    // the inherited PATH rather than delaying the launch. ---
+    // --- "Give a spawned daemon the login shell's PATH", second half: the
+    // probe is bounded in time and degrades to the inherited PATH rather than
+    // delaying the launch. ---
 
     /// Write an executable stand-in for a login shell into a temp dir.
     #[cfg(unix)]

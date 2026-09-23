@@ -9,7 +9,8 @@ silently changes the wire contract.
 That separation earned its keep in this redesign. ``Fact`` carried ``status``
 and ``superseded_by``, and the wire carried them too; when retirement stopped
 being a flag on a live record and became a file leaving ``notes/`` plus a line
-in ``RETIRED.md`` (FR-025), the two fields had to go from both sides — and the
+in ``RETIRED.md`` ("Record retirements so they stick"), the two fields had to
+go from both sides — and the
 contract test comparing this module against
 ``openspec/specs/memory/contracts/api.openapi.yaml`` field name by field name is what
 makes "both sides" checkable rather than remembered.
@@ -29,7 +30,8 @@ class PartitionOut(BaseModel):
     (``repository_path``). Both are empty for ``global``, which is no
     repository. The single working-directory root they replace is what split a
     worktree from its own checkout and turned six dated scratch folders into six
-    permanent partitions (FR-014, FR-015).
+    permanent partitions ("Identify a partition by its repository", "Create no
+    partition for a non-repository directory").
     """
 
     #: The partition Resource's immutable identity, and what every route under
@@ -49,7 +51,8 @@ class PartitionOut(BaseModel):
     repository_path: str
     note_count: int
     #: True when ``repository_path`` is no longer a directory on this disk, so
-    #: nothing can ever resolve to this partition again (FR-016). Surfaced
+    #: nothing can ever resolve to this partition again ("Report unresolvable
+    #: partitions"). Surfaced
     #: rather than hidden: only the developer can decide it is not coming back.
     unresolvable: bool
 
@@ -89,7 +92,8 @@ class NoteSummaryOut(BaseModel):
     type: str
     #: What the source itself said to look this material up by, carried up from
     #: the entries that supplied it — Codex states them per task group, Claude
-    #: Code states none (FR-004).
+    #: Code states none ("Read Claude Code and Codex memory with their search
+    #: terms").
     search_terms: list[str]
     created_at: str
     updated_at: str
@@ -102,7 +106,8 @@ class NoteListOut(BaseModel):
 class NoteOut(NoteSummaryOut):
     """One note, whole: Coffer's own text and the entries behind it.
 
-    ``body`` is Coffer's writing, not a quote of any source (FR-020) — the
+    ``body`` is Coffer's writing, not a quote of any source ("Write notes in
+    Coffer's own words") — the
     sources are named in ``origins`` and kept verbatim under the partition's
     ``.raw/``, which is what keeps a paraphrase traceable.
     """
@@ -140,7 +145,8 @@ class AggregationResultOut(BaseModel):
 
     ``entries_written`` counts raw entries put under the partitions' ``.raw/``,
     and never notes: aggregation may not write one, and only aggregation may
-    write ``.raw/`` (FR-008, FR-026). A pass that found nothing new reports
+    write ``.raw/`` ("Let only aggregation write raw entries"). A pass that
+    found nothing new reports
     zero, which is the ordinary state of a machine whose agents have not
     written since the last pass.
     """
@@ -149,19 +155,22 @@ class AggregationResultOut(BaseModel):
     entries_written: int
     sources_read: int
     sources_skipped: int
-    #: Paths of native sources that would not parse (FR-005) — left standing
+    #: Paths of native sources that would not parse ("Fail a broken reader
+    #: loudly and in isolation") — left standing
     #: rather than deleted, so a later sync keeps retrying them.
     failures: list[str]
 
 
 class DistilResultOut(BaseModel):
-    """What one distil pass found, by FR-023's four actions.
+    """What one distil pass found, by the four actions of "Distil incrementally
+    in two stages".
 
     ``dropped`` is a first-class outcome, not a failure: it is how a scratch
     directory's incidental material and an agent's transient observations stay
     out of the store. ``model_used`` is false when no internal connection is
     configured — each entry became a note of its own and the index was still
-    written, from their frontmatter (FR-024).
+    written, from their frontmatter ("Distil mechanically with no internal
+    connection").
     """
 
     partition: str
@@ -178,7 +187,7 @@ class ComposedContextOut(BaseModel):
     There is no ``layers`` field any more. Delivery is not a two-tier digest: it
     is the whole index of the current repository's partition plus what is known
     about the developer, so naming a layer would name a structure the payload no
-    longer has (FR-028).
+    longer has ("Deliver the index and the notes path at session start").
     """
 
     text: str
@@ -186,12 +195,14 @@ class ComposedContextOut(BaseModel):
     notes_included: int
     #: How many index lines the ceiling left out. The text names the count and
     #: the directory holding them, which is what makes a trim a small loss:
-    #: every line that did not fit is still a file (FR-030).
+    #: every line that did not fit is still a file ("Bound delivery and prefer
+    #: the current repository").
     notes_omitted: int
 
 
 class FileNodeOut(BaseModel):
-    """One entry in a partition's own directory (FR-037).
+    """One entry in a partition's own directory ("Present partitions as a table
+    and a file tree").
 
     Same shape as the skill kind's file tree so the two surfaces render through
     one component on the frontend. ``path`` is POSIX and relative to the
@@ -209,7 +220,7 @@ class FileNodeOut(BaseModel):
     #: True for ``.raw/`` and everything under it: the verbatim entries
     #: aggregation read out of the agents. Flagged rather than hidden so the
     #: surface can show it as the distil pass's input rather than as Coffer's
-    #: own writing (FR-008, FR-037).
+    #: own writing ("Keep raw entries verbatim and hidden").
     derived: bool
     size: int | None = None
     #: True on a directory whose descendants were clipped at the walk bound.
@@ -226,7 +237,8 @@ class FileContentOut(BaseModel):
 
     No fingerprint, unlike the skill kind's equivalent: a fingerprint exists to
     make a later write conditional, and this family has no write. The tree under
-    ``~/.coffer/memory/`` is derived (FR-019) — an edit here would be overwritten
+    ``~/.coffer/memory/`` is derived ("Keep the memory tree derived and local") —
+    an edit here would be overwritten
     by the next aggregation pass, so the surface does not offer one.
     """
 
@@ -246,7 +258,8 @@ class DeliveryStatusOut(BaseModel):
     There is deliberately no last-fired field. A fire is an **event**, written
     to the audit log as ``memory_delivery_fired``; a hook installed a minute ago
     has legitimately never fired, so a status field flagging that would be
-    crying wolf on its own normal state (FR-033, FR-039).
+    crying wolf on its own normal state ("Audit every delivery fire", "Show
+    delivery state on the agent's own page").
     """
 
     #: Which agent this row is about, and what the install and remove routes
@@ -268,7 +281,8 @@ class DeliveryStatusListOut(BaseModel):
 
 
 class ContextQuery(BaseModel):
-    """Body for composing a session-start context (FR-028).
+    """Body for composing a session-start context ("Deliver the index and the
+    notes path at session start").
 
     A ``POST`` despite being a read, because the query is structured rather than
     a couple of scalar filters (knowledge's ``search`` is a ``POST`` for the same
@@ -288,7 +302,8 @@ class ContextQuery(BaseModel):
     agent_uid: str | None = None
     #: Omitted or null uses the server's default ceiling.
     ceiling_tokens: int | None = None
-    #: Whether serving this payload counts as a real delivery (FR-033). The
+    #: Whether serving this payload counts as a real delivery ("Audit every
+    #: delivery fire"). The
     #: installed hook always sets this; a management-surface preview must not,
     #: so it never records a fire that did not happen.
     record_fired: bool = False

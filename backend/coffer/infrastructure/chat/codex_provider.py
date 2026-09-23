@@ -165,10 +165,12 @@ class CodexAppServerProvider:
             env=env,
             # Codex cannot hear audio. A voice attachment is transcribed by the
             # user's configured connection, or handed over untouched when there
-            # is none (spec channels FR-019).
+            # is none (spec channels "Transcribe inbound voice only when the
+            # user opted in").
             transcriber=await self._transcriber(),
             # Codex is path-native and cannot parse a binary PDF; a document is
-            # text-extracted so it reaches the agent as text (FR-031).
+            # text-extracted so it reaches the agent as text (spec chat "Extract
+            # document attachments to text").
             document_extractor=default_document_extractor(),
         )
 

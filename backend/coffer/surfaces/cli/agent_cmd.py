@@ -69,7 +69,7 @@ def add(
 ) -> None:
     """Register an agent.
 
-    FR-006: ``--name`` is optional — when omitted the daemon derives a stable
+    ``--name`` is optional — when omitted the daemon derives a stable
     per-type default (``claude_code`` → ``claude-code``).
     """
     verbose = (ctx.obj or {}).get("verbose", False)

@@ -1,4 +1,4 @@
-"""The launchd agent's contents — spec daemon FR-028.
+"""The launchd agent's contents — spec daemon "Run as a login service".
 
 Installing one needs a Mac and a session bus, so what is pinned here is the
 plist itself: the three keys that are decisions rather than boilerplate, each
@@ -55,7 +55,8 @@ def test_the_agent_carries_the_users_own_path() -> None:
 
 
 def test_the_agent_logs_where_everything_else_does() -> None:
-    # One timeline, not a second file nothing tells anyone about (FR-022).
+    # One timeline, not a second file nothing tells anyone about (see "Write
+    # one bounded daemon log in one format").
     plist = _plist()
     assert plist["StandardOutPath"] == "/Users/u/.coffer/logs/daemon.log"
     assert plist["StandardErrorPath"] == plist["StandardOutPath"]

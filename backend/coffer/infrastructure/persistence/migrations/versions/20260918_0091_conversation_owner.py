@@ -1,7 +1,7 @@
 """A conversation says whose it is.
 
 Every conversation in this vault was the developer's own until a workflow task
-became one (spec workflow, FR-019/FR-030). A task's conversation is created
+became one (spec workflow). A task's conversation is created
 through the same service and stored in the same table — which is the point, and
 what makes its transcript ordinary — but it belongs to the RUN, and the chat
 list was showing all of them: three rows reading "# Workflow node: Draft the

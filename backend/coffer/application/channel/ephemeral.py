@@ -1,9 +1,10 @@
-"""Answers that belong to one member of a group, not to the room (FR-049).
+"""Answers that belong to one member of a group, not to the room (see "Keep non-answer
+chatter private in a group").
 
-FR-022 stops the bot *acting* on everything said in a group. This is the other
-half: stopping it from *saying* everything out loud. ``/status``, ``/help`` and
-the selection cards are the asker's own business — announcing each one to
-everybody is how a useful bot becomes an unwelcome one.
+"Act in a group only on an addressed message from the owner" stops the bot *acting* on
+everything said in a group. This is the other half: stopping it from *saying* everything
+out loud. ``/status``, ``/help`` and the selection cards are the asker's own business —
+announcing each one to everybody is how a useful bot becomes an unwelcome one.
 
 Where the platform can deliver a message only the asker's client shows
 (Telegram ephemeral messages) those answers go that way. The agent's actual
@@ -84,10 +85,11 @@ async def safe_send(
     confirmations, the turn's own output — which is why it is the place the two
     routing decisions that depend on the chat kind are made:
 
-    * FR-053: only a group needs the reply pointer. In a DM every message is
-      plainly an answer, and a reply chain there is just noise.
-    * FR-049: ``ephemeral`` is passed through for the transport to honour or
-      ignore; it is a request, never a guarantee.
+    * "Attach a group reply to the message it answers": only a group needs the reply
+      pointer. In a DM every message is plainly an answer, and a reply chain there is
+      just noise.
+    * "Keep non-answer chatter private in a group": ``ephemeral`` is passed through for
+      the transport to honour or ignore; it is a request, never a guarantee.
 
     A failed send is logged, not raised: one undeliverable line must not take
     down the turn that produced it.

@@ -2,9 +2,9 @@
 the same way knowledge's is: no I/O, just "does this build the path the
 contract promises, and does the guard refuse what it should."
 
-A partition holds four things with one writer each — ``MEMORY.md``,
-``notes/``, ``RETIRED.md`` and the hidden ``.raw/`` — and ``paths.py`` is the
-sole owner of every one of those names (spec memory FR-044).
+A partition holds four things with one writer each — ``MEMORY.md``, ``notes/``,
+``RETIRED.md`` and the hidden ``.raw/`` — and ``paths.py`` is the sole owner of
+every one of those names.
 
 The root itself is already pinned to ``tmp_path`` by the suite-wide
 ``_isolated_memory_root`` fixture in ``backend/tests/conftest.py`` — every
@@ -49,7 +49,8 @@ def test_notes_live_in_their_own_directory_under_the_partition() -> None:
 
 
 def test_raw_entries_live_in_the_partitions_hidden_directory() -> None:
-    """``.raw/`` is the one hidden name the layer owns (FR-008).
+    """``.raw/`` is the one hidden name the layer owns (see "Keep raw entries
+    verbatim and hidden").
 
     ``check_segment`` refuses a dot-prefixed *caller-supplied* segment, so the
     only way this directory is reachable is through the constant — which is

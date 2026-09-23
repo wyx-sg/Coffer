@@ -1,13 +1,15 @@
 """What the knowledge directory looks like, read at call time.
 
-Nothing here is materialized (spec knowledge FR-001): a catalogue is produced
-by walking the tree and reading frontmatter when someone asks, so it cannot
-drift from what is on disk — there is no second copy to keep in sync.
+Nothing here is materialized (spec knowledge "Store each collection as one
+tree of Markdown files"): a catalogue is produced by walking the tree and
+reading frontmatter when someone asks, so it cannot drift from what is on
+disk — there is no second copy to keep in sync.
 
 A walk sees every visible Markdown document under a collection. It never sees
-the hidden ``.inbox/`` — material there is not knowledge yet (FR-005) — and it
-never lists a ``README.md``, which describes the directory it sits in rather
-than being content in it (FR-007).
+the hidden ``.inbox/`` — material there is not knowledge yet (see "Hide
+dot-prefixed entries except the inbox") — and it never lists a ``README.md``,
+which describes the directory it sits in rather than being content in it (see
+"Keep the collection README out of the corpus").
 """
 
 from __future__ import annotations
@@ -31,7 +33,7 @@ MARKDOWN_SUFFIX = ".md"
 
 
 def visible(entry: pathlib.Path) -> bool:
-    """Excludes any dot-prefixed entry — the inbox included (FR-005)."""
+    """Excludes any dot-prefixed entry — the inbox included."""
     return not entry.name.startswith(".")
 
 
@@ -39,7 +41,7 @@ def is_listed(name: str) -> bool:
     """Whether a person browsing this folder should see the file.
 
     Every visible file except a ``README.md``, which describes the directory it
-    sits in rather than being content in it (FR-007). Not restricted to
+    sits in rather than being content in it. Not restricted to
     Markdown: a file a person drops in by hand is theirs to see and delete,
     whatever it is.
     """
@@ -69,9 +71,11 @@ def count_files(directory: pathlib.Path, *, markdown_only: bool = False) -> int:
 def readme_description(collection: str) -> str:
     """A collection's one-line description: its README's first paragraph.
 
-    Deliberately read from the file rather than stored (FR-011) — the person
-    browsing the folder must be able to see and change it in place, and it is
-    what the delivered skill's own description is built from (FR-036).
+    Deliberately read from the file rather than stored (see "Read a collection's
+    description from its README") — the person browsing the folder must be
+    able to see and change it in place, and it is what the delivered skill's
+    own description is built from (see "Describe Coffer and the collections'
+    subjects in the skill description").
     """
     readme = paths.readme_path(collection)
     if not readme.is_file():
@@ -174,9 +178,10 @@ def list_level(relpath: str) -> CatalogueLevel:
 def walk_files(directory: pathlib.Path) -> tuple[FileEntry, ...]:
     """Every content file under ``directory``, recursively, in path order.
 
-    The catalogue a skill carries is a whole collection at once (FR-037),
-    unlike the level-at-a-time listing a human surface pages through — so this
-    is the shape that builds it, and the one curation reads a collection with.
+    The catalogue a skill carries is a whole collection at once (see "Merge the
+    manual and the catalogue in the skill body"), unlike the level-at-a-time
+    listing a human surface pages through — so this is the shape that builds
+    it, and the one curation reads a collection with.
     """
     if not directory.is_dir():
         return ()

@@ -117,7 +117,8 @@ class SkillFrontmatter(BaseModel):
         YAML parses an unquoted scalar by type, so `license: 2024` (int),
         `license: true` (bool), or `license: 1.0` (float) would otherwise
         reject the whole skill under a strict `str`. Recognizing optional
-        fields is additive (FR-005), so coerce scalars to a string and
+        fields is additive ("Retain optional AgentSkills frontmatter fields"),
+        so coerce scalars to a string and
         tolerate any non-scalar shape as absent rather than failing.
         """
         if v is None:

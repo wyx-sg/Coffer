@@ -137,7 +137,7 @@ def test_reissue_resets_attempt_budget(manager: PairingManager):
     assert manager.try_claim("ch", code) is True
 
 
-# -- deep-link pairing (FR-051) ----------------------------------------------
+# -- deep-link pairing ("Pair by a one-tap start link") ----------------------
 
 
 def test_start_link_carries_the_code() -> None:

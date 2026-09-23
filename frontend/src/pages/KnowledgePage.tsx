@@ -2,7 +2,7 @@
 // It lists collections: the top-level folders under `~/.coffer/knowledge/`.
 // Every one of them exists because somebody made it — nothing auto-provisions
 // a collection, so an empty list means the vault is genuinely empty rather
-// than merely untouched (spec knowledge FR-008).
+// than merely untouched (spec knowledge "Create collections only deliberately").
 //
 // Loads from the DEDICATED `/knowledge/collections` endpoint rather than the
 // generic `/resources` list: only the former carries the file counts and the

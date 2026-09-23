@@ -1,7 +1,8 @@
 """Revision 0064: every curated model entry gains a ``modality``.
 
 A connection's curated set used to be bare ids, which assumed everything an
-endpoint serves is a chat model. It is not (spec provider-switching FR-031), so
+endpoint serves is a chat model. It is not (spec provider-switching "Store a
+modality with each curated model"), so
 each entry becomes ``{"id": ..., "modality": ...}``. Rows written earlier have
 no answer, and the only evidence is the id — so this revision guesses ONCE from
 the name. Afterwards the stored modality is the truth: nothing re-infers at load

@@ -51,9 +51,9 @@ carefully that a reader could take the removal as final.
 removal, and a proposal to remove one is a proposal to amend this ADR, decided
 by the project owner:
 
-1. **The desktop shell** — spec desktop-app FR-001 – FR-014,
+1. **The desktop shell** — spec [desktop-app](../../openspec/specs/desktop-app/spec.md),
    [The Desktop Shell Returns](desktop-shell-over-a-shared-frontend.md).
-2. **The web Chat page** — spec chat FR-029 – FR-041,
+2. **The web Chat page** — the Chat page requirements of spec [chat](../../openspec/specs/chat/spec.md),
    [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md).
 3. **Bidirectional vault sync with a user-owned remote** — spec vault-sync,
    [Vault Sync](vault-sync.md), Principle I's user-owned sync remote exception

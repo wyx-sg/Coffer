@@ -1,4 +1,6 @@
-"""Migration 0101's on-disk rewrite, against a real tree (spec knowledge FR-042).
+"""Migration 0101's on-disk rewrite, against a real tree.
+
+See spec knowledge "Migrate the two-lane corpus into the inbox".
 
 0101 retires the two lanes 0085 introduced. Every Markdown file in ``topics/``
 and ``sources/`` is queued as material in the collection's hidden ``.inbox/``

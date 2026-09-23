@@ -234,7 +234,8 @@ def test_store_files_tree_and_content(tmp_path, monkeypatch):
         assert body["content"] == "alpha fact"
         assert body["binary"] is False
         assert body["truncated"] is False
-        # The absolute path is what the viewer's open / reveal act on (spec agent-registry FR-047).
+        # The absolute path is what the viewer's open / reveal act on (spec agent-registry
+        # "Open config files in an external editor or reveal them").
         assert body["abs_path"] == str(mem / "notes" / "a.md")
 
 
@@ -268,7 +269,10 @@ def test_store_files_refuses_a_dir_that_is_not_a_store(tmp_path, monkeypatch):
 
 
 def test_store_files_emit_no_audit_event(tmp_path, monkeypatch):
-    """FR-009: workspace listings do not audit, and neither does opening one."""
+    """Workspace listings do not audit, and neither does opening one.
+
+    See "Audit every agent lifecycle event".
+    """
     config_dir = tmp_path / "cc-config"
     mem = config_dir / "projects" / "-X" / "memory"
     mem.mkdir(parents=True)

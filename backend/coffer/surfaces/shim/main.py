@@ -121,7 +121,8 @@ class _Bridge:
             except _json.JSONDecodeError as e:
                 _logger.warning("shim.bad_json_from_stdin", extra={"error": str(e)})
                 continue
-            # spec mcp-gateway FR-013 (amended): report the agent's launch cwd
+            # spec mcp-gateway "Take the agent identity from the handshake":
+            # report the agent's launch cwd
             # AND, when known, its self-reported `--agent-uid` identity at
             # session handshake. Both ride ``initialize`` params under ``_meta``
             # (an MCP-reserved extension key); the gateway threads cwd into tools

@@ -104,7 +104,7 @@ paths:
         answer. A Telegram channel, and a SeaTalk channel on **websocket**
         delivery, are refused the same way — a websocket channel has no public
         URL to probe at all, and its `websocket_state` is the health answer
-        there (spec channels/seatalk FR-005).
+        there (spec channels/seatalk "Keep status truthful per transport").
       operationId: testChannelCallback
       tags: [channels]
       parameters:

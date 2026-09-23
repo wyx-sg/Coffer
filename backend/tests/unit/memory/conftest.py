@@ -9,12 +9,12 @@ is handed a fixture ``config_dir`` built under ``tmp_path``.
 
 What is faked and what is not is deliberate. ``ResourceService`` and
 ``AuditService`` are fakes because a database is the integration tier's
-business and nothing about aggregation's own decisions needs one. The
-**store** is real, because "what is on disk after a pass" is the whole of what
-these tests assert. The completion port is always a fake, and two of the
-shapes below (:class:`NoModelSelector`, :class:`ExplodingCompletion`) exist to
-make FR-024's "no model is called" a structural assertion rather than a
-hopeful one.
+business and nothing about aggregation's own decisions needs one. The **store**
+is real, because "what is on disk after a pass" is the whole of what these
+tests assert. The completion port is always a fake, and two of the shapes below
+(:class:`NoModelSelector`, :class:`ExplodingCompletion`) exist to make "no
+model is called" (see "Distil mechanically with no internal connection") a
+structural assertion rather than a hopeful one.
 """
 
 from __future__ import annotations
@@ -201,7 +201,8 @@ class FakeReader:
         """Register one source file and what reading it produces.
 
         ``entries`` is a tuple of :class:`RawEntry`, or an exception instance
-        the read raises — which is how FR-005's isolation is exercised.
+        the read raises — which is how "Fail a broken reader loudly and in
+        isolation" is exercised.
         """
         source = SourceFile(path=path, digest=digest)
         self.sources_by_dir.setdefault(config_dir, []).append(source)
@@ -271,7 +272,7 @@ def memory_service(
 
 
 class NoModelSelector:
-    """No internal connection configured — FR-024's path."""
+    """No internal connection configured — the mechanical distil path."""
 
     async def get_default(self) -> None:
         return None
@@ -311,7 +312,8 @@ class ScriptedCompletion:
 
 
 class ExplodingCompletion:
-    """Raises if it is called at all — FR-024 asserted structurally."""
+    """Raises if it is called at all — "no model is called" asserted
+    structurally."""
 
     async def complete(
         self,

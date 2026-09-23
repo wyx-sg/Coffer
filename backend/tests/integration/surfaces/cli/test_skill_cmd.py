@@ -176,7 +176,8 @@ def test_skill_list_json_holds_only_coffers_own_on_a_fresh_vault(skill_cli_daemo
     """`skill list --json` before the user imports anything.
 
     Exactly one row, and it is Coffer's: the manual it seeds for itself (spec
-    knowledge FR-034). It is an ordinary skill Resource, which is precisely why
+    knowledge "Deliver the catalogue through the coffer-guide skill"). It is an
+    ordinary skill Resource, which is precisely why
     it appears here — the rendering it replaced was written straight into each
     agent's own directory and this listing never knew about it.
     """

@@ -12,12 +12,12 @@ from typing import Any
 
 #: The extension key the shim stamps the launch cwd into (initialize handshake).
 _CWD_META_KEY = "coffer/cwd"
-#: The extension key the shim stamps its self-reported agent identity into
-#: (spec mcp-gateway FR-013, amended). The value is the agent resource's **uid**,
-#: which is also why the key is not the older ``coffer/agent``: that one carried
-#: a name, and a shim installed by an older Coffer is still out there sending it.
-#: Reading only the new key is what makes such a shim *unidentified* rather than
-#: quietly matched against a scope by a stale label (ADR
+#: The extension key the shim stamps its self-reported agent identity into (spec
+#: mcp-gateway "Take the agent identity from the handshake"). The value is the agent
+#: resource's **uid**, which is also why the key is not the older ``coffer/agent``: that
+#: one carried a name, and a shim installed by an older Coffer is still out there
+#: sending it. Reading only the new key is what makes such a shim *unidentified* rather
+#: than quietly matched against a scope by a stale label (ADR
 #: resource-identity-is-an-immutable-uid; "no name fallback").
 _AGENT_UID_META_KEY = "coffer/agent-uid"
 

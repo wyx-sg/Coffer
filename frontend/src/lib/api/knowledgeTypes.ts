@@ -9,15 +9,15 @@
 //
 // Every `path` here is RELATIVE to the knowledge root. The two ABSOLUTE paths —
 // `file_path` and `folder_path` on a read — exist only so the viewer can hand
-// them to the OS file actions (FR-041).
+// them to the OS file actions (see "Return absolute paths on reads").
 //
 // These are the knowledge contract's generated schemas
 // (`openspec/specs/knowledge/contracts/api.openapi.yaml` → `generated/knowledge.ts`)
 // under the names the hooks and pages already import.
 //
 // There is no search or grep type in this file because the layer exposes no
-// retrieval at all (FR-033): an agent reads the files with its own tools at the
-// paths its delivered skill carries, and the filter box over the tree is
+// retrieval at all (see "Expose exactly one knowledge tool"): an agent reads the files with its own
+// tools at the paths its delivered skill carries, and the filter box over the tree is
 // client-side and name-only (`lib/knowledge/filter.ts`).
 import type { components } from "@/lib/api/generated/knowledge";
 
@@ -59,7 +59,8 @@ export type TreeOut = Schemas["TreeOut"];
 /**
  * What one curation pass did. `status` is what the page reports: every one of
  * them is a 200, because a vault with no internal model configured, or with
- * nothing pending, is an ordinary state rather than a failed request (FR-029).
+ * nothing pending, is an ordinary state rather than a failed request (see
+ * "Promote material directly when no model is configured").
  */
 export type CurationOut = Schemas["CurationOut"];
 

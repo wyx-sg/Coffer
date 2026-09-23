@@ -1,4 +1,7 @@
-"""/api/v1/fs/* — local filesystem browse + open/reveal (spec daemon FR-019/FR-021).
+"""/api/v1/fs/* — local filesystem browse + open/reveal.
+
+Spec daemon "Browse folders without reading files" and "Open and reveal
+existing absolute paths".
 
 Backs the web folder picker (browse) and the read-only file viewers' open/reveal
 actions. A browser can't read absolute paths or reach the OS, but the loopback

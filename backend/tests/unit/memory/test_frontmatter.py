@@ -1,5 +1,6 @@
 """The fence every memory file goes through, and the two exactness rules that
-are load-bearing rather than cosmetic (spec memory FR-008, FR-025).
+are load-bearing rather than cosmetic (spec memory "Keep raw entries verbatim
+and hidden", "Record retirements so they stick").
 
 ``render_frontmatter``/``split_frontmatter`` are the only reader and writer of
 the ``---``-fenced block under ``~/.coffer/memory/``, and two of their
@@ -82,8 +83,9 @@ def test_a_file_with_no_fence_is_all_body() -> None:
 
 
 def test_an_unterminated_fence_degrades_to_all_body() -> None:
-    """Nothing here is hand-authored and everything is rebuildable (FR-019),
-    so one damaged file costs one thin entry, not the partition's listing."""
+    """Nothing here is hand-authored and everything is rebuildable (see "Keep
+    the memory tree derived and local"), so one damaged file costs one thin
+    entry, not the partition's listing."""
     text = "---\ntitle: t\nstill inside the block\n"
     assert split_frontmatter(text) == ({}, text)
 

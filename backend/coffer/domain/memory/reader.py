@@ -1,14 +1,16 @@
-"""The port every native-memory reader implements (spec memory FR-004).
+"""The port every native-memory reader implements (spec memory "Read Claude
+Code and Codex memory with their search terms").
 
 Two agents, two undocumented private formats, one shape: list the source
 files under an agent's own ``config_dir`` without opening them (``sources``),
 then parse one of those files into the entries it holds (``read``). Splitting
 the two lets the caller hash a file cheaply to decide whether it changed
-(FR-006) before paying to parse it.
+("Skip unchanged sources") before paying to parse it.
 
 A reader's output is a :class:`RawEntry` — **the input layer, not the
-product**. It is written verbatim under the partition's ``.raw/`` (FR-008)
-and the distil pass turns entries into Coffer's own notes (FR-020). That
+product**. It is written verbatim under the partition's ``.raw/`` ("Keep raw
+entries verbatim and hidden") and the distil pass turns entries into Coffer's
+own notes ("Write notes in Coffer's own words"). That
 split is why a reader may stay dumb: it is not trying to write anything a
 person will read, only to hand the pass everything the source said,
 including the source's own search terms where it supplies them.
@@ -18,7 +20,8 @@ YAML, no agent-specific knowledge. The two adapters that actually walk a disk
 live in :mod:`coffer.infrastructure.memory.readers`; this module is what they
 both promise to satisfy, and what the aggregation pass composes against
 instead of a concrete reader class (so a third agent, when one earns the
-abstraction per FR-045, is one more adapter, not a change here).
+abstraction per "Reintroduce no retired mechanism", is one more adapter, not
+a change here).
 """
 
 from __future__ import annotations
@@ -33,14 +36,14 @@ class SourceFile:
 
     ``digest`` is a content hash, not a size or an mtime, because a native
     tool may rewrite a file with the same bytes at a new mtime (or vice versa
-    on a filesystem with coarse mtime resolution) — FR-006's skip-unchanged
-    check needs to survive either.
+    on a filesystem with coarse mtime resolution) — the skip-unchanged check
+    of "Skip unchanged sources" needs to survive either.
     """
 
     #: Absolute path of the native file.
     path: str
     #: Content hash, so aggregation can skip a file whose content is unchanged
-    #: since the last pass (FR-006) without re-parsing it.
+    #: since the last pass without re-parsing it.
     digest: str
 
 
@@ -58,33 +61,37 @@ class RawEntry:
     #: Code's frontmatter ``name``); otherwise derived defensibly by the
     #: reader, which documents the choice where it makes it. It is a handle
     #: for the distil pass, not a title a person will read — the note's title
-    #: is Coffer's to write (FR-020).
+    #: is Coffer's to write ("Write notes in Coffer's own words").
     title: str
     #: Longer human description, same provenance rule as ``title``.
     description: str
     #: One of :data:`coffer.domain.memory.note.NOTE_TYPES`.
     type: str
     #: The source's own words, verbatim. This is the layer where verbatim
-    #: still holds (FR-008): it is what lands under ``.raw/`` and what a
+    #: still holds ("Keep raw entries verbatim and hidden"): it is what lands
+    #: under ``.raw/`` and what a
     #: note's claim is checked against.
     body: str
     #: Where inside the source file this entry lives — a heading, a bullet's
     #: content hash, or empty when the whole file is the entry. Half of the
-    #: stable identity FR-009 needs; the reader is responsible for it being
+    #: stable identity "Let only aggregation write raw entries" needs; the
+    #: reader is responsible for it being
     #: the same string on a second, unchanged read.
     anchor: str
     #: Absolute working directory this entry was learned in, or "" when it is
     #: about the person rather than any one project. Aggregation resolves it
-    #: to a repository (FR-014); an entry whose directory is not inside one
-    #: creates no partition and is judged on its merits by distil (FR-015).
+    #: to a repository ("Identify a partition by its repository"); an entry
+    #: whose directory is not inside one creates no partition and is judged on
+    #: its merits by distil ("Create no partition for a non-repository
+    #: directory").
     project_root: str
     #: The source's own timestamp for this entry, when it records one at all.
     source_written_at: str = ""
     #: Search terms the source itself states for this material. Codex writes
     #: them per task group in its summary; Claude Code states none. Carried
     #: rather than discarded because the source has already answered "what
-    #: would you look this up by" better than a later guess can (FR-004), and
-    #: the index line repeats them (FR-029).
+    #: would you look this up by" better than a later guess can, and the index
+    #: line repeats them ("Write each index line to stand on its own").
     search_terms: tuple[str, ...] = field(default_factory=tuple)
 
 
@@ -100,7 +107,8 @@ class MemoryReader(Protocol):
 
         Must not raise for one unreadable file — skip it and keep listing the
         rest (a directory-listing failure is a filesystem problem, not a
-        format problem, and FR-005's isolation still applies: one bad path
+        format problem, and the isolation of "Fail a broken reader loudly and in
+        isolation" still applies: one bad path
         must not blank the whole list).
         """
         ...
@@ -109,7 +117,7 @@ class MemoryReader(Protocol):
         """Parse one source file into the entries it holds.
 
         Raises :class:`coffer.domain.memory.errors.UnreadableMemory` — never
-        returns a partial tuple — when the file cannot be parsed (FR-005):
+        returns a partial tuple — when the file cannot be parsed:
         the caller is expected to catch it per file, record the reason, and
         carry on with everything else.
         """

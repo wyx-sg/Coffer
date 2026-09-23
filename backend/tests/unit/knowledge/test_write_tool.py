@@ -1,4 +1,5 @@
-"""``coffer__write`` — the layer's only MCP tool (spec knowledge FR-033).
+"""``coffer__write`` — the layer's only MCP tool (spec knowledge "Expose
+exactly one knowledge tool").
 
 Three things are worth pinning about it. It writes into ``sources/`` and never
 into the curated lane, so an agent cannot reach past curation by naming a path.

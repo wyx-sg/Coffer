@@ -1,4 +1,5 @@
-"""HTTP surface for the one ``memory`` kind (spec memory FR-036).
+"""HTTP surface for the one ``memory`` kind (spec memory "Cover memory
+management on REST and the CLI").
 
 List partitions, notes and retirements, show one note with the entries behind
 it, walk a partition's own directory and read a file out of it, run a sync, run

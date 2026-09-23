@@ -216,7 +216,8 @@ def test_prepend_context_combines_forward_and_reply():
     assert "Bob: hi" in out
 
 
-# -- build_inbound_message: mentions_others (FR-037) -------------------------
+# -- build_inbound_message: mentions_others -----------------------------------
+# (spec channels "Configure when the bot answers in a group")
 
 
 def _build(message):
@@ -305,8 +306,9 @@ def test_mention_without_astral_characters_is_unchanged() -> None:
     assert (addressed, stripped) == (True, "status")
 
 
-# -- unfetchable attachment notes (spec channels/telegram FR-014)
-# ------------------------------------
+# -- unfetchable attachment notes ---------------------------------------------
+# (spec channels/telegram "Download every Telegram media type without leaking
+# the token")
 
 
 def test_notes_are_appended_to_the_turn_text() -> None:

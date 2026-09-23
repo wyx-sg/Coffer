@@ -1,8 +1,9 @@
 """Unit tests for `coffer.application.memory.aggregate_worker.AggregateWorker`.
 
-FR-007's two halves: aggregation runs unattended on an interval, and a pass
-that fails does not end the loop. No filesystem, no database — the worker is
-a loop around one injected callable, and that is all these assert.
+Both halves of "Aggregate on an interval and on demand": aggregation runs
+unattended on an interval, and a pass that fails does not end the loop. No
+filesystem, no database — the worker is a loop around one injected callable,
+and that is all these assert.
 """
 
 from __future__ import annotations
@@ -45,8 +46,8 @@ async def test_a_pass_runs_on_start_without_anyone_asking() -> None:
 
 
 async def test_the_actor_distinguishes_a_scheduled_pass_from_a_requested_one() -> None:
-    # FR-024: every pass is audited, and the log has to be able to say which
-    # ones nobody asked for.
+    # "Audit every lifecycle act": every pass is audited, and the log has to be
+    # able to say which ones nobody asked for.
     calls: list[str] = []
 
     async def _aggregate(*, actor: str) -> None:

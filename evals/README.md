@@ -107,7 +107,9 @@ asked and the ranked tool names that came back:
 ```
 
 Only this shape is recorded — never tool arguments or result content (that stays
-out of any Coffer store; SC-010 / the roadmap no-payloads rule). Capture writes
+out of any Coffer store; [mcp-gateway](../openspec/specs/mcp-gateway/spec.md)
+"Record invocations without content" and [credentials](../openspec/specs/credentials/spec.md)
+"Hold plaintext only in memory at the moment of use"). Capture writes
 nothing unless the env var is set, so it is safe to leave wired in.
 
 **Curate captured traces into golden cases:**

@@ -1,6 +1,7 @@
 """coffer agent native-memory — read the agent's OWN native memory stores.
 
-Every agent-workspace operation exists on BOTH REST and CLI (spec agent-registry FR-044/FR-046);
+Every agent-workspace operation exists on BOTH REST and CLI (spec agent-registry
+"Expose every agent operation through REST, CLI and the Agents page");
 this is the CLI half of
 
   ``GET /agents/{uid}/native-memory`` → ``coffer agent native-memory <name>``

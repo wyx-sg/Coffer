@@ -36,10 +36,11 @@ _FAKE = Path(__file__).resolve().parents[1] / "fixtures" / "fake_mcp_server.py"
 _TOKEN = "test-oracle-token"
 _HEADERS = {"X-Coffer-Token": _TOKEN}
 
-#: FR-050: the gateway exposes EXACTLY ONE built-in knowledge tool. Upload is
-#: not among them — a document enters through a human surface, not an agent's
-#: tool call — and neither is any way to READ: an agent reads the files with
-#: its own tools at the paths its delivered skill carries.
+#: The gateway exposes EXACTLY ONE built-in knowledge tool. Upload is not among
+#: them — a document enters through a human surface, not an agent's tool call —
+#: and neither is any way to READ: an agent reads the files with its own tools
+#: at the paths its delivered skill carries (spec knowledge "Expose exactly one
+#: knowledge tool").
 _KNOWLEDGE_TOOLS = frozenset({"coffer__write"})
 
 #: The five that went with the retrieval surface. Asserted absent by name, so a
@@ -254,19 +255,20 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
         assert any(n.startswith("coffer__") for n in tool_names), (
             f"no coffer__ built-in tools found in tools/list: {tool_names}"
         )
-        # And the knowledge tools specifically. FR-050 says EXACTLY ONE, so
+        # And the knowledge tools specifically. The spec says EXACTLY ONE, so
         # this is an equality and not the `issubset` it used to be: a subset
         # check let a second knowledge tool — an agent-callable `upload`, say,
-        # which FR-050 rules out by name — ship without anything going red.
+        # which the spec rules out by name — ship without anything going red.
         #
         # The knowledge-owned half of the roster is isolated by subtracting the
         # built-ins other slices own, so this asserts about one kind
         # rather than about every built-in Coffer happens to have.
         coffer_tools = {n for n in tool_names if n.startswith("coffer__")}
-        # skill-manager FR-031: no skill tool rides the wire. Both supported
-        # agent types read skills natively from `<config_dir>/skills/`, where
-        # delivery already puts them, and serving the master store over MCP
-        # would be a second delivery path with no per-agent scope on it.
+        # No skill tool rides the wire (spec skill-manager "Expose no skill
+        # tools over MCP"). Both supported agent types read skills natively
+        # from `<config_dir>/skills/`, where delivery already puts them, and
+        # serving the master store over MCP would be a second delivery path
+        # with no per-agent scope on it.
         assert not {"coffer__list_skills", "coffer__load_skill"} & coffer_tools, (
             f"skill tools are exposed over MCP: {sorted(coffer_tools)}"
         )
@@ -276,8 +278,8 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
         )
         knowledge_on_the_wire = coffer_tools - _NON_KNOWLEDGE_BUILTIN_TOOLS
         assert knowledge_on_the_wire == set(_KNOWLEDGE_TOOLS), (
-            f"the knowledge tools in tools/list are not exactly the one FR-050 "
-            f"name; unexpected={sorted(knowledge_on_the_wire - _KNOWLEDGE_TOOLS)}; "
+            f"the knowledge tools in tools/list are not exactly the one the spec "
+            f"names; unexpected={sorted(knowledge_on_the_wire - _KNOWLEDGE_TOOLS)}; "
             f"missing={sorted(_KNOWLEDGE_TOOLS - knowledge_on_the_wire)}"
         )
         # The five retired names, asserted absent individually. The equality
@@ -294,7 +296,7 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
         declared = _tools_declared_under(_APPLICATION_ROOT / "knowledge")
         assert declared == set(_KNOWLEDGE_TOOLS), (
             f"backend/coffer/application/knowledge declares "
-            f"{len(declared)} built-in tool(s), not the one FR-050 allows; "
+            f"{len(declared)} built-in tool(s), not the one the spec allows; "
             f"unexpected={sorted(declared - _KNOWLEDGE_TOOLS)}; "
             f"missing={sorted(_KNOWLEDGE_TOOLS - declared)}"
         )
@@ -310,14 +312,16 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
         # 4. tools/call of the one coffer__ BUILT-IN end-to-end through the
         # daemon (review gap: builtins were only ever listed, never called over
         # the wire). The collection has to exist first — nothing
-        # auto-provisions one (spec knowledge FR-008).
+        # auto-provisions one (spec knowledge "Create collections only
+        # deliberately").
         #
         # There is no read tool left to confirm the write with, which is the
         # point of the redesign, so the confirmation is the file itself: the
         # daemon runs in this process over an isolated HOME, so the collection
         # can be read off disk exactly as the agent's own `Read` would. No
         # internal model is configured here, so the material is promoted to a
-        # document on the spot rather than waiting in the inbox (FR-029).
+        # document on the spot rather than waiting in the inbox (see "Promote
+        # material directly when no model is configured").
         await _create_collection("oracle")
         write_result = await session.call_tool(
             "coffer__write",

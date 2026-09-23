@@ -2,8 +2,9 @@
 
 The knowledge **curation** pass rewrites a collection's documents with no diff
 anyone approved. That is defensible on one machine and not on several, and the
-spec's ``## Unattended rewriters`` section states three normative rules to make
-it safe:
+spec states three normative rules to make it safe (requirements
+"Run an unattended rewriter on one owner machine", "Never overlap a tidy pass
+and a round" and "Let an edit beat a tidy deletion"):
 
 The acceptance scenario titles below still read "tidy" because that is what
 `openspec/specs/vault-sync/spec.md` calls the pass; curation is what replaced it, and
@@ -138,7 +139,8 @@ async def test_an_orphaned_owner_is_a_reportable_fault_and_can_be_taken_over(pai
     and False for an owner that no longer exists, and those two are a vault
     that is fine and a vault whose curation stopped everywhere. Until this the
     difference was unrepresentable, so the second one looked exactly like the
-    first and nothing in the product said otherwise (spec vault-sync FR-098).
+    first and nothing in the product said otherwise (spec vault-sync "Report and
+    change the rewriter's owner").
     """
     from coffer.domain.internal_engine_config import (
         CurationOwner,

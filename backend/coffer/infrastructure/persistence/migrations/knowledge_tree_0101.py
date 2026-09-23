@@ -1,4 +1,6 @@
-"""One-way rewrite of the two lanes into one tree (spec knowledge FR-042).
+"""One-way rewrite of the two lanes into one tree.
+
+Spec knowledge "Migrate the two-lane corpus into the inbox".
 
 Since 0085 a collection has been two visible lanes with different authors:
 ``sources/``, what a person, an upload or ``coffer__write`` put there, and

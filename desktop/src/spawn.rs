@@ -26,7 +26,8 @@ pub fn spawn_resolved_daemon(app: &AppHandle) -> Result<u32, String> {
 /// The spawn decision, split from the `AppHandle`-bound resolution above so
 /// the refusal to start a second daemon is unit-testable. A `Running` source
 /// reaching here is the double-spawn the resolution chain exists to prevent
-/// (FR-006), so it is an error naming the port rather than a spawn.
+/// (see "Find or start a daemon by a fixed resolution order"), so it is an error naming the port
+/// rather than a spawn.
 fn spawn_from_source(source: DaemonSource) -> Result<u32, String> {
     match source {
         DaemonSource::Binary { path, origin } => {
@@ -125,7 +126,8 @@ mod tests {
         assert!(err.contains("/nonexistent/coffer-daemon"), "{err}");
     }
 
-    /// FR-006's ordering, seen from the spawn side: the chain answering
+    /// The ordering of "Find or start a daemon by a fixed resolution order",
+    /// seen from the spawn side: the chain answering
     /// "a daemon is already up" must never be turned into a spawn.
     // acceptance(spec = "desktop-app", scenario = "the shell takes over a running daemon instead of spawning a second")
     #[test]
@@ -139,8 +141,8 @@ mod tests {
         assert!(err.contains("already listening"), "{err}");
     }
 
-    /// FR-009: a daemon the shell spawns must outlive the app, which is why
-    /// it goes through `std::process::Command` + `setsid` rather than Tauri's
+    /// "Detach a spawned daemon from the app": a daemon the shell spawns must outlive the app,
+    /// which is why it goes through `std::process::Command` + `setsid` rather than Tauri's
     /// managed-sidecar API (that one tears its children down on app exit).
     ///
     /// The observable consequence of `setsid` is that the child leads its own

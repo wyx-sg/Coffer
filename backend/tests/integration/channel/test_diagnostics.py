@@ -1,5 +1,8 @@
-"""Channel health: configuration the platform will not honour (spec channels/telegram FR-004), and
-the one-tap pairing link (FR-051)."""
+"""Channel health: configuration the platform will not honour, and the one-tap pairing link.
+
+See spec channels/telegram "Report privacy mode that defeats the group configuration" and spec
+channels "Pair by a one-tap start link".
+"""
 
 from __future__ import annotations
 
@@ -81,7 +84,7 @@ async def test_a_transport_without_an_identity_reports_nothing(env: ChannelEnv) 
     assert (await env.service.status(channel.uid)).diagnostics == ()
 
 
-# -- the pairing link (FR-051) ------------------------------------------------
+# -- the pairing link -----------------------------------------------------------
 
 
 @pytest.mark.acceptance(spec="channels", scenario="pairing by link claims the code")
@@ -106,7 +109,7 @@ async def test_a_channel_with_no_known_username_still_issues_a_code(env: Channel
     assert pair_url == ""  # the typed code is the only way in
 
 
-# -- private answers in a group, end to end (FR-049) --------------------------
+# -- private answers in a group, end to end -------------------------------------
 
 
 async def test_a_group_status_answers_the_asker_alone(env: ChannelEnv) -> None:
@@ -150,15 +153,15 @@ async def test_a_group_new_still_answers_the_room(env: ChannelEnv) -> None:
 
 
 async def test_a_group_selection_card_is_not_delivered_privately(env: ChannelEnv) -> None:
-    """FR-049 excludes cards on purpose.
+    """Cards are excluded on purpose from "Keep non-answer chatter private in a group".
 
-    A card is the one surface that must be REWRITTEN after it is used (FR-015),
-    and Telegram rewrites an ephemeral message through a different address space
-    (`receiver_user_id` + `ephemeral_message_id`) with an edit it documents as
-    not guaranteed to arrive. A card that cannot be reliably rewritten keeps
-    offering the option already taken — exactly what FR-015 prevents — so it
-    stays an ordinary message even though the command that produced it is
-    private.
+    A card is the one surface that must be REWRITTEN after it is used ("Offer
+    command choices as owner-gated selection cards"), and Telegram rewrites an
+    ephemeral message through a different address space (`receiver_user_id` +
+    `ephemeral_message_id`) with an edit it documents as not guaranteed to
+    arrive. A card that cannot be reliably rewritten keeps offering the option
+    already taken — exactly what that requirement prevents — so it stays an
+    ordinary message even though the command that produced it is private.
     """
     resource = await env.register_channel("tg")
     adapter = env.bind(resource, FakeChannelAdapter(supports_buttons=True))

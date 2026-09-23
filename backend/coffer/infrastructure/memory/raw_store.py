@@ -1,16 +1,17 @@
 """The verbatim half of a partition: ``.raw/``, written by aggregation alone.
 
-Kept apart from :mod:`coffer.infrastructure.memory.store` for the reason the
-two halves exist at all. A partition's four files have **one writer each**
-(FR-026), and the sharpest way to keep that checkable is for the one directory
-only aggregation may touch to be the one module only aggregation imports:
-"does the distil pass write ``.raw/``?" is then answered by reading its import
-list, not by trusting a comment.
+Kept apart from :mod:`coffer.infrastructure.memory.store` for the reason the two
+halves exist at all. A partition's four files have **one writer each** (see
+"Keep distil out of the raw directory"), and the sharpest way to keep that
+checkable is for the one directory only aggregation may touch to be the one
+module only aggregation imports: "does the distil pass write ``.raw/``?" is then
+answered by reading its import list, not by trusting a comment.
 
-What lands here is an agent's own words, byte for byte (FR-008, FR-009). That
-is what lets a bad distillation be re-run without going back to the agents —
-and it is why :mod:`coffer.infrastructure.memory.frontmatter` reflows nothing,
-unlike knowledge's own copy of the same idea.
+What lands here is an agent's own words, byte for byte (see "Keep raw entries
+verbatim and hidden"). That is what lets a bad distillation be re-run without
+going back to the agents — and it is why
+:mod:`coffer.infrastructure.memory.frontmatter` reflows nothing, unlike
+knowledge's own copy of the same idea.
 """
 
 from __future__ import annotations
@@ -50,7 +51,8 @@ class StoredRawEntry:
     *which of my agents already knows this*. :attr:`entry_id` is derived rather
     than passed in, so a note's origin and the raw file it names cannot drift
     apart, and a second pass over an unchanged source overwrites one file rather
-    than accumulating a near-duplicate (FR-009).
+    than accumulating a near-duplicate (see "Let only aggregation write raw
+    entries").
     """
 
     partition: str
@@ -78,9 +80,10 @@ class StoredRawEntry:
 def write_raw_entry(stored: StoredRawEntry) -> str:
     """Write one verbatim entry under ``.raw/``. Returns the relative path.
 
-    Only aggregation may call this (FR-009), and the body goes down exactly as
-    the reader handed it over — which is what lets a bad distillation be re-run
-    without going back to the agents.
+    Only aggregation may call this (see "Let only aggregation write raw
+    entries"), and the body goes down exactly as the reader handed it over —
+    which is what lets a bad distillation be re-run without going back to the
+    agents.
     """
     entry = stored.entry
     frontmatter: dict[str, Any] = {
@@ -137,9 +140,9 @@ def delete_raw_entry(partition: str, entry_id: str) -> bool:
     """Remove one raw entry's file; ``True`` when there was one to remove.
 
     Per entry, with no partition-wide counterpart: a pass never re-reads a
-    source whose digest is unchanged (FR-006), so a "clear the partition and
-    write this pass's entries" helper would delete what the skip had just
-    decided was still good.
+    source whose digest is unchanged (see "Skip unchanged sources"), so a "clear
+    the partition and write this pass's entries" helper would delete what the
+    skip had just decided was still good.
     """
     path = paths.raw_path(partition, entry_id)
     if not path.is_file():

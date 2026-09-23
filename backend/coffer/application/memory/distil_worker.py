@@ -1,4 +1,5 @@
-"""The background worker that runs the distil pass on an interval (FR-007).
+"""The background worker that runs the distil pass on an interval (spec internal-engine
+"Carry a switch and interval for each unattended pass").
 
 Shaped like ``aggregate_worker.AggregateWorker``: a catch-up pass shortly after
 boot, then on an interval; a failing pass is logged and never kills the loop; a
@@ -13,20 +14,20 @@ is deliberate: aggregation is what *fills* ``.raw/``, and distilling a
 partition before this boot's aggregation has run would spend a model on the
 same entries the pass a minute later would have seen anyway.
 
-**On by default**, like aggregation and unlike knowledge's tidy. Tidy is off
-until the operator switches it on because it rewrites the human's own files
-with no diff to approve. Everything this pass writes is under
-``~/.coffer/memory/``, which is derived by construction (FR-019): delete it,
-run aggregation and distil, and an equivalent partition comes back. There is no
-unattended-rewrite risk here to gate behind consent — only a model call, which
-is what the switch is actually for.
+**On by default**, like aggregation and unlike knowledge's tidy. Tidy is off until the
+operator switches it on because it rewrites the human's own files with no diff to
+approve. Everything this pass writes is under ``~/.coffer/memory/``, which is derived by
+construction (see "Keep the memory tree derived and local"): delete it, run aggregation
+and distil, and an equivalent partition comes back. There is no unattended-rewrite risk
+here to gate behind consent — only a model call, which is what the switch is actually
+for.
 
-**One pass per partition, whoever started it (FR-041).** The timer and the
-Distil button are two writers over one directory, so both claim the same
-upkeep-runs key: whichever arrives first holds it, the button's route is
-refused with ``UPKEEP_ALREADY_RUNNING`` and this worker simply skips the
-partition. Busy is an ordinary state of a partition, not a failure, so it is
-logged at debug and the next sweep comes round to it.
+**One pass per partition, whoever started it (see "Run one distil pass per partition at
+a time").** The timer and the Distil button are two writers over one directory, so both
+claim the same upkeep-runs key: whichever arrives first holds it, the button's route is
+refused with ``UPKEEP_ALREADY_RUNNING`` and this worker simply skips the partition. Busy
+is an ordinary state of a partition, not a failure, so it is logged at debug and the
+next sweep comes round to it.
 """
 
 from __future__ import annotations
@@ -49,16 +50,16 @@ DEFAULT_START_DELAY_S = 60.0
 DEFAULT_INTERVAL_S = 6 * 60 * 60.0
 
 #: The actor recorded on an unattended pass's audit event, so the log can tell
-#: a scheduled distillation apart from one the user asked for (FR-038).
+#: a scheduled distillation apart from one the user asked for (see "Audit every lifecycle act").
 WORKER_ACTOR = "system:memory-distil-worker"
 
 DistilCallable = Callable[..., Awaitable[object]]
 EnabledCheck = Callable[[], Awaitable[bool]]
-#: Yields the **uids** of the partitions to sweep. A pass spends a model and
-#: rewrites every note in a directory, so it is aimed at the identity rather
-#: than at a label the user can edit while it runs — and the Distil button
-#: sends the same uid, which is what lets the claim below and the route's claim
-#: collide the way FR-041 needs them to without either side translating.
+#: Yields the **uids** of the partitions to sweep. A pass spends a model and rewrites
+#: every note in a directory, so it is aimed at the identity rather than at a label the
+#: user can edit while it runs — and the Distil button sends the same uid, which is what
+#: lets the claim below and the route's claim collide the way "Run one distil pass per
+#: partition at a time" needs them to without either side translating.
 PartitionLister = Callable[[], Awaitable[list[str]]]
 
 
@@ -92,7 +93,8 @@ class DistilWorker:
         self._start_delay_s = start_delay_s
         self._interval_s = interval_s
         self._read_interval = read_interval
-        # The same table the button's route claims against (FR-041).
+        # The same table the button's route claims against (see "Run one distil pass per
+        # partition at a time").
         self._runs = runs
 
     async def run_forever(self) -> None:

@@ -260,7 +260,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     publish_daemon_identity()
 
-    # Frozen builds only; no-op from source (spec daemon FR-027, see binary_deploy).
+    # Frozen builds only; no-op from source (spec daemon "Deploy frozen sibling
+    # binaries and back up the vault before migrating", see binary_deploy).
     await asyncio.to_thread(deploy_frozen_sidecars)
 
     workers = start_background_workers(

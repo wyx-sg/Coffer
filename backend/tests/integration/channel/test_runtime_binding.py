@@ -1,4 +1,6 @@
-"""The machine binding decides which daemon runs a channel (spec channels FR-026).
+"""The machine binding decides which daemon runs a channel.
+
+See spec channels "Bind each channel to the one machine that runs it".
 
 A channel travels between the user's machines now, so the resource table is no
 longer a private list — two daemons read the same rows. What keeps them from

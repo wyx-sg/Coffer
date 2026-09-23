@@ -1,6 +1,5 @@
-"""Telegram album debounce (spec channels/telegram FR-015): buffer messages sharing a
-``media_group_id``
-and flush them as ONE inbound turn.
+"""Telegram album debounce (spec channels/telegram "Debounce an album into one turn"):
+buffer messages sharing a ``media_group_id`` and flush them as ONE inbound turn.
 
 Split out of ``telegram.py`` to keep that module under the file-size limit. The
 Bot API delivers a multi-photo album as SEPARATE update messages that share a
@@ -36,8 +35,8 @@ class _Album:
 
     message: dict[str, Any]
     attachments: list[InboundAttachment] = field(default_factory=list)
-    #: spec channels/telegram FR-014 notes about items that could not be downloaded, accumulated
-    #: across the album so one unfetchable photo is still reported.
+    #: Notes about items that could not be downloaded, accumulated across
+    #: the album so one unfetchable photo is still reported.
     notes: list[str] = field(default_factory=list)
 
 

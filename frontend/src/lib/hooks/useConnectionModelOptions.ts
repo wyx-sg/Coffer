@@ -5,7 +5,8 @@
 // Two sources, in this order: a connection's CURATED set when it has one — that
 // IS its catalogue, and an embedding entry is no more a chat model here than in
 // an agent's picker — and otherwise the endpoint's own list, probed once per
-// connection (spec provider-switching FR-030). Both are narrowed to the
+// connection (spec provider-switching "Curate the models a connection offers").
+// Both are narrowed to the
 // modality the caller needs, because one base URL and key answer for chat,
 // embeddings, images and speech alike.
 //

@@ -127,7 +127,7 @@ def test_0066_registers_collections_that_are_already_on_disk(tmp_path, monkeypat
     migrated by an earlier run — or restored from a backup — reports no work
     done, so the scopes' rows were deleted and nothing registered in their
     place, leaving every file on disk invisible to every agent (the per-agent
-    scope reads the Resource rows, spec knowledge FR-010).
+    scope reads the Resource rows).
     """
     db_path = tmp_path / "m.db"
     root = tmp_path / "knowledge"
@@ -157,8 +157,9 @@ def test_0066_registers_collections_that_are_already_on_disk(tmp_path, monkeypat
 
 def test_0066_fills_in_a_missing_description(tmp_path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
     """An empty description is not cosmetic: the catalogue is the only
-    retrieval surface, so a file describing nothing is one an agent scrolls
-    past (spec knowledge FR-003). Almost no pre-migration document carried one.
+    retrieval surface, so a file describing nothing is one an agent scrolls past
+    (spec knowledge "Carry title, description and actor in frontmatter"). Almost
+    no pre-migration document carried one.
     """
     db_path = tmp_path / "m.db"
     root = tmp_path / "knowledge"

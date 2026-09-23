@@ -1,4 +1,5 @@
-"""File naming — the path is the identity (spec knowledge FR-002).
+"""File naming — the path is the identity (spec knowledge "Use the file path as a
+document's identity").
 
 With no index mapping an id to a title, a file name is what a human reads in
 their file manager and what an agent reads in a grep result. So names are

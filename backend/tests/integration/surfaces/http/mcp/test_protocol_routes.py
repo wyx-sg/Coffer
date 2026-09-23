@@ -229,8 +229,9 @@ async def test_post_unexpected_exception_does_not_leak_message_to_wire(
 
     Upstream errors can embed credentials (an auth failure echoing the API
     key). The catch-all branch previously sent ``str(e)`` verbatim to the
-    downstream client, defeating the same SC-010 secret-hygiene rule the
-    invocation-log path already honours via ``_safe_error_summary``.
+    downstream client, defeating the same secret-hygiene rule (spec credentials
+    "Hold plaintext only in memory at the moment of use") the invocation-log
+    path already honours via ``_safe_error_summary``.
     """
     secret = "ghp_SUPERSECRET_TOKEN_should_never_reach_client"
 

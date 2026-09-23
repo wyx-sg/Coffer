@@ -1,4 +1,6 @@
-"""Inbound Telegram media downloads that fail (spec channels, spec channels/telegram FR-014).
+"""Inbound Telegram media downloads that fail.
+
+See spec channels/telegram "Download every Telegram media type without leaking the token".
 
 The file endpoint's URL carries the bot token (``/file/bot<token>/<path>``),
 so a failed download is the one place the adapter could put the token into the

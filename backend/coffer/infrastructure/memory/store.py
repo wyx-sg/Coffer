@@ -1,11 +1,12 @@
 """Reads and writes one partition's four files, with one writer each.
 
 A partition holds ``MEMORY.md``, ``notes/``, ``RETIRED.md`` and ``.raw/``, and
-keeping those apart is not tidiness — it is what makes FR-026 checkable. Every
-function here writes into exactly one of the four, so "does the distil pass
-write ``.raw/``?" is answered by reading which functions the pass calls rather
-than by trusting it, and there is deliberately no helper that writes a note and
-its raw entry in one go however convenient that would be.
+keeping those apart is not tidiness — it is what makes "Keep distil out of the
+raw directory" checkable. Every function here writes into exactly one of the
+four, so "does the distil pass write ``.raw/``?" is answered by reading which
+functions the pass calls rather than by trusting it, and there is deliberately
+no helper that writes a note and its raw entry in one go however convenient that
+would be.
 
 Notes and raw entries are one Markdown file each — frontmatter, then a body that
 comes back byte for byte (:mod:`coffer.infrastructure.memory.frontmatter` argues
@@ -15,11 +16,12 @@ why that exactness is load-bearing for ``.raw/``, and writes atomically too).
 so that the one directory only aggregation may write is the one module only
 aggregation imports. That is the same argument one level up.
 
-``MEMORY.md`` is written and read as **opaque text**. FR-029 requires one
-function to render both that file and the delivered line, and it lives in
-``application/memory/index.py``; a second renderer hiding in the storage layer
-is how those two surfaces became two definitions of "newest" and drifted last
-time. ``RETIRED.md``'s format is argued at :func:`write_retired`.
+``MEMORY.md`` is written and read as **opaque text**. "Write each index line to
+stand on its own" requires one function to render both that file and the
+delivered line, and it lives in ``application/memory/index.py``; a second
+renderer hiding in the storage layer is how those two surfaces became two
+definitions of "newest" and drifted last time. ``RETIRED.md``'s format is argued
+at :func:`write_retired`.
 """
 
 from __future__ import annotations
@@ -44,8 +46,9 @@ _RETIRED_HEADER = (
     "# Retired\n\n"
     "Notes Coffer removed from this partition, and why — also the next distil "
     "pass's exclusion list, so a subject recorded here is not re-opened from the "
-    "same unchanged raw entry (spec memory FR-025). The record above the fence "
-    "is read back; the prose below it is rendered from it, to be read not parsed.\n"
+    "same unchanged raw entry (spec memory, 'Record retirements so they stick'). "
+    "The record above the fence is read back; the prose below it is rendered from "
+    "it, to be read not parsed.\n"
 )
 
 
@@ -127,9 +130,10 @@ def read_note(partition: str, slug: str) -> Note:
 def list_notes(partition: str) -> tuple[Note, ...]:
     """Every note in ``partition``, by slug — not by ``updated_at``.
 
-    FR-029 requires *one* definition of "newest" behind the index and the
-    delivered lines, and it is the index renderer's; a second ordering here is
-    how those two surfaces drifted apart before.
+    "Write each index line to stand on its own" requires *one* definition of
+    "newest" behind the index and the delivered lines, and it is the index
+    renderer's; a second ordering here is how those two surfaces drifted apart
+    before.
     """
     directory = paths.notes_dir(partition)
     if not directory.is_dir():
@@ -143,7 +147,7 @@ def delete_note(partition: str, slug: str) -> bool:
 
     Only the file half of a retirement: :func:`write_retired` is the half that
     makes it stick, and deleting without recording writes a deletion the next
-    aggregation undoes (FR-025).
+    aggregation undoes (see "Record retirements so they stick").
     """
     path = paths.note_path(partition, slug)
     if not path.is_file():
@@ -162,8 +166,9 @@ def write_retired(partition: str, retired: Sequence[RetiredNote]) -> str:
     developer opens the partition as a folder and wants prose — what Coffer
     decided was no longer true, and on what grounds. The next distil pass takes
     the same file as its exclusion list, and a record it mis-parses is a note
-    re-opened from an unchanged raw entry: the precise failure FR-025 exists to
-    prevent, repeating every pass thereafter.
+    re-opened from an unchanged raw entry: the precise failure "Record
+    retirements so they stick" exists to prevent, repeating every pass
+    thereafter.
 
     One format cannot serve both, because ``reason`` is free prose Coffer
     writes: any heading, bullet or delimiter chosen to separate records is a
@@ -175,9 +180,9 @@ def write_retired(partition: str, retired: Sequence[RetiredNote]) -> str:
     from the same list on every write, so the two cannot disagree.
 
     An empty ``retired`` **removes** the file rather than writing an empty one:
-    FR-037 shows it in the tree when something has been retired, and a "nothing
-    yet" file in every partition is noise in the surface meant to make a
-    retirement visible.
+    "Present partitions as a table and a file tree" shows it in the tree when
+    something has been retired, and a "nothing yet" file in every partition is
+    noise in the surface meant to make a retirement visible.
     """
     path = paths.retired_path(partition)
     if not retired:
@@ -271,9 +276,10 @@ def read_index(partition: str) -> str:
 def list_partitions() -> tuple[str, ...]:
     """Every partition directory present on disk, ``global`` included.
 
-    This module creates none of them — FR-012 gives that to aggregation, so an
-    agent's working directory cannot bring a partition into existence merely by
-    being read. Dot-prefixed directories are the layer's own state.
+    This module creates none of them — "Create partitions only by aggregation"
+    gives that to aggregation, so an agent's working directory cannot bring a
+    partition into existence merely by being read. Dot-prefixed directories are
+    the layer's own state.
     """
     root = paths.memory_root()
     if not root.is_dir():
@@ -284,8 +290,8 @@ def list_partitions() -> tuple[str, ...]:
 def delete_partition(name: str) -> None:
     """Remove a partition entirely — index, notes, retirements and ``.raw/``.
 
-    Safe by construction, which is what FR-019 means by derived: the agents
-    still hold everything it was built from.
+    Safe by construction, which is what "Keep the memory tree derived and local"
+    means by derived: the agents still hold everything it was built from.
     """
     directory = paths.partition_dir(name)
     if directory.is_dir():
@@ -303,13 +309,14 @@ def rename_partition(old: str, new: str) -> None:
 
     **A target that already exists is refused rather than merged into.** The
     framework has checked that no ``memory`` *row* holds the new name; it has
-    not checked the filesystem, and it cannot — a directory can be there with
-    no row behind it, left by a partition whose cleanup failed. The check has
-    to be explicit because ``rename(2)`` makes the wrong call quietly: it fails
-    on a non-empty target but succeeds over an empty one. Merging would file
-    two repositories' raw entries into one partition, which is the one thing
-    FR-014's keying exists to prevent, and it would not be undone by the tree
-    being derived — the next pass would happily re-fill the merged directory.
+    not checked the filesystem, and it cannot — a directory can be there with no
+    row behind it, left by a partition whose cleanup failed. The check has to be
+    explicit because ``rename(2)`` makes the wrong call quietly: it fails on a
+    non-empty target but succeeds over an empty one. Merging would file two
+    repositories' raw entries into one partition, which is the one thing the
+    keying of "Identify a partition by its repository" exists to prevent, and it
+    would not be undone by the tree being derived — the next pass would happily
+    re-fill the merged directory.
 
     A missing source is tolerated: a row whose directory is gone still renames,
     and the next aggregation pass writes the directory under the new name.

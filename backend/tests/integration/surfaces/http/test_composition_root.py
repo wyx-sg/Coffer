@@ -33,7 +33,8 @@ def test_app_mounts_all_kind_agnostic_routes(tmp_path, monkeypatch):
         # /resources (token required; a fresh vault has none)
         r = c.get("/api/v1/resources", headers=headers)
         assert r.status_code == 200
-        # One row, and it is Coffer's own skill (spec knowledge FR-034): the
+        # One row, and it is Coffer's own skill (spec knowledge "Deliver the catalogue
+        # through the coffer-guide skill"): the
         # manual it seeds for itself at every boot. The user has made nothing,
         # so anything else here would be a route returning someone else's rows.
         assert [(x["kind"], x["name"]) for x in r.json()["resources"]] == [

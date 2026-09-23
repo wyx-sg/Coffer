@@ -123,7 +123,7 @@ class InternalEngineConfigService:
         reason: the owner travels with this document, so a retired machine
         leaves an owner nobody claims, the pass stops on every machine, and
         without this there was no way to take it back (spec vault-sync
-        ``## Unattended rewriters``).
+        "Report and change the rewriter's owner").
 
         The id is not checked against the machine registry. Reading the
         registry means reading the sync working tree, and a vault that has

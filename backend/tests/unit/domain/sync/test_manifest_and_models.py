@@ -34,7 +34,7 @@ def test_manifest_omits_a_creation_time_nobody_supplied() -> None:
     # machine and on every round: it lives in the working tree git three-way
     # merges, so a stamped-per-export timestamp would make an unchanged vault
     # commit and would conflict two machines on their first contact before they
-    # had disagreed about anything real (spec vault-sync "Determinism").
+    # had disagreed about anything real (spec vault-sync "Serialize deterministically").
     assert Manifest().to_dict() == {"schema_version": SCHEMA_VERSION}
 
 

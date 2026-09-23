@@ -3,9 +3,11 @@
 // Settings → Engine: the work Coffer does when nobody asked it to.
 //
 // Three passes run on a timer — aggregation reads the agents' own memory into
-// the derived tree (spec memory FR-007), distil lets the model rewrite that
-// derived digest (FR-030), and curation reads the knowledge sources the user
-// writes and derives the topic documents agents read (spec knowledge FR-021).
+// the derived tree (spec memory "Aggregate on an interval and on demand"),
+// distil lets the model rewrite that derived digest ("Distil incrementally in
+// two stages"), and curation reads the knowledge sources the user writes and
+// derives the topic documents agents read (spec knowledge "Curate through a
+// fenced four-tool pass").
 // Until now none of them was visible: two had no switch at all, the third's
 // switch could only be changed by editing a synced settings document, and all
 // three intervals were constants compiled into the workers. Something that

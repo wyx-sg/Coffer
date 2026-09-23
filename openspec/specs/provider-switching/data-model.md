@@ -23,7 +23,7 @@ model is chosen at the point of use.
 | `models[].modality` | `Modality` | `"text"` (the default), `"embedding"`, `"image"`, `"video"` or `"audio"` — which KIND of model the id is. STORED, never re-derived at read time. |
 | `is_active` | `bool` | At most one `True` per AGENT TYPE at any time, enforced by the switch op. It records that this connection is the one currently written INTO the agents it reaches — a claim about a file Coffer does not own, which is why the boot self-check exists. Always `False` for `ollama`, which projects into nothing. |
 | `internal_default` | `bool` | At most one `True` globally: the connection Coffer's own engine runs on. Its MODEL is a separate singleton, not stored here. Backed by a partial unique index, so a second flagged row is unrepresentable whatever writes it. |
-| `transcribe_default` | `bool` | At most one `True` globally: the connection Coffer transcribes speech on. Its MODEL is a separate singleton too, and neither half falls back to the engine's — a gateway serving chat completions commonly serves no `/audio/transcriptions` at all, so with this unset Coffer uploads nothing and the agent receives the audio file. Upheld by `set_transcribe_default`'s clear-then-set; no partial unique index backs it yet (spec FR-035). |
+| `transcribe_default` | `bool` | At most one `True` globally: the connection Coffer transcribes speech on. Its MODEL is a separate singleton too, and neither half falls back to the engine's — a gateway serving chat completions commonly serves no `/audio/transcriptions` at all, so with this unset Coffer uploads nothing and the agent receives the audio file. Upheld by `set_transcribe_default`'s clear-then-set; no partial unique index backs it yet. |
 
 Reach — which agents the connection projects into — is deliberately NOT a field
 here. It is the resource row's framework-level per-agent `scope`
@@ -190,8 +190,8 @@ All implementation MUST reuse these existing components; do not re-implement.
 
 | Component | Path | Used for |
 |---|---|---|
-| `ConfigFileStore.write_text_atomic` | `backend/coffer/infrastructure/agent/config_file_store.py` | atomic write + `.bak` (rotating `.bak.1` / `.bak.2`) — spec agent-registry FR-017 |
-| `ConfigFileStore.fingerprint` / `delete_with_backup` | same | staleness detection (spec agent-registry FR-036); retiring the Codex catalogue |
+| `ConfigFileStore.write_text_atomic` | `backend/coffer/infrastructure/agent/config_file_store.py` | atomic write + `.bak` (rotating `.bak.1` / `.bak.2`) — spec agent-registry "Write config files atomically with a backup and an audit entry" |
+| `ConfigFileStore.fingerprint` / `delete_with_backup` | same | staleness detection (spec agent-registry "Reject stale config-file writes by fingerprint"); retiring the Codex catalogue |
 | `spec_for` / `config_files_for` | `backend/coffer/domain/agent/config_files.py` | resolve the canonical path for an `AgentType` + key |
 | `AgentType` descriptors | `backend/coffer/domain/agent/descriptor.py` | `claude_code` `settings` → `~/.claude/settings.json`; `codex` `config` → `~/.codex/config.toml` |
 
@@ -353,5 +353,5 @@ copies, and the Codex model catalogue.
   `ResourceService.update_config` calls serialised by the single-process daemon;
   the single global internal default is additionally enforced by the database,
   while the single global speech-to-text default rests on the operation alone
-  (spec FR-035).
+  (see "Keep an independent speech-to-text default").
 - All HTTP routes are loopback-only, gated by `X-Coffer-Token`.

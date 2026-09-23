@@ -1,7 +1,7 @@
 // frontend/src/components/knowledge/KnowledgeFileDelete.tsx
 //
 // Delete the ONE document being previewed on a collection's detail page — any
-// document, whoever wrote it (FR-020).
+// document, whoever wrote it (see "Let only a person delete a document").
 //
 // Deleting the collection is the library page's action, on the Resource; this
 // is the file-sized one, which the UI did not have at all — a collection could

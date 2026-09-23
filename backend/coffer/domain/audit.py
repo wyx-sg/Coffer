@@ -23,7 +23,8 @@ class AuditEventType(StrEnum):
     CAPABILITY_ENABLED = "capability_enabled"
     CAPABILITY_DISABLED = "capability_disabled"
     TOKEN_ROTATED = "token_rotated"
-    # spec daemon FR-028/FR-029: autostart installed or removed, idle window changed
+    # spec daemon "Run as a login service" / "Stand down after an idle window":
+    # autostart installed or removed, idle window changed
     DAEMON_RESIDENCY_UPDATED = "daemon_residency_updated"
     RETENTION_UPDATED = "retention_updated"
     INTERNAL_ENGINE_MODEL_SET = "internal_engine_model_set"

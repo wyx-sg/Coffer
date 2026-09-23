@@ -61,13 +61,14 @@ def kinds(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, 
     scenario="a kind that declares itself derived never reaches the tree",
 )
 def test_memory_is_the_one_kind_whose_rows_do_not_converge(kinds) -> None:  # type: ignore[no-untyped-def]
-    """spec memory FR-016, asserted where the kinds are actually built.
+    """Spec memory "Keep the memory tree derived and local", asserted where the
+    kinds are actually built.
 
     A partition row is derived from the agents installed on THIS machine. Sent
     to a second one it becomes a partition naming a project root that machine
     may not have, holding no facts — because the derived tree under
     ``~/.coffer/memory/`` is not mirrored either — until the next local pass
-    recomputes it away. memory FR-016 forbids exactly that.
+    recomputes it away. Memory "Keep the memory tree derived and local" forbids exactly that.
     """
     withheld = {name for name, kind in kinds.items() if not kind.converges}
     assert withheld == _NON_CONVERGING, (
@@ -88,7 +89,8 @@ def test_every_kind_the_daemon_registers_answers_the_question(kinds) -> None:  #
 
 
 def test_the_skill_kind_withholds_its_own_generated_row(kinds) -> None:  # type: ignore[no-untyped-def]
-    """spec vault-sync FR-093, asserted against the registry the daemon built.
+    """Spec vault-sync "Withhold derived output in both halves", asserted against
+    the registry the daemon built.
 
     ``converges_row`` has exactly the failure mode ``converges`` has and this
     file exists for: a predicate can be written, tested and honoured by the

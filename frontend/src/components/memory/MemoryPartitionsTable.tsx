@@ -1,7 +1,8 @@
 // frontend/src/components/memory/MemoryPartitionsTable.tsx
 //
 // The partitions list: one row per repository partition plus `global`, each one
-// a `memory` Resource (spec memory FR-010). A row carries what a partition
+// a `memory` Resource (spec memory "Partition by
+// repository plus global"). A row carries what a partition
 // has — its name, the repository it is keyed on, how many notes it holds —
 // plus the status control every Resource gets (ScopeControl), and a bulk bar
 // applying that same choice to the whole selection.
@@ -18,11 +19,12 @@
 // "Status", since enabled/disabled is the whole of what it reports.
 //
 // A partition is keyed on a REPOSITORY, not on a working directory: a worktree
-// and a second clone resolve to one partition (FR-014), so the column names the
+// and a second clone resolve to one partition (see "Identify a partition by its
+// repository"), so the column names the
 // repository rather than the folder some session happened to run in. When that
 // repository is no longer on disk the row says so instead of hiding: such a
 // partition is delivered to nobody, and deleting it is the developer's call and
-// nobody else's (FR-016).
+// nobody else's (see "Report unresolvable partitions").
 //
 // `enabled` does not live on the dedicated partitions endpoint (it only
 // carries what is read off disk: name, repository path and key, note count,

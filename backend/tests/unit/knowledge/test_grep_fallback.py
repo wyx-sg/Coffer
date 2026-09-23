@@ -3,7 +3,9 @@
 These pin the rules the fallback shares with ``rg``: hidden entries skipped,
 binary files skipped, a regex applied line by line, a per-file and overall cap
 one past the limit so truncation stays visible, and a timeout that reports
-itself as truncation rather than as "no matches" (spec knowledge FR-015).
+itself as truncation rather than as "no matches". Curation uses it to pick a
+pass's candidate documents (spec knowledge "Assemble a pass from a bounded
+context").
 """
 
 from __future__ import annotations

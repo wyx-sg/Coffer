@@ -220,7 +220,8 @@ async def adopt_mcp_entry(
             actor=actor,
         )
     except ResourceAlreadyExists as e:
-        # Spec FR-021: the conflict response carries a suggested alternative
+        # Spec agent-registry "Adopt a direct MCP entry into Coffer": the
+        # conflict response carries a suggested alternative
         # name. Derived from the agent's type so it stays stable + readable.
         agent = await agent_svc.get(uid)
         agent_type = AgentConfig.model_validate(agent.config).type.value

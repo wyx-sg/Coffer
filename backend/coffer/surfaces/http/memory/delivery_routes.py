@@ -12,7 +12,8 @@ unattributed. There is no name fallback anywhere here (ADR
 resource-identity-is-an-immutable-uid).
 
 **Nothing here is filtered by who is asking.** A partition carries no per-agent
-reach (FR-013): every enabled partition is served to every agent, so ``POST
+reach ("Serve every enabled partition to every agent"): every enabled
+partition is served to every agent, so ``POST
 /context`` composes the same payload whoever fired it. The agent uid identifies
 the caller for the audit log and decides nothing about the content.
 
@@ -77,7 +78,8 @@ async def context(
     no caller identity to narrow by, and exists here for ``record_fired`` — the
     audited "this agent's hook fired" event. ``record_fired`` is what the
     installed hook sets; a management surface previewing the payload leaves it
-    false so it never records a fire that did not happen (FR-033).
+    false so it never records a fire that did not happen ("Audit every
+    delivery fire").
     """
     composed = await compose_context(
         svc,
@@ -114,7 +116,7 @@ async def install_delivery(
     svc: DeliveryService = Depends(get_memory_delivery_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> DeliveryStatusOut:
-    """Write Coffer's hook into one agent's own settings file (FR-032).
+    """Write Coffer's hook into one agent's own settings file.
 
     The uid is not only how this route is addressed — it is what goes INTO the
     installed command, so the entry keeps naming this agent however the user

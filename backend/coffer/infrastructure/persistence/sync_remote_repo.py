@@ -271,11 +271,12 @@ class SqlAlchemySyncRemoteRepo:
         """Re-stamp the newest recorded round instead of appending a new one.
 
         One outstanding confirmation is one situation, and the timer
-        re-deriving it every interval is not news (spec vault-sync FR-092). The
-        round is written over the row that first reported it — same
-        ``started_at``, so the moment the vault stopped is still readable, with
-        ``finished_at`` and the payload refreshed so the row also shows the
-        vault is still ticking — and the history grows no second row for it.
+        re-deriving it every interval is not news (spec vault-sync "Record one
+        outstanding confirmation once"). The round is written over the row that
+        first reported it — same ``started_at``, so the moment the vault
+        stopped is still readable, with ``finished_at`` and the payload
+        refreshed so the row also shows the vault is still ticking — and the
+        history grows no second row for it.
 
         False when there is nothing to refresh, or when the newest row is not
         the same outcome: the caller then records the round normally. The

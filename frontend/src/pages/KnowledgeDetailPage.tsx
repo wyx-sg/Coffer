@@ -1,7 +1,8 @@
 // frontend/src/pages/KnowledgeDetailPage.tsx
 //
 // Detail surface for ONE collection, which is ONE tree of Markdown documents
-// (spec knowledge FR-040, ADR knowledge-is-plain-files). People and Coffer's
+// (spec knowledge "Present a collection as one tree in the web UI", ADR
+// knowledge-is-plain-files). People and Coffer's
 // curation write the same documents: a person edits one in their own editor
 // (reached from the FileActions bar on the preview) or deletes it here, and a
 // curation pass merges new material into them. There is no second tree of
@@ -34,7 +35,8 @@
 // There is NO retrieval box anywhere on this page. The one input beside the
 // tree narrows the names already on screen, client-side; the layer exposes no
 // search and no grep at all, and an agent reads the files with its own tools at
-// the paths its delivered skill carries (FR-050).
+// the paths its delivered skill carries (see "Expose exactly one knowledge
+// tool").
 import { useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Inbox } from "lucide-react";

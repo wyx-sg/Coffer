@@ -3,7 +3,8 @@
 #
 # Output: dist/coffer-mcp-shim (single-file executable)
 # Shipped in coffer-cli-<triple>.tar.gz; a frozen daemon deploys it into
-# ~/.coffer/bin/ at startup (spec daemon FR-027) so MCP clients can launch it.
+# ~/.coffer/bin/ at startup (spec daemon "Deploy frozen sibling binaries and
+# back up the vault before migrating") so MCP clients can launch it.
 
 # -*- mode: python ; coding: utf-8 -*-
 
@@ -30,7 +31,8 @@ a = Analysis(
     excludes=[
         # Heavy ML stack (torch/mlx/numba/scipy/…). No coffer source imports
         # any of it: nothing local decodes audio or runs a model — voice is
-        # transcribed through the user's own connection (spec channels FR-019).
+        # transcribed through the user's own connection (spec channels
+        # "Transcribe inbound voice only when the user opted in").
         # The exclude stays as a guard — a transitive pull would inflate every
         # binary from ~95 MB to ~260 MB, and torch is fragile under PyInstaller.
         "torch",

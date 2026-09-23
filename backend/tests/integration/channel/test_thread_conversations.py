@@ -1,6 +1,6 @@
-"""FR-033: each group thread is its own conversation (its own history and its
-own turn lock), and FR-028's foundation — one bot runs a different agent in
-each thread.
+"""Each group thread is its own conversation (its own history and its own turn
+lock), and the foundation of "Drive every managed agent from one bot" — one bot
+runs a different agent in each thread.
 
 Conversation identity is keyed ``(resource_id, chat_id, thread_id)``: two
 threads of one group (same ``chat_id``, the group id) resolve to two different

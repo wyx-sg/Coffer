@@ -561,7 +561,8 @@ async def test_turn_completion_bumps_conversation_updated_at() -> None:
 async def test_in_flight_turn_leaves_a_streaming_assistant_row() -> None:
     """While a turn streams, a placeholder assistant message with
     status='streaming' must exist, so a daemon crash leaves a row the startup
-    sweep can flip to 'failed' (FR-020) rather than a silently-missing reply."""
+    sweep can flip to 'failed' (spec chat "Sweep streaming rows left by a
+    crashed daemon") rather than a silently-missing reply."""
     orchestrator, _, msg_repo, _ = make_orchestrator(
         adapter=_BlockingAdapter([TextDelta(text="partial")])
     )

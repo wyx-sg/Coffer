@@ -12,18 +12,19 @@
 // nobody.
 //
 // Nothing here acts on an individual note, and that is the rule rather than an
-// omission (FR-037). A partition is a folder of derived Markdown: `MEMORY.md`,
-// `notes/`, `RETIRED.md`, and the `.raw/` those were distilled from. Coffer's
-// own passes rewrite all of it on their own schedule, so a verdict recorded
+// omission (see "Present partitions as a table and a file tree"). A partition is a folder of
+// derived Markdown: `MEMORY.md`, `notes/`, `RETIRED.md`, and the `.raw/` those were distilled from.
+// Coffer's own passes rewrite all of it on their own schedule, so a verdict recorded
 // against one note — hide it, pin it, mark it dead — would be a promise the
 // surface could not keep. What is left is the truth it can keep: here are the
 // files, this is what they say, open one if you want to change it.
 //
 // The header names the REPOSITORY the partition is keyed on, not a working
-// directory: a worktree and a second clone are one partition (FR-014). When
+// directory: a worktree and a second clone are one partition (see
+// "Identify a partition by its repository"). When
 // that repository is gone from disk the header says so, because such a
 // partition is delivered to nobody and only the developer can decide whether
-// it should still exist (FR-016).
+// it should still exist (see "Report unresolvable partitions").
 import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import { RefreshCw } from "lucide-react";

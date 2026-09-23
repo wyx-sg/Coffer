@@ -4,7 +4,8 @@
 // API, put material in it, then walk its single tree of documents in the real
 // DOM.
 //
-// Nothing auto-provisions a collection any more (spec knowledge FR-008), so a
+// Nothing auto-provisions a collection any more (spec knowledge "Create collections
+// only deliberately"), so a
 // walk starts by making one. State is provisioned through the daemon's REST API
 // so the tests stay robust against UI churn; the page render is exercised
 // against the real DOM.

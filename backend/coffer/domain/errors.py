@@ -213,7 +213,8 @@ class FsPathNotOpenable(CofferError):  # noqa: N818
 
     Surfaces map this to 400 — the caller-supplied path is invalid or the OS
     launcher could not be spawned. The daemon acts only on an existing absolute
-    path; it never creates anything (spec daemon FR-021,
+    path; it never creates anything (spec daemon "Open and reveal existing
+    absolute paths",
     ADR: daemon-proxies-os-file-actions).
     """
 

@@ -423,7 +423,8 @@ describe("AgentOverviewTab", () => {
     expect(listMutate).toHaveBeenCalled();
   });
 
-  // --- the curated set is narrowed to modality `text` (spec provider-switching FR-032) ---
+  // --- the curated set is narrowed to modality `text` (spec provider-switching "Offer only text
+  // models to chat pickers") ---
   // One endpoint answers for chat AND embeddings; the agent's binding is a CHAT
   // binding, so only `text` entries may be offered as the model it runs on.
 

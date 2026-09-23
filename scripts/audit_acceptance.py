@@ -5,10 +5,7 @@ Convention (see .agents/testing.md "Acceptance Scenarios — Cross-Tier Markers"
   * Spec scenarios live in `openspec/specs/<id>/spec.md` as OpenSpec
     `#### Scenario: <title>` headings, each inside the `### Requirement:` block
     it verifies, under `## Requirements`.
-  * While the migration to OpenSpec is in flight, a spec may still sit at the
-    legacy `openspec/specs/<id>/spec.md` with a trailing '## Acceptance Scenarios'
-    section of `### <title>` (or `### Scenario: <title>`) headings.
-  * Spec ID is the spec directory's path relative to its spec root, so it is
+  * Spec ID is the spec directory's path relative to `openspec/specs/`, so it is
     the folder name for a top-level spec (`openspec/specs/mcp-gateway/spec.md`
     → 'mcp-gateway') and a slash-joined path for a nested child
     (`openspec/specs/channels/telegram/spec.md` → 'channels/telegram').
@@ -50,7 +47,6 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SPECS_DIR = REPO_ROOT / "openspec" / "specs"
-LEGACY_SPECS_DIR = REPO_ROOT / "specs"
 BACKEND_TESTS = REPO_ROOT / "backend" / "tests"
 # The frontend has no tier-by-directory layout: its tests are co-located
 # `*.test.tsx` under src/. `frontend/tests/` was the first scaffold's shape and
@@ -65,9 +61,6 @@ TS_SKIP_DIRS = {"node_modules", "dist", "build", ".next", "test-results"}
 # `desktop/src/`, not a separate test tree.
 RUST_ROOTS = [REPO_ROOT / "desktop" / "src"]
 
-ACCEPTANCE_HEADER_RE = re.compile(r"^##\s+Acceptance\s+Scenarios\s*$", re.IGNORECASE)
-NEXT_H2_RE = re.compile(r"^##\s+(?!Acceptance\s+Scenarios)", re.IGNORECASE)
-SCENARIO_HEADING_RE = re.compile(r"^###\s+(?:Scenario:\s*)?(.+?)\s*$", re.IGNORECASE)
 REQUIREMENTS_HEADER_RE = re.compile(r"^##\s+Requirements\s*$")
 H2_RE = re.compile(r"^##\s")
 OPENSPEC_SCENARIO_RE = re.compile(r"^####\s+Scenario:\s*(.+?)\s*$")
@@ -148,23 +141,9 @@ def _unfenced_lines(text: str) -> list[str]:
     return out
 
 
-def spec_layout(lines: list[str]) -> str:
-    """`openspec`, `legacy`, or `mixed` — a spec half-way between the two."""
-    legacy = any(ACCEPTANCE_HEADER_RE.match(line) for line in lines)
-    openspec = any(REQUIREMENTS_HEADER_RE.match(line) for line in lines) and any(
-        OPENSPEC_SCENARIO_RE.match(line) for line in lines
-    )
-    if legacy and openspec:
-        return "mixed"
-    return "legacy" if legacy else "openspec"
-
-
 def parse_spec_scenarios(spec_md: Path) -> list[str]:
     """Scenario names in document order, duplicates kept so they can be flagged."""
-    lines = _unfenced_lines(spec_md.read_text(encoding="utf-8"))
-    if spec_layout(lines) == "legacy":
-        return _parse_legacy_scenarios(lines)
-    return _parse_openspec_scenarios(lines)
+    return _parse_openspec_scenarios(_unfenced_lines(spec_md.read_text(encoding="utf-8")))
 
 
 def _parse_openspec_scenarios(lines: list[str]) -> list[str]:
@@ -184,22 +163,6 @@ def _parse_openspec_scenarios(lines: list[str]) -> list[str]:
     return scenarios
 
 
-def _parse_legacy_scenarios(lines: list[str]) -> list[str]:
-    scenarios: list[str] = []
-    in_section = False
-    for line in lines:
-        if ACCEPTANCE_HEADER_RE.match(line):
-            in_section = True
-            continue
-        if in_section and NEXT_H2_RE.match(line):
-            break
-        if in_section:
-            m = SCENARIO_HEADING_RE.match(line)
-            if m:
-                scenarios.append(m.group(1).strip())
-    return scenarios
-
-
 def _duplicates(names: list[str]) -> list[str]:
     seen: set[str] = set()
     dup: list[str] = []
@@ -212,38 +175,27 @@ def _duplicates(names: list[str]) -> list[str]:
 
 def collect_specs() -> tuple[dict[str, set[str]], list[str]]:
     """`({spec_id: {scenario, ...}}, [problem, ...])` for every spec.md at any
-    depth under the spec roots.
+    depth under `openspec/specs/`.
 
-    The spec id is the spec directory's path RELATIVE TO its root, so a nested
+    The spec id is the spec directory's path RELATIVE TO `openspec/specs/`, so a nested
     child spec is `channels/telegram` while a top-level one stays `channels`.
     The recursive glob and the relative id are what let a parent spec keep its
     own scenarios while its children carry theirs: a `*/spec.md` glob would see
     only the parent, and `spec_md.parent.name` would collapse
     `channels/telegram` and `agent-registry/telegram` onto the same id.
 
-    A problem is a spec present under both roots, or a scenario name used
-    twice within one spec, or a spec that mixes the two layouts.
+    A problem is a scenario name used twice within one spec.
     """
     out: dict[str, set[str]] = {}
     problems: list[str] = []
-    for root in (SPECS_DIR, LEGACY_SPECS_DIR):
-        if not root.exists():
-            continue
-        for spec_md in sorted(root.rglob("spec.md")):
-            spec_id = spec_md.parent.relative_to(root).as_posix()
-            if spec_id in out:
-                problems.append(f"{spec_id}: present under both openspec/specs/ and specs/")
-                continue
-            if spec_layout(_unfenced_lines(spec_md.read_text(encoding="utf-8"))) == "mixed":
-                problems.append(
-                    f"{spec_id}: has both '## Acceptance Scenarios' and OpenSpec "
-                    "'#### Scenario:' blocks — finish moving it to one layout"
-                )
-                continue
-            names = parse_spec_scenarios(spec_md)
-            for dup in _duplicates(names):
-                problems.append(f"{spec_id}: scenario {dup!r} appears more than once")
-            out[spec_id] = set(names)
+    if not SPECS_DIR.exists():
+        return out, problems
+    for spec_md in sorted(SPECS_DIR.rglob("spec.md")):
+        spec_id = spec_md.parent.relative_to(SPECS_DIR).as_posix()
+        names = parse_spec_scenarios(spec_md)
+        for dup in _duplicates(names):
+            problems.append(f"{spec_id}: scenario {dup!r} appears more than once")
+        out[spec_id] = set(names)
     return out, problems
 
 

@@ -37,8 +37,9 @@ class InboundMessage:
     sender_id: str = ""  # stable per-sender id for the owner gate (Telegram
     # from.id, SeaTalk employee_code); "" when the transport has none
     # The id this sender is ADDRESSED by — what an outbound @mention points at
-    # (FR-055). Deliberately NOT ``sender_id``: the two are different values on
-    # SeaTalk, where the owner gate matches ``employee_code`` while a mention
+    # ("Mention the asker in a group answer"). Deliberately NOT ``sender_id``:
+    # the two are different values on SeaTalk, where the owner gate matches
+    # ``employee_code`` while a mention
     # must carry ``seatalk_id``, and the docs warn that ``employee_code`` and
     # ``email`` arrive EMPTY for a sender outside the bot's organisation while
     # ``seatalk_id`` is always present. "" when the transport has no such id, or
@@ -54,9 +55,11 @@ class InboundMessage:
     chat_title: str = ""  # group/channel display name where the platform supplies
     # one for free (Telegram ``chat.title``); "" when it does not (SeaTalk's group
     # events carry only ``group_id``) — the origin block then names the chat by id
-    # alone (FR-035)
+    # alone ("Open every turn with its message origin")
     addressed: bool = True  # DMs always; group only when @mentioned / reply-to-bot
-    mentions_others: bool = False  # group message @-mentions a non-bot user (FR-037)
+    # group message @-mentions a non-bot user ("Configure when the bot answers
+    # in a group")
+    mentions_others: bool = False
     thread_id: str = ""  # non-empty when the message is inside a thread/topic
     # The message this one quotes/replies-to; "" when it quotes nothing. SeaTalk
     # delivers it on BOTH the DM (``message_from_bot_subscriber``) and the
@@ -69,7 +72,8 @@ class InboundMessage:
     attachments: tuple[InboundAttachment, ...] = ()  # photos/files/voice, if any
     ephemeral_id: str = ""  # set when the message itself was ephemeral (only the
     # sender and the bot can see it); it is the handle that lets the bot answer
-    # privately in a group without being an administrator (FR-049)
+    # privately in a group without being an administrator ("Keep non-answer
+    # chatter private in a group")
 
 
 @dataclass(frozen=True)
@@ -77,7 +81,7 @@ class ChannelCapabilities:
     """What a transport can do; the core picks strategies from this.
 
     ``supports_edit`` and ``supports_live_text`` are easy to confuse, so keep
-    the distinction sharp (FR-039):
+    the distinction sharp ("Grow a reply in place on one live surface"):
 
     * ``supports_edit`` is literal — the transport can rewrite a message it
       already delivered (Telegram ``editMessageText``). ``edit_text`` raises
@@ -105,7 +109,8 @@ class ChannelCapabilities:
     # supports_edit: SeaTalk can update a card but not a text message.
     supports_card_update: bool = False
     # A surface the core can keep updating during a turn — by edit (Telegram)
-    # or by streaming (SeaTalk). Drives the FR-039 progress/reply strategy.
+    # or by streaming (SeaTalk). Drives the progress/reply strategy of "Grow a
+    # reply in place on one live surface".
     supports_live_text: bool = False
     # Whether that surface BECOMES the reply, or is scaffolding thrown away at
     # the end. SeaTalk's stream persists — the message it opened is the answer,
@@ -118,9 +123,11 @@ class ChannelCapabilities:
     supports_groups: bool = False  # group-chat send path exists
     supports_history_fetch: bool = False  # can fetch recent/thread messages for context
     supports_reactions: bool = False  # emoji reaction on a message (set_reaction),
-    # used for the FR-038 receipt (👀) + completion (✅) ack; transports without
+    # used for the receipt (👀) + completion (✅) ack of "Acknowledge receipt
+    # and completion by capability"; transports without
     # it fall back to the typing/working signal for the same receipt cue
-    # FR-055: how this transport spells an @mention, with ``{user_id}`` standing
+    # "Mention the asker in a group answer": how this transport spells an
+    # @mention, with ``{user_id}`` standing
     # in for the id being addressed — e.g. ``"<x target=\"y?id={user_id}\"/>"``.
     # The core substitutes and prefixes; it never learns the shape. A transport
     # that cannot mention, or whose mention needs more than an id (Telegram's
@@ -145,7 +152,8 @@ class ChoiceButton:
 
     label: str  # human text shown on the button
     value: str  # callback payload routed back through InboundCallback.data
-    # FR-054: this option is the one already in effect. A transport whose
+    # "Use the platform's button vocabulary on cards": this option is the one
+    # already in effect. A transport whose
     # buttons have states shows it disabled and marked rather than re-offering
     # something tapping cannot change; one whose buttons are plain labels
     # ignores it and relies on the tick in the label instead.
@@ -168,7 +176,8 @@ class InboundCallback:
     callback_id: str = ""  # platform ack handle (Telegram callback_query.id); "" if none
     platform_message_id: str = ""  # the card message (for an optional in-place ack)
     chat_kind: str = "direct"  # "direct" | "group" — mirrors InboundMessage so a
-    # group card tap owner-gates and replies in the group, not a DM (FR-036)
+    # group card tap owner-gates and replies in the group, not a DM ("Route
+    # group selection-card taps back to the group")
     thread_id: str = ""  # non-empty when the card sits inside a thread/topic
 
 
@@ -196,7 +205,9 @@ class InboundLifecycle:
 
 @dataclass(frozen=True)
 class EphemeralTarget:
-    """Where a group answer meant for one member is delivered (FR-049).
+    """Where a group answer meant for one member is delivered.
+
+    Spec channels "Keep non-answer chatter private in a group".
 
     A platform will only let an ordinary bot answer privately when it can point
     at the interaction that prompted it, and only for a short window after —
@@ -210,7 +221,9 @@ class EphemeralTarget:
 
 @dataclass(frozen=True)
 class InboundStop:
-    """The user stopped the reply from the platform's own control (FR-048).
+    """The user stopped the reply from the platform's own control.
+
+    Spec channels "Stop the turn from the platform's own stop control".
 
     Telegram draws a stop button on a streamed draft; pressing it reports the
     stopped draft rather than sending a message. It must reach the same

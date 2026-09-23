@@ -1,6 +1,6 @@
 """Read-only local-filesystem browsing for the skill-directory folder picker.
 
-Spec spec daemon FR-019. Lists the immediate subdirectories of a
+Spec daemon "Browse folders without reading files". Lists the immediate subdirectories of a
 directory so the web folder browser can navigate the user's filesystem and
 hand back an absolute path (the daemon, unlike a browser, can read real
 paths). It never returns file contents — directories only.

@@ -714,7 +714,7 @@ async def test_reimport_overwrite_registers_orphan_master(tmp_path):
     await engine.dispose()
 
 
-# ----- repair_drift (FR-015) -----
+# ----- repair_drift ("Repair repairable drift from master") -----
 
 
 @pytest.mark.asyncio

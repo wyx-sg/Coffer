@@ -6,10 +6,9 @@ SeaTalk delivers media as authenticated file links
 (``https://openapi.seatalk.io/messaging/v2/file/<id>[?seq=N]``) — the agent
 can't open them, so the transport must download the bytes with the app token
 and hand them to the turn as attachments. Images, files/documents, and (best
-effort) voice/video all take this path (spec channels/seatalk FR-014), so a directly-sent PDF or
-voice
-memo drives a turn like a photo does. Split out of ``seatalk.py`` (mirroring
-``telegram_media.py``) to keep that module under the file-size limit.
+effort) voice/video all take this path (spec channels/seatalk "Download every inbound SeaTalk media
+type"), so a directly-sent PDF or voice memo drives a turn like a photo does. Split out of
+``seatalk.py`` (mirroring ``telegram_media.py``) to keep that module under the file-size limit.
 """
 
 from __future__ import annotations
@@ -72,9 +71,9 @@ async def send_outbound_media(
 ) -> str:
     """Upload one local file, then its caption, through ``send`` (the adapter's
     ``_send(chat_id, message, thread_id, chat_kind)`` router — so both land in
-    the same chat_kind + thread the turn came from, FR-032). SeaTalk file
-    messages carry no caption field, so a non-empty caption follows as a short
-    threaded text message. Returns the last platform message id."""
+    the same chat_kind + thread the turn came from — "Return outbound media into the originating
+    thread"). SeaTalk file messages carry no caption field, so a non-empty caption follows as a
+    short threaded text message. Returns the last platform message id."""
     result = await send(chat_id, build_outbound_media_message(path), thread_id, chat_kind)
     last = str(result.get("message_id", ""))
     if caption:
@@ -121,7 +120,7 @@ class MediaRef:
 
 def collect_media(message: dict[str, Any]) -> list[MediaRef]:
     """Every downloadable SeaTalk media item reachable from one message (spec channels/seatalk
-    FR-014).
+    "Download every inbound SeaTalk media type").
 
     A directly-sent image carries ``message.image.content``; a file/document
     carries ``message.file.content`` + ``message.file.filename``; any other tag
@@ -222,10 +221,9 @@ async def media_attachments(
     message: dict[str, Any],
 ) -> tuple[InboundAttachment, ...]:
     """Download every media item on ``message`` (image/file/generic, direct or
-    forwarded) as an attachment (spec channels/seatalk FR-014). Fetches the app token only when
-    there
-    is something to download; a single failed download is skipped (logged),
-    never wedging the message."""
+    forwarded) as an attachment (spec channels/seatalk "Download every inbound SeaTalk media
+    type"). Fetches the app token only when there is something to download; a single failed
+    download is skipped (logged), never wedging the message."""
     refs = collect_media(message)
     if not refs:
         return ()
@@ -239,7 +237,7 @@ async def thread_media_attachments(
     ensure_token: Callable[[], Awaitable[str]],
     messages: Sequence[dict[str, Any]],
 ) -> tuple[InboundAttachment, ...]:
-    """Download every media item carried by a thread's own messages (FR-030) so
+    """Download every media item carried by a thread's own messages so
     an in-thread @mention grounds the turn on the real pictures/files, not the
     dead auth-gated links a text flatten would leave behind. Collects refs
     across ALL ``messages`` — recursing forwarded records within each via

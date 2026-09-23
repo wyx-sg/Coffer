@@ -1,12 +1,12 @@
-"""The aggregation pass: the agents' own words, filed by repository (FR-008..FR-015).
+"""The aggregation pass: the agents' own words, filed by repository.
 
 This is the **input** half of the layer. It reads each registered, enabled
 agent's native memory through that agent's reader, decides which partition
 each entry belongs to, and writes the entry **verbatim** under that
 partition's hidden ``.raw/``. It writes nothing else — no note, no index, no
 retirement record — because those three belong to the distil pass, and the
-one-writer-per-directory split is what makes FR-026 checkable by reading call
-sites rather than by trusting a comment.
+one-writer-per-directory split is what makes "Keep distil out of the raw
+directory" checkable by reading call sites rather than by trusting a comment.
 
 ``MemoryService`` (``service.py``) keeps the parts that need a database: which
 agents are registered, which partitions already have a Resource row, and the
@@ -19,24 +19,25 @@ Three decisions live here, and each one is a named past failure:
 
 - **A partition is keyed on a repository, never on a working directory**
   (:class:`_Placer`). A worktree, a second clone and the main checkout are one
-  repository and therefore one partition (FR-014).
+  repository and therefore one partition (see "Identify a partition by its repository").
 - **A directory inside no repository files into ``global``'s ``.raw/``**
-  (FR-015). It creates no partition of its own, and the distil pass judges the
-  entry on its merits — keeping it in ``global`` or keeping nothing. Six of
-  sixteen partitions on the maintainer's live vault were dated scratch folders
-  that the previous design turned into permanent partitions, holding material
-  that could never reach the repository it was actually about.
+  (see "Create no partition for a non-repository directory"). It creates no partition of
+  its own, and the distil pass judges the entry on its merits — keeping it in ``global``
+  or keeping nothing. Six of sixteen partitions on the maintainer's live vault were
+  dated scratch folders that the previous design turned into permanent partitions,
+  holding material that could never reach the repository it was actually about.
 - **Nothing here merges two agents' entries.** ``merge_duplicates`` used to
   live in this module and matched two facts on an identical normalised body or
   an identical ``(type, partition, title)``. Measured on 378 real facts from
   two agents it produced **zero** merges, because two agents never phrase
   anything the same way — so the merge moved to the distil pass, where it is a
-  judgement about *meaning* made by a model (FR-018). There is deliberately no
-  literal comparison left here to be tempted to widen. There are no slugs
-  either: a file name belongs to a note, and a note is written one layer up. A
-  raw entry's file name is the origin key ``StoredRawEntry`` derives from the
-  triple that identifies it, so a second pass over an unchanged source
-  overwrites one file rather than accumulating a near-duplicate (FR-009).
+  judgement about *meaning* made by a model (see "Record provenance and merge by
+  meaning"). There is deliberately no literal comparison left here to be tempted to
+  widen. There are no slugs either: a file name belongs to a note, and a note is written
+  one layer up. A raw entry's file name is the origin key ``StoredRawEntry`` derives
+  from the triple that identifies it, so a second pass over an unchanged source
+  overwrites one file rather than accumulating a near-duplicate (see "Let only
+  aggregation write raw entries").
 """
 
 from __future__ import annotations
@@ -62,7 +63,7 @@ from coffer.infrastructure.memory.repository import Repository, resolve_reposito
 
 @dataclass(frozen=True)
 class SourceFailure:
-    """One reader's ``UnreadableMemory`` for one source, isolated (FR-005)."""
+    """One reader's ``UnreadableMemory`` for one source, isolated."""
 
     agent: str
     path: str
@@ -74,8 +75,9 @@ class AggregationResult:
     """What one pass did, in the shape ``AggregationResultOut`` publishes.
 
     ``entries_written`` counts raw entries, not notes: aggregation writes no
-    note at all (FR-008). A pass over an idle machine writes zero and skips
-    every source, which is the steady state rather than a sign of trouble.
+    note at all (see "Keep raw entries verbatim and hidden"). A pass over an idle
+    machine writes zero and skips every source, which is the steady state rather than a
+    sign of trouble.
     """
 
     partitions: tuple[str, ...]
@@ -114,7 +116,8 @@ AgentSourceResolver = Callable[[Resource], AgentSource]
 
 @dataclass(frozen=True)
 class Placement:
-    """One partition, by the only three things that identify it (FR-014).
+    """One partition, by the only three things that identify it (see "Identify a
+    partition by its repository").
 
     The same value serves as input and as output: the caller seeds a pass with
     the partitions that already have a Resource row, and the pass hands back
@@ -172,7 +175,8 @@ def _home_dir() -> str:
     """The developer's home directory, by the same rule ``paths.py`` uses.
 
     An entry whose project root IS this directory is about the person, not a
-    project, and files into ``global`` whatever its type says (FR-011).
+    project, and files into ``global`` whatever its type says (see "File personal entries
+    into global").
     """
     return str(pathlib.Path(os.environ.get("HOME", "~")).expanduser()).rstrip("/")
 
@@ -181,9 +185,10 @@ def _source_failure(agent: str, path: str, exc: Exception) -> SourceFailure:
     """One source's failure, whatever shape it took.
 
     A reader is meant to raise ``UnreadableMemory`` for a file it cannot
-    parse, but a reader has bugs like any code, and FR-005's isolation is
-    only worth anything if it holds for the failure nobody anticipated: one
-    file that trips a reader must cost that file, not the whole pass.
+    parse, but a reader has bugs like any code, and the isolation "Fail a
+    broken reader loudly and in isolation" asks for is only worth anything if it holds
+    for the failure nobody anticipated: one file that trips a reader must cost that
+    file, not the whole pass.
     """
     if isinstance(exc, UnreadableMemory):
         return SourceFailure(agent=agent, path=exc.path, reason=exc.reason)
@@ -208,7 +213,8 @@ class _Placer:
         self._home = _home_dir()
 
     def place(self, entry: RawEntry) -> Placement:
-        """Where ``entry`` belongs (FR-011, FR-015).
+        """Where ``entry`` belongs (see "File personal entries into global" and "Create no
+        partition for a non-repository directory").
 
         Three routes to ``global``, and they are different rules that happen to
         agree: an entry **about the person** goes there whichever repository it
@@ -266,7 +272,7 @@ def _entries_by_source() -> dict[str, tuple[StoredRawEntry, ...]]:
     """Every raw entry already on disk, grouped by the native file it came from.
 
     Two questions are answered from this one read, and they are the two halves
-    of the layer's only real trap (FR-019, SC-002): *may this source be
+    of the layer's only real trap ("Keep the memory tree derived and local"): *may this source be
     skipped* — only if its digest matches **and** the entries it produced are
     still here — and *what did a re-read of it stop producing*, which is
     whatever is here and is not written again: a bullet the agent deleted from
@@ -274,7 +280,7 @@ def _entries_by_source() -> dict[str, tuple[StoredRawEntry, ...]]:
 
     Reading every entry back parses every file under every ``.raw/``: the
     honest cost of keeping the answer on disk rather than in a table this layer
-    is forbidden to add (FR-042), over files that are small and local.
+    is forbidden to add (see "Add no table of its own"), over files that are small and local.
     """
     found: dict[str, list[StoredRawEntry]] = defaultdict(list)
     for partition in store.list_partitions():
@@ -295,24 +301,24 @@ def run_aggregation(
     **The skip is never taken on a digest alone.** ``source_state`` records
     what each native file hashed to last pass, and a match says the *source*
     has not changed — it does not say the entries that source produced are
-    still on disk. FR-019 requires that deleting the memory tree and re-syncing
-    rebuilds it *with that cache deliberately left behind*, so the match is
-    combined with the presence of the entries themselves; a source whose
-    entries are gone is read again however familiar its hash looks. A source
-    that legitimately yields no entries is therefore re-read every pass, which
-    costs one parse of a file that says nothing.
+    still on disk. "Keep the memory tree derived and local" requires that deleting the
+    memory tree and re-syncing rebuilds it *with that cache deliberately left behind*,
+    so the match is combined with the presence of the entries themselves; a source whose
+    entries are gone is read again however familiar its hash looks. A source that
+    legitimately yields no entries is therefore re-read every pass, which costs one
+    parse of a file that says nothing.
 
     **A source that will not parse leaves everything it produced standing**
-    (FR-005). Its digest is deliberately not recorded either, so the next pass
-    tries again rather than treating the broken format as the new normal, and
-    nothing it wrote is pruned — a reader that breaks on an agent's format
-    change must not empty that agent's contribution.
+    (see "Fail a broken reader loudly and in isolation"). Its digest is deliberately not
+    recorded either, so the next pass tries again rather than treating the broken format
+    as the new normal, and nothing it wrote is pruned — a reader that breaks on an
+    agent's format change must not empty that agent's contribution.
 
     **No partition is ever deleted here.** One whose repository is gone is
-    surfaced as unresolvable for the developer to decide about (FR-016), and
-    one whose sources fell silent still holds notes the distil pass wrote:
-    deleting a partition on the strength of one quiet pass is how a
-    de-registered agent would take a repository's whole memory with it.
+    surfaced as unresolvable for the developer to decide about (see "Report unresolvable
+    partitions"), and one whose sources fell silent still holds notes the distil pass
+    wrote: deleting a partition on the strength of one quiet pass is how a de-registered
+    agent would take a repository's whole memory with it.
     """
     placer = _Placer(known)
     standing_by_source = _entries_by_source()
@@ -332,7 +338,7 @@ def run_aggregation(
     for agent_source in agents:
         reader = readers.get(agent_source.agent_type)
         if reader is None:
-            continue  # no reader for this agent type (FR-001, FR-045): silent
+            continue  # no reader for this agent type: silent
         for source in reader.sources(agent_source.config_dir):
             standing = standing_by_source.get(source.path, ())
             if old_state.get(source.path) == source.digest and standing:

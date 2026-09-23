@@ -18,7 +18,8 @@ type Schemas = components["schemas"];
 // Types
 // ---------------------------------------------------------------------------
 
-/** `attachment` blocks carry the file's name/mime (channel media); no path (FR-034). */
+/** `attachment` blocks carry the file's name/mime (channel media); no path (spec channels
+ *  "Persist inbound attachments as references"). */
 export type ContentBlock = Schemas["ContentBlockOut"];
 
 export type Message = Schemas["MessageOut"];

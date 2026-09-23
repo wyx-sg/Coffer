@@ -16,7 +16,8 @@ agent page's native-memory listing (``infrastructure.agent.codex_memory_store``)
 groups entries by cwd into one read-only store row per project; memory
 aggregation's reader (``infrastructure.memory.readers.codex``) turns each
 group's and the profile's own bullets into raw entries and carries the
-summary's search terms onto them (spec memory FR-004). Which sections become
+summary's search terms onto them (spec memory "Read Claude Code and Codex
+memory with their search terms"). Which sections become
 entries, how a bullet gets a title, how an entry's identity anchor is built,
 and **which summary topic describes which task group** are all that reader's
 own policy, not this module's — this module only knows Codex's file *format*.
@@ -45,7 +46,8 @@ _TOPICS_HEADING = "What's in Memory"
 _TOPIC_TERMS_SEP = ": `"
 # One backticked term. Codex backticks every term it states; anything unquoted
 # on that line is prose, and a caller is better served by no terms than by an
-# invented one (spec memory FR-004).
+# invented one (spec memory "Read Claude Code and Codex memory with their
+# search terms").
 _TERM_RE = re.compile(r"`([^`]+)`")
 
 

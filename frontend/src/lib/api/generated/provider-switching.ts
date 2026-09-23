@@ -130,7 +130,8 @@ export interface paths {
          *     Emits a `PROVIDER_INTERNAL_DEFAULT_SET` audit event with details
          *     `{from, to}` and returns the updated `ProviderOut`. It also notifies the
          *     engine, which applies its own rule about the model it was paired with
-         *     (spec internal-engine FR-007); the engine's own settings live under
+         *     (spec internal-engine "Drop the engine model when its connection
+         *     moves"); the engine's own settings live under
          *     `/api/v1/internal-engine-config` and are not this document's.
          */
         post: operations["setInternalDefaultProvider"];
@@ -343,7 +344,7 @@ export interface components {
             secret_value?: string | null;
         };
         /**
-         * @description Which KIND of model an id names. A provider endpoint serves more than chat models — embedding, image, video and audio models live on the same endpoint — so a curated entry says which it is and a picker asks for the kind it needs (spec provider-switching FR-029).
+         * @description Which KIND of model an id names. A provider endpoint serves more than chat models — embedding, image, video and audio models live on the same endpoint — so a curated entry says which it is and a picker asks for the kind it needs (see "Store a modality with each curated model").
          * @default text
          * @enum {string}
          */
@@ -355,7 +356,7 @@ export interface components {
             modality?: components["schemas"]["Modality"];
         };
         ProviderModelsOut: {
-            /** @description The ids the endpoint reported, each with an INFERRED modality (spec provider-switching FR-030) so the connection editor can pre-fill a sensible value. The inference is a suggestion the user may correct — what is stored on the connection is the truth, never re-derived. */
+            /** @description The ids the endpoint reported, each with an INFERRED modality (see "Offer only text models to chat pickers") so the connection editor can pre-fill a sensible value. The inference is a suggestion the user may correct — what is stored on the connection is the truth, never re-derived. */
             models: components["schemas"]["ProviderModel"][];
             /** @default  */
             message: string;

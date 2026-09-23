@@ -818,7 +818,7 @@ def _sleep_past_a_fernet_second() -> None:
     time.sleep(1.05)
 
 
-# --- a move is not a deletion (spec vault-sync FR-090) ----------------------
+# --- a move is not a deletion (spec vault-sync "Count losses, not deletions") ---
 
 
 def _relayout(machine: VaultMachine, names: list[str]) -> None:
@@ -927,7 +927,7 @@ async def test_a_relayout_that_rewrites_its_documents_publishes_unattended(pair)
     """The 2026-09-19 bug: the vault was held for four days over a migration
     this project shipped, with nothing lost. Exact-bytes pairing could not see
     it because the migration edited every document on its way; git's rename
-    detection can (spec vault-sync FR-090).
+    detection can (spec vault-sync "Count losses, not deletions").
     """
     a, b = pair
     names = [f"n{i:02d}" for i in range(30)]

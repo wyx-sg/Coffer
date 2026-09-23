@@ -58,10 +58,10 @@ class _Collections:
 def corpus(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     """Two collections, each holding one piece of material no pass has merged yet.
 
-    The curation worker asks the DIRECTORY what is owed (spec knowledge
-    FR-022) rather than a queue, so a collection with nothing pending is
-    skipped before the registry is ever consulted — which would make a
-    busy/free test pass for the wrong reason.
+    The curation worker asks the DIRECTORY what is owed (spec knowledge "Run
+    curation on a sweep and on demand") rather than a queue, so a collection
+    with nothing pending is skipped before the registry is ever consulted —
+    which would make a busy/free test pass for the wrong reason.
     """
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     for name in ("busy", "free"):
@@ -136,11 +136,12 @@ async def test_curation_worker_skips_a_collection_already_being_curated(corpus) 
 async def test_a_disabled_worker_delivers_but_starts_no_pass(corpus) -> None:  # type: ignore[no-untyped-def]
     """Two different switches, and only one of them is ``auto_curate_enabled``.
 
-    The switch is read per sweep (spec knowledge FR-032), so turning it off
-    stops the very next pass rather than the one after a restart. Delivery is
-    outside it on purpose: a collection created, deleted or re-scoped changes
-    what each agent must be told, and that is just as true on a machine where
-    curation is off or which is not the owner (FR-052).
+    The switch is read per sweep (spec knowledge "Curate on one owner machine
+    only"), so turning it off stops the very next pass rather than the one
+    after a restart. Delivery is outside it on purpose: a collection created,
+    deleted or re-scoped changes what each agent must be told, and that is just
+    as true on a machine where curation is off or which is not the owner (see
+    "Deliver the guide as the shared-master link").
     """
     started: list[str] = []
     delivered: list[int] = []

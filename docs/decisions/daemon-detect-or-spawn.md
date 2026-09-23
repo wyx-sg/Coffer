@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-05-20 (revised 2026-05-30; see Revision history)
 **Deciders**: Yuxing Wu
-**Related**: spec resource-framework FR-009, spec daemon FR-024, [Session Subprocess Model](session-subprocess-model.md)
+**Related**: [daemon](../../openspec/specs/daemon/spec.md) "Spawn a detached daemon from any surface that needs one", [daemon](../../openspec/specs/daemon/spec.md) "Install the console scripts from source", [Session Subprocess Model](session-subprocess-model.md)
 
 ## Context
 

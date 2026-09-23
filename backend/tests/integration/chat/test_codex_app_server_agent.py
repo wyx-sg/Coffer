@@ -583,7 +583,8 @@ async def test_stream_end_without_terminal_no_pending_task_warning(recwarn: Any)
 
 
 # ---------------------------------------------------------------------------
-# FR-031 — a document reaches a path-native agent as extracted text
+# A document reaches a path-native agent as extracted text
+# (spec channels "Give documents to every agent as extracted text")
 # ---------------------------------------------------------------------------
 
 

@@ -1,14 +1,15 @@
-"""The index: one line per note, rendered once for two readers (FR-029).
+"""The index: one line per note, rendered once for two readers (see "Write each
+index line to stand on its own").
 
 ``MEMORY.md`` and the delivered payload must be the same lines in the same
 order, because they were two renderings once and drifted — and under a ceiling
-the sort order *is* which notes survive a trim (FR-030). So this file pins
-three things: what a line says, what "newest" means, and that a line is
-sufficient on its own.
+the sort order *is* which notes survive a trim (see "Bound delivery and prefer
+the current repository"). So this file pins three things: what a line says,
+what "newest" means, and that a line is sufficient on its own.
 
-Pure: ``index.py`` has no filesystem and no model, which is what guarantees
-FR-024's path — an installation with no internal connection still gets a real
-index because nothing here can depend on a model having run.
+Pure: ``index.py`` has no filesystem and no model, which is what guarantees the
+mechanical distil path — an installation with no internal connection still gets
+a real index because nothing here can depend on a model having run.
 """
 
 from __future__ import annotations
@@ -59,8 +60,9 @@ def test_a_line_carries_the_title_the_file_name_and_the_conclusion() -> None:
 
 
 def test_a_line_states_the_sources_own_search_terms() -> None:
-    """Codex answers "what would you look this up by" itself (FR-004);
-    discarding that answer is what left retrieval to guesswork."""
+    """Codex answers "what would you look this up by" itself (see "Read Claude
+    Code and Codex memory with their search terms"); discarding that answer is
+    what left retrieval to guesswork."""
     line = index_line(_note("daemon-restart", search_terms=("daemon", "port drift")))
     assert line.endswith(" · look up: daemon, port drift")
 
@@ -98,9 +100,10 @@ def test_recency_prefers_the_notes_own_timestamps() -> None:
 
 
 def test_a_note_dated_only_at_its_source_still_sorts_by_that_date() -> None:
-    """The exact drift FR-029 names: delivery read ``captured_at`` alone, so a
-    note timestamped only by its origin scored ``""`` and sorted last there
-    while sorting correctly in the file."""
+    """The exact drift "Write each index line to stand on its own" names:
+    delivery read ``captured_at`` alone, so a note timestamped only by its
+    origin scored ``""`` and sorted last there while sorting correctly in the
+    file."""
     note = _note(
         "n",
         origins=(
@@ -120,7 +123,8 @@ def test_a_note_with_no_timestamp_anywhere_sorts_last_rather_than_raising() -> N
 
 def test_the_index_restates_the_repository_the_partition_is_about() -> None:
     """A partition's directory name is a slug and it collects a repository's
-    worktrees and clones, so "which project is this?" needs an answer (FR-014)."""
+    worktrees and clones, so "which project is this?" needs an answer (see
+    "Identify a partition by its repository")."""
     text = render_index([_note("n")], partition="coffer", repository_path="/home/dev/coffer")
     assert "# coffer — Coffer memory" in text
     assert "`/home/dev/coffer`" in text

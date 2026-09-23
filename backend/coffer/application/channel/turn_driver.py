@@ -8,10 +8,10 @@ reply when the turn starts. Owner-gating, pairing, command dispatch, and the
 session registry itself stay in ``inbound``.
 
 A channel message does not queue here. It goes through the orchestrator's
-``enqueue_message`` like a web message does, so the web's pending chips show
-it, the two surfaces share one FIFO per conversation (spec chat FR-018), and a turn that
-ends on either surface advances the same queue. What the channel keeps is an
-``on_start`` sink: when the orchestrator begins the message's turn it hands
+``enqueue_message`` like a web message does, so the web's pending chips show it, the two
+surfaces share one FIFO per conversation (spec chat "Queue messages sent during a
+turn"), and a turn that ends on either surface advances the same queue. What the channel
+keeps is an ``on_start`` sink: when the orchestrator begins the message's turn it hands
 back a dedicated event queue, and the renderer spawned here drains it.
 
 Application layer only: no infrastructure import here.
@@ -45,8 +45,9 @@ __all__ = ["QUEUE_MAX", "ConversationPort", "QueuedInbound", "Session", "TurnDri
 
 _logger = logging.getLogger(__name__)
 
-#: How many messages may wait behind a running turn before the channel says
-#: "busy" (FR-006). The web composer is not bounded; a chat's flood is.
+#: How many messages may wait behind a running turn before the channel says "busy" (see
+#: "Answer the conversation commands from any paired chat"). The web composer is not
+#: bounded; a chat's flood is.
 QUEUE_MAX = 10
 
 #: Sends one reply back through a channel binding, matching
@@ -63,14 +64,16 @@ SessionAccessor = Callable[[str, str, str], "Session"]
 class QueuedInbound:
     """One inbound message, ready to become a turn.
 
-    ``text`` drives the turn (it opens with the FR-035 origin block);
-    ``attachments`` are the downloaded files to materialise for the agent;
-    ``thread_id`` / ``chat_kind`` route the reply back to where the message came
-    from; ``reply_to_message_id`` is the user's inbound platform_message_id the
-    receipt/completion reactions target (FR-038; "" when the transport supplied
-    none); the mention id and address are what a group reply opens by
-    @mentioning (FR-055); and ``title_hint`` is the human's own words, carried
-    apart from the driving text (spec chat FR-011; "" when nothing was nameable).
+    ``text`` drives the turn (it opens with the origin block of "Open every turn with
+    its message origin"); ``attachments`` are the downloaded files to materialise for
+    the agent; ``thread_id`` / ``chat_kind`` route the reply back to where the message
+    came from; ``reply_to_message_id`` is the user's inbound platform_message_id the
+    receipt/completion reactions target (see "Acknowledge receipt and completion by
+    capability"; "" when the transport supplied none); the mention id and address are
+    what a group reply opens by @mentioning (see "Mention the asker in a group answer");
+    and ``title_hint`` is the human's own words, carried apart from the driving text
+    (spec chat "Persist conversations and messages in SQLite"; "" when nothing was
+    nameable).
     """
 
     text: str
@@ -110,13 +113,13 @@ class Session:
     running_conversation_id: str | None = None
     # The renderer draining that turn's events into the chat.
     render_task: asyncio.Task[None] | None = None
-    # The most recently received document/attachment for this (channel, chat,
-    # thread), held for a `/save` that follows (spec channels FR-014). It rides
-    # alongside the ordinary turn — an attachment still reaches the agent
-    # exactly as before; this is ONLY the channel's own memory of what a later
-    # `/save` acts on. Replaced by the next attachment that arrives here, and
-    # cleared once a save is attempted (succeeding or not — retrying the same
-    # bytes against the same failure is never useful).
+    # The most recently received document/attachment for this (channel, chat, thread),
+    # held for a `/save` that follows (spec channels "Save a sent document into a
+    # collection"). It rides alongside the ordinary turn — an attachment still reaches
+    # the agent exactly as before; this is ONLY the channel's own memory of what a later
+    # `/save` acts on. Replaced by the next attachment that arrives here, and cleared
+    # once a save is attempted (succeeding or not — retrying the same bytes against the
+    # same failure is never useful).
     pending_document: Attachment | None = None
 
 
@@ -143,10 +146,11 @@ class TurnDriver:
     async def submit(self, binding: ChannelBinding, peer: ChannelPeer, item: QueuedInbound) -> None:
         """Queue ``item`` as a turn on this thread's conversation.
 
-        The turn starts now when the conversation is idle, else waits its turn
-        behind the messages already pending — web and channel alike, in arrival
-        order (spec chat FR-018). Past ``QUEUE_MAX`` pending the message is dropped and
-        the chat told (FR-006): a flood must not pile up forever.
+        The turn starts now when the conversation is idle, else waits its turn behind
+        the messages already pending — web and channel alike, in arrival order (spec
+        chat "Queue messages sent during a turn"). Past ``QUEUE_MAX`` pending the
+        message is dropped and the chat told (see "Answer the conversation commands from
+        any paired chat"): a flood must not pile up forever.
         """
         adapter = binding.adapter
 
@@ -167,7 +171,7 @@ class TurnDriver:
         if len(self._turns.pending(conversation_id)) >= QUEUE_MAX:
             await _say("⚠️ Busy — message dropped, try again.")
             return
-        # FR-038: an immediate receipt ack (👀) on the user's message where the
+        # An immediate receipt ack (👀) on the user's message where the
         # transport supports reactions (Telegram); SeaTalk has none and leans on
         # the typing signal the renderer sends. Best-effort — a failed ack never
         # breaks the turn. At receipt, not at start: a queued message was heard
@@ -184,7 +188,7 @@ class TurnDriver:
             # history); ``title_hint`` is the human's own words out of the same
             # message, so a conversation still under its placeholder title is
             # named after what the person asked and not after a header every
-            # channel turn shares (spec chat FR-011).
+            # channel turn shares (spec chat "Persist conversations and messages in SQLite").
             await self._turns.enqueue_message(
                 conversation_id,
                 item.text,
@@ -231,7 +235,7 @@ class TurnDriver:
                 )
 
         async def _send(message: str) -> None:
-            # FR-053: the turn's own replies point back at the message that
+            # The turn's own replies point back at the message that
             # drove them (the helper drops the pointer outside a group).
             await self._safe_send(
                 binding,
@@ -267,7 +271,7 @@ class TurnDriver:
             if session.render_task is asyncio.current_task():
                 session.render_task = None
                 session.running_conversation_id = None
-        # FR-038: mark completion (✅) on the user's message ONLY on a clean finish
+        # Mark completion (✅) on the user's message ONLY on a clean finish
         # (an errored/interrupted turn keeps just the 👀 receipt), where the
         # transport supports reactions. Best-effort — never fails a delivered reply.
         if clean and adapter.capabilities.supports_reactions and item.reply_to_message_id:

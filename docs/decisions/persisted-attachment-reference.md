@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-07-09
 **Deciders**: Yuxing Wu
-**Related**: spec channels FR-033; supersedes the v1 "defer a persisted
+**Related**: [channels](../../openspec/specs/channels/spec.md) "Persist inbound attachments as references"; supersedes the v1 "defer a persisted
 attachment block" decision in [Channel Media](channel-media.md)
 
 ## Context
@@ -18,7 +18,7 @@ contract) and the DB-bloat risk of inlining base64.
 The consequence Channel Media accepted: an attachment was materialised per turn but
 never persisted, so anything that re-reads full history (no session resume) saw
 a note, not the image, and the attachment left no trace in the conversation.
-Spec channels FR-034 revisits that decision — the key realisation is that a **reference** block
+[channels](../../openspec/specs/channels/spec.md) "Persist inbound attachments as references" revisits that decision — the key realisation is that a **reference** block
 (path/mime/filename, **no bytes**) removes the DB-bloat objection entirely.
 
 ## Decision
@@ -54,7 +54,7 @@ turn.**
 
 - **Keep Channel Media as-is (this-turn-only, out-of-band param)** — simplest, but the
   attachment is invisible in the web UI and lost after a daemon restart mid-turn.
-  Rejected: spec channels FR-033 exists precisely to make the attachment durable + visible.
+  Rejected: [channels](../../openspec/specs/channels/spec.md) "Persist inbound attachments as references" exists precisely to make the attachment durable + visible.
 - **Inline base64 in a persisted block** — the DB-bloat case Channel Media rejected;
   still rejected. The reference block gets the history/visibility benefit without
   the bytes.

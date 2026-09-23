@@ -3,18 +3,21 @@
 One root, one tree per collection: ``~/.coffer/knowledge/<collection>/…``.
 Everything visible under a collection is a **document** — Markdown a person and
 Coffer's curation pass write together, in whatever nesting either of them
-chooses (spec knowledge FR-001, FR-004). The collection's ``README.md`` sits at
-its root and describes it rather than being content in it (FR-007).
+chooses (spec knowledge "Store each collection as one tree of Markdown files",
+"Allow nesting without giving it meaning"). The collection's ``README.md``
+sits at its root and describes it rather than being content in it (see "Keep
+the collection README out of the corpus").
 
 There is exactly one hidden directory, and it is Coffer's: ``.inbox/``, where
 new material waits to be merged into the documents — an upload's extracted
 text, an agent's ``coffer__write``, a migrated file. It is hidden because it is
 not knowledge yet: nothing lists it, no catalogue names it, and each item is
-deleted the moment a pass has folded it in (FR-005). Hidden entries are
-otherwise never addressable.
+deleted the moment a pass has folded it in (see "Hide dot-prefixed entries
+except the inbox"). Hidden entries are otherwise never addressable.
 
 ``$COFFER_KNOWLEDGE_ROOT`` overrides the root for tests. Every segment that
-becomes a path component goes through the traversal guard here (FR-006).
+becomes a path component goes through the traversal guard here (see "Guard every
+path through one module").
 """
 
 from __future__ import annotations
@@ -27,7 +30,7 @@ from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 
 README_NAME = "README.md"
 
-#: Where material waits to be merged into a collection's documents (FR-005).
+#: Where material waits to be merged into a collection's documents.
 INBOX_DIR_NAME = ".inbox"
 
 _DOTS_ONLY = re.compile(r"^\.+$")
@@ -84,7 +87,7 @@ def assert_inside_root(candidate: pathlib.Path, relpath: str) -> None:
     Checked on the nearest *existing* ancestor rather than on ``candidate``
     itself: a file that does not exist yet has nothing to resolve, but the
     directory it would be created in does — and a symlinked directory inside
-    the root would carry the write wherever it points (FR-006).
+    the root would carry the write wherever it points.
     """
     root = knowledge_root()
     root_resolved = root.resolve()
@@ -145,10 +148,10 @@ def relative_of(path: pathlib.Path) -> str:
 
 
 def readme_path(collection: str) -> pathlib.Path:
-    """A collection's own description file, at its root (FR-007)."""
+    """A collection's own description file, at its root."""
     return collection_dir(collection) / README_NAME
 
 
 def inbox_dir(collection: str) -> pathlib.Path:
-    """Where a collection's unmerged material waits (FR-005)."""
+    """Where a collection's unmerged material waits."""
     return collection_dir(collection) / INBOX_DIR_NAME

@@ -1,12 +1,14 @@
-"""``.raw/`` — what was read out of the agents, verbatim (FR-008, FR-009).
+"""``.raw/`` — what was read out of the agents, verbatim (see "Keep raw entries
+verbatim and hidden", "Let only aggregation write raw entries").
 
 Its own module because its own directory: ``raw_store.py`` is the only thing
 aggregation writes through, and nothing the distil pass imports. That split is
-what makes FR-026 checkable by reading an import list rather than by trusting a
-comment, and this file holds the property the split exists for — **a body
-comes back exactly as the reader handed it over**, CRLF and trailing
-whitespace included. The moment a round-trip rewrites one character, "re-run
-the distillation without going back to the agents" stops meaning what it says.
+what makes "Keep distil out of the raw directory" checkable by reading an
+import list rather than by trusting a comment, and this file holds the property
+the split exists for — **a body comes back exactly as the reader handed it
+over**, CRLF and trailing whitespace included. The moment a round-trip rewrites
+one character, "re-run the distillation without going back to the agents" stops
+meaning what it says.
 
 ``COFFER_MEMORY_ROOT`` is pinned to ``tmp_path`` by the suite-wide
 ``_isolated_memory_root`` fixture (``backend/tests/conftest.py``).
@@ -86,7 +88,7 @@ def test_a_raw_entrys_file_name_is_its_origin_key() -> None:
 
 def test_re_reading_an_unchanged_source_overwrites_one_file() -> None:
     """A second pass over the same (agent, file, anchor) must not accumulate a
-    near-duplicate (FR-009)."""
+    near-duplicate (see "Let only aggregation write raw entries")."""
     write_raw_entry(_stored("first text"))
     write_raw_entry(_stored("second text"))
 
@@ -143,8 +145,9 @@ def test_listing_raw_entries_of_a_partition_with_none_is_empty() -> None:
 
 
 def test_raw_entries_are_hidden_from_the_partitions_ordinary_listing() -> None:
-    """``.raw/`` is excluded from the index, from delivery and from recall
-    (FR-008) — which starts with it not being a note."""
+    """``.raw/`` is excluded from the index, from delivery and from recall (see
+    "Keep raw entries verbatim and hidden") — which starts with it not being a
+    note."""
     from coffer.infrastructure.memory import store
 
     write_raw_entry(_stored())

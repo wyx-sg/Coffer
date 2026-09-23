@@ -32,8 +32,8 @@ ALLOWED_UPDATES: tuple[str, ...] = (
     "message",
     "callback_query",
     "my_chat_member",
-    # FR-048: the user pressed the stop control on a streamed draft. An older
-    # Bot API server simply never sends this one; naming it costs nothing.
+    # "Stop the turn from the platform's own stop control": the user pressed the stop control on a
+    # streamed draft. An older Bot API server simply never sends this one; naming it costs nothing.
     "stopped_message_generation",
 )
 
@@ -54,9 +54,10 @@ def lifecycle_from_update(
 
     Telegram reports the bot's own membership where SeaTalk reports a removal
     event; both mean the same thing to Coffer, so both land on the one
-    ``InboundLifecycle`` (FR-043) rather than growing a second envelope per
-    platform. Only a DEPARTURE is an event — being added changes nothing until
-    somebody pairs (FR-005), and that is a message, not this.
+    ``InboundLifecycle`` ("Track the bot's own standing in a group") rather than growing a second
+    envelope per platform. Only a DEPARTURE is an event — being added changes nothing until
+    somebody pairs ("Pair exactly one owner with a single-use code"), and that is a message, not
+    this.
 
     ``None`` covers a malformed payload, an update about somebody other than
     this bot, an arrival, and a status transition whose meaning is not known —
@@ -101,7 +102,7 @@ def callback_from_query(query: dict[str, Any], *, channel: str) -> InboundCallba
 
     A card tapped in a (super)group replies back into that group/thread, not a
     DM, so the routing comes from the CARD's own message rather than from the
-    tapper (FR-036).
+    tapper ("Route group selection-card taps back to the group").
     """
     sender = query.get("from") or {}
     card = query.get("message") or {}
@@ -126,7 +127,7 @@ def tap_ack(data: str) -> str:
 
 
 def stop_from_update(update: dict[str, Any], *, channel: str) -> InboundStop | None:
-    """Read a ``stopped_message_generation`` update (FR-048), or ``None``.
+    """Read a ``stopped_message_generation`` update, or ``None``.
 
     The draft id is deliberately not carried through: Coffer keys a turn by
     ``(channel, chat, thread)``, which is exactly what the update names, and the

@@ -60,8 +60,8 @@ capabilities.** Three moves.
   unused and restored on the 12th, so the observation seat described here stands
   — widened, since the page also interrupts and continues what it watches
   ([Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md)). The
-  `ConversationPort` / `TurnPort` seams named here live in spec chat FR-001…spec chat FR-012, with the page itself at
-  spec chat FR-029…spec chat FR-041. The first two bullets —
+  `ConversationPort` / `TurnPort` seams named here, and the page itself, are
+  specified in [chat](../../openspec/specs/chat/spec.md). The first two bullets —
   managed agents only, no `builtin` in the registry — still hold, and are now
   what the agent-provider listing returns.
 

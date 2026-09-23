@@ -3,8 +3,9 @@
 Aggregation is the **input** half of the layer. It reads each registered,
 enabled agent through that agent's reader and writes what it read, verbatim,
 under a partition's hidden ``.raw/`` — and it writes nothing else, because
-``notes/``, ``MEMORY.md`` and ``RETIRED.md`` all belong to the distil pass
-(FR-008, FR-026).
+``notes/``, ``MEMORY.md`` and ``RETIRED.md`` all belong to the distil pass (see
+"Keep raw entries verbatim and hidden", "Keep distil out of the raw
+directory").
 
 The readers are faked here, per the tier's own rule: a unit test never touches
 a developer's real ``~/.claude`` or ``~/.codex``. The store is real, under the
@@ -18,13 +19,14 @@ is the integration tier's, in
 Three decisions are pinned here, and each is a named past failure:
 
 * an entry **about the person** files into ``global`` whichever repository it
-  came from (FR-011);
-* a directory inside **no repository** creates no partition of its own
-  (FR-015) — six of sixteen partitions on the maintainer's live vault were
-  dated scratch folders that the previous design made permanent;
-* **the skip is never taken on a digest alone** (FR-019). A digest match says
-  the *source* has not changed; it does not say the entries it produced are
-  still on disk.
+  came from (see "File personal entries into global");
+* a directory inside **no repository** creates no partition of its own (see
+  "Create no partition for a non-repository directory") — six of sixteen
+  partitions on the maintainer's live vault were dated scratch folders that the
+  previous design made permanent;
+* **the skip is never taken on a digest alone** (see "Keep the memory tree
+  derived and local"). A digest match says the *source* has not changed; it
+  does not say the entries it produced are still on disk.
 """
 
 from __future__ import annotations
@@ -148,8 +150,9 @@ async def test_a_dated_scratch_directory_creates_no_partition_of_its_own(
     tmp_path: pathlib.Path,
 ) -> None:
     """The impostor failure: six of sixteen partitions on the live vault were
-    one-off session directories that could never reach the repository they
-    were actually about (FR-015)."""
+    one-off session directories that could never reach the repository they were
+    actually about (see "Create no partition for a non-repository
+    directory")."""
     scratch = tmp_path / "Documents" / "Codex" / "2026-09-17" / "some-topic"
     scratch.mkdir(parents=True)
     resources = FakeResources()
@@ -182,8 +185,9 @@ async def test_a_dated_scratch_directory_creates_no_partition_of_its_own(
 async def test_a_partition_whose_repository_is_gone_is_reported_as_unresolvable(
     tmp_path: pathlib.Path,
 ) -> None:
-    """FR-016: an orphaned partition is delivered to nobody, and only the
-    developer can decide whether that repository is coming back."""
+    """An orphaned partition is delivered to nobody, and only the developer can
+    decide whether that repository is coming back (see "Report unresolvable
+    partitions")."""
     root = _repository(tmp_path, "vanishing")
     resources = FakeResources()
     resources.add_agent("codex", "codex", "/cx")
@@ -217,8 +221,9 @@ async def test_a_partition_whose_repository_is_gone_is_reported_as_unresolvable(
 async def test_a_worktree_and_its_checkout_named_by_one_remote_share_one_partition(
     tmp_path: pathlib.Path,
 ) -> None:
-    """The pure half of FR-014, with the ``.git`` written by hand; the real
-    ``git worktree add`` is exercised in the integration tier."""
+    """The pure half of "Identify a partition by its repository", with the
+    ``.git`` written by hand; the real ``git worktree add`` is exercised in the
+    integration tier."""
     main = _repository(tmp_path, "coffer", remote="git@github.com:owner/coffer.git")
     clone = _repository(tmp_path, "coffer-second", remote="https://github.com/owner/coffer")
     resources = FakeResources()
@@ -326,7 +331,8 @@ async def test_an_unchanged_source_is_not_read_at_all_on_the_next_pass(
     spec="memory", scenario="deleting the memory tree and re-syncing reproduces an equivalent set"
 )
 async def test_a_digest_match_alone_never_suppresses_a_rebuild(tmp_path: pathlib.Path) -> None:
-    """The trap the source-state cache creates (FR-019, SC-002).
+    """The trap the source-state cache creates ("Keep the memory tree derived
+    and local").
 
     A digest match says the *source* is unchanged. It does not say the entries
     it produced are still on disk — and deleting the tree with the cache
@@ -407,7 +413,8 @@ async def test_one_agents_unreadable_file_leaves_the_others_aggregation_intact(
         "/cx", "/cx/memories/MEMORY.md", "d1", (raw_entry("A", "b", project_root=str(root)),)
     )
 
-    # A note an earlier pass distilled, which must be left standing (SC-006).
+    # A note an earlier pass distilled, which must be left standing ("Fail a broken reader
+    # loudly and in isolation").
     store.write_note(
         Note(
             slug="standing",
@@ -458,8 +465,9 @@ async def test_a_source_that_failed_is_tried_again_next_pass_rather_than_being_c
 async def test_a_reader_that_raises_something_unexpected_costs_that_file_not_the_pass(
     tmp_path: pathlib.Path,
 ) -> None:
-    """FR-005's isolation is only worth anything if it holds for the failure
-    nobody anticipated."""
+    """Failing a broken reader in isolation is only worth anything if it holds
+    for the failure nobody anticipated (see "Fail a broken reader loudly and in
+    isolation")."""
     root = _repository(tmp_path, "coffer")
     resources = FakeResources()
     resources.add_agent("codex", "codex", "/cx")
@@ -494,7 +502,8 @@ async def test_a_disabled_agent_is_not_read(tmp_path: pathlib.Path) -> None:
 
 @pytest.mark.asyncio
 async def test_an_agent_type_with_no_reader_is_skipped_rather_than_failing_the_pass() -> None:
-    """A third agent earns an adapter, not a failure here (FR-045)."""
+    """A third agent earns an adapter, not a failure here (see "Reintroduce no
+    retired mechanism")."""
     resources = FakeResources()
     resources.add_agent("cursor", "cursor", "/cursor")
     resources.add_agent("codex", "codex", "/cx")
@@ -594,7 +603,8 @@ async def test_a_partition_two_agents_filled_is_one_row_serving_both(
 
 @pytest.mark.asyncio
 async def test_a_pass_records_one_audit_event_naming_its_actor(tmp_path: pathlib.Path) -> None:
-    """So the log can tell a scheduled pass from a requested one (FR-038)."""
+    """So the log can tell a scheduled pass from a requested one (see "Audit
+    every lifecycle act")."""
     root = _repository(tmp_path, "coffer")
     resources = FakeResources()
     resources.add_agent("codex", "codex", "/cx")

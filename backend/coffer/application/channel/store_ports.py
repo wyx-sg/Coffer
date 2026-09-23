@@ -82,7 +82,8 @@ class ChannelPeerRepoPort(Protocol):
 class ChannelThreadConversation:
     """The per-thread conversation binding (one row in
     ``channel_thread_conversations``): conversation identity is keyed by
-    ``(resource_id, chat_id, thread_id)`` (FR-033), not by the peer alone.
+    ``(resource_id, chat_id, thread_id)`` (see "Key conversation identity by channel,
+    chat and thread"), not by the peer alone.
 
     ``thread_id=""`` is the DM (or a group's main chat); each thread in a group
     is an independent row with its own active conversation and its own sticky
@@ -102,7 +103,8 @@ class ChannelThreadConversation:
 
 
 class ChannelThreadConversationRepoPort(Protocol):
-    """Persistence for per-thread conversation bindings (FR-033).
+    """Persistence for per-thread conversation bindings (see "Key conversation identity
+    by channel, chat and thread").
 
     The source of truth for driving a turn: which conversation a
     ``(resource_id, chat_id, thread_id)`` resolves to, and the sticky agent it

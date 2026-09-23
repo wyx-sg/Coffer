@@ -1,6 +1,7 @@
 // frontend/src/components/knowledge/KnowledgeCurateButton.tsx
 //
-// The manual curation trigger on a collection's page (spec knowledge FR-040):
+// The manual curation trigger on a collection's page (spec knowledge "Present a
+// collection as one tree in the web UI"):
 // one bounded pass that merges the next pending item — new material from the
 // inbox, or a document edited since curation last saw it — into the
 // collection's documents. The background sweep runs the same pass on an

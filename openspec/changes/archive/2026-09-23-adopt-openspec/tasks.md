@@ -34,23 +34,24 @@
 - [x] 2.17 For every capability, check that each old scenario appears exactly once and each requirement owns at least one scenario
 - [x] 2.18 Fold each `plan.md` and `research.md` into `docs/architecture.md` or an ADR, then delete them
 - [x] 2.19 Merge each `quickstart.md` into its `docs-site/guide/` page, then delete them
-- [ ] 2.20 Write an acceptance-marked test for every scenario added in 2.2–2.16; list any that exposes a real defect under section 4
+- [x] 2.20 Write an acceptance-marked test for every scenario added in 2.2–2.16; list any that exposes a real defect under section 4
 - [x] 2.21 Repoint or drop every link inside `openspec/specs/` to a file phase 1 removed (`.specify/…`, `.agents/sdd.md`)
-- [ ] 2.22 Run `openspec validate --all --strict` and `make verify`; open PR 2
+- [x] 2.22 Run `openspec validate --all --strict` and `make verify`; open PR 2
 
 ## 3. Requirement numbers out (PR 3)
 
-- [ ] 3.1 Rewrite every `FR-<n>` citation in `backend/coffer`, `backend/tests`, `frontend/src`, `desktop/src` and `e2e` to the requirement title, or drop it where it only decorated the comment
-- [ ] 3.2 Rewrite every `FR-<n>` citation in `docs/decisions`, `docs/research`, `docs-site` and `.agents` as a spec link plus requirement title
-- [ ] 3.3 `check_doc_numbering.py`: drop the unique-FR rule, reject any `FR-<n>` token; delete `docs/decisions/fr-ids-reset-once.md` and its index entry
-- [ ] 3.4 Add the check that fails on `.specify/`, a root `specs/`, or `speckit`/`spec-kit` in any tracked file
-- [ ] 3.5 Remove the old-layout path from `audit_acceptance.py`
-- [ ] 3.6 Run `make verify`; open PR 3
+- [x] 3.1 Rewrite every `FR-<n>` citation in `backend/coffer`, `backend/tests`, `frontend/src`, `desktop/src` and `e2e` to the requirement title, or drop it where it only decorated the comment
+- [x] 3.2 Rewrite every `FR-<n>` citation in `docs/decisions`, `docs/research`, `docs-site` and `.agents` as a spec link plus requirement title
+- [x] 3.3 `check_doc_numbering.py`: drop the unique-FR rule, reject any `FR-<n>` token; delete `docs/decisions/fr-ids-reset-once.md` and its index entry
+- [x] 3.4 Add the check that fails on `.specify/`, a root `specs/`, or `speckit`/`spec-kit` in any tracked file
+- [x] 3.5 Remove the old-layout path from `audit_acceptance.py`
+- [x] 3.6 Run `make verify`; open PR 3
 
 ## 4. Follow-ups found during the migration
 
-- [ ] 4.1 (none yet)
+- [x] 4.1 Nine places where the code fell short of its spec, found by the new scenarios' tests and fixed in their own PR (#420): `credentials list` covers every kind; ollama activation refused; plugin cache checks the path; vault-sync reports a join before applying it, joins only on adopt, and records inapplicable paths as not applicable; curation retires only after writing elsewhere; the markitdown import fence covers all of `coffer`; `conversations.agent_key` has no default; replies keep text and tool calls in order; web copy, one Chat name, and an About page without daemon internals
+- [x] 4.2 Spec text corrected where the code was deliberately different: Telegram mentions and callback values, memory's empty state, Codex's MCP entry shape, the desktop shell's CORS origins, the adopted-secret store, the provider ref form, `last_converged_on`, the legacy redirect, `CONFIG_FILE_NOT_ALLOWED`
 
 ## 5. Close
 
-- [ ] 5.1 `openspec archive adopt-openspec`
+- [x] 5.1 `openspec archive adopt-openspec`

@@ -67,11 +67,11 @@ def callback_path(resource: Resource) -> str:
 class CallbackInfo:
     """How this SeaTalk channel receives events, and whether that is working.
 
-    spec channels/seatalk FR-004: the block covers both delivery methods, and
-    every field that belongs to the other one reports its absent value rather
-    than a plausible-looking lie. On websocket delivery there is no port, no
-    path, no public URL, no listener and no tunnel — ``websocket_state`` carries
-    the whole truth instead.
+    spec channels/seatalk "Keep status truthful per transport": the block covers both
+    delivery methods, and every field that belongs to the other one reports its absent
+    value rather than a plausible-looking lie. On websocket delivery there is no port,
+    no path, no public URL, no listener and no tunnel — ``websocket_state`` carries the
+    whole truth instead.
     """
 
     port: int
@@ -95,7 +95,8 @@ class CallbackInfo:
 
 
 def callback_info(resource: Resource, *, runtime: ChannelRuntime) -> CallbackInfo:
-    """The inbound-transport block for a SeaTalk channel (spec channels/seatalk FR-004)."""
+    """The inbound-transport block for a SeaTalk channel (spec channels/seatalk
+    "Keep status truthful per transport")."""
     if str(resource.config.get("delivery") or "webhook") == "websocket":
         state = runtime.websocket_state(resource.uid)
         return CallbackInfo(

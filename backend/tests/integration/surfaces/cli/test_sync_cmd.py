@@ -392,9 +392,9 @@ def test_status_exits_non_zero_while_a_round_is_held(fleet: Fleet) -> None:
     """A held vault converges no further, so the exit code has to say so.
 
     The first hold in the field stood for four days because the only surface
-    that reported it was a page nobody had reason to open (spec vault-sync
-    FR-096). A non-zero exit is what lets a prompt, a cron line or a monitor
-    notice without reading the text.
+    that reported it was a page nobody had reason to open (spec vault-sync "Say
+    a vault needs a human where the user already is"). A non-zero exit is what
+    lets a prompt, a cron line or a monitor notice without reading the text.
     """
     _hold_a_deletion(fleet)
 

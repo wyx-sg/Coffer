@@ -41,7 +41,8 @@ class ErrorOut(BaseModel):
 class ContentBlockOut(BaseModel):
     """Wire representation of a ContentBlock (text | tool_use | tool_result |
     attachment). ``filename``/``mime`` describe an ``attachment`` reference; the
-    local ``path`` is deliberately NOT surfaced (leak/security — FR-034)."""
+    local ``path`` is deliberately NOT surfaced (leak/security — spec chat
+    "Re-materialise attachments from persisted history")."""
 
     type: Literal["text", "tool_use", "tool_result", "attachment"]
     text: str | None = None

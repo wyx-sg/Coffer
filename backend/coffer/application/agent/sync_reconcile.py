@@ -7,12 +7,13 @@ door. An installation without the agent refuses the doc as not applicable here
 (``AGENT_CONFIG_DIR_MISSING``: held, not retried), instead of creating a
 registry row pointing at a dead directory; an unusable skill dir is retried.
 
-Hook: importing resources changes which skills each agent should be holding. A
-skill's reach — its ``enabled`` flag and its ``scope`` — is this machine's own
-and never arrives with the document, but the set of skill ROWS does change, and
-the registry upsert alone performs no on-disk delivery. After every import each
-agent's delivered set is reconciled idempotently against the delivery predicate
-(spec skill-manager FR-012) from the converged rows and this machine's reach.
+Hook: importing resources changes which skills each agent should be holding. A skill's
+reach — its ``enabled`` flag and its ``scope`` — is this machine's own and never arrives
+with the document, but the set of skill ROWS does change, and the registry upsert alone
+performs no on-disk delivery. After every import each agent's delivered set is
+reconciled idempotently against the delivery predicate (spec skill-manager "Deliver a
+skill only where it is enabled and in scope") from the converged rows and this machine's
+reach.
 """
 
 from __future__ import annotations

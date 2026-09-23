@@ -1,4 +1,6 @@
-"""One invariant, both write paths (spec channels FR-025).
+"""One invariant, both write paths.
+
+See spec channels "Limit the agents a channel may drive to its scope".
 
 A channel's ``default_agent`` must be an agent the channel may drive. Two
 endpoints can break that — ``PATCH /resources/{uid}`` edits the config and

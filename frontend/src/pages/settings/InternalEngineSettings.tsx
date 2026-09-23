@@ -6,8 +6,8 @@
 // separate singleton. Replaces the per-card star toggle that used to set it.
 //
 // The third control is the bound on ONE call to that model (spec
-// internal-engine FR-022). It belongs beside the model rather than in the
-// upkeep card because it is a property of the ENDPOINT, not of any one pass:
+// internal-engine "Carry the bound on one model call"). It belongs beside the model rather than in
+// the upkeep card because it is a property of the ENDPOINT, not of any one pass:
 // the same number bounds the memory distil pass, a knowledge description, each
 // turn of curation and a transcription. It is here for a failure that does not
 // look like one — a pass that runs out of time defers its work and reports

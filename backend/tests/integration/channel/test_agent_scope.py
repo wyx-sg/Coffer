@@ -1,4 +1,6 @@
-"""A channel routes only to the agents in its scope (spec channels FR-025).
+"""A channel routes only to the agents in its scope.
+
+See spec channels "Limit the agents a channel may drive to its scope".
 
 A channel's framework-level per-agent scope (ADR per-agent-resource-scope) is read the opposite
 way round from every other kind's: a channel is an inbound surface no agent

@@ -5,15 +5,17 @@ scripted completion, because a model is the one dependency this tier does not
 run. What is exercised is the sequence, which is where the layer's value and
 its risk both sit:
 
-* two agents' differently-worded entries becoming **one** note (FR-018) —
-  matched on meaning, because on the maintainer's live vault 378 entries from
-  two agents produced **zero** cross-agent matches under literal comparison;
+* two agents' differently-worded entries becoming **one** note ("Record
+  provenance and merge by meaning") — matched on meaning, because on the
+  maintainer's live vault 378 entries from two agents produced **zero**
+  cross-agent matches under literal comparison;
 * a later entry **rewriting** the note it belongs to rather than adding a
-  second beside it (FR-021);
+  second beside it ("Keep one topic per note");
 * a retirement that **sticks**: the note leaves ``notes/``, the record goes
   into ``RETIRED.md``, and the next pass over unchanged sources does not
-  re-open it (FR-025) — nor does it reach delivery or recall, which is the
-  specific bug the previous design had, where 11 dead facts stayed answerable.
+  re-open it ("Record retirements so they stick") — nor does it reach delivery
+  or recall, which is the specific bug the previous design had, where 11 dead
+  facts stayed answerable.
 """
 
 from __future__ import annotations
@@ -155,7 +157,8 @@ async def test_two_agents_accounts_of_one_lesson_become_one_note_naming_both(
     assert note.agents == ("claude-code", "codex") or note.agents == ("codex", "claude-code")
     assert len(note.origins) == 2
     assert result.opened == 1
-    # The note is Coffer's own writing, not either source's (FR-020).
+    # The note is Coffer's own writing, not either source's ("Write notes in
+    # Coffer's own words").
     assert note.body.startswith("Both agents hit this")
 
 
@@ -371,7 +374,8 @@ async def test_recall_locates_a_live_note_by_its_absolute_path(vault: _Vault) ->
 async def test_an_entry_the_pass_kept_nothing_from_is_never_offered_to_a_model_twice(
     vault: _Vault,
 ) -> None:
-    """``.raw/`` may not be pruned to express a drop (FR-026), so the record is
+    """``.raw/`` may not be pruned to express a drop ("Keep distil out of the raw
+    directory"), so the record is
     what stops the same entry being routed on every pass for the rest of the
     vault's life."""
     vault.codex_says("Incidental", "A transient observation.", digest="b1")

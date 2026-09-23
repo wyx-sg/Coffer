@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-12
 **Deciders**: Yuxing Wu
-**Spec**: [daemon](../../openspec/specs/daemon/spec.md) FR-016 / FR-011; [desktop-app](../../openspec/specs/desktop-app/spec.md) FR-001 … FR-011
+**Spec**: [daemon](../../openspec/specs/daemon/spec.md) "Serve the built web UI from the daemon's own origin" / "Bind a fixed, settable port"; [desktop-app](../../openspec/specs/desktop-app/spec.md)
 **Supersedes in part**: the "A desktop shell" explicit non-goal recorded in the roadmap on 2026-09-09
 **Related**: [The Daemon Serves Its Token in the Page](./daemon-serves-the-token-in-the-page.md) (which this amends — its "there is no third case" now has one), [Detect-or-Spawn](./daemon-detect-or-spawn.md), [PyInstaller Distribution](./distribution-pyinstaller.md), [The Daemon Proxies OS File Actions](./daemon-proxies-os-file-actions.md)
 
@@ -35,7 +35,7 @@ a shell that owns *only* these three problems — which is a much smaller shell
 than the one that was removed, because the intervening three months moved most
 of its work somewhere better:
 
-- Binary deployment moved into the daemon's own frozen-start path (spec daemon FR-027).
+- Binary deployment moved into the daemon's own frozen-start path ([daemon](../../openspec/specs/daemon/spec.md) "Deploy frozen sibling binaries and back up the vault before migrating").
 - Native folder picking, opening a file in the user's editor, and revealing it
   in Finder all moved onto daemon HTTP routes
   ([The Daemon Proxies OS File Actions](./daemon-proxies-os-file-actions.md)) —
@@ -68,12 +68,12 @@ reads.
 ### The frontend gains a host, not a fork
 
 The page is a local asset, so nobody injected a token into it. The browser's
-mechanism (spec daemon FR-017) cannot apply, and the shell supplies the same two globals
+mechanism ([daemon](../../openspec/specs/daemon/spec.md) "Hand the browser its token in the served page") cannot apply, and the shell supplies the same two globals
 through an IPC command instead:
 
 ```
-browser  → daemon injects window.__COFFER_TOKEN__ into index.html   (spec daemon FR-017)
-Tauri    → shell invokes get_daemon_info → setDaemonConnection(...)  (spec desktop-app FR-004)
+browser  → daemon injects window.__COFFER_TOKEN__ into index.html   (daemon "Hand the browser its token in the served page")
+Tauri    → shell invokes get_daemon_info → setDaemonConnection(...)  (desktop-app "Supply the page its daemon connection over IPC")
 ```
 
 Three files change: `lib/tauri.ts` returns, `lib/auth.ts` regains
@@ -104,9 +104,9 @@ are gated on `isTauri()`:
 
 ### The daemon binds a fixed port by default
 
-Spec daemon FR-011 made the port configurable, defaulting to a scan of 8000–8009. The
+[daemon](../../openspec/specs/daemon/spec.md) "Bind a fixed, settable port" made the port configurable, defaulting to a scan of 8000–8009. The
 default inverts: **the daemon binds 8000, and refuses to start if it cannot**,
-naming the process that holds it — machinery spec daemon FR-011 already built for its
+naming the process that holds it — machinery that requirement already built for its
 configured-port path.
 
 The scan was always the unusual choice. Local services with a web UI fix a
@@ -149,7 +149,7 @@ whose sidecar is missing or unrunnable.
 
 **Installing the app also installs the CLI**, without the shell doing anything.
 The daemon deploys its own siblings — all four, `coffer` included — into
-`~/.coffer/bin/` on frozen start (spec daemon FR-027), so the first launch of the app leaves
+`~/.coffer/bin/` on frozen start ([daemon](../../openspec/specs/daemon/spec.md) "Deploy frozen sibling binaries and back up the vault before migrating"), so the first launch of the app leaves
 the command-line tools on disk for the user to put on `PATH`. This is the
 arrangement Ollama, Docker Desktop and Tailscale all use: one installable app,
 with the CLI linked out of it rather than installed before it.
@@ -190,8 +190,8 @@ single highest-value thing that account would buy.
   diagnosis names the holder and the fix, but the daemon does not start until
   the user acts. This is the intended trade: a predictable origin is worth more
   than an automatic one.
-- **The release grows a second tier again, and it is nearly free.** Spec daemon
-  FR-025 collapsed the release to one `coffer-cli-<triple>.tar.gz`; a `.dmg` joins it.
+- **The release grows a second tier again, and it is nearly free.** [daemon](../../openspec/specs/daemon/spec.md)
+  "Release the macOS arm64 terminal archive" collapsed the release to one `coffer-cli-<triple>.tar.gz`; a `.dmg` joins it.
   The expensive half — PyInstaller over four binaries — is work the release job
   already does for the CLI archive, so the desktop tier reuses those artifacts
   and adds only a Tauri build. The hour-long cost is a *local* `make desktop`

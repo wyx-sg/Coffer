@@ -1,7 +1,8 @@
 """What a converge round changes, and the deletion guard over it.
 
-Covers `openspec/specs/vault-sync/spec.md` "Applying a diff" and "Safety" (the
-oversized-deletion hold), for the pure domain in `coffer.domain.sync.diff`.
+Covers `openspec/specs/vault-sync/spec.md` "Never apply the registry or the
+manifest", "Hold a round that would lose too much" and "Count losses, not
+deletions" (the oversized-deletion hold), for the pure domain in `coffer.domain.sync.diff`.
 """
 
 from __future__ import annotations
@@ -241,7 +242,7 @@ def test_an_iterator_of_changes_is_consumed_once_and_still_scored() -> None:
     assert guard.breached_areas(changes, {"knowledge": 10}) == [("knowledge", 9, 10)]
 
 
-# --- moves are not losses (spec vault-sync FR-090) --------------------------
+# --- moves are not losses (spec vault-sync "Count losses, not deletions") ---
 
 
 def _relayout(count: int, *, from_dir: str = "", to_dir: str = "sources/") -> list[DocChange]:

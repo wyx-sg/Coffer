@@ -1,4 +1,5 @@
-"""What the distil pass decided, and the carrying out of it (spec memory FR-023).
+"""What the distil pass decided, and the carrying out of it (spec memory "Distil
+incrementally in two stages").
 
 Between the two model-facing stages sits the part that is all Coffer's: the
 routing answers are folded into a **plan**, and the plan is carried out against
@@ -15,8 +16,8 @@ and a retirement whose replacement the writing stage could not produce is
 skipped. Retiring a note and putting nothing back is strictly worse than not
 running the pass.
 
-Nothing here writes ``.raw/`` (FR-026): it reads entries the caller listed and
-writes only ``notes/`` and ``RETIRED.md``.
+Nothing here writes ``.raw/`` (see "Keep distil out of the raw directory"): it reads
+entries the caller listed and writes only ``notes/`` and ``RETIRED.md``.
 """
 
 from __future__ import annotations
@@ -253,7 +254,7 @@ async def build_plan(
     stamp = now()
     for chunk in routing.chunks(entries, chunk_size):
         # Every retirement is an exclusion the model must see, including the
-        # ones this pass has just decided (FR-025).
+        # ones this pass has just decided (see "Record retirements so they stick").
         retired_titles = [r.title for r in retired if r.title]
         retired_titles.extend(r.title for r in plan.retirements.values() if r.title)
         actions = await routing.route_chunk(

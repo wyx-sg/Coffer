@@ -7,8 +7,8 @@
 //
 // The third pass is `curate`: it merges new material into a collection's
 // documents and carries a person's edit through the rest (spec knowledge
-// FR-021), which is why it ships ON and why its note is about what switching
-// it OFF costs.
+// "Curate through a fenced four-tool pass"), which is why it ships ON and why its note is about
+// what switching it OFF costs.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 

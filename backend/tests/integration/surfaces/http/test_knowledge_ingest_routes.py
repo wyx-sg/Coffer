@@ -1,4 +1,4 @@
-"""``POST /api/v1/knowledge/upload`` end to end (spec knowledge FR-016..FR-019).
+"""``POST /api/v1/knowledge/upload`` end to end (spec knowledge).
 
 The full app is booted through ``create_app`` so the route is wired exactly as
 production wires it — real SQLite, real Markdown under a temp HOME, the real
@@ -6,11 +6,11 @@ converter registry — and driven with a Starlette ``TestClient``. ``client`` an
 ``_create_collection`` live in ``conftest.py``.
 
 This module replaces one that also covered ``POST /knowledge/search`` and
-``GET /knowledge/grep``. Both routes are gone with the retrieval surface
-(FR-033), and nothing took their place: a person greps the directory with
-their own tools and an agent reads the paths its delivered skill carries. What
-is kept is upload, because its refusals are a contract the UI keys messages
-off, and because "nothing half-lands" is only provable through a real write.
+``GET /knowledge/grep``. Both routes are gone with the retrieval surface ("Expose
+exactly one knowledge tool"), and nothing took their place: a person greps the directory
+with their own tools and an agent reads the paths its delivered skill carries. What
+is kept is upload, because its refusals are a contract the UI keys messages off, and
+because "nothing half-lands" is only provable through a real write.
 """
 
 from __future__ import annotations
@@ -55,23 +55,26 @@ def test_an_upload_becomes_one_document_and_keeps_no_file_of_its_own(client, tmp
     assert resp.status_code == 201, resp.text
     doc = resp.json()
 
-    # No internal model in this app, so the converted text is promoted to a
-    # document on the spot (FR-029). A CSV, because a `.txt` or `.md` converts
-    # by passthrough and would not show that conversion happened.
+    # No internal model in this app, so the converted text is promoted to a document
+    # on the spot ("Promote material directly when no model is configured"). A CSV,
+    # because a `.txt` or `.md` converts by passthrough and would not show that
+    # conversion happened.
     assert doc["path"] == "shopee/team.md"
     assert doc["pending"] is False
     assert doc["converter"] == "csv"
     assert doc["title"] and doc["description"]
     assert "original_path" not in doc
 
-    # Neither the original bytes nor a separate extracted file: the one file in
-    # the collection is the document the knowledge became (FR-016).
+    # Neither the original bytes nor a separate extracted file: the one file in the
+    # collection is the document the knowledge became ("Convert uploads into
+    # material without keeping them").
     assert _files_on_disk(tmp_path) == ["team.md"]
 
     read = client.get("/api/v1/knowledge/file", params={"path": doc["path"]})
     assert read.status_code == 200, read.text
     file_out = read.json()
-    # An upload is a person's action, so the frontmatter says so (FR-017).
+    # An upload is a person's action, so the frontmatter says so ("Fill frontmatter
+    # on converted material").
     assert file_out["actor"] == "user"
     assert file_out["title"] == doc["title"]
     assert file_out["description"] == doc["description"]
@@ -83,7 +86,7 @@ def test_an_upload_waits_in_the_inbox_when_a_pass_could_merge_it(  # type: ignor
 ) -> None:
     """With a model to merge it, the upload is material like any other: it
     waits in the hidden inbox and the response says so rather than naming a
-    document that does not exist yet (FR-013)."""
+    document that does not exist yet ("Submit every entrance's input as material")."""
     _create_collection(client, "shopee")
     _hold_material(monkeypatch)
 
@@ -138,7 +141,8 @@ def test_upload_of_unsupported_type_is_refused_with_its_reason(client, tmp_path)
 def test_upload_of_a_pdf_with_no_text_layer_is_refused_as_scanned(  # type: ignore[no-untyped-def]
     client, tmp_path, monkeypatch
 ) -> None:
-    """FR-019, end to end, including the reason the UI keys its message off.
+    """Per "Bound uploads and leave nothing behind on failure", end to end,
+    including the reason the UI keys its message off.
 
     A real image-only PDF is not worth carrying as a fixture: the rule is that
     ANY conversion producing no text is refused, so the converter is made to
@@ -165,7 +169,8 @@ def test_upload_of_a_pdf_with_no_text_layer_is_refused_as_scanned(  # type: igno
     assert body["error"]["details"]["reason"] == "scanned_pdf"
     assert body["error"]["details"]["doc_type"] == "pdf"
 
-    # Nothing — no document, no inbox item, no original (FR-019).
+    # Nothing — no document, no inbox item, no original ("Bound uploads and leave
+    # nothing behind on failure").
     assert _files_on_disk(tmp_path) == []
 
 
@@ -177,7 +182,7 @@ def test_upload_into_an_unknown_collection_is_not_found(client, tmp_path) -> Non
     )
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "KNOWLEDGE_COLLECTION_NOT_FOUND"
-    # A read or a write never provisions a collection (FR-008).
+    # A read or a write never provisions a collection ("Create collections only deliberately").
     assert not (tmp_path / "knowledge" / "typo").exists()
 
 

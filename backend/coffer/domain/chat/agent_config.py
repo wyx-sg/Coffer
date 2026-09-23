@@ -1,4 +1,5 @@
-"""Typed per-conversation agent provider config (spec chat FR-002).
+"""Typed per-conversation agent provider config (spec chat "Record the agent on
+each conversation").
 
 The chat platform keeps a small per-conversation blob of provider-owned state:
 the working directory a turn runs in, the upstream session id to ``--resume``,

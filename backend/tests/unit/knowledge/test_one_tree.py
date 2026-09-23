@@ -2,13 +2,14 @@
 
 Nothing here goes through a service or a route: the substrate is
 ``infrastructure/knowledge``, and if the one tree, the inbox and the walk over
-them are right, every surface above is reading the truth (spec knowledge
-FR-001).
+them are right, every surface above is reading the truth (spec knowledge "Store
+each collection as one tree of Markdown files").
 
 What these pin: a collection is one tree of documents with a README beside
 them, new material waits in a hidden inbox that nothing lists, and the stamp
 that decides which documents curation still owes is read off the file rather
-than out of any state Coffer keeps (FR-028).
+than out of any state Coffer keeps (see "Settle an item only after its pass
+completes").
 """
 
 from __future__ import annotations

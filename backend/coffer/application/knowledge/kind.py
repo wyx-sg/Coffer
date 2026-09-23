@@ -26,11 +26,12 @@ Two defaults are worth naming, because an earlier design set them otherwise:
 - There is no ``on_update_config`` — nothing in the config can change, because
   there is nothing in the config.
 
-``on_delete`` and ``on_enabled_changed`` both end by telling the service its
-catalogue moved. The catalogue is carried by Coffer's own skill (FR-034), and
-that skill is a file: switching a collection off changes nothing an agent can
-see until the file is rewritten, so a re-render that waited for the next boot
-would leave the agent reading a catalogue the owner had already changed.
+``on_delete`` and ``on_enabled_changed`` both end by telling the service its catalogue
+moved. The catalogue is carried by Coffer's own skill (see "Deliver the catalogue
+through the coffer-guide skill"), and that skill is a file: switching a collection off
+changes nothing an agent can see until the file is rewritten, so a re-render that waited
+for the next boot would leave the agent reading a catalogue the owner had already
+changed.
 """
 
 from __future__ import annotations

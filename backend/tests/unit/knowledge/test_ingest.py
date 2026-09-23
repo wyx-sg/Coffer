@@ -1,12 +1,13 @@
 """Document ingestion: convert, describe, and submit what it says as material.
 
-The contract under test (spec knowledge FR-016..FR-019): an upload becomes
-**material** for a collection — the same submission, frontmatter and audit
-event as an agent's ``coffer__write`` — which a curation pass merges into the
-documents. Nothing of the upload itself is kept: not the original bytes, not
-the extracted text as a file of its own. With no internal model to merge it,
-the material becomes a document as it stands (FR-029). And the whole thing is
-all-or-nothing: a refusal leaves nothing behind.
+The upload contract under test (spec knowledge): an upload becomes **material**
+for a collection — the same submission, frontmatter and audit event as an
+agent's ``coffer__write`` — which a curation pass merges into the documents.
+Nothing of the upload itself is kept: not the original bytes, not the extracted
+text as a file of its own. With no internal model to merge it, the material
+becomes a document as it stands (see "Promote material directly when no model
+is configured"). And the whole thing is all-or-nothing: a refusal leaves
+nothing behind.
 """
 
 from __future__ import annotations
@@ -258,7 +259,8 @@ async def test_an_unsupported_type_is_refused_and_writes_nothing(knowledge) -> N
         )
 
     assert exc_info.value.doc_type == "bin"
-    # Nothing at all: no material, no original (FR-019).
+    # Nothing at all: no material, no original (see "Bound uploads and leave
+    # nothing behind on failure").
     assert _on_disk() == []
 
 
@@ -266,11 +268,12 @@ async def test_an_unsupported_type_is_refused_and_writes_nothing(knowledge) -> N
 async def test_a_document_that_converts_to_nothing_is_refused_and_writes_nothing(  # type: ignore[no-untyped-def]
     knowledge,
 ) -> None:
-    """FR-019. The real case is an image-only PDF: MarkItDown extracts no text,
-    returns ``""``, and reports no error — it did its job, the document simply
-    has no text layer. Stored, that is titled material with an empty body: it
-    would be material a curation pass has nothing to fold in from, and with no
-    model it would become a document that says nothing.
+    """See "Bound uploads and leave nothing behind on failure". The real case
+    is an image-only PDF: MarkItDown extracts no text, returns ``""``, and
+    reports no error — it did its job, the document simply has no text layer.
+    Stored, that is titled material with an empty body: it would be material a
+    curation pass has nothing to fold in from, and with no model it would
+    become a document that says nothing.
 
     Driven through a converter that returns empty markdown rather than through
     a real scanned PDF, because the rule is about ANY converter producing
@@ -375,13 +378,14 @@ async def test_description_falls_back_to_the_title_when_there_is_no_prose_at_all
 ) -> None:
     """A document can convert to real content and still contain no PROSE — a
     file that is nothing but a heading is the case. ``_fallback_description``
-    skips heading lines, so there is no paragraph left, and FR-003 makes the
-    description required: the title is the only thing left to use.
+    skips heading lines, so there is no paragraph left, and "Carry title,
+    description and actor in frontmatter" makes the description required: the
+    title is the only thing left to use.
 
     This used to be driven with a completely EMPTY CSV. That is no longer a
     stored document at all — a conversion that produces nothing is refused
-    (``EmptyConversion``, FR-019) — so the vehicle has to be a document that
-    converts to something and still yields no prose.
+    (``EmptyConversion``) — so the vehicle has to be a document that converts
+    to something and still yields no prose.
     """
     service = _service(knowledge)
 
@@ -412,7 +416,7 @@ async def test_ingest_into_a_collection_that_does_not_exist_fails(knowledge) -> 
     assert not paths.collection_dir("elsewhere").exists()
 
 
-# ----- deleting (FR-020) ------------------------------------------------
+# ----- deleting ("Let only a person delete a document") -----------------
 
 
 async def test_a_person_may_delete_any_document(knowledge) -> None:  # type: ignore[no-untyped-def]

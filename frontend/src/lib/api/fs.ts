@@ -1,5 +1,6 @@
 // frontend/src/lib/api/fs.ts — local filesystem browse + open/reveal through
-// the loopback daemon (spec daemon FR-019/FR-021). A browser can't
+// the loopback daemon (spec daemon "Browse folders without
+// reading files", "Open and reveal existing absolute paths"). A browser can't
 // read absolute paths or reach the OS, but the daemon — always on the user's own
 // machine — can (ADR daemon-proxies-os-file-actions). `browse` backs the web folder picker; `open`/`reveal`
 // back the read-only file viewers' "open in editor" / "reveal in file manager".

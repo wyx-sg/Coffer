@@ -5,7 +5,7 @@
 // derived view of `machines/*.yaml` in the working tree.
 //
 // The list is not only the Machines tab's data — it is also the pick-list the
-// channel binding control offers (spec channels, "Where a channel runs"),
+// channel binding control offers (spec channels, "Bind each channel to the one machine that runs it"),
 // which is why it lives in its own hook file rather than inside the Sync
 // page's tree. `scope` has no machine axis and never did name a machine; the
 // binding does, by DERIVED id rather than display name, so renaming a machine

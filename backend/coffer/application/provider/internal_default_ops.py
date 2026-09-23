@@ -3,20 +3,20 @@
 Two things happen when the internal engine's connection changes, and the second
 is why this is its own module rather than three lines inside the service.
 
-The flag (FR-024/FR-025, this kind's own): at most one connection globally
+The flag ("Keep at most one internal-engine default" and "Set the internal-engine
+default", this kind's own): at most one connection globally
 carries ``internal_default``, so the target is set only after the flag is
 cleared everywhere else — sequential clear-then-set, serialised by the
 single-process daemon — and the move is audited.
 
-The model (spec internal-engine FR-005, NOT this kind's): the internal engine's
-model is a global singleton with no link to the connection, and a move that
-left the old model standing aimed Coffer's own passes at a model the new
-endpoint has never heard of. What to do about that is the engine's rule and
-lives in ``application.engine.internal_default``; this module supplies the
-trigger and the new connection's curated ids, through a port declared on this
-side (``ports.EngineNotifyPort``) so neither package imports the other.
-``None`` there is the test-convenience construction: no engine to tell, so the
-model is left alone.
+The model (spec internal-engine "Drop the engine model when its connection moves", NOT
+this kind's): the internal engine's model is a global singleton with no link to the
+connection, and a move that left the old model standing aimed Coffer's own passes at a
+model the new endpoint has never heard of. What to do about that is the engine's rule
+and lives in ``application.engine.internal_default``; this module supplies the trigger
+and the new connection's curated ids, through a port declared on this side
+(``ports.EngineNotifyPort``) so neither package imports the other. ``None`` there is the
+test-convenience construction: no engine to tell, so the model is left alone.
 """
 
 from __future__ import annotations

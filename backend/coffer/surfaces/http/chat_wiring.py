@@ -95,7 +95,8 @@ class _ActiveProviderModels:
 
     Narrowed to ``text``: the question is what a CHAT picker may offer, and the
     same endpoint's embedding, image, video and speech models would be rejected
-    by every turn that tried them (spec provider-switching FR-032).
+    by every turn that tried them (spec provider-switching "Offer only text
+    models to chat pickers").
     """
 
     #: Held rather than resolved lazily like the provider service: a

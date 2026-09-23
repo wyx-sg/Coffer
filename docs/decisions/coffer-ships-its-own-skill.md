@@ -122,7 +122,7 @@ the same thing on its own, since the shipped half of the text moves between
 builds.
 
 So the real answer is that **this artifact does not converge at all** — neither
-its master folder nor its resource row (spec vault-sync FR-093). It is derived
+its master folder nor its resource row ([vault-sync](../../openspec/specs/vault-sync/spec.md) "Withhold derived output in both halves"). It is derived
 output: every machine already holds everything it takes to produce its own, from
 files that converge plus its own switches, so publishing it is pure churn. The
 resource framework carries the rule the same way it carries `memory`'s, on the
@@ -132,10 +132,10 @@ travelling — and the mirrored `skills/` tree leaves that one folder alone in
 both directions. Withholding it never publishes its *absence* either: a bundle
 an older build wrote already carries those paths, and staging their deletion
 would hand a machine still running that build an instruction to tear down its
-own live copy (FR-094).
+own live copy ([vault-sync](../../openspec/specs/vault-sync/spec.md) "Leave the paths of withheld derived output inert").
 
 Determinism survives as a rule, with a smaller and more honest justification
-(spec knowledge FR-047): an unchanged catalogue re-rendering to the same bytes
+([knowledge](../../openspec/specs/knowledge/spec.md) "Render the guide skill deterministically"): an unchanged catalogue re-rendering to the same bytes
 is what lets the seed skip the write, so a boot or a curation tick that changed
 nothing registers nothing, audits nothing and re-delivers nothing. That is why
 the knowledge root is still written in its `~`-relative form in its default

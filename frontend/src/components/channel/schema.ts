@@ -128,7 +128,7 @@ export function channelSecretRef(secret: ChannelSecret): string {
  * function may not go looking for either.
  *
  * Every created channel is BOUND, to the machine it was created from (spec
- * channels, "Where a channel runs"). A channel naming no machine means the
+ * channels, "Bind each channel to the one machine that runs it"). A channel naming no machine means the
  * same thing on every machine that holds it, so no daemon can read it as "me"
  * and it runs nowhere — an unbound channel is a bot that never answers, which
  * is not a state a user should be able to fall into by filling in a form.

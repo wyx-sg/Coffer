@@ -1,5 +1,6 @@
-"""`/save`: the phone forwards a document into a knowledge collection (spec channels FR-014, spec
-channels FR-031/FR-034).
+"""`/save`: the phone forwards a document into a knowledge collection.
+
+See spec channels "Save a sent document into a collection".
 
 The trigger is a plain TEXT `/save [collection]`, sent as its own message
 after the document — never a caption. A caption starting with "/" alongside an
@@ -134,8 +135,8 @@ async def test_save_with_nothing_pending_is_refused(env: ChannelEnv) -> None:
 async def test_unnamed_save_offers_a_card_even_for_a_single_collection(
     env: ChannelEnv, tmp_path: Any
 ) -> None:
-    """FR-038: confirm, never guess — even a lone collection is offered as a
-    tap, not applied automatically."""
+    """Per "Save a sent document into a collection": confirm, never guess — even
+    a lone collection is offered as a tap, not applied automatically."""
     adapter = await _card_channel(env)
     env.collections.names = ["only-one"]
     attachment = _attach(tmp_path)

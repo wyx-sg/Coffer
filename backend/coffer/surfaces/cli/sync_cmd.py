@@ -252,7 +252,7 @@ def status(ctx: typer.Context) -> None:
     prompt, a cron line or a monitor can notice without reading the text. A
     vault held on a confirmation nobody sees converges no further, and the
     first time that happened in the field it went unnoticed for four days
-    (spec vault-sync FR-096).
+    (spec vault-sync "Say a vault needs a human where the user already is").
     """
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()

@@ -1,8 +1,9 @@
 """The document→Markdown conversion layer: pure bytes-and-filename logic.
 
 No file is written and no ``.raw/`` copy is kept here — those belong to the
-ingestion pipeline that calls this layer. This tests only what turns bytes
-into ``Conversion`` (spec knowledge FR-024..FR-026).
+ingestion pipeline that calls this layer. This tests only what turns bytes into
+``Conversion`` (spec knowledge "Convert uploads into material without keeping
+them").
 """
 
 from __future__ import annotations

@@ -179,9 +179,10 @@ class CodexAppServerAdapter:
     async def _stream(
         self, history: Sequence[Message], attachments: Sequence[Attachment] = ()
     ) -> AsyncIterator[AgentEvent]:
-        # Codex cannot hear audio: transcribe voice to text; extract documents to
-        # text (FR-031 — Codex is path-native and cannot parse a binary PDF); keep
-        # other files as path notes.
+        # Codex cannot hear audio: transcribe voice to text; extract documents
+        # to text (see "Extract document attachments to text" — Codex is
+        # path-native and cannot parse a binary PDF); keep other files as path
+        # notes.
         attachments, transcripts = await transcribe_audio_attachments(
             attachments, self._transcriber
         )

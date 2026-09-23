@@ -17,7 +17,8 @@ probe.
 
 Agents with no native memory layout — and agents with no projects dir on disk —
 return an empty list; a uid no agent answers to returns 404 via the service's
-agent lookup. Like every workspace listing (spec agent-registry FR-048), none of
+agent lookup. Like every workspace listing (spec agent-registry "Audit every
+agent lifecycle event"), none of
 these audits.
 """
 
@@ -72,7 +73,7 @@ class MemoryFileContentOut(BaseModel):
 
     path: str
     #: Absolute path on disk, so the viewer can offer open / reveal (spec
-    #: agent-registry FR-047).
+    #: agent-registry "Open config files in an external editor or reveal them").
     abs_path: str
     content: str  # empty when ``binary``
     truncated: bool

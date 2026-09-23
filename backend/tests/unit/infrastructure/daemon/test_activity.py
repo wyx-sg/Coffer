@@ -1,9 +1,9 @@
 """The idle clock — what counts as the daemon being wanted, and what holds it.
 
-spec daemon FR-029. The interesting decisions here are not arithmetic: they
-are which evidence of use is admitted (holds, not just requests) and which
-clock is consulted (monotonic, so a sleeping laptop is not nine hours of
-disuse).
+spec daemon "Stand down after an idle window". The interesting decisions here
+are not arithmetic: they are which evidence of use is admitted (holds, not just
+requests) and which clock is consulted (monotonic, so a sleeping laptop is not
+nine hours of disuse).
 """
 
 from __future__ import annotations

@@ -129,7 +129,8 @@ def wire_channel_kind(
         # catalogue service's ``suggest`` IS the ModelSuggestionPort shape, so
         # it goes in directly rather than through a hardcoded local list.
         model_suggestions=chat.model_catalogue,
-        # `/save` (spec channels FR-014): both already satisfy the channel
+        # `/save` (spec channels "Save a sent document into a collection"): both
+        # already satisfy the channel
         # core's Protocol shape structurally (``CollectionCatalogPort`` /
         # ``IngestPort``), so the knowledge kind's own services go in
         # directly — the channel core never imports the knowledge kind itself
@@ -158,7 +159,8 @@ def wire_channel_kind(
         pairing=pairing,
         listener=listener,
         tunnel=TunnelController(),
-        # spec channels/seatalk FR-004: websocket-delivery channels converge the same way, and their
+        # spec channels/seatalk "Carry no ingress fields on websocket delivery":
+        # websocket-delivery channels converge the same way, and their
         # inbound events land on the same seam the webhook route uses —
         # ``ChannelService.ingest_event``, which does not exist yet at this point
         # in the wiring, so it is resolved at call time exactly as the daemon's
@@ -167,7 +169,8 @@ def wire_channel_kind(
         materialize=materialize,
         machine_id=local_machine_id,
         # A live listener keeps the daemon from standing down as idle
-        # (spec daemon FR-029): it exists to be reachable, so the hours it
+        # (spec daemon "Stand down after an idle window"): it exists to be
+        # reachable, so the hours it
         # spends waiting for a message are exactly what it is for.
         service_hold=_hold_for_channel_listener,
     )

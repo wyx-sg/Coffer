@@ -1,4 +1,5 @@
-"""The supported agent types — exactly two, both fully faceted (FR-003)."""
+"""The supported agent types — exactly two, both fully faceted (spec
+agent-registry "Support exactly the Claude Code and Codex agent types")."""
 
 from coffer.domain.agent.descriptor import AGENT_DESCRIPTORS
 from coffer.domain.agent.types import AgentType

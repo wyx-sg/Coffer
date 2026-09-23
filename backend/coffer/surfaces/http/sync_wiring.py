@@ -146,7 +146,7 @@ def wire_sync(
         The held paths are read once here and handed to the bundle as a view
         that resolves at write time. They are what stops a document this vault
         failed to absorb from being published as a deletion — the retry set's
-        whole purpose (spec vault-sync "Why deletion is safe").
+        whole purpose (spec vault-sync "Never export a retry-set path as a deletion").
         """
         retry, not_applicable = await state.held_paths()
         held = retry | not_applicable
@@ -179,7 +179,8 @@ def wire_sync(
                 TreeApplier("knowledge/", worktree=worktree, live_root=knowledge_root()),
                 # The skills tree carries one folder this machine generates for
                 # itself and therefore never receives from another (spec
-                # vault-sync FR-093). ``Bundle`` defaults to the same set on
+                # vault-sync "Withhold derived output in both halves"). ``Bundle``
+                # defaults to the same set on
                 # the publish side; the applier is handed it explicitly because
                 # the application layer may not read infrastructure.
                 TreeApplier(
@@ -200,7 +201,7 @@ def wire_sync(
             # A kind owns more than its row: a native config file, a shim, a
             # delivered skill. The applier writes the row; these put this
             # machine's side of it back in step (spec vault-sync
-            # ``## Applying a diff``).
+            # "Re-run post-import hooks after applying").
             post_import=hooks,
         )
 

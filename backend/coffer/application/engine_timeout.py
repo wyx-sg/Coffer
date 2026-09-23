@@ -1,4 +1,5 @@
-"""How long Coffer waits for its own model on one call (spec internal-engine FR-022).
+"""How long Coffer waits for its own model on one call (spec internal-engine
+"Carry the bound on one model call").
 
 Every call Coffer's internal engine makes is bounded, because an unbounded one
 is how an unattended pass stops being unattended: a wedged endpoint that never

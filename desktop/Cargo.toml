@@ -35,7 +35,8 @@ tauri-build = { version = "2", features = [] }
 # webview is granted no permission to (see `capabilities/default.json`). It is
 # Rust-side only, driven by `sync_watch.rs`, and it exists because a vault held
 # for a confirmation nobody sees stops converging in silence — the first one in
-# the field stood for four days (spec vault-sync FR-096).
+# the field stood for four days (spec vault-sync "Say a vault needs a human
+# where the user already is").
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-notification = "2"

@@ -1,4 +1,6 @@
-"""Knowledge: the two lanes become one co-edited tree (spec knowledge FR-042).
+"""Knowledge: the two lanes become one co-edited tree.
+
+Spec knowledge "Migrate the two-lane corpus into the inbox".
 
 The on-disk half is ``persistence/migrations/knowledge_tree_0101.py``, frozen
 alongside this file: every collection's ``sources/`` and ``topics/`` are backed

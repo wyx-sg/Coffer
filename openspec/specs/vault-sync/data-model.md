@@ -210,16 +210,17 @@ modification of one file instead of a deletion beside an addition
   machine-local, and they would make every round produce a commit. The `uid` is
   the opposite of machine-local and is the one identifier that DOES travel.
 - `enabled` and `scope` are **excluded** for a stronger reason than churn: they
-  are one thing, the resource's reach, and reach is machine-local (FR-014).
-  They are **rejected** like any other unknown key. They used to be parsed and
-  discarded so that a machine which had not upgraded could not stall
-  convergence for the rest — but the version 2 bump retires that argument
-  rather than softening it: a build old enough to write them cannot reach this
-  parser at all, because it refuses the whole tree first.
+  are one thing, the resource's reach, and reach is machine-local (see "Keep
+  reach machine-local"). They are **rejected** like any other unknown key. They
+  used to be parsed and discarded so that a machine which had not upgraded could
+  not stall convergence for the rest — but the version 2 bump retires that
+  argument rather than softening it: a build old enough to write them cannot
+  reach this parser at all, because it refuses the whole tree first.
 - A `channel` gets an ordinary document like every other kind. It once got none
   at all; it travels now because its config names the one machine whose daemon
-  runs its adapter (`runs_on`, spec channels FR-026), so the document can move
-  without the adapter moving with it.
+  runs its adapter (`runs_on`, spec channels "Bind each channel to the one
+  machine that runs it"), so the document can move without the adapter moving
+  with it.
 - Mapping keys are sorted; there is exactly one document per resource, so an
   unchanged vault produces an unchanged tree.
 - String values under this machine's home are normalized to `${HOME}/...` and
@@ -302,9 +303,9 @@ back under a new identity becomes a ghost — it rejoins as a stranger, its old
 descriptor lingers with nobody to update it, and anything that named it stops
 meaning this machine.
 
-Applying a diff does **nothing** with `machines/*.yaml` in either direction
-(FR-054): the registry is read from the tree, never projected into anything
-local.
+Applying a diff does **nothing** with `machines/*.yaml` in either direction (see
+"Never apply the registry or the manifest"): the registry is read from the tree,
+never projected into anything local.
 
 ### State areas (`state/<area>/...yaml`)
 
@@ -334,7 +335,8 @@ providers — the sync slice never imports kind modules. Current areas:
   every document written so far put curation's switch, and a document that
   carries no `upkeep` block is still read for it. A key the document does not
   carry leaves this machine's value alone — an older machine is not a decision
-  (spec [internal-engine](../internal-engine/spec.md) FR-017).
+  (spec [internal-engine](../internal-engine/spec.md) "Leave settings alone for
+  keys an incoming document omits").
 
   ```yaml
   model: <model id>
@@ -364,16 +366,16 @@ providers — the sync slice never imports kind modules. Current areas:
   single-machine vault.
 
   The area publishes a **decision, not a row** — the general rule every state
-  area follows (FR-058). Nothing is written while the
-  singleton holds the defaults — no model, no speech-to-text model, no chosen
-  call bound, no curation owner, all three passes on — and a machine that has
-  persisted no singleton at all writes
+  area follows (see "Let each state area define its document's deletion").
+  Nothing is written while the singleton holds the defaults — no model, no
+  speech-to-text model, no chosen call bound, no curation owner, all three
+  passes on — and a machine that has persisted no singleton at all writes
   nothing either. So the tree holds this document exactly while some machine
-  holds a non-default choice, a deletion of it means "back to the defaults",
-  and honouring that deletion leaves nothing to republish. Had a machine
-  published its defaults as a document, a fresh machine — which never persists
-  a default it already has — would delete it on every round, and the two would
-  ping-pong forever.
+  holds a non-default choice, a deletion of it means "back to the defaults", and
+  honouring that deletion leaves nothing to republish. Had a machine published
+  its defaults as a document, a fresh machine — which never persists a default
+  it already has — would delete it on every round, and the two would ping-pong
+  forever.
 
 Skill delivery bindings (`skill_agent_bindings`) stay machine-local by decision:
 delivery is a side-effectful file operation against directories that differ per

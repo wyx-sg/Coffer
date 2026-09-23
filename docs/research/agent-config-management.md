@@ -174,9 +174,8 @@ Primary (project repos/docs):
   Cursor / OpenCode / OpenClaw / Hermes (`enabled=False`), and exactly 2 are
   enabled (Claude Code, Codex). `repo:backend/coffer/domain/agent/descriptor.py`
 - **Coffer ingests config bi-directionally (the "ingest half").** The
-  agent-registry spec frames the workspace amendment as ingest→hub→deliver; US10 / FR-021 define "Adopt a
-  direct MCP server into Coffer" as "the ingest half of Coffer's hub-and-spoke
-  model." `adopt()` registers an `mcp_server` resource, verifies read-back via
+  agent-registry spec frames the workspace amendment as ingest→hub→deliver; "Adopt a direct MCP entry into Coffer"
+  describes adoption as "the ingest half of Coffer's hub-and-spoke model." `adopt()` registers an `mcp_server` resource, verifies read-back via
   `self._rs.get(...)`, then removes the direct entry — and drift-awareness is
   backed by the derived-never-stored Agent MCP Entry view (`cache_present=false`
   example). A parallel skill `adopt_unmanaged` path exists too.

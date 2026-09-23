@@ -16,7 +16,8 @@
 // The one thing the tree adds to the raw listing is the distinction it would be
 // dangerous to leave implicit: `.raw/` is reachable, but it is marked as
 // derived INPUT and it does not open itself, because its files are the agents'
-// words rather than Coffer's answer (spec memory FR-037).
+// words rather than Coffer's answer (spec memory "Present partitions as a table
+// and a file tree").
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";

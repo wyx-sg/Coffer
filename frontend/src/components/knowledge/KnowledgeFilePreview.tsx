@@ -1,9 +1,11 @@
 // frontend/src/components/knowledge/KnowledgeFilePreview.tsx
 //
 // The pane beside a collection's tree: one document, rendered read-only, with
-// what may be done to it (spec knowledge FR-040). Every document is the same
+// what may be done to it (spec knowledge "Present a
+// collection as one tree in the web UI"). Every document is the same
 // here, whoever wrote it last: it can be handed to the user's own editor,
-// revealed in their file manager, and deleted (FR-020). Editing happens in
+// revealed in their file manager, and deleted (see "Let only a
+// person delete a document"). Editing happens in
 // that editor, never in this pane — the file on disk is the document, and an
 // edit there is live on the next read.
 //

@@ -1,12 +1,14 @@
-"""Stage two: Coffer's own words for one note (FR-020).
+"""Stage two: Coffer's own words for one note (see "Write notes in Coffer's own
+words").
 
 One request per note the routing stage actually touched, carrying **that one
 note's** current text and the entries routed to it — which is the whole reason
 routing was a separate stage.
 
 ``description`` is the product. It is not a summary of the note, it is the
-index entry, and the index is the whole of what a session is given
-(FR-017, FR-029) — so a half-written note is worse than no note, and every
+index entry, and the index is the whole of what a session is given (see "Store
+each note as one Markdown file with frontmatter", "Write each index line to
+stand on its own") — so a half-written note is worse than no note, and every
 unusable answer returns ``None`` rather than something partial.
 """
 

@@ -28,7 +28,8 @@ export interface TestResult {
 const post = <T>(path: string, body: unknown) => call<T>(path, { method: "POST", body });
 
 /** What an endpoint reports it serves. Each id carries the modality Coffer
- *  INFERRED from its name (spec provider-switching FR-032) — a pre-fill for the
+ *  INFERRED from its name (spec provider-switching "Offer only text models to
+ *  chat pickers") — a pre-fill for the
  *  connection's model table, never a stored fact: once an entry is curated, the
  *  modality the user left on it is the truth. */
 export interface EndpointModelsOut {

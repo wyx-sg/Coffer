@@ -75,7 +75,7 @@ export function useKnowledgeFile(path: string | null) {
  *
  * Every status the pass reports is a 200, so the toast says which one it was
  * rather than treating `no_model` or `up_to_date` as a success that did
- * something (FR-038).
+ * something.
  *
  * The pass is long and the daemon refuses a second one over the same
  * collection, so this keeps the shared run list honest at both ends — same
@@ -107,7 +107,7 @@ export function useCurateCollection(collectionUid: string) {
 
 /**
  * Delete ONE document from a collection — any document, whoever wrote it
- * (FR-020).
+ * (see "Let only a person delete a document").
  *
  * The deleted file's own cache entry is REMOVED rather than invalidated: a
  * viewer still mounted on it would otherwise refetch a path that is now a 404

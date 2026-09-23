@@ -1,4 +1,5 @@
-// frontend/src/pages/AgentMemoryStorePage.tsx — spec agent-registry/codex FR-012.
+// frontend/src/pages/AgentMemoryStorePage.tsx — spec agent-registry
+// "Read one native memory store's files read-only".
 // One of the agent's OWN native memory stores, reached by clicking its row on
 // the Memory tab: a file tree of the store directory and a read-only preview of
 // the selected file, with open-in-editor / reveal on the file.

@@ -219,8 +219,9 @@ def test_agent_add_success(agent_cli_daemon):
 
 
 def test_agent_add_without_name_uses_per_type_default(agent_cli_daemon):
-    """FR-006: --name is optional; omitting it registers under the type's
-    default name (codex -> codex, claude_code -> claude-code)."""
+    """Per "Manage the agent lifecycle without an enable state", --name is
+    optional; omitting it registers under the type's default name (codex ->
+    codex, claude_code -> claude-code)."""
     config_dir = agent_cli_daemon / "cfg"
     config_dir.mkdir()
     result = _runner.invoke(cli_app, ["agent", "add", "codex", "--config-dir", str(config_dir)])

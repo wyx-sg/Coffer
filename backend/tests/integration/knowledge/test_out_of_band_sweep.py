@@ -1,12 +1,14 @@
 """A document edited by hand is curated with no import step.
 
 This is the promise that makes the layer a directory rather than a database
-(spec knowledge FR-015): a person edits a Markdown file under
-``~/.coffer/knowledge/<collection>/`` in their own editor — or drops a new one
-in with Finder — and Coffer carries the edit into the rest of the collection.
-Nothing registers it, nothing indexes it and no row is written, so the only
-thing that can notice it is the sweep comparing each document's modification
-time with its own ``coffer_curated_at`` frontmatter (FR-022, FR-028).
+(spec knowledge "Keep direct file edits a complete way to change knowledge"): a
+person edits a Markdown file under ``~/.coffer/knowledge/<collection>/`` in
+their own editor — or drops a new one in with Finder — and Coffer carries the
+edit into the rest of the collection. Nothing registers it, nothing indexes it
+and no row is written, so the only thing that can notice it is the sweep
+comparing each document's modification time with its own ``coffer_curated_at``
+frontmatter (see "Run curation on a sweep and on demand" and "Settle an item
+only after its pass completes").
 
 The sweep owes material in the hidden inbox first: until it is merged, it is
 knowledge no agent can read, whereas an edited document is readable as it
@@ -169,7 +171,8 @@ async def test_a_document_dropped_in_by_hand_is_picked_up_by_the_next_sweep(corp
     assert written.curated_at != ""
 
     # The watermark is written into the person's own file, which is what makes
-    # the next sweep a no-op without any state Coffer has to keep (FR-028).
+    # the next sweep a no-op without any state Coffer has to keep ("Settle an item
+    # only after its pass completes").
     assert fs.read_file(_DROPPED_RELPATH).curated_at != ""
     assert fs.edited_documents("shopee") == ()
 
@@ -178,7 +181,7 @@ async def test_a_document_dropped_in_by_hand_is_picked_up_by_the_next_sweep(corp
 async def test_the_sweep_does_not_rewrite_the_edited_document(corpus) -> None:  # type: ignore[no-untyped-def]
     """It is the person's file. Settling the pass may stamp it and nothing
     else — the body, and any frontmatter they wrote themselves, come through
-    untouched (FR-028)."""
+    untouched ("Settle an item only after its pass completes")."""
     _drop(
         "dropped-by-hand.md",
         "---\ntitle: My own title\ndescription: what I wrote\nactor: user\n"

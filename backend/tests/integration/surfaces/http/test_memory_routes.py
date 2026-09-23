@@ -1,20 +1,22 @@
-"""Integration tests for ``/api/v1/memory/*`` (spec memory FR-036..FR-038).
+"""Integration tests for ``/api/v1/memory/*`` (spec memory).
 
-Boots the full FastAPI app (via ``create_app``) so every route is wired
-exactly as production wires it — real SQLite, a real Claude Code fixture tree
-under a temp HOME, and **a real git repository**, because a partition is keyed
-on a repository now and a plain directory deliberately makes none (FR-014,
-FR-015). No internal connection is configured, so the distil pass takes its
-mechanical path (FR-024) — which is what makes "sync, distil, then read" a
-deterministic three lines here rather than a model call.
+Boots the full FastAPI app (via ``create_app``) so every route is wired exactly as
+production wires it — real SQLite, a real Claude Code fixture tree under a temp
+HOME, and **a real git repository**, because a partition is keyed on a repository
+now and a plain directory deliberately makes none ("Identify a partition by its
+repository", "Create no partition for a non-repository directory"). No internal
+connection is configured, so the distil pass takes its mechanical path ("Distil
+mechanically with no internal connection") — which is what makes "sync, distil, then
+read" a deterministic three lines here rather than a model call.
 
 What this tier is for, as opposed to the unit and ``tests/integration/memory``
 tiers that already cover the layer's behaviour: the **wire**. Field names and
-error codes, the status codes a client branches on, and the two payload
-promises FR-028/FR-030 make that a client can only check by reading the
+error codes, the status codes a client branches on, and the two payload promises
+"Deliver the index and the notes path at session start" and "Bound delivery and
+prefer the current repository" make that a client can only check by reading the
 response — that ``POST /context`` carries a line for *every* note plus the
-absolute ``notes/`` path, and that under a binding ceiling it is ``global``
-that loses lines while the repository the session is open in keeps its own.
+absolute ``notes/`` path, and that under a binding ceiling it is ``global`` that
+loses lines while the repository the session is open in keeps its own.
 
 Every route on this family is addressed by **uid**, so the helpers below take
 the label a fixture created and look the uid up once — the same one round trip
@@ -50,11 +52,11 @@ _HEADERS = {"X-Coffer-Token": _TOKEN, "X-Coffer-Actor": "user"}
 
 # ----- fixture native-memory content --------------------------------------- #
 #
-# One project entry and one personal entry, which is the split the layer files
-# on: an entry about the repository lands in that repository's partition, and
-# one about the developer lands in ``global`` whichever repository it was
-# learned in (FR-011). Every test below that needs two partitions gets them
-# from this pair rather than from a second fixture repository.
+# One project entry and one personal entry, which is the split the layer files on:
+# an entry about the repository lands in that repository's partition, and one about
+# the developer lands in ``global`` whichever repository it was learned in ("File
+# personal entries into global"). Every test below that needs two partitions gets
+# them from this pair rather than from a second fixture repository.
 
 
 def _cc_memory_file(name: str, description: str, type_: str, body: str) -> str:
@@ -118,7 +120,8 @@ def _uid(c: TestClient, kind: str, name: str) -> str:
 
 
 def _repository(tmp_path: pathlib.Path, name: str = "coffer") -> pathlib.Path:
-    """A real ``git init`` — the only thing that earns a partition (FR-014)."""
+    """A real ``git init`` — the only thing that earns a partition ("Identify a
+    partition by its repository")."""
     return init_repository(tmp_path / name)
 
 
@@ -168,7 +171,7 @@ def _distilled(c: TestClient, tmp_path: pathlib.Path, files: dict[str, str] | No
 
     Returns the repository partition's name. Most tests below want a partition
     with real notes in it, and notes only exist after a distil pass: aggregation
-    writes ``.raw/`` and nothing else (FR-008).
+    writes ``.raw/`` and nothing else ("Keep raw entries verbatim and hidden").
     """
     _register_agent(c, "cc")
     repository = _repository(tmp_path)
@@ -217,7 +220,7 @@ def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> 
     assert sorted(result["partitions"]) == ["coffer", "global"]
 
     # Aggregation writes `.raw/` only — a partition has no note until a distil
-    # pass has run (FR-008).
+    # pass has run ("Keep raw entries verbatim and hidden").
     listed = _partitions(client)
     assert listed["coffer"]["note_count"] == 0
     assert listed["coffer"]["repository_path"] == str(repository.resolve())
@@ -252,10 +255,11 @@ def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> 
     assert summary["partition"] == "coffer"
     assert summary["type"] == "project"
     assert summary["description"] == "Dependencies are locked with uv"
-    assert summary["search_terms"] == []  # Claude Code states none (FR-004)
+    # Claude Code states none ("Read Claude Code and Codex memory with their search terms").
+    assert summary["search_terms"] == []
     assert summary["created_at"] and summary["updated_at"]
     # Retirement is a file leaving `notes/` plus a line in `RETIRED.md`, never a
-    # flag a client has to filter on (FR-025).
+    # flag a client has to filter on ("Record retirements so they stick").
     assert "status" not in summary
     assert "superseded_by" not in summary
 
@@ -266,7 +270,7 @@ def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> 
     assert detail["origins"][0]["anchor"] == "python-lockfile"
 
     # The personal entry went to `global` whichever repository it was learned
-    # in — and that is what the session is given first (FR-011).
+    # in — and that is what the session is given first ("File personal entries into global").
     global_uid = _partition_uid(client, "global")
     global_notes = client.get(f"/api/v1/memory/partitions/{global_uid}/notes").json()["notes"]
     assert [n["title"] for n in global_notes] == ["worktree-development"]
@@ -294,10 +298,10 @@ def test_unknown_note_slug_is_not_found(client, tmp_path) -> None:
     spec="memory", scenario="a directory that is not a repository gets no partition"
 )
 def test_a_partition_whose_repository_is_gone_is_listed_as_unresolvable(client, tmp_path) -> None:
-    """FR-016: an orphan says so on this surface rather than sitting there
-    undeliverable and unmentioned. It stays listed — and therefore deletable
-    through the Resource route — because only the developer can decide that
-    repository is not coming back."""
+    """Per "Report unresolvable partitions": an orphan says so on this surface
+    rather than sitting there undeliverable and unmentioned. It stays listed — and
+    therefore deletable through the Resource route — because only the developer can
+    decide that repository is not coming back."""
     partition = _distilled(client, tmp_path)
     assert _partitions(client)[partition]["unresolvable"] is False
 
@@ -313,8 +317,9 @@ def test_a_partition_whose_repository_is_gone_is_listed_as_unresolvable(client, 
 
 
 def test_retired_answers_from_the_partitions_retirement_record(client, tmp_path) -> None:
-    """``GET /retired`` reads ``RETIRED.md`` (FR-025), newest first — the file
-    is appended to, so the wire order is the file's reversed."""
+    """``GET /retired`` reads ``RETIRED.md`` ("Record retirements so they stick"),
+    newest first — the file is appended to, so the wire order is the file's
+    reversed."""
     partition = _distilled(client, tmp_path)
     uid = _partition_uid(client, partition)
     assert client.get(f"/api/v1/memory/partitions/{uid}/retired").json()["retired"] == []
@@ -365,8 +370,9 @@ def test_retired_of_an_unknown_partition_is_not_found(client) -> None:
 
 
 def test_distil_with_no_internal_connection_still_writes_an_index(client, tmp_path) -> None:
-    """FR-024: thinner, not absent. Each raw entry becomes a note of its own and
-    ``MEMORY.md`` is still written, so this installation still has a delivery."""
+    """Per "Distil mechanically with no internal connection": thinner, not absent.
+    Each raw entry becomes a note of its own and ``MEMORY.md`` is still written, so
+    this installation still has a delivery."""
     _register_agent(client, "cc")
     repository = _repository(tmp_path)
     _seed(tmp_path, repository, _default_files())
@@ -400,9 +406,9 @@ def test_distil_unknown_partition_is_not_found(client) -> None:
 )
 def test_a_second_distil_over_the_same_partition_is_refused(client, tmp_path) -> None:
     """The bug this is here for: the button's spinner used to live in a browser
-    component, so navigating away mid-pass and back showed an idle button and
-    the next click started a SECOND pass over the same files (FR-041). The
-    daemon now holds that fact, and refuses.
+    component, so navigating away mid-pass and back showed an idle button and the
+    next click started a SECOND pass over the same files ("Run one distil pass per
+    partition at a time"). The daemon now holds that fact, and refuses.
 
     The in-flight pass is simulated by claiming the partition's key directly —
     the route is synchronous, so a real second request could only be made from
@@ -444,7 +450,8 @@ def test_context_carries_every_note_and_the_absolute_notes_path(client, tmp_path
     """The measured failure this route exists to fix: the old surface shipped
     8 of 189 lines and pointed at ``coffer__recall``, which was called five
     times in its life. The payload now carries a line per note and the absolute
-    directory the bodies are in, and names no tool at all (FR-028)."""
+    directory the bodies are in, and names no tool at all ("Deliver the index and
+    the notes path at session start")."""
     files = {
         f"project-{i}.md": _cc_memory_file(f"project-{i}", f"Project fact {i}", "project", "body")
         for i in range(4)
@@ -473,8 +480,9 @@ def test_context_carries_every_note_and_the_absolute_notes_path(client, tmp_path
         assert data["text"].count(f"`{slug}.md`") == 1
     assert len(_lines(data["text"])) == 7
 
-    # The path is the current repository partition's, absolute, and the payload
-    # says a body is read as a file rather than naming a tool for it (FR-028).
+    # The path is the current repository partition's, absolute, and the payload says
+    # a body is read as a file rather than naming a tool for it ("Deliver the index
+    # and the notes path at session start").
     notes_dir = str(memory_paths.notes_dir(partition))
     assert notes_dir.startswith("/")
     assert notes_dir in data["text"]
@@ -491,10 +499,11 @@ def test_context_carries_every_note_and_the_absolute_notes_path(client, tmp_path
 def test_context_under_a_binding_ceiling_keeps_the_repository_and_drops_global(
     client, tmp_path
 ) -> None:
-    """FR-030, and the reverse of what this layer did before. The previous
-    design spent its budget on ``global`` first and delivered, on a live vault
-    of 189 entries, 8 lines of which none were about the project the session
-    was open in — so what is pinned here is *which* partition loses lines."""
+    """Per "Bound delivery and prefer the current repository", and the reverse
+    of what this layer did before. The previous design spent its budget on
+    ``global`` first and delivered, on a live vault of 189 entries, 8 lines of
+    which none were about the project the session was open in — so what is
+    pinned here is *which* partition loses lines."""
     files = {
         f"project-{i}.md": _cc_memory_file(f"project-{i}", f"Project fact {i}", "project", "b")
         for i in range(3)
@@ -544,7 +553,8 @@ def test_context_under_a_binding_ceiling_keeps_the_repository_and_drops_global(
 def test_context_serves_a_partition_to_an_agent_that_contributed_nothing_to_it(
     client, tmp_path
 ) -> None:
-    """FR-013 at the wire: the partition reaches every agent, not its sources.
+    """Per "Serve every enabled partition to every agent", at the wire: the
+    partition reaches every agent, not its sources.
 
     The notes here were aggregated from ``cc`` alone, and ``outsider`` — a
     Codex agent that contributed not one entry — opens a session in the same
@@ -609,7 +619,8 @@ def test_delivery_install_status_and_record_fired_round_trip(client) -> None:
     # carrying one of the two would send every client back for the other.
     assert status["delivery"][0]["agent_uid"] == cc_uid
     assert status["delivery"][0]["agent_name"] == "cc"
-    # A fire is an event, never a field on the status (FR-033, FR-039).
+    # A fire is an event, never a field on the status ("Audit every delivery fire",
+    # "Show delivery state on the agent's own page").
     assert "last_fired_at" not in status["delivery"][0]
 
     installed = client.post(f"/api/v1/memory/delivery/{cc_uid}/install").json()
@@ -703,8 +714,9 @@ def test_partition_files_walk_the_directory_and_read_one_file(client, tmp_path) 
     assert names["notes"]["type"] == "dir"
     assert names["notes"]["derived"] is False
     assert "notes/python-lockfile.md" in {c["path"] for c in names["notes"]["children"]}
-    # `.raw/` is reachable through the same tree, and marked as the verbatim
-    # input rather than Coffer's own writing (FR-008, FR-037).
+    # `.raw/` is reachable through the same tree, and marked as the verbatim input
+    # rather than Coffer's own writing ("Keep raw entries verbatim and hidden",
+    # "Present partitions as a table and a file tree").
     assert names[".raw"]["type"] == "dir"
     assert names[".raw"]["derived"] is True
     raw_children = names[".raw"]["children"]
@@ -731,8 +743,9 @@ def test_partition_files_walk_the_directory_and_read_one_file(client, tmp_path) 
 
 
 def test_partition_files_are_read_only(client, tmp_path) -> None:
-    """No write reaches this family. The tree is derived (FR-019), so an edit
-    would survive only until the next aggregation pass."""
+    """No write reaches this family. The tree is derived ("Keep the memory tree
+    derived and local"), so an edit would survive only until the next aggregation
+    pass."""
     partition = _distilled(client, tmp_path)
 
     r = client.put(

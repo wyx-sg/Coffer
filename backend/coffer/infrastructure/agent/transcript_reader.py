@@ -185,7 +185,8 @@ class FileTranscriptReader:
         What the boot-time warm pass calls. Deliberately not routed through
         ``AgentTranscriptService``: this is the same disk read the listing does,
         with none of the management semantics around it — no agent lookup, and
-        so no audit event, which FR-048 forbids for a workspace listing.
+        so no audit event, which "Audit every agent lifecycle event" forbids for
+        a workspace listing.
         """
         return len(self._all_summaries(agent_type_value, config_dir))
 

@@ -16,8 +16,10 @@ export interface paths {
          * @description The single global row: the model Coffer's internal engine runs on, and
          *     every unattended pass's switch and timer. The engine takes its endpoint
          *     and key from the `internal_default` connection but its MODEL from here
-         *     (internal-engine FR-004); `model` is `null` until one is chosen, and
-         *     while it is, every internal pass is a clean no-op (FR-005).
+         *     (internal-engine "Resolve the engine's connection and model together");
+         *     `model` is `null` until one is chosen, and while it is, every internal
+         *     pass is a clean no-op ("Make every internal pass a clean no-op when
+         *     nothing is configured").
          */
         get: operations["getInternalEngineConfig"];
         /**
@@ -25,7 +27,8 @@ export interface paths {
          * @description Sets the engine model (`null` or empty clears it). Overlaid onto the
          *     resolved `internal_default` connection before the engine builds its chat
          *     model. Emits an `internal_engine_model_set` audit entry naming the actor
-         *     (internal-engine FR-002, FR-003).
+         *     (internal-engine "Report and set the engine model over HTTP", "Audit
+         *     every write to the engine settings").
          */
         put: operations["updateInternalEngineConfig"];
         post?: never;
@@ -46,16 +49,22 @@ export interface paths {
         /**
          * Change one unattended pass's switch or timer
          * @description Coffer runs three passes on its own behalf — `aggregate` (spec memory
-         *     FR-007), `distil` (spec memory FR-030) and `curate` (spec knowledge FR-021) — each with a switch and an interval.
+         *     "Aggregate on an interval and on demand"), `distil` (spec memory
+         *     "Distil incrementally in two stages") and `curate` (spec knowledge
+         *     "Curate through a fenced four-tool pass") — each with a switch and an
+         *     interval.
          *
          *     ONE pass per request, and each half left alone when it is not sent: a
          *     settings page toggles one row at a time, and a body carrying all three
          *     would make every toggle a chance to write back a stale copy of the other
-         *     two (internal-engine FR-010). `use_default_interval` returns a pass to
-         *     its own built-in interval, which a null `interval_s` cannot express
-         *     (FR-011). An interval below the floor and an unknown pass name are both
-         *     refused (FR-012). A running worker picks the change up without a restart
-         *     (FR-013). Emits an `internal_engine_model_set` audit entry.
+         *     two (internal-engine "Change one unattended pass per write").
+         *     `use_default_interval` returns a pass to its own built-in interval,
+         *     which a null `interval_s` cannot express ("Report an unchosen interval
+         *     beside its default"). An interval below the floor and an unknown pass
+         *     name are both refused ("Refuse an interval below the floor or an
+         *     unknown pass"). A running worker picks the change up without a restart
+         *     ("Apply a changed switch or interval without a restart"). Emits an
+         *     `internal_engine_model_set` audit entry.
          */
         put: operations["updateUpkeep"];
         post?: never;
@@ -80,7 +89,7 @@ export interface paths {
          *     machines fold the same material into two DIFFERENT documents, git merges
          *     that cleanly as two additions at different paths, and the vault ends up
          *     holding the same knowledge twice with nothing in conflict (spec
-         *     vault-sync `## Unattended rewriters`).
+         *     vault-sync "Run an unattended rewriter on one owner machine").
          *
          *     This is how that machine is chosen — the counterpart of binding a
          *     channel, and it exists for the same reason: the owner travels with the
@@ -112,12 +121,12 @@ export interface paths {
         /**
          * Bound one call to Coffer's own model
          * @description How long ONE call to the internal engine's model may take before the
-         *     caller gives up (internal-engine FR-022). The right number is a
-         *     property of the operator's endpoint, not of Coffer: against a gateway
-         *     whose typical answer takes 25-30 seconds the built-in 60 leaves barely
-         *     a factor of two, and a pass that times out defers its work and reports
-         *     success — so the layer converges at a fraction of its rate while
-         *     nothing looks broken.
+         *     caller gives up (internal-engine "Carry the bound on one model call").
+         *     The right number is a property of the operator's endpoint, not of
+         *     Coffer: against a gateway whose typical answer takes 25-30 seconds the
+         *     built-in 60 leaves barely a factor of two, and a pass that times out
+         *     defers its work and reports success — so the layer converges at a
+         *     fraction of its rate while nothing looks broken.
          *
          *     `null` returns the bound to `default_model_timeout_s`, which is the
          *     only way back and keeps the default in one place. A value outside the
@@ -126,9 +135,11 @@ export interface paths {
          *     a row written by an older build cannot take a pass down.
          *
          *     A value outside the range is refused by this route and by the CLI with
-         *     the same error (FR-024). One setting per request, for the reason
-         *     `UpkeepUpdate` records (FR-027). Emits an `internal_engine_model_set`
-         *     audit entry naming the actor.
+         *     the same error ("Refuse an out-of-range bound at a surface and clamp it
+         *     in a pass"). One setting per request, for the reason `UpkeepUpdate`
+         *     records ("Change the bound and the speech-to-text model one value at a
+         *     time"). Emits an `internal_engine_model_set` audit entry naming the
+         *     actor.
          */
         put: operations["updateModelTimeout"];
         post?: never;
@@ -148,12 +159,12 @@ export interface paths {
         get?: never;
         /**
          * Set the model Coffer transcribes speech with
-         * @description The speech-to-text model (internal-engine FR-025). Its ENDPOINT and key
-         *     come from the connection flagged `transcribe_default`, which spec
-         *     provider-switching serves under `/api/v1/providers` — NOT from the
-         *     `internal_default` one, and there is deliberately no fallback between
-         *     them: they are different models, and a chat gateway commonly serves no
-         *     `/audio/transcriptions` at all.
+         * @description The speech-to-text model (internal-engine "Transcribe speech on its own
+         *     connection and model"). Its ENDPOINT and key come from the connection
+         *     flagged `transcribe_default`, which spec provider-switching serves under
+         *     `/api/v1/providers` — NOT from the `internal_default` one, and there is
+         *     deliberately no fallback between them: they are different models, and a
+         *     chat gateway commonly serves no `/audio/transcriptions` at all.
          *
          *     `null` or empty stops transcription, which is a real answer rather than
          *     an unset one — with no model, or no connection marked, a turn carrying

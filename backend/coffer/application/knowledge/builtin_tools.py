@@ -1,22 +1,22 @@
 """The knowledge layer's one built-in MCP tool.
 
-``coffer__write`` — and nothing else (spec knowledge FR-033). ``list``,
-``grep``, ``read``, ``search`` and ``delete`` are gone.
+``coffer__write`` — and nothing else (spec knowledge "Expose exactly one knowledge
+tool"). ``list``, ``grep``, ``read``, ``search`` and ``delete`` are gone.
 
-**Why reading has no tool.** Across 448 Claude Code sessions after the corpus
-was built, the delivered skill was never loaded once and no knowledge tool was
-ever called. The question was never which retrieval mechanism to expose: a
-tool an agent does not remember to call is not retrieval. Every agent Coffer
-supports already has `Read` and `Grep`, which need no remembering, so the
-layer's job narrows to putting the right absolute paths in front of the model —
-which the delivered skill does, catalogue and all (FR-037).
+**Why reading has no tool.** Across 448 Claude Code sessions after the corpus was built,
+the delivered skill was never loaded once and no knowledge tool was ever called. The
+question was never which retrieval mechanism to expose: a tool an agent does not
+remember to call is not retrieval. Every agent Coffer supports already has `Read` and
+`Grep`, which need no remembering, so the layer's job narrows to putting the right
+absolute paths in front of the model — which the delivered skill does, catalogue and all
+(see "Merge the manual and the catalogue in the skill body").
 
-**Why writing keeps one.** A write is the one operation where the agent
-genuinely needs Coffer rather than a filesystem: which collections exist, how
-new material is merged into what the collection already says, and the audit
-entry naming who wrote it are all this layer's to decide. An agent that wants
-to *edit* a document it has read does so with its own file tools, as a person
-does in their editor; the next sweep carries that edit through (FR-022). It is also the only
+**Why writing keeps one.** A write is the one operation where the agent genuinely needs
+Coffer rather than a filesystem: which collections exist, how new material is merged
+into what the collection already says, and the audit entry naming who wrote it are all
+this layer's to decide. An agent that wants to *edit* a document it has read does so
+with its own file tools, as a person does in their editor; the next sweep carries that
+edit through (see "Run curation on a sweep and on demand"). It is also the only
 remaining place an invocation is recorded.
 
 The tool's description is one of exactly two places this layer is always in a
@@ -52,12 +52,12 @@ def _required(args: dict[str, Any], name: str) -> str:
 def _agent(args: dict[str, Any]) -> str | None:
     """The session's agent identity, or ``None`` when it reported none.
 
-    Set by the gateway, never by the caller: it is absent from the tool's input
-    schema and overwritten on every call (spec mcp-gateway FR-013). It narrows
-    nothing — every enabled collection is writable by every agent — and is read
-    for exactly one reason: the audit entry naming who wrote the file. ``None``
-    becomes :data:`_ANONYMOUS_ACTOR` there, because an unattributed write is
-    still worth recording.
+    Set by the gateway, never by the caller: it is absent from the tool's input schema
+    and overwritten on every call (spec mcp-gateway "Take the agent identity from the
+    handshake"). It narrows nothing — every enabled collection is writable by every
+    agent — and is read for exactly one reason: the audit entry naming who wrote the
+    file. ``None`` becomes :data:`_ANONYMOUS_ACTOR` there, because an unattributed write
+    is still worth recording.
     """
     return _text(args.get("agent")) or None
 
@@ -105,7 +105,8 @@ def register_knowledge_builtin_tools(
             submitted = await svc.submit(
                 title=_required(args, "title"),
                 description=_required(args, "description"),
-                # Optional, matching the REST surface and FR-014: a file whose
+                # Optional, matching the REST surface and "Submit material through
+                # coffer__write": a file whose
                 # whole content is its title and description is a legitimate
                 # thing to write, and rejecting it would be a rule only one of
                 # the two write surfaces had.

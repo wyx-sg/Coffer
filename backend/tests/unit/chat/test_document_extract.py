@@ -1,4 +1,5 @@
-"""Document text-extraction seam tests (spec channels FR-030).
+"""Document text-extraction seam tests (spec channels "Give documents to every
+agent as extracted text").
 
 A document attachment (PDF/office file) reaches the agent as extracted text
 folded into the turn, not as a vision input or an opaque binary path. The engine

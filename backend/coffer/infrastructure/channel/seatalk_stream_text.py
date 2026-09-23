@@ -33,12 +33,11 @@ def interim_snapshot(text: str) -> str:
     """One in-flight snapshot, ready for the wire: clipped to the stream budget
     and escaped so nothing in it is interpreted.
 
-    FR-055 shapes the order. Every snapshot — the opening one included — carries
-    the @mention at its head, because the platform decides @ notifications when
-    the message is CREATED. So the mention is split off before the tail clip
-    (which shortens from the front and would otherwise eat it) and re-joined
-    afterwards, and the body is escaped rather than rendered: a reply cut
-    mid-word can end inside an unclosed ``*`` or ``_``.
+    "Mention the asker in a group answer" shapes the order. Every snapshot — the opening one
+    included — carries the @mention at its head, because the platform decides @ notifications when
+    the message is CREATED. So the mention is split off before the tail clip (which shortens from
+    the front and would otherwise eat it) and re-joined afterwards, and the body is escaped rather
+    than rendered: a reply cut mid-word can end inside an unclosed ``*`` or ``_``.
 
     Escaping can only grow the body, and the budget below is in BYTES against a
     platform cap counted in CHARACTERS — ~500 characters of headroom on an

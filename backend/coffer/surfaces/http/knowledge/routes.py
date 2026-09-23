@@ -2,7 +2,8 @@
 
 Create a collection, list them, walk one level of a collection, read a
 document, submit material, upload a document, delete a document, trigger
-curation (spec knowledge FR-039). Deleting a collection goes through the
+curation (spec knowledge "Cover collection management on REST and the CLI").
+Deleting a collection goes through the
 kind-agnostic Resource route, since collection lifecycle is a Resource concern.
 
 Two properties shape every handler below.
@@ -10,12 +11,14 @@ Two properties shape every handler below.
 **Nothing here retrieves.** There is no ``search`` and no ``grep``: the layer
 keeps no index and exposes no retrieval anywhere, so the person reads through
 ``tree``/``file`` and an agent reads the files itself at the paths its
-delivered skill carries (FR-033, invariant 4). The one input beside a tree on
-the web page narrows the names already on screen, client-side (FR-040).
+delivered skill carries ("Expose exactly one knowledge tool", invariant 4). The
+one input beside a tree on the web page narrows the names already on screen,
+client-side ("Present a collection as one tree in the web UI").
 
 **New knowledge arrives as material, never as a file write.** ``POST
 /material`` and ``/upload`` both submit to the collection's inbox, and a pass
-merges what is new into the documents (FR-013). A person edits a document in
+merges what is new into the documents ("Submit every entrance's input as
+material"). A person edits a document in
 their own editor, reached from the page's open-in-editor action; there is no
 write-a-document route, because that edit is live on the very next read.
 
@@ -37,7 +40,8 @@ which is the extra vocabulary this change exists to remove. Each of them says so
 where it takes the argument.
 
 Domain errors propagate to the app-wide handler in ``surfaces/http/errors.py``
-— including ``UploadTooLarge`` (FR-019), which ``IngestService`` itself raises
+— including ``UploadTooLarge`` ("Bound uploads and leave nothing behind on
+failure"), which ``IngestService`` itself raises
 before doing any conversion or write. ``UnsupportedDocument`` is the one
 exception ``upload`` maps by hand: it is raised by the converter registry, a
 plain-Python layer below the domain, so it is not a ``CofferError``.
@@ -145,7 +149,8 @@ async def read_file(
     path: str = Query(min_length=1),
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
 ) -> FileOut:
-    # The response carries both absolute paths (FR-041), which is what the
+    # The response carries both absolute paths ("Return absolute paths on
+    # reads"), which is what the
     # page's open-in-editor and reveal actions hand back to the daemon.
     return _file_out(await svc.read(path))
 
@@ -179,7 +184,8 @@ async def delete_file(
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
     actor: str = Depends(_actor_kind),
 ) -> Response:
-    # Any document (FR-020): the collection is the person's as much as
+    # Any document ("Let only a person delete a document"): the collection is
+    # the person's as much as
     # curation's. No agent-facing tool deletes.
     await svc.delete_document(path, actor=actor)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -203,7 +209,8 @@ async def curate(
     # The registry claim is first, and it is about THIS collection: a pass
     # takes minutes and rewrites the collection's documents, so a second
     # request while one is in flight is refused (409 ``UPKEEP_ALREADY_RUNNING``)
-    # rather than queued behind it (FR-030) — the caller asked to start a pass,
+    # rather than queued behind it ("Run one pass per collection at a time") —
+    # the caller asked to start a pass,
     # and no pass is going to start. Claiming before the lock is what makes
     # that refusal immediate instead of a request that blocks until the first
     # pass finishes and then runs anyway. The claim is keyed on the **uid**,
@@ -214,15 +221,17 @@ async def curate(
     # The vault-write lock is second, and it is about the whole vault: a pass
     # and a converge round both rewrite vault content, and an export caught
     # half-way through a rewrite is a torn snapshot git reads as a deliberate
-    # change (FR-031, spec vault-sync "## Unattended rewriters").
+    # change ("Never overlap curation with a sync round", spec vault-sync
+    # "Never overlap a tidy pass and a round").
     with UPKEEP_RUNS.guard(KIND_KNOWLEDGE, uid):
         async with vault_write_lock():
             result = await get_curation_runner()(
                 svc,
                 uid,
                 # Omitted, the pass picks the oldest pending item itself
-                # (FR-022). One item per pass either way: a trigger is never a
-                # corpus-wide rewrite (FR-025).
+                # ("Run curation on a sweep and on demand"). One item per pass
+                # either way: a trigger is never a corpus-wide rewrite ("Bound a
+                # pass to eight writes").
                 item=Pending(document=body.document)
                 if body is not None and body.document
                 else None,
@@ -247,7 +256,7 @@ async def upload(
 ) -> Any:
     data = await file.read()
     try:
-        # A size ceiling and a refusal naming it (FR-019) both come from
+        # A size ceiling and a refusal naming it both come from
         # ``IngestService.ingest`` itself — it raises ``UploadTooLarge``
         # (a ``CofferError``) before any conversion or write, so the
         # app-wide handler maps it without help from this route.

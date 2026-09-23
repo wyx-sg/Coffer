@@ -3,7 +3,8 @@
 #
 # Output: dist/coffer-daemon (single-file executable)
 # Ships the built web UI (frontend/dist) as `webui/` — the daemon serves it
-# itself now that the desktop shell is gone (spec daemon FR-016).
+# itself now that the desktop shell is gone (spec daemon "Serve the built web UI
+# from the daemon's own origin").
 
 # -*- mode: python ; coding: utf-8 -*-
 
@@ -31,7 +32,8 @@ hidden = (
     # chat agent.
     #   markitdown — knowledge/converters/markitdown_converter.py (file → markdown
     #                at ingest) and chat/document_extract.py (channel attachments,
-    #                spec channels FR-030)
+    #                spec channels "Give documents to every agent as extracted
+    #                text")
     #   openai     — providers/*
     #   langgraph / langchain — llm/*, chat/*
     # The knowledge layer needs no index and no embedding client bundled: it is
@@ -104,7 +106,8 @@ a = Analysis(
     excludes=[
         # Heavy ML stack (torch/mlx/numba/scipy/…). No coffer source imports
         # any of it: nothing local decodes audio or runs a model — voice is
-        # transcribed through the user's own connection (spec channels FR-019).
+        # transcribed through the user's own connection (spec channels
+        # "Transcribe inbound voice only when the user opted in").
         # The exclude stays as a guard — a transitive pull would inflate every
         # binary from ~95 MB to ~260 MB, and torch is fragile under PyInstaller.
         "torch",

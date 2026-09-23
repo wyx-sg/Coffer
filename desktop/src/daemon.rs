@@ -28,7 +28,8 @@ pub struct RestartResult {
     /// Asking again is what used to start a SECOND daemon: the page called
     /// `get_daemon_info` the instant this returned, before the daemon just
     /// spawned had bound a port, and that command's cold-start branch spawned
-    /// a rival for it (FR-006/FR-007).
+    /// a rival for it (see "Find or start a daemon by a fixed resolution order"
+    /// and "Restart by stopping the running daemon first").
     pub base_url: String,
     pub token: String,
 }
@@ -133,7 +134,8 @@ pub fn restart_daemon(app: AppHandle) -> Result<RestartResult, String> {
 /// Show the main window, which the app opens hidden.
 ///
 /// The window waits for a daemon rather than opening in front of one that is
-/// not there yet (spec desktop-app FR-001). Everything the UI can show before
+/// not there yet (spec desktop-app "Host the UI locally in an application
+/// window"). Everything the UI can show before
 /// the handshake is a lie or an apology — a page whose every query answers
 /// "not ready", under a banner explaining why — and an application that opens
 /// like that reads as broken even when it is merely early. With the daemon
@@ -218,7 +220,8 @@ pub struct DaemonInfo {
 /// (up to [`DAEMON_READY_TIMEOUT_SECS`]) for it to publish `daemon.json` and
 /// answer.
 ///
-/// Every outcome is logged (FR-012). It used to be the one thing the shell
+/// Every outcome is logged (see "Write the shell's records into the daemon
+/// log"). It used to be the one thing the shell
 /// did silently, and it is the one a user most needs an account of: a
 /// handshake that failed here left the page with no API address at all, and
 /// nothing in `~/.coffer/logs/daemon.log` said so.

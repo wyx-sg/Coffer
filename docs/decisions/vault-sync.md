@@ -131,7 +131,7 @@ to absorb is pending, not deleted.
 The same guarantee is what lets shared state be deleted at all. Under one-way
 import a state area could only ever be upserted; under convergence a deleted
 state document is a decision some machine took back, and every area's provider
-honours it in its own terms (spec `## Applying a diff`): an override is cleared,
+honours it in its own terms (spec vault-sync "Let each state area define its document's deletion"): an override is cleared,
 a server's capabilities are re-enabled, the engine settings are reset to their
 defaults, and the plugin inventory — which has no local store beyond the
 document and no uninstall path — drops nothing. One rule follows for the
@@ -367,7 +367,7 @@ that shape needs: a binding naming a machine the registry does not hold is a
 elsewhere, and rebindable in one action. The curation owner had none of the
 three — no surface showed it, nothing reported it, and no route changed it, so
 the only repair was editing SQLite. It now carries all three (spec vault-sync
-FR-098), under the channel's own four-state vocabulary rather than a second one
+"Report and change the rewriter's owner"), under the channel's own four-state vocabulary rather than a second one
 invented for it, because a reader should not have to learn the same fact twice.
 
 One state is deliberately NOT shared. An unbound channel runs **nowhere**,
@@ -438,7 +438,7 @@ a bot answering itself.
   grounds that a channel is an inbound surface bound to one machine and so
   travels to be at best inert and at worst a second machine answering the same
   conversation. That objection is answered rather than avoided by a binding
-  (spec channels FR-026): the document travels, the adapter does not, and only
+  ([channels](../../openspec/specs/channels/spec.md) "Bind each channel to the one machine that runs it"): the document travels, the adapter does not, and only
   the machine the document names starts one. The reversal is written up in spec
   vault-sync's "Keep reach machine-local" amendment.
 - Coffer now writes the vault without a human in the loop. That is the real

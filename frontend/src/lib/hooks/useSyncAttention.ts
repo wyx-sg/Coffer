@@ -3,9 +3,9 @@
 // Whether the sidebar's Sync entry should be carrying a dot.
 //
 // This replaces a floating banner that sat over whatever page the user was on
-// (spec vault-sync FR-096). The banner was right about the problem — a held or
-// failed vault stops converging AND stops backing up, and the only surface
-// that says so is the page nobody opens — and wrong about the remedy. It
+// (spec vault-sync "Say a vault needs a human where the user already is"). The banner was right
+// about the problem — a held or failed vault stops converging AND stops backing up, and the only
+// surface that says so is the page nobody opens — and wrong about the remedy. It
 // covered the page, it said nothing the destination did not say better, and
 // it came back on every render of every page until the situation was answered,
 // which for a stretch of hourly failures is a banner that never leaves.

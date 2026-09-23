@@ -63,7 +63,8 @@ describe("SkillAddDialog", () => {
 
   test("offers a folder picker beside the path display", () => {
     // No skill-manager requirement states the picker any more; what it reuses
-    // is the daemon's own native folder dialog (spec daemon FR-020).
+    // is the daemon's own native folder dialog (spec daemon "Open the
+    // host's native folder picker").
     stub({});
     render(<SkillAddDialog open onOpenChange={() => {}} onCreated={() => {}} />, {
       wrapper: wrap(null),

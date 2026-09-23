@@ -534,7 +534,8 @@ async def test_knowledge_kind_declares_no_credentials(tmp_path):
             allow_lifecycle_kind=True,
         )
         stored = await svc.get(created.uid)
-        # A collection carries no config at all (spec knowledge FR-046).
+        # A collection carries no config at all (spec knowledge "Add no table and
+        # no directory outside the knowledge root").
         assert stored.config == {}
     finally:
         await engine.dispose()

@@ -78,8 +78,9 @@ _STATUS: dict[str, int] = {
     # gets its own code because 413 is the honest status for it.
     "INGEST_REJECTED": 400,
     # ripgrep's two failures. No surface calls it any more — the layer offers
-    # no retrieval (FR-050) — but curation still matches literally to pick its
-    # candidates (FR-032), so a missing binary or a bad pattern can still
+    # no retrieval ("Expose exactly one knowledge tool") — but curation still
+    # matches literally to pick its candidates ("Assemble a pass from a bounded
+    # context"), so a missing binary or a bad pattern can still
     # surface through a pass.
     "ENGINE_UNAVAILABLE": 503,
     "GREP_PATTERN_INVALID": 400,
@@ -134,12 +135,15 @@ _STATUS: dict[str, int] = {
     "KNOWLEDGE_COLLECTION_EXISTS": 409,
     "KNOWLEDGE_FILE_NOT_FOUND": 404,
     # Also the answer for a path that cannot name a document — the
-    # collection itself, its README, or anything hidden (spec knowledge FR-006).
+    # collection itself, its README, or anything hidden (spec knowledge "Guard
+    # every path through one module").
     "KNOWLEDGE_PATH_UNSAFE": 400,
-    # Ingestion (spec knowledge FR-016..FR-019): named the limit, refused
+    # Ingestion (spec knowledge "Bound uploads and leave nothing behind on
+    # failure"): named the limit, refused
     # before any conversion or write.
     "KNOWLEDGE_UPLOAD_TOO_LARGE": 413,
-    # Curation's two refusals (spec knowledge FR-027, FR-025). Both are the
+    # Curation's two refusals (spec knowledge "Refuse file-name references in
+    # documents", "Bound a pass to eight writes"). Both are the
     # request being wrong rather than Coffer failing, so both are 400-class
     # like KNOWLEDGE_PATH_UNSAFE above: a topic naming another knowledge file
     # is a link that rots, and a pass past its write bound is one source trying

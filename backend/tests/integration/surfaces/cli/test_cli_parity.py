@@ -41,7 +41,8 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "status",
         "rotate-token",
         "port",
-        # What starts the daemon and what ends it (spec daemon FR-028/FR-029).
+        # What starts the daemon and what ends it (spec daemon "Run as a login service",
+        # "Stand down after an idle window").
         # Both are reachable with no daemon running, which is the state
         # "it was not running" is most often diagnosed from.
         "idle",
@@ -100,8 +101,9 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "agent plugin": {"list", "enable", "disable", "uninstall"},
     "channel": {"register", "list", "status", "pair", "bind", "notify"},
     "skill": {"list", "show", "import", "adopt", "rm", "unmanaged", "rm-unmanaged", "verify"},
-    # Exactly FR-039's list and nothing beyond it. `grep` and `search` are
-    # gone with the retrieval surface (spec knowledge FR-033) — the corpus is
+    # Exactly the list in spec knowledge "Cover collection management on REST and the
+    # CLI" and nothing beyond it. `grep` and `search` are gone with the retrieval
+    # surface (spec knowledge "Expose exactly one knowledge tool") — the corpus is
     # plain Markdown under ~/.coffer/knowledge/, so a person's own grep beats
     # anything this group could wrap — and `organize` went with the tidy pass
     # `curate` replaces.
@@ -163,7 +165,8 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "sync key": {"export", "import", "fingerprint"},
     "sync machine": {"list", "rename", "remove"},
     "sync remote": {"show", "set", "clear"},
-    # Coffer's own operating settings (spec internal-engine FR-020/FR-021):
+    # Coffer's own operating settings (spec internal-engine "Show, set and clear the
+    # engine model from the CLI", "List and change each unattended pass from the CLI"):
     # the model its passes think with, and the switch and timer of each pass
     # it runs unattended. Listed here because `.agents/openspec.md` requires every
     # management operation to be reachable from a terminal, and one of these
@@ -177,11 +180,11 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # machine holds. Without `set` a retired owner stops curation on every
     # machine with no way back short of editing SQLite.
     "engine curate-owner": {"show", "set", "clear"},
-    # The other two settings on the same singleton (spec internal-engine
-    # FR-027). `timeout default` and `transcribe-model clear` are named
-    # verbs rather than a null argument because a terminal has no way to spell
-    # a JSON null, and the way back to the default is the half of each setting
-    # an operator most needs.
+    # The other two settings on the same singleton (spec internal-engine "Change the
+    # bound and the speech-to-text model one value at a time"). `timeout default`
+    # and `transcribe-model clear` are named verbs rather than a null argument
+    # because a terminal has no way to spell a JSON null, and the way back to the
+    # default is the half of each setting an operator most needs.
     "engine timeout": {"show", "set", "default"},
     "engine transcribe-model": {"show", "set", "clear"},
 }

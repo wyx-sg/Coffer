@@ -204,7 +204,8 @@ paths:
         Emits a `PROVIDER_INTERNAL_DEFAULT_SET` audit event with details
         `{from, to}` and returns the updated `ProviderOut`. It also notifies the
         engine, which applies its own rule about the model it was paired with
-        (spec internal-engine FR-007); the engine's own settings live under
+        (spec internal-engine "Drop the engine model when its connection
+        moves"); the engine's own settings live under
         `/api/v1/internal-engine-config` and are not this document's.
       responses:
         "200":
@@ -445,7 +446,7 @@ components:
         Which KIND of model an id names. A provider endpoint serves more than
         chat models — embedding, image, video and audio models live on the same
         endpoint — so a curated entry says which it is and a picker asks for the
-        kind it needs (spec provider-switching FR-029).
+        kind it needs (see "Store a modality with each curated model").
 
     ProviderModel:
       type: object
@@ -478,9 +479,9 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ProviderModel" }
           description: >-
-            The ids the endpoint reported, each with an INFERRED modality (spec
-            provider-switching FR-030) so the connection editor can pre-fill a
-            sensible value. The inference is a suggestion the user may correct —
+            The ids the endpoint reported, each with an INFERRED modality (see
+            "Offer only text models to chat pickers") so the connection editor
+            can pre-fill a sensible value. The inference is a suggestion the user may correct —
             what is stored on the connection is the truth, never re-derived.
         message: { type: string, default: "" }
 

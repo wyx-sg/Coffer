@@ -1,5 +1,6 @@
-"""Unit coverage for FsOpenService command building + validation
-(spec daemon FR-021, ADR: daemon-proxies-os-file-actions)."""
+"""Unit coverage for FsOpenService command building + validation (spec daemon
+"Open and reveal existing absolute paths", ADR:
+daemon-proxies-os-file-actions)."""
 
 from __future__ import annotations
 

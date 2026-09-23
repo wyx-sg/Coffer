@@ -37,7 +37,8 @@ def get_channel_service() -> ChannelService:
 class PairingCodeOut(BaseModel):
     code: str
     expires_at: datetime
-    # FR-051: a link that carries the code, so the owner pairs by opening it.
+    # "Pair by a one-tap start link": a link that carries the code, so the
+    # owner pairs by opening it.
     # "" when the platform has no such link or the bot's username is unknown —
     # the typed code always works.
     pair_url: str = ""
@@ -51,7 +52,9 @@ class ChannelPeerOut(BaseModel):
 
 
 class CallbackInfoOut(BaseModel):
-    """How a SeaTalk channel receives events (spec channels/seatalk FR-004).
+    """How a SeaTalk channel receives events.
+
+    Spec channels/seatalk "Keep status truthful per transport".
 
     Covers both delivery methods. On ``websocket`` the webhook-only fields report
     their absent/false values — there is no port, path, public URL, listener or
@@ -97,7 +100,7 @@ class ChannelStatusOut(BaseModel):
     callback: CallbackInfoOut | None
     diagnostics: list[ChannelDiagnosticOut] = []
     # The machine whose daemon runs this channel's adapter (spec channels
-    # ``## Where a channel runs``), and whether that machine is the one
+    # "Bind each channel to the one machine that runs it"), and whether that machine is the one
     # answering this request. Both travel, because ``running: false`` is two
     # different facts — a channel that failed to start here, and a channel that
     # was never this machine's to start — and a surface cannot tell them apart

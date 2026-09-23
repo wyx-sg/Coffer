@@ -1,6 +1,6 @@
 """Name the one machine allowed to run the unattended tidy pass.
 
-Spec vault-sync ``## Unattended rewriters``. The knowledge tidy pass merges
+Spec vault-sync "Run an unattended rewriter on one owner machine". The knowledge tidy pass merges
 duplicate notes, splits overgrown ones and deletes the file whose content now
 lives elsewhere. On one machine that is housekeeping; on several it is a
 failure git cannot see — each machine merges the same two notes into a

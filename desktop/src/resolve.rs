@@ -7,7 +7,8 @@
 //!      over, never re-spawned
 //!   2. inside the app bundle (`externalBin`, staged by `make desktop`)
 //!   3. `~/.coffer/bin/coffer-daemon` (where the daemon's own frozen-start
-//!      path, spec daemon FR-027, deploys it)
+//!      path, spec daemon "Deploy frozen sibling binaries and back up the
+//!      vault before migrating", deploys it)
 //!   4. `coffer-daemon` on `$PATH`
 //!   5. otherwise: a message telling the user to install the Coffer CLI
 //!
@@ -16,7 +17,7 @@
 //! binary would we spawn — while step 1 answers a different one: whether to
 //! spawn at all. Ask them the other way round and a bundled build opens a
 //! second daemon beside the one the user already started from the CLI. Under
-//! the fixed-port default (spec daemon FR-011) that second daemon cannot
+//! the fixed-port default (spec daemon "Bind a fixed, settable port") that second daemon cannot
 //! bind and refuses to start, so the symptom is an error on an app that should
 //! simply have attached to what was already there.
 //!
@@ -111,7 +112,8 @@ pub fn daemon_exe_name() -> &'static str {
 }
 
 /// Step 3's path, given the user's home dir. Pure so the layout is testable.
-/// Mirrors where the daemon's own frozen-start deploy (spec daemon FR-027) puts it.
+/// Mirrors where the daemon's own frozen-start deploy puts it (spec daemon
+/// "Deploy frozen sibling binaries and back up the vault before migrating").
 pub fn user_bin_daemon_path(home: &str) -> PathBuf {
     PathBuf::from(home)
         .join(".coffer")
@@ -129,7 +131,7 @@ pub fn daemon_source(app: &AppHandle) -> Result<DaemonSource, String> {
         || read_daemon_info().filter(|(port, _)| daemon_responds_ok(*port)),
         // (2) staged by `externalBin` into the .app.
         || resolve_sidecar(app, &["coffer-daemon"]).ok(),
-        // (3) ~/.coffer/bin, where spec daemon FR-027's frozen-start deploy puts it.
+        // (3) ~/.coffer/bin, where the daemon's own frozen-start deploy puts it.
         || {
             let home = env::var("HOME")
                 .ok()

@@ -122,17 +122,16 @@ def vault_kinds() -> dict[str, Kind]:
     daemon runs its adapter. Testing that it travels — and that its binding
     survives the trip untouched — needs a real row and a real document.
 
-    ``skill`` additionally carries the production ``converges_row`` predicate.
-    It is the one kind with rows on both sides of the question — every
-    imported skill travels, and Coffer's own generated one does not (spec
-    vault-sync FR-093) — and the predicate is imported from the domain rather
-    than restated, because a harness that re-answered it would prove the
-    exporter honours *this file's* idea of a builtin skill instead of the
-    product's.
+    ``skill`` additionally carries the production ``converges_row`` predicate. It is
+    the one kind with rows on both sides of the question — every imported skill
+    travels, and Coffer's own generated one does not (spec vault-sync "Withhold
+    derived output in both halves") — and the predicate is imported from the domain
+    rather than restated, because a harness that re-answered it would prove the
+    exporter honours *this file's* idea of a builtin skill instead of the product's.
 
-    ``memory`` is the opposite case and the only kind here that does NOT
-    converge (``converges=False``, spec memory FR-016): a partition row is
-    derived from the agents installed on THIS machine. Its
+    ``memory`` is the opposite case and the only kind here that does NOT converge
+    (``converges=False``, spec memory "Keep the memory tree derived and local"): a
+    partition row is derived from the agents installed on THIS machine. Its
     ``generic_create_allowed`` is left at the default here, unlike production,
     because what these tests exercise is travel, not creation.
     """
@@ -264,7 +263,7 @@ class ScriptedResolver:
 
 
 class StubStateProvider:
-    """A module-owned shared-state area (spec vault-sync "Shared state")."""
+    """A module-owned shared-state area (spec vault-sync "Converge shared state areas")."""
 
     area = "peers"
 
@@ -602,7 +601,7 @@ class VaultMachine:
     async def _serialize(self) -> ExportSummary:
         """Step 1's callable: the vault into the tree, plus this machine's own
         descriptor — the one document a machine writes about itself and about
-        no other (spec vault-sync "The registry is a derived view")."""
+        no other (spec vault-sync "Derive the registry from the descriptors")."""
         summary = await self.exporter.export(self.bundle, with_credentials=self.with_credentials)
         pointer = await self.state.pointer()
         commit = pointer if pointer and pointer != GitMirror.EMPTY_TREE else None

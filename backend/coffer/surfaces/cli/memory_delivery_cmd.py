@@ -1,6 +1,7 @@
 """``coffer memory delivery …`` — the install half of the memory layer's push.
 
-Three commands: what is installed, install it, remove it (spec memory FR-032).
+Three commands: what is installed, install it, remove it (spec memory "Install
+delivery hooks explicitly and removably").
 Split out of ``memory_cmd.py`` to respect the 400-line backend file cap, along
 the seam that was already there — every other command in that group reads or
 rewrites the memory tree, and these three write into an **agent's own settings
@@ -42,7 +43,7 @@ def delivery_status(
     agent: str = typer.Option("", "--agent", help="Restrict to one agent, by name"),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Show per-agent delivery installation state (FR-032).
+    """Show per-agent delivery installation state.
 
     Installed or not, and nothing else. Whether the hook has ever *fired* is an
     event, not a property of an agent, so it is read on the audit surface:
@@ -75,7 +76,7 @@ def delivery_install(
     ctx: typer.Context,
     agent: str = typer.Argument(..., help="Agent name"),
 ) -> None:
-    """Install Coffer's session-start hook for an agent (FR-032).
+    """Install Coffer's session-start hook for an agent.
 
     The name is resolved here; the uid is what the route takes and what ends up
     written into the agent's settings file, so relabelling the agent afterwards

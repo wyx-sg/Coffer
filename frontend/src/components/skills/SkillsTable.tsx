@@ -8,7 +8,8 @@
 // that same three-state reach control over the whole selection, plus Delete.
 // The per-row + bulk action UI lives in SkillsTableActions.tsx.
 //
-// The name cell also carries the copy_fallback "Copied" chip (FR-011): when a
+// The name cell also carries the copy_fallback "Copied" chip (see "Fall back to
+// copying where links are unavailable"): when a
 // delivery had to fall back to a copy, the UI must say so, and this list is the
 // only place the whole library is in view — the agent's Skills tab no longer
 // repeats it. Beside it sits the "Built-in" chip: Coffer's own generated skill

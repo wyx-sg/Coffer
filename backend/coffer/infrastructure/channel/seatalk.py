@@ -72,7 +72,7 @@ class SeaTalkAdapter:
         self._client = client or httpx.AsyncClient(timeout=httpx.Timeout(10.0, read=30.0))
         self._media_dir = media_dir or default_media_dir()
         self._callbacks: AdapterCallbacks | None = None
-        self._seen = SeenIds()  # FR-040: drop redelivered events
+        self._seen = SeenIds()  # "Process each inbound event once"
         self._transport = SeaTalkTransport(channel_name, app_id, app_secret, base_url, self._client)
         # One chat_kind-routed send seam for every outbound payload — text
         # chunks, cards, media (``send_outbound_media`` takes it as a callable).
@@ -82,7 +82,7 @@ class SeaTalkAdapter:
     def capabilities(self) -> ChannelCapabilities:
         return ChannelCapabilities(
             supports_edit=False,  # no API rewrites a delivered SeaTalk message
-            # FR-039: but a message CAN grow in place — init_stream/update_stream.
+            # But a message CAN grow in place — init_stream/update_stream.
             supports_live_text=True,
             live_text_persists=True,  # the streamed message IS the reply
             # Both chat kinds: single_chat_typing and group_chat_typing. The
@@ -96,8 +96,8 @@ class SeaTalkAdapter:
             supports_media=True,
             supports_groups=True,
             supports_history_fetch=True,
-            # FR-055: SeaTalk mentions from a bare id, so a group reply can open
-            # by @mentioning whoever asked without resolving a display name. Its
+            # "Mention the asker in a group answer": SeaTalk mentions from a bare id, so a group
+            # reply can open by @mentioning whoever asked without resolving a display name. Its
             # documented email form is the fallback for a sender with no id.
             mention_template=SEATALK_MENTION_TEMPLATE,
             mention_email_template=SEATALK_MENTION_EMAIL_TEMPLATE,
@@ -122,10 +122,10 @@ class SeaTalkAdapter:
         event = envelope.get("event")
         if not isinstance(event, dict):
             return
-        # FR-040: SeaTalk retries a slow callback and a network hiccup can
-        # double-deliver — drop an event whose id (or message id) we already
-        # processed so a redelivery never drives the same turn twice. The
-        # verification handshake never reaches here (the listener answers it).
+        # "Process each inbound event once": SeaTalk retries a slow callback and a network hiccup
+        # can double-deliver — drop an event whose id (or message id) we already processed so a
+        # redelivery never drives the same turn twice. The verification handshake never reaches
+        # here (the listener answers it).
         key = dedup_key(envelope, event)
         if key and not self._seen.add(key):
             return
@@ -191,7 +191,7 @@ class SeaTalkAdapter:
                         int(envelope.get("timestamp", 0) or 0), tz=UTC
                     ),
                     sender_id=str(sender.get("employee_code", "")),
-                    # FR-055: the id an outbound @mention points at, kept apart
+                    # The id an outbound @mention points at, kept apart
                     # from sender_id because they are different values here —
                     # and because the docs warn employee_code and email arrive
                     # EMPTY for a sender outside the bot's organisation, which
@@ -201,8 +201,8 @@ class SeaTalkAdapter:
                     sender_mention_email=str(sender.get("email", "")),
                     chat_kind="group",
                     addressed=True,
-                    # FR-037: >1 distinct @mentioned username ⇒ a non-bot user
-                    # was mentioned alongside the bot (empty for a forwarded record).
+                    # >1 distinct @mentioned username ⇒ a non-bot user was mentioned
+                    # alongside the bot (empty for a forwarded record).
                     mentions_others=mentions_others(
                         (message.get("text") or {}).get("mentioned_list")
                     ),
@@ -240,7 +240,7 @@ class SeaTalkAdapter:
             # button comes back here (ADR seatalk-websocket-inbound, "Cards").
             # A group tap carries a ``group_id`` and a DM tap does not, so the
             # core replies into the group/thread and owner-gates on the right
-            # peer (FR-036). A DM's sender IS the employee_code; a group tap
+            # peer. A DM's sender IS the employee_code; a group tap
             # names the tapper under ``sender``, like the @mention.
             group_id = str(event.get("group_id", ""))
             sender = event.get("sender") or {}
@@ -281,8 +281,8 @@ class SeaTalkAdapter:
         ephemeral: EphemeralTarget | None = None,
     ) -> SentMessage:
         # SeaTalk has no reply primitive — a message cannot point at another —
-        # so the reply target is accepted and ignored (FR-053); nor can it show
-        # a group message to one member only (FR-049).
+        # so the reply target is accepted and ignored, nor can it show a group
+        # message to one member only (both degrade as spec channels allows).
         del reply_to_message_id, ephemeral
         return await send_text_pieces(
             self._send,
@@ -299,7 +299,7 @@ class SeaTalkAdapter:
     async def open_live_text(
         self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
     ) -> SeaTalkLiveText:
-        """FR-039: SeaTalk cannot edit, but it can stream — one message that
+        """SeaTalk cannot edit, but it can stream — one message that
         re-renders from the full snapshot until the stream is finished."""
         return SeaTalkLiveText(
             self._post, chat_id, name=self._name, thread_id=thread_id, chat_kind=chat_kind
@@ -328,8 +328,8 @@ class SeaTalkAdapter:
         raise ChannelSendFailed(self._name, "seatalk cannot delete messages")
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
-        # FR-038: SeaTalk has no outbound reaction API — capabilities report
-        # supports_reactions=False, so the core never calls this (it uses the
+        # "Acknowledge receipt and completion by capability": SeaTalk has no outbound reaction API
+        # — capabilities report supports_reactions=False, so the core never calls this (it uses the
         # typing signal for the same receipt cue); the Protocol still needs it.
         raise ChannelSendFailed(self._name, "seatalk cannot set reactions")
 
@@ -359,7 +359,7 @@ class SeaTalkAdapter:
         """Upload a local file through the endpoints send_text uses (via
         ``send_outbound_media``): an image (by extension) as a SeaTalk ``image``
         message, else a ``file`` message (base64 content), routed through
-        ``_send`` into the same chat_kind + thread the turn came from (FR-032).
+        ``_send`` into the same chat_kind + thread the turn came from.
         ``as_photo`` is unused — SeaTalk picks preview-vs-attachment by tag."""
         del as_photo
         message_id = await send_outbound_media(

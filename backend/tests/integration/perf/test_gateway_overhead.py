@@ -1,4 +1,6 @@
-"""SC-003: gateway median overhead ≤ 50 ms per tool call.
+"""Gateway median overhead ≤ 50 ms per tool call.
+
+Spec mcp-gateway "Present Coffer as one MCP server" (the gateway-overhead budget).
 
 Marked ``benchmark`` so it is excluded from default ``make verify`` runs.
 Enable with ``pytest -m benchmark`` or set ``COFFER_RUN_BENCHMARKS=1``.
@@ -180,6 +182,6 @@ async def test_gateway_overhead_under_50ms_median(
 
     assert overhead <= _MAX_OVERHEAD_MS, (
         f"gateway overhead {overhead:.2f} ms exceeds the {_MAX_OVERHEAD_MS} ms "
-        f"SC-003 budget (baseline {baseline_median:.2f} ms, gateway "
+        f"gateway-overhead budget (baseline {baseline_median:.2f} ms, gateway "
         f"{gateway_median:.2f} ms)"
     )

@@ -278,7 +278,8 @@ describe("KnowledgeDetailPage", () => {
   });
 
   test("the one input beside the tree is a filter, not a retrieval box", () => {
-    // The layer exposes no search and no grep (FR-050/FR-061). The only textbox
+    // The layer exposes no search and no grep (spec knowledge "Present a collection
+    // as one tree in the web UI"). The only textbox
     // on the page narrows the names already on screen.
     renderPage();
 

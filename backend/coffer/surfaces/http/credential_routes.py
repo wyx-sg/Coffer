@@ -9,8 +9,9 @@ pasted `env` is lifted into the credential store here, so it never lands in
 Coffer's resource config unencrypted — the resource config only keeps a
 credential ref.
 
-Every lifecycle change is audited (spec resource-framework FR-006). The audit row records the `ref`
-only — secret values never appear in the audit log.
+Every lifecycle change is audited (spec resource-framework "Audit every lifecycle
+change"). The audit row records the `ref` only — secret values never appear in
+the audit log.
 """
 
 from __future__ import annotations

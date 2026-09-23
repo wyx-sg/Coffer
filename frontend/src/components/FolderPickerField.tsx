@@ -1,4 +1,6 @@
-// frontend/src/components/FolderPickerField.tsx — spec agent-registry FR-050/spec daemon FR-019/spec daemon FR-020.
+// frontend/src/components/FolderPickerField.tsx — spec agent-registry "Offer a
+// folder picker for a custom config directory"; spec daemon "Browse folders without
+// reading files" and "Open the host's native folder picker".
 // A folder is picked, never typed: the native dialog on desktop, the daemon's
 // native dialog then an in-app browser on web. The row it sits in — read-only
 // display, Browse, optional Clear — is `PickerField`, shared with the file

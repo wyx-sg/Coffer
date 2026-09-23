@@ -1,4 +1,5 @@
-"""Claude Code's per-entry Markdown files, read into `RawEntry`s (FR-004).
+"""Claude Code's per-entry Markdown files, read into `RawEntry`s (see "Read
+Claude Code and Codex memory with their search terms").
 
 Builds a `<config_dir>/projects/<slug>/memory/` tree under `tmp_path` for
 each test; nothing here touches the real `~/.claude`. `tmp_path` is a real
@@ -73,9 +74,10 @@ def test_a_memory_file_becomes_one_raw_entry(tmp_path: pathlib.Path) -> None:
     assert "---" not in entry.body
     assert entry.anchor == "feedback-worktree-development"
     assert entry.project_root == str(project_root)
-    # Claude Code states no search terms anywhere in this format; FR-004 asks a
-    # reader to carry them *where the source states them*, and synthesising
-    # them here would be exactly the guess that requirement replaces.
+    # Claude Code states no search terms anywhere in this format; the reader
+    # requirement asks a reader to carry them *where the source states them*,
+    # and synthesising them here would be exactly the guess that requirement
+    # replaces.
     assert entry.search_terms == ()
 
 
@@ -147,10 +149,10 @@ def test_sources_skips_a_dangling_file_rather_than_dying(tmp_path: pathlib.Path)
 def test_a_deleted_project_still_yields_an_entry_with_a_best_effort_root(
     tmp_path: pathlib.Path,
 ) -> None:
-    # The project directory named by the slug is never created — as if it
-    # had been deleted since Claude Code last wrote to it (FR-005's
-    # degrade-loudly is about parsing; a missing *project* root is not a
-    # parse failure, so this must not raise).
+    # The project directory named by the slug is never created — as if it had
+    # been deleted since Claude Code last wrote to it ("Fail a broken reader
+    # loudly and in isolation" is about parsing; a missing *project* root is
+    # not a parse failure, so this must not raise).
     config_dir = tmp_path / "claude"
     memory_dir = config_dir / "projects" / "-Users-dev-gone-project" / "memory"
     memory_dir.mkdir(parents=True)
@@ -164,7 +166,8 @@ def test_a_deleted_project_still_yields_an_entry_with_a_best_effort_root(
 
 def test_an_empty_metadata_block_is_a_project_entry_not_a_crash(tmp_path: pathlib.Path) -> None:
     """``metadata:`` with nothing under it loads as ``None``; the reader must
-    treat it as "no type given" rather than die on ``None.get`` (FR-005)."""
+    treat it as "no type given" rather than die on ``None.get`` (see "Fail a
+    broken reader loudly and in isolation")."""
     project_root = tmp_path / "Users" / "dev" / "empty-meta"
     project_root.mkdir(parents=True)
     memory_dir = _memory_dir(tmp_path, "claude", project_root)

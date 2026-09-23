@@ -17,10 +17,12 @@ Code's per-fact Markdown, Codex's `MEMORY.md`/profile) read-only and never
 writes it (`docs/decisions/aggregate-agent-memory-never-write-it.md`). This
 module writes a hook, which is a different kind of file entirely, and only
 ever on an explicit `DeliveryService.install()` call — never as a side effect
-of registering an agent, aggregating memory, or serving a turn (spec memory FR-032).
+of registering an agent, aggregating memory, or serving a turn (spec memory
+"Install delivery hooks explicitly and removably").
 
 The previous session-context injection layer shipped, was never installed on
-the maintainer's own machine, and nothing said so for two months (spec memory FR-033, the ADR's
+the maintainer's own machine, and nothing said so for two months (spec memory
+"Audit every delivery fire", the ADR's
 "Delivery is a push ... installed on purpose"). The fix is
 that a fire is *recorded*: `DeliveryService.record_fired()`, called by
 whatever serves the context, writes one audit entry per fire. So "installed"
@@ -65,7 +67,8 @@ class DeliveryUnsupported(CofferError):  # noqa: N818
     """`agent_type` has no session-start-like hook adapter.
 
     Only the two agent types Coffer reads native memory from today (Claude
-    Code, Codex — spec memory FR-004) have one; a third agent type earns an
+    Code, Codex — spec memory "Read Claude Code and Codex memory with their
+    search terms") have one; a third agent type earns an
     adapter under `infrastructure.memory.delivery` before this stops raising
     for it.
     """
@@ -115,7 +118,8 @@ class DeliveryStatus:
 
     Deliberately *only* that. Whether the hook has fired is not a property of
     the agent but a stream of events, and it is reported as one: an audit
-    entry per fire (FR-033), read on the Activity surface beside every other
+    entry per fire ("Audit every delivery fire"), read on the Activity surface
+    beside every other
     thing that happened.
     """
 

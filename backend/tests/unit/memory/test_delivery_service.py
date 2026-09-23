@@ -356,7 +356,7 @@ async def test_status_with_no_agent_reports_every_registered_agent(
 
 
 # ---------------------------------------------------------------------------
-# record_fired: one audit entry per real fire (FR-022)
+# record_fired: one audit entry per real fire ("Audit every delivery fire")
 # ---------------------------------------------------------------------------
 
 

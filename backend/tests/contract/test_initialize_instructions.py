@@ -53,7 +53,8 @@ def test_instructions_name_the_escape_hatch():
 
 
 def test_instructions_name_every_builtin_tool_even_with_nothing_hidden():
-    """All four names, in every session (spec knowledge FR-038).
+    """All four names, in every session (spec knowledge "Keep the handshake
+    instructions to what a skill cannot carry").
 
     The names are what make the tools recognisable in a tool list, and that is
     not a fact about this session. ``coffer__search_tools`` used to be named

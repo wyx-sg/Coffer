@@ -218,7 +218,7 @@ Each ORM model provides:
 | Action                                    | Effect                                                                                                                                                               |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `DELETE FROM resources WHERE id=?`        | cascades to `mcp_capability_preferences` (via FK). Does **not** cascade to `mcp_invocations` — the invocation log outlives the server it describes, as the audit log does. |
-| `DELETE FROM mcp_capability_preferences`  | never done directly: a preference is flipped, not removed, which is what makes a decision survive an upstream upgrade (FR-008).                                       |
+| `DELETE FROM mcp_capability_preferences`  | never done directly: a preference is flipped, not removed, which is what makes a decision survive an upstream upgrade.                                                |
 | `mcp_server_health`                       | keyed by the server's `uid` rather than by its name or its row id (migration 0097), so a rename keeps the row it already has. Keyed by name it left a permanent orphan nothing would overwrite, and the status page went blank for a server that had tested green a second earlier. |
 
 The kind-agnostic rules these sit under — what a rename does to the audit trail

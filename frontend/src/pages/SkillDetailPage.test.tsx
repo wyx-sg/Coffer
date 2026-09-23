@@ -119,8 +119,8 @@ describe("SkillDetailPage", () => {
     expect(disableMutate).toHaveBeenCalledWith({ kind: "skill", uid: SKILL_UID });
   });
 
-  // spec skill-manager FR-030: the read model carries an explicit `builtin`
-  // flag "rather than leaving each client to infer it from the source variant".
+  // spec skill-manager "Mark the builtin skill on every surface": the read model carries an
+  // explicit `builtin` flag "rather than leaving each client to infer it from the source variant".
   // The Overview tab used to branch on `source.type` while the table branched
   // on the flag — two answers to one question, free to disagree.
   test("Overview reads the builtin flag, not the source variant", () => {

@@ -1,8 +1,8 @@
 //! Whether the vault's last sync round needs a human — and, if it does,
 //! whether the user has already been told.
 //!
-//! Spec vault-sync FR-096: a round that ended held for confirmation,
-//! conflicted, or unable to push or run must say so where the user already is.
+//! Spec vault-sync "Say a vault needs a human where the user already is": a round that ended held
+//! for confirmation, conflicted, or unable to push or run must say so where the user already is.
 //! A held vault converges no further and backs nothing up, so a hold nobody
 //! sees is an outage that looks like silence; the first one in the field stood
 //! for four days because the only surface that mentioned it was the `/sync`
@@ -18,7 +18,8 @@
 /// ordinary state of a machine whose remote is switched off, not a fault.
 ///
 /// This list is a copy of a vocabulary the daemon owns, which is the same
-/// arrangement `daemon.json`'s fields are already in (spec desktop-app FR-005):
+/// arrangement `daemon.json`'s fields are already in (spec desktop-app "Read the
+/// daemon's credentials from its discovery file"):
 /// a change on either side is made on both.
 pub const ATTENTION_STATUSES: [&str; 4] =
     ["conflict", "awaiting_confirmation", "push_failed", "failed"];

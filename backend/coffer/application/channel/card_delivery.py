@@ -114,10 +114,10 @@ async def dispatch_card_tap(
     index we do not render) is dropped rather than falling through to the code
     path that applies a choice.
 
-    ``session`` is only read by the ``collection:`` branch (spec channels FR-014): the pending
-    document a `/save` card tap saves lives there, keyed
-    by this same ``(channel, chat, thread)``, exactly like the queue and the
-    running-turn bookkeeping every other tap ignores.
+    ``session`` is only read by the ``collection:`` branch (spec channels "Save a sent
+    document into a collection"): the pending document a `/save` card tap saves lives
+    there, keyed by this same ``(channel, chat, thread)``, exactly like the queue and
+    the running-turn bookkeeping every other tap ignores.
     """
     turn = parse_page_turn(data)
     if turn is not None:
@@ -325,7 +325,7 @@ async def _current_card(
         # No conversation/model state to re-read, and nothing agent-specific to
         # ask either — a collection carries no per-agent reach, so this is the
         # same whole-catalogue question `/save` itself asks (spec channels
-        # FR-014).
+        # "Save a sent document into a collection").
         known = await commands._collections.enabled_collections()
         return collection_card(choices=known, page=page) if known else None
     if kind not in ("model", "effort"):

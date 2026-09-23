@@ -121,8 +121,8 @@ export function useDistilPartition(partitionUid: string) {
 }
 
 /** Per-agent delivery state — whether Coffer's hook is installed in that
- * agent's own settings (FR-039). Whether it has ever fired is a separate
- * question, answered by the audit surface. Omit `agentUid` to list every agent
+ * agent's own settings (see "Show delivery state on the agent's own page"). Whether it has ever
+ * fired is a separate question, answered by the audit surface. Omit `agentUid` to list every agent
  * delivery can install for.
  *
  * Each row carries the agent's name beside its uid, so a surface renders the
@@ -149,7 +149,8 @@ export function useInstallDelivery() {
 }
 
 /** Removal only takes out Coffer's own marker-scoped entry — nothing else in
- * the agent's own settings file is touched (spec memory FR-032). */
+ * the agent's own settings file is touched (spec memory "Install delivery hooks
+ * explicitly and removably"). */
 export function useRemoveDelivery() {
   const qc = useQueryClient();
   const { t } = useTranslation();

@@ -1,5 +1,6 @@
-"""SC-010: secret values must never appear in the DB, logs, or any persisted
-artefact.
+"""Secret values must never appear in the DB, logs, or any persisted artefact.
+
+Spec credentials "Hold plaintext only in memory at the moment of use".
 
 Drives a representative session with a unique sentinel value written into the
 Fernet-encrypted credential store (the same store the composition root wires),

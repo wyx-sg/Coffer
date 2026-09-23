@@ -16,8 +16,8 @@ supersession check. Written atomically at mode `0600`
 | --- | --- | --- |
 | `version` | int | Schema version of this file. `1` today. |
 | `pid` | int | The daemon process. Never trusted on its own — every reader confirms the pid is still a Coffer daemon before acting on it. |
-| `port` | int | The bound port. The one authority for "where is Coffer" (spec daemon FR-011). |
-| `token` | string | The API token for this daemon's lifetime (spec daemon FR-013). Why the file is `0600`. |
+| `port` | int | The bound port. The one authority for "where is Coffer" (spec daemon "Publish one private discovery file"). |
+| `token` | string | The API token for this daemon's lifetime (spec daemon "Require a token on every management call"). Why the file is `0600`. |
 | `started_at` | ISO-8601 | When this daemon bound its port. Reported by `/daemon/status`. |
 | `binary_path` | string | The executable that is serving — the frozen binary, or the interpreter of a run-from-source daemon. Named in the version-skew warning. |
 
@@ -138,8 +138,8 @@ hiding at the bottom of a severity filter.
 
 | Event | Emitted by |
 | --- | --- |
-| `token_rotated` | A rotation through either surface (spec daemon FR-014). |
+| `token_rotated` | A rotation through either surface (spec daemon "Rotate the token from REST or the command line"). |
 
-The fixed-port setting deliberately emits nothing — see spec daemon FR-011 for
+The fixed-port setting deliberately emits nothing — see spec daemon "Bind a fixed, settable port" for
 why recording it only when a daemon happens to be running would be less honest
 than recording none.

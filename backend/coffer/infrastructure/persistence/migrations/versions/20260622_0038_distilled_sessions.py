@@ -13,7 +13,8 @@ re-distill. This ledger is the idempotency key the future SessionEnd hook
 
 Both the sweep and that hook are gone: transcript distillation was removed on
 2026-09-09, 0050 drops this table, and the requirement that mandated automatic
-recording is retired — spec memory FR-037 now forbids reintroducing the path.
+recording is retired — spec memory "Reintroduce no retired mechanism" now
+forbids reintroducing the path.
 
 Idempotent on a DB that already has the table (the roundtrip suite stamps back
 and replays the chain tail). Reversible (drops the table).

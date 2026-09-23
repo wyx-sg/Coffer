@@ -91,7 +91,8 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
         agent_uid = r.json()["uid"]
 
         # list skills — just Coffer's own, which it seeds for itself at boot
-        # (spec knowledge FR-034). The user has imported nothing yet, so the
+        # (spec knowledge "Deliver the catalogue through the coffer-guide skill"). The
+        # user has imported nothing yet, so the
         # lifecycle below is measured against that one row.
         r = c.get("/api/v1/skills")
         assert r.status_code == 200

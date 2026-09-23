@@ -7,8 +7,8 @@
 // is what the very next call returns and there is nothing to reindex.
 //
 // There is no `search` and no `grep` here because the daemon serves neither
-// (FR-050). New knowledge goes in as MATERIAL — an upload here, an agent's
-// `coffer__write`, the CLI — which waits in the collection's hidden inbox
+// (see "Cover collection management on REST and the CLI"). New knowledge goes in as MATERIAL — an
+// upload here, an agent's `coffer__write`, the CLI — which waits in the collection's hidden inbox
 // until a curation pass merges it into the documents; with no internal model
 // configured it becomes a document as it is.
 //
@@ -78,8 +78,8 @@ export function getFile(path: string): Promise<FileOut> {
 
 /**
  * Remove ONE document — any of them: the collection is the person's as much
- * as curation's (FR-020). `path` is relative to the knowledge root, the same
- * string the tree and `getFile` use, and the daemon refuses anything that
+ * as curation's (see "Let only a person delete a document"). `path` is relative to the knowledge
+ * root, the same string the tree and `getFile` use, and the daemon refuses anything that
  * escapes it.
  *
  * A document is the only copy: there is no index to fall out of step and
@@ -105,7 +105,8 @@ export function deleteFile(path: string): Promise<void> {
  * every status here is something the page reports rather than a failure.
  *
  * A second pass over the same collection is refused with 409
- * `UPKEEP_ALREADY_RUNNING` rather than queued (FR-039).
+ * `UPKEEP_ALREADY_RUNNING` rather than queued (see "Run one pass per collection
+ * at a time").
  */
 export function curateCollection(uid: string, document?: string | null): Promise<CurationOut> {
   return call<CurationOut>(`${ROOT}/collections/${enc(uid)}/curate`, {

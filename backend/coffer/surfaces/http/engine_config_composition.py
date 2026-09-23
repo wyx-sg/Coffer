@@ -56,7 +56,8 @@ async def read_transcribe_model() -> str | None:
 
     Deliberately NOT falling back to the engine model: they run on different
     connections and the endpoints that serve one commonly do not serve the
-    other (spec internal-engine FR-025).
+    other (spec internal-engine "Transcribe speech on its own connection and
+    model").
     """
     return (await get_internal_engine_config_service().get()).transcribe_model
 

@@ -31,7 +31,8 @@ def test_picks_default_when_free():
 
 
 def test_bind_free_socket_returns_loopback_bound_socket():
-    """CODE-041 / spec daemon FR-012: bind_free_socket hands back an OPEN socket bound to
+    """CODE-041 / spec daemon "Bind every endpoint to loopback only": bind_free_socket
+    hands back an OPEN socket bound to
     a loopback port in range — a daemon started under the range override keeps
     it and passes its fd to uvicorn, so the port is never released between
     publishing daemon.json and binding."""

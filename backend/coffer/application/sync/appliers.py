@@ -1,4 +1,5 @@
-"""Putting one document's change into the vault (spec vault-sync ``## Applying a diff``).
+"""Putting one document's change into the vault (spec vault-sync step 5 of
+"Run the seven round steps in order").
 
 One applier per bundle area, each owning a path prefix, each with exactly two
 operations. Two rather than one "sync this path", because **removal is the
@@ -38,16 +39,16 @@ class TreeApplier:
     directory (ADR knowledge-is-plain-files), which is most of why bidirectional
     convergence is affordable at all.
 
-    ``excluded`` names bundle-relative directory prefixes this applier ignores
-    outright, upsert and removal alike — the derived subtrees the exporter also
-    refuses to publish (spec vault-sync FR-093). The exporter's half is not
-    enough on its own: it silences this machine, while a machine still running
-    an older build keeps publishing `skills/coffer-guide/` and would otherwise
-    overwrite a master folder this machine rendered for itself — the one
-    direction an export-side rule cannot reach. Removal is ignored for the
-    stronger reason: the folder here is written from the running build at every
-    boot, so a deletion in the tree has no standing over it and obeying one
-    would only unlink a manual that comes straight back.
+    ``excluded`` names bundle-relative directory prefixes this applier ignores outright,
+    upsert and removal alike — the derived subtrees the exporter also refuses to publish
+    (spec vault-sync "Withhold derived output in both halves"). The exporter's half is
+    not enough on its own: it silences this machine, while a machine still running an
+    older build keeps publishing `skills/coffer-guide/` and would otherwise overwrite a
+    master folder this machine rendered for itself — the one direction an export-side
+    rule cannot reach. Removal is ignored for the stronger reason: the folder here is
+    written from the running build at every boot, so a deletion in the tree has no
+    standing over it and obeying one would only unlink a manual that comes straight
+    back.
     """
 
     def __init__(
@@ -116,7 +117,7 @@ class StateApplier:
     into a permanent error.
 
     A state document is carried with the same ``${HOME}`` sentinel a resource
-    document is (spec vault-sync ``## Determinism and path portability``), so
+    document is (spec vault-sync "Store home paths against a sentinel"), so
     it is expanded against this machine's home here, exactly as the resource
     applier does — one rule for every serialized document.
     """

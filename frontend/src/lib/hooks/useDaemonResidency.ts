@@ -1,7 +1,8 @@
 // frontend/src/lib/hooks/useDaemonResidency.ts
 //
-// Whether the daemon outlives the things that use it (spec daemon FR-028) and
-// for how long it stays once nothing does (FR-029). One route, because they
+// Whether the daemon outlives the things that use it (spec daemon "Run as a
+// login service") and for how long it stays once nothing does ("Stand down
+// after an idle window"). One route, because they
 // are one question with two halves — see the contract.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";

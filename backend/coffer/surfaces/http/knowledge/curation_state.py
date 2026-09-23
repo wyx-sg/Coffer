@@ -37,7 +37,8 @@ def set_vault_write_lock(lock: asyncio.Lock) -> None:
     Set from the composition root once sync is wired. The curation pass takes
     it too, because both rewrite vault content and an export caught half-way
     through a rewrite is a torn snapshot git reads as a deliberate change
-    (spec knowledge FR-031, spec vault-sync ``## Unattended rewriters``).
+    (spec knowledge "Never overlap curation with a sync round", spec vault-sync
+    "Never overlap a tidy pass and a round").
     """
     global _vault_lock
     _vault_lock = lock
