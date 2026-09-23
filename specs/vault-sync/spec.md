@@ -606,11 +606,19 @@ reported as a conflict.
 - **FR-086**: A **conflict** MUST stay a banner above the table, because its
   paths have to be resolved with the user's own git in a working tree the table
   has no column for.
-- **FR-087**: Exactly one row — the newest that reached its pre-apply snapshot,
-  which is the round a rollback would reverse — MUST carry an **Undo** action
+- **FR-087**: At most one row — the newest that reached its pre-apply snapshot,
+  which is the round a rollback would reverse — MAY carry an **Undo** action
   naming the paths it would take back, and no other row may, because
   `POST /sync/rollback` names no round and an Undo on every row would run the
-  same call from each.
+  same call from each. That row MUST carry it only when the round **applied
+  something to this machine**: every round reaching the apply step tags a
+  snapshot, including one that applies nothing, so after a single quiet round
+  the newest snapshot is the vault exactly as it already is, and an Undo there
+  offers to restore the state it is already in. The action MUST NOT move down
+  to an older round that did apply something — the quiet round's snapshot is
+  the newest, so the daemon would reverse to that one and leave the older
+  round standing, which is a button naming one round and undoing another.
+  Reaching further back is `coffer sync restore` (FR-088).
 - **FR-088**: Restoring at a point in time MUST stay a CLI operation and no page
   may offer it: `--at` names a revision in the *remote's* history, which no route
   exposes, so a page could only offer a blind date box with no preview of what
@@ -875,7 +883,9 @@ reported as a conflict.
 - **Given** a completed round that applied a diff,
 - **When** the user rolls it back,
 - **Then** the vault returns to the state the pre-apply snapshot holds and the
-  pointer returns with it.
+  pointer returns with it,
+- **And** a round that applied nothing here offers no Undo at all, because the
+  snapshot it left is the state the vault is already in.
 
 ### Scenario: reach stays on the machine it was set on
 

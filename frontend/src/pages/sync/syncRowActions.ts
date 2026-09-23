@@ -25,18 +25,38 @@ const SNAPSHOTTED = new Set(["ok", "no_change", "push_failed"]);
  */
 const PRE_SNAPSHOT = new Set(["conflict", "awaiting_confirmation", "disabled"]);
 
+/** Whether a round changed anything ON THIS MACHINE — which is the only
+ *  thing an undo can reverse. A round that merely published pushed local
+ *  state up; reversing its snapshot restores a local tree that never moved. */
+function appliedSomething(run: RunRecord): boolean {
+  const { added, modified, deleted } = run.applied;
+  return added + modified + deleted > 0;
+}
+
 /**
  * The id of the one round `POST /sync/rollback` would undo, or null.
  *
- * The route takes no argument: it reverses the round that left the NEWEST
- * pre-apply snapshot. So the surface has to work out which row that is rather
- * than offering the same call from every row under a different name.
+ * The route takes no argument: it reverses the NEWEST pre-apply snapshot. So
+ * the surface has to work out which row that is rather than offering the same
+ * call from every row under a different name.
  *
- * `failed` deliberately ends the walk with no target. A failed round may have
- * died before the snapshot or after it — the status cannot say which — and
- * guessing the wrong way would put "Undo" on a round that is not the one the
- * daemon would reverse. No button is the honest answer; `coffer sync rollback`
- * is still there for someone who knows what happened.
+ * And then it has to ask whether that round left anything to reverse, which
+ * is the part that was missing. Every round reaching the apply step tags a
+ * snapshot — including one that applies nothing — so after a single quiet
+ * round the newest snapshot is the vault exactly as it already is. "Undo this
+ * round" on a row reading `+0 ~0 −0` offers to restore the state it is
+ * already in: a button that does nothing, on the row that says nothing
+ * happened.
+ *
+ * It also cannot be moved down to the last round that DID apply something.
+ * The quiet round's snapshot is now the newest one, so the daemon would
+ * reverse to that and leave the older round standing — the button would name
+ * one round and undo another. No button is the honest answer, and
+ * `coffer sync restore` is what reaches further back.
+ *
+ * `failed` deliberately ends the walk with no target for the same reason: a
+ * failed round may have died before the snapshot or after it, and the status
+ * cannot say which.
  *
  * Lives here beside `heldRoundId` because the two answer one question —
  * WHICH row may act — for two routes that share the same shape: neither names
@@ -46,7 +66,7 @@ const PRE_SNAPSHOT = new Set(["conflict", "awaiting_confirmation", "disabled"]);
  */
 export function rollbackTargetId(runs: RunRecord[]): number | null {
   for (const run of runs) {
-    if (SNAPSHOTTED.has(run.status)) return run.id;
+    if (SNAPSHOTTED.has(run.status)) return appliedSomething(run) ? run.id : null;
     if (!PRE_SNAPSHOT.has(run.status)) return null;
   }
   return null;

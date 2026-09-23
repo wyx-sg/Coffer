@@ -88,12 +88,7 @@ export function SyncRollbackAction({ run }: { run: RunRecord }) {
               </p>
             ) : null}
           </div>
-        ) : (
-          // A round can be the newest snapshot and still have applied nothing
-          // here — it published, or it changed nothing at all. Saying so is
-          // more use than an empty heading.
-          <p className="text-sm text-muted-foreground">{t("sync.rollback.nothingApplied")}</p>
-        )}
+        ) : null}
       </ConfirmDialog>
     </div>
   );
