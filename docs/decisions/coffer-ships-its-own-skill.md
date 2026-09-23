@@ -61,7 +61,7 @@ predicate and the same links as any imported skill.
   The body is the manual — the tools and when to reach for each, the tiering
   contract, that knowledge is files read with the agent's own tools, that Coffer
   reads an agent's memory and never writes it, that nothing waits on an approval
-  — followed by the catalogue of every topic document with its path.
+  — followed by the catalogue of every knowledge document with its path.
 - **Generated is not the opposite of registered.** The master folder is
   rewritten from the running build at every daemon boot and whenever the
   catalogue moves. So the reason the knowledge skill stayed outside the

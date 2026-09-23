@@ -117,9 +117,9 @@ paths:
       operationId: updateCurationOwner
       summary: Name the machine that runs the curation pass
       description: |
-        Curation rewrites the `topics/` lane with no diff anyone approved, so
-        once a vault spans machines exactly one may run it: two machines fold
-        the same pair of sources into two DIFFERENT topic documents, git merges
+        Curation rewrites a collection's documents with no diff anyone
+        approved, so once a vault spans machines exactly one may run it: two
+        machines fold the same material into two DIFFERENT documents, git merges
         that cleanly as two additions at different paths, and the vault ends up
         holding the same knowledge twice with nothing in conflict (spec
         vault-sync `## Unattended rewriters`).

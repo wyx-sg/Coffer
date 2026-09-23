@@ -104,8 +104,9 @@ def start_background_workers(
     )
     converge_worker = start_converge_worker(sync, sm)
 
-    # Curation: a sweep that folds whatever sources have changed since they
-    # were last consumed into the collection's topic documents.
+    # Curation: a sweep that merges each collection's inbox into its
+    # documents, then carries through any document edited since it was last
+    # curated.
     curation_task = start_curation_worker(
         knowledge_service, curation_pass, guide, resource_svc, engine_config, sync
     )

@@ -46,12 +46,9 @@ so this only ever concerns upstream tools.
 
 ## Knowledge is a directory of files, and you read it yourself
 
-The developer's knowledge lives under `<KNOWLEDGE_ROOT>/<collection>/`, split
-into two lanes:
-
-- `sources/` — what a person or an agent wrote down, in the words they wrote it.
-- `topics/` — what Coffer's own model folded those sources into. This is the
-  lane worth reading.
+The developer's knowledge lives under `<KNOWLEDGE_ROOT>/<collection>/`: one
+tree of Markdown documents per collection, which the developer and Coffer's own
+model write together.
 
 **There is no Coffer tool for reading, listing, searching or grepping it.** Use
 your own file tools on those paths. The full catalogue of what exists is at the
@@ -67,16 +64,15 @@ down.
 
 Use `coffer__write` when you learn something durable: a fact about a service, a
 convention this developer follows, a decision and the reason behind it, a trap
-and how to avoid it. What you write is filed as **source material** under
-`sources/`, and Coffer's model later folds it into the topic documents, merging
-it with what is already there.
+and how to avoid it. What you write is **new material**: Coffer's model merges
+it into the collection's documents, integrating it with what is already there.
 
 So write the fact plainly. You do not have to work out where it belongs, and
 you do not have to check whether it repeats something already filed.
 
-Do not write into `topics/` yourself and do not edit those files — they are
-generated, and the next pass overwrites them. A correction goes in as a new
-source saying what is actually true.
+To correct or extend a document you have read, you may also edit the file
+itself with your own tools, as the developer does in their editor. Coffer's
+model notices the edit and carries it into the rest of the collection.
 
 ## Coffer reads your memory. It never writes it.
 

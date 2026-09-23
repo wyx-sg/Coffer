@@ -1,8 +1,9 @@
 // frontend/src/components/knowledge/KnowledgeTable.tsx
 // The collections list, rendered via the shared DataTable. A collection is a
 // top-level folder under the knowledge root and one `knowledge` Resource, so a
-// row carries what a folder has — its name, what its README says it is for, and
-// the size of each of its two lanes — plus the status control every Resource
+// row carries what a folder has — its name, what its README says it is for, how
+// many documents it holds and how much material is waiting to be merged into
+// them — plus the status control every Resource
 // gets, in the shape this kind's Resource actually has.
 //
 // A collection carries NO PER-AGENT REACH. The `knowledge` kind declares no
@@ -18,10 +19,11 @@
 // header changes — it says "Status", since enabled/disabled is the whole of
 // what it reports.
 //
-// The lanes are counted APART because they answer different questions: how much
-// the person has contributed, and how much of it an agent can read today. A
-// collection with sources and no topics is one curation has not reached yet,
-// which a single total would hide (spec knowledge FR-001).
+// Documents and pending material are counted APART because they answer
+// different questions: how much an agent can read today, and how much is still
+// in the inbox where no agent can see it. A collection with material pending
+// is one curation has not caught up with, which a single total would hide
+// (spec knowledge FR-005).
 //
 // `enabled` is a generic Resource field and is NOT on /knowledge/collections
 // (which reads the folders off disk), so it is merged in from
@@ -92,16 +94,22 @@ export function KnowledgeTable({
     {
       // A CJK header in an unsized column wraps one character per line. The
       // counts are short, so neither column ever needs to wrap at all.
-      key: "sources",
-      header: t("knowledge.cols.sources"),
+      key: "documents",
+      header: t("knowledge.cols.documents"),
       className: "whitespace-nowrap text-right",
-      cell: (r) => <span className="tabular-nums">{r.source_count}</span>,
+      cell: (r) => <span className="tabular-nums">{r.document_count}</span>,
     },
     {
-      key: "topics",
-      header: t("knowledge.cols.topics"),
+      key: "pending",
+      header: t("knowledge.cols.pending"),
       className: "whitespace-nowrap text-right",
-      cell: (r) => <span className="tabular-nums">{r.topic_count}</span>,
+      cell: (r) => (
+        <span
+          className={r.pending_count > 0 ? "tabular-nums" : "tabular-nums text-muted-foreground"}
+        >
+          {r.pending_count}
+        </span>
+      ),
     },
     {
       // The flexible column: it takes the remaining width, which is what stops

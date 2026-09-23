@@ -314,8 +314,10 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
         #
         # There is no read tool left to confirm the write with, which is the
         # point of the redesign, so the confirmation is the file itself: the
-        # daemon runs in this process over an isolated HOME, so the lane can be
-        # read off disk exactly as the agent's own `Read` would.
+        # daemon runs in this process over an isolated HOME, so the collection
+        # can be read off disk exactly as the agent's own `Read` would. No
+        # internal model is configured here, so the material is promoted to a
+        # document on the spot rather than waiting in the inbox (FR-029).
         await _create_collection("oracle")
         write_result = await session.call_tool(
             "coffer__write",
@@ -328,12 +330,13 @@ async def test_sdk_round_trip(running_daemon: tuple[int, str, Path]) -> None:
         )
         assert not write_result.is_error, write_result.content
 
-        landed = knowledge_root / "oracle" / "sources" / "axolotls.md"
+        assert "written" in str(write_result.content), write_result.content
+        landed = knowledge_root / "oracle" / "axolotls.md"
         assert landed.is_file(), (
-            "coffer__write did not land a file in the collection's sources lane: "
+            "coffer__write did not become a document in the collection: "
             f"{sorted(p.name for p in landed.parent.iterdir()) if landed.parent.is_dir() else []}"
         )
         assert "oracle smoke fact about axolotls" in landed.read_text(encoding="utf-8")
-        # And nothing reached the lane curation owns (FR-020).
-        topics = knowledge_root / "oracle" / "topics"
-        assert list(topics.iterdir()) == []
+        # And nothing is left waiting in the inbox behind it.
+        inbox = knowledge_root / "oracle" / ".inbox"
+        assert not inbox.is_dir() or list(inbox.iterdir()) == []

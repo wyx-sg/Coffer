@@ -224,8 +224,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Kept on app.state: an integration test asserts the registry's contents.
     app.state.mcp_session_supervisors = kinds.mcp.session_supervisors
 
-    # Another internal-LLM knowledge consumer: the curation pass that derives
-    # a collection's `topics/` lane from the sources people write. It carries
+    # Another internal-LLM knowledge consumer: the curation pass that merges
+    # new material into a collection's documents. It carries
     # the skill delivery too, because a document nothing has re-rendered a
     # catalogue for is a document no agent has a path to (spec knowledge).
     curation_pass = wire_curation(kinds.knowledge.models, credential_resolver, kinds.guide)

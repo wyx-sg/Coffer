@@ -104,9 +104,10 @@ between machines. Why each decision went the way it did is in
   is taken in slices and the interval re-read each slice.
 - **B6 — The defaults follow what a pass WRITES.** `aggregate` and `distil`
   write only derived files that deleting and re-running reproduces, so they ship
-  ON — including `curate`, which derives `topics/` from sources it may not
-  touch and is the only path from a source to something an agent can read, so a
-  vault where it never runs has an empty lane forever.
+  ON — and so does `curate`, although it rewrites documents a person also
+  edits, because it never reverts a person's edit and it is what merges new
+  material into something an agent can read: a vault where it never runs has
+  its uploads and notes waiting unmerged in the inbox forever.
 
 ### Convergence
 

@@ -42,14 +42,14 @@ class KnowledgeFileNotFound(KnowledgeError):  # noqa: N818
 
 
 class UnsafeKnowledgePath(KnowledgeError):  # noqa: N818
-    """A path that escapes the knowledge root, names a hidden entry, or sits
-    outside a lane.
+    """A path that escapes the knowledge root, names a hidden entry, or cannot
+    name a document.
 
-    All three are refused rather than silently corrected. The lane check is
-    here rather than in each caller because "a knowledge file lives under
-    ``sources/`` or ``topics/``" is a property of path construction: it is what
-    keeps an agent write out of the curated lane and the curation pass out of
-    the sources lane (spec knowledge FR-013, FR-021).
+    All three are refused rather than silently corrected. The document check
+    is here rather than in each caller because "a document lives inside a
+    collection, and is not its README" is a property of path construction: it
+    is what keeps every write, delete and stamp off the collection itself and
+    off the inbox (spec knowledge FR-006).
     """
 
     code = "KNOWLEDGE_PATH_UNSAFE"
@@ -76,9 +76,9 @@ class UploadTooLarge(KnowledgeError):  # noqa: N818
 
 
 class TopicReferencesFile(KnowledgeError):  # noqa: N818
-    """A curated topic document naming another knowledge file (FR-027).
+    """A curated document naming another knowledge file (FR-027).
 
-    Refused at the write rather than asked for in the prompt. Topic paths are
+    Refused at the write rather than asked for in the prompt. Document paths are
     chosen by curation and move as the corpus is reorganised, so a file name
     written into prose is a link that rots — 343 of the corpus's 398 internal
     references were already dead when this rule was introduced. A document

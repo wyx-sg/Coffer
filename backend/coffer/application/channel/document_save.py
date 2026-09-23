@@ -187,7 +187,11 @@ async def apply_save_collection(
     await send(
         binding,
         peer.chat_id,
-        f"📄 Saved '{doc.title}' to {collection} → {doc.path}",
+        (
+            f"📄 Saved '{doc.title}' to {collection} → {doc.path}"
+            if doc.path
+            else f"📄 Saved '{doc.title}' to {collection} — merging it into the documents."
+        ),
         chat_kind=chat_kind,
         thread_id=thread_id,
     )

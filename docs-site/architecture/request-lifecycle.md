@@ -226,14 +226,14 @@ Messaging channels (Telegram, SeaTalk) are how a user reaches an agent away from
 
 Progress is rendered from the agent's capabilities, not the adapter type: Telegram streams progress by editing one message, SeaTalk degrades to ack-then-final.
 
-## Knowledge search lifecycle
+## Knowledge lifecycle
 
-Search requests — `coffer__search` and `coffer__grep`, and the REST `search` / `grep` routes — have almost no lifecycle left, and that is the point. There is no index between the caller and the disk, so there is no pipeline to walk:
+Knowledge has almost no request lifecycle left, and that is the point. There is no retrieval tool and no index between an agent and the disk: an agent reads the documents with its own `Read` and `Grep`, at the absolute paths the `coffer-guide` skill carries, and Coffer is not in that path at all.
 
-1. **Resolve what the caller may see.** The service turns the caller's identity into the set of collection directories under `~/.coffer/knowledge/` it is allowed to search. This is the only knowledge-specific step.
-2. **Run `ripgrep` over those directories.** One literal text search, hidden entries excluded so the `.history/` revisions and `.raw/` originals never answer a query.
-3. **Shape the matches.** `grep` returns the matching lines as they are; `search` groups them into file-level hits — path, title, description, and the few lines that matched — reading each file's title and description out of its own frontmatter.
+What does pass through Coffer is new knowledge arriving, and it takes three steps:
 
-`coffer__recall`, memory's pull tool, is the same shape one layer over: a case-insensitive substring scan across the facts the caller may see, already loaded in memory.
+1. **Submit.** `coffer__write`, `POST /api/v1/knowledge/material`, an upload (converted to Markdown first) and a channel `/save` all write one item of material into the collection's hidden `.inbox/`, and record an audit event. With no internal model configured, the item is promoted to a document of its own on the spot.
+2. **Merge.** The curation sweep, every minute, takes each pending item — inbox material first, then any document edited since curation last stamped it — and runs one bounded pass over it: at most five candidate documents, found by a literal `ripgrep` match, plus the catalogue of titles, and at most eight writes.
+3. **Settle and re-render.** A completed pass deletes the inbox item (or stamps the edited document), and the catalogue in `coffer-guide` is re-rendered so every agent can reach what changed.
 
-Three consequences follow from having no index at all. **Freshness is decided from the file**, so a file the user edited in their editor, an agent wrote, or `git` pulled is searchable the instant it lands — a write (`coffer__write`, or an ingest) is done when the markdown is on disk, with nothing to update afterwards. **Nothing derived is authoritative**, because nothing is derived. And **matching is byte-level**, so CJK text matches without a tokenizer and the user can grep and edit the same content with ordinary tools.
+`coffer__recall`, memory's pull tool, is the one retrieval call Coffer still serves: a case-insensitive literal scan across the memory notes, answering with paths the calTwo consequences follow from having no index at all. **Freshness is decided from the file**, so a document the user edited in their editor, an agent edited, or `git` pulled is readable the instant it lands, with nothing to update afterwards. And **matching is byte-level**, so CJK text matches without a tokenizer and the user can grep and edit the same content with ordinary tools.ent with ordinary tools.

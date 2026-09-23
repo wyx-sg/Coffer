@@ -1,11 +1,9 @@
-"""The background worker that curates sources into topic documents.
+"""The background worker that folds new knowledge into a collection's documents.
 
-Unlike the tidy worker it replaces, this one is **on by default** (spec
-knowledge FR-032). That inversion is the whole point of the redesign: tidy
-rewrote the only copy of a person's writing, so it should have been something
-they switched on; curation derives a second copy from sources it may not
-touch, and it is the only path from a source to something an agent can read.
-A vault where it never runs is a vault whose `topics/` lane stays empty.
+It is **on by default** (spec knowledge FR-032): it is what merges each
+collection's inbox — uploads, agents' ``coffer__write`` — into the documents an
+agent reads, and what carries a person's edit to one document into the rest.
+A vault where it never runs is one whose new material waits unread.
 
 It is still bounded by an owner machine, because a pass rewrites synced
 content: two machines curating one corpus independently would each merge the
@@ -25,23 +23,23 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
+from coffer.application.knowledge.curate import pending_items
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.upkeep_runs import UPKEEP_RUNS, UpkeepRunRegistry
 from coffer.application.upkeep_schedule import IntervalReader, wait_for_next_pass
-from coffer.infrastructure.knowledge import fs
 
 logger = logging.getLogger(__name__)
 
 #: Long enough that a boot storm has settled before the first sweep.
 DEFAULT_START_DELAY_S = 60.0
 
-#: Short, because a source a person just wrote should be readable by an agent
+#: Short, because material a person just added should be readable by an agent
 #: in the same sitting. One pass is one small model call, so a sweep that finds
 #: nothing pending costs a directory walk.
 DEFAULT_INTERVAL_S = 60.0
 
 #: Passes one sweep may run per collection. A freshly migrated vault has
-#: dozens of pending sources; draining them a few at a time keeps any single
+#: dozens of pending items; draining them a few at a time keeps any single
 #: sweep short and lets a person watch the corpus fill in rather than waiting
 #: on one long batch.
 MAX_PASSES_PER_SWEEP = 5
@@ -150,17 +148,17 @@ class CurationWorker:
                 )
 
     async def _drain(self, uid: str) -> None:
-        """Up to ``max_passes`` sources of one collection, one pass each.
+        """Up to ``max_passes`` pending items of one collection, one pass each.
 
         The collection is held as a uid and the *name* is read off its row,
         once, because the name is only ever wanted for one thing here: it is
-        the directory ``pending_sources`` walks. The pass itself is handed the
+        the directory ``pending_items`` walks. The pass itself is handed the
         uid and resolves the row again on its own — a second cheap lookup, in
         exchange for a pass that cannot be aimed at a collection by a label
         this worker read some seconds earlier.
         """
         collection = (await self._service.collection(uid)).name
-        if not await asyncio.to_thread(fs.pending_sources, collection):
+        if not await asyncio.to_thread(pending_items, collection):
             return
         # Skip, never queue: a collection someone is already curating by hand
         # does not need a second pass behind the first, and the next sweep
@@ -175,18 +173,17 @@ class CurationWorker:
                 return
             # Re-read inside the claim. The cheap check above only decided
             # whether the claim was worth taking; between it and here a manual
-            # pass may have absorbed some of those sources, and curating an
-            # already-stamped source is a wasted model call that rewrites
-            # documents for nothing.
-            pending = await asyncio.to_thread(fs.pending_sources, collection)
-            for relpath in pending[: self._max_passes]:
-                outcome = await self._curate(
-                    self._service, uid, source_relpath=relpath, actor="system"
-                )
+            # pass may have absorbed some of those items, and curating one
+            # already settled is a wasted model call that rewrites documents
+            # for nothing.
+            pending = await asyncio.to_thread(pending_items, collection)
+            for item in pending[: self._max_passes]:
+                outcome = await self._curate(self._service, uid, item=item, actor="system")
                 status = str(outcome.get("status", ""))
                 if status in {"no_model", "failed"}:
-                    # No model is an installation-wide fact, and a failed loop
-                    # is likely to fail again on the next source in the same
+                    # No model is an installation-wide fact — and the pass has
+                    # already promoted the inbox as it stands — and a failed
+                    # loop is likely to fail again on the next item in the same
                     # sweep. Either way, stop here and let the next sweep try.
                     logger.info(
                         "knowledge.curate_worker.stopping_sweep",

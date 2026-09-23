@@ -63,34 +63,35 @@ Currently registered kinds:
 | `mcp_server`     | [mcp-gateway](../../specs/mcp-gateway/spec.md)       | A registered upstream MCP server. Carries transport configuration, credential references, and the per-server policies the gateway needs.                                                                                                                                                                                                                                                                                  |
 | `agent`          | [agent-registry](../../specs/agent-registry/spec.md) | A registered coding agent (e.g. Claude Code). Carries its config directory and the Coffer-MCP install state. The workspace amendment also surfaces the agent's own files as **read-only** facets — MCP entries (listed, with adopt-into-Coffer the one write), plugins (listed only), and directory config entries with per-child edit — all derived at read time, never stored. Coffer no longer writes into another tool's private config to remove, toggle or uninstall an entry: the plugin toggle/uninstall surface and the MCP entry remove/toggle surface are gone, and with them the `agent_plugin_toggled`, `agent_plugin_uninstalled` and `agent_mcp_entry_removed` audit events.                                                       |
 | `skill`          | [skill-manager](../../specs/skill-manager/spec.md)   | A master skill bundle Coffer can deliver into one or more agents' skill directories. The workspace amendment adds an unmanaged-skill scan (adopt hand-placed skills into the master store). Delivery is decided by the skill's own `enabled` flag intersected with its agent scope and reconciled on every change to either — the agent-side follow-master-library policy this row once described is gone. One skill is Coffer's own: `coffer-guide`, whose `builtin` source means the master folder is rewritten from the running build at every boot and whenever the knowledge catalogue moves, whose deletion is refused (`RESOURCE_PROTECTED`, 409) while `enabled` and scope stay the owner's, and which is otherwise delivered, verified, repaired and audited by exactly the same code as an imported skill ([Coffer Ships Its Own Skill](../../docs/decisions/coffer-ships-its-own-skill.md)).                                                                                                     |
-| `knowledge`      | [knowledge](../../specs/knowledge/spec.md)                 | One **collection** — a top-level folder under `~/.coffer/knowledge/` holding two lanes, `sources/` (what people contribute) and `topics/` (what curation derives and agents read). The collection is the only boundary the system knows, and it is a Resource for its lifecycle and its one switch: `enabled`, which decides whether it is served at all. It carries **no per-agent reach** — every enabled collection is catalogued into every agent's delivered skill, since the per-agent form only trimmed a skill that hands the agent the whole knowledge root anyway (spec knowledge FR-010). Nothing is derived from a cwd and nothing auto-provisions. See [Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md). |
+| `knowledge`      | [knowledge](../../specs/knowledge/spec.md)                 | One **collection** — a top-level folder under `~/.coffer/knowledge/` holding one tree of Markdown documents that people and Coffer's curation pass write together, plus a hidden `.inbox/` of new material waiting to be merged. The collection is the only boundary the system knows, and it is a Resource for its lifecycle and its one switch: `enabled`, which decides whether it is served at all. It carries **no per-agent reach** — every enabled collection is catalogued into every agent's delivered skill, since the per-agent form only trimmed a skill that hands the agent the whole knowledge root anyway (spec knowledge FR-010). Nothing is derived from a cwd and nothing auto-provisions. See [Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md). |
 | `channel`        | [channels](../../specs/channels/spec.md)             | A messaging-channel binding (Telegram, SeaTalk). Carries transport config + credential refs and a default agent; a paired owner chats with managed agents from the IM app and receives notifications. Its per-agent scope is read INVERTED — it names the agents this channel may drive, since a channel is an inbound surface no agent consumes — narrowing `/agent` and the channel's own default agent; a channel that may drive nothing does not run. A channel DOES sync, and carries `runs_on` — the `machine_id` of the one machine whose daemon starts its adapter, so the document travels and the adapter does not (spec channels FR-026). Thin adapters over the turn-platform seams (spec chat FR-001…FR-026), which the web Chat page sits on as the second surface (spec chat FR-029…FR-041) — once a message reaches the turn orchestrator nothing downstream knows which surface it came from ([Channel Adapter Framework](../../docs/decisions/channel-adapter-framework.md), [Chat Is a Single-Owner Live Mirror](../../docs/decisions/chat-single-owner-live-mirror.md)).                                                                                              |
 | `memory`         | [memory](../../specs/memory/spec.md)                 | One **partition** of aggregated agent memory — a project, or `global`. Its facts are read out of the registered agents' own native memories, never written back; everything on disk is derived and rebuildable, with no non-derived state left beside it — the per-fact hide/pin/mark-superseded/settle-a-conflict overrides went with the surface that recorded them, and the table that stored them was dropped. It carries **no per-agent reach**: an enabled partition is delivered to, and recalled by, every agent — the reach it used to default to, the agents it had been aggregated from, withheld a repository's notes from the other agent working in that same repository, which is the opposite of what aggregating is for (spec memory FR-013) ([Aggregate Agent Memory](../../docs/decisions/aggregate-agent-memory-never-write-it.md)).                                                                                              |
 | `provider`       | [provider-switching](../../specs/provider-switching/spec.md) | One **model-provider profile** — a wire protocol, a base URL and one `credential_ref`. Pure config with no on-disk artifact, so it takes the framework's generic create/update path. Its per-agent scope names the agents it projects into, which is the reach this kind used to carry itself as `compatible_agents` inside its own config; `application/provider/targets.py` is the enforcement point the switch, the per-agent key lookup, the import reconcile and the boot self-heal all read. A new profile starts scoped to the agents its protocol can actually serve rather than to every agent ([Provider Switching](../../docs/decisions/provider-switching.md)). |
 
-The knowledge layer is **a directory, not a database**, and it has two lanes.
-Under `~/.coffer/knowledge/<collection>/`, `sources/` holds what a person, an
-upload and `coffer__write` put there; `topics/` holds the documents an
-internal-model **curation pass** derives from those sources, and is what an
-agent reads. There is no `documents` table and no chunk table, so nothing has
-to be reconciled and a file edited in the user's own editor is live on the very
-next pass ([Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md),
+The knowledge layer is **a directory, not a database**, and a collection is
+**one tree of documents** under `~/.coffer/knowledge/<collection>/`, co-written
+by people and Coffer. A person edits a document in their own editor, an agent
+may edit one with its own file tools, and an internal-model **curation pass**
+rewrites documents as it merges new knowledge in. There is no `documents` table
+and no chunk table, so nothing has to be reconciled and a document edited in
+the user's own editor is live on the very next read
+([Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md),
 which supersedes Files as Truth and Retrieval Mode Is Internal).
 
-**Sources are the truth; topics are derived.** Deleting `topics/` and
-re-running curation must reproduce a corpus carrying the same facts. That
-inversion is what makes an unattended rewriter acceptable: the thing being
-rewritten is no longer the only copy. It is also why the two lanes are
-directories rather than a frontmatter property — "who may write here" is the
-one thing a key inside a file cannot say. `.history/` and `.raw/` are gone with
-the reasons they existed; an uploaded original is now an ordinary visible file
-in `sources/` beside the text extracted from it.
+**New knowledge arrives as material, never as a file in the tree.** Every
+entrance — `coffer__write`, `POST /api/v1/knowledge/material`, an upload
+(converted to Markdown first) and a channel `/save` — submits one item into the
+collection's hidden `.inbox/`, the one hidden directory Coffer writes. A pass
+merges it into the documents and deletes it; with no internal model configured
+it is promoted to a document of its own on the spot, so nothing waits on a
+connection nobody set up. Neither an upload's original bytes nor its extracted
+text is kept as a file: the collection holds the knowledge, merged.
 
 A file's **path is its identity** — names are readable slugs, not ULIDs.
 Frontmatter carries `title`, `description`, `actor` and timestamps, plus
-`coffer_ingested_at` on a source: Coffer's watermark, compared against the
-file's own mtime, which is how a sweep knows what curation still owes without
-any state file or table. A collection describes itself in its own `README.md`
+`coffer_curated_at`: when curation last had the document in front of it,
+compared against the file's own mtime, which is how a sweep finds a document
+someone edited out of band without any state file or table. A collection describes itself in its own `README.md`
 rather than in a database row, so the person browsing the folder sees the same
 sentence the delivered skill does.
 
@@ -116,7 +117,7 @@ semantic retrieval is expected back
 
 The layer contributes **one** builtin tool, `coffer__write` (see
 [Builtin tools](#builtin-tools)), because writing is where an agent genuinely
-needs Coffer: the collection, the lane, the frontmatter and the audit entry are
+needs Coffer: the collection, the inbox, the frontmatter and the audit entry are
 Coffer's to decide. Everything else rides **Coffer's own skill**, `coffer-guide`
 ([Coffer Ships Its Own Skill](../../docs/decisions/coffer-ships-its-own-skill.md)).
 This layer renders the text — `application/knowledge/guide_render.py`, pure, with
@@ -126,7 +127,7 @@ composition root (`surfaces/http/guide_wiring.py`) is the one place allowed to
 join the two, since the kinds may not import each other. Its description names
 Coffer, its builtin tools and the subjects the enabled collections cover — the
 only part always in a model's context — and its body carries Coffer's manual
-followed by the knowledge root and every topic document's path, title and
+followed by the knowledge root and every document's path, title and
 description. Nothing is injected into a session and no agent's own memory is
 written to
 ([Aggregate Agent Memory](../../docs/decisions/aggregate-agent-memory-never-write-it.md)).
@@ -139,23 +140,24 @@ overwriting each other forever. Hence the `~`-relative knowledge root and the
 fieldless `builtin` source (spec knowledge FR-047, spec skill-manager FR-028).
 
 The **curation** pass is a bounded agentic rewrite of one collection's
-`topics/`, driven by the internal-engine connection. One pass sees one source
-in full, at most five candidate documents, and the collection's whole catalogue
-of titles; it may write at most eight files, may not reach `sources/` at all,
-and may not record a reference to another knowledge file — that last is
-enforced at the write, because 343 of the corpus's 398 internal references were
-already dead when the rule was introduced. It is triggerable by hand (the UI,
-and `coffer knowledge curate`); the interval worker is governed by one
+documents, driven by the internal-engine connection. It takes one pending item —
+inbox material, or a document edited since its `coffer_curated_at` stamp — plus
+at most five candidate documents and the collection's whole catalogue of
+titles; its tools are `list_documents`, `read_document`, `write_document` and
+`retire_document`, it may write at most eight files, and it may not record a
+reference to another knowledge file — that last is enforced at the write,
+because 343 of the corpus's 398 internal references were already dead when the
+rule was introduced. Newer material wins over what a document says, and a
+person's edit stands: the pass carries it outward and never reverts it. It is
+triggerable by hand (the UI, and `coffer knowledge curate`); the interval worker
+drains the inbox first and then edited documents, and is governed by one
 installation-wide setting on `internal_engine_config` that names an owner
-machine and, unlike the tidy pass it replaces, defaults **on** — it is the only
-path from a source to something an agent can read.
+machine and defaults **on**.
 
-Putting a Markdown file in `sources/` stays a complete way to add knowledge —
-no import, no registration, and the next sweep folds it in. Ingestion is a
-second entrance, for where the filesystem is out of reach: a document uploaded
-from the Knowledge page or forwarded to a channel is converted by `markitdown`
-and lands in `sources/` beside its own original. Upload is a human surface, not
-an agent tool.
+Editing a document directly stays a complete way to add knowledge — no import,
+no registration, and the next sweep carries the edit into the rest of the
+collection. Upload is a human surface, not an agent tool; a person may delete
+any document, and no agent-facing tool deletes anything.
 
 ## Builtin tools
 
@@ -345,5 +347,5 @@ the optional fixed port and the cached machine id. See [Detect-or-Spawn](../../d
 | Retention         | `application/retention_service.py` + `retention_policies` table + asyncio worker                 | Each log-style table registers as a `PrunableTable`; central registry enforces SQL allowlist. Owned by spec resource-framework.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | Errors            | `domain/errors.py` + FastAPI global handlers                                                     | Uniform `{error: {code, message, details}}` envelope; `X-Coffer-Trace` header for correlation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Logging           | `structlog` JSON-per-line to `~/.coffer/logs/`                                                   | Per-request trace IDs via contextvar.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| Document extraction | `DocumentExtractor` port + `infrastructure/chat/document_extract.py`                           | The only place importing a converter library (MarkItDown, imported lazily and optional). It serves **inbound channel attachments** (spec channels FR-030): a PDF or docx reaches the agent as extracted text rather than an opaque path, degrading to a file attachment when the library or the extraction fails. The knowledge layer converts through the same library on its own upload path, landing both the extracted Markdown and the original in `sources/` ([Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)).                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Document extraction | `DocumentExtractor` port + `infrastructure/chat/document_extract.py`                           | The only place importing a converter library (MarkItDown, imported lazily and optional). It serves **inbound channel attachments** (spec channels FR-030): a PDF or docx reaches the agent as extracted text rather than an opaque path, degrading to a file attachment when the library or the extraction fails. The knowledge layer converts through the same library on its own upload path, submitting the extracted Markdown as material for curation to merge and keeping neither it nor the original as a file ([Knowledge Is Plain Files](../../docs/decisions/knowledge-is-plain-files.md)).                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Sync              | `application/sync/` + `infrastructure/sync/` + CLI and HTTP surfaces | Convergence with **one user-owned git remote** (spec vault-sync, [Vault Sync](../../docs/decisions/vault-sync.md), constitution 0.6.0). A worker shaped like `RetentionWorker` runs a **converge round**: serialize the vault differentially into the git working tree and commit it as `L`, merge `origin/<branch>` into `L` giving `M`, apply the diff `L..M` back into the vault path by path — deletions included — then push and advance the **pointer**, the local-only record of the commit this vault provably absorbed and the base of every diff. Paths that fail to apply join a **retry set** the exporter must not delete, so a pending document is never published as a deletion; a machine with no pointer is joining, and the registry tells a new one (pointer := git's empty tree, so the diff can only add) from a returning one (pointer := the commit its descriptor names). Applying a diff writes knowledge and skill files, upserts resource documents through the resource service with `${HOME}` expanded and the kind's import gate run, hands `state/<area>/**` to its owning module, and re-runs each kind's post-import hook. Git's three-way merge arbitrates — credential blobs are ordered by encryption time instead, an unresolved conflict aborts the round untouched — under a pre-apply snapshot tag and a circuit breaker that holds an oversized deletion for confirmation in both directions. Each machine writes one `machines/<machine_id>.yaml` it alone owns, so the registry is a derived view of the tree rather than a synced table; `machine_id` is derived from the host and hashed before it travels, so a reinstall leaves no ghost. The one-shot export-to-a-directory and import-of-one-back surfaces are **deleted** — a wholesale overwrite with no base has no place beside the diff-based apply. Cross-cutting, not a kind. A resource document carries identity, description and config alone: a resource's **reach** — its `enabled` flag and its agent `scope` — is machine-local and never converges, so an import leaves the local reach exactly as this machine set it, and a newly arrived resource lands at this machine's own default ([Per-Agent Resource Scope](../../docs/decisions/per-agent-resource-scope.md)). Every kind is serialized, `channel` included: a channel carries the one machine whose daemon runs its adapter inside its own config, so the document converges while the adapter stays put (spec channels FR-026). Channel peer pairings are a synced state area again for the same reason — a channel that travelled without them would make the owner re-pair on every rebind — carrying platform identity only, never this machine's conversation pointer. |

@@ -1,25 +1,31 @@
-"""The curation pass: one source, folded into the topic documents.
+"""The curation pass: one piece of new knowledge, folded into the documents.
 
-A person writes into ``sources/``; this is what turns that material into the
-``topics/`` lane an agent reads (spec knowledge FR-021). It replaces the tidy
-pass, and the difference is not the mechanism but what is at stake: tidy
-rewrote the only copy, so it shipped off by default and ran once. Curation
-derives a second copy from material it may not touch, so it can run
-unattended — and must, because it is now the only path from a source to
-something an agent can read.
+A collection is one tree of documents a person and Coffer write together (spec
+knowledge FR-001). New knowledge arrives as **material** in the collection's
+hidden inbox — an upload's extracted text, an agent's ``coffer__write`` — and
+this pass is what folds it into the documents, so the collection grows by
+integration rather than by accumulating a file per arrival (FR-021).
+
+The same pass also comes back for a **document someone edited** outside it:
+the sweep finds every document whose file changed since curation last stamped
+it (FR-022), and hands it here so the edit is carried into the rest of the
+collection — a correction made in one document reaching the others that say
+the same thing, a new section that belongs in a document of its own moved
+there.
 
 Four things shape this module:
 
-* **One source per pass.** The context is bounded to that source, at most five
+* **One item per pass.** The context is bounded to that item, at most five
   candidate documents, and the catalogue of titles (FR-023). A sweep with ten
-  pending sources runs ten small passes rather than one large one, so a bad
-  pass is small and the next source is unaffected by it.
+  pending items runs ten small passes rather than one large one, so a bad pass
+  is small and the next item is unaffected by it.
 * **The catalogue is always in the prompt.** Candidate selection is literal and
   therefore crude; the catalogue is what lets a model conclude that none of the
   five is the right home and open a new document instead.
-* **The watermark is written last.** A pass that raises leaves
-  ``coffer_ingested_at`` unset, so the material is curated by a later sweep
-  rather than lost to one that half-ran (FR-028).
+* **The item is settled last.** Material is deleted from the inbox, and an
+  edited document stamped, only after the loop returns. A pass that raises
+  leaves both as they were, so a later sweep retries rather than losing what
+  one half-ran over (FR-028).
 * **langgraph stays out.** The loop is reached only through the injected
   :class:`AgenticCurationPort` (import contract 9a), so this module — and the
   whole ``application.knowledge`` package — never imports langchain.
@@ -41,10 +47,12 @@ from coffer.application.knowledge.curate_tools import (
     Counters,
     CurationTool,
     build_tools,
-    topic_count,
+    document_count,
 )
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.audit import AuditEventType
+from coffer.domain.knowledge.entry import Pending
+from coffer.domain.knowledge.errors import KnowledgeFileNotFound, UnsafeKnowledgePath
 from coffer.infrastructure.knowledge import catalogue, fs, paths
 
 if TYPE_CHECKING:
@@ -56,38 +64,53 @@ logger = logging.getLogger(__name__)
 #: rewrites a corpus, so the ceiling is deliberately low.
 DEFAULT_CURATION_RECURSION_LIMIT = 24
 
-#: How much of one source to hand the model. A source is what a person wrote
-#: or uploaded, so it is bounded by what a person produces; past this the pass
+#: How much of one item to hand the model. Material is what a person wrote or
+#: uploaded, so it is bounded by what a person produces; past this the pass
 #: reports rather than silently truncating the material it was asked to keep.
 MAX_SOURCE_CHARS = 120_000
 
 CURATION_SYSTEM = (
-    "You maintain ONE collection of curated Markdown knowledge documents. You are given a "
-    "single new or changed SOURCE — material a person contributed — and you fold it into the "
-    "collection's topic documents.\n\n"
+    "You maintain ONE collection of Markdown knowledge documents that a person and you write "
+    "together. You are given ONE item: either NEW MATERIAL to fold into the documents, or a "
+    "DOCUMENT A PERSON EDITED, whose edit you carry into the rest of the collection.\n\n"
     "RULES, in order of importance:\n"
-    "1. LOSE NOTHING. Every fact in the source must end up in a topic document, and every "
-    "fact already in a document you rewrite must survive. Integrate; never regenerate.\n"
-    "2. READ BEFORE YOU WRITE. Call read_topic on any document you intend to change.\n"
-    "3. FIND THE RIGHT HOME. The candidate documents you were shown are a literal-match guess, "
-    "not an answer. Call list_topics and read the titles and descriptions: if none of them owns "
-    "this subject, create a new document rather than forcing the material somewhere it does not "
-    "belong.\n"
-    "4. WHEN THE SOURCE CONTRADICTS A DOCUMENT, THE SOURCE WINS — and say so in the prose. "
-    "Keep the superseded statement legible with the date it changed, e.g. '(previously recorded "
-    "as X; corrected YYYY-MM-DD from <what the source is>)'. Knowledge is about a world that "
-    "changes, and when it changed is worth keeping.\n"
-    "5. NEVER NAME ANOTHER FILE. Topic paths move as the corpus is reorganised. Name the "
-    "subject in prose. A write that names one of this corpus's files is refused.\n"
-    "6. ORGANISE BY SUBJECT, NEVER BY PROVENANCE. A reader wants the document to be about the "
-    "thing; they do not care which note told you what. Never add sections like 'First read' or "
-    "'From the new source' — fold the new material into the section it belongs in, and keep a "
-    "correction as a sentence where the corrected fact is, not as a changelog at the bottom.\n"
-    "7. Give every document a title and a one-line description saying what QUESTION it answers. "
+    "1. LOSE NOTHING. Every fact in new material must end up in a document, and every fact "
+    "already in a document you rewrite must survive. Integrate; never regenerate.\n"
+    "2. A PERSON'S EDIT IS DELIBERATE. When the item is an edited document, what the person "
+    "wrote there is the truth: never revert it or reword it. Carry it outward — correct the "
+    "other documents that say otherwise, and move a section that belongs in another document "
+    "there — and leave the edited document alone unless it now duplicates another.\n"
+    "3. READ BEFORE YOU WRITE. Call read_document on any document you intend to change.\n"
+    "4. FIND THE RIGHT HOME. The candidate documents you were shown are a literal-match guess, "
+    "not an answer. Call list_documents and read the titles and descriptions: if none of them "
+    "owns this subject, create a new document rather than forcing the material somewhere it "
+    "does not belong.\n"
+    "5. WHEN NEW MATERIAL CONTRADICTS A DOCUMENT, THE NEWER STATEMENT WINS — and say so in the "
+    "prose. Keep the superseded statement legible with the date it changed, e.g. '(previously "
+    "recorded as X; corrected YYYY-MM-DD)'. Knowledge is about a world that changes, and when "
+    "it changed is worth keeping.\n"
+    "6. NEVER NAME ANOTHER FILE. Document paths move as the collection is reorganised. Name the "
+    "subject in prose. A write that names one of this collection's files is refused.\n"
+    "7. ORGANISE BY SUBJECT, NEVER BY PROVENANCE. A reader wants the document to be about the "
+    "thing; they do not care which upload told you what. Never add sections like 'From the new "
+    "material' — fold it into the section it belongs in, and keep a correction as a sentence "
+    "where the corrected fact is, not as a changelog at the bottom.\n"
+    "8. Give every document a title and a one-line description saying what QUESTION it answers. "
     "The description is the only thing a future reader chooses by.\n"
-    f"8. You may write at most {MAX_WRITES_PER_PASS} files in this pass. Change nothing that "
-    "does not need changing, and stop when the source is absorbed."
+    f"9. You may write at most {MAX_WRITES_PER_PASS} files in this pass. Change nothing that "
+    "does not need changing, and stop when the item is absorbed."
 )
+
+
+def pending_items(collection: str) -> tuple[Pending, ...]:
+    """What a sweep owes one collection: material first, then edits.
+
+    New material first, because until it is merged it is knowledge no agent
+    can read; an edited document is already readable as it stands.
+    """
+    return tuple(Pending(material=name) for name in fs.inbox_items(collection)) + tuple(
+        Pending(document=relpath) for relpath in fs.edited_documents(collection)
+    )
 
 
 class AgenticCurationPort(Protocol):
@@ -107,14 +130,19 @@ class AgenticCurationPort(Protocol):
 
 
 def _brief(
-    collection: str, source: Any, candidate_bodies: Sequence[Any], every_topic: Sequence[Any]
+    collection: str,
+    item: Any,
+    *,
+    edited: bool,
+    candidate_bodies: Sequence[Any],
+    every_document: Sequence[Any],
 ) -> str:
-    """The one user turn: the source, the candidates, and every title."""
-    lines = [f"The collection is {collection!r}.", "", "## Every topic document that exists"]
-    if every_topic:
-        lines += [f"- {e.path} — {e.title}: {e.description}" for e in every_topic]
+    """The one user turn: the item, the candidates, and every title."""
+    lines = [f"The collection is {collection!r}.", "", "## Every document that exists"]
+    if every_document:
+        lines += [f"- {e.path} — {e.title}: {e.description}" for e in every_document]
     else:
-        lines.append("(none yet — this collection has no topic documents)")
+        lines.append("(none yet — this collection has no documents)")
     lines += ["", "## Candidate documents, in full"]
     if candidate_bodies:
         for found in candidate_bodies:
@@ -126,24 +154,25 @@ def _brief(
                 found.body,
             ]
     else:
-        lines.append("(no document mentions anything in this source)")
-    lines += [
-        "",
-        "## The source to absorb",
-        "",
-        f"### {source.title}",
-        f"_{source.description}_",
-        "",
-        source.body,
-    ]
+        lines.append("(no other document mentions anything in this item)")
+    if edited:
+        lines += ["", f"## The document a person edited: {item.path}"]
+    else:
+        lines += ["", "## The new material to absorb"]
+    lines += ["", f"### {item.title}", f"_{item.description}_", "", item.body]
     return "\n".join(lines)
+
+
+def _promote_all(collection: str) -> list[str]:
+    """Every inbox item made a document as it stands — the no-model path."""
+    return [fs.promote(collection, name).path for name in fs.inbox_items(collection)]
 
 
 async def run_curation(
     service: KnowledgeService,
     collection_uid: str,
     *,
-    source_relpath: str | None = None,
+    item: Pending | None = None,
     actor: str = "system",
     agent: AgenticCurationPort,
     models: ModelSelectorPort,
@@ -151,17 +180,19 @@ async def run_curation(
     recursion_limit: int = DEFAULT_CURATION_RECURSION_LIMIT,
     read_timeout: TimeoutReader | None = None,
 ) -> dict[str, Any]:
-    """Fold one pending source into the topic documents of one collection.
+    """Fold one pending item into the documents of one collection.
 
     The collection is named by its **uid**, resolved once here. A pass takes
     minutes and rewrites a corpus, so the thing it is aimed at has to be the
     thing that cannot change underneath it: the label is read off the row and
     used to build paths, and the row itself is what the audit event is tied to.
 
-    ``status`` is ``no_model`` with no internal connection configured,
-    ``up_to_date`` when every source has already been curated, ``too_large``
-    for a source past :data:`MAX_SOURCE_CHARS`, ``failed`` when the loop
-    raised, and ``ok`` otherwise. Only ``ok`` writes the watermark.
+    ``status`` is ``no_model`` with no internal connection configured — and
+    then every inbox item is promoted to a document as it stands, so material
+    never waits on a connection nobody configured (FR-029) — ``up_to_date``
+    when nothing is pending, ``too_large`` for an item past
+    :data:`MAX_SOURCE_CHARS`, ``failed`` when the loop raised, and ``ok``
+    otherwise. Only ``ok`` settles the item.
 
     Every outcome carries ``collection`` as the collection's NAME, because the
     dict is what a surface renders and a person reads a pass's report by the
@@ -174,29 +205,40 @@ async def run_curation(
 
     model = await models.get_default()
     if model is None:
-        return {"status": "no_model", "collection": collection}
+        promoted = await asyncio.to_thread(_promote_all, collection)
+        return {"status": "no_model", "collection": collection, "promoted": promoted}
 
-    relpath = source_relpath
-    if relpath is None:
-        pending = await asyncio.to_thread(fs.pending_sources, collection)
+    if item is None:
+        pending = await asyncio.to_thread(pending_items, collection)
         if not pending:
             return {"status": "up_to_date", "collection": collection}
-        relpath = pending[0]
+        item = pending[0]
 
-    source = await asyncio.to_thread(fs.read_file, relpath)
-    if len(source.body) > MAX_SOURCE_CHARS:
+    edited = item.document is not None
+    if item.document is not None:
+        # A caller-named document must be one of THIS collection's: the pass's
+        # tools are fenced to it, and the stamp written at the end must land on
+        # a document the pass could actually have carried through.
+        paths.require_document(item.document)
+        if paths.collection_of(item.document) != collection:
+            raise UnsafeKnowledgePath(item.document, f"not a document of {collection!r}")
+        found = await asyncio.to_thread(fs.read_file, item.document)
+    else:
+        found = await asyncio.to_thread(fs.read_material, collection, item.material or "")
+    label = found.path
+    if len(found.body) > MAX_SOURCE_CHARS:
         return {
             "status": "too_large",
             "collection": collection,
-            "source": relpath,
+            "item": label,
             "limit": MAX_SOURCE_CHARS,
         }
 
-    chosen = await candidates.select(service, collection, source)
+    chosen = await candidates.select(service, collection, found)
     candidate_bodies = [await asyncio.to_thread(fs.read_file, path) for path in chosen]
-    every_topic = await asyncio.to_thread(catalogue.walk_files, paths.topics_dir(collection))
+    every_document = await asyncio.to_thread(catalogue.walk_files, paths.collection_dir(collection))
 
-    before = await asyncio.to_thread(topic_count, collection)
+    before = await asyncio.to_thread(document_count, collection)
     counters = Counters()
     tools = build_tools(service=service, collection=collection, actor=actor, counters=counters)
     try:
@@ -207,7 +249,13 @@ async def run_curation(
             # turn: the first is identical on every pass and is what a provider
             # caches, the second is tens of kilobytes that differ every time.
             system_prompt=CURATION_SYSTEM,
-            user_prompt=_brief(collection, source, candidate_bodies, every_topic),
+            user_prompt=_brief(
+                collection,
+                found,
+                edited=edited,
+                candidate_bodies=candidate_bodies,
+                every_document=every_document,
+            ),
             credential_resolver=credential_resolver,
             recursion_limit=recursion_limit,
             # Per TURN, not per pass. A curation pass is a conversation of up
@@ -220,24 +268,24 @@ async def run_curation(
     except asyncio.CancelledError:
         raise
     except Exception:
-        # The watermark stays unset on purpose: a half-run pass must be retried
+        # The item stays as it was on purpose: a half-run pass must be retried
         # by the next sweep, not treated as having absorbed the material.
         logger.warning(
             "knowledge.curate.loop_failed",
-            extra={"collection": collection, "source": relpath},
+            extra={"collection": collection, "item": label},
             exc_info=True,
         )
-        return {"status": "failed", "collection": collection, "source": relpath}
+        return {"status": "failed", "collection": collection, "item": label}
 
-    await asyncio.to_thread(fs.mark_ingested, relpath)
+    await asyncio.to_thread(_settle, collection, item)
     result = {
         "status": "ok",
         "collection": collection,
-        "source": relpath,
+        "item": label,
         "model": model.model,
         "candidates": list(chosen),
-        "topics_before": before,
-        "topics_after": await asyncio.to_thread(topic_count, collection),
+        "documents_before": before,
+        "documents_after": await asyncio.to_thread(document_count, collection),
         "written": counters.written,
         "retired": counters.retired,
         "refused": counters.refused,
@@ -252,10 +300,28 @@ async def run_curation(
             actor=actor,
             details={
                 k: result[k]
-                for k in ("source", "model", "topics_before", "topics_after", "written", "retired")
+                for k in (
+                    "item",
+                    "model",
+                    "documents_before",
+                    "documents_after",
+                    "written",
+                    "retired",
+                )
             },
         )
     return result
+
+
+def _settle(collection: str, item: Pending) -> None:
+    """Mark the item absorbed: material leaves the inbox, a document is
+    stamped — unless the pass retired it, in which case there is nothing left
+    to stamp."""
+    if item.material is not None:
+        fs.discard_material(collection, item.material)
+        return
+    with contextlib.suppress(KnowledgeFileNotFound):
+        fs.mark_curated(item.document or "")
 
 
 class CurationPass:
@@ -292,13 +358,13 @@ class CurationPass:
         service: KnowledgeService,
         collection_uid: str,
         *,
-        source_relpath: str | None = None,
+        item: Pending | None = None,
         actor: str = "system",
     ) -> dict[str, Any]:
         outcome = await run_curation(
             service,
             collection_uid,
-            source_relpath=source_relpath,
+            item=item,
             actor=actor,
             agent=self._agent,
             models=self._models,
@@ -306,7 +372,8 @@ class CurationPass:
             recursion_limit=self._recursion_limit,
             read_timeout=self._read_timeout,
         )
-        if self._on_corpus_changed is not None and outcome.get("status") == "ok":
+        changed = outcome.get("status") == "ok" or bool(outcome.get("promoted"))
+        if self._on_corpus_changed is not None and changed:
             with contextlib.suppress(Exception):
                 await self._on_corpus_changed()
         return outcome
@@ -320,5 +387,7 @@ __all__ = [
     "CurationPass",
     "CurationTool",
     "ModelSelectorPort",
+    "Pending",
+    "pending_items",
     "run_curation",
 ]

@@ -46,8 +46,8 @@ GUIDE_SKILL_MD = f"{GUIDE_TREE_PREFIX}SKILL.md"
 # module-level constant for it. Ask the machine — ``_guide_doc`` below.
 
 _COLLECTIONS = {
-    "notes": ("Day-to-day working notes.", "notes/topics/standup.md", "Standup"),
-    "archive": ("Things kept for later.", "archive/topics/old-runbook.md", "Old runbook"),
+    "notes": ("Day-to-day working notes.", "notes/standup.md", "Standup"),
+    "archive": ("Things kept for later.", "archive/old-runbook.md", "Old runbook"),
 }
 
 
@@ -70,13 +70,12 @@ def _guide_text(*enabled: str) -> str:
             uid=f"rsc_{name}",
             name=name,
             description=description,
-            source_count=1,
-            topic_count=1,
+            document_count=1,
         )
-        topic = FileEntry(
+        document = FileEntry(
             path=path, title=title, description=description, actor="agent", updated_at=""
         )
-        catalogue.append((entry, [topic]))
+        catalogue.append((entry, [document]))
     return render("~/.coffer/knowledge", catalogue)
 
 

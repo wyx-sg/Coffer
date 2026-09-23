@@ -44,7 +44,7 @@ class CurationOwner(StrEnum):
     is deliberate. An unbound channel runs **nowhere**, because answering a
     platform twice cannot be walked back. An unowned curation pass runs
     **here**, because a vault that has never named an owner is a vault with one
-    machine, and the cost of being wrong is a duplicated topic document rather
+    machine, and the cost of being wrong is a duplicated document rather
     than a bot answering itself.
     """
 
@@ -83,22 +83,21 @@ class GlobalInternalEngineConfig:
 
     ``auto_curate_enabled`` lives here rather than on a collection because it
     governs the engine, not a directory: it decides whether Coffer's own model
-    may read a collection's ``sources/`` and derive its ``topics/`` on a timer
-    with no review step (spec knowledge FR-021).
+    may merge new material into a collection's documents, and carry a
+    person's edit through the rest of them, on a timer with no review step
+    (spec knowledge FR-021).
 
-    It ships **on**, which inverts what the pass it replaces did. Tidy rewrote
-    the user's own knowledge files, so an operator had to switch it on
-    deliberately. Curation may not touch a source at all — it reads
-    ``sources/`` and writes only ``topics/``, a lane that is rebuilt from
-    scratch by deleting it and running again — and it is the ONLY path from a
-    source to something an agent can read. Shipping it off would leave every
-    new vault with a readable lane that is empty forever.
+    It ships **on**: curation is what turns the material an upload or an
+    agent's ``coffer__write`` leaves in a collection's inbox into documents an
+    agent reads. Shipping it off would leave every new vault's material
+    waiting unread. (With no internal model configured, material becomes a
+    document as it stands, so nothing depends on this switch for that.)
 
     ``curate_owner_machine_id`` names the single machine allowed to run that
     pass once a vault spans several (spec vault-sync ``## Unattended
-    rewriters``). Without it, two machines fold the same pair of sources into
-    two *different* topic documents; git merges that cleanly — the two topics
-    are additions at different paths — and the vault silently ends up holding
+    rewriters``). Without it, two machines fold the same material into two
+    *different* documents; git merges that cleanly — the two documents are
+    additions at different paths — and the vault silently ends up holding
     the same knowledge twice. That is a duplicate no conflict can catch, so the
     fix has to be that only one machine ever writes.
 
@@ -156,9 +155,9 @@ class GlobalInternalEngineConfig:
         """Whether the timer may run a curation pass on this machine.
 
         An owner that names a machine this vault has never heard of stops
-        curation everywhere, which is the safe direction: no curation costs a
-        stale ``topics/`` lane, curation on every machine costs duplicated
-        knowledge no merge can see.
+        curation everywhere, which is the safe direction: no curation costs
+        material waiting in the inbox, curation on every machine costs
+        duplicated knowledge no merge can see.
         """
         if not self.auto_curate_enabled:
             return False

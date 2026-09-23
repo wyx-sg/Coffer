@@ -1,9 +1,9 @@
 """``/api/v1/knowledge/*`` — the human's side of the knowledge directory.
 
-Create a collection, list them, walk one level of a lane, read a file, write a
-source, upload a document, delete a source, trigger curation (spec knowledge
-FR-039). Deleting a collection goes through the kind-agnostic Resource route,
-since collection lifecycle is a Resource concern.
+Create a collection, list them, walk one level of a collection, read a
+document, submit material, upload a document, delete a document, trigger
+curation (spec knowledge FR-039). Deleting a collection goes through the
+kind-agnostic Resource route, since collection lifecycle is a Resource concern.
 
 Two properties shape every handler below.
 
@@ -13,10 +13,11 @@ keeps no index and exposes no retrieval anywhere, so the person reads through
 delivered skill carries (FR-033, invariant 4). The one input beside a tree on
 the web page narrows the names already on screen, client-side (FR-040).
 
-**Writing is split by lane.** ``PUT`` and ``DELETE`` reach ``sources/`` and
-only ``sources/`` — ``topics/`` is curation's to write and no one else's
-(FR-013, FR-021), so a request aiming at a topic path is refused by the
-path layer rather than by a check each handler remembers to make.
+**New knowledge arrives as material, never as a file write.** ``POST
+/material`` and ``/upload`` both submit to the collection's inbox, and a pass
+merges what is new into the documents (FR-013). A person edits a document in
+their own editor, reached from the page's open-in-editor action; there is no
+write-a-document route, because that edit is live on the very next read.
 
 **No handler here takes an agent, and neither does the service.** A collection
 carries no per-agent reach: every enabled one is served to every agent and to
@@ -52,8 +53,7 @@ from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.upkeep_runs import UPKEEP_RUNS
 from coffer.domain.knowledge.converter import EmptyConversion, UnsupportedDocument
-from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER
-from coffer.domain.knowledge.errors import UnsafeKnowledgePath
+from coffer.domain.knowledge.entry import ACTOR_AGENT, ACTOR_USER, Pending
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.errors import error_response
 from coffer.surfaces.http.knowledge.curation_state import get_curation_runner, vault_write_lock
@@ -70,8 +70,9 @@ from coffer.surfaces.http.knowledge.schemas import (
     DirectoryOut,
     FileOut,
     FileSummaryOut,
-    FileWrite,
     IngestedDocumentOut,
+    MaterialIn,
+    SubmissionOut,
     TreeOut,
 )
 
@@ -120,14 +121,10 @@ async def create_collection(
 
 @router.get("/tree", response_model=TreeOut)
 async def read_tree(
-    # The lane is part of the path — ``shopee/sources`` or ``shopee/topics``.
-    # The page asks twice, once per tree (FR-040), rather than this route
-    # inventing a lane parameter the path already carries.
-    #
-    # A path, so its first segment is the collection's directory NAME and stays
-    # one: this addresses a place on disk, and the disk knows the label. A uid
-    # here would have to be translated back into that same name before anything
-    # could be opened.
+    # A path — ``shopee`` or ``shopee/account`` — so its first segment is the
+    # collection's directory NAME and stays one: this addresses a place on
+    # disk, and the disk knows the label. A uid here would have to be
+    # translated back into that same name before anything could be opened.
     path: str = Query(min_length=1),
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
 ) -> TreeOut:
@@ -148,40 +145,31 @@ async def read_file(
     path: str = Query(min_length=1),
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
 ) -> FileOut:
-    # Reading is lane-agnostic on purpose: the page previews a topic document
-    # exactly as it previews a source, and refuses to *edit* it instead
-    # (FR-040). The response carries both absolute paths (FR-041).
+    # The response carries both absolute paths (FR-041), which is what the
+    # page's open-in-editor and reveal actions hand back to the daemon.
     return _file_out(await svc.read(path))
 
 
-@router.put("/file", response_model=FileOut)
-async def write_file(
-    body: FileWrite,
+@router.post("/material", response_model=SubmissionOut, status_code=status.HTTP_201_CREATED)
+async def submit_material(
+    body: MaterialIn,
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
     actor: str = Depends(_actor_kind),
-) -> FileOut:
-    if (body.path is None) == (body.collection is None):
-        raise UnsafeKnowledgePath(
-            body.path or body.collection or "",
-            "a write names exactly one of 'path' or 'collection'",
-        )
-    # ``write_source`` adds the ``sources/`` segment itself and, for a replace,
-    # asserts the target is in that lane — a ``path`` under ``topics/`` raises
-    # ``UnsafeKnowledgePath`` there and reaches the client as 400
-    # ``KNOWLEDGE_PATH_UNSAFE``. That is the only guard this route needs: the
-    # rule belongs to path construction, which is the one place it cannot be
-    # forgotten (FR-006, FR-013).
-    written = await svc.write_source(
+) -> SubmissionOut:
+    submitted = await svc.submit(
+        collection=body.collection,
         title=body.title,
         description=body.description,
         body=body.body,
-        collection=body.collection,
-        folder=body.folder,
-        relpath=body.path,
         actor_kind=actor,
         actor=actor,
     )
-    return _file_out(written)
+    return SubmissionOut(
+        status="written" if submitted.document is not None else "pending",
+        collection=submitted.collection,
+        title=submitted.title,
+        path=submitted.document.path if submitted.document is not None else None,
+    )
 
 
 @router.delete("/file", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
@@ -191,10 +179,9 @@ async def delete_file(
     svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
     actor: str = Depends(_actor_kind),
 ) -> Response:
-    # A source only (FR-020). A topic document is derived and is deleted by
-    # being retired in a pass, never from here — so this refuses a ``topics/``
-    # path rather than offering a delete the next pass would undo.
-    await svc.delete_source(path, actor=actor)
+    # Any document (FR-020): the collection is the person's as much as
+    # curation's. No agent-facing tool deletes.
+    await svc.delete_document(path, actor=actor)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -214,7 +201,7 @@ async def curate(
     # Two different guards, in this order on purpose.
     #
     # The registry claim is first, and it is about THIS collection: a pass
-    # takes minutes and rewrites the collection's topic documents, so a second
+    # takes minutes and rewrites the collection's documents, so a second
     # request while one is in flight is refused (409 ``UPKEEP_ALREADY_RUNNING``)
     # rather than queued behind it (FR-030) — the caller asked to start a pass,
     # and no pass is going to start. Claiming before the lock is what makes
@@ -233,10 +220,12 @@ async def curate(
             result = await get_curation_runner()(
                 svc,
                 uid,
-                # Omitted, the pass picks the oldest pending source itself
-                # (FR-022). One source per pass either way: a trigger is never
-                # a corpus-wide rewrite (FR-025).
-                source_relpath=body.source if body is not None else None,
+                # Omitted, the pass picks the oldest pending item itself
+                # (FR-022). One item per pass either way: a trigger is never a
+                # corpus-wide rewrite (FR-025).
+                item=Pending(document=body.document)
+                if body is not None and body.document
+                else None,
                 actor=actor,
             )
     # ``result`` already carries ``collection`` — as the collection's NAME, put
@@ -253,10 +242,6 @@ async def upload(
     #: segment ``IngestService`` joins under the knowledge root, exactly like
     #: ``FileWrite.collection``.
     collection: str = Form(...),
-    #: A subdirectory inside the collection's ``sources/``, never the lane
-    #: itself: an upload is a source like any other and cannot be aimed at
-    #: ``topics/`` (FR-013, FR-016).
-    folder: str | None = Form(default=None),
     svc: IngestService = Depends(get_ingest_service),  # noqa: B008
     actor: str = Depends(_actor_kind),
 ) -> Any:
@@ -270,7 +255,6 @@ async def upload(
             collection=collection,
             filename=file.filename or "upload",
             data=data,
-            folder=folder,
             actor=actor,
         )
     except UnsupportedDocument as exc:

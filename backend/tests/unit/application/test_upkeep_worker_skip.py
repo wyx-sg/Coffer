@@ -35,7 +35,7 @@ class _Collections:
     """The slice of ``KnowledgeService`` the curation worker actually uses.
 
     It holds a collection by uid and reads the *name* off the row, once, for
-    the directory ``pending_sources`` walks — so a fake has to answer that one
+    the directory ``pending_items`` walks — so a fake has to answer that one
     question. ``uid-<name>`` keeps the mapping obvious at the call sites.
     """
 
@@ -56,7 +56,7 @@ class _Collections:
 
 @pytest.fixture
 def corpus(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
-    """Two collections, each holding one source no pass has absorbed yet.
+    """Two collections, each holding one piece of material no pass has merged yet.
 
     The curation worker asks the DIRECTORY what is owed (spec knowledge
     FR-022) rather than a queue, so a collection with nothing pending is
@@ -66,9 +66,7 @@ def corpus(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     for name in ("busy", "free"):
         fs.create_collection_dir(name)
-        fs.write_file(
-            directory=f"{name}/sources", title="Session", description="d", body="b", actor="user"
-        )
+        fs.submit_material(name, title="Session", description="d", body="b", actor="user")
     return tmp_path / "knowledge"
 
 

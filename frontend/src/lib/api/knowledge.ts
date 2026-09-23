@@ -1,14 +1,16 @@
 // frontend/src/lib/api/knowledge.ts
 //
 // Request helpers for the `knowledge` kind. Nothing here retrieves and nothing
-// here reads an index: a collection is two folders (`sources/` and `topics/`)
-// walked a level at a time, frontmatter read at call time (ADR
-// knowledge-is-plain-files), so a file someone dropped into `sources/` by hand
-// is visible on the very next call and there is nothing to reindex or re-embed.
+// here reads an index: a collection is one folder of Markdown documents walked
+// a level at a time, frontmatter read at call time (ADR
+// knowledge-is-plain-files), so a document someone edited in their own editor
+// is what the very next call returns and there is nothing to reindex.
 //
 // There is no `search` and no `grep` here because the daemon serves neither
-// (FR-050). Writing and deleting reach `sources/` only — `topics/` is
-// curation's lane, and `curateCollection` is the one way anything gets into it.
+// (FR-050). New knowledge goes in as MATERIAL — an upload here, an agent's
+// `coffer__write`, the CLI — which waits in the collection's hidden inbox
+// until a curation pass merges it into the documents; with no internal model
+// configured it becomes a document as it is.
 //
 // Deleting a COLLECTION is deliberately absent: a collection is one `knowledge`
 // Resource, so it goes through the kind-agnostic `DELETE /resources/{uid}`
@@ -60,11 +62,11 @@ export function createCollection(payload: {
 // --- catalogue --------------------------------------------------------------
 
 /**
- * List ONE level of ONE lane: the immediate subdirectories and files under
- * `path` (relative to the knowledge root, lane included —
- * `shopee/sources/account`). The tree descends a level per request, and the
- * page asks once per lane rather than this route carrying a lane parameter the
- * path already spells.
+ * List ONE level of a collection: the immediate subdirectories and documents
+ * under `path`, relative to the knowledge root — `shopee` for the collection
+ * itself, `shopee/account` for a folder inside it. The tree descends a level
+ * per request. The collection's own `README.md` and the hidden inbox never
+ * appear: neither is a document.
  */
 export function getTree(path: string): Promise<TreeOut> {
   return call<TreeOut>(`${ROOT}/tree?path=${enc(path)}`);
@@ -75,14 +77,14 @@ export function getFile(path: string): Promise<FileOut> {
 }
 
 /**
- * Remove ONE source. `path` is relative to the knowledge root, the same string
- * the tree and `getFile` use — the daemon refuses anything that escapes it,
- * and refuses a `topics/` path outright: a topic document is derived and is
- * removed by being retired in a pass, never from here (FR-027).
+ * Remove ONE document — any of them: the collection is the person's as much
+ * as curation's (FR-020). `path` is relative to the knowledge root, the same
+ * string the tree and `getFile` use, and the daemon refuses anything that
+ * escapes it.
  *
- * A source is the only copy: there is no index to fall out of step and nothing
- * to restore it from but the sync remote's history, which is why every caller
- * confirms first. 204, so nothing comes back.
+ * A document is the only copy: there is no index to fall out of step and
+ * nothing to restore it from but the sync remote's history, which is why every
+ * caller confirms first. 204, so nothing comes back.
  */
 export function deleteFile(path: string): Promise<void> {
   return call<void>(`${ROOT}/file?path=${enc(path)}`, { method: "DELETE" });
@@ -92,47 +94,44 @@ export function deleteFile(path: string): Promise<void> {
 
 /**
  * Run ONE curation pass over one collection now — the manual trigger for the
- * pass the background sweep otherwise runs on an interval. It reads one source
- * and writes only `topics/`.
+ * pass the background sweep otherwise runs on an interval. It takes one
+ * pending item and merges it into the collection's documents.
  *
- * `source` names a particular source to fold in; omitted, the pass takes the
- * oldest one whose watermark is behind its own modification time, which is
- * what the page's button wants. A pass with no internal model configured comes
- * back `no_model` — a clean 200, not an error — so every status here is
- * something the page reports rather than something it treats as a failure.
+ * `document` names a particular document to carry through; omitted, the pass
+ * takes the oldest pending item — inbox material first, then a document edited
+ * since curation last saw it — which is what the page's button wants. A pass
+ * with no internal model configured comes back `no_model`, having promoted the
+ * inbox to documents as it stood (`promoted`) — a clean 200, not an error — so
+ * every status here is something the page reports rather than a failure.
  *
  * A second pass over the same collection is refused with 409
  * `UPKEEP_ALREADY_RUNNING` rather than queued (FR-039).
  */
-export function curateCollection(uid: string, source?: string | null): Promise<CurationOut> {
+export function curateCollection(uid: string, document?: string | null): Promise<CurationOut> {
   return call<CurationOut>(`${ROOT}/collections/${enc(uid)}/curate`, {
     method: "POST",
-    body: { source: source ?? null },
+    body: { document: document ?? null },
   });
 }
 
 // --- ingestion ----------------------------------------------------------------
 
 /**
- * Convert an uploaded document into an ordinary source. `folder` is relative to
- * the collection's `sources/` LANE (not the knowledge root and not the
- * collection root) — mirroring `IngestService.ingest`, which joins it onto that
- * lane itself, so an upload can never be aimed at `topics/`.
- *
- * Both the original and the Markdown extracted from it land in `sources/`; the
- * response names the original's path, which is an ordinary visible file the
- * tree lists beside its conversion.
+ * Convert an uploaded document into material for a collection. The Markdown
+ * extracted from it joins the collection's inbox and is merged into the
+ * documents by the next pass (`pending: true`); with no internal model
+ * configured it is promoted to a document on the spot and `path` names it.
+ * Neither the original nor the extracted Markdown is kept beyond that — the
+ * documents are what the collection holds.
  */
 export function uploadFile(params: {
-  /** The collection's NAME: this lands a file in its directory. */
+  /** The collection's NAME: this lands material in its directory. */
   collection: string;
-  folder?: string | null;
   file: File;
 }): Promise<IngestedDocumentOut> {
   const form = new FormData();
   form.append("file", params.file);
   form.append("collection", params.collection);
-  if (params.folder) form.append("folder", params.folder);
   // A FormData body goes out with no Content-Type: the browser sets the
   // multipart boundary itself (see `call`).
   return call<IngestedDocumentOut>(`${ROOT}/upload`, { method: "POST", body: form });

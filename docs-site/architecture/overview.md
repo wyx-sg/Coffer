@@ -89,7 +89,7 @@ Every persistent artifact lives in one directory:
 ├── master.key           # Fernet master key (0600; keychain opt-in moves it out)
 ├── machine-id           # this machine's stable identity for sync
 ├── knowledge/           # knowledge files-as-truth, one dir per collection:
-│                        #   <collection>/ + hidden .raw/ and .history/
+│                        #   <collection>/ documents + a hidden .inbox/
 ├── memory/              # facts aggregated out of the agents' own native memory
 ├── skills/              # canonical master skill store
 ├── sync/                # the git working tree the vault converges through

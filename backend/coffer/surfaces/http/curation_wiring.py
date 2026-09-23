@@ -4,7 +4,7 @@ Three things only a composition root can supply meet here: the langgraph loop
 adapter (import contract 9a keeps langgraph inside ``infrastructure.llm``, so
 ``application.knowledge`` reaches it only through the injected port), the
 installation-wide switch that decides whether the worker runs, and Coffer's
-own skill, which the pass re-renders after every corpus change — a new topic
+own skill, which the pass re-renders after every corpus change — a new
 document is unreachable until the catalogue in that skill names it.
 
 Kept out of ``app.py`` / ``chat_wiring.py``, both at the 400-LOC ceiling,
@@ -69,10 +69,10 @@ def start_curation_worker(
 ) -> asyncio.Task[None]:
     """Start the interval sweep.
 
-    Unlike the tidy worker this replaces, it is **on by default** (FR-032):
-    curation is the only path from a source to something an agent can read, so
-    an installation where it never runs is one whose ``topics/`` lane stays
-    empty forever. Returns the task; the lifespan cancels it at shutdown.
+    It is **on by default** (FR-032): curation is what merges new material into
+    the documents an agent reads, so an installation where it never runs is one
+    whose inbox is never read. Returns the task; the lifespan cancels it at
+    shutdown.
 
     Takes the sync graph explicitly: the worker consults this machine's
     identity, the pending-round state and the vault-write lock, all of which
@@ -96,7 +96,7 @@ def start_curation_worker(
 
         Once a vault spans machines an unattended rewriter must run on exactly
         one of them (spec vault-sync ``## Unattended rewriters``): two machines
-        folding the same source produce two *different* topic documents, git
+        folding the same material produce two *different* documents, git
         merges both additions cleanly, and the vault silently holds the
         knowledge twice. No owner set means a single-machine vault, where
         "here" is the only answer there is.

@@ -1,22 +1,24 @@
 """The curation pass, and the boundaries that make it safe to run unattended.
 
-Curation rewrites ``topics/`` with no review step (spec knowledge FR-021). What
-makes that acceptable is not a safety net after the fact but three properties
-checked here: it cannot reach ``sources/`` at all, it cannot write more than a
-handful of files, and it cannot record a reference that will rot. The fourth —
-that a source it did not finish absorbing stays owed — is the watermark, tested
-in ``test_two_lanes``.
+Curation rewrites a collection's documents with no review step (spec knowledge
+FR-021). What makes that acceptable is not a safety net after the fact but the
+properties checked here: it is fenced to one collection's documents, it cannot
+write more than a handful of files, it cannot record a reference that will
+rot, and an item it did not finish absorbing stays owed — material stays in the
+inbox, an edited document stays unstamped.
 """
 
 from __future__ import annotations
 
+import os
+import time
 from datetime import UTC, datetime
 from typing import Any
 
 import pytest
 
 from coffer.application.engine_timeout import DEFAULT_MODEL_TIMEOUT_S
-from coffer.application.knowledge.curate import CURATION_SYSTEM, run_curation
+from coffer.application.knowledge.curate import CURATION_SYSTEM, pending_items, run_curation
 from coffer.application.knowledge.curate_tools import (
     MAX_WRITES_PER_PASS,
     Counters,
@@ -25,6 +27,8 @@ from coffer.application.knowledge.curate_tools import (
 )
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.domain.errors import ResourceNotFound
+from coffer.domain.knowledge.entry import Pending
+from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 from coffer.domain.resource import Resource
 from coffer.infrastructure.knowledge import catalogue, fs, paths
 
@@ -142,16 +146,22 @@ def _service() -> KnowledgeService:
     return KnowledgeService(resources=_Resources(["shopee"]), audit=_Audit())
 
 
-def _source(title: str = "Session facts", body: str = "`account.session` owns login state") -> str:
+def _material(
+    title: str = "Session facts", body: str = "`account.session` owns login state"
+) -> str:
+    """New material in the inbox — what an upload or ``coffer__write`` leaves."""
+    return fs.submit_material("shopee", title=title, description="d", body=body, actor="user")
+
+
+def _document(title: str, body: str = "b", description: str = "d") -> str:
+    """A document curation has already seen."""
     return fs.write_file(
-        directory="shopee/sources", title=title, description="d", body=body, actor="user"
+        directory="shopee", title=title, description=description, body=body, curated=True
     ).path
 
 
-def _topic(title: str, body: str = "b", description: str = "d") -> str:
-    return fs.write_file(
-        directory="shopee/topics", title=title, description=description, body=body
-    ).path
+def _documents() -> list[str]:
+    return [f.path for f in catalogue.walk_files(paths.collection_dir("shopee"))]
 
 
 async def _run(loop: _Loop, models: Any = None, **kwargs: Any) -> dict[str, Any]:
@@ -169,18 +179,24 @@ async def _run(loop: _Loop, models: Any = None, **kwargs: Any) -> dict[str, Any]
 
 
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="curation is a no-op when no internal model is configured"
+    spec="knowledge",
+    scenario="with no internal model, pending material becomes documents as it stands",
 )
 @pytest.mark.anyio
-async def test_no_model_writes_nothing_and_leaves_the_source_owed(knowledge_root) -> None:  # type: ignore[no-untyped-def]
-    relpath = _source()
+async def test_no_model_promotes_the_inbox_as_it_stands(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    _material(title="Session facts", body="one fact")
+    _material(title="Gateway", body="another fact")
     outcome = await _run(_Loop([]), models=_NoModel())
+
     assert outcome["status"] == "no_model"
-    assert catalogue.count_files(paths.topics_dir("shopee")) == 0
-    # The watermark stays unset, so the material is curated once a model is
-    # configured rather than skipped forever.
-    assert fs.read_file(relpath).ingested_at == ""
-    assert fs.pending_sources("shopee") == (relpath,)
+    assert sorted(outcome["promoted"]) == ["shopee/gateway.md", "shopee/session-facts.md"]
+    assert fs.inbox_items("shopee") == ()
+    # Promoted as it stood, and stamped: nothing is going to curate it, so an
+    # unstamped document would only be handed back by every sweep.
+    promoted = fs.read_file("shopee/session-facts.md")
+    assert promoted.body.strip() == "one fact"
+    assert promoted.curated_at != ""
+    assert pending_items("shopee") == ()
 
 
 @pytest.mark.anyio
@@ -189,8 +205,8 @@ async def test_nothing_pending_is_up_to_date(knowledge_root) -> None:  # type: i
 
 
 @pytest.mark.anyio
-async def test_a_loop_that_raises_leaves_the_source_owed(knowledge_root) -> None:  # type: ignore[no-untyped-def]
-    relpath = _source()
+async def test_a_loop_that_raises_leaves_the_material_owed(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    name = _material()
 
     class _Boom:
         async def run(self, **kwargs: Any) -> dict[str, Any]:
@@ -198,90 +214,138 @@ async def test_a_loop_that_raises_leaves_the_source_owed(knowledge_root) -> None
 
     outcome = await _run(_Boom())  # type: ignore[arg-type]
     assert outcome["status"] == "failed"
-    assert fs.read_file(relpath).ingested_at == ""
+    assert fs.inbox_items("shopee") == (name,)
 
 
-# ----- what the pass may touch --------------------------------------------
-
-
-@pytest.mark.acceptance(
-    spec="knowledge", scenario="curation writes topics and never touches sources"
-)
-@pytest.mark.anyio
-async def test_a_pass_writes_topics_and_leaves_sources_byte_identical(knowledge_root) -> None:  # type: ignore[no-untyped-def]
-    relpath = _source(body="one fact")
-    other = _source(title="Second", body="another fact")
-    before = paths.resolve(other).read_bytes()
-
-    loop = _Loop(
-        [
-            (
-                "write_topic",
-                {
-                    "title": "Session",
-                    "description": "who owns login state",
-                    "body": "one fact and another",
-                },
-            )
-        ]
-    )
-    outcome = await _run(loop, source_relpath=relpath)
-
-    assert outcome["status"] == "ok"
-    assert [f.path for f in catalogue.walk_files(paths.topics_dir("shopee"))] == [
-        "shopee/topics/session.md"
-    ]
-    # The source that was absorbed gained only its stamp; the untouched one is
-    # byte-for-byte what it was.
-    assert paths.resolve(other).read_bytes() == before
-    assert fs.read_file(relpath).ingested_at != ""
+# ----- what the pass does with its item ------------------------------------
 
 
 @pytest.mark.acceptance(
     spec="knowledge",
-    scenario="a pass sees candidates and the catalogue, never the sources lane",
+    scenario="curation merges material into the documents and empties the inbox",
 )
 @pytest.mark.anyio
-async def test_the_tool_surface_cannot_reach_the_sources_lane(knowledge_root) -> None:  # type: ignore[no-untyped-def]
-    relpath = _source(body="`account.session` owns login state")
-    _topic("Login state", body="`account.session` is involved somehow")
-    _topic("Unrelated", body="nothing in common")
+async def test_a_pass_merges_material_and_empties_the_inbox(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    name = _material(body="one fact")
+    other = _material(title="Second", body="another fact")
 
-    loop = _Loop([("read_topic", {"path": relpath})])
-    await _run(loop, source_relpath=relpath)
+    loop = _Loop(
+        [
+            (
+                "write_document",
+                {
+                    "title": "Session",
+                    "description": "who owns login state",
+                    "body": "one fact and more",
+                },
+            )
+        ]
+    )
+    outcome = await _run(loop, item=Pending(material=name))
 
-    # Four tools, none of which names the other lane.
-    assert loop.tool_names == ["list_topics", "read_topic", "retire_topic", "write_topic"]
-    # And the one call that tried to read a source was refused rather than served.
-    assert "error" in loop.results[0]
-    assert "topics/" in loop.results[0]["error"]
+    assert outcome["status"] == "ok"
+    assert outcome["documents_before"] == 0
+    assert outcome["documents_after"] == 1
+    assert _documents() == ["shopee/session.md"]
+    # The item the pass absorbed left the inbox; the one it was not handed is
+    # still owed.
+    assert fs.inbox_items("shopee") == (other,)
+    # What the pass wrote is stamped, so the sweep does not hand the pass its
+    # own output back as an "edit".
+    assert fs.read_file("shopee/session.md").curated_at != ""
+    assert [p.document for p in pending_items("shopee") if p.document] == []
 
-    # The brief carries the source, the catalogue, and the candidate that
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a document edited out-of-band is curated by the next sweep"
+)
+@pytest.mark.anyio
+async def test_an_edited_document_is_carried_through_then_stamped(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    relpath = _document("Login state", body="the old wording")
+    assert pending_items("shopee") == ()
+
+    # A person rewrites it in their own editor: no stamp moves, the mtime does.
+    target = paths.resolve(relpath)
+    fm_and_body = target.read_text().replace("the old wording", "the corrected wording")
+    target.write_text(fm_and_body)
+    later = time.time() + 5
+    os.utime(target, (later, later))
+    assert pending_items("shopee") == (Pending(document=relpath),)
+
+    loop = _Loop([])
+    outcome = await _run(loop)
+
+    assert outcome["status"] == "ok"
+    assert outcome["item"] == relpath
+    # The brief says which document a person edited, in full.
+    assert f"The document a person edited: {relpath}" in loop.prompt
+    assert "the corrected wording" in loop.prompt
+    # And once carried through, it is not handed back on the next sweep — nor
+    # is the person's wording touched by the stamp.
+    assert pending_items("shopee") == ()
+    assert "the corrected wording" in fs.read_file(relpath).body
+
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a pass sees candidates and the catalogue, never the inbox"
+)
+@pytest.mark.anyio
+async def test_the_tool_surface_is_fenced_to_the_collection_s_documents(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    name = _material(body="`account.session` owns login state")
+    _material(title="Waiting", body="still in the inbox")
+    _document("Login state", body="`account.session` is involved somehow")
+    _document("Unrelated", body="nothing in common")
+    (paths.collection_dir("shopee") / "README.md").write_text("# shopee\n\nAbout it.\n")
+
+    loop = _Loop(
+        [
+            ("read_document", {"path": f"shopee/.inbox/{name}"}),
+            ("read_document", {"path": "shopee/README.md"}),
+            ("read_document", {"path": "other/anything.md"}),
+            ("list_documents", {}),
+        ]
+    )
+    await _run(loop, item=Pending(material=name))
+
+    assert loop.tool_names == [
+        "list_documents",
+        "read_document",
+        "retire_document",
+        "write_document",
+    ]
+    # The inbox, the README and another collection are all refused.
+    assert all("error" in r for r in loop.results[:3])
+    listed = [d["path"] for d in loop.results[3]["documents"]]
+    assert listed == ["shopee/login-state.md", "shopee/unrelated.md"]
+
+    # The brief carries the material, the catalogue, and the candidate that
     # actually matched — the catalogue so the model can decide none of them fit.
     assert "account.session" in loop.prompt
-    assert "shopee/topics/login-state.md" in loop.prompt
-    assert "shopee/topics/unrelated.md" in loop.prompt
+    assert "shopee/login-state.md" in loop.prompt
+    assert "shopee/unrelated.md" in loop.prompt
+    # Other waiting material is not in front of this pass.
+    assert "still in the inbox" not in loop.prompt
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="a pass is bounded to a handful of writes")
 @pytest.mark.anyio
 async def test_a_pass_stops_at_the_write_bound(knowledge_root) -> None:  # type: ignore[no-untyped-def]
-    relpath = _source()
+    name = _material()
     attempts = MAX_WRITES_PER_PASS + 3
     loop = _Loop(
         [
-            ("write_topic", {"title": f"Doc {n}", "description": "d", "body": f"body {n}"})
+            ("write_document", {"title": f"Doc {n}", "description": "d", "body": f"body {n}"})
             for n in range(attempts)
         ]
     )
-    outcome = await _run(loop, source_relpath=relpath)
+    outcome = await _run(loop, item=Pending(material=name))
 
     assert outcome["written"] == MAX_WRITES_PER_PASS
     refused = [r for r in loop.results if "error" in r]
     assert len(refused) == attempts - MAX_WRITES_PER_PASS
     assert str(MAX_WRITES_PER_PASS) in refused[0]["error"]
     # What did land is whole files, not truncated ones.
-    written = catalogue.walk_files(paths.topics_dir("shopee"))
+    written = catalogue.walk_files(paths.collection_dir("shopee"))
     assert len(written) == MAX_WRITES_PER_PASS
     assert all(fs.read_file(f.path).body.strip().startswith("body") for f in written)
 
@@ -290,46 +354,46 @@ async def test_a_pass_stops_at_the_write_bound(knowledge_root) -> None:  # type:
 @pytest.mark.parametrize(
     ("folder", "expected"),
     [
-        ("", "shopee/topics/doc.md"),
-        ("account", "shopee/topics/account/doc.md"),
-        ("shopee/topics", "shopee/topics/doc.md"),
-        ("shopee/topics/account", "shopee/topics/account/doc.md"),
-        ("topics/account", "shopee/topics/account/doc.md"),
-        ("/account/", "shopee/topics/account/doc.md"),
+        ("", "shopee/doc.md"),
+        ("account", "shopee/account/doc.md"),
+        ("shopee", "shopee/doc.md"),
+        ("shopee/account", "shopee/account/doc.md"),
+        ("/account/", "shopee/account/doc.md"),
     ],
 )
-async def test_a_folder_lands_inside_the_lane_however_it_is_spelled(
+async def test_a_folder_lands_inside_the_collection_however_it_is_spelled(
     knowledge_root, folder: str, expected: str
 ) -> None:  # type: ignore[no-untyped-def]
-    # Found by running a real pass, not by any fake: a model shown paths like
-    # `shopee/topics/x.md` answers with `folder="shopee/topics"`, which used to
-    # produce `shopee/topics/shopee/topics/x.md`. The prefixes this layer adds
-    # are stripped rather than the spelling being refused.
-    relpath = _source()
+    # A model shown paths like `shopee/x.md` answers with `folder="shopee"`,
+    # which would produce `shopee/shopee/x.md`. The prefix this layer adds is
+    # stripped rather than the spelling being refused.
+    name = _material()
     loop = _Loop(
-        [("write_topic", {"folder": folder, "title": "Doc", "description": "d", "body": "b"})]
+        [("write_document", {"folder": folder, "title": "Doc", "description": "d", "body": "b"})]
     )
-    await _run(loop, source_relpath=relpath)
+    await _run(loop, item=Pending(material=name))
     assert loop.results[0]["path"] == expected
 
 
 # ----- the reference rule --------------------------------------------------
 
 
-@pytest.mark.acceptance(spec="knowledge", scenario="a curated topic carries no file-name reference")
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a curated document carries no file-name reference"
+)
 @pytest.mark.anyio
 async def test_a_write_naming_a_knowledge_file_is_refused(knowledge_root) -> None:  # type: ignore[no-untyped-def]
-    relpath = _source()
-    _topic("Login state")
+    name = _material()
+    _document("Login state")
 
     loop = _Loop(
         [
             (
-                "write_topic",
+                "write_document",
                 {"title": "Session", "description": "d", "body": "see `login-state.md` for more"},
             ),
             (
-                "write_topic",
+                "write_document",
                 {
                     "title": "Session",
                     "description": "d",
@@ -338,7 +402,7 @@ async def test_a_write_naming_a_knowledge_file_is_refused(knowledge_root) -> Non
             ),
         ]
     )
-    await _run(loop, source_relpath=relpath)
+    await _run(loop, item=Pending(material=name))
 
     assert "error" in loop.results[0] and "login-state.md" in loop.results[0]["error"]
     # The rewrite that names the subject instead of the file goes through.
@@ -350,29 +414,32 @@ def test_only_this_corpus_s_file_names_are_refused() -> None:
     # A document about a repository may legitimately mention that repository's
     # own files; refusing that would be a rule the model cannot satisfy.
     assert offending_reference("the repo's `AGENTS.md` says so", known, collection="shopee") is None
-    # A repository of its own may hold a `sources/` folder; that is not this
-    # corpus, and refusing it would be a rule the model cannot satisfy.
-    assert offending_reference("see `docs/sources/overview.md`", known, collection="shopee") is None
+    # A repository of its own may hold a folder of the same name; that is not
+    # this corpus.
+    assert offending_reference("see `docs/shopee/overview.md`", known, collection="shopee") is None
     assert (
         offending_reference("see `login-state.md`", known, collection="shopee") == "login-state.md"
     )
-    # A path into THIS collection's lanes is this corpus by construction.
+    # A path into THIS collection is this corpus by construction.
     assert (
-        offending_reference("shopee/topics/anything.md", known, collection="shopee")
-        == "shopee/topics/anything.md"
+        offending_reference("shopee/anything.md", known, collection="shopee")
+        == "shopee/anything.md"
     )
 
 
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="the pass is instructed that a contradicting source wins"
+    spec="knowledge",
+    scenario="the pass is instructed that newer material wins and a person's edit stands",
 )
-def test_the_system_prompt_states_the_contradiction_rule() -> None:
-    # No code can adjudicate a contradiction, so the instructions are the whole
-    # of FR-026 and this is what pins them.
+def test_the_system_prompt_states_the_contradiction_and_edit_rules() -> None:
+    # No code can adjudicate a contradiction or tell a deliberate edit from a
+    # mistake, so the instructions are the whole of FR-026 and this pins them.
     lowered = CURATION_SYSTEM.lower()
-    assert "the source wins" in lowered
+    assert "the newer statement wins" in lowered
     assert "previously recorded" in lowered
     assert "corrected" in lowered
+    assert "a person's edit is deliberate" in lowered
+    assert "never revert" in lowered
     # And the bound the model is told about matches the one enforced.
     assert str(MAX_WRITES_PER_PASS) in CURATION_SYSTEM
 
@@ -389,7 +456,29 @@ def test_retire_is_bounded_like_a_write(knowledge_root) -> None:  # type: ignore
         )
     }
     assert counters.writes == MAX_WRITES_PER_PASS
-    assert "retire_topic" in tools
+    assert "retire_document" in tools
+
+
+@pytest.mark.anyio
+async def test_a_pass_that_retires_its_own_edited_document_settles_cleanly(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    # An edited document that duplicates another is folded in and retired by
+    # the pass; there is then nothing left to stamp, and that is not a failure.
+    relpath = fs.write_file(directory="shopee", title="Dup", description="d", body="x").path
+    keeper = _document("Keeper", body="x and more")
+    loop = _Loop(
+        [
+            ("read_document", {"path": keeper}),
+            (
+                "write_document",
+                {"path": keeper, "title": "Keeper", "description": "d", "body": "x"},
+            ),
+            ("retire_document", {"path": relpath}),
+        ]
+    )
+    outcome = await _run(loop, item=Pending(document=relpath))
+    assert outcome["status"] == "ok"
+    assert _documents() == [keeper]
+    assert pending_items("shopee") == ()
 
 
 async def test_every_turn_of_the_loop_carries_the_operators_bound() -> None:
@@ -401,7 +490,7 @@ async def test_every_turn_of_the_loop_carries_the_operators_bound() -> None:
     it could bound the whole conversation or nothing, and neither is "each turn
     gets a fair chance and then gives up".
     """
-    _source()
+    _material()
     loop = _Loop([])
 
     async def chosen() -> int | None:
@@ -415,9 +504,20 @@ async def test_every_turn_of_the_loop_carries_the_operators_bound() -> None:
 async def test_a_pass_with_no_settings_to_consult_still_has_a_bound() -> None:
     # The unit-test construction, and any pass built before the singleton
     # exists. Making the bound configurable must not make it optional.
-    _source()
+    _material()
     loop = _Loop([])
 
     await _run(loop)
 
     assert loop.timeout == DEFAULT_MODEL_TIMEOUT_S
+
+
+@pytest.mark.anyio
+async def test_a_named_document_must_belong_to_the_collection(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    fs.create_collection_dir("other")
+    elsewhere = fs.write_file(directory="other", title="Theirs", description="d", body="b").path
+    with pytest.raises(UnsafeKnowledgePath):
+        await _run(_Loop([]), item=Pending(document=elsewhere))
+    with pytest.raises(UnsafeKnowledgePath):
+        await _run(_Loop([]), item=Pending(document="shopee/README.md"))
+    assert fs.read_file(elsewhere).curated_at == ""
