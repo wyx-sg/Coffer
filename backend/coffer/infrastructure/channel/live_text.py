@@ -8,10 +8,9 @@ underneath differs per transport:
 * SeaTalk cannot edit anything, but it *can* stream: ``init_stream`` opens a
   message and each ``update_stream`` re-renders it from the FULL snapshot.
 
-The rules both transports share — never call the platform more often than the
-buffer interval, remember the last snapshot, and latch dead on the first
-failure so a terminated surface is never reused — live in
-:class:`LiveTextSurface` here rather than being written twice.
+The rules both transports share — never call the platform more often than the buffer
+interval, remember the last snapshot, and latch dead on the first failure so a terminated
+surface is never reused — live in :class:`LiveTextSurface` rather than being written twice.
 """
 
 from __future__ import annotations
@@ -24,6 +23,7 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from coffer.application.channel.turn_text import clip_stream_preview
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.infrastructure.channel.render import markdown_to_seatalk
 from coffer.infrastructure.channel.seatalk_stream_text import (
@@ -55,11 +55,12 @@ _logger = logging.getLogger(__name__)
 #: backs off, and the refusal is logged; it cannot fail silently.
 MIN_UPDATE_INTERVAL = float(os.environ.get("COFFER_SEATALK_STREAM_INTERVAL", "0.1"))
 
-#: Telegram edits a real message to show progress, and its flood limits are far
-#: tighter than a streaming endpoint's — roughly one edit a second before it
-#: starts refusing them. It keeps the cadence the core used to impose on
-#: everyone.
+#: Telegram edits a real message, and its flood limits (~one edit a second) are far
+#: tighter than a streaming endpoint's.
 TELEGRAM_UPDATE_INTERVAL = 1.5
+
+#: One plain message's cap; the renderer clips to the far larger rich budget.
+TELEGRAM_TEXT_LIMIT = 4096
 
 #: SeaTalk terminates a stream that goes 30 s without an update, and a Telegram
 #: draft is a 30-second preview: the one keep-alive cadence every live surface
@@ -238,7 +239,15 @@ class TelegramLiveText(LiveTextSurface):
         self._thread_id = thread_id
         self._message_id = ""
 
+    async def close(self, text: str) -> str:
+        """A status message that died on a later edit is still deleted (spec channels/telegram
+        "Use a deleted status message as the live scaffolding")."""
+        if self._dead and self._message_id:
+            return await self._finish(text)
+        return await super().close(text)
+
     async def _write(self, text: str) -> None:
+        text = clip_stream_preview(text, TELEGRAM_TEXT_LIMIT)
         if not self._message_id:
             extra: dict[str, Any] = {}
             if self._thread_id:
@@ -258,6 +267,7 @@ class TelegramLiveText(LiveTextSurface):
         # paragraph-chunked (an edit cannot do either).
         with contextlib.suppress(Exception):
             await self._call("deleteMessage", chat_id=self._chat_id, message_id=self._message_id)
+        self._message_id = ""  # a second close has nothing left to delete
         return text
 
 

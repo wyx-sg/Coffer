@@ -62,6 +62,10 @@ _SENTINEL = object()
 _CLIENT_INFO = {"name": "coffer", "title": None, "version": "0"}
 
 
+class _ConnectError(Exception):
+    """The app-server could not open a thread for this turn."""
+
+
 class CodexAppServerAdapter:
     """One turn of an app-server-backed Codex agent.
 
@@ -128,15 +132,14 @@ class CodexAppServerAdapter:
                 exc_info=True,
             )
 
-    async def _drive_handshake(self, rpc: CodexRpcClient, prompt: str) -> str:
-        """Run initialize → initialized → thread/start|resume → turn/start.
+    async def _open_thread(self, rpc: CodexRpcClient, state: CodexParseState) -> str:
+        """Resume the stored thread, or start one; return its id.
 
-        Returns the turn id (needed to interrupt). The thread id lands in the
-        parse state via the ``thread/started`` notification the pump maps.
+        spec chat "Retry a forgotten resume id once as a fresh session": a
+        ``thread/resume`` the app-server rejects (it has forgotten the thread)
+        is retried ONCE as ``thread/start``, whose id then replaces the stored
+        one. A failure of that fresh start propagates — it is the turn error.
         """
-        await rpc.request("initialize", {"clientInfo": _CLIENT_INFO, "capabilities": None})
-        await rpc.notify("initialized")
-
         model = self._extra.get("model")
         # Full permissions — Coffer does not gate individual tool calls; the owner
         # driving the conversation is the trust boundary.
@@ -147,8 +150,6 @@ class CodexAppServerAdapter:
             "approvalPolicy": "never",
             "sandbox": "danger-full-access",
         }
-        if self._resume:
-            thread_params["threadId"] = self._resume
         if model:
             thread_params["model"] = model
         if self._system_context:
@@ -157,10 +158,43 @@ class CodexAppServerAdapter:
             # alongside its own base instructions, never replacing them
             # (that would be ``baseInstructions``).
             thread_params["developerInstructions"] = self._system_context
-        thread = await rpc.request(
-            "thread/resume" if self._resume else "thread/start", thread_params
-        )
-        thread_id = (thread.get("thread") or {}).get("id") or self._resume or ""
+        if self._resume:
+            try:
+                thread = await rpc.request(
+                    "thread/resume", {**thread_params, "threadId": self._resume}
+                )
+                return (thread.get("thread") or {}).get("id") or self._resume
+            except Exception:
+                _logger.warning(
+                    "codex_agent.resume_failed_retrying_fresh",
+                    extra={"resume": self._resume},
+                    exc_info=True,
+                )
+                # The forgotten id must not be written back or resumed again:
+                # whatever the fresh thread reports replaces it.
+                state.session_id = None
+        thread = await rpc.request("thread/start", thread_params)
+        thread_id = (thread.get("thread") or {}).get("id") or ""
+        if thread_id and not state.session_id:
+            # Normally ``thread/started`` reports it too; the result is enough.
+            state.session_id = thread_id
+        return thread_id
+
+    async def _drive_handshake(
+        self, rpc: CodexRpcClient, prompt: str, state: CodexParseState
+    ) -> str:
+        """Run initialize → initialized → thread/start|resume → turn/start.
+
+        Returns the turn id (needed to interrupt). The thread id lands in the
+        parse state via the ``thread/started`` notification the pump maps.
+        Raises ``_ConnectError`` when no thread could be opened.
+        """
+        try:
+            await rpc.request("initialize", {"clientInfo": _CLIENT_INFO, "capabilities": None})
+            await rpc.notify("initialized")
+            thread_id = await self._open_thread(rpc, state)
+        except Exception as exc:
+            raise _ConnectError(str(exc)) from exc
 
         # ``effort`` rides on the TURN, which is where Codex takes it — the
         # thread's own settings are behind its experimental API, and a model
@@ -241,7 +275,14 @@ class CodexAppServerAdapter:
             # the only consumer of ``rpc.notifications()`` — start it first so it
             # is draining before any notification can be produced.
             pump_task = asyncio.create_task(pump())
-            turn_id = await self._drive_handshake(rpc, prompt)
+            try:
+                turn_id = await self._drive_handshake(rpc, prompt, state)
+            except _ConnectError as exc:
+                # No thread could be opened (a forgotten resume already had its
+                # one fresh retry): a turn error, not an unhandled raise.
+                state.terminal_emitted = True
+                yield TurnError(code="codex_connect_error", message=str(exc))
+                return
             while True:
                 item = await queue.get()
                 if item is _SENTINEL:

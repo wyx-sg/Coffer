@@ -68,9 +68,10 @@ def config_ls(
 def config_cat(
     ctx: typer.Context,
     name: str = typer.Argument(...),
-    key: str = typer.Argument(..., help="Config-file key (e.g. settings, config, memory)"),
+    key: str = typer.Argument(..., help="Config-file key (e.g. settings, config, instructions)"),
+    output_json: bool = typer.Option(False, "--json", help="JSON output"),
 ) -> None:
-    """Print one config file's content."""
+    """Print one config file's content (--json: the whole read, fingerprint included)."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -78,13 +79,16 @@ def config_cat(
         r = c.get(f"/agents/{uid}/config-files/{key}")
         _not_found_exit(r)
         _cli_client.check(r, verbose=verbose)
+    if output_json:
+        typer.echo(_json.dumps(r.json(), indent=2))
+        return
     typer.echo(r.json()["content"], nl=False)
 
 
 def config_edit(
     ctx: typer.Context,
     name: str = typer.Argument(...),
-    key: str = typer.Argument(..., help="Config-file key (e.g. settings, config, memory)"),
+    key: str = typer.Argument(..., help="Config-file key (e.g. settings, config, instructions)"),
     from_file: str | None = typer.Option(
         None,
         "--from-file",
@@ -95,7 +99,10 @@ def config_edit(
 
     On save, Coffer validates the content against the file's format (malformed
     JSON/TOML is rejected and the on-disk file is left unchanged), writes it
-    atomically, and keeps a `<path>.bak` of the prior version.
+    atomically, and keeps a `<path>.bak` of the prior version. The write carries
+    the fingerprint of the content it started from, so a change made on disk in
+    the meantime is refused (exit 5) instead of overwritten (spec agent-registry
+    "Reject stale config-file writes by fingerprint").
     """
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
@@ -106,6 +113,7 @@ def config_edit(
         _not_found_exit(r)
         _cli_client.check(r, verbose=verbose)
         current = r.json()["content"]
+        fingerprint = r.json()["fingerprint"]
 
         if from_file is not None:
             import pathlib
@@ -124,8 +132,15 @@ def config_edit(
                 raise typer.Exit(0)
             content = edited
 
-        w = c.put(f"/agents/{uid}/config-files/{key}", json={"content": content})
+        w = c.put(
+            f"/agents/{uid}/config-files/{key}",
+            json={"content": content, "expected_fingerprint": fingerprint},
+        )
         _not_found_exit(w)
+        if w.status_code == 409:
+            typer.echo(w.json().get("error", {}).get("message", "file changed"), err=True)
+            typer.echo(f"hint: re-run `coffer agent config edit {name} {key}`", err=True)
+            raise typer.Exit(5)
         if w.status_code == 422:
             typer.echo(w.json().get("error", {}).get("message", "invalid content"), err=True)
             raise typer.Exit(2)

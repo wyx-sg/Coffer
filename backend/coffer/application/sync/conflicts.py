@@ -1,4 +1,5 @@
-"""Everything git's three-way merge could not settle (spec vault-sync ``## Conflicts``).
+"""Everything git's three-way merge could not settle (spec vault-sync "Resolve remaining
+conflicts with an agent only in the working tree").
 
 Three layers, narrowest first, and the narrowness is the design:
 

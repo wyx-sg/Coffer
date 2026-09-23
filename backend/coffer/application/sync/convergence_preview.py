@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 from coffer.application.sync.convergence_ops import diff_between, remote_tip
 from coffer.application.sync.joining import JoinPreview, JoinResolver
+from coffer.domain.error_base import CofferError
 from coffer.domain.sync.convergence import JoinKind
 from coffer.domain.sync.errors import SyncJoinAmbiguous
 
@@ -50,7 +51,13 @@ class PreviewMixin:
     _branch: str
 
     async def _reachable(self, commit: str) -> bool:
-        raise NotImplementedError  # pragma: no cover - provided by ConvergeRound
+        if commit == self._mirror.EMPTY_TREE:
+            # A new machine's base: not a commit, but a pointer all the same.
+            return True
+        try:
+            return bool(await self._mirror.resolve_revision(commit))
+        except CofferError:
+            return False
 
     async def is_joining(self) -> bool:
         """No pointer, or one that no longer resolves: the next round joins.
@@ -58,7 +65,7 @@ class PreviewMixin:
         The one predicate for "has this machine joined?" — the round, the
         preview and the status surface all ask this, so they cannot disagree.
         The empty tree a new machine joins from counts as joined
-        (``ConvergeRound._reachable``).
+        (``_reachable``).
         """
         pointer = await self._state.pointer()
         if pointer is None:

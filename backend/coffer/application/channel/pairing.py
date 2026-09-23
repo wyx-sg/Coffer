@@ -149,6 +149,7 @@ async def claim_pairing(
         paired_at=datetime.now(tz=UTC),
         sender_id=sender_id or None,
     )
+    await _drop_previous_owner(peers, binding.resource.id, chat_id, peer.sender_id)
     await peers.upsert(peer)
     await audit.record(
         AuditEventType.CHANNEL_PAIRED.value,
@@ -161,3 +162,26 @@ async def claim_pairing(
         details={"chat_id": chat_id, "display_name": sender_display},
     )
     return peer
+
+
+async def _drop_previous_owner(
+    peers: ChannelPeerRepoPort, resource_id: int, chat_id: str, sender_id: str | None
+) -> None:
+    """Un-pair every chat that belongs to anyone but the claiming sender.
+
+    spec channels "Pair exactly one owner with a single-use code": the code binds
+    its sender as the channel's sole peer, replacing any previous peer. A channel
+    has one owner identity, and every peer row carries it — the owner's DM and each
+    group that inherited the owner's ``sender_id`` ("Treat an addressed group chat
+    as its own peer"). Rows of another sender (or of no known sender) are the
+    previous owner's authority: left in place, their DM still passes the owner
+    gate, ``owner_peer`` still aims ``notify`` at them and ``owner_sender_id``
+    still names them at the group gate. The same sender re-pairing keeps its
+    rows, groups included — that is a rebind, not a change of owner.
+    """
+    for existing in await peers.list_by_resource(resource_id):
+        if existing.chat_id == chat_id:
+            continue  # the upsert rebinds this row in place
+        if sender_id is not None and existing.sender_id == sender_id:
+            continue
+        await peers.delete_by_chat(resource_id, existing.chat_id)

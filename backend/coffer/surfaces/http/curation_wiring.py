@@ -59,6 +59,27 @@ def wire_curation(
     return curation
 
 
+async def curation_may_run(engine_config: InternalEngineConfigService, sync: SyncWiring) -> bool:
+    """On, and on the machine that owns the pass.
+
+    Once a vault spans machines an unattended rewriter must run on exactly
+    one of them (spec vault-sync "Run an unattended rewriter on one owner
+    machine"): two machines folding the same material produce two *different*
+    documents, git merges both additions cleanly, and the vault silently holds
+    the knowledge twice. No owner set means a single-machine vault, where
+    "here" is the only answer there is.
+    """
+    if not (await engine_config.get()).curate_runs_on(sync.registry.machine_id):
+        return False
+    # And not while a round is waiting on the user — a held confirmation or
+    # an unresolved conflict (spec vault-sync "Never overlap a tidy pass and a
+    # round"). A confirmation is answered on the promise that re-deriving the
+    # round yields the diff the user was shown, and a conflict is a choice
+    # between two versions; a rewriter that moves documents underneath either
+    # breaks exactly that.
+    return not await sync.service.divergence_outstanding()
+
+
 def start_curation_worker(
     knowledge_service: KnowledgeService,
     curation: CurationPass,
@@ -76,7 +97,7 @@ def start_curation_worker(
     shutdown.
 
     Takes the sync graph explicitly: the worker consults this machine's
-    identity, the pending-round state and the vault-write lock, all of which
+    identity, the outstanding-round state and the vault-write lock, all of which
     ``start_sync`` builds — so sync is wired first (see ``background_workers``).
     """
 
@@ -93,27 +114,12 @@ def start_curation_worker(
         return [r.uid for r in await resources.list(kind=KIND_KNOWLEDGE, enabled=True)]
 
     async def is_enabled() -> bool:
-        """On, and on the machine that owns the pass.
-
-        Once a vault spans machines an unattended rewriter must run on exactly
-        one of them (spec vault-sync "Run an unattended rewriter on one owner
-        machine"): two machines folding the same material produce two *different* documents, git
-        merges both additions cleanly, and the vault silently holds the
-        knowledge twice. No owner set means a single-machine vault, where
-        "here" is the only answer there is.
-        """
-        if not (await engine_config.get()).curate_runs_on(sync.registry.machine_id):
-            return False
-        # And not while a round is waiting on the user (spec vault-sync
-        # "Never overlap a tidy pass and a round"). A confirmation is answered on the promise
-        # that re-deriving the round yields the diff the user was shown, and a
-        # rewriter that moves documents underneath them breaks exactly that
-        # promise.
-        return await sync.state.pending() is None
+        return await curation_may_run(engine_config, sync)
 
     async def read_interval() -> int | None:
         """The operator's interval for this pass, re-read while the wait runs
-        (spec provider-switching E3a) — a value captured at boot would be stale
+        (spec internal-engine "Apply a changed switch or interval without a
+        restart") — a value captured at boot would be stale
         the moment another machine's setting converged in."""
         return (await engine_config.get()).upkeep(CURATE).interval_s
 

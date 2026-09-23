@@ -8,7 +8,10 @@
 // file for edits that want a real editor.
 //
 // Binary files, and files the read truncated, stay read-only: saving a partial
-// read would cut the file short on disk.
+// read would cut the file short on disk. So does every file of a builtin skill,
+// and it says why — Coffer rewrites that folder at every start, so an edit would
+// not survive (spec skill-manager "Regenerate Coffer's builtin skill from the
+// build").
 import { useTranslation } from "react-i18next";
 
 import { FileActions } from "@/components/FileActions";
@@ -24,7 +27,15 @@ function isMarkdown(path: string): boolean {
   return /\.mdx?$/i.test(path);
 }
 
-export function SkillFileViewer({ uid, path }: { uid: string; path: string }) {
+export function SkillFileViewer({
+  uid,
+  path,
+  builtin = false,
+}: {
+  uid: string;
+  path: string;
+  builtin?: boolean;
+}) {
   const { t } = useTranslation();
   const content = useSkillFileContent(uid, path);
   const draft = useFileDraft({
@@ -94,7 +105,9 @@ export function SkillFileViewer({ uid, path }: { uid: string; path: string }) {
         onCancel={draft.cancel}
         onSave={draft.save}
         onDiscardAndReload={() => void draft.discardAndReload()}
-        readOnlyReason={truncated ? t("files.readOnlyTruncated") : null}
+        readOnlyReason={
+          builtin ? t("skills.builtinTooltip") : truncated ? t("files.readOnlyTruncated") : null
+        }
         ariaLabel={t("skills.files.editorLabel", { path })}
       >
         {/* Preview grows with content but is capped at 60vh and scrolls inside

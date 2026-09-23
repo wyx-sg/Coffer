@@ -72,7 +72,8 @@ class BackwardsMixin:
         ``delete=False`` separates a **restore** from a rollback. A rollback
         undoes a round whole, deletions included. A restore reaches back for
         something that was lost, and everything the vault gained since is not
-        part of the question (spec vault-sync ``## Restore``).
+        part of the question (spec vault-sync "Restore to a revision without
+        discarding later work").
         """
         started = datetime.now(tz=UTC)
         diff = await diff_between(self._mirror, current, target)

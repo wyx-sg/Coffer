@@ -38,6 +38,9 @@ class _FakeCredentialStore:
     def delete(self, ref: str) -> None:
         self.store.pop(ref, None)
 
+    def remove(self, ref: str) -> bool:
+        return self.store.pop(ref, None) is not None
+
 
 class _FakeAuditRepo:
     """Captures inserted audit entries for assertions."""
@@ -233,16 +236,32 @@ async def test_delete_credential_removes_value() -> None:
         r2 = await c.delete("/api/v1/credentials/nonexistent.REF")
         assert r2.status_code == 204
     assert fake.store == {}
-    # Spec scenario "delete a credential frees the reference":
-    # "the deletion is audited" — assert the audit row exists with correct
-    # event_type + ref. Both deletes (existing + absent) are recorded since
-    # the route is idempotent.
+    # Spec credentials "Delete a credential idempotently": the deletion is
+    # audited only when it removed something — the absent ref answers 204 too
+    # but records nothing, so exactly one row, for the ref that existed.
     delete_events = [e for e in audit_repo.entries if e.event_type == "credential_deleted"]
-    assert len(delete_events) == 2
+    assert len(delete_events) == 1
     assert delete_events[0].details == {"ref": "github.GITHUB_TOKEN"}
-    assert delete_events[1].details == {"ref": "nonexistent.REF"}
     # Actor falls back to "api" when X-Coffer-Actor header is absent.
-    assert all(e.actor == "api" for e in delete_events)
+    assert delete_events[0].actor == "api"
+
+
+@pytest.mark.asyncio
+async def test_delete_absent_credential_answers_204_and_records_nothing() -> None:
+    fake = _FakeCredentialStore()
+    fake.store["other.REF"] = "keep"
+    audit_repo = _FakeAuditRepo()
+    transport = ASGITransport(_build_app(fake, audit_repo))
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://t",
+        headers={"X-Coffer-Token": "test-token"},
+    ) as c:
+        r = await c.delete("/api/v1/credentials/nonexistent.REF")
+    assert r.status_code == 204
+    assert r.content == b""
+    assert fake.store == {"other.REF": "keep"}
+    assert [e for e in audit_repo.entries if e.event_type == "credential_deleted"] == []
 
 
 @pytest.mark.asyncio

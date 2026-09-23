@@ -107,7 +107,7 @@ class MachineRegistry:
         empty tree — so it writes a descriptor naming no commit, and the
         once-a-day rule would then freeze that absence in place until tomorrow.
         A returning machine recovers its base from exactly this field (spec
-        vault-sync ``## Joining a remote``), so a machine reinstalled on the day
+        vault-sync "Tell a new machine from a returning one"), so a machine reinstalled on the day
         it first converged would be refused as unrecoverable. Filling a missing
         commit in is one extra write, once, and then the day rule holds again.
         """

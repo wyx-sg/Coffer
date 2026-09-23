@@ -45,9 +45,10 @@ async def run_agentic_reorg(
 
     Each tool in ``tools`` is duck-typed with ``.name``, ``.description``,
     ``.input_schema`` (JSON-Schema dict), and ``.handler`` (async callable).
-    Catches ``GraphRecursionError`` and returns ``{"truncated": True}`` so the
-    service can finalize from on-disk state + action counters even when the loop
-    overruns.
+    Catches ``GraphRecursionError`` and returns ``{"truncated": True}``: the
+    writes that landed stay on disk, and the curation pass reports ``truncated``
+    and leaves its item pending (spec knowledge "Bound a pass to eight writes",
+    "Settle an item only after its pass completes").
     """
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -89,7 +90,7 @@ async def run_agentic_reorg(
         )
     except GraphRecursionError:
         log.warning(
-            "reorg recursion limit (%d) reached; finalizing from on-disk state",
+            "reorg recursion limit (%d) reached; pass reported as truncated",
             recursion_limit,
         )
         return {"truncated": True}

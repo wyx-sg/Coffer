@@ -48,8 +48,19 @@ def set_secret(
         ),
     ),
 ) -> None:
-    """Store a secret in the encrypted credential store (via the daemon)."""
+    """Store a secret in the encrypted credential store (via the daemon).
+
+    ``--value`` still stores, but prints a warning to stderr that the value
+    lands in shell history (spec credentials "Read a secret on the command
+    line without shell history"); the value itself is never echoed.
+    """
     verbose = (ctx.obj or {}).get("verbose", False)
+    if value is not None:
+        typer.echo(
+            "warning: --value puts the secret in your shell history; "
+            "pipe it on stdin or omit --value to be prompted instead",
+            err=True,
+        )
     secret = _read_value(value)
     if not secret:
         typer.echo("empty value rejected", err=True)

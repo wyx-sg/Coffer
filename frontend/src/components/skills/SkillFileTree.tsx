@@ -2,8 +2,9 @@
 // Two-pane file browser for a skill's master folder (the Files tab): a recursive
 // left tree (expand/collapse dirs, click a file to select it) and a right
 // content pane (SkillFileViewer) that renders Markdown nicely and shows other
-// text files raw, READ-ONLY (editing happens in the user's own editor via the
-// viewer's FileActions bar). Mirrors the AgentConfigFilesEditor layout.
+// text files raw, editable behind an explicit Edit — except a builtin skill's,
+// which the viewer keeps read-only because Coffer rewrites them at every start.
+// Mirrors the AgentConfigFilesEditor layout.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
@@ -15,7 +16,7 @@ import type { SkillFileNode } from "@/lib/api/skills";
 import { useSkillFiles } from "@/lib/hooks/useSkills";
 import { cn } from "@/lib/utils";
 
-export function SkillFileTree({ uid }: { uid: string }) {
+export function SkillFileTree({ uid, builtin = false }: { uid: string; builtin?: boolean }) {
   const { t } = useTranslation();
   const tree = useSkillFiles(uid);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -47,7 +48,7 @@ export function SkillFileTree({ uid }: { uid: string }) {
       {/* Right: rendered/editable content of the selected file. */}
       <div className="min-w-0">
         {selectedPath ? (
-          <SkillFileViewer uid={uid} path={selectedPath} />
+          <SkillFileViewer uid={uid} path={selectedPath} builtin={builtin} />
         ) : (
           <div className="flex h-80 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
             {t("skills.files.selectFile")}

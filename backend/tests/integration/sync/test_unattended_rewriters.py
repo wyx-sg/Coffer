@@ -32,10 +32,11 @@ import asyncio
 import dataclasses
 import pathlib
 from datetime import UTC, datetime
+from typing import Any, cast
 
 import pytest
 
-from coffer.domain.sync.convergence import ConvergeStatus
+from coffer.domain.sync.convergence import ConvergeStatus, GuardDirection, PendingConfirmation
 from coffer.domain.sync.diff import DeletionGuard
 from tests.integration.sync.harness import settle, two_machines
 
@@ -191,3 +192,77 @@ async def test_an_edit_beats_a_curation_deletion_without_reporting_a_conflict(pa
 
     assert run.conflicts == (), "delete-versus-edit is not a conflict; the edit wins"
     assert b.read_knowledge("notes", "merged-away") == "the original note, with B's edit\n"
+
+
+class _EngineConfig:
+    """The one read the gate makes of the engine config: curation on, no owner."""
+
+    async def get(self):
+        from coffer.domain.internal_engine_config import GlobalInternalEngineConfig
+
+        return GlobalInternalEngineConfig(
+            model="m", updated_at=datetime.now(tz=UTC), auto_curate_enabled=True
+        )
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a curation pass is skipped while a round is unresolved"
+)
+async def test_curation_is_skipped_while_a_conflict_or_confirmation_is_outstanding(
+    pair,
+) -> None:
+    """Spec vault-sync "Never overlap a tidy pass and a round": a pass MUST be
+    skipped while a conflict *or* a pending confirmation is outstanding.
+
+    The conflict half is the one that was missing. A conflicted round leaves no
+    held confirmation behind — the vault is untouched and the pointer has not
+    moved — so a gate that only read ``pending()`` let the rewriter pile a pass
+    onto a divergence the user had not yet resolved. The gate is driven through
+    a real service recording real rounds, so "outstanding" means what the
+    history says the last round was.
+    """
+    from coffer.surfaces.http.curation_wiring import curation_may_run
+    from coffer.surfaces.http.sync_wiring import SyncWiring
+
+    a, b = pair
+    a.write_knowledge("notes", "shared", "original\n")
+    await settle(a, b)
+    await b.remote_config()
+    service = b.service()
+    # The harness's in-memory state stands in for the SQLAlchemy repo.
+    wiring = SyncWiring(service=service, registry=b.registry, state=cast(Any, b.state))
+    config = cast(Any, _EngineConfig())
+    assert await curation_may_run(config, wiring) is True
+
+    # A real conflict: both machines edited the same note, nothing resolves it.
+    a.write_knowledge("notes", "shared", "A's version\n")
+    b.write_knowledge("notes", "shared", "B's version\n")
+    await a.converge()
+    b.resolver.enabled = False
+    run = await service.run_once()
+    assert run.status is ConvergeStatus.CONFLICT
+    assert await b.state.pending() is None, "a conflict holds no confirmation"
+
+    assert await curation_may_run(config, wiring) is False, (
+        "curation ran over an unresolved sync conflict"
+    )
+
+    # The user resolves it (takes A's side); the next round converges and the
+    # pass is allowed again.
+    b.write_knowledge("notes", "shared", "A's version\n")
+    resolved = await service.run_once()
+    assert resolved.ok, resolved.error
+    assert await curation_may_run(config, wiring) is True
+
+    # And a pending confirmation holds it too.
+    await b.state.set_pending(
+        PendingConfirmation(
+            direction=GuardDirection.APPLY,
+            commit="c0ffee",
+            remote_tip=None,
+            breaches=(("knowledge", 5, 5),),
+            paths=("knowledge/notes/shared.md",),
+            raised_at=datetime.now(tz=UTC),
+        )
+    )
+    assert await curation_may_run(config, wiring) is False

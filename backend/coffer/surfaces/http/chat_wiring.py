@@ -96,7 +96,9 @@ class _ActiveProviderModels:
     Narrowed to ``text``: the question is what a CHAT picker may offer, and the
     same endpoint's embedding, image, video and speech models would be rejected
     by every turn that tried them (spec provider-switching "Offer only text
-    models to chat pickers").
+    models to chat pickers"). A connection that curates nothing answers
+    ``None`` like no connection at all; one that curates only non-text models
+    answers ``[]``.
     """
 
     #: Held rather than resolved lazily like the provider service: a
@@ -128,7 +130,11 @@ class _ActiveProviderModels:
             if cfg.is_active and any(
                 t.value == agent_key for t in projection_targets(resource, cfg, agents)
             ):
-                return cfg.model_ids(Modality.TEXT)
+                # Curating nothing is "no restriction" (``None``); curating
+                # something but nothing ``text`` is an empty chat list (``[]``),
+                # never the agent's own catalogue (spec provider-switching
+                # "Offer only text models to chat pickers").
+                return cfg.model_ids(Modality.TEXT) if cfg.models else None
         return None
 
 
@@ -157,7 +163,7 @@ def wire_chat(
     agent_service: AgentService,
     resource_service: ResourceService,
 ) -> ChatWiring:
-    """Wire the agent-chat feature (spec channels) into the running app.
+    """Wire the agent-chat feature (spec chat) into the running app.
 
     Must be called **after** the ``BuiltinToolRegistry`` is fully populated
     (after knowledge, MCP, and skill wiring) so the ``coffer-builtin-agent``

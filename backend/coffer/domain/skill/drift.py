@@ -16,18 +16,30 @@ class DriftKind(StrEnum):
     ORPHAN_MASTER = "orphan_master"
 
 
+# Each remedy names an action that exists: per-(skill, agent) enable/disable
+# is gone (spec skill-manager), and repair re-links only missing/tampered
+# links — it never touches foreign content (spec skill-manager "Repair
+# repairable drift from master"). Backticked ``coffer ...`` commands are
+# resolved against the real CLI by tests/unit/domain/test_skill_drift_remedies.
 _REMEDIES: dict[DriftKind, str] = {
-    DriftKind.MISSING_LINK: "Re-enable the skill for this agent to recreate the link.",
+    DriftKind.MISSING_LINK: (
+        "Run `coffer skill verify --fix` (or `coffer daemon restart`) to re-link it from master."
+    ),
     DriftKind.TAMPERED_LINK: (
-        "Disable then re-enable the skill for this agent, or pass --force to overwrite."
+        "Run `coffer skill verify --fix` (or `coffer daemon restart`) to point the link "
+        "back at master."
     ),
     DriftKind.REPLACED_WITH_REGULAR: (
-        "A non-Coffer file or directory occupies the target path; "
-        "pass --force to back it up and re-link."
+        "A non-Coffer file or folder occupies the target path and Coffer will not touch it; "
+        "move it away yourself, then run `coffer skill verify --fix`."
     ),
-    DriftKind.MISSING_MASTER: "Re-import or re-fetch the skill; the master folder is gone.",
+    DriftKind.MISSING_MASTER: (
+        "The master folder is gone; remove the record with `coffer skill rm <name>` "
+        "and re-import the skill with `coffer skill import <path>`."
+    ),
     DriftKind.ORPHAN_MASTER: (
-        "Master folder on disk has no Coffer record; adopt it via import or remove it manually."
+        "A folder in Coffer's skill store has no Coffer record; move it out of the store "
+        "and adopt it with `coffer skill import <path>`, or delete it."
     ),
 }
 

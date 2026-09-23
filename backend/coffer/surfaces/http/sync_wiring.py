@@ -87,9 +87,9 @@ _log = logging.getLogger(__name__)
 
 
 class SyncWiring(NamedTuple):
-    """What the composition root hands back: the service the surfaces call,
-    the registry the machines table reads, and the convergence state the tidy
-    worker consults before it rewrites anything."""
+    """What the composition root hands back: the service the surfaces call
+    (and the curation worker asks whether a divergence is outstanding), the
+    registry the machines table reads, and the convergence state."""
 
     service: ConvergeService
     registry: MachineRegistry
@@ -198,6 +198,8 @@ def wire_sync(
             serialize=lambda: _serialize(worktree),
             guard=DeletionGuard(),
             branch=branch,
+            # Asked after the apply which refs it now holds without a key.
+            credentials=cred_sync,
             # A kind owns more than its row: a native config file, a shim, a
             # delivered skill. The applier writes the row; these put this
             # machine's side of it back in step (spec vault-sync

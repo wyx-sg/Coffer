@@ -125,7 +125,10 @@ class CurationRequest(BaseModel):
 
 
 class CurationOut(BaseModel):
-    #: ``ok`` | ``no_model`` | ``up_to_date`` | ``too_large`` | ``failed``.
+    #: ``ok`` | ``truncated`` | ``no_model`` | ``up_to_date`` | ``too_large`` |
+    #: ``failed``. ``truncated`` is a pass the recursion limit cut off: it
+    #: carries the same counters as ``ok`` but its item stays pending ("Bound a
+    #: pass to eight writes", "Settle an item only after its pass completes").
     #: Every one of them is a 200: a collection with no model configured, or
     #: with nothing pending, is an ordinary state of the feature and not a
     #: fault of the request.

@@ -155,7 +155,8 @@ async def delete_secret(
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> Response:
-    """Remove `ref` from the credential store. Idempotent — absent is fine.
+    """Remove `ref` from the credential store. Idempotent — absent is fine,
+    and audited only when a row was actually removed.
 
     Refuses with 409 CREDENTIAL_IN_USE when a resource config still references
     this credential: deleting it would silently break that channel / model /
@@ -182,10 +183,13 @@ async def delete_secret(
         )
     # to_thread: the sync store write blocks on SQLite's busy_timeout, which on
     # the event loop would deadlock against the loop's own aiosqlite writer.
-    await asyncio.to_thread(store.delete, ref)
-    await audit.record(
-        AuditEventType.CREDENTIAL_DELETED.value,
-        actor=actor,
-        details={"ref": ref},
-    )
+    removed = await asyncio.to_thread(store.remove, ref)
+    # 204 either way, but only a real removal is a lifecycle change worth an
+    # audit row (spec credentials "Delete a credential idempotently").
+    if removed:
+        await audit.record(
+            AuditEventType.CREDENTIAL_DELETED.value,
+            actor=actor,
+            details={"ref": ref},
+        )
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -1,11 +1,11 @@
-"""/api/v1/agents/{uid}/config-files and /mcp-install routes (spec agent-registry v2).
+"""/api/v1/agents/{uid}/config-files and /mcp-install routes (spec agent-registry).
 
 Config-file view + edit (list + read + write), directory-entry child files
 (read + write + delete under `/files/{relpath}`), and one-click Coffer-MCP
 install. Writes carry an optional `expected_fingerprint` for optimistic
-concurrency. Domain errors (ConfigFileNotAllowed → 404,
-ConfigFileFormatInvalid → 422, ConfigFileStale → 409, ShimNotFound → 422,
-ResourceNotFound → 404) are mapped centrally by surfaces/http/errors.py.
+concurrency ("Reject stale config-file writes by fingerprint"). Domain errors
+(ConfigFileNotAllowed → 404, ConfigFileFormatInvalid → 422, ConfigFileStale → 409,
+ShimNotFound → 422, ResourceNotFound → 404) are mapped centrally by surfaces/http/errors.py.
 """
 
 from __future__ import annotations

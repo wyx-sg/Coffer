@@ -242,7 +242,10 @@ export interface paths {
          *     a document a person edited is never reverted (see "Let newer statements
          *     win and a person's edit stand").
          *
-         *     `status` is `ok` when a pass ran; `no_model` when no internal connection
+         *     `status` is `ok` when a pass ran; `truncated` when the recursion limit
+         *     cut the pass off before it completed — it carries the same counters as
+         *     `ok`, the writes that landed stay, and the item is left pending (see
+         *     "Bound a pass to eight writes"); `no_model` when no internal connection
          *     is configured, in which case every inbox item was promoted to a document
          *     as it stood and `promoted` lists them; `up_to_date` when nothing is
          *     pending; `too_large` when the item does not fit the model's context
@@ -490,14 +493,16 @@ export interface components {
          */
         CurationOut: {
             /**
-             * @description `no_model` when no internal connection is configured — every inbox
+             * @description `truncated` when the recursion limit cut the pass off: the same
+             *     counters as `ok`, but the item is left pending, not settled.
+             *     `no_model` when no internal connection is configured — every inbox
              *     item was promoted to a document as it stood, never an error.
              *     `up_to_date` when nothing is pending. `too_large` when the item
              *     does not fit, `limit` naming the ceiling. `failed` leaves the item
              *     as it was so it is curated later rather than lost.
              * @enum {string}
              */
-            status: "ok" | "no_model" | "up_to_date" | "too_large" | "failed";
+            status: "ok" | "truncated" | "no_model" | "up_to_date" | "too_large" | "failed";
             /** @description The collection's NAME, not its uid — this is what a surface renders. */
             collection: string;
             /**

@@ -190,3 +190,8 @@ class CurationWorker:
                         extra={"collection": collection, "status": status},
                     )
                     return
+                # ``truncated`` (the recursion limit cut the pass off) leaves
+                # its item pending but does NOT stop the sweep: that item is
+                # first in line every sweep, so stopping on it would starve
+                # the rest. The loop walks a snapshot, so it is not retried
+                # until the next sweep.

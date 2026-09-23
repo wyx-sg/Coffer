@@ -135,7 +135,7 @@ class SeaTalkChannelConfig(_CommonChannelFields):
     # connection and nothing is ever signed.
     signing_secret_ref: str | None = Field(default=None, min_length=1, max_length=256)
     # The tunnel's public base URL (scheme://host[:port]); the full SeaTalk
-    # callback URL is this + "/seatalk/<name>". Optional: until the user records
+    # callback URL is this + "/seatalk/<channel uid>". Optional: until the user records
     # their public base URL here we only know the loopback address.
     public_base_url: str | None = Field(default=None, max_length=512)
     # Credential-store ref for a cloudflared connector token. When set, the
@@ -166,7 +166,7 @@ class SeaTalkChannelConfig(_CommonChannelFields):
         if parsed.path.strip("/") or parsed.query or parsed.fragment:
             raise ValueError(
                 "public_base_url must be a bare base URL (scheme://host) with no path; "
-                "Coffer appends /seatalk/<name> itself"
+                "Coffer appends /seatalk/<channel uid> itself"
             )
         return v.rstrip("/")
 

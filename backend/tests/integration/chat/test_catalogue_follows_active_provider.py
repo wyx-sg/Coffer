@@ -25,10 +25,13 @@ import pathlib
 from collections.abc import AsyncIterator
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.audit_service import AuditService
+from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.provider.kind import make_provider_kind
 from coffer.application.provider.service import ProviderService
 from coffer.application.resource_service import ResourceService
@@ -45,8 +48,13 @@ from coffer.infrastructure.persistence.engine import (
     session_maker,
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
+from coffer.surfaces.http import errors as err_handlers
+from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.chat.agent_provider_routes import router as agent_provider_router
+from coffer.surfaces.http.chat.dependencies import get_agent_registry, get_model_catalog
 from coffer.surfaces.http.chat_wiring import _ActiveProviderModels
 from coffer.surfaces.http.provider_dependencies import set_provider_service
+from tests.unit.chat.conftest import FakeAgentProvider
 
 _NOW = dt.datetime(2026, 9, 11, tzinfo=dt.UTC)
 
@@ -269,4 +277,39 @@ async def test_only_the_text_models_of_a_mixed_connection_are_offered(env: _Env)
     assert await env.catalogue.suggest("claude_code") == ["agnes-2.5-pro-beta"]
     # The agent's own catalogue is untouched by curation — it describes the
     # login, and narrowing is the picker's business (``offered``), not its.
+    assert [m.id for m in await env.catalogue.catalogue("claude_code")] == _CLI_MODELS
+
+
+async def test_a_connection_curating_no_text_model_offers_no_chat_model(env: _Env) -> None:
+    """spec provider-switching "Offer only text models to chat pickers": a
+    connection that curates something but nothing ``text`` offers no chat model
+    rather than falling back to the agent's own catalogue — those are ids the
+    endpoint the turns now go to would reject. Asked over the real route every
+    web picker reads."""
+    await _gateway(
+        env,
+        models=[CuratedModel(id="agnes-embed-1", modality=Modality.EMBEDDING)],
+        agents=[AgentType.CLAUDE_CODE],
+    )
+
+    registry = AgentProviderRegistry()
+    registry.register(FakeAgentProvider(None, agent_key="claude_code"), display_name="Claude Code")
+    app = FastAPI()
+    err_handlers.register(app)
+    app.include_router(agent_provider_router)
+    app.dependency_overrides[get_agent_registry] = lambda: registry
+    app.dependency_overrides[get_model_catalog] = lambda: env.catalogue
+    token = "test-token-no-text-model"
+    set_active_token(token)
+    with TestClient(app) as client:
+        resp = client.get(
+            "/api/v1/agent-providers/claude_code/models", headers={"X-Coffer-Token": token}
+        )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["models"] == []
+    # The channel ``/model`` card and ``/effort`` card read the same answer.
+    assert await env.catalogue.suggest("claude_code") == []
+    assert await env.catalogue.efforts("claude_code", None) == []
+    # The login's own catalogue is still the full truth, just not offered.
     assert [m.id for m in await env.catalogue.catalogue("claude_code")] == _CLI_MODELS

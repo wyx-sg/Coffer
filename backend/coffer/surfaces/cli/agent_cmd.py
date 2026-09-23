@@ -124,9 +124,7 @@ def edit(
     name: str = typer.Argument(...),
     config_dir: str | None = typer.Option(None, "--config-dir"),
     description: str | None = typer.Option(None, "--description"),
-    model: str | None = typer.Option(
-        None, "--model", help="Model this agent answers with (spec provider-switching E3)"
-    ),
+    model: str | None = typer.Option(None, "--model", help="Model this agent answers with"),
     fast_model: str | None = typer.Option(
         None, "--fast-model", help="Small/fast model slot (anthropic wire only)"
     ),

@@ -516,6 +516,7 @@ class VaultMachine:
             serialize=self._serialize,
             guard=self._guard,
             branch=BRANCH,
+            credentials=self.credentials,
             post_import=[self.hook],
         )
 

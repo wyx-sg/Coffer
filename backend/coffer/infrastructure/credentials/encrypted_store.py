@@ -78,8 +78,19 @@ class EncryptedCredentialStore:
         return row is not None
 
     def delete(self, ref: str) -> None:
+        self.remove(ref)
+
+    def remove(self, ref: str) -> bool:
+        """Delete ``ref`` and report whether a row was actually removed.
+
+        ``delete`` keeps the ``-> None`` shape the credential ports declare;
+        a caller that must act only on a real removal (the HTTP route audits
+        only then — spec credentials "Delete a credential idempotently") uses
+        this instead.
+        """
         with closing(self._connect()) as conn, conn:
-            conn.execute("DELETE FROM credentials WHERE ref = ?", (ref,))
+            cur = conn.execute("DELETE FROM credentials WHERE ref = ?", (ref,))
+            return cur.rowcount > 0
 
     def count(self) -> int:
         with closing(self._connect()) as conn:

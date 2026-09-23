@@ -57,10 +57,12 @@ class ModelIntrospectionService:
         try:
             key = self._key_for(provider, credential_ref, secret_value)
             models = await self._port.list_models(provider=provider, base_url=base_url, api_key=key)
-        except Exception as e:  # degrade to manual entry — never 500 the picker
+        except Exception as e:  # degrade to an empty list + reason — never 500 the picker
             return ModelList(models=[], message=str(e))
         if not models:
-            return ModelList(models=[], message="no models returned; enter a model id manually")
+            # Say what happened, nothing more: no surface takes a typed model id
+            # (spec provider-switching "Choose a model from a fixed list").
+            return ModelList(models=[], message="the endpoint listed no models")
         return ModelList(models=[DiscoveredModel(id=m, modality=infer_modality(m)) for m in models])
 
     async def test_connection(
@@ -88,8 +90,9 @@ class ModelIntrospectionService:
         credential_ref: str | None,
         secret_value: str | None = None,
     ) -> str:
-        # Classify the endpoint's wire so the connection needs no manual type
-        # selector (provider switching, D9). Never raises: a failed or
+        # Classify the endpoint's wire. The add-connection dialog asks for the
+        # protocol instead of calling this (spec provider-switching "Offer every
+        # connection operation on REST, CLI and web"). Never raises: a failed or
         # inconclusive probe degrades to 'unknown', and a connection whose
         # protocol is 'unknown' starts scoped to EVERY agent for the user to
         # narrow (see ``domain.provider.config.Protocol``) — the conservative

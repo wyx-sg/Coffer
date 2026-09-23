@@ -987,7 +987,7 @@
     "degradedBadge": "已复制",
     "degradedTooltip": "当前文件系统不支持符号链接，Coffer 向至少一个 Agent 下发了副本。在重新投递之前，这些 Agent 不会看到主技能的后续修改。",
     "builtinBadge": "内置",
-    "builtinTooltip": "Coffer 自行生成该技能，并在每次启动时重写它，因此无法在此编辑或删除。你仍可以停用它，或收窄它触达的 agent。",
+    "builtinTooltip": "Coffer 自行生成该技能，并在每次启动时重写它，任何修改都不会保留：它的文件在此只读，也无法删除。你仍可以停用它，或收窄它触达的 agent。",
     "builtinDeleteHint": "Coffer 管理该技能，并在每次启动时重写它，因此无法删除。可以改为停用它，或收窄它的触达范围。",
     "title": "技能",
     "subtitle": "Coffer 管理的 AgentSkills 标准目录，会下发到所有已注册的 Agent。",
@@ -1074,6 +1074,7 @@
         "no_model": "没有配置内部模型，所以没有做合并——待并入的材料已按原样成为文档（{{count}} 份）。",
         "up_to_date": "没有待并入的内容。",
         "too_large": "这份内容太大，一次提炼放不下。",
+        "truncated": "这次提炼在跑完之前达到了步数上限。已写入的内容会保留，这一项稍后会重试。",
         "failed": "这次提炼没有跑完。没有丢失任何内容，稍后会重试。"
       },
       "curatedAt": "上次提炼于 {{when}}",

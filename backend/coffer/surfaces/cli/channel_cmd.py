@@ -48,7 +48,7 @@ def list_cmd(
     # "Runs on" is the machine id rather than a name: resolving a name needs
     # the machine registry, which only exists once this vault converges with a
     # remote, and a column that is blank on a single-machine install would say
-    # less than the id does. `coffer sync machines` maps the two.
+    # less than the id does. `coffer sync machine list` maps the two.
     for col in ("Name", "Type", "Agent", "Enabled", "Runs on"):
         table.add_column(col)
     for it in items:
@@ -206,9 +206,14 @@ def status(
         return
     typer.echo(f"channel:  {body['name']} ({body['channel_type']})")
     typer.echo(f"enabled:  {body['enabled']}    running: {body['running']}")
-    binding = body.get("runs_on") or "unbound"
-    where = "this machine" if body.get("runs_here") else "another machine"
-    typer.echo(f"runs on:  {binding} ({where})")
+    # spec channels "Bind each channel to the one machine that runs it": unbound runs
+    # nowhere and is said so — never dressed as the normal "another machine" state.
+    binding = body.get("runs_on")
+    if not binding:
+        typer.echo("runs on:  unbound (runs nowhere)")
+    else:
+        where = "this machine" if body.get("runs_here") else "another machine"
+        typer.echo(f"runs on:  {binding} ({where})")
     typer.echo(f"pairing:  {'code pending' if body['pending_pairing'] else 'no pending code'}")
     peer = body.get("peer")
     if peer:

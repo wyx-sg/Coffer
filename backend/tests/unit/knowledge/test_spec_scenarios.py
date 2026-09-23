@@ -315,3 +315,39 @@ def test_curation_runs_only_on_the_owner_machine() -> None:
     assert here.curate_runs_on("machine-a") is True
     # A single-machine vault never named an owner, and curates where it is.
     assert default.curate_runs_on("machine-a") is True
+
+
+@pytest.mark.anyio
+async def test_a_truncated_item_neither_stops_the_sweep_nor_is_retried_within_it(
+    root: pathlib.Path,
+) -> None:
+    # A pass cut off by the recursion limit leaves its item pending (spec
+    # knowledge "Settle an item only after its pass completes"). The sweep
+    # moves on to the next item rather than stopping — the item that truncated
+    # is first in line every sweep, so stopping on it would starve the rest —
+    # and does not hand the same item back to a second pass in this sweep.
+    fs.submit_material("shopee", title="Huge", description="d", body="b", actor="agent")
+    fs.submit_material("shopee", title="Small", description="d", body="b", actor="agent")
+    curated: list[Any] = []
+
+    async def curate(service, uid, *, item, actor):  # type: ignore[no-untyped-def]
+        curated.append(item.material)
+        return {"status": "truncated" if item.material == "huge.md" else "ok"}
+
+    async def enabled() -> bool:
+        return True
+
+    async def collections() -> list[str]:
+        return ["uid-1"]
+
+    worker = CurationWorker(
+        service=_service("shopee"),
+        curate=curate,
+        deliver=None,
+        is_enabled=enabled,
+        list_collections=collections,
+        runs=UpkeepRunRegistry(),
+    )
+    await worker.run_once()
+
+    assert curated == ["huge.md", "small.md"]

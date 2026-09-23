@@ -131,9 +131,28 @@ def daemon(monkeypatch):
 def test_set_writes_through_daemon(daemon):
     result = runner.invoke(app, ["credentials", "set", "my_token", "--value", "supersecret"])
     assert result.exit_code == 0, result.output
-    assert "stored: my_token" in result.output
+    assert "stored: my_token" in result.stdout
     # The secret was created by the daemon, not the CLI process.
     assert daemon.store["my_token"] == "supersecret"
+    # `--value` still stores, but warns on stderr that the value lands in
+    # shell history — and never echoes the value itself anywhere.
+    assert "shell history" in result.stderr
+    assert "warning" in result.stderr.lower()
+    assert "supersecret" not in result.stdout
+    assert "supersecret" not in result.stderr
+
+
+@pytest.mark.acceptance(
+    spec="credentials",
+    scenario="the command line stores a secret without it reaching shell history",
+)
+def test_set_from_stdin_stores_without_warning(daemon):
+    result = runner.invoke(app, ["credentials", "set", "piped_token"], input="pipedsecret\n")
+    assert result.exit_code == 0, result.output
+    assert daemon.store["piped_token"] == "pipedsecret"
+    assert "stored: piped_token" in result.stdout
+    assert result.stderr == ""
+    assert "pipedsecret" not in result.output
 
 
 def test_get_show_reads_through_daemon(daemon):

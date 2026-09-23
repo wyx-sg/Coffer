@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coffer.domain.sync.convergence import RunRecord
+from coffer.domain.sync.convergence import ConvergeStatus, RunRecord
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from coffer.application.sync.ports import ConvergenceStatePort, SyncRemoteRepoPort
@@ -51,3 +51,19 @@ class HistoryMixin:
         rather than failing.
         """
         return await self._remotes.list_runs(limit)
+
+    async def divergence_outstanding(self) -> bool:
+        """Whether a round left something the user has not yet answered.
+
+        Either a confirmation held at the deletion guard, or a last round that
+        stopped on a conflict — which holds nothing (the vault is untouched and
+        the pointer has not moved), so only the recorded round says it is
+        there. An unattended rewriter consults this before it runs (spec
+        vault-sync "Never overlap a tidy pass and a round"): a rewrite piled
+        onto an unresolved divergence changes the very documents the user is
+        about to decide between.
+        """
+        if await self._state.pending() is not None:
+            return True
+        last = await self._remotes.last_run()
+        return last is not None and last.status is ConvergeStatus.CONFLICT

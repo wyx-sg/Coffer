@@ -129,4 +129,26 @@ describe("SkillFileViewer", () => {
     expect(screen.getByText(/read-only/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
   });
+
+  // spec skill-manager "Regenerate Coffer's builtin skill from the build": an
+  // edit to a builtin skill does not survive the next start, and the surfaces
+  // MUST say so rather than letting a person discover it.
+  test("a builtin skill is read-only and says Coffer rewrites it at every start", () => {
+    stubContent({ path: "SKILL.md", content: "# Guide" });
+    renderViewer(<SkillFileViewer uid={SKILL_UID} path="SKILL.md" builtin />);
+
+    expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByText(/rewrites it at every start/i)).toHaveTextContent(
+      /edit.*would not survive/i,
+    );
+  });
+
+  test("an imported skill carries no builtin notice", () => {
+    stubContent({ path: "SKILL.md", content: "# Mine" });
+    renderViewer(<SkillFileViewer uid={SKILL_UID} path="SKILL.md" builtin={false} />);
+
+    expect(screen.getByRole("button", { name: /^edit$/i })).toBeInTheDocument();
+    expect(screen.queryByText(/rewrites it at every start/i)).not.toBeInTheDocument();
+  });
 });

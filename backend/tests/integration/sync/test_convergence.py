@@ -801,12 +801,45 @@ async def test_the_repository_carries_ciphertext_and_no_key_material(pair) -> No
 
     # A machine holding the ciphertext without the key reports the ref locked
     # rather than failing decryption silently.
-    await b.adopt()
-    await b.converge()
+    joined = await b.adopt()
+    later = await b.converge()
     assert b.credentials.locked_refs() == ["mcp/files/token"]
+    # And the round says so (spec vault-sync "Report refs without a key as
+    # locked"): the round that delivered the ciphertext, and every round after
+    # it while the key is still missing.
+    assert joined.locked_refs == ("mcp/files/token",)
+    assert later.locked_refs == ("mcp/files/token",)
     # "Locked", not "silently wrong": reading it here is refused outright.
     with pytest.raises(CredentialUnreadable):
         b.credential_store.get("mcp/files/token")
+
+
+async def test_a_round_that_delivers_undecryptable_ciphertext_reports_the_ref_locked(
+    pair,
+) -> None:
+    """The report a user sees is the recorded round, so it is asserted there.
+
+    B holds no key A's ciphertext opens under. The round that brings the blob in
+    applies it (ciphertext travels regardless of keys) and names the ref locked
+    — in the run it returns and in the history the CLI and the page read — and
+    a ref B *can* decrypt is not in that list.
+    """
+    a, b = pair
+    b.set_credential("mcp/own/token", "b-local")
+    a.set_credential("mcp/files/token", "s3cret-value")
+    await a.register("mcp_server", "files", {"value": "f", "credential_ref": "mcp/files/token"})
+    await settle(a)
+    await b.remote_config()
+    service = b.service()
+
+    run = await service.run_once(adopt=True)
+
+    assert run.ok, run.error
+    assert "credentials/mcp/files/token.enc" in {c.path for c in run.applied.changes}
+    assert run.locked_refs == ("mcp/files/token",)
+    recorded = await service.last_run()
+    assert recorded is not None
+    assert recorded.locked_refs == ("mcp/files/token",)
 
 
 def _sleep_past_a_fernet_second() -> None:
