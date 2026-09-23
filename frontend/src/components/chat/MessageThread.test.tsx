@@ -103,7 +103,7 @@ describe("MessageThread", () => {
   test("renders live streaming message text", async () => {
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderThread({
-      liveMessage: { text: "Streaming reply...", toolBlocks: [], streaming: true },
+      liveMessage: { blocks: [{ type: "text", text: "Streaming reply..." }], streaming: true },
     });
     await waitFor(() => expect(screen.getByText("Streaming reply...")).toBeInTheDocument());
   });
@@ -112,9 +112,8 @@ describe("MessageThread", () => {
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderThread({
       liveMessage: {
-        text: "",
         streaming: true,
-        toolBlocks: [
+        blocks: [
           {
             type: "tool_use",
             tool_use_id: "tc-1",
@@ -194,7 +193,7 @@ describe("MessageThread", () => {
     });
     renderThread({
       isStreaming: true,
-      liveMessage: { text: "live text", toolBlocks: [], streaming: true },
+      liveMessage: { blocks: [{ type: "text", text: "live text" }], streaming: true },
     });
     await waitFor(() => expect(screen.getByText("live text")).toBeInTheDocument());
     // Exactly one in-progress bubble: the live one; the fetched placeholder is filtered.
@@ -208,7 +207,7 @@ describe("MessageThread", () => {
     renderThread({
       isStreaming: true,
       pendingEchoes: [{ id: "echo-1", text: "my question", sentAt: Date.now(), afterSeq: -1 }],
-      liveMessage: { text: "replying", toolBlocks: [], streaming: true },
+      liveMessage: { blocks: [{ type: "text", text: "replying" }], streaming: true },
     });
     await waitFor(() => expect(screen.getByText("my question")).toBeInTheDocument());
     expect(screen.getByText("replying")).toBeInTheDocument();
@@ -235,7 +234,7 @@ describe("MessageThread", () => {
     renderThread({
       isStreaming: true,
       pendingEchoes: [{ id: "echo-2", text: "again", sentAt: Date.now(), afterSeq: 2 }],
-      liveMessage: { text: "", toolBlocks: [], streaming: true },
+      liveMessage: { blocks: [], streaming: true },
     });
     await waitFor(() => expect(screen.getByText("first answer")).toBeInTheDocument());
     expect(screen.getAllByText("again")).toHaveLength(2);
@@ -297,7 +296,7 @@ describe("MessageThread", () => {
     });
     renderThread({
       pendingEchoes: [{ id: "echo-1", text: "my question", sentAt: Date.now(), afterSeq: -1 }],
-      liveMessage: { text: "", toolBlocks: [], streaming: true },
+      liveMessage: { blocks: [], streaming: true },
       turnError: new Error("provider failed"),
     });
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/provider failed/i));

@@ -36,7 +36,7 @@ added provider my-gateway (openai)
 | --- | --- | --- | --- |
 | `anthropic` | Anthropic's own wire. | Required | both agents |
 | `openai` | An OpenAI-compatible endpoint — OpenAI, Gemini's compatibility endpoint, DeepSeek, OpenRouter, most gateways. | Required | both agents |
-| `ollama` | A local Ollama. **Internal-only**: it projects into no agent whatever its scope says, because there is no key to write. | None | nothing |
+| `ollama` | A local Ollama. **Internal-only**: it projects into no agent whatever its scope says, because there is no key to write, and switching it on is refused (`PROVIDER_INTERNAL_ONLY`). | None | nothing |
 | `unknown` | A probe was inconclusive. Coffer hides nothing — it starts open and you decide. | Required | both agents |
 
 Supply exactly one of `--secret` (stored encrypted under `provider/<name>/key`, only the ref is kept) or `--credential-ref` (reuse a vault entry you already have). Both, or neither, is rejected — except for `ollama`, which must supply neither.

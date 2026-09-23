@@ -11,6 +11,12 @@ prompt (spec knowledge FR-021):
   never be able to trigger a corpus-wide rewrite, however sure the model is.
 * **A document may not name another file** (FR-027). Checked at the write,
   because asking for it in a prompt is what produced 343 dead references.
+* **A retire must follow the write that kept its content.** A document may be
+  retired only after this pass has seen it — in the brief or through
+  ``read_document`` — and has since written a *different* document. Code
+  cannot prove that the facts moved, but it can refuse every retire for which
+  they could not have: before any write, of an unread document, or where the
+  only write was to the document itself.
 
 Split out of ``curate.py`` for the file-size ceiling; the pass itself owns when
 the loop runs and what it reports.
@@ -20,7 +26,7 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -98,8 +104,18 @@ def build_tools(
     collection: str,
     actor: str,
     counters: Counters,
+    shown: Iterable[str] = (),
 ) -> list[CurationTool]:
-    """The four operations, fenced to one collection's documents."""
+    """The four operations, fenced to one collection's documents.
+
+    ``shown`` names the documents the pass's brief carries in full (the item
+    and its candidates): the pass has their content without reading them.
+    The returned tools share per-pass state, so build them once per pass.
+    """
+    # Per-pass record of what was written, in order, and of the point in that
+    # order at which each document's content was last in front of the model.
+    written_paths: list[str] = []
+    seen_at: dict[str, int] = dict.fromkeys(shown, 0)
 
     def _document_path(relpath: str) -> str | None:
         """``relpath`` if it names a document in this collection."""
@@ -156,6 +172,7 @@ def build_tools(
             found = await service.read(relpath)
         except KnowledgeError as exc:
             return {"error": str(exc)}
+        seen_at[found.path] = len(written_paths)
         return {
             "path": found.path,
             "title": found.title,
@@ -198,6 +215,9 @@ def build_tools(
         except KnowledgeError as exc:
             return {"error": str(exc)}
         counters.written += 1
+        written_paths.append(written.path)
+        # What the pass just wrote is content it has in front of it.
+        seen_at[written.path] = len(written_paths)
         return {
             "ok": True,
             "path": written.path,
@@ -210,6 +230,16 @@ def build_tools(
         relpath = str(args.get("path") or "")
         if _document_path(relpath) is None:
             return _outside(relpath)
+        since = seen_at.get(relpath)
+        if since is None or not any(p != relpath for p in written_paths[since:]):
+            counters.refused += 1
+            return {
+                "error": (
+                    f"cannot retire {relpath!r}: this pass has not yet written its content "
+                    "into another document. Read it, fold every fact it holds into the "
+                    "document that should own them with write_document, then retire it."
+                )
+            }
         try:
             fs.delete_file(relpath)
         except KnowledgeError as exc:

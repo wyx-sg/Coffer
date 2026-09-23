@@ -82,6 +82,9 @@ class _FakeResourceService:
     async def find_credential_citations(self, credential_ref: str) -> list[Resource]:
         return list(self.citations.get(credential_ref, []))
 
+    async def cited_credential_refs(self) -> dict[str, list[Resource]]:
+        return {ref: list(rows) for ref, rows in self.citations.items() if rows}
+
 
 def _build_app(
     fake: _FakeCredentialStore,
@@ -284,6 +287,46 @@ async def test_delete_referenced_credential_returns_409_with_citations() -> None
     assert fake.store["channel/tg/bot-token"] == "123:abc"
     # A refused delete is not a lifecycle change — nothing audited.
     assert [e for e in audit_repo.entries if e.event_type == "credential_deleted"] == []
+
+
+@pytest.mark.asyncio
+async def test_list_reports_every_cited_ref_with_its_presence() -> None:
+    """``GET /credentials`` enumerates every ref a registered resource cites,
+    whatever its kind, with whether the store holds it — so a vault restored
+    without its secrets says which are missing. Presence only: no value.
+    """
+    fake = _FakeCredentialStore()
+    fake.store["mcp/github/token"] = "ghp_secret"
+    resources = _FakeResourceService(
+        {
+            "mcp/github/token": [_resource("mcp_server", "github", row_id=1)],
+            "provider/openai/key": [_resource("provider", "openai", row_id=2)],
+        }
+    )
+    transport = ASGITransport(_build_app(fake, resources=resources))
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://t",
+        headers={"X-Coffer-Token": "test-token"},
+    ) as c:
+        r = await c.get("/api/v1/credentials")
+    assert r.status_code == 200
+    body = r.json()
+    assert body == {
+        "refs": [
+            {
+                "ref": "mcp/github/token",
+                "present": True,
+                "cited_by": [{"uid": f"{1:032x}", "kind": "mcp_server", "name": "github"}],
+            },
+            {
+                "ref": "provider/openai/key",
+                "present": False,
+                "cited_by": [{"uid": f"{2:032x}", "kind": "provider", "name": "openai"}],
+            },
+        ]
+    }
+    assert "ghp_secret" not in r.text
 
 
 @pytest.mark.asyncio

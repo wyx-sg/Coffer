@@ -70,7 +70,7 @@ async def test_a_round_waits_for_whatever_else_is_rewriting_the_vault(pair) -> N
     async with lock:
         # A pass is "in progress": it has the lock and is midway through
         # rewriting the corpus.
-        round_task = asyncio.create_task(service.run_once())
+        round_task = asyncio.create_task(service.run_once(adopt=True))
         await asyncio.sleep(0.15)
         assert not round_task.done(), "the round serialized the vault mid-rewrite"
         # The rewrite finishes while the round is still waiting.

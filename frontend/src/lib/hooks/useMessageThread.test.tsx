@@ -27,7 +27,7 @@ const row = (overrides: Partial<Message>): Message => ({
   ...overrides,
 });
 
-const LIVE: LiveMessage = { text: "", toolBlocks: [], streaming: true };
+const LIVE: LiveMessage = { blocks: [], streaming: true };
 
 function makeWrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });

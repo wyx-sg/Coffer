@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from coffer.domain.sync.convergence import RunRecord
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from coffer.application.sync.ports import SyncRemoteRepoPort
+    from coffer.application.sync.ports import ConvergenceStatePort, SyncRemoteRepoPort
 
 #: What one read returns, newest first. The surface searches, filters and pages
 #: in the browser over what it is handed, so this is the window a user can look
@@ -35,6 +35,12 @@ class HistoryMixin:
     """
 
     _remotes: SyncRemoteRepoPort
+    _state: ConvergenceStatePort
+
+    async def not_applicable(self) -> list[str]:
+        """Every path recorded as not applicable on this machine."""
+        _retry, not_applicable = await self._state.held_paths()
+        return sorted(not_applicable)
 
     async def runs(self, limit: int = DEFAULT_RUN_LIMIT) -> list[RunRecord]:
         """Every round this vault has run against its remote, newest first.

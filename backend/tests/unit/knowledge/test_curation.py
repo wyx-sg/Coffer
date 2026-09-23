@@ -459,6 +459,81 @@ def test_retire_is_bounded_like_a_write(knowledge_root) -> None:  # type: ignore
     assert "retire_document" in tools
 
 
+def _retire_tools(**kwargs: Any) -> dict[str, Any]:
+    return {
+        t.name: t
+        for t in build_tools(
+            service=_service(), collection="shopee", actor="system", counters=Counters(), **kwargs
+        )
+    }
+
+
+@pytest.mark.anyio
+async def test_a_retire_before_the_pass_has_written_anything_is_refused(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    # "Preserve every fact a pass is shown": a document may be retired only
+    # once this pass has written its content somewhere else.
+    first = _document("First", body="one fact")
+    _document("Second", body="another fact")
+    tools = _retire_tools()
+    await tools["read_document"].handler({"path": first})
+
+    outcome = await tools["retire_document"].handler({"path": first})
+
+    assert "error" in outcome
+    assert "retire" in outcome["error"]
+    assert first in _documents()
+
+
+@pytest.mark.anyio
+async def test_a_retire_needs_a_write_elsewhere_after_the_document_was_seen(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    unseen = _document("Unseen", body="a fact nobody read")
+    keeper = _document("Keeper", body="k")
+    tools = _retire_tools()
+
+    # Writing the document itself is not writing its content elsewhere.
+    await tools["write_document"].handler(
+        {"path": unseen, "title": "Unseen", "description": "d", "body": "a fact nobody read"}
+    )
+    refused = await tools["retire_document"].handler({"path": unseen})
+    assert "error" in refused
+    assert unseen in _documents()
+
+    # A write elsewhere that comes before the pass saw a document does not
+    # carry that document's content.
+    other = _document("Other", body="o")
+    await tools["write_document"].handler(
+        {"path": keeper, "title": "Keeper", "description": "d", "body": "k"}
+    )
+    await tools["read_document"].handler({"path": other})
+    refused = await tools["retire_document"].handler({"path": other})
+    assert "error" in refused
+    assert other in _documents()
+
+    # Read, then written elsewhere: now the retire is allowed.
+    await tools["write_document"].handler(
+        {"path": keeper, "title": "Keeper", "description": "d", "body": "k and o"}
+    )
+    retired = await tools["retire_document"].handler({"path": other})
+    assert retired == {"ok": True, "path": other}
+    assert other not in _documents()
+
+
+@pytest.mark.anyio
+async def test_a_document_shown_in_the_brief_counts_as_seen(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    # The item and the candidates arrive in full in the brief, so the pass has
+    # their content without calling read_document.
+    shown = _document("Shown", body="s")
+    keeper = _document("Keeper", body="k")
+    tools = _retire_tools(shown=(shown,))
+    await tools["write_document"].handler(
+        {"path": keeper, "title": "Keeper", "description": "d", "body": "k and s"}
+    )
+    assert await tools["retire_document"].handler({"path": shown}) == {
+        "ok": True,
+        "path": shown,
+    }
+
+
 @pytest.mark.anyio
 async def test_a_pass_that_retires_its_own_edited_document_settles_cleanly(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     # An edited document that duplicates another is folded in and retired by

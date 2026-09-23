@@ -1056,30 +1056,26 @@ ignore_imports = [
 # Contract 7: converter confinement. ``markitdown`` has exactly two consumers —
 # ``infrastructure.chat.document_extract``, which turns an inbound channel
 # attachment into text (spec channels FR-030), and
-# ``infrastructure.knowledge.converters``, which turns an uploaded document
-# into a Markdown file (spec knowledge FR-022/FR-037) — so the rule keeps it
-# out of every other package rather than granting either an exemption. The
+# ``infrastructure.knowledge.converters.markitdown_converter``, which turns an
+# uploaded document into a Markdown file (spec knowledge FR-022/FR-037). The
+# source is the whole ``coffer`` package, so a package added later is covered
+# without anyone remembering to list it; the two consumers' own edges are the
+# only ones ignored, which also removes every indirect chain through them. The
 # vector-index and embedding SDKs it also used to fence are gone from the
 # dependency set entirely and are banned by Contract 8 instead, so a
 # reintroduction has to be a deliberate act. Coffer no longer embeds anything
 # at any layer.
 [[tool.importlinter.contracts]]
-name = "Engine confinement: the markdown converter lives in infrastructure.chat and infrastructure.knowledge only"
+name = "Engine confinement: markitdown is imported by the channel attachment extractor and the knowledge converter only"
 type = "forbidden"
-source_modules = [
-    "coffer.domain",
-    "coffer.application",
-    "coffer.infrastructure.mcp",
-    "coffer.infrastructure.agent",
-    "coffer.infrastructure.skill",
-    "coffer.infrastructure.persistence",
-    "coffer.infrastructure.credentials",
-    "coffer.infrastructure.daemon",
-    "coffer.infrastructure.logging",
-]
+source_modules = ["coffer"]
 forbidden_modules = [
     "markitdown",
     "docling",
+]
+ignore_imports = [
+    "coffer.infrastructure.chat.document_extract -> markitdown",
+    "coffer.infrastructure.knowledge.converters.markitdown_converter -> markitdown",
 ]
 
 # Contract 8: the dropped stacks must not return anywhere in the codebase.

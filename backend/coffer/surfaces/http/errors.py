@@ -123,6 +123,8 @@ _STATUS: dict[str, int] = {
     # Not 422: the patch is well-formed, and the same patch succeeds once the
     # connection is no longer projected — a state conflict, not a bad body.
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": 409,
+    # An ollama connection is internal-only and never switched on for an agent.
+    "PROVIDER_INTERNAL_ONLY": 409,
     "NO_ACTIVE_PROVIDER": 404,
     # knowledge (spec knowledge). A collection an agent is not authorized for
     # is NOT FOUND rather than FORBIDDEN: telling an unauthorized caller that

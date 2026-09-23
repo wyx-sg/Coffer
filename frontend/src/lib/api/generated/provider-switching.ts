@@ -93,6 +93,10 @@ export interface paths {
          *     If no matching agent is registered, the profile is still activated and
          *     the response carries the agent in `skipped` — NOT an error.
          *
+         *     An `ollama` connection is internal-only: it is refused with 409
+         *     `PROVIDER_INTERNAL_ONLY`, never becomes `is_active`, and no native
+         *     config is written.
+         *
          *     Emits a `PROVIDER_SWITCHED` audit event with details
          *     `{from, to, protocol, agents: [...projected...]}`.
          */
@@ -720,6 +724,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             500: components["responses"]["InternalError"];
         };
     };

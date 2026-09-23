@@ -35,9 +35,11 @@ before assuming something is absent.
   **`tomlkit`**, **`pyyaml`** (agent-native config files), **`sse-starlette`** +
   **`watchfiles`** (streamed turns, file watching).
 - **`markitdown[docx,pdf,pptx,xls,xlsx]`** — inbound **channel attachment → text**
-  only. The knowledge layer converts nothing any more, so do not reach for it as
-  a "knowledge substrate"; the extras are what stop each rich format raising at
-  extraction time.
+  (`infrastructure/chat/document_extract.py`) and **uploaded document → Markdown
+  file** (`infrastructure/knowledge/converters/markitdown_converter.py`). Those
+  two modules are its only permitted importers; an importlinter contract over
+  the whole `coffer` package refuses any other. The extras are what stop each
+  rich format raising at extraction time.
 
 Coffer embeds nothing: there is no vector index and no embedding model in the
 dependency set, and knowledge search and memory recall are literal. A genuinely

@@ -25,10 +25,10 @@ coffer sync remote set https://github.com/you/coffer-vault.git \
 
 The remote is probed before it is accepted, so a typo or a token that cannot push fails here rather than an hour later. `coffer sync remote show` prints what is configured; `coffer sync remote clear` forgets it and leaves the vault exactly as it is.
 
-Then run a round by hand rather than waiting for the timer:
+Then join the remote. Joining is always explicit — the timer and `coffer sync now` never join on their own — so even the first machine adopts the repository it just named:
 
 ```bash
-coffer sync now
+coffer sync adopt --yes
 ```
 
 ```
@@ -52,14 +52,26 @@ Install Coffer there, then point it at the same repository:
 coffer sync adopt https://github.com/you/coffer-vault.git
 ```
 
-Joining reports **which kind of join this is** before it applies anything, and the two kinds get opposite treatment:
+Before it applies anything, `adopt` states the join and asks you to go ahead:
+
+```text
+Joining this remote as a returning machine: its id is in the registry, so it resumes from the base it last converged on.
+  last converged here: 2026-09-01
+  documents the remote changed since: 7
+  documents this vault holds: 42
+Join this remote? [y/N]:
+```
+
+It names **which kind of join this is**, the day this machine last converged with the remote, how many documents the remote has changed since then (everything it holds, for a new machine), and how many this vault holds. Answer `n` and nothing has changed. In a script, pass `--yes` once you have decided; without a terminal to answer the question and without `--yes`, `adopt` refuses rather than joining. On the web, the Sync page's Setup card offers **Join this remote** while this machine has not joined; it asks the same question in a dialog and joins only when you confirm. The preview is also `GET /api/v1/sync/join`.
+
+The two kinds get opposite treatment:
 
 - **A new machine takes the union.** Its id is not in the remote's machine registry, so the round's base is git's empty tree — a diff from nothing can only contain additions. Everything the remote holds is added here, everything this machine already had stays, and the next round publishes both. Deletion is structurally impossible, not merely avoided.
 - **A returning machine recovers its base.** Its id *is* in the registry, so it has converged before and merely lost its local pointer — a reinstall, a wiped `~/.coffer`, a disk restored from elsewhere. Its descriptor names the commit it last reached, that commit becomes the base, and the round proceeds as an ordinary stale-machine round: the remote's deletions are applied, this machine's edits are kept, and nothing resurrects.
 
 That distinction is the whole point. A returning machine treated as new would republish everything the others deleted while it was away — every deletion undone at once, with no conflict raised, because a union has no base to disagree with.
 
-If a returning machine's vault is *also* gone, the round stops and asks rather than publishing the loss; see [When a round asks before it deletes](#when-a-round-asks-before-it-deletes). And if its recorded base is no longer in the remote's history, there is no safe default at all, so the round refuses until you choose: `coffer sync adopt --keep-local` publishes this vault's documents as additions, and `coffer sync rebuild` takes the remote's state instead.
+If a returning machine's vault is *also* gone, the round stops and asks rather than publishing the loss; see [When a round asks before it deletes](#when-a-round-asks-before-it-deletes). And if its recorded base is no longer in the remote's history, there is no safe default at all, so `adopt` says so and stops until you choose: `coffer sync adopt --keep-local` publishes this vault's documents as additions, and `coffer sync rebuild` takes the remote's state instead. On the web, the join dialog names this case and offers only the keep-local answer, under a button that says so.
 
 ## Bring the master key over
 
@@ -120,7 +132,9 @@ coffer sync history --limit 20
 
 Rounds that changed nothing are listed like any other. They are the majority, and they are what makes a **gap** visible: without them, a vault that stopped converging on Tuesday looks the same as one that has had nothing to do.
 
-A path that fails to apply is reported and rejoins the next round rather than aborting this one. A path that cannot apply on this machine **at all** — an agent whose `config_dir` does not exist here — is recorded as *not applicable here*: it is preserved, not retried, and not counted as an error.
+A path that fails to apply is reported and rejoins the next round rather than aborting this one. A path that cannot apply on this machine **at all** — an agent whose `config_dir` does not exist here — is recorded as *not applicable here*: it is preserved, not retried, and not counted as an error. The round that meets it lists it under `not applicable here` rather than `could not apply`, `coffer sync status` lists every path this machine holds that way, and on the Sync page the round's row in **Runs** shows them under *Not applicable on this machine*. Each round re-checks only the cheap precondition — does that agent's config directory exist here now? — so installing the agent later brings its document in on the next round, with no error in between.
+
+Until a machine has joined, a round — the timer's or `coffer sync now` — still **detects** the join: it reads the remote's registry and works out whether this machine is new or returning, recovering a returning machine's base from its own descriptor, so a machine that forgot its pointer cannot skip the question. But it **applies** nothing and publishes nothing: it ends as `awaiting_join` and reports the join it found — the case, the day this machine last converged, how many documents the remote changed since and how many this vault holds. `coffer sync now` and `coffer sync status` print that report and point at `coffer sync adopt` (`status` exits non-zero, like any state that waits on you); the Sync page shows it on the Setup card and offers **Join this remote**, which confirms before it joins. The waiting round is recorded once, not once per interval. A pointer that no longer resolves — the working tree was deleted or moved — also waits for `adopt`, and the daemon log says so once.
 
 ## What a machine keeps to itself
 
@@ -174,7 +188,7 @@ conflict
   resolve them with your own git tools, then run 'coffer sync now'
 ```
 
-The vault is untouched and the pointer has not moved, so nothing is lost while you decide. The working tree is an ordinary git repository:
+The vault is untouched and the pointer has not moved, so nothing is lost while you decide. That holds for a join too: a join that stops on a conflict has still joined — the machine has its base — so after resolving, the next step is the same `coffer sync now` (running `coffer sync adopt` again does the same thing on a machine that has joined). The working tree is an ordinary git repository:
 
 ```bash
 cd ~/.coffer/sync

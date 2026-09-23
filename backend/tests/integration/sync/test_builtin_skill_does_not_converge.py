@@ -180,7 +180,7 @@ async def test_two_machines_keep_their_own_guide_and_stop_talking_about_it(pair)
     #    machine, forever.
     commits = await a.remote_commit_count()
     for machine in (a, b):
-        run = await machine.converge()
+        run = await machine.adopt()
         assert run.status is ConvergeStatus.NO_CHANGE, (run.status, run.error)
         assert not run.published.changes
         assert not run.applied.changes

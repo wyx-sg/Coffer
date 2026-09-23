@@ -50,6 +50,7 @@ const STATUSES = [
   "push_failed",
   "failed",
   "disabled",
+  "awaiting_join",
 ] as const;
 
 interface Props {

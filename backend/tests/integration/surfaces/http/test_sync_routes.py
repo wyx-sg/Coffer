@@ -219,9 +219,11 @@ async def test_delete_remote_is_idempotent(client, fleet) -> None:
 
 async def test_run_publishes_the_vault_to_a_real_remote(client, fleet) -> None:
     a, _b = fleet
+    await _configure(client, a)
+    assert (await client.post("/api/v1/sync/adopt", json={})).status_code == 200
+    commits = await a.remote_commit_count()
     a.write_knowledge("notes", "one", "first note\n")
     await a.register("mcp_server", "files")
-    await _configure(client, a)
 
     r = await client.post("/api/v1/sync/run", json={})
 
@@ -239,7 +241,7 @@ async def test_run_publishes_the_vault_to_a_real_remote(client, fleet) -> None:
     assert body["commit"] is not None
     # The round reports the commit it reached; git resolves it to the branch tip.
     assert await a.mirror.resolve_revision(body["commit"]) == await a.mirror.head()
-    assert await a.remote_commit_count() == 1
+    assert await a.remote_commit_count() == commits + 1
     assert body["conflicts"] == []
     assert body["failures"] == []
     assert body["pending"] is None
@@ -258,12 +260,60 @@ async def test_run_without_a_remote_is_a_disabled_round(client) -> None:
     assert r.json()["commit"] is None
 
 
+async def test_run_on_a_machine_that_has_not_joined_waits_for_adopt(client, fleet) -> None:
+    a, b = fleet
+    b.write_knowledge("notes", "from-b", "written on the desktop\n")
+    await b.adopt()
+    a.write_knowledge("notes", "from-a", "written on the laptop\n")
+    await _configure(client, a)
+    assert (await client.get("/api/v1/sync/status")).json()["joined"] is False
+
+    r = await client.post("/api/v1/sync/run", json={})
+
+    assert r.status_code == 200
+    assert r.json()["status"] == "awaiting_join"
+    assert r.json()["commit"] is None
+    # The join is detected and reported, not applied.
+    assert r.json()["join"] == "new"
+    report = r.json()["join_report"]
+    assert report["case"] == "new"
+    assert report["remote_changed"] == 1
+    assert report["vault_documents"] == 1
+    assert a.read_knowledge("notes", "from-b") is None
+    assert "knowledge/notes/from-a.md" not in await a.remote_paths()
+    status = (await client.get("/api/v1/sync/status")).json()
+    assert status["joined"] is False
+    assert status["last_run"]["status"] == "awaiting_join"
+
+    assert (await client.post("/api/v1/sync/adopt", json={})).json()["join"] == "new"
+    assert (await client.get("/api/v1/sync/status")).json()["joined"] is True
+
+
+async def test_a_path_that_cannot_apply_here_is_reported_as_not_applicable(client, fleet) -> None:
+    a, b = fleet
+    await b.register("mcp_server", "wrong-machine", {"value": "never"})
+    await b.adopt()
+    await _configure(client, a)
+    a.gate.refuse_value = "never"
+    a.gate.refuse_permanently = True
+
+    run = (await client.post("/api/v1/sync/adopt", json={})).json()
+
+    path = await b.doc_path("mcp_server", "wrong-machine")
+    assert run["failures"] == []
+    assert run["not_applicable"] == [path]
+    status = (await client.get("/api/v1/sync/status")).json()
+    assert status["not_applicable"] == [path]
+    history = (await client.get("/api/v1/sync/runs")).json()["runs"]
+    assert history[0]["not_applicable"] == [path]
+
+
 async def test_adopt_joins_as_new_when_the_registry_has_never_seen_this_machine(
     client, fleet
 ) -> None:
     a, b = fleet
     b.write_knowledge("notes", "from-b", "written on the desktop\n")
-    await b.converge()
+    await b.adopt()
     await b.converge()
     a.write_knowledge("notes", "from-a", "written on the laptop\n")
     await _configure(client, a)
@@ -290,7 +340,7 @@ async def test_adopt_needs_a_choice_when_a_returning_machine_has_lost_its_base(
     a, _b = fleet
     a.write_knowledge("notes", "one", "first note\n")
     await _configure(client, a)
-    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    assert (await client.post("/api/v1/sync/adopt", json={})).json()["status"] == "ok"
     a.state.forget()  # what a reinstall does to the machine-local pointer
 
     refused = await client.post("/api/v1/sync/adopt", json={})
@@ -308,6 +358,49 @@ async def test_adopt_needs_a_choice_when_a_returning_machine_has_lost_its_base(
     assert a.read_knowledge("notes", "one") == "first note\n"
 
 
+async def test_join_preview_states_the_case_and_counts_and_applies_nothing(client, fleet) -> None:
+    a, b = fleet
+    b.write_knowledge("notes", "from-b", "written on the desktop\n")
+    await b.adopt()
+    a.write_knowledge("notes", "from-a", "written on the laptop\n")
+    await _configure(client, a)
+
+    r = await client.get("/api/v1/sync/join")
+
+    assert r.status_code == 200
+    assert r.json() == {
+        "joining": True,
+        "case": "new",
+        "base": None,
+        "last_converged_on": None,
+        "remote_changed": 1,
+        "vault_documents": 1,
+    }
+    assert a.read_knowledge("notes", "from-b") is None
+    assert await a.state.pointer() is None
+    assert (await client.get("/api/v1/sync/status")).json()["last_run"] is None
+
+
+async def test_join_preview_names_an_ambiguous_join_and_the_choice_resolves_it(
+    client, fleet
+) -> None:
+    a, _b = fleet
+    a.write_knowledge("notes", "one", "first note\n")
+    await _configure(client, a)
+    assert (await client.post("/api/v1/sync/adopt", json={})).json()["status"] == "ok"
+    a.state.forget()
+
+    ambiguous = (await client.get("/api/v1/sync/join")).json()
+    chosen = (await client.get("/api/v1/sync/join", params={"choice": "keep-local"})).json()
+    bad = await client.get("/api/v1/sync/join", params={"choice": "rebuild"})
+
+    assert ambiguous["case"] == "ambiguous"
+    assert ambiguous["last_converged_on"] is not None
+    assert ambiguous["remote_changed"] is None
+    assert chosen["case"] == "new"
+    assert bad.status_code == 422
+
+
 # --- the deletion guard -----------------------------------------------------
 
 
@@ -315,7 +408,7 @@ async def _held_publish_round(client: AsyncClient, a: VaultMachine) -> dict:
     """Seed one note, publish it, delete it — the guard holds the deletion."""
     a.write_knowledge("notes", "only", "the only note\n")
     await _configure(client, a)
-    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    assert (await client.post("/api/v1/sync/adopt", json={})).json()["status"] == "ok"
     a.delete_knowledge("notes", "only")
 
     r = await client.post("/api/v1/sync/run", json={})
@@ -397,8 +490,8 @@ async def test_rollback_undoes_the_last_applied_round(client, fleet) -> None:
     for i in range(_ROOMY):
         a.write_knowledge("notes", f"n{i}", f"original {i}\n")
     await _configure(client, a)
-    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
-    await b.converge()
+    assert (await client.post("/api/v1/sync/adopt", json={})).json()["status"] == "ok"
+    await b.adopt()
     await b.converge()
 
     b.write_knowledge("notes", "n0", "rewritten by B\n")
@@ -424,7 +517,7 @@ async def test_restore_brings_back_a_deleted_document(client, fleet) -> None:
     for i in range(_ROOMY):
         a.write_knowledge("notes", f"n{i}", f"note {i}\n")
     await _configure(client, a)
-    before = (await client.post("/api/v1/sync/run", json={})).json()["commit"]
+    before = (await client.post("/api/v1/sync/adopt", json={})).json()["commit"]
     assert before
 
     a.delete_knowledge("notes", "n0")
@@ -463,7 +556,7 @@ async def test_a_run_against_a_newer_layout_fails_and_says_why(client, fleet) ->
     a, _b = fleet
     a.write_knowledge("notes", "mine", "my body\n")
     await _configure(client, a)
-    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    assert (await client.post("/api/v1/sync/adopt", json={})).json()["status"] == "ok"
 
     another_coffer_pushes(
         a.remote_url, layout=SCHEMA_VERSION + 1, adding="knowledge/notes/newer.md"
@@ -486,7 +579,7 @@ async def test_rebuilding_from_a_newer_layout_is_409(client, fleet) -> None:
     a, _b = fleet
     a.write_knowledge("notes", "mine", "my body\n")
     await _configure(client, a)
-    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    assert (await client.post("/api/v1/sync/adopt", json={})).json()["status"] == "ok"
 
     another_coffer_pushes(
         a.remote_url, layout=SCHEMA_VERSION + 1, adding="knowledge/notes/newer.md"
@@ -518,7 +611,7 @@ async def test_status_reports_the_remote_and_the_last_round(client, fleet) -> No
     a, _b = fleet
     a.write_knowledge("notes", "one", "first note\n")
     await _configure(client, a)
-    run = (await client.post("/api/v1/sync/run", json={})).json()
+    run = (await client.post("/api/v1/sync/adopt", json={})).json()
 
     body = (await client.get("/api/v1/sync/status")).json()
 
@@ -550,7 +643,7 @@ async def test_every_round_lands_in_the_history_newest_first(client, fleet) -> N
     """
     a, _b = fleet
     await _configure(client, a)
-    first = (await client.post("/api/v1/sync/run", json={})).json()
+    first = (await client.post("/api/v1/sync/adopt", json={})).json()
     a.write_knowledge("notes", "one", "first note\n")
     second = (await client.post("/api/v1/sync/run", json={})).json()
     third = (await client.post("/api/v1/sync/run", json={})).json()
@@ -576,7 +669,7 @@ async def test_a_history_row_carries_everything_the_status_round_did_plus_when(
     a, _b = fleet
     a.write_knowledge("notes", "one", "first note\n")
     await _configure(client, a)
-    run = (await client.post("/api/v1/sync/run", json={})).json()
+    run = (await client.post("/api/v1/sync/adopt", json={})).json()
 
     record = (await client.get("/api/v1/sync/runs")).json()["runs"][0]
 
@@ -594,7 +687,7 @@ async def test_the_newest_history_row_and_the_status_round_are_the_same_round(
     a, _b = fleet
     a.write_knowledge("notes", "one", "first note\n")
     await _configure(client, a)
-    await client.post("/api/v1/sync/run", json={})
+    await client.post("/api/v1/sync/adopt", json={})
     a.write_knowledge("notes", "two", "second note\n")
     await client.post("/api/v1/sync/run", json={})
 
@@ -607,7 +700,7 @@ async def test_the_newest_history_row_and_the_status_round_are_the_same_round(
 async def test_runs_caps_what_one_read_returns(client, fleet) -> None:
     a, _b = fleet
     await _configure(client, a)
-    await client.post("/api/v1/sync/run", json={})
+    await client.post("/api/v1/sync/adopt", json={})
     await client.post("/api/v1/sync/run", json={})
 
     assert len((await client.get("/api/v1/sync/runs?limit=1")).json()["runs"]) == 1
@@ -628,10 +721,10 @@ async def test_machines_without_a_remote_is_empty(client) -> None:
 async def test_machines_lists_every_machine_sharing_the_vault(client, fleet) -> None:
     a, b = fleet
     b.write_knowledge("notes", "from-b", "desktop\n")
-    await b.converge()
+    await b.adopt()
     await b.converge()
     await _configure(client, a)
-    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    assert (await client.post("/api/v1/sync/adopt", json={})).json()["status"] == "ok"
 
     r = await client.get("/api/v1/sync/machines")
 
@@ -682,11 +775,11 @@ async def test_retiring_a_machine_removes_its_descriptor_and_nothing_else(client
     report.
     """
     a, b = fleet
-    await b.converge()
+    await b.adopt()
     await b.converge()
     await a.register("mcp_server", "shared")
     await _configure(client, a)
-    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    assert (await client.post("/api/v1/sync/adopt", json={})).json()["status"] == "ok"
     await a.set_scope("mcp_server", "shared", Scope(agents=["claude-code"]))
 
     r = await client.delete(f"/api/v1/sync/machines/{MACHINE_B}")
@@ -747,9 +840,9 @@ async def test_key_import_reports_what_it_still_cannot_read(client, fleet) -> No
     a.set_credential("mcp/files/token", "s3cret-value")
     await a.register("mcp_server", "files", {"value": "f", "credential_ref": "mcp/files/token"})
     await _configure(client, a)
-    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    assert (await client.post("/api/v1/sync/adopt", json={})).json()["status"] == "ok"
     # B absorbs A's ciphertext without A's key, so the ref is locked there.
-    await b.converge()
+    await b.adopt()
     await b.converge()
     assert b.credentials.locked_refs() == ["mcp/files/token"]
 

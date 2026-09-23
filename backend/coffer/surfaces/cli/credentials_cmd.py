@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json as _json
 import sys
+from typing import Any
 
 import typer
 from rich.console import Console
@@ -105,14 +106,13 @@ def list_refs(
     ctx: typer.Context,
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """List known credential refs (scanned from registered MCP server resources).
+    """List every credential ref a registered resource cites, with its presence.
 
-    Refs are enumerated from the daemon's registered MCP server configs; each
-    ref's presence is then probed via the daemon's ``/credentials/{ref}/exists``
-    endpoint (no secret value crosses the API).
+    The daemon enumerates refs from every kind (MCP servers, channels, model
+    providers, ...) and reports whether the store holds each one; no secret
+    value crosses the API.
     """
     verbose = (ctx.obj or {}).get("verbose", False)
-    refs: set[str] = set()
     try:
         c, _info = _cli_client.client_or_exit()
     except SystemExit:
@@ -121,22 +121,12 @@ def list_refs(
         else:
             typer.echo("(no known refs — daemon not reachable to enumerate)")
         return
-    presence: dict[str, bool] = {}
     with c:
-        r = c.get("/resources", params={"kind": "mcp_server"})
+        r = c.get("/credentials")
         _cli_client.check(r, verbose=verbose)
-        for resource in r.json().get("resources", []):
-            config = resource.get("config") or {}
-            transport = config.get("transport") or {}
-            cred_refs = transport.get("credential_refs") or {}
-            refs.update(cred_refs.values())
-        if not output_json:
-            for ref in refs:
-                er = c.get(f"/credentials/{ref}/exists")
-                _cli_client.check(er, verbose=verbose)
-                presence[ref] = bool(er.json().get("present"))
+        refs: list[dict[str, Any]] = r.json().get("refs", [])
     if output_json:
-        typer.echo(_json.dumps({"refs": sorted(refs)}))
+        typer.echo(_json.dumps({"refs": refs}))
         return
     if not refs:
         typer.echo("(no credential refs registered in any resource)")
@@ -144,8 +134,11 @@ def list_refs(
     table = Table(title="Known credential refs")
     table.add_column("Ref")
     table.add_column("Present in store")
-    for ref in sorted(refs):
-        table.add_row(ref, "yes" if presence.get(ref) else "no")
+    table.add_column("Cited by")
+    for entry in refs:
+        cited_by = entry.get("cited_by", [])
+        citers = ", ".join(f"{citer['kind']} {citer['name']}" for citer in cited_by)
+        table.add_row(entry["ref"], "yes" if entry.get("present") else "no", citers)
     _console.print(table)
 
 

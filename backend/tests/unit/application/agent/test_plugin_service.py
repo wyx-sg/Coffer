@@ -394,11 +394,65 @@ async def test_list_claude_inventory_and_enabled(store, audit_svc):
     assert by_id["plugin-a@npm"].enabled is True
     # plugin-b explicitly disabled in settings
     assert by_id["plugin-b@pypi"].enabled is False
-    # cache_present = "was in installed inventory"
-    assert by_id["plugin-a@npm"].cache_present is True
-    assert by_id["plugin-b@pypi"].cache_present is True
+    # Neither inventory record carries an installPath, so there is no cache
+    # the inventory records — cache_present is False for both.
+    assert by_id["plugin-a@npm"].cache_present is False
+    assert by_id["plugin-b@pypi"].cache_present is False
     # marketplaces come from known_marketplaces.json
     assert any(m.name == "npm" for m in out.marketplaces)
+
+
+async def test_list_claude_cache_present_follows_the_recorded_install_path(store, audit_svc):
+    """cache_present is whether the installPath the inventory records exists on
+    disk — a record pointing at a deleted cache dir is flagged, while enabled
+    state still comes from settings.json's enabledPlugins."""
+    here = pathlib.Path("/cfg/plugins/cache/mk/here/1.0.0")
+    gone = pathlib.Path("/cfg/plugins/cache/mk/gone/1.0.0")
+    store._files[_CLAUDE_INSTALLED] = json.dumps(
+        {
+            "version": 2,
+            "plugins": {
+                "here@mk": [{"installPath": str(here), "version": "1.0.0"}],
+                "gone@mk": [{"installPath": str(gone), "version": "1.0.0"}],
+            },
+        }
+    )
+    store._files[_CLAUDE_SETTINGS] = '{"enabledPlugins": {"gone@mk": false}}'
+    svc = _make_svc(store, audit_svc, cache_dirs={here})
+
+    out = await svc.list_plugins(_CC_UID)
+
+    by_id = {v.id: v for v in out.items}
+    assert by_id["here@mk"].cache_present is True
+    assert by_id["gone@mk"].cache_present is False
+    assert by_id["here@mk"].enabled is True
+    assert by_id["gone@mk"].enabled is False
+
+
+async def test_list_claude_cache_present_needs_an_absolute_install_path(store, audit_svc):
+    """An empty or relative installPath names no cache: ``Path("")`` is the
+    daemon's own working directory, which exists, and a relative path resolves
+    against it too — neither says anything about the plugin's cache."""
+    store._files[_CLAUDE_INSTALLED] = json.dumps(
+        {
+            "version": 2,
+            "plugins": {
+                "empty@mk": [{"installPath": "", "version": "1.0.0"}],
+                "relative@mk": [{"installPath": "cache/mk/relative/1.0.0", "version": "1.0.0"}],
+            },
+        }
+    )
+    svc = _make_svc(
+        store,
+        audit_svc,
+        cache_dirs={pathlib.Path(""), pathlib.Path("."), pathlib.Path("cache/mk/relative/1.0.0")},
+    )
+
+    out = await svc.list_plugins(_CC_UID)
+
+    by_id = {v.id: v for v in out.items}
+    assert by_id["empty@mk"].cache_present is False
+    assert by_id["relative@mk"].cache_present is False
 
 
 async def test_list_claude_surfaces_detail_from_reader(store, audit_svc):

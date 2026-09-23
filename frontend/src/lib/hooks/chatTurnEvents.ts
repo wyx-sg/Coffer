@@ -12,12 +12,31 @@ import { ApiError } from "@/lib/api/errors";
 import { messagesKey } from "@/lib/api/queryKeys";
 
 export interface LiveMessage {
-  /** Partial accumulated text from text_delta events. */
-  text: string;
-  /** Tool call/result blocks accumulated during the turn. */
-  toolBlocks: ContentBlock[];
+  /**
+   * The turn's text and tool blocks in the order it emitted them — the same
+   * shape the persisted assistant row carries. Consecutive text deltas extend
+   * the trailing text block; a tool call or result closes it.
+   */
+  blocks: ContentBlock[];
   /** Whether the turn is still streaming. */
   streaming: boolean;
+}
+
+/** `blocks` with `delta` appended to its trailing text block, or a new one. */
+function appendText(blocks: ContentBlock[], delta: string): ContentBlock[] {
+  const last = blocks[blocks.length - 1];
+  if (last?.type === "text") {
+    return [...blocks.slice(0, -1), { ...last, text: (last.text ?? "") + delta }];
+  }
+  return [...blocks, { type: "text", text: delta }];
+}
+
+/** Fold one content block into the live bubble, starting one if none is shown. */
+function withBlocks(
+  prev: LiveMessage | null,
+  next: (blocks: ContentBlock[]) => ContentBlock[],
+): LiveMessage {
+  return { blocks: next(prev?.blocks ?? []), streaming: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -186,16 +205,12 @@ export async function handleEvent(event: AgentEvent, ctx: HandlerCtx): Promise<v
       // so this client may hold no echo for it. Begin a fresh live bubble and
       // invalidate messages so the committed user message appears (which is
       // also what retires this client's own echo, via the cache subscription).
-      setLiveMessage({ text: "", toolBlocks: [], streaming: true });
+      setLiveMessage({ blocks: [], streaming: true });
       await qc.invalidateQueries({ queryKey: messagesKey(conversationId) });
       break;
 
     case "text_delta":
-      setLiveMessage((prev) =>
-        prev
-          ? { ...prev, text: prev.text + event.data.text, streaming: true }
-          : { text: event.data.text, toolBlocks: [], streaming: true },
-      );
+      setLiveMessage((prev) => withBlocks(prev, (blocks) => appendText(blocks, event.data.text)));
       break;
 
     case "tool_call": {
@@ -205,11 +220,7 @@ export async function handleEvent(event: AgentEvent, ctx: HandlerCtx): Promise<v
         tool_name: event.data.tool_name,
         tool_input: event.data.tool_input,
       };
-      setLiveMessage((prev) =>
-        prev
-          ? { ...prev, toolBlocks: [...prev.toolBlocks, block], streaming: true }
-          : { text: "", toolBlocks: [block], streaming: true },
-      );
+      setLiveMessage((prev) => withBlocks(prev, (blocks) => [...blocks, block]));
       break;
     }
 
@@ -221,11 +232,7 @@ export async function handleEvent(event: AgentEvent, ctx: HandlerCtx): Promise<v
         output: event.data.output ?? null,
         error: event.data.error ?? null,
       };
-      setLiveMessage((prev) =>
-        prev
-          ? { ...prev, toolBlocks: [...prev.toolBlocks, resultBlock], streaming: true }
-          : { text: "", toolBlocks: [resultBlock], streaming: true },
-      );
+      setLiveMessage((prev) => withBlocks(prev, (blocks) => [...blocks, resultBlock]));
       break;
     }
 

@@ -51,8 +51,10 @@ function run(overrides: Partial<RunRecord> = {}): RunRecord {
     conflicts: [],
     agent_resolved: [],
     failures: [],
+    not_applicable: [],
     locked_refs: [],
     pending: null,
+    join_report: null,
     error: null,
     ...overrides,
   };

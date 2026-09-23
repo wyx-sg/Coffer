@@ -17,12 +17,20 @@ import { SyncRemoteCard } from "./SyncRemoteCard";
 vi.mock("@/lib/hooks/useSync", () => ({
   useSaveSyncRemote: vi.fn(),
   useRunConverge: vi.fn(),
+  usePreviewJoin: vi.fn(),
+  useAdoptRemote: vi.fn(),
 }));
 
-const { useSaveSyncRemote, useRunConverge } = await import("@/lib/hooks/useSync");
+const { useSaveSyncRemote, useRunConverge, usePreviewJoin, useAdoptRemote } =
+  await import("@/lib/hooks/useSync");
 
 const saveMutate = vi.fn();
 const runMutate = vi.fn();
+// Answers "not joining", so Converge now goes straight to its round.
+const previewMutate = vi.fn(
+  (_: undefined, opts: { onSuccess: (p: { joining: boolean }) => void }) =>
+    opts.onSuccess({ joining: false }),
+);
 
 function stub() {
   vi.mocked(useSaveSyncRemote).mockReturnValue({
@@ -33,6 +41,16 @@ function stub() {
     mutate: runMutate,
     isPending: false,
   } as unknown as ReturnType<typeof useRunConverge>);
+  vi.mocked(usePreviewJoin).mockReturnValue({
+    mutate: previewMutate,
+    isPending: false,
+  } as unknown as ReturnType<typeof usePreviewJoin>);
+  vi.mocked(useAdoptRemote).mockReturnValue({
+    mutate: vi.fn(),
+    reset: vi.fn(),
+    isPending: false,
+    error: null,
+  } as unknown as ReturnType<typeof useAdoptRemote>);
 }
 
 function status(configured: boolean): SyncStatus {
@@ -52,6 +70,8 @@ function status(configured: boolean): SyncStatus {
     last_run: null,
     machine_id: "a3f21c9e4b7d2610",
     machine_id_is_derived: true,
+    joined: configured,
+    not_applicable: [],
   };
 }
 
@@ -164,6 +184,39 @@ describe("SyncRemoteCard", () => {
     rerender(<SyncRemoteCard status={status(true)} />);
     fireEvent.click(screen.getByRole("button", { name: /converge now/i }));
     expect(runMutate).toHaveBeenCalled();
+  });
+
+  test("a machine that has not joined is told so and offered the join", () => {
+    stub();
+    const detected = {
+      status: "awaiting_join" as const,
+      join: "new" as const,
+      applied: { added: 0, modified: 0, deleted: 0, changes: [] },
+      published: { added: 0, modified: 0, deleted: 0, changes: [] },
+      commit: null,
+      conflicts: [],
+      agent_resolved: [],
+      failures: [],
+      not_applicable: [],
+      locked_refs: [],
+      pending: null,
+      join_report: {
+        joining: true,
+        case: "new" as const,
+        base: null,
+        last_converged_on: null,
+        remote_changed: 3,
+        vault_documents: 9,
+      },
+      error: null,
+    };
+    render(<SyncRemoteCard status={{ ...status(true), joined: false, last_run: detected }} />);
+
+    expect(screen.getByText(/has not joined this remote yet/i)).toBeInTheDocument();
+    // The join the last round detected is on the card.
+    expect(screen.getByTestId("sync-join")).toHaveTextContent(/changed since\s*3/i);
+    fireEvent.click(screen.getByRole("button", { name: /join this remote/i }));
+    expect(previewMutate).toHaveBeenCalled();
   });
 
   acceptance("vault-sync", "the push credential never reaches the repository", () => {

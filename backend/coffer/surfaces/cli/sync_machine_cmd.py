@@ -37,9 +37,16 @@ def machine_list(ctx: typer.Context) -> None:
         r = c.get("/sync/machines")
         _cli_client.check(r, verbose=verbose)
         payload = r.json()
-    machines = payload.get("machines") or []
+        machines = payload.get("machines") or []
+        if not machines:
+            s = c.get("/sync/status")
+            _cli_client.check(s, verbose=verbose)
+            joined = bool(s.json().get("joined"))
     if not machines:
-        _console.print("no machines yet — run 'coffer sync now' to publish this one")
+        # Only a round publishes this machine's descriptor, and only a joined
+        # machine runs one: until then the step is ``adopt``.
+        step = "coffer sync now" if joined else "coffer sync adopt"
+        _console.print(f"no machines yet — run '{step}' to publish this one")
         return
     table = Table(show_header=True, header_style="bold")
     for column in ("Name", "Id", "System", "Last converged", "Key", "Agents"):

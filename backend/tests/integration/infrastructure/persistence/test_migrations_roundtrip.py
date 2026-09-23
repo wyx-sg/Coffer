@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0101"
+HEAD_REVISION = "0102"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -185,6 +185,9 @@ HEAD_REVISION = "0101"
 # ``workflow_runs.template_ref``, which held the ``<kind>:<name>`` string form
 # this release deletes; no DDL, and its downgrade puts the prefix back because
 # the kind is constant for that column.
+# 0101 changes no table (the knowledge lanes live on disk). 0102 rebuilds
+# ``conversations`` to drop ``agent_key``'s ``'builtin'`` server default — a
+# column-default change only, so the table/column set is unchanged at head.
 EXPECTED_TABLES = {
     "resources",
     "audit_log",

@@ -9,6 +9,7 @@ redact.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -77,6 +78,28 @@ class PendingConfirmationOut(BaseModel):
     raised_at: datetime
 
 
+class JoinPreviewOut(BaseModel):
+    """The join a round would make, stated before anything is applied.
+
+    ``joining`` is False for a machine that already converged here: adopting
+    is then an ordinary round with nothing to announce. ``case`` is
+    ``ambiguous`` for a returning machine whose base is gone, which still
+    needs the explicit ``keep-local`` choice (or a rebuild) before it joins.
+    """
+
+    joining: bool
+    case: Literal["new", "returning", "ambiguous"] | None = None
+    #: The commit a returning machine recovered from its own descriptor.
+    base: str | None = None
+    #: ISO date this machine last converged with the remote; None when new.
+    last_converged_on: str | None = None
+    #: Documents the remote changed since this machine's base — everything it
+    #: holds, for a new machine. None when the base is gone.
+    remote_changed: int | None = None
+    #: Documents this vault holds.
+    vault_documents: int | None = None
+
+
 class RoundOut(BaseModel):
     """One converge round's outcome."""
 
@@ -95,8 +118,13 @@ class RoundOut(BaseModel):
     #: machine merge of the user's own notes is what they would most want told.
     agent_resolved: list[str] = []
     failures: list[FailureOut] = []
+    #: Paths this round met that can never apply on this machine. Held and
+    #: not retried; not failures.
+    not_applicable: list[str] = []
     locked_refs: list[str] = []
     pending: PendingConfirmationOut | None = None
+    #: On an ``awaiting_join`` round, the join it detected and did not apply.
+    join_report: JoinPreviewOut | None = None
     error: str | None = None
 
 
@@ -200,6 +228,11 @@ class SyncStatusOut(BaseModel):
     #: ``False`` when the id came from the local fallback file rather than the
     #: host, which means it does not survive deleting ``~/.coffer``.
     machine_id_is_derived: bool
+    #: Whether this machine has joined the remote. Until it has, a round
+    #: reports ``awaiting_join`` and only ``POST /adopt`` joins.
+    joined: bool = False
+    #: Every path recorded as not applicable on this machine, sorted.
+    not_applicable: list[str] = []
 
 
 class MachineOut(BaseModel):

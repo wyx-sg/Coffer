@@ -36,6 +36,7 @@ const NEEDS_ATTENTION: readonly RoundStatus[] = [
   "awaiting_confirmation",
   "push_failed",
   "failed",
+  "awaiting_join",
 ];
 
 /**

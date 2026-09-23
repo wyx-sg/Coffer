@@ -130,7 +130,7 @@ test("a failed save puts the control back — it never left the daemon unchanged
 
   // The error is shown AND the switch is back off: the two together are the
   // honest report. Either alone is a lie.
-  await waitFor(() => expect(screen.getByText(/unexpected error/i)).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText(/internal error/i)).toBeInTheDocument());
   expect(toggle).not.toBeChecked();
 });
 

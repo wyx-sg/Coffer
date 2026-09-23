@@ -240,7 +240,14 @@ async def run_curation(
 
     before = await asyncio.to_thread(document_count, collection)
     counters = Counters()
-    tools = build_tools(service=service, collection=collection, actor=actor, counters=counters)
+    tools = build_tools(
+        service=service,
+        collection=collection,
+        actor=actor,
+        counters=counters,
+        # The brief carries these in full, so the pass has seen their content.
+        shown=[*chosen, *([item.document] if item.document is not None else [])],
+    )
     try:
         await agent.run(
             model=model,

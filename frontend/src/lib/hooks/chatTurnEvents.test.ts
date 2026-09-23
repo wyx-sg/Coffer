@@ -12,6 +12,7 @@ import {
   reconcileEchoes,
   subscribeMessagesCache,
   type HandlerCtx,
+  type LiveMessage,
   type PendingEcho,
 } from "./chatTurnEvents";
 import { messagesKey } from "@/lib/api/queryKeys";
@@ -204,5 +205,50 @@ describe("handleEvent settles echoes", () => {
     ctx.isCancelled = () => true;
     await handleEvent({ event: "turn_done", data: { stop_reason: "end_turn" } }, ctx);
     expect(ctx.setEchoes).not.toHaveBeenCalled();
+  });
+});
+
+describe("handleEvent folds a turn into the live bubble in emission order", () => {
+  test("text before a tool call stays before it, and text after it is a new block", async () => {
+    const qc = new QueryClient();
+    let live: LiveMessage | null = { blocks: [], streaming: true };
+    const ctx: HandlerCtx = {
+      conversationId: "conv-1",
+      qc,
+      priorReplyCountRef: { current: 0 },
+      setIsStreaming: vi.fn(),
+      setLiveMessage: vi.fn((next) => {
+        live = typeof next === "function" ? next(live) : next;
+      }),
+      setPendingState: vi.fn(),
+      setEchoes: vi.fn(),
+      setError: vi.fn(),
+      isCancelled: () => false,
+    };
+
+    await handleEvent({ event: "text_delta", data: { text: "Let me " } }, ctx);
+    await handleEvent({ event: "text_delta", data: { text: "look." } }, ctx);
+    await handleEvent(
+      {
+        event: "tool_call",
+        data: { tool_use_id: "tu-1", tool_name: "read_file", tool_input: { path: "a" } },
+      },
+      ctx,
+    );
+    await handleEvent(
+      {
+        event: "tool_result",
+        data: { tool_use_id: "tu-1", tool_name: "read_file", output: { ok: 1 }, error: null },
+      },
+      ctx,
+    );
+    await handleEvent({ event: "text_delta", data: { text: "It says hi." } }, ctx);
+
+    expect(live!.blocks.map((b) => [b.type, b.text ?? b.tool_use_id])).toEqual([
+      ["text", "Let me look."],
+      ["tool_use", "tu-1"],
+      ["tool_result", "tu-1"],
+      ["text", "It says hi."],
+    ]);
   });
 });

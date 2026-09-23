@@ -1,8 +1,9 @@
 """Persistence helpers for the turn orchestrator.
 
-Split out of ``turn_orchestrator.py`` (file-size limit): the end-of-turn
-finalize write and the cancel-raced placeholder recovery. Both are pure
-application-layer helpers over the ``ChatService`` port.
+Split out of ``turn_orchestrator.py`` (file-size limit): the ordered fold of a
+turn's events into content blocks, the end-of-turn finalize write, and the
+cancel-raced placeholder recovery. All are pure application-layer helpers over
+the ``ChatService`` port.
 """
 
 from __future__ import annotations
@@ -11,7 +12,14 @@ import asyncio
 import logging
 
 from coffer.application.chat.service import ChatService
-from coffer.domain.chat.events import TurnDone, TurnError
+from coffer.domain.chat.events import (
+    AgentEvent,
+    TextDelta,
+    ToolCall,
+    ToolResult,
+    TurnDone,
+    TurnError,
+)
 from coffer.domain.chat.message import (
     ContentBlock,
     Message,
@@ -24,15 +32,61 @@ from coffer.domain.chat.message import (
 log = logging.getLogger(__name__)
 
 
+class TurnContent:
+    """A turn's assistant content, folded from its events in emission order.
+
+    Consecutive text deltas join into one ``TextBlock``; a tool call or result
+    closes the running text, so text the agent wrote before a tool call stays
+    before that call's blocks and text written after it becomes a new block
+    (spec chat, "Render tool calls as cards"). Non-content events are ignored.
+    """
+
+    def __init__(self) -> None:
+        self._blocks: list[ContentBlock] = []
+        self._text: list[str] = []
+
+    def add(self, event: AgentEvent) -> None:
+        if isinstance(event, TextDelta):
+            self._text.append(event.text)
+        elif isinstance(event, ToolCall):
+            self._close_text()
+            self._blocks.append(
+                ToolUseBlock(
+                    tool_use_id=event.tool_use_id,
+                    tool_name=event.tool_name,
+                    tool_input=event.tool_input,
+                )
+            )
+        elif isinstance(event, ToolResult):
+            self._close_text()
+            self._blocks.append(
+                ToolResultBlock(
+                    tool_use_id=event.tool_use_id,
+                    tool_name=event.tool_name,
+                    output=event.output,
+                    error=event.error,
+                )
+            )
+
+    def blocks(self) -> list[ContentBlock]:
+        """The content so far, in emission order (the running text included)."""
+        text = "".join(self._text)
+        return [*self._blocks, TextBlock(text=text)] if text else list(self._blocks)
+
+    def _close_text(self) -> None:
+        text = "".join(self._text)
+        if text:
+            self._blocks.append(TextBlock(text=text))
+        self._text = []
+
+
 async def finalize_assistant_message(
     *,
     chat: ChatService,
     conversation_id: str,
     message_id: str | None,
     model_id: str | None,
-    text_parts: list[str],
-    tool_use_blocks: list[ToolUseBlock],
-    tool_result_blocks: list[ToolResultBlock],
+    content: TurnContent,
     final_done: TurnDone | None,
     error_event: TurnError | None,
 ) -> None:
@@ -44,12 +98,7 @@ async def finalize_assistant_message(
     cancelled before committing) the message is appended directly instead,
     so the turn still leaves a persisted record.
     """
-    content: list[ContentBlock] = []
-    if text_parts:
-        content.append(TextBlock(text="".join(text_parts)))
-    content.extend(tool_use_blocks)
-    content.extend(tool_result_blocks)
-
+    blocks = content.blocks()
     status = "failed" if error_event is not None else "complete"
     prompt_tokens = final_done.prompt_tokens if final_done is not None else None
     completion_tokens = final_done.completion_tokens if final_done is not None else None
@@ -59,7 +108,7 @@ async def finalize_assistant_message(
             await chat.finalize_message(
                 conversation_id,
                 message_id,
-                content=content,
+                content=blocks,
                 status=status,
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
@@ -68,7 +117,7 @@ async def finalize_assistant_message(
             await chat.append_message(
                 conversation_id,
                 role=Role.ASSISTANT,
-                content=content,
+                content=blocks,
                 status=status,
                 model_id=model_id,
                 prompt_tokens=prompt_tokens,
@@ -98,4 +147,4 @@ async def recover_placeholder_id(
         return None
 
 
-__all__ = ["finalize_assistant_message", "recover_placeholder_id"]
+__all__ = ["TurnContent", "finalize_assistant_message", "recover_placeholder_id"]

@@ -27,6 +27,7 @@ from collections.abc import AsyncIterator, Sequence
 from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_persistence import (
+    TurnContent,
     finalize_assistant_message,
     recover_placeholder_id,
 )
@@ -35,19 +36,10 @@ from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
     TURN_TIMEOUT,
     AgentEvent,
-    TextDelta,
-    ToolCall,
-    ToolResult,
     TurnDone,
     TurnError,
 )
-from coffer.domain.chat.message import (
-    AttachmentBlock,
-    Message,
-    Role,
-    ToolResultBlock,
-    ToolUseBlock,
-)
+from coffer.domain.chat.message import AttachmentBlock, Message, Role
 
 log = logging.getLogger(__name__)
 
@@ -120,9 +112,8 @@ async def run_turn_task(
         if active.primary_queue is not None:
             active.primary_queue.put_nowait(event)
 
-    text_parts: list[str] = []
-    tool_use_blocks: list[ToolUseBlock] = []
-    tool_result_blocks: list[ToolResultBlock] = []
+    # Text and tool blocks in the order the turn emitted them.
+    content = TurnContent()
     final_done: TurnDone | None = None
     error_event: TurnError | None = None
     # An adapter may expose the resolved model id so the assistant message can
@@ -174,26 +165,8 @@ async def run_turn_task(
                 emit(error_event)
                 break
             emit(event)
-            if isinstance(event, TextDelta):
-                text_parts.append(event.text)
-            elif isinstance(event, ToolCall):
-                tool_use_blocks.append(
-                    ToolUseBlock(
-                        tool_use_id=event.tool_use_id,
-                        tool_name=event.tool_name,
-                        tool_input=event.tool_input,
-                    )
-                )
-            elif isinstance(event, ToolResult):
-                tool_result_blocks.append(
-                    ToolResultBlock(
-                        tool_use_id=event.tool_use_id,
-                        tool_name=event.tool_name,
-                        output=event.output,
-                        error=event.error,
-                    )
-                )
-            elif isinstance(event, TurnDone):
+            content.add(event)
+            if isinstance(event, TurnDone):
                 final_done = event
             elif isinstance(event, TurnError):
                 error_event = event
@@ -210,9 +183,7 @@ async def run_turn_task(
             conversation_id=conversation_id,
             message_id=placeholder_id,
             model_id=model_id,
-            text_parts=text_parts,
-            tool_use_blocks=tool_use_blocks,
-            tool_result_blocks=tool_result_blocks,
+            content=content,
             final_done=final_done,
             error_event=error_event,
         )
@@ -233,9 +204,7 @@ async def run_turn_task(
                     conversation_id=conversation_id,
                     message_id=placeholder_id,
                     model_id=model_id,
-                    text_parts=text_parts,
-                    tool_use_blocks=tool_use_blocks,
-                    tool_result_blocks=tool_result_blocks,
+                    content=content,
                     final_done=done,
                     error_event=None,
                 )
@@ -260,9 +229,7 @@ async def run_turn_task(
             conversation_id=conversation_id,
             message_id=placeholder_id,
             model_id=model_id,
-            text_parts=text_parts,
-            tool_use_blocks=tool_use_blocks,
-            tool_result_blocks=tool_result_blocks,
+            content=content,
             final_done=final_done,
             error_event=error_event,
         )

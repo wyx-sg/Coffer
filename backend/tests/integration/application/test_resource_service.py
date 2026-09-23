@@ -301,6 +301,69 @@ async def test_find_credential_citations_lists_referencing_resources(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_cited_credential_refs_collects_every_kinds_refs(tmp_path):
+    """Every ref any registered resource cites, of whatever kind, keyed to the
+    resources citing it — what ``coffer credentials list`` enumerates. A kind
+    that stores its ref somewhere other than an MCP transport must still count.
+    """
+
+    class _TransportConfig(BaseModel):
+        header_ref: str
+
+    class _KeyConfig(BaseModel):
+        credential_ref: str
+
+    class _PlainConfig(BaseModel):
+        foo: int = 0
+
+    class _FakeKeyring:
+        def get(self, ref: str) -> str | None:
+            return "value"
+
+    kinds = {
+        "server": Kind(
+            name="server",
+            display_name="Server",
+            config_schema=_TransportConfig,
+            credential_ref_extractor=lambda cfg: {"Authorization": cfg["header_ref"]},
+        ),
+        "connection": Kind(
+            name="connection",
+            display_name="Connection",
+            config_schema=_KeyConfig,
+            credential_ref_extractor=lambda cfg: {"credential_ref": cfg["credential_ref"]},
+        ),
+        "plain": Kind(name="plain", display_name="Plain", config_schema=_PlainConfig),
+    }
+    engine = create_async_engine_with_pragmas(f"sqlite+aiosqlite:///{tmp_path / 'refs.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    sm = session_maker(engine)
+    try:
+        svc = ResourceService(
+            kinds=kinds,
+            repo=SqlAlchemyResourceRepo(sm),
+            audit=AuditService(SqlAlchemyAuditRepo(sm)),
+            credentials=_FakeKeyring(),
+        )
+        a = await svc.register(kind="server", name="a", config={"header_ref": "gh"}, actor="cli")
+        b = await svc.register(
+            kind="connection", name="b", config={"credential_ref": "llm"}, actor="cli"
+        )
+        c = await svc.register(
+            kind="connection", name="c", config={"credential_ref": "gh"}, actor="cli"
+        )
+        await svc.register(kind="plain", name="d", config={"foo": 1}, actor="cli")
+
+        cited = await svc.cited_credential_refs()
+        assert sorted(cited) == ["gh", "llm"]
+        assert sorted(r.uid for r in cited["gh"]) == sorted([a.uid, c.uid])
+        assert [r.uid for r in cited["llm"]] == [b.uid]
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_register_unknown_kind_raises(tmp_path):
     svc, _, engine = await _service(tmp_path)
     with pytest.raises(UnknownKind):

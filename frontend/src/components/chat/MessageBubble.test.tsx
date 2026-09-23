@@ -2,7 +2,7 @@
 import { describe, expect, test } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MessageBubble } from "./MessageBubble";
-import type { Message } from "@/lib/api/chat";
+import type { ContentBlock, Message } from "@/lib/api/chat";
 
 const makeAssistant = (overrides: Partial<Message>): Message => ({
   id: "m-1",
@@ -92,5 +92,43 @@ describe("MessageBubble", () => {
     // the START edge — so a long message slid left, under the sidebar, with
     // its first characters cut off.
     expect(bubble.className).toContain("max-w-[min(48rem,100%)]");
+  });
+
+  describe("an assistant turn's text and tool calls render in the order the turn emitted them", () => {
+    const orderedBlocks: ContentBlock[] = [
+      { type: "text", text: "BEFORE" },
+      { type: "tool_use", tool_use_id: "tu-1", tool_name: "read_file", tool_input: {} },
+      { type: "tool_result", tool_use_id: "tu-1", tool_name: "read_file", output: {} },
+      { type: "text", text: "AFTER" },
+    ];
+
+    function renderedOrder(container: HTMLElement): string[] {
+      const before = screen.getByText("BEFORE");
+      const card = screen.getByRole("button", { name: /read_file/ });
+      const after = screen.getByText("AFTER");
+      const nodes = [before, card, after];
+      expect(container.textContent).not.toContain("BEFOREAFTER");
+      return [...nodes]
+        .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+        .map((n) => (n === before ? "BEFORE" : n === after ? "AFTER" : "card"));
+    }
+
+    test("a persisted message", () => {
+      const { container } = render(
+        <MessageBubble message={makeAssistant({ content: orderedBlocks })} />,
+      );
+      expect(renderedOrder(container)).toEqual(["BEFORE", "card", "AFTER"]);
+      // The result still pairs with its call: one card, marked done.
+      expect(screen.getAllByRole("button")).toHaveLength(1);
+      expect(screen.getByText(/done/i)).toBeInTheDocument();
+    });
+
+    test("the live bubble of a turn still streaming", () => {
+      const { container } = render(
+        <MessageBubble live={{ blocks: orderedBlocks, streaming: true }} />,
+      );
+      expect(renderedOrder(container)).toEqual(["BEFORE", "card", "AFTER"]);
+      expect(screen.getAllByRole("button")).toHaveLength(1);
+    });
   });
 });
