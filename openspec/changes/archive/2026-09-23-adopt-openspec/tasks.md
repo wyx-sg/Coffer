@@ -45,7 +45,7 @@
 - [x] 3.3 `check_doc_numbering.py`: drop the unique-FR rule, reject any `FR-<n>` token; delete `docs/decisions/fr-ids-reset-once.md` and its index entry
 - [x] 3.4 Add the check that fails on `.specify/`, a root `specs/`, or `speckit`/`spec-kit` in any tracked file
 - [x] 3.5 Remove the old-layout path from `audit_acceptance.py`
-- [ ] 3.6 Run `make verify`; open PR 3
+- [x] 3.6 Run `make verify`; open PR 3
 
 ## 4. Follow-ups found during the migration
 
@@ -54,4 +54,4 @@
 
 ## 5. Close
 
-- [ ] 5.1 `openspec archive adopt-openspec`
+- [x] 5.1 `openspec archive adopt-openspec`
