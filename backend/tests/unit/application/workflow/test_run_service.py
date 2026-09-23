@@ -38,7 +38,7 @@ async def test_create_freezes_the_template_and_opens_no_conversation(engine: Eng
     assert run.status == RunStatus.DRAFT.value
     assert run.version == 1
     assert run.machine_id == "machine-a"
-    # FR-030: a run has no conversation of its own. Creating one opens nothing
+    # A run has no conversation of its own. Creating one opens nothing
     # and spends nothing — every conversation belongs to a task, and the driver
     # opens it when that task starts.
     assert engine.turns.conversations == []
@@ -48,7 +48,7 @@ async def test_create_freezes_the_template_and_opens_no_conversation(engine: Eng
 
 @pytest.mark.acceptance(spec="workflow", scenario="editing a template leaves a running run alone")
 async def test_editing_the_template_does_not_reach_a_created_run(engine: Engine) -> None:
-    """FR-010: the snapshot is the run's, and the resource may move on."""
+    """The snapshot is the run's, and the resource may move on."""
     run = await engine.create()
 
     engine.templates.configs["delivery"] = {
@@ -70,14 +70,14 @@ async def test_create_refuses_an_unknown_template(engine: Engine) -> None:
     spec="workflow", scenario="a run is created from a template and a title alone"
 )
 async def test_create_asks_for_nothing_but_a_template_and_a_title(engine: Engine) -> None:
-    """FR-011, FR-053: no working directory, no inputs."""
+    """No working directory, no inputs."""
     run = await engine.create()
 
     # Coffer made the working directory, under the run's own tree, and created
     # it before recording the run that names it.
     assert run.workdir == f"/fake/workflows/{run.id}/workspace"
     assert engine.artifacts.created == [run.id]
-    # A run starts reading nothing; inputs are mounted afterwards (FR-050).
+    # A run starts reading nothing; inputs are mounted afterwards.
     assert run.inputs == []
 
 
@@ -117,7 +117,7 @@ async def test_an_illegal_signal_says_what_is_allowed(engine: Engine) -> None:
 
 @pytest.mark.acceptance(spec="workflow", scenario="an aborted run refuses everything afterwards")
 async def test_an_aborted_run_refuses_every_later_command(engine: Engine) -> None:
-    """FR-016 / FR-013: each signal is taken in turn, and the abort is the end.
+    """Each signal is taken in turn, and the abort is the end.
 
     "Never again" is a different answer from "not from here", and the refusal
     has to cover the commands that name a NODE as well as the ones that name
@@ -172,7 +172,7 @@ async def test_abort_supersedes_the_approvals_waiting_on_the_developer(engine: E
 
 
 async def test_a_stale_version_is_refused_with_the_run_s_position(engine: Engine) -> None:
-    """FR-015: two clients, one observed version, one change."""
+    """Two clients, one observed version, one change."""
     run = await engine.started()
     stale = run.version - 1
 
@@ -190,7 +190,7 @@ async def test_a_stale_version_is_refused_with_the_run_s_position(engine: Engine
     spec="workflow", scenario="a run is read-only on a machine that does not own it"
 )
 async def test_a_run_owned_elsewhere_is_read_only_here(engine: Engine) -> None:
-    """FR-012: visible everywhere, advanced on one machine."""
+    """Visible everywhere, advanced on one machine."""
     run = await engine.started()
     engine.machine.machine_id = "machine-b"
 
@@ -203,7 +203,7 @@ async def test_a_run_owned_elsewhere_is_read_only_here(engine: Engine) -> None:
 
 @pytest.mark.acceptance(spec="workflow", scenario="a run rebuilds itself from its events")
 async def test_rebuild_restores_a_dropped_projection_from_the_events(engine: Engine) -> None:
-    """FR-014: the log is the truth; the projection is a cache of a fold."""
+    """The log is the truth; the projection is a cache of a fold."""
     run = await engine.started()
     row = engine.run_repo.rows[run.id]
     before = (row.status, row.current_stage_key, row.current_node_key, row.tokens_spent)
@@ -225,7 +225,7 @@ async def test_rebuild_restores_a_dropped_projection_from_the_events(engine: Eng
 async def test_rebuild_reports_an_interrupted_turn_and_keeps_its_conversation(
     engine: Engine,
 ) -> None:
-    """FR-027: reported, not resumed and not dropped."""
+    """Reported, not resumed and not dropped."""
     run = await engine.started()
     attempt = await engine.attempts.insert_attempt(
         attempt_id="att-1",

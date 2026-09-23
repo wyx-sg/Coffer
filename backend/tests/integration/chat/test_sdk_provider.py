@@ -252,8 +252,9 @@ async def test_init_conversation_persists_effort_and_adapter_passes_it(tmp_path)
 
 @pytest.mark.asyncio
 async def test_conversation_env_lookup_reaches_the_sdk_options(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """Spec workflow FR-035: the run identity a node's turn needs the shim to
-    report travels as the agent process's environment, so the lookup's answer
+    """Spec workflow "Give the gateway the run's identity at dispatch": the run
+    identity a node's turn needs the shim to report travels as the agent
+    process's environment, so the lookup's answer
     must land on ``ClaudeAgentOptions.env`` — the seam the adapter has always
     had and nothing used. An overlay is enough: the SDK merges it over the
     inherited environment rather than replacing it."""

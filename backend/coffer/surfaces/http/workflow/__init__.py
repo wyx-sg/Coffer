@@ -1,4 +1,5 @@
-"""HTTP surface for the one ``workflow`` kind (spec workflow FR-044).
+"""HTTP surface for the one ``workflow`` kind (spec workflow "Expose the
+engine over REST").
 
 Five routers over one prefix, split by what they act on rather than by size:
 the run, one node, what the run reads, an approval, and the files a run

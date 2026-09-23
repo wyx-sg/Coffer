@@ -1,4 +1,4 @@
-"""The built-in template a fresh vault already has (FR-009), and its one rule.
+"""The built-in template a fresh vault already has, and its one rule.
 
 Two claims, and the second is the one with teeth. A vault nobody has touched
 ends up holding exactly one workflow, seeded through the ordinary resource
@@ -93,13 +93,14 @@ async def test_an_untouched_vault_holds_one_built_in_workflow_it_owns(vault: Vau
     assert [n.skill for n in nodes] == [None] * 5
     assert [n.agent for n in nodes] == [None] * 5
     # Every task owes something, so none of them can finish leaving the run
-    # nothing (FR-072) — including the one that declares no artifact of its own.
+    # nothing (spec workflow "Give every task at least one deliverable") —
+    # including the one that declares no artifact of its own.
     assert all(n.required_artifacts for n in nodes)
     implement = next(n for n in nodes if n.key == "implement")
     assert implement.artifacts == ()
     assert [a.name for a in implement.owed_artifacts] == ["report.md"]
 
-    # FR-001: an ordinary resource. It has the framework's identity, it is
+    # An ordinary resource. It has the framework's identity, it is
     # enabled, it left an audit trail, and every lifecycle operation the
     # developer has over any other resource works on it.
     assert seeded.uid == BUILTIN_TEMPLATE_UID

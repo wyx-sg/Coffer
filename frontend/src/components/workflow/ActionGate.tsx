@@ -1,6 +1,6 @@
 // frontend/src/components/workflow/ActionGate.tsx
 // A run records the machine that owns it, and only that machine's daemon may
-// advance it (FR-012). Everywhere else the run is visible and read-only.
+// advance it. Everywhere else the run is visible and read-only.
 //
 // "Read-only" is rendered as disabled controls plus a tooltip that NAMES the
 // machine: a disabled button with no explanation is indistinguishable from a

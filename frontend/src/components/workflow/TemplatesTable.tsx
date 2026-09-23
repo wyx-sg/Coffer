@@ -1,6 +1,6 @@
 // frontend/src/components/workflow/TemplatesTable.tsx
 // The template list: what each flow is called, what it is for, the stages it
-// runs IN ORDER, and whether it is enabled (FR-054).
+// runs IN ORDER, and whether it is enabled.
 //
 // The stages column COUNTS them. It used to spell the order out — `Design →
 // Coding → Testing` — which is the shape of the flow and therefore the thing

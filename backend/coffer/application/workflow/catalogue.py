@@ -1,4 +1,5 @@
-"""``CATALOG.md`` — a run's artifacts, rendered from the directory (FR-031).
+"""``CATALOG.md`` — a run's artifacts, rendered from the directory (spec
+workflow "Generate the index of earlier tasks").
 
 The catalogue is **generated, never hand-maintained**: every line of it is a
 fact read off ``artifacts/<node_key>/<attempt>/<name>`` by the artifact store,
@@ -27,7 +28,8 @@ __all__ = ["CATALOGUE_FILE", "CATALOGUE_TITLE", "regenerate_catalogue", "render_
 #: The catalogue's file name under the run's own directory. Mirrors
 #: ``infrastructure.workflow.paths.CATALOG_NAME``, which this layer may not
 #: import; a task's opening context names the path so that an index too long
-#: for the budget can point at the whole of it (FR-047).
+#: for the budget can point at the whole of it (spec workflow "Keep a task's
+#: opening context within budget").
 CATALOGUE_FILE = "CATALOG.md"
 
 #: The file's own H1. Exported because the composer embeds the catalogue under
@@ -57,7 +59,8 @@ def render_catalogue(entries: Iterable[ArtifactEntry]) -> str:
     """The Markdown for ``CATALOG.md``, naming each artifact's node and attempt.
 
     Deterministic in its input: the same entries render the same bytes, and the
-    entries are sorted here rather than trusted in arrival order (FR-031).
+    entries are sorted here rather than trusted in arrival order (spec workflow
+    "Generate the index of earlier tasks").
     """
     rows = sorted(entries, key=lambda e: (e.node_key, e.attempt, e.name))
     lines = [CATALOGUE_TITLE, "", _PREAMBLE, ""]

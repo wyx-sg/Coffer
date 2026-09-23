@@ -1,4 +1,4 @@
-"""``/api/v1/workflow/runs/{run_id}/inputs`` — what a run reads (FR-032, FR-050).
+"""``/api/v1/workflow/runs/{run_id}/inputs`` — what a run reads.
 
 Six routes over one list, and the thing worth proving about them is that they
 work on a run that is already going: an input is the developer's at any point in
@@ -46,7 +46,7 @@ def test_listing_the_inputs_of_an_unknown_run_is_404(surface: Surface) -> None:
     spec="workflow", scenario="an input can be added and removed while the run is going"
 )
 def test_a_link_can_be_mounted_on_a_running_run(surface: Surface) -> None:
-    """FR-050. No ``version`` is sent, because mounting an input is not a
+    """No ``version`` is sent, because mounting an input is not a
     transition — the run did not move, it was given something to read."""
     run = started_run(surface.client)
     response = surface.client.post(
@@ -64,7 +64,8 @@ def test_a_link_can_be_mounted_on_a_running_run(surface: Surface) -> None:
             "path": None,
             "mount": None,
             # `wiki.` is how a self-hosted Confluence is named, so this one is
-            # recognised — DERIVED on read (FR-065), never sent by the client.
+            # recognised — DERIVED on read, never sent by the client (spec
+            # workflow "Name what a mounted external reference points at").
             "provider": "confluence",
         }
     ]
@@ -147,7 +148,7 @@ def test_a_run_another_machine_owns_refuses_a_mount(surface: Surface) -> None:
     spec="workflow", scenario="an uploaded file becomes an input the nodes can read"
 )
 def test_an_uploaded_file_is_mounted_as_an_input(surface: Surface) -> None:
-    """FR-051. The bytes reach the store whole and come back described — the
+    """The bytes reach the store whole and come back described — the
     route asserts nothing about where they landed, which is the point of the
     seam."""
     run = started_run(surface.client)
@@ -188,15 +189,15 @@ def test_an_upload_to_an_unknown_run_is_404(surface: Surface) -> None:
     assert code_of(response) == "RESOURCE_NOT_FOUND"
 
 
-# --- notes the developer wrote themselves (FR-069) ---------------------------
+# --- notes the developer wrote themselves ------------------------------------
 
 
 @pytest.mark.acceptance(
     spec="workflow", scenario="a note the developer wrote is part of the run's context"
 )
 def test_a_note_is_written_into_the_run_and_can_be_rewritten(surface: Surface) -> None:
-    """FR-069: a note is a file, and a thought is not finished when it is first
-    written down."""
+    """A note is a file, and a thought is not finished when it is first written
+    down."""
     run = started_run(surface.client)
 
     added = surface.client.post(

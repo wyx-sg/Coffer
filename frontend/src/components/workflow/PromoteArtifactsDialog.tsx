@@ -1,6 +1,6 @@
 // frontend/src/components/workflow/PromoteArtifactsDialog.tsx
-// Keep what a run is MADE OF: copy its files into a knowledge collection
-// (FR-043), so one delivery's output becomes the next delivery's input.
+// Keep what a run is MADE OF: copy its files into a knowledge collection,
+// so one delivery's output becomes the next delivery's input.
 //
 // Made of, not produced by. The artifacts travel, and so do the PRD somebody
 // attached and the note somebody wrote — a delivery that has so far only been

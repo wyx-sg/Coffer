@@ -64,7 +64,8 @@ class RunRepoPort(Protocol):
 
         A conflict is a return value rather than an exception because the
         caller always has something to say about it — the current run comes
-        back on the next read and the refusal carries it (FR-015)."""
+        back on the next read and the refusal carries it (spec workflow
+        "Refuse a command carrying a stale version")."""
         ...
 
     async def set_inputs(
@@ -76,9 +77,10 @@ class RunRepoPort(Protocol):
     ) -> RunRow | None:
         """Replace the run's mounted inputs; ``None`` when the run is gone.
 
-        Outside the version cycle (FR-050): mounting a PRD advances nothing, so
-        bumping the version would invalidate every open client's observed
-        version for a change that moves the run nowhere."""
+        Outside the version cycle (spec workflow "Add and remove inputs at any
+        point in a run"): mounting a PRD advances nothing, so bumping the
+        version would invalidate every open client's observed version for a
+        change that moves the run nowhere."""
         ...
 
     async def set_label(
@@ -91,12 +93,13 @@ class RunRepoPort(Protocol):
     ) -> RunRow | None:
         """Rewrite the run's title and description; ``None`` when it is gone.
 
-        Outside the version cycle for the same reason ``set_inputs`` is
-        (FR-070): a label is not the projection. The status, the stage and the
-        position are folded from the events and only the engine writes them;
-        what the developer called the work is theirs to correct, and bumping
-        the version for it would invalidate every open client's observed
-        version for a change that moves the run nowhere."""
+        Outside the version cycle for the same reason ``set_inputs`` is (spec
+        workflow "Edit a run's title and description as labels"): a label is
+        not the projection. The status, the stage and the position are folded
+        from the events and only the engine writes them; what the developer
+        called the work is theirs to correct, and bumping the version for it
+        would invalidate every open client's observed version for a change
+        that moves the run nowhere."""
         ...
 
     async def delete_run(self, run_id: str) -> None: ...
@@ -161,7 +164,8 @@ class AttemptRepoPort(Protocol):
         effort: str | None,
     ) -> AttemptRow | None:
         """Write all three VERBATIM: ``None`` clears the override and falls
-        back to the template (FR-071), which is the opposite of what ``None``
+        back to the template (spec workflow "Choose a task's agent, model and
+        effort before it starts"), which is the opposite of what ``None``
         means to ``update_attempt``."""
         ...
 

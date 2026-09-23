@@ -1,13 +1,16 @@
 """``/api/v1/workflow/runs/{run_id}/nodes`` and ``…/tasks`` — one node at a time.
 
-Three routes: the six node actions (FR-021), one sentence to a task whatever
-state it is in (FR-068), and the ad-hoc task that joins a stage with
-instructions of the developer's own (FR-028).
+Three routes: the six node actions (spec workflow "Accept the node actions
+start, feedback, complete, retry, skip and restore"), one sentence to a task
+whatever state it is in ("Let the developer speak to a task at any point, in
+one place"), and the ad-hoc task that joins a stage with instructions of the
+developer's own ("Add an ad-hoc task to any stage").
 
 There is no fourth that sends work back to an earlier stage. A finding is acted
-on by retrying the task that was wrong or by adding one that fixes it (FR-025),
-both of which are already here — the route that existed took a template's own
-edge, and the template no longer draws one.
+on by retrying the task that was wrong or by adding one that fixes it ("Send
+work back by the developer's hand, never a template route"), both of which are
+already here — the route that existed took a template's own edge, and the
+template no longer draws one.
 
 Neither route decides anything. Which actions are legal, what an action leaves
 behind, whether a required artifact may be waived and where the ceiling is are
@@ -83,7 +86,8 @@ async def say_to_node(
     nodes: WorkflowNodeService = Depends(get_workflow_node_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> NodeAttemptOut:
-    """Say something to one task, whenever (FR-068).
+    """Say something to one task, whenever (spec workflow "Let the
+    developer speak to a task at any point, in one place").
 
     What it means depends on where the task is, and the service decides: a task
     that has not started is briefed, one waiting for review carries on, one
@@ -107,7 +111,8 @@ async def assign_node(
     nodes: WorkflowNodeService = Depends(get_workflow_node_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> NodeAttemptOut:
-    """Choose who runs this task, on what, before it runs (FR-071).
+    """Choose who runs this task, on what, before it runs (spec workflow
+    "Choose a task's agent, model and effort before it starts").
 
     Only before: once the turn is in flight the conversation owns these
     settings and the task's own pickers write them there. Recorded on the
@@ -140,7 +145,8 @@ async def add_adhoc_task(
     nodes: WorkflowNodeService = Depends(get_workflow_node_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> NodeAttemptOut:
-    """Add an unplanned task to a stage, with instructions of your own (FR-028).
+    """Add an unplanned task to a stage, with instructions of your own (spec
+    workflow "Add an ad-hoc task to any stage").
 
     The task joins the run as a node keyed ``adhoc:<slug>``. The slug is minted
     inside the service — a name that repeats gets a numeric suffix rather than

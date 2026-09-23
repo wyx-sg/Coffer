@@ -1,18 +1,19 @@
 // frontend/src/components/workflow/CreateRunDialog.tsx
-// Create a run: a template and a title. Nothing else (FR-011).
+// Create a run: a template and a title. Nothing else (spec workflow "Create a run from a
+// template and a title alone").
 //
 // It asked for a working directory once, and for the inputs the run opens
 // with. Both are gone. Coffer makes the run its own working directory, so
 // there is nothing to pick and nothing to get wrong — the run's page SHOWS
 // where the agent is working, but nothing sets it. Inputs are mounted on the
 // run's own page, where they can be added and removed for the whole of its
-// life (FR-050) rather than only in the five seconds before it exists.
+// life rather than only in the five seconds before it exists.
 //
 // The run lands in `draft`, not `running` — creating and starting are two
 // decisions, and mounting the PRD before the first task opens is the reason.
 //
-// The template list is the generic resource list for kind `workflow`
-// (FR-001), so a template registered from the CLI or arriving over sync shows
+// The template list is the generic resource list for kind `workflow`,
+// so a template registered from the CLI or arriving over sync shows
 // up here without this dialog knowing anything about it.
 //
 // The picker's VALUE is the workflow's uid and its label is the name. The run
@@ -54,7 +55,7 @@ export function CreateRunDialog({
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  // Only the enabled ones: a disabled workflow starts no new runs (FR-066),
+  // Only the enabled ones: a disabled workflow starts no new runs,
   // and the daemon refuses one, so offering it here would be offering a
   // refusal. The rule is the daemon's; this is the courtesy of not asking.
   const { templates } = useWorkflowTemplates();

@@ -1,6 +1,6 @@
 // frontend/src/components/workflow/TemplateStageList.tsx
 // The left half of the editor: the shared stage list, with the editor's own
-// concerns hung off it (FR-061).
+// concerns hung off it.
 //
 // The picture itself is `StageRailList`, which a run draws too — a run is this
 // template with state on it, and the two must not become two pictures of one

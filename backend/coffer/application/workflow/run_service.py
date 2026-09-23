@@ -2,7 +2,7 @@
 
 Create, read, list, delete, the four signals, and the projection rebuild the
 daemon performs at start. Everything about a NODE lives in
-``node_service``; the split is the one ``plan.md`` names, and it is also the
+``node_service``; the split follows the run/node boundary, and it is also the
 line the file-size ceiling falls on.
 
 What this service does not do: advance the run. ``start`` moves the run to
@@ -119,7 +119,8 @@ class WorkflowRunService:
         return await self._runs.list_runs(status=status, limit=limit)
 
     def owned_here(self, run: RunRow) -> bool:
-        """What the API reports as ``owned_here`` (FR-012)."""
+        """What the API reports as ``owned_here`` (spec workflow
+        "Advance a run only on the machine that owns it")."""
         return run.machine_id == self._cmd.machine_id
 
     # -- creation ---------------------------------------------------------
@@ -134,25 +135,29 @@ class WorkflowRunService:
     ) -> RunRow:
         """Freeze a template and record the run.
 
-        **A template and a title, and nothing else** (FR-011). Two things the
-        developer used to supply are gone: the working directory, which Coffer
-        now makes and owns per run (FR-053), and the inputs, which are added
-        afterwards through ``WorkflowInputsService`` at any point in the run's
-        life (FR-050). Both were questions asked before the developer had
-        thought about the work.
+        **A template and a title, and nothing else** (spec workflow "Create a
+        run from a template and a title alone"). Two things the developer used
+        to supply are gone: the working directory, which Coffer now makes and
+        owns per run ("Give each run a working directory of its own"), and the
+        inputs, which are added afterwards through ``WorkflowInputsService``
+        at any point in the run's life ("Add and remove inputs at any point in
+        a run"). Both were questions asked before the developer had thought
+        about the work.
 
-        The snapshot is taken here and never consulted again (FR-010): every
-        later read of "what is this run supposed to do" goes to
-        ``template_snapshot``, so editing the template afterwards cannot reach
-        a run already created.
+        The snapshot is taken here and never consulted again ("Freeze the
+        template when a run is created"): every later read of "what is this
+        run supposed to do" goes to ``template_snapshot``, so editing the
+        template afterwards cannot reach a run already created.
 
-        **No conversation is opened.** A run has none of its own (FR-030) —
-        every conversation belongs to one task and is opened by the driver when
-        that task starts, so a run created and never started has spent nothing
-        and left no empty thread behind for the developer to wonder about.
+        **No conversation is opened.** A run has none of its own ("Give a run
+        no conversation of its own") — every conversation belongs to one task
+        and is opened by the driver when that task starts, so a run created and
+        never started has spent nothing and left no empty thread behind for the
+        developer to wonder about.
         """
         resource = await self._templates.get(template_uid)
-        # Enabled decides whether a workflow starts new runs (FR-066), and the
+        # Enabled decides whether a workflow starts new runs (spec workflow
+        # "Refuse new runs from a disabled workflow at the daemon"), and the
         # decision is made here so that it holds for the CLI and the API as
         # well as for the dropdown that also hides it.
         if not resource.enabled:
@@ -179,10 +184,11 @@ class WorkflowRunService:
             # The template's LABEL as it read at this moment, not its
             # identity: this is provenance for a person to recognise, it is
             # rendered raw as the run's subtitle, and it is allowed to dangle
-            # (FR-010 — the snapshot beside it is what the run actually
-            # executes). Freezing the label is what makes it still answer
-            # "what was this started from" after the template is renamed or
-            # deleted, which an identity nothing resolves any more would not.
+            # (spec workflow "Freeze the template when a run is created" —
+            # the snapshot beside it is what the run actually executes).
+            # Freezing the label is what makes it still answer "what was this
+            # started from" after the template is renamed or deleted, which
+            # an identity nothing resolves any more would not.
             template_ref=resource.name,
             status=RunStatus.DRAFT.value,
             inputs=[],
@@ -219,11 +225,13 @@ class WorkflowRunService:
         reason: str | None = None,
         actor: EventActor = DEFAULT_ACTOR,
     ) -> CommandResult:
-        """Apply one of the four run signals (FR-016)."""
+        """Apply one of the four run signals (spec workflow "Accept the
+        run signals start, pause, resume and abort")."""
         run = await self._cmd.require_run(run_id)
         status = self._cmd.guard(run, signal.value, version)
         # Raises on an illegal signal, and on a terminal run says "never again"
-        # rather than "not from here" (FR-013).
+        # rather than "not from here" (spec workflow "Keep a run to six
+        # statuses").
         apply_run_signal(status, signal)
 
         payload: dict[str, Any] = {} if reason is None else {"reason": reason}
@@ -242,7 +250,8 @@ class WorkflowRunService:
         return result
 
     async def _audit_signal(self, run: RunRow, signal: RunSignal, reason: str | None) -> None:
-        """Audit the two moments FR-040 asks for by name.
+        """Audit the two run moments spec workflow "Audit template, run,
+        approval and gate events" names: a start and a finish.
 
         Pause and resume are not audited: the run's own log already carries
         them, and the audit trail exists for the coarse question "what did this
@@ -267,12 +276,13 @@ class WorkflowRunService:
     async def rebuild_projection(self, run_id: str) -> RunRow:
         """Rebuild a run from its events, and report what the restart lost.
 
-        This is what the daemon calls at start (FR-014). Two things happen, in
-        this order and not the other: an attempt left ``running`` by the
-        process that died is failed with ``interrupted`` FIRST (FR-027), so the
-        fold that follows already includes the ``node.failed`` that says so.
-        The attempt keeps its ``conversation_id`` — the whole point of
-        reporting an interruption rather than dropping it is that the
+        This is what the daemon calls at start (spec workflow "Rebuild a run
+        from its event log"). Two things happen, in this order and not the
+        other: an attempt left ``running`` by the process that died is failed
+        with ``interrupted`` FIRST ("Report a node interrupted by a restart as
+        failed"), so the fold that follows already includes the ``node.failed``
+        that says so. The attempt keeps its ``conversation_id`` — the whole
+        point of reporting an interruption rather than dropping it is that the
         conversation is still there to read.
         """
         run = await self._cmd.require_run(run_id)
@@ -298,7 +308,8 @@ class WorkflowRunService:
         return rebuilt
 
     async def _report_interrupted(self, run: RunRow) -> int:
-        """Fail every attempt the dead process left mid-turn (FR-027)."""
+        """Fail every attempt the dead process left mid-turn (spec
+        workflow "Report a node interrupted by a restart as failed")."""
         count = 0
         for attempt in await self._attempts.list_attempts(run.id):
             if attempt.status != NodeStatus.RUNNING.value:
@@ -347,7 +358,8 @@ class WorkflowRunService:
         title: str,
         description: str | KeepStored | None = KEEP,
     ) -> RunRow:
-        """Rewrite what this run is CALLED and what it is for (FR-070).
+        """Rewrite what this run is CALLED and what it is for (spec
+        workflow "Edit a run's title and description as labels").
 
         Delegates to ``run_label_ops`` to keep this module under the file-size
         limit; see that module for the full behaviour.
@@ -369,7 +381,8 @@ class WorkflowRunService:
         retention (data-model, "Deletion").
         """
         run = await self._cmd.require_run(run_id)
-        # FR-012: the run is visible here but only its owner may change it, and
+        # Spec workflow "Advance a run only on the machine that owns it": the
+        # run is visible here but only its owner may change it, and
         # deleting is the largest change there is.
         self._cmd.guard(run, "delete", None)
         await self._runs.delete_run(run_id)

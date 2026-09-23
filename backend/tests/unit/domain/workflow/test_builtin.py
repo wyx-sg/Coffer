@@ -1,4 +1,4 @@
-"""The shipped template is a valid template, and it assumes nothing (FR-009).
+"""The shipped template is a valid template, and it assumes nothing.
 
 The seed cannot discover a malformed built-in — it swallows its own failures so
 a bad document cannot stop a daemon starting, which means a typo here would
@@ -47,7 +47,8 @@ def test_every_task_owes_a_required_deliverable() -> None:
         "understand": ["understanding.md"],
         "plan": ["plan.md"],
         # Declares none of its own — what it produces is the change — and is
-        # read back owing the default (FR-072).
+        # read back owing the default (spec workflow "Give every task at least
+        # one deliverable").
         "implement": ["report.md"],
         "verify": ["verification.md"],
         "report": ["report.md"],

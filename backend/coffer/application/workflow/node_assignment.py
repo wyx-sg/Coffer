@@ -1,4 +1,5 @@
-"""Choosing who runs a task, on what, before it runs (FR-071).
+"""Choosing who runs a task, on what, before it runs (spec workflow
+"Choose a task's agent, model and effort before it starts").
 
 A task's agent came from the template and nothing else; its model and its
 reasoning effort came from whatever the agent's own configuration projected.
@@ -8,10 +9,11 @@ conversation until it starts — so the one moment a developer most wants to say
 could be said.
 
 The choice is recorded on the ATTEMPT rather than on the task, and that is the
-point: a retry is a new attempt (FR-022), so picking a stronger model for the
-second try leaves the first attempt's row still saying what it actually ran on.
-A run is a record of what happened, and an override that rewrote history would
-make it a record of what was last intended.
+point: a retry is a new attempt ("Keep every attempt when a node is retried"),
+so picking a stronger model for the second try leaves the first attempt's row
+still saying what it actually ran on. A run is a record of what happened, and
+an override that rewrote history would make it a record of what was last
+intended.
 
 One ladder, three rungs, each deferring to the next rather than inventing a
 default of its own: the attempt's own answer, then the template's, then the

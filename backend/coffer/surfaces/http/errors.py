@@ -189,7 +189,8 @@ _STATUS: dict[str, int] = {
 
 #: The one refusal that carries more than a message: a stale version is refused
 #: with the run's CURRENT version and position so the client can re-read and
-#: decide in one round trip rather than two (spec workflow FR-015).
+#: decide in one round trip rather than two (spec workflow "Refuse a
+#: command carrying a stale version").
 _VERSION_CONFLICT_DETAILS = ("current", "expected", "status", "stage_key", "node_key")
 
 # Map raw HTTP status codes back to envelope codes when a surface raises a

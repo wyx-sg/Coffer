@@ -1,5 +1,5 @@
 // frontend/src/components/workflow/TemplateFlow.tsx
-// The template as its SHAPE, in two halves (FR-061).
+// The template as its SHAPE, in two halves.
 //
 // The editor used to render every field of every task inline, so a four-task
 // flow was a wall of forty controls and the shape of the work — which is the
@@ -38,7 +38,7 @@ type Open =
   | null;
 
 /** What a Delete button asked for. Held here rather than acted on where it was
- *  pressed: the editor writes every edit the moment it is made (FR-062), so a
+ *  pressed: the editor writes every edit the moment it is made, so a
  *  delete IS the save — there is no draft to change your mind in afterwards,
  *  and the question has to come first. */
 type Doomed = { kind: "stage"; stage: number } | { kind: "node"; stage: number; node: number };

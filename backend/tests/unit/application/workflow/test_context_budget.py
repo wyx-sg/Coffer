@@ -1,4 +1,5 @@
-"""The context ceiling and how it is priced (FR-047)."""
+"""The context ceiling and how it is priced (spec workflow "Keep a task's opening
+context within budget")."""
 
 from __future__ import annotations
 

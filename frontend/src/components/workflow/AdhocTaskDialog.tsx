@@ -1,5 +1,5 @@
 // frontend/src/components/workflow/AdhocTaskDialog.tsx
-// Unplanned work joins the run rather than happening beside it (FR-028): the
+// Unplanned work joins the run rather than happening beside it: the
 // developer picks the stage it belongs to, writes the instructions themselves,
 // and the task opens with the same shared context and leaves its artifacts in
 // the same place as any template node.
@@ -27,7 +27,7 @@ import { useAddAdhocTask } from "@/lib/hooks/useWorkflowRun";
 
 interface Props {
   runId: string;
-  /** The run's observed version (FR-015). */
+  /** The run's observed version (spec workflow "Refuse a command carrying a stale version"). */
   version: number;
   /** The stage the task joins; null closes the dialog. */
   stageKey: string | null;
@@ -35,7 +35,7 @@ interface Props {
   /**
    * The new task's node key, once it exists. The caller opens its conversation:
    * an unplanned task is a conversation like any other, and landing in it is
-   * the only way to say what it should do next (FR-030).
+   * the only way to say what it should do next.
    */
   onAdded: (nodeKey: string) => void;
 }

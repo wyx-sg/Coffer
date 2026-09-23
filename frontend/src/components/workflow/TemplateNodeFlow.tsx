@@ -1,6 +1,6 @@
 // frontend/src/components/workflow/TemplateNodeFlow.tsx
 // The right half of the editor: one stage's tasks, in the order they run, each
-// saying what it does (FR-061).
+// saying what it does.
 //
 // Down rather than across, and one per row: a stage's tasks are a sequence,
 // and a row of chips reads as a set of options.
@@ -11,7 +11,7 @@
 // not be misread as is a way to edit a task.
 //
 // Nothing here says where work goes when something is found wrong, because a
-// workflow draws no route back (FR-025): the stages run in the order they sit
+// workflow draws no route back: the stages run in the order they sit
 // in, and a finding is acted on by the developer holding it.
 import { ChevronDown, Plus } from "lucide-react";
 import { Fragment } from "react";

@@ -48,9 +48,11 @@ async def dispatch(
             stage_key=stage_key,
             node=node,
             attempt=attempt,
-            # One ladder (FR-071): this attempt's own answer, then the
-            # task's, then the run's, then this machine's default. Each
-            # rung defers to the next rather than inventing a default.
+            # One ladder (spec workflow "Choose a task's agent, model
+            # and effort before it starts"): this attempt's own answer,
+            # then the task's, then the run's, then this machine's
+            # default. Each rung defers to the next rather than
+            # inventing a default.
             agent_key=(
                 attempt.agent or node.agent or await run_agent(ops, run) or ops._default_agent
             ),
@@ -75,8 +77,9 @@ async def run_agent(ops: NodeOps, run: RunRow) -> str | None:
 
 
 async def node_workdir(ops: NodeOps, run: RunRow, node_key: str) -> str:
-    """The run's working directory (FR-019), unless an ad-hoc task named
-    another — which is how work in a second repository is expressed."""
+    """The run's working directory (spec workflow "Run a node's work as one
+    conversation"), unless an ad-hoc task named another — which is how work in a
+    second repository is expressed."""
     if not node_key.startswith(ADHOC_KEY_PREFIX):
         return run.workdir
     for row in await ops.cmd.domain_events(run.id):

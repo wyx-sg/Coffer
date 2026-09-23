@@ -1,9 +1,10 @@
 """The index a task opens with: every earlier task, and what it produced.
 
 This is the module that replaced carrying the earlier tasks' transcripts
-forward (FR-029, FR-031). The two properties worth pinning are that it costs a
-LINE per task rather than a conversation, and that it never lies by omission —
-a task that produced nothing is still in it.
+forward (spec workflow "Generate the index of earlier tasks"). The two
+properties worth pinning are that it costs a LINE per task rather than a
+conversation, and that it never lies by omission — a task that produced nothing
+is still in it.
 """
 
 from __future__ import annotations

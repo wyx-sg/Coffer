@@ -1,4 +1,5 @@
-"""Compacting one node's own conversation (FR-049).
+"""Compacting one node's own conversation (spec workflow "Compact a long
+node conversation into a summary").
 
 A node can run for hours. Its opening message is bounded by
 ``context_budget``, but the turns that follow are not: tool output, a
@@ -92,7 +93,8 @@ class Compaction:
 
 
 class ConversationCompactor:
-    """Applies FR-049 to one conversation, before a turn starts on it."""
+    """Applies spec workflow "Compact a long node conversation into a
+    summary" to one conversation, before a turn starts on it."""
 
     def __init__(
         self,

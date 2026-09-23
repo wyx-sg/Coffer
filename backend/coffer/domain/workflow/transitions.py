@@ -9,13 +9,15 @@ The two rules worth stating up front, because they are the ones a delivery
 engine usually gets wrong:
 
 * **Nothing here sends a run backwards.** There is no route between stages
-  (FR-025): a finding in a later task is acted on by retrying the task that was
-  wrong or by adding one that fixes it, and either way the work that already
-  passed keeps its result and its history. The judgement — redo the code, or
-  redo the design — belongs to whoever holds the finding, and a table in this
-  module could only make it in advance.
-* A **ceiling** ends a loop (FR-026). A task may be tried the number of times
-  it declared; the next try fails the run instead of spending the night on it.
+  ("Send work back by the developer's hand, never a template route"): a finding
+  in a later task is acted on by retrying the task that was wrong or by adding
+  one that fixes it, and either way the work that already passed keeps its
+  result and its history. The judgement — redo the code, or redo the design —
+  belongs to whoever holds the finding, and a table in this module could only
+  make it in advance.
+* A **ceiling** ends a loop ("Bound each task's attempts by its own ceiling"). A
+  task may be tried the number of times it declared; the next try fails the run
+  instead of spending the night on it.
 """
 
 from __future__ import annotations
@@ -76,7 +78,8 @@ _NODE_ACTIONS: dict[NodeStatus, frozenset[NodeAction]] = {
 _NODE_RESULT: dict[NodeAction, NodeStatus] = {
     NodeAction.START: NodeStatus.RUNNING,
     # Feedback re-opens the same attempt's turn — it is more to do, not a new
-    # try. A new try is `retry`, which inserts attempt + 1 (FR-022).
+    # try. A new try is `retry`, which inserts attempt + 1 (spec workflow "Keep
+    # every attempt when a node is retried").
     NodeAction.FEEDBACK: NodeStatus.RUNNING,
     NodeAction.COMPLETE: NodeStatus.COMPLETED,
     # A retry lands on a *new* attempt row, which starts pending and is picked
@@ -96,7 +99,8 @@ class NodePosition:
 
 
 def allowed_run_signals(status: RunStatus) -> frozenset[RunSignal]:
-    """The signals a run in ``status`` accepts (FR-016)."""
+    """The signals a run in ``status`` accepts (spec workflow "Accept the run
+    signals start, pause, resume and abort")."""
     return _RUN_SIGNALS[status]
 
 
@@ -106,7 +110,8 @@ def apply_run_signal(status: RunStatus, signal: RunSignal) -> RunStatus:
     Raises:
         RunTerminal: the run is completed or aborted — it refuses every
             mutating command, and that is a different answer from "not from
-            this status" (FR-013, FR-016).
+            this status" (spec workflow "Keep a run to six statuses",
+            "Accept the run signals start, pause, resume and abort").
         IllegalTransition: the signal is not legal from a non-terminal status.
     """
     if status in TERMINAL_RUN_STATUSES:
@@ -122,15 +127,17 @@ def apply_run_signal(status: RunStatus, signal: RunSignal) -> RunStatus:
 def ensure_run_mutable(status: RunStatus, attempted: str, run_id: str = "run") -> None:
     """Guard a mutating command that is not a run signal — a node action, an
     ad-hoc task, a main-thread message. A completed or aborted run refuses them
-    all (FR-013, FR-016), and a node action is no exception just because it
-    names a node rather than the run."""
+    all (spec workflow "Keep a run to six statuses", "Accept the run signals
+    start, pause, resume and abort"), and a node action is no exception just
+    because it names a node rather than the run."""
     if status in TERMINAL_RUN_STATUSES:
         raise RunTerminal(run_id, status.value, attempted)
 
 
 def ensure_owning_machine(run_id: str, owner_machine_id: str, this_machine_id: str) -> None:
-    """Only the machine that owns a run advances it (FR-012). Everywhere else
-    the run is visible and read-only."""
+    """Only the machine that owns a run advances it (spec workflow "Advance a
+    run only on the machine that owns it"). Everywhere else the run is visible
+    and read-only."""
     if owner_machine_id != this_machine_id:
         raise NotThisMachine(run_id, owner_machine_id, this_machine_id)
 
@@ -144,8 +151,9 @@ def ensure_version(
     stage_key: str | None = None,
     node_key: str | None = None,
 ) -> None:
-    """Optimistic lock (FR-015): a stale observed version is refused with the
-    run's current version and position, never merged."""
+    """Optimistic lock (spec workflow "Refuse a command carrying a stale
+    version"): a stale observed version is refused with the run's current
+    version and position, never merged."""
     if current != observed:
         raise WorkflowVersionConflict(
             run_id,
@@ -158,7 +166,8 @@ def ensure_version(
 
 
 def allowed_node_actions(node_status: NodeStatus, node_type: NodeType) -> frozenset[NodeAction]:
-    """The actions a node in ``node_status`` accepts (FR-021).
+    """The actions a node in ``node_status`` accepts (spec workflow "Accept the
+    node actions start, feedback, complete, retry, skip and restore").
 
     The node's type narrows one thing: ``feedback`` is a message to an agent
     mid-turn, and a ``manual`` node has no agent and no turn — there is nothing
@@ -180,7 +189,7 @@ def apply_node_action(
     ``retry`` returns ``pending`` rather than ``running``: the retry opens a new
     attempt row, and the attempt that is starting is pending until the advancer
     dispatches its turn. The failed attempt keeps its own status and its
-    conversation (FR-022).
+    conversation (spec workflow "Keep every attempt when a node is retried").
 
     Raises:
         IllegalTransition: the action is not legal for this status and type.
@@ -208,7 +217,8 @@ def next_node(
     first node that is not done. A task the developer reopened is not done, so
     the same walk hands it back and then walks forward past everything that
     still is — which is the whole of what "send it back" needs to mean now that
-    no route in the template claims to do it (FR-025).
+    no route in the template claims to do it (spec workflow "Send work back by
+    the developer's hand, never a template route").
 
     A skipped node counts as done for ordering: it will not run, so the run
     must not stop on it. An optional stage is *not* skipped here — ``optional``
@@ -225,10 +235,10 @@ def next_node(
 def check_attempt_ceiling(node_key: str, attempts_used: int, ceiling: int) -> int:
     """The attempt number a retry would open, or a refusal at the ceiling.
 
-    One task's tries against that task's own ceiling (FR-026). The limit
-    belongs to the task rather than to the workflow, because a draft that is
-    cheap to redo and a deploy that must not be tried twice are not the same
-    judgement.
+    One task's tries against that task's own ceiling (spec workflow "Bound each
+    task's attempts by its own ceiling"). The limit belongs to the task rather
+    than to the workflow, because a draft that is cheap to redo and a deploy
+    that must not be tried twice are not the same judgement.
 
     Raises:
         AttemptCeilingReached: when the next attempt would exceed the ceiling.

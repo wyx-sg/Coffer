@@ -60,7 +60,8 @@ KIND_ATTEMPT = "workflow_attempt"
 
 
 class MissingRequiredArtifact(CofferError):  # noqa: N818
-    """A node owing a required artifact has not produced it (FR-023).
+    """A node owing a required artifact has not produced it (spec
+    workflow "Hold completion until a required artifact exists").
 
     Its own error rather than an ``IllegalTransition``: the action WAS legal
     for the node's status, and the developer's next move is to write the file
@@ -105,7 +106,8 @@ class NodeOps:
         self._audit = audit
         self._default_agent = default_agent
         # Which agents this machine has, for a choice made before a task starts
-        # (FR-071). The empty default means "not checked here" — the same
+        # (spec workflow "Choose a task's agent, model and effort before it
+        # starts"). The empty default means "not checked here" — the same
         # convention ``parse_template``'s ``allowed_agents=None`` uses, so a
         # test can drive the engine without an agent registry behind it.
         self._known_agents = known_agents
@@ -124,7 +126,8 @@ class NodeOps:
         self, run: RunRow, template: WorkflowTemplate, node_key: str
     ) -> tuple[Node, str]:
         """The node a key names, whether the template declared it or the
-        developer added it (FR-028), with the stage it sits in."""
+        developer added it (spec workflow "Add an ad-hoc task to any
+        stage"), with the stage it sits in."""
         if node_key.startswith(ADHOC_KEY_PREFIX):
             return await self.adhoc_node_of(run.id, node_key)
         found = template.node(node_key)
@@ -171,7 +174,7 @@ class NodeOps:
         return attempt
 
     async def require_nothing_running(self, run_id: str, node_key: str) -> None:
-        """At most one node of a run runs at any moment (FR-017)."""
+        """At most one node of a run runs at any moment."""
         for key, row in (await self.cmd.latest_attempts(run_id)).items():
             if key != node_key and NodeStatus(row.status) is NodeStatus.RUNNING:
                 raise IllegalTransition(f"run {run_id}", f"node {key} is running", "node.start", ())
@@ -222,10 +225,11 @@ class NodeOps:
         """Put a node into a terminal status, and close the run if it was last.
 
         Committed before the row moves, as everywhere in this layer: the commit
-        is where the optimistic lock is checked (FR-015), and a row settled
-        behind a refused command is a node whose status no replay of the event
-        log can account for. ``closing_events`` does not need the row written
-        first — it tells the walk which node just settled.
+        is where the optimistic lock is checked (spec workflow "Refuse a
+        command carrying a stale version"), and a row settled behind a refused
+        command is a node whose status no replay of the event log can account
+        for. ``closing_events`` does not need the row written first — it tells
+        the walk which node just settled.
         """
         events = [
             PendingEvent(
@@ -256,13 +260,15 @@ class NodeOps:
         actor: EventActor,
         instructions: str | None = None,
     ) -> CommandResult:
-        """Open the next attempt at a node; never rewrite the last one (FR-022).
+        """Open the next attempt at a node; never rewrite the last one (spec
+        workflow "Keep every attempt when a node is retried").
 
         ``instructions`` overrides what the new attempt opens with. Left alone
         it carries the last attempt's brief forward, which is what a retry
         means: the same work, tried again.
 
-        The assignment carries forward for the same reason (FR-071): a
+        The assignment carries forward for the same reason (spec workflow
+        "Choose a task's agent, model and effort before it starts"): a
         developer who said "run this task on the bigger model" said it about
         the TASK, not about attempt 1, and an automatic retry that quietly went
         back to the workflow's agent would undo the choice without telling
@@ -316,7 +322,8 @@ class NodeOps:
         )
         # Written after the insert rather than through it: ``insert_attempt``
         # reads ``None`` as "leave it", and here every one of the three is a
-        # real answer including ``None`` (FR-071).
+        # real answer including ``None`` (spec workflow "Choose a task's
+        # agent, model and effort before it starts").
         if agent is None and model is None and effort is None:
             return row
         return (
@@ -343,7 +350,8 @@ class NodeOps:
     def run_failed(
         reason: FailureReason, stage_key: str | None, node_key: str, detail: object
     ) -> PendingEvent:
-        """The event that ends a run with a reason rather than a loop (FR-026)."""
+        """The event that ends a run with a reason rather than a loop (spec
+        workflow "Bound each task's attempts by its own ceiling")."""
         return PendingEvent(
             event_type=EventType.RUN_FAILED,
             stage_key=stage_key,
@@ -379,7 +387,8 @@ class NodeOps:
         return await _workdir(self, run, node_key)
 
     async def audit_finished(self, result: CommandResult) -> None:
-        """FR-040's coarse record: this vault finished a run it was running."""
+        """The coarse record spec workflow "Audit template, run, approval and
+        gate events" asks for: this vault finished a run it was running."""
         if not (result.appended(EventType.RUN_COMPLETED) or result.appended(EventType.RUN_FAILED)):
             return
         await self._audit.record(

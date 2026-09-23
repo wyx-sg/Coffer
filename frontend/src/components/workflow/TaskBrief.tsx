@@ -1,6 +1,5 @@
 // frontend/src/components/workflow/TaskBrief.tsx
-// A task the run has not reached yet — and the composer that briefs it
-// (FR-068).
+// A task the run has not reached yet — and the composer that briefs it.
 //
 // It is NOT a thread pretending to be empty. A task with no conversation has
 // said nothing and been told nothing by an agent, and rendering an empty
@@ -15,7 +14,7 @@
 // instructions rather than reaching an agent.
 //
 // Whatever is written here is carried on the attempt the task opens with and
-// arrives in its brief (FR-029). It is shown back for the same reason it is
+// arrives in its brief. It is shown back for the same reason it is
 // accepted: a queued instruction nobody can see is one the developer will
 // write twice.
 import { useTranslation } from "react-i18next";

@@ -1,7 +1,7 @@
 // frontend/src/components/workflow/CreateRunDialog.test.tsx
 // Creating a run asks TWO questions and no more: which template, and what is
 // being delivered. The working directory is Coffer's to make, and inputs are
-// mounted on the run's own page for the whole of its life (FR-050) — so both
+// mounted on the run's own page for the whole of its life — so both
 // fields are asserted ABSENT here, not merely optional.
 //
 // The picker shows names and sends uids, so the fixtures carry both: a run
@@ -71,7 +71,7 @@ describe("CreateRunDialog", () => {
   });
 
   test("a switched-off workflow is not offered", async () => {
-    // The daemon refuses a run from a disabled workflow (FR-066), so offering
+    // The daemon refuses a run from a disabled workflow, so offering
     // it here would be offering a refusal.
     templates.mockReturnValue([
       { uid: "wf-delivery", name: "delivery", enabled: true },

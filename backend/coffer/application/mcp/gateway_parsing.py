@@ -21,7 +21,8 @@ _CWD_META_KEY = "coffer/cwd"
 #: resource-identity-is-an-immutable-uid; "no name fallback").
 _AGENT_UID_META_KEY = "coffer/agent-uid"
 #: The extension key the shim stamps a workflow run identity into, present only
-#: when the shim was launched inside a node's turn (spec workflow FR-035).
+#: when the shim was launched inside a node's turn (spec workflow "Give the
+#: gateway the run's identity at dispatch").
 _RUN_META_KEY = "coffer/run"
 
 

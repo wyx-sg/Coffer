@@ -6,10 +6,11 @@ run advances on its own:
 * :func:`record_output` — a turn produced something. A node whose approval
   policy is ``never``, which is not a manual step, and whose required artifacts
   are on disk completes right here, and the advancer moves to the next node
-  with no command in between (FR-017, SC-001). Anything else stops at
-  ``waiting_review``, which is where the developer finds it.
+  with no command in between ("Run at most one node at a time"). Anything else
+  stops at ``waiting_review``, which is where the developer finds it.
 * :func:`record_failure` — a turn ended badly, and the node's own declared
-  failure behaviour decides what the run does about it (FR-024).
+  failure behaviour decides what the run does about it ("Handle a node
+  failure as the node declares").
 
 Free functions over :class:`NodeOps` rather than methods, for the file-size
 ceiling and because they are genuinely one layer up from the moves they are
@@ -112,7 +113,8 @@ def _needs_the_developer(node: Node, missing: tuple[str, ...]) -> bool:
     A manual node always does, however permissive its policy: its "output" is
     only the note telling the developer what to do, and the human step has not
     happened yet. A required artifact that was never written always does too —
-    that is FR-023 arriving on the automatic path rather than the commanded one.
+    that is "Hold completion until a required artifact exists" arriving on the
+    automatic path rather than the commanded one.
     """
     return node.approval is ApprovalPolicy.ALWAYS or node.type is NodeType.MANUAL or bool(missing)
 
@@ -126,7 +128,8 @@ async def record_failure(
     detail: str | None = None,
     actor: EventActor = ENGINE_ACTOR,
 ) -> CommandResult:
-    """A turn ended badly; the node's declared behaviour decides (FR-024)."""
+    """A turn ended badly; the node's declared behaviour decides (spec
+    workflow "Handle a node failure as the node declares")."""
     run = await ops.cmd.require_run(run_id)
     ops.cmd.guard(run, "node.failed", None)
     template = template_of(run)
@@ -160,13 +163,15 @@ async def _after_failure(
     stage_key: str,
     attempt: AttemptRow,
 ) -> list[PendingEvent]:
-    """``stop``, ``continue`` or ``retry`` — the node said which (FR-024)."""
+    """``stop``, ``continue`` or ``retry`` — the node said which (spec
+    workflow "Handle a node failure as the node declares")."""
     behaviour = node.on_failure
     if behaviour.action is FailureAction.RETRY and attempt.attempt <= behaviour.times:
         try:
             # The node's own ``times`` is not a second ceiling: its
             # ``attempt_ceiling`` still caps it, so a task told to retry five
-            # times but allowed three attempts stops at three (FR-026).
+            # times but allowed three attempts stops at three (spec workflow
+            # "Bound each task's attempts by its own ceiling").
             number = check_attempt_ceiling(node.key, attempt.attempt, node.attempt_ceiling)
         except AttemptCeilingReached as exc:
             return [ops.run_failed(FailureReason.ATTEMPT_CEILING, stage_key, node.key, exc)]

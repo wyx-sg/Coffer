@@ -64,7 +64,8 @@ class WorkflowRunRepo:
         inputs: list[Any] | None = None,
         now: datetime | None = None,
     ) -> WorkflowRunModel:
-        """Insert a run at version 1, carrying its frozen snapshot (FR-010)."""
+        """Insert a run at version 1, carrying its frozen snapshot (spec
+        workflow "Freeze the template when a run is created")."""
         stamp = _now(now)
         row = WorkflowRunModel(
             id=run_id,
@@ -121,7 +122,8 @@ class WorkflowRunRepo:
         *,
         now: datetime | None = None,
     ) -> WorkflowRunModel | None:
-        """Advance the projection, or refuse a stale caller (FR-015).
+        """Advance the projection, or refuse a stale caller (spec
+        workflow "Refuse a command carrying a stale version").
 
         Returns the updated row, or ``None`` when ``expected_version`` is not
         the version on disk — the caller turns that into
@@ -165,7 +167,8 @@ class WorkflowRunRepo:
         *,
         now: datetime | None = None,
     ) -> WorkflowRunModel | None:
-        """Replace the run's mounted inputs (FR-050).
+        """Replace the run's mounted inputs (spec workflow "Add and
+        remove inputs at any point in a run").
 
         No version predicate and no version bump. Mounting a PRD or unmounting
         a stale collection does not advance the run — it changes what the NEXT
@@ -197,7 +200,8 @@ class WorkflowRunRepo:
         description: str | None,
         now: datetime | None = None,
     ) -> WorkflowRunModel | None:
-        """Rewrite what the developer called this run (FR-070).
+        """Rewrite what the developer called this run (spec workflow
+        "Edit a run's title and description as labels").
 
         No version predicate and no version bump, exactly as ``set_inputs``:
         a label is not the projection, so it is deliberately outside the

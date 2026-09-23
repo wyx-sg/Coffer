@@ -162,7 +162,7 @@ class FakeRunRepo:
         if row is None:
             return None
         # Neither the version nor the projection moves: a label is not state
-        # the event log owns (FR-070).
+        # the event log owns.
         row.title = title
         row.description = description
         row.updated_at = now or NOW
@@ -666,7 +666,7 @@ class FakeTemplates:
     def __init__(self, configs: dict[str, dict[str, Any]]) -> None:
         self.configs = configs
         #: Workflows switched off. Enabled is what decides whether new runs may
-        #: start (FR-066), so a fake that could not be switched off could not
+        #: start, so a fake that could not be switched off could not
         #: exercise the refusal.
         self.disabled: set[str] = set()
 

@@ -1,4 +1,5 @@
-"""Adding work to a run that its workflow never anticipated (FR-028).
+"""Adding work to a run that its workflow never anticipated (spec
+workflow "Add an ad-hoc task to any stage").
 
 An ad-hoc task is an ordinary command — same guard, same log, same projection —
 but it is not one of the six node actions, and keeping it out of
@@ -6,11 +7,12 @@ but it is not one of the six node actions, and keeping it out of
 "skip" and "add a task" from the same enum.
 
 It is also how a run goes backwards. There is no route in the template that
-sends work to an earlier stage (FR-025): a finding in a later task is acted on
-by retrying the task that was wrong, or by adding a task here that fixes what
-was found. Nothing that already ran is rewound either way, and the judgement
-about which of the two to reach for belongs to whoever is holding the finding
-rather than to an edge drawn before the run existed.
+sends work to an earlier stage ("Send work back by the developer's hand, never
+a template route"): a finding in a later task is acted on by retrying the task
+that was wrong, or by adding a task here that fixes what was found. Nothing
+that already ran is rewound either way, and the judgement about which of the
+two to reach for belongs to whoever is holding the finding rather than to an
+edge drawn before the run existed.
 """
 
 from __future__ import annotations
@@ -43,7 +45,8 @@ async def add_adhoc_task(
     workdir: str | None,
     actor: EventActor,
 ) -> CommandResult:
-    """Add unplanned work to a stage of a run (FR-028).
+    """Add unplanned work to a stage of a run (spec workflow "Add an
+    ad-hoc task to any stage").
 
     It is recorded as a node with an ``adhoc:`` key, gets an attempt row like
     any node, and carries the developer's own instructions. Everything
@@ -111,10 +114,11 @@ async def _add_task(
                     "instructions": instructions,
                     "agent": agent,
                     "workdir": workdir,
-                    # How many tries this task gets (FR-026). Recorded HERE
-                    # because an ad-hoc task exists nowhere else: the walk
-                    # rebuilds it from this event, so a number left out is a
-                    # number that silently becomes the default.
+                    # How many tries this task gets (spec workflow "Bound
+                    # each task's attempts by its own ceiling"). Recorded
+                    # HERE because an ad-hoc task exists nowhere else: the
+                    # walk rebuilds it from this event, so a number left out
+                    # is a number that silently becomes the default.
                     "attempt_ceiling": attempt_ceiling,
                     **(extra or {}),
                 },

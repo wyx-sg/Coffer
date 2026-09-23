@@ -1,7 +1,7 @@
 // frontend/src/components/workflow/TemplatePositionField.tsx
 // Where a stage runs in the workflow, or a task runs in its stage.
 //
-// The order IS the forward path (FR-005), so this is an edit to the flow and
+// The order IS the forward path, so this is an edit to the flow and
 // not a layout preference — which is why it is a field of the thing being
 // edited, in that thing's dialog, beside everything else about it. It used to
 // be a pair of arrows stuck to the box on the map; the map is a map now, and

@@ -1,11 +1,12 @@
 // frontend/src/lib/hooks/useWorkflowTemplates.ts — the template surface's
-// queries and mutations (spec workflow, FR-054/FR-056).
+// queries and mutations (spec workflow "Author templates in the web UI", "Write templates
+// through the resource endpoint only").
 //
-// A template is a Resource of kind `workflow` and nothing else (FR-001), so
+// A template is a Resource of kind `workflow` and nothing else, so
 // every read and every write here goes through the kind-agnostic resource
 // endpoint every other client uses. There is no template route in the workflow
 // contract, and this file must not grow one: a second write path would be a
-// second contract for the same data (FR-056).
+// second contract for the same data.
 //
 // Every one of those requests is addressed by the template's `uid`, and so is
 // every cache key. The name is a label the developer edits from this very
@@ -13,8 +14,8 @@
 // the address it was reading through (ADR resource-identity-is-an-immutable-uid).
 //
 // None of the four mutations toasts its failure. Each caller renders it where
-// it belongs instead — the editor against the field the refusal names
-// (FR-055), the create dialog and the delete confirmation inline — and a toast
+// it belongs instead — the editor against the field the refusal names,
+// the create dialog and the delete confirmation inline — and a toast
 // would surface the same refusal twice, the second time without the field.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -136,7 +137,7 @@ export function useSaveWorkflowTemplate() {
       // Write what was just stored into the cache BEFORE invalidating.
       //
       // The editor has no draft: each edit is applied to whatever the cache
-      // holds and written straight back (FR-062). Invalidating alone starts a
+      // holds and written straight back. Invalidating alone starts a
       // refetch, and until it lands the cache still holds the PREVIOUS
       // config — so a second edit made in that window would be computed from
       // it and would undo the first. Reordering two stages quickly did

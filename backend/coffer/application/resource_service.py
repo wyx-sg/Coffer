@@ -140,14 +140,11 @@ class ResourceService:
     ) -> Resource:
         """Create a resource and mint its identity.
 
-        ``uid`` is supplied by two callers, and both are supplying an identity
-        that was decided elsewhere: the sync applier, putting a resource this
-        vault has not seen before at the identity the other machine already
-        gave it, and the built-in workflow seed, whose row is the same resource
-        on every machine and so carries a constant rather than a fresh uid.
-        Every other path leaves it ``None`` and gets a fresh random one,
-        because minting a uid from anything a user can change is what this
-        whole design removed.
+        ``uid`` is supplied only where the identity was decided elsewhere: by
+        the sync applier (the uid the other machine gave it) and the built-in
+        workflow seed (a constant, the same row on every machine). Every other
+        path gets a fresh random one, because minting a uid from anything a
+        user can change is what this whole design removed.
         """
         kind_def = self._require_kind(kind)
         # CODE-REG: a kind that owns creation invariants beyond config

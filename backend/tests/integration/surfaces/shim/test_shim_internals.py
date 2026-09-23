@@ -82,9 +82,10 @@ def test_inject_meta_preserves_existing_meta_keys(monkeypatch):
 
 
 def test_inject_meta_stamps_run_context_from_the_environment(monkeypatch):
-    """Spec workflow FR-035: a node's turn puts the run identity in the agent
-    process's environment, the CLI passes it down to the shim it spawns, and
-    the shim reports it at the handshake — the same route as the cwd."""
+    """Spec workflow "Give the gateway the run's identity at dispatch": a node's
+    turn puts the run identity in the agent process's environment, the CLI
+    passes it down to the shim it spawns, and the shim reports it at the
+    handshake — the same route as the cwd."""
     monkeypatch.setattr("os.getcwd", lambda: "/p")
     monkeypatch.setenv("COFFER_RUN_CONTEXT", "run_01J/att_07")
     envelope: dict[str, Any] = {"method": "initialize"}

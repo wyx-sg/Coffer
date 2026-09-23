@@ -27,7 +27,7 @@ class RunRow(Protocol):
     title: str
     #: What the developer says this delivery is. A LABEL like the title:
     #: neither is folded from the events, and both may be corrected after the
-    #: fact (FR-070).
+    #: fact (spec workflow "Edit a run's title and description as labels").
     description: str | None
     workdir: str
     machine_id: str
@@ -68,9 +68,10 @@ class AttemptRow(Protocol):
     status: str
     conversation_id: str | None
     instructions: str | None
-    #: Who runs this attempt, on which model, at which effort (FR-071).
-    #: None defers to the template, whose None defers to the agent's own
-    #: configuration.
+    #: Who runs this attempt, on which model, at which effort (spec
+    #: workflow "Choose a task's agent, model and effort before it
+    #: starts"). None defers to the template, whose None defers to the
+    #: agent's own configuration.
     agent: str | None
     model: str | None
     effort: str | None

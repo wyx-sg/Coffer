@@ -1,4 +1,4 @@
-"""A mounted link names its provider in the node's context (FR-065)."""
+"""A mounted link names its provider in the node's context."""
 
 from __future__ import annotations
 

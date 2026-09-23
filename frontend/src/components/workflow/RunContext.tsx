@@ -1,6 +1,6 @@
 // frontend/src/components/workflow/RunContext.tsx
-// One table for everything the run is made of: what it READS (FR-032) and
-// what it WROTE (FR-041).
+// One table for everything the run is made of: what it READS and
+// what it WROTE.
 //
 // These were two tabs, because they come from two routes. That is a fact about
 // the API, not about the delivery — the developer's question is "what is in
@@ -9,7 +9,7 @@
 // "where did td.md come from" used to mean guessing which tab to look in.
 //
 // Nothing here advances the run, which is why this tab is allowed on the run's
-// page at all while Retry and Skip are not (FR-052). Mounting a PRD changes
+// page at all while Retry and Skip are not. Mounting a PRD changes
 // what every task that opens afterwards is told about; it does not move the
 // delivery. Promotion copies files out and leaves the run untouched.
 import { useState } from "react";
@@ -28,7 +28,7 @@ import { RunInputDialog } from "./RunInputDialog";
 import { useRunContextColumns } from "./RunContextColumns";
 
 /** What unmounting costs, which differs by kind: an uploaded file's bytes go
- *  with it, a repository's checkout goes but its source does not (FR-058), and
+ *  with it, a repository's checkout goes but its source does not, and
  *  a collection or link was never the run's to begin with. */
 const REMOVE_CONFIRM = {
   knowledge: "workflow.inputs.removeConfirm",
@@ -40,7 +40,7 @@ const REMOVE_CONFIRM = {
 
 interface Props {
   runId: string;
-  /** False when another machine advances this run (FR-012). */
+  /** False when another machine advances this run. */
   ownedHere: boolean;
   /** Display name of the owning machine, for the read-only tooltip. */
   machine: string;
@@ -59,7 +59,7 @@ export function RunContext({ runId, ownedHere, machine, enabled = true }: Props)
 
   const isLoading = inputs.isPending || artifacts.isPending;
   const rows = buildContextRows(inputs.data ?? [], artifacts.data?.items ?? []);
-  // Anything at all, not only what an agent produced (FR-043). A delivery
+  // Anything at all, not only what an agent produced. A delivery
   // that has so far been given a PRD, a note and two links is one whose PRD,
   // note and links are worth keeping — and waiting for an artifact greyed the
   // button out for exactly the run the developer most wanted to save.

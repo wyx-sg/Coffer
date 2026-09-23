@@ -1,7 +1,7 @@
 // frontend/src/components/workflow/NodeHeader.tsx
 // The band above a task's conversation: what this task is, where it sits and
-// how far it got. NO CONTROLS — a run is driven by talking to its tasks
-// (FR-063), so everything the developer can do to this one is in the thread
+// how far it got. NO CONTROLS — a run is driven by talking to its tasks,
+// so everything the developer can do to this one is in the thread
 // below and this band only states facts.
 //
 // Split out of the page so the page is the LAYOUT — header, thread, context —

@@ -66,7 +66,7 @@ const NAV_GROUPS: NavGroup[] = [
       // do with one of them.
       { to: "/agents", labelKey: "nav.agents", icon: Bot },
       { to: "/chat", labelKey: "nav.chat", icon: MessageSquare },
-      // A workflow RUN is operational state, not a vault asset (FR-011), so
+      // A workflow RUN is operational state, not a vault asset, so
       // it does not belong under Resources with the kinds — the WORKFLOW it
       // runs does, and is down there. A run sits beside Chat because both are
       // things you do WITH an agent: a chat is one conversation you drive, a

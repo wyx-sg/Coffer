@@ -1,4 +1,5 @@
-"""The opening context every task receives (FR-029, FR-031, FR-032, FR-072)."""
+"""The opening context every task receives (spec workflow "Open every task with
+the same four parts")."""
 
 from __future__ import annotations
 
@@ -242,7 +243,7 @@ async def test_the_earlier_tasks_are_indexed_oldest_first_by_what_they_produced(
 async def test_no_earlier_conversation_reaches_the_opening_message() -> None:
     """The change this module exists for, asserted as an absence.
 
-    A task hands the next one its deliverable, not its transcript (FR-029). The
+    A task hands the next one its deliverable, not its transcript. The
     composer has no port that could reach a conversation any more, so what this
     pins is that nobody reintroduces one by putting a summary or an output on
     the index row — which is how the unbounded growth came back last time.
@@ -315,8 +316,10 @@ async def test_composing_regenerates_the_catalogue_the_index_points_at() -> None
     text = await composer.compose(make_request())
 
     # The index names `CATALOG.md` as where the whole of it can be read when it
-    # is itself too long (FR-047), so the file has to exist by then — a path
-    # offered to an agent that resolves to nothing is worse than no path.
+    # is itself too long (spec workflow
+    # "Keep a task's opening context within budget"), so the file has to exist
+    # by then — a path offered to an agent that resolves to nothing is worse
+    # than no path.
     assert store.written, "composing must regenerate CATALOG.md from the directory"
     assert "`/vault/workflows/run-1/artifacts/draft_td/1/td.md`" in text
 
@@ -346,7 +349,7 @@ async def test_mounted_inputs_are_listed_and_never_inlined() -> None:
     spec="workflow", scenario="a note the developer wrote is part of the run's context"
 )
 async def test_a_note_is_listed_as_the_developers_own_words() -> None:
-    """FR-069: an uploaded PRD is a document to work from; a note is the person
+    """An uploaded PRD is a document to work from; a note is the person
     who owns this run telling you something, and the two should not read the
     same to a node deciding what to believe."""
     inputs = (
@@ -451,7 +454,7 @@ async def test_a_linked_directory_is_not_dressed_up_as_a_checkout() -> None:
 
     text = await composer.compose(make_request(inputs=inputs))
 
-    # FR-057: a node told it has isolation it does not have will write into
+    # A node told it has isolation it does not have will write into
     # the developer's directory believing it is its own.
     assert "a LINK to `/Users/dev/notes`" in text
     assert "anything you write there, you write in the original" in text
@@ -461,7 +464,8 @@ async def test_a_linked_directory_is_not_dressed_up_as_a_checkout() -> None:
     spec="workflow", scenario="a task the developer gave no deliverable still owes one"
 )
 async def test_a_task_that_declared_no_artifacts_is_still_told_what_to_write() -> None:
-    """FR-072, at the one place it has to be visible: the brief.
+    """Spec workflow "Give every task at least one deliverable", at the one place
+    it has to be visible: the brief.
 
     The default is applied on READ, so the task's own declaration stays empty
     and round-trips through the editor unchanged — but the brief it opens with
@@ -480,7 +484,8 @@ async def test_a_task_that_declared_no_artifacts_is_still_told_what_to_write() -
 
 
 async def test_an_enormous_skill_is_cut_and_says_where_the_rest_is() -> None:
-    """FR-047, at the only place the budget can actually be breached.
+    """Spec workflow "Keep a task's opening context within budget", at the only
+    place the budget can actually be breached.
 
     Every other part of the opening message is names — a path, a task key, a
     URL — and fits by construction. The skill's instructions are the one part

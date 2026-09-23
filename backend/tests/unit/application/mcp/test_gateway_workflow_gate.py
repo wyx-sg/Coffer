@@ -1,4 +1,5 @@
-"""The gateway's side of the gate (spec workflow FR-034/FR-035).
+"""The gateway's side of the gate (spec workflow "Refuse an unapproved write-class
+tool call made for a run", "Give the gateway the run's identity at dispatch").
 
 The gate's own decision is tested in
 ``tests/unit/application/workflow/test_gate.py``. What is tested here is the
@@ -194,7 +195,7 @@ async def test_with_no_gate_wired_a_run_s_call_still_dispatches() -> None:
     spec="workflow", scenario="a write-class tool call without an approval is refused"
 )
 async def test_a_refused_call_never_reaches_the_upstream() -> None:
-    """FR-034. The upstream recorded nothing — that is the whole claim."""
+    """The upstream recorded nothing — that is the whole claim."""
     h = build(gate=RecordingGate(answer=REFUSAL))
     await _initialize(h.session, run="run1/att1")
 
@@ -206,7 +207,7 @@ async def test_a_refused_call_never_reaches_the_upstream() -> None:
 
 @pytest.mark.acceptance(spec="workflow", scenario="an approved call goes through exactly once")
 async def test_an_allowed_call_reaches_the_upstream_exactly_once() -> None:
-    """FR-037: a held call that is approved resumes, and resumes once."""
+    """A held call that is approved resumes, and resumes once."""
     h = build(gate=RecordingGate(answer=None))
     await _initialize(h.session, run="run1/att1")
 
@@ -219,7 +220,7 @@ async def test_an_allowed_call_reaches_the_upstream_exactly_once() -> None:
 
 
 async def test_the_gate_is_asked_about_the_prefixed_name_and_the_real_arguments() -> None:
-    """FR-033/FR-035: what the developer decides on is what will execute."""
+    """What the developer decides on is what will execute."""
     h = build(gate=RecordingGate(answer=REFUSAL))
     await _initialize(h.session, run="run1/att1")
 

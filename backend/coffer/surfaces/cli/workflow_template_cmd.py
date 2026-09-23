@@ -1,14 +1,15 @@
 """``coffer workflow template …`` — the shape of the work, from the terminal.
 
-A template is a Resource of kind ``workflow`` (spec workflow FR-001), so these
-commands speak to the kind-agnostic resource routes rather than to a template
-route of their own — there is no second way to write one. What this module adds
-over ``coffer resource`` is only convenience: the kind is implied, and a
-definition comes from a file rather than from a shell-quoted JSON blob.
+A template is a Resource of kind ``workflow`` (spec workflow "Register a
+template as a workflow resource"), so these commands speak to the kind-agnostic
+resource routes rather than to a template route of their own — there is no
+second way to write one. What this module adds over ``coffer resource`` is only
+convenience: the kind is implied, and a definition comes from a file rather
+than from a shell-quoted JSON blob.
 
-A refusal here is the kind's own validation (FR-006) and names the JSON path of
-the offending field, so a bad template is rejected with somewhere to look
-rather than with "invalid config".
+A refusal here is the kind's own validation ("Refuse an invalid template naming
+the offending path") and names the JSON path of the offending field, so a bad
+template is rejected with somewhere to look rather than with "invalid config".
 
 Every command here takes the template's NAME, because that is what a person
 knows; the uid the routes address is looked up once, through ``_resolve``
@@ -80,7 +81,8 @@ def update_template(
     """Replace a template's definition.
 
     A run already created keeps the snapshot it froze, so editing a template
-    never disturbs work in flight (FR-010).
+    never disturbs work in flight (spec workflow "Freeze the template when a
+    run is created").
     """
     config = _load_definition(file)
     c, _info = _cli_client.client_or_exit()

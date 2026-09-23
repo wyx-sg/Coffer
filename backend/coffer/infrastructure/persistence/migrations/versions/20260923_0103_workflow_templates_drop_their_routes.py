@@ -1,11 +1,12 @@
 """A workflow template's stored config stops carrying routes between stages.
 
-``edges`` — a route from a later stage back to an earlier one — is gone from
-the template (spec workflow FR-025). A finding in a later task is acted on by
-the developer retrying the task that was wrong or adding one that fixes it,
-because whether a failing test means redo the code or redo the design is a
-judgement only whoever holds the finding can make, and an edge drawn when the
-template was written makes it in advance and for every run alike.
+``edges`` — a route from a later stage back to an earlier one — is gone from the
+template (spec workflow "Send work back by the developer's hand, never a
+template route"). A finding in a later task is acted on by the developer
+retrying the task that was wrong or adding one that fixes it, because whether a
+failing test means redo the code or redo the design is a judgement only whoever
+holds the finding can make, and an edge drawn when the template was written
+makes it in advance and for every run alike.
 
 This is a stripping migration rather than a shim, and it is not optional.
 ``parse_template`` now REFUSES a config carrying ``edges`` as an unknown field,
@@ -18,8 +19,9 @@ two places a template's JSON lives:
 * ``resources.config_json`` for every row of kind ``workflow`` — the template
   the developer edits and runs from;
 * ``workflow_runs.template_snapshot`` — the copy a run froze at creation
-  (FR-010), which is what it actually executes and is therefore the one that
-  would strand a run in flight rather than merely a menu entry.
+  ("Freeze the template when a run is created"), which is what it actually
+  executes and is therefore the one that would strand a run in flight rather
+  than merely a menu entry.
 
 Both are rewritten only when the key is present, so running this twice is a
 no-op and a row written by some other build is left alone rather than guessed

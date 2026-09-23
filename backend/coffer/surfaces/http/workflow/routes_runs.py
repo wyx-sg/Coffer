@@ -1,23 +1,25 @@
-"""``/api/v1/workflow/runs`` — a run's whole management plane (FR-044).
+"""``/api/v1/workflow/runs`` — a run's whole management plane (spec
+workflow "Expose the engine over REST").
 
 List, create, read, delete, signal, and read the log. What one NODE accepts is
 in ``routes_nodes`` and what a run READS is in ``routes_inputs``; the split is
 the services' own, and it is also where the file-size ceiling falls.
 
-**A run has no conversation of its own** (FR-030). There is no route here for
-saying something to the run, because there is nothing to say it in: every
-conversation belongs to one task, and the developer speaks to a task through
-the ordinary chat API on that task's ``conversation_id``. A run-level message
-route existed briefly and is gone — it described a main thread this layer no
-longer has.
+**A run has no conversation of its own** ("Give a run no conversation of its
+own"). There is no route here for saying something to the run, because there is
+nothing to say it in: every conversation belongs to one task, and the developer
+speaks to a task through the ordinary chat API on that task's
+``conversation_id``. A run-level message route existed briefly and is gone — it
+described a main thread this layer no longer has.
 
 ``GET /runs/{run_id}`` is the one route worth reading the code of rather than
 the summary. It assembles the run's stages and nodes, and each node's
 ``allowed_actions`` comes from
 ``domain.workflow.transitions.allowed_node_actions`` — the same table the
 command path consults. Those buttons now live on the conversation page rather
-than the run's own (FR-052), which changes where they are drawn and not what
-they are: a value computed any other way is still a button that 409s.
+than the run's own ("Offer no run controls on the run's page"), which changes
+where they are drawn and not what they are: a value computed any other way is
+still a button that 409s.
 """
 
 from __future__ import annotations
@@ -110,12 +112,14 @@ async def create_run(
     runs: WorkflowRunService = Depends(get_workflow_run_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> RunOut:
-    """Create a run from a template, freezing the template's snapshot (FR-010).
+    """Create a run from a template, freezing the template's snapshot (spec
+    workflow "Freeze the template when a run is created").
 
-    A template and a title, and nothing else (FR-011). The working directory is
-    Coffer's own, made per run (FR-053) and reported back on the run; the inputs
-    are mounted afterwards, through the routes that can also unmount them
-    (FR-050).
+    A template and a title, and nothing else ("Create a run from a template and
+    a title alone"). The working directory is Coffer's own, made per run ("Give
+    each run a working directory of its own") and reported back on the run; the
+    inputs are mounted afterwards, through the routes that can also unmount
+    them ("Add and remove inputs at any point in a run").
     """
     run = await runs.create_run(
         template_uid=body.template_uid,
@@ -174,14 +178,15 @@ async def relabel_run(
     body: RunLabelIn,
     runs: WorkflowRunService = Depends(get_workflow_run_service),  # noqa: B008
 ) -> RunOut:
-    """Rewrite what this run is called and what it is for (FR-070).
+    """Rewrite what this run is called and what it is for (spec workflow
+    "Edit a run's title and description as labels").
 
     The ONE in-place edit of a run's row, and it touches nothing the event log
     owns. A run's status, its stage and its position are folded from its events
-    and only the engine writes them (FR-014); the title is a label the
-    developer typed before the first task had opened, when they knew least
-    about the work. No ``version``: the optimistic lock guards the position,
-    and this moves the run nowhere.
+    and only the engine writes them ("Rebuild a run from its event log"); the
+    title is a label the developer typed before the first task had opened, when
+    they knew least about the work. No ``version``: the optimistic lock guards
+    the position, and this moves the run nowhere.
     """
     # An ABSENT description leaves what is stored alone; an explicit null
     # clears it. `--title` on its own must not erase the words someone wrote
@@ -219,7 +224,8 @@ async def signal_run(
     runs: WorkflowRunService = Depends(get_workflow_run_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> RunOut:
-    """Start, pause, resume or abort a run (FR-016)."""
+    """Start, pause, resume or abort a run (spec workflow "Accept the
+    run signals start, pause, resume and abort")."""
     result = await runs.signal(
         run_id,
         body.signal,
@@ -237,7 +243,8 @@ async def list_run_events(
     runs: WorkflowRunService = Depends(get_workflow_run_service),  # noqa: B008
     events: EventRepoPort = Depends(get_workflow_event_repo),  # noqa: B008
 ) -> EventListOut:
-    """A run's event log, in sequence — its record of truth (FR-014)."""
+    """A run's event log, in sequence — its record of truth (spec
+    workflow "Rebuild a run from its event log")."""
     await runs.get_run(run_id)  # 404 for a run that is not there
     rows = await events.list_events(run_id, after_sequence=after_sequence)
     return EventListOut(items=[event_out(row) for row in rows])
@@ -291,9 +298,10 @@ def _tries(row: AttemptRow | None) -> int:
     """How many times this node has been TRIED — not which row is open.
 
     An attempt row exists before its turn does: a retry opens the next one
-    pending, and so does briefing a task that has not started (FR-068). Neither
-    is a try, so neither is counted until the row is started. Without this, a
-    task the developer wrote a brief for would claim to be on its first attempt
+    pending, and so does briefing a task that has not started (spec workflow
+    "Let the developer speak to a task at any point, in one place"). Neither is
+    a try, so neither is counted until the row is started. Without this, a task
+    the developer wrote a brief for would claim to be on its first attempt
     while sitting beside an identical one claiming zero, for a reason the
     reader cannot see.
     """
@@ -314,10 +322,11 @@ def _allowed_actions(
     ``allowed_node_actions`` answers for the node alone. Two of the run's own
     guards then narrow it, and they are the two ``RunCommands.guard`` applies
     before any action is even looked at: a run this machine does not own accepts
-    nothing (FR-012), and a completed or aborted one accepts nothing ever again
-    (FR-013). A third narrowing is ``node.start``'s own precondition — the run
-    must be ``running`` (``WorkflowNodeService._start``) — without which a draft
-    run would offer a Start button that refuses itself.
+    nothing (spec workflow "Advance a run only on the machine that owns it"),
+    and a completed or aborted one accepts nothing ever again ("Keep a run to
+    six statuses"). A third narrowing is ``node.start``'s own precondition — the
+    run must be ``running`` (``WorkflowNodeService._start``) — without which a
+    draft run would offer a Start button that refuses itself.
     """
     if not owned_here or RunStatus(run.status) in TERMINAL_RUN_STATUSES:
         return []

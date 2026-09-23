@@ -1,11 +1,12 @@
-// frontend/src/pages/WorkflowRunsPage.tsx — spec workflow, FR-045.
+// frontend/src/pages/WorkflowRunsPage.tsx — spec workflow "Show runs, their tasks and their
+// context in the web UI".
 // The run list: every delivery this vault is carrying, whichever machine
 // advances it. Mirrors ChannelsPage — PageHeader + error / empty / table, with
 // the Create action in the header only once there is something to create
 // beside, since the empty state carries its own call to action.
 //
 // The WORKFLOWS these runs are running are a resource kind with their own list
-// under `/workflows` and their own sidebar entry (FR-001). This page used to
+// under `/workflows` and their own sidebar entry. This page used to
 // carry a button through to them, because the two had been built as one
 // surface and a second `/workflows`-prefixed nav entry would have lit up
 // beside this page's own on every template URL. Splitting the paths settled

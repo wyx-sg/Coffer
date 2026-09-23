@@ -1,4 +1,4 @@
-"""Template validation (spec workflow FR-002..FR-007).
+"""Template validation.
 
 Every refusal is checked for the JSON path it names, because that path is the
 contract: a template is hand-written JSON and "invalid template" without a path
@@ -23,7 +23,7 @@ from coffer.domain.workflow.template import (
 
 
 def valid_config() -> dict[str, Any]:
-    """The quickstart's three-stage template, which is a complete flow."""
+    """A three-stage template, which is a complete flow."""
     return {
         "description": "One repository, one change, design first",
         "stages": [
@@ -141,7 +141,7 @@ def test_omitted_fields_take_the_documented_defaults():
     spec="workflow", scenario="a task carries everything the engine needs to run it"
 )
 def test_a_task_is_read_back_with_every_field_the_engine_runs_it_on():
-    """FR-004: a node is not a name and a pointer — it carries the whole of what
+    """A node is not a name and a pointer — it carries the whole of what
     dispatching it needs, and the stage keeps the order the developer wrote.
 
     Asserted field by field against a stage holding TWO tasks, because the two
@@ -182,7 +182,7 @@ def test_a_task_is_read_back_with_every_field_the_engine_runs_it_on():
 
     # The second task declares almost nothing, and what it gets is the
     # documented default rather than a null the dispatcher would have to guess
-    # about — including the deliverable every task owes (FR-072).
+    # about — including the deliverable every task owes.
     second = stage.nodes[1]
     assert second.type is NodeType.MANUAL
     assert (second.skill, second.instructions, second.agent) == (None, None, None)
@@ -223,7 +223,7 @@ def test_stage_index_reports_template_order():
     spec="workflow", scenario="a template with any number of stages runs as written"
 )
 def test_the_engine_reads_no_meaning_from_a_key():
-    """FR-003: a stage's meaning is its position; a non-English key is the same
+    """A stage's meaning is its position; a non-English key is the same
     to the engine as `design`."""
     config = valid_config()
     config["stages"] = [config["stages"][0]]
@@ -252,7 +252,7 @@ def test_omitting_the_collections_skips_the_two_checks_the_domain_cannot_answer(
 
 
 # --------------------------------------------------------------------------
-# The refusals — one per rule, each asserting the offending path (FR-006)
+# The refusals — one per rule, each asserting the offending path
 # --------------------------------------------------------------------------
 
 REFUSALS: list[tuple[str, dict[str, Any], str]] = [
@@ -410,7 +410,8 @@ REFUSALS: list[tuple[str, dict[str, Any], str]] = [
     ),
     ("a run-wide token budget", _mutate(["token_budget"], 4_000_000), "token_budget"),
     # A route between stages is not a field a template may carry any more
-    # (FR-025). This is the shape a template stored before that change still
+    # (spec workflow "Send work back by the developer's hand, never a template
+    # route"). This is the shape a template stored before that change still
     # has, so it is refused naming `edges` rather than parsed with the route
     # silently dropped — a workflow that still believes it has one would send
     # work nowhere.
@@ -460,7 +461,7 @@ def test_an_unregistered_skill_is_refused_with_its_node_path():
 @pytest.mark.acceptance(
     spec="workflow", scenario="an invalid template is refused with the offending path"
 )
-def test_an_agent_outside_the_templates_scope_is_refused():  # FR-007
+def test_an_agent_outside_the_templates_scope_is_refused():
     config = _mutate(["stages", 1, "nodes", 0, "agent"], "codex")
     with pytest.raises(TemplateInvalid) as caught:
         parse_template(config, allowed_agents={"claude-code"})

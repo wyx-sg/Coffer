@@ -1,4 +1,4 @@
-"""``…/nodes/{node_key}/actions`` and ``…/tasks`` — the node half (FR-021, FR-028).
+"""``…/nodes/{node_key}/actions`` and ``…/tasks`` — the node half.
 
 Both routes answer with the node's latest attempt, so every test here reads the
 same shape. The engine is driven directly where a test needs a node in a state
@@ -82,7 +82,8 @@ def test_a_retry_opens_the_next_attempt_and_leaves_the_last_one_standing(
     spec="workflow", scenario="a required artifact that was never written blocks completion"
 )
 def test_completing_a_node_that_owes_an_artifact_is_refused(surface: Surface) -> None:
-    """FR-023: the refusal IS the wait — nothing about the run moves."""
+    """Spec workflow "Hold completion until a required artifact exists": the
+    refusal IS the wait — nothing about the run moves."""
     run = started_run(surface.client)
     act(surface.client, run["id"], "draft_td", "start", run["version"])
     _reviewable(surface, run["id"], "draft_td")
@@ -261,10 +262,10 @@ def test_a_task_added_to_a_stage_that_is_not_in_the_template_is_409(surface: Sur
 
 
 def test_a_stale_version_never_creates_the_task(surface: Surface) -> None:
-    """The lock is checked before anything is written (FR-015): a task the
-    developer added against a run that has since moved must leave no half-added
-    node behind, because nothing on the run's detail would explain where it
-    came from."""
+    """The lock is checked before anything is written (spec workflow
+    "Refuse a command carrying a stale version"): a task the developer added
+    against a run that has since moved must leave no half-added node behind,
+    because nothing on the run's detail would explain where it came from."""
     run = started_run(surface.client)
     response = surface.client.post(
         f"{_RUNS}/{run['id']}/tasks",
@@ -325,7 +326,8 @@ def test_saying_nothing_is_refused(surface: Surface) -> None:
 def test_talking_to_a_task_carries_no_version_and_survives_the_run_moving(
     surface: Surface,
 ) -> None:
-    """FR-068: a sentence addressed to a named task means the same wherever the
+    """Spec workflow "Let the developer speak to a task at any point, in one
+    place": a sentence addressed to a named task means the same wherever the
     run has got to, so there is no stale version to be refused for."""
     run = started_run(surface.client)
     act(surface.client, run["id"], "draft_td", "start", run["version"])  # version moves

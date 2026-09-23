@@ -4,7 +4,7 @@
 // so the tabs it composes are exercised for real. The behaviour worth naming
 // above all others:
 //
-//   THE RUN'S OWN PAGE OFFERS NO CONTROLS (FR-052). Every button that
+//   THE RUN'S OWN PAGE OFFERS NO CONTROLS. Every button that
 //   advanced or altered a run used to live here; each one now lives on the
 //   conversation of the task it belongs to. The test below names them one by
 //   one, because "no controls" is only enforceable as a list.
@@ -190,7 +190,7 @@ describe("WorkflowRunPage", () => {
     }
     // Nor the approval itself: it belongs to the task that raised it.
     expect(screen.queryByText(/waiting for approval/)).not.toBeInTheDocument();
-    // Nor a conversation of the run's own (FR-030).
+    // Nor a conversation of the run's own.
     expect(screen.queryByRole("region", { name: /conversation/i })).not.toBeInTheDocument();
   });
 
@@ -235,7 +235,7 @@ describe("WorkflowRunPage", () => {
     expect(screen.getAllByText("2 KB")).toHaveLength(2);
 
     // Neither affordance advances the run, which is why both are allowed here
-    // (FR-052): mounting changes what later tasks are told, promotion copies
+    // — mounting changes what later tasks are told, promotion copies
     // files out and leaves the run's directory as it was.
     expect(screen.getByRole("button", { name: "Add" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Save to knowledge" })).toBeEnabled();

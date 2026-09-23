@@ -43,7 +43,7 @@ _CWD_META_KEY = "coffer/cwd"
 #: a scope that now holds uids (ADR resource-identity-is-an-immutable-uid).
 _AGENT_UID_META_KEY = "coffer/agent-uid"
 #: MCP-reserved extension key the daemon reads the workflow run identity from
-#: (spec workflow FR-035).
+#: (spec workflow "Give the gateway the run's identity at dispatch").
 _RUN_META_KEY = "coffer/run"
 #: The variable a workflow node's turn sets in the agent process's environment;
 #: the CLI passes it down to the shim it spawns, and the shim reports it here.

@@ -135,7 +135,7 @@ acceptance("web-ui", "the sidebar groups agents, resources and system by role", 
   renderNav();
 
   expect(groupLabels()).toEqual(["Agents", "Resources", "System"]);
-  expect(group("Agents").map(([name]) => name)).toEqual(["Agents", "Chat"]);
+  expect(group("Agents").map(([name]) => name)).toEqual(["Agents", "Chat", "Runs"]);
   expect(group("Resources").map(([, href]) => href)).not.toContain("/agents");
   expect(group("Resources").map(([name]) => name)).not.toContain("Agents");
   expect(group("System").map(([name]) => name)).toEqual(["Activity", "Sync", "Settings"]);
@@ -145,7 +145,7 @@ acceptance("web-ui", "every resource entry opens a list page of its own", () => 
   renderNav();
 
   const hrefs = group("Resources").map(([, href]) => href!);
-  expect(hrefs).toHaveLength(6);
+  expect(hrefs).toHaveLength(7);
   // The check below can tell a redirect apart: the retired /resources is one.
   expect(isRedirect("/resources")).toBe(true);
   const resolved = hrefs.map((href) => leafRoute(href));
@@ -163,7 +163,7 @@ acceptance("web-ui", "the sidebar carries no placeholder entries", () => {
   renderNav();
 
   const links = Array.from(document.querySelectorAll("nav a"));
-  expect(links.length).toBe(11);
+  expect(links.length).toBe(13);
   for (const link of links) {
     const href = link.getAttribute("href");
     expect(href).toBeTruthy();

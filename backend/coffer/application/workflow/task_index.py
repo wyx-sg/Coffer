@@ -1,4 +1,6 @@
-"""What the run has done so far, as the next task reads it (FR-029, FR-031).
+"""What the run has done so far, as the next task reads it (spec workflow
+"Open every task with the same four parts", "Generate the index of earlier
+tasks").
 
 A task opens with an **index**, not with anybody's conversation. One line per
 task that ran before it — what it was, what became of it, and the path of each
@@ -125,7 +127,8 @@ def _row(task: EarlierTask, paths: tuple[str, ...]) -> str:
 
 
 def _fit(rows: Sequence[str], catalogue_path: str) -> str:
-    """Keep the newest rows that fit; name what that dropped (FR-047).
+    """Keep the newest rows that fit; name what that dropped (spec
+    workflow "Keep a task's opening context within budget").
 
     Trimmed from the OLDEST, because the run's recent history is what the next
     task is continuing from. This is a backstop and is expected never to fire:

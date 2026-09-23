@@ -1,8 +1,9 @@
 """``workflow_node_attempts`` and ``workflow_approvals`` against real SQLite.
 
-A retry appends rather than rewrites (FR-022), an ad-hoc task is recorded as
-any node is (FR-028), and a decision is taken exactly once — repeated,
-expired, or superseded by an abort (FR-033, FR-037, FR-038).
+A retry appends rather than rewrites, an ad-hoc task is recorded as any node
+is, and a decision is taken exactly once — repeated, expired, or superseded by
+an abort (spec workflow "Make an approval decision idempotent", "Resume or fail
+a held tool call, never drop it").
 """
 
 from __future__ import annotations
@@ -71,7 +72,7 @@ async def test_attempt_round_trips_and_moves_forward(repos: Repos) -> None:
 
 
 async def test_a_retry_is_a_second_row_and_the_first_survives(repos: Repos) -> None:
-    """FR-022: a retry appends ``attempt + 1``; the earlier try stays readable."""
+    """A retry appends ``attempt + 1``; the earlier try stays readable."""
     run_id = await _run(repos)
     first = await repos.attempts.insert_attempt(
         attempt_id=uuid.uuid4().hex,
@@ -123,7 +124,7 @@ async def test_duplicate_attempt_number_for_a_node_is_refused(repos: Repos) -> N
 
 
 async def test_an_adhoc_task_is_an_attempt_like_any_other(repos: Repos) -> None:
-    """FR-028: an unplanned task is recorded and attributed exactly as a node is."""
+    """An unplanned task is recorded and attributed exactly as a node is."""
     run_id = await _run(repos)
 
     row = await repos.attempts.insert_attempt(
@@ -169,14 +170,14 @@ async def test_approval_round_trips_with_its_payload_verbatim(repos: Repos) -> N
     assert stored is not None
     assert stored.status == ApprovalStatus.PENDING.value
     assert stored.tool_name == "gitlab__create_merge_request"
-    # Verbatim, not a summary (FR-033) — nested structure and all.
+    # Verbatim, not a summary — nested structure and all.
     assert stored.payload == payload
     assert stored.decided_at is None
 
 
 @pytest.mark.acceptance(spec="workflow", scenario="an approval decision is idempotent")
 async def test_a_second_decision_returns_the_first_one_unchanged(repos: Repos) -> None:
-    """FR-038: deciding twice does not authorise a second execution."""
+    """Deciding twice does not authorise a second execution."""
     run_id = await _run(repos)
     row = await repos.approvals.create_approval(
         approval_id=uuid.uuid4().hex,

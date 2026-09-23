@@ -54,6 +54,33 @@ which is the developer's own machine.
 The removal ADR stands everywhere else. A channel conversation, a chat, an agent
 the owner is driving: no gate, unchanged.
 
+### Where the gate touches code outside the workflow layer
+
+Three seams, each small, so a review can find every one of them:
+
+1. **The shim reports a run identity.** `surfaces/shim/bootstrap.py` reads
+   `COFFER_RUN_CONTEXT` (`"<run_id>/<node_attempt_id>"`) from its environment
+   and stamps it into the `initialize` handshake's `_meta` as `coffer/run`. The
+   key is omitted on every ordinary launch, so a session without it looks
+   exactly like one from before the key existed.
+2. **A node's turn sets that variable.** Both chat providers
+   (`infrastructure/chat/claude_sdk_provider.py`, `codex_provider.py`) take a
+   `ConversationEnv` lookup and overlay what it returns on the agent process's
+   environment. The composition root wires it to the workflow's
+   `conversation_env_lookup`, which answers only for a conversation that is a
+   node attempt, and answers nothing for any other conversation.
+3. **The gateway consults a port, not the workflow.** The import fence forbids
+   `application.mcp` from importing `application.workflow`, so the hold is a
+   `ToolCallGatePort` Protocol in `application/mcp/gateway_gate.py`.
+   `MCPGatewaySession` dispatches every upstream call through
+   `gated_upstream_call`, which awaits the port only when a gate is wired and
+   the session carries a run identity. The composition root fills a late-bound
+   holder with `application/workflow/gate.py`'s `WorkflowToolGate`. Built-in
+   tools are dispatched before that point and never reach it.
+
+The gate's memory is data rather than code: an `mcp_server`'s config carries a
+`tool_write_class` map, read and written through `application/mcp/tool_class.py`.
+
 ## Consequences
 
 **The gate is not a sandbox, and must not be described as one.** It covers what

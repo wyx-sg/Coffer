@@ -3,9 +3,10 @@
 ``workflow_runs`` / ``workflow_events`` / ``workflow_node_attempts`` /
 ``workflow_approvals``, registered against the shared ``Base.metadata`` so
 Alembic sees them in one place. The template a run came from has no table —
-it is a row in ``resources`` like every other kind (FR-001), and what a run
-executes is the snapshot frozen into ``template_snapshot`` at creation
-(FR-010), never the resource as it stands today.
+it is a row in ``resources`` like every other kind (spec workflow "Register
+a template as a workflow resource"), and what a run executes is the
+snapshot frozen into ``template_snapshot`` at creation ("Freeze the
+template when a run is created"), never the resource as it stands today.
 
 The status-ish columns are plain TEXT. Their vocabularies live in
 ``domain/workflow/run.py`` as enums; keeping the column a string means a value
@@ -39,16 +40,18 @@ from coffer.infrastructure.persistence.base import Base
 
 
 class WorkflowRunModel(Base):
-    """One run: the work in flight, not a curated asset (FR-011).
+    """One run: the work in flight, not a curated asset (spec workflow
+    "Create a run from a template and a title alone").
 
     ``status``, ``current_stage_key``, ``current_node_key`` and
-    ``tokens_spent`` are **projections** of ``workflow_events`` (FR-014). They
-    are stored so a list query reads one row instead of folding a log, and
-    they are rebuilt from the events on daemon start — which is why nothing
-    here is the record of truth.
+    ``tokens_spent`` are **projections** of ``workflow_events`` ("Rebuild a
+    run from its event log"). They are stored so a list query reads one row
+    instead of folding a log, and they are rebuilt from the events on daemon
+    start — which is why nothing here is the record of truth.
 
     There is no conversation column: a run has no conversation of its own, and
-    every conversation belongs to one task's attempt (FR-030).
+    every conversation belongs to one task's attempt ("Give a run no
+    conversation of its own").
     """
 
     __tablename__ = "workflow_runs"
@@ -64,20 +67,24 @@ class WorkflowRunModel(Base):
     title: Mapped[str] = mapped_column(String, nullable=False)
     #: What this delivery is, in the developer's own words. A LABEL, like the
     #: title: neither is folded from the events, and both may be corrected
-    #: after the fact (FR-070).
+    #: after the fact (spec workflow "Edit a run's title and description as
+    #: labels").
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    #: Absolute path every node conversation runs in (FR-019).
+    #: Absolute path every node conversation runs in (spec workflow "Run
+    #: a node's work as one conversation").
     workdir: Mapped[str] = mapped_column(String, nullable=False)
     #: Only this machine's daemon advances the run; elsewhere it is read-only
-    #: (FR-012).
+    #: (spec workflow "Advance a run only on the machine that owns it").
     machine_id: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False)
     current_stage_key: Mapped[str | None] = mapped_column(String, nullable=True)
     current_node_key: Mapped[str | None] = mapped_column(String, nullable=True)
-    #: Optimistic lock (FR-015). Bumped by exactly one writer, in one UPDATE.
+    #: Optimistic lock (spec workflow "Refuse a command carrying a stale
+    #: version"). Bumped by exactly one writer, in one UPDATE.
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     tokens_spent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    #: Mounted inputs (FR-032): a JSON list of references, never file contents.
+    #: Mounted inputs (spec workflow "List a run's mounted inputs to every
+    #: node"): a JSON list of references, never file contents.
     inputs: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
@@ -89,7 +96,8 @@ class WorkflowRunModel(Base):
 
 
 class WorkflowEventModel(Base):
-    """One entry in a run's append-only log — its record of truth (FR-014).
+    """One entry in a run's append-only log — its record of truth (spec
+    workflow "Rebuild a run from its event log").
 
     No row here is ever updated or deleted while its run exists. ``sequence``
     is monotonic within a run and unique with it, so a gap or a duplicate is a
@@ -121,11 +129,12 @@ class WorkflowEventModel(Base):
 class WorkflowNodeAttemptModel(Base):
     """One attempt at one node.
 
-    A retry never rewrites this row — it inserts ``attempt + 1`` (FR-022), so
-    the earlier attempt's conversation, summary and failure reason stay
-    readable. ``node_key`` carries the ``adhoc:<slug>`` form for an unplanned
-    task (FR-028); ``conversation_id`` is NULL for a ``manual`` node, which
-    records a human step and opens no conversation.
+    A retry never rewrites this row — it inserts ``attempt + 1`` (spec
+    workflow "Keep every attempt when a node is retried"), so the earlier
+    attempt's conversation, summary and failure reason stay readable.
+    ``node_key`` carries the ``adhoc:<slug>`` form for an unplanned task
+    ("Add an ad-hoc task to any stage"); ``conversation_id`` is NULL for a
+    ``manual`` node, which records a human step and opens no conversation.
     """
 
     __tablename__ = "workflow_node_attempts"
@@ -139,9 +148,11 @@ class WorkflowNodeAttemptModel(Base):
     attempt: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False)
     conversation_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    #: An ad-hoc task's own brief, written by the developer (FR-028).
+    #: An ad-hoc task's own brief, written by the developer (spec
+    #: workflow "Add an ad-hoc task to any stage").
     instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
-    #: Who runs THIS attempt, on which model, thinking how hard (FR-071).
+    #: Who runs THIS attempt, on which model, thinking how hard (spec
+    #: workflow "Choose a task's agent, model and effort before it starts").
     #: NULL means "what the template said", and the template's NULL means
     #: "what the agent's own configuration projects" — one ladder, each rung
     #: deferring to the next rather than inventing a default of its own.
@@ -166,7 +177,8 @@ class WorkflowNodeAttemptModel(Base):
 class WorkflowApprovalModel(Base):
     """One held decision — a gated tool call, or a node action that needs a yes.
 
-    ``payload`` is the arguments **verbatim** (FR-033): a decision taken on a
+    ``payload`` is the arguments **verbatim** (spec workflow "Refuse an
+    unapproved write-class tool call made for a run"): a decision taken on a
     summary is not a decision on what executes. Credential material never
     reaches it, because credentials are injected by the gateway at dispatch and
     are not part of a call's arguments.

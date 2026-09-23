@@ -3,8 +3,9 @@
 The template below is the smallest one that can still exercise everything the
 spec asks of the engine: two stages so there is a "next node", a declared
 required artifact on the first task so completion can be blocked, and a second
-task that declares none — which is the shape FR-072 gives a default `report.md`
-to, so the two halves of that rule are both under test from the same fixture.
+task that declares none — which is the shape spec workflow "Give every task at
+least one deliverable" gives a default `report.md` to, so the two halves of that
+rule are both under test from the same fixture.
 """
 
 from __future__ import annotations
@@ -194,7 +195,7 @@ def with_template(**overrides: Any) -> dict[str, Any]:
 
 def with_ceiling(ceiling: int) -> dict[str, Any]:
     """The default template with EVERY task capped at ``ceiling``. The number is
-    per-task (FR-026), so a test that wants one limit for the whole flow has to
+    per-task, so a test that wants one limit for the whole flow has to
     say it on each of them."""
     return {
         **TEMPLATE,

@@ -3,48 +3,53 @@ info:
   title: Coffer — Workflow API
   version: 0.4.0
   description: |
-    REST surface for workflow runs (spec workflow, FR-044).
+    REST surface for workflow runs (spec workflow, "Expose the engine over REST").
 
     ## The template is not here
 
-    A workflow template is a Resource of kind `workflow` (FR-001), so it is
-    created, edited, enabled, disabled, scoped and deleted through the
-    kind-agnostic resource routes — `POST /api/v1/resources`,
+    A workflow template is a Resource of kind `workflow` ("Register a template
+    as a workflow resource"), so it is created, edited, enabled, disabled,
+    scoped and deleted through the kind-agnostic resource routes —
+    `POST /api/v1/resources`,
     `PATCH /api/v1/resources/workflow/{name}`,
     `PUT /api/v1/resources/workflow/{name}/scope`,
     `DELETE /api/v1/resources/workflow/{name}` — and validated by the kind's
-    own schema at that boundary (FR-006). This contract adds no template
-    routes, because a second way to write one would be a second contract for
-    the same data.
+    own schema at that boundary ("Refuse an invalid template naming the
+    offending path"). This contract adds no template routes, because a second
+    way to write one would be a second contract for the same data.
 
     ## A run has no conversation of its own
 
-    Every conversation in a run belongs to one **task** (FR-030), so there is no
-    route here for writing to the run: the developer speaks to a task through
-    the ordinary chat API, on that task's `conversation_id`, and what they say
-    reaches the rest of the run through the deliverable that task writes
-    (FR-029). No route here returns another task's conversation, because no
-    task's opening context carries one. A run-level message route existed
-    briefly and is gone — it described a main thread this layer never had.
+    Every conversation in a run belongs to one **task** ("Give a run no
+    conversation of its own"), so there is no route here for writing to the run:
+    the developer speaks to a task through the ordinary chat API, on that task's
+    `conversation_id`, and what they say reaches the rest of the run through the
+    deliverable that task writes ("Open every task with the same four parts").
+    No route here returns another task's conversation, because no task's opening
+    context carries one. A run-level message route existed briefly and is gone —
+    it described a main thread this layer never had.
 
     ## Runs are operational state
 
-    A run is not a Resource (FR-011): it has no reach, it does not sync, and it
-    belongs to one machine (FR-012). The routes below are the whole management
-    plane for one.
+    A run is not a Resource ("Create a run from a template and a title alone"):
+    it has no reach, it does not sync, and it belongs to one machine ("Advance a
+    run only on the machine that owns it"). The routes below are the whole
+    management plane for one.
 
     ## Every mutating route carries a version
 
-    A run's `version` is an optimistic lock (FR-015). A command whose `version`
-    is not the run's current one is refused `409` with the run's current
-    version, status, stage and node — never applied. The client re-reads and
-    decides; the server never merges.
+    A run's `version` is an optimistic lock ("Refuse a command carrying a stale
+    version"). A command whose `version` is not the run's current one is refused
+    `409` with the run's current version, status, stage and node — never
+    applied. The client re-reads and decides; the server never merges.
 
     ## What a run refuses
 
-    A `completed` or `aborted` run refuses every mutating command (FR-013,
-    FR-016). A run owned by another machine refuses them too, and says which
-    machine owns it (FR-012). Both are `409`.
+    A `completed` or `aborted` run refuses every mutating command ("Keep a run
+    to six statuses" and "Accept the run signals start, pause, resume and
+    abort"). A run owned by another machine refuses them too, and says which
+    machine owns it ("Advance a run only on the machine that owns it"). Both are
+    `409`.
 
 servers:
   - url: http://127.0.0.1:8000
@@ -124,8 +129,9 @@ paths:
       summary: Rewrite what this run is called and what it is for.
       description: |
         The one in-place edit of a run's row, and it touches nothing the event
-        log owns (FR-070). A run's status, stage and position are folded from
-        its events and only the engine writes them (FR-014); the title is a
+        log owns ("Edit a run's title and description as labels"). A run's
+        status, stage and position are folded from its events and only the
+        engine writes them ("Rebuild a run from its event log"); the title is a
         label the developer typed before the first task had opened. No
         `version`: the optimistic lock guards the position, and this moves the
         run nowhere.
@@ -147,7 +153,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: This machine does not advance this run (FR-012).
+          description: This machine does not advance this run ("Advance a run only on the machine that owns it").
         "422":
           description: The title was empty.
     delete:
@@ -175,7 +181,9 @@ paths:
       description: |
         Node lifecycle actions are not signals and are refused here — they have
         their own route, because a signal is about the run and an action is
-        about one node (FR-016, FR-021).
+        about one node ("Accept the run signals start, pause, resume and abort"
+        and "Accept the node actions start, feedback, complete, retry, skip and
+        restore").
       parameters:
         - $ref: "#/components/parameters/RunId"
       requestBody:
@@ -255,11 +263,12 @@ paths:
       operationId: sayToWorkflowNode
       summary: Say something to one task, whatever state it is in.
       description: |
-        What one sentence means depends on where the task is (FR-068). Not
-        started: it is queued onto the attempt the task will open with, and
-        arrives in its brief. Waiting for review: the same attempt carries on
-        with more to do. Finished: the next attempt opens with it, bounded by
-        the template's ceiling.
+        What one sentence means depends on where the task is ("Let the developer
+        speak to a task at any point, in one place"). Not started: it is queued
+        onto the attempt the task will open with, and arrives in its brief.
+        Waiting for review: the same attempt carries on with more to do.
+        Finished: the next attempt opens with it, bounded by the template's
+        ceiling.
 
         Two states refuse with `409`, because something else owns the task: a
         turn in flight (say it in the conversation, which queues it) and a
@@ -298,9 +307,9 @@ paths:
       summary: Choose who runs this task, on what, before it runs.
       description: |
         The agent, the model and the reasoning effort this task's next attempt
-        will use (FR-071). Recorded on the ATTEMPT, so a retry given a stronger
-        model leaves the first attempt's row still saying what it actually ran
-        on.
+        will use ("Choose a task's agent, model and effort before it starts").
+        Recorded on the ATTEMPT, so a retry given a stronger model leaves the
+        first attempt's row still saying what it actually ran on.
 
         Only before it starts. Once the turn is in flight the conversation owns
         these settings and the task's own pickers write them there; a task that
@@ -338,7 +347,8 @@ paths:
       summary: Add an unplanned task to a stage, with instructions of your own.
       description: |
         The task joins the run as a node keyed `adhoc:<slug>` and opens with the
-        same shared context as any template node (FR-028).
+        same shared context as any template node ("Add an ad-hoc task to any
+        stage").
       parameters:
         - $ref: "#/components/parameters/RunId"
       requestBody:
@@ -383,8 +393,9 @@ paths:
       summary: Mount a knowledge collection or a link on a running run.
       description: |
         Inputs are the developer's at any point in a run's life, not only at
-        creation (FR-050). An uploaded FILE does not come through this route —
-        it has its own, because it carries a body rather than a reference.
+        creation ("Add and remove inputs at any point in a run"). An uploaded
+        FILE does not come through this route — it has its own, because it
+        carries a body rather than a reference.
       parameters:
         - $ref: "#/components/parameters/RunId"
       requestBody:
@@ -413,10 +424,10 @@ paths:
       operationId: uploadWorkflowInput
       summary: Upload a file for this run to read.
       description: |
-        The file is stored under the run's own directory and mounted as an
-        input of kind `file` (FR-051). Its `ref` is the path relative to the
-        run's input directory, which is what a node is told and what the agent
-        opens from its working directory.
+        The file is stored under the run's own directory and mounted as an input
+        of kind `file` ("Store an uploaded input under the run's directory").
+        Its `ref` is the path relative to the run's input directory, which is
+        what a node is told and what the agent opens from its working directory.
       parameters:
         - $ref: "#/components/parameters/RunId"
       requestBody:
@@ -453,9 +464,10 @@ paths:
       summary: Write a note of your own into the run's inputs.
       description: |
         A note is the developer's own writing rather than a document they were
-        given (FR-069). It is stored as a markdown file under the run's own
-        inputs and listed to every node as their words. An image pasted into
-        one is an ordinary upload the note refers to by name.
+        given ("Keep the developer's own notes in a run's context"). It is
+        stored as a markdown file under the run's own inputs and listed to every
+        node as their words. An image pasted into one is an ordinary upload the
+        note refers to by name.
       parameters:
         - $ref: "#/components/parameters/RunId"
       requestBody:
@@ -484,9 +496,10 @@ paths:
       operationId: rewriteWorkflowNote
       summary: Replace a note's contents, keeping its name.
       description: |
-        A thought is not finished when it is first written down (FR-069). The
-        ref survives the rewrite: a node that has already read the run's inputs
-        knows the note by that name.
+        A thought is not finished when it is first written down ("Keep the
+        developer's own notes in a run's context"). The ref survives the
+        rewrite: a node that has already read the run's inputs knows the note by
+        that name.
       parameters:
         - $ref: "#/components/parameters/RunId"
         - name: input_ref
@@ -598,11 +611,11 @@ paths:
       operationId: readWorkflowRunFileBytes
       summary: One file's bytes, so an image the run holds can be displayed.
       description: |
-        The sibling above answers "show this to a person" and returns text;
-        this answers "put this in an `<img>`" (FR-069). Same guard, same cap.
-        The media type is narrowed to a list the daemon is willing to hand a
-        browser and everything else is served opaque, because a run's directory
-        holds whatever its agent wrote.
+        The sibling above answers "show this to a person" and returns text; this
+        answers "put this in an `<img>`" ("Keep the developer's own notes in a
+        run's context"). Same guard, same cap. The media type is narrowed to a
+        list the daemon is willing to hand a browser and everything else is
+        served opaque, because a run's directory holds whatever its agent wrote.
       parameters:
         - $ref: "#/components/parameters/RunId"
         - name: path
@@ -627,7 +640,8 @@ paths:
       operationId: promoteWorkflowArtifacts
       summary: Copy a run's artifacts into a knowledge collection.
       description: |
-        The run's own directory is left untouched (FR-043).
+        The run's own directory is left untouched ("Promote what a run is made
+        of into a knowledge collection").
       parameters:
         - $ref: "#/components/parameters/RunId"
       requestBody:
@@ -683,8 +697,9 @@ paths:
       summary: Approve or reject one approval.
       description: |
         Idempotent: a repeated decision returns the same terminal state and
-        executes nothing a second time (FR-038). A decision on an expired
-        approval returns `409` — the held call has already been failed.
+        executes nothing a second time ("Make an approval decision idempotent").
+        A decision on an expired approval returns `409` — the held call has
+        already been failed.
       parameters:
         - name: approval_id
           in: path
@@ -784,10 +799,11 @@ components:
 
         It is declared here and served by NO route in this file on purpose: a
         template is written through the kind-agnostic resource endpoint like
-        every other resource (FR-056), and a second write path would be a second
-        contract for the same data. What this schema is for is the editor —
-        it gives the web UI a generated type for the shape it is authoring
-        (FR-054) without inventing an endpoint to get it from.
+        every other resource ("Write templates through the resource endpoint
+        only"), and a second write path would be a second contract for the same
+        data. What this schema is for is the editor — it gives the web UI a
+        generated type for the shape it is authoring ("Author templates in the
+        web UI") without inventing an endpoint to get it from.
       required: [stages]
       properties:
         description:
@@ -842,10 +858,11 @@ components:
           type: array
           description: |
             What this task owes. A task stored with none is READ BACK owing a
-            required `report.md` (FR-072): a deliverable is the only thing a
-            task says to the tasks after it, so none means its work leaves the
-            run when its conversation closes. The default is applied on read,
-            never written into the developer's stored template.
+            required `report.md` ("Give every task at least one deliverable"): a
+            deliverable is the only thing a task says to the tasks after it, so
+            none means its work leaves the run when its conversation closes. The
+            default is applied on read, never written into the developer's
+            stored template.
           items:
             $ref: "#/components/schemas/TemplateArtifact"
         approval:
@@ -856,14 +873,14 @@ components:
         agent:
           type: string
           nullable: true
-          description: Null means the run's default; must be inside the template's scope (FR-007).
+          description: Null means the run's default; must be inside the template's scope ("Read a template's scope as the agents it may drive").
         attempt_ceiling:
           type: integer
           minimum: 1
           description: |
             How many attempts this task may open across a run before the run
-            fails with that reason (FR-026). Absent means the default rather
-            than no ceiling.
+            fails with that reason ("Bound each task's attempts by its own
+            ceiling"). Absent means the default rather than no ceiling.
 
     TemplateArtifact:
       type: object
@@ -874,7 +891,7 @@ components:
           description: A single safe path segment — the file the node owes.
         required:
           type: boolean
-          description: A required artifact that was never written blocks completion (FR-023).
+          description: A required artifact that was never written blocks completion ("Hold completion until a required artifact exists").
 
     TemplateOnFailure:
       type: object
@@ -892,10 +909,12 @@ components:
       type: object
       required: [template_uid, title]
       description: |
-        A template and a title, and nothing else (FR-011). The working
-        directory is Coffer's own, one per run (FR-053), and the inputs are
+        A template and a title, and nothing else ("Create a run from a template
+        and a title alone"). The working directory is Coffer's own, one per run
+        ("Give each run a working directory of its own"), and the inputs are
         mounted through `/runs/{run_id}/inputs` at any point in the run's life
-        (FR-050) — neither is asked for here.
+        ("Add and remove inputs at any point in a run") — neither is asked for
+        here.
       properties:
         template_uid:
           type: string
@@ -923,7 +942,8 @@ components:
             A collection name, a path relative to the run's input directory, a
             URL, or an absolute path to a local repository — whichever the
             `kind` says. A mounted repository is checked out into the run's own
-            working directory rather than written in place (FR-057).
+            working directory rather than written in place ("Give a mounted
+            repository its own checkout").
         label:
           type: string
           nullable: true
@@ -984,15 +1004,17 @@ components:
           nullable: true
           description: |
             What the developer says this delivery is. A label like the title —
-            neither is folded from the events (FR-070).
+            neither is folded from the events ("Edit a run's title and
+            description as labels").
         template_ref:
           type: string
           description: |
             The template's LABEL as it read when the run was created —
             provenance for a person to recognise, rendered raw. Frozen, and
-            allowed to go stale: the snapshot beside it is what the run
-            executes (FR-010), so renaming or deleting the template leaves
-            this saying what the run was started from.
+            allowed to go stale: the snapshot beside it is what the run executes
+            ("Freeze the template when a run is created"), so renaming or
+            deleting the template leaves this saying what the run was started
+            from.
         status:
           type: string
           enum: [draft, running, paused, completed, aborted, failed]
@@ -1000,36 +1022,39 @@ components:
         workdir:
           type: string
           description: |
-            The run's own working directory, which Coffer makes and owns —
-            one per run (FR-053). Reported, never supplied.
+            The run's own working directory, which Coffer makes and owns — one
+            per run ("Give each run a working directory of its own"). Reported,
+            never supplied.
         machine_id: { type: string }
         owned_here:
           type: boolean
-          description: False when another machine advances this run (FR-012).
+          description: False when another machine advances this run ("Advance a run only on the machine that owns it").
         current_stage_key: { type: string, nullable: true }
         current_stage_name:
           type: string
           nullable: true
           description: |
-            What the developer CALLED that stage, read from the run's own
-            frozen snapshot. A key is an identity the engine reads no meaning
-            from and the developer never typed (FR-003, FR-060). Null when the
+            What the developer CALLED that stage, read from the run's own frozen
+            snapshot. A key is an identity the engine reads no meaning from and
+            the developer never typed ("Attach no behaviour to a stage key" and
+            "Derive stage and task keys from their names"). Null when the
             snapshot no longer parses or no longer has that stage.
         current_node_key: { type: string, nullable: true }
         tokens_spent:
           type: integer
           description: |
             What the run has spent so far. A readout, not a cap: a run is
-            bounded by each task's own attempt ceiling (FR-026).
+            bounded by each task's own attempt ceiling ("Bound each task's
+            attempts by its own ceiling").
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time, nullable: true }
 
     AssignmentIn:
       type: object
       description: |
-        Who runs a task's next attempt, on what, at what effort (FR-071). All
-        three are written verbatim: null clears the override rather than
-        leaving it alone.
+        Who runs a task's next attempt, on what, at what effort ("Choose a
+        task's agent, model and effort before it starts"). All three are written
+        verbatim: null clears the override rather than leaving it alone.
       properties:
         agent: { type: string, nullable: true }
         model: { type: string, nullable: true }
@@ -1040,7 +1065,8 @@ components:
       required: [title]
       description: |
         A run's title and description. No `version`, deliberately: this changes
-        no state the optimistic lock guards (FR-070).
+        no state the optimistic lock guards ("Edit a run's title and description
+        as labels").
       properties:
         title:
           type: string
@@ -1101,7 +1127,8 @@ components:
           nullable: true
           description: |
             What the WORKFLOW says runs this task. Null means the run's own
-            default; an attempt may override it either way (FR-071).
+            default; an attempt may override it either way ("Choose a task's
+            agent, model and effort before it starts").
         approval:
           type: string
           enum: [never, always]
@@ -1123,7 +1150,8 @@ components:
             How many times this node has been TRIED. 0 until the first turn
             starts: an attempt row exists before its turn does — a retry opens
             the next one pending, and so does briefing a task that has not
-            started (FR-068) — and neither is a try.
+            started ("Let the developer speak to a task at any point, in one
+            place") — and neither is a try.
         adhoc: { type: boolean }
         allowed_actions:
           type: array
@@ -1134,8 +1162,9 @@ components:
           type: string
           nullable: true
           description: |
-            The latest attempt's conversation — what opening this task
-            navigates to (FR-030). Null until the node has been started.
+            The latest attempt's conversation — what opening this task navigates
+            to ("Give a run no conversation of its own"). Null until the node
+            has been started.
         latest:
           $ref: "#/components/schemas/NodeAttemptOut"
 
@@ -1151,8 +1180,9 @@ components:
           type: string
           nullable: true
           description: |
-            What THIS attempt was told to run on (FR-071). Null defers to the
-            task's own answer, whose null defers to the agent's configuration.
+            What THIS attempt was told to run on ("Choose a task's agent, model
+            and effort before it starts"). Null defers to the task's own answer,
+            whose null defers to the agent's configuration.
         model: { type: string, nullable: true }
         effort: { type: string, nullable: true }
         status:
@@ -1178,9 +1208,10 @@ components:
           type: string
           nullable: true
           description: |
-            What the developer wrote for THIS attempt (FR-068), on top of
-            whatever the template said. Readable so a task that has not started
-            can show what it has been told it will do.
+            What the developer wrote for THIS attempt ("Let the developer speak
+            to a task at any point, in one place"), on top of whatever the
+            template said. Readable so a task that has not started can show what
+            it has been told it will do.
         tokens: { type: integer }
         started_at: { type: string, format: date-time, nullable: true }
         finished_at: { type: string, format: date-time, nullable: true }
@@ -1211,7 +1242,8 @@ components:
           type: boolean
           default: false
           description: |
-            Complete a node whose required artifact was never written (FR-023).
+            Complete a node whose required artifact was never written ("Hold
+            completion until a required artifact exists").
 
     AdhocTaskIn:
       type: object
@@ -1393,7 +1425,8 @@ components:
           enum: [read, write, null]
           description: |
             Record this tool's write-class judgement on its server so the same
-            tool is not asked about twice (FR-036).
+            tool is not asked about twice ("Treat an unjudged tool as
+            write-class and remember the answer").
 
     EventListOut:
       type: object

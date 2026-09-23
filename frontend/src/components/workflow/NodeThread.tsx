@@ -1,12 +1,13 @@
 // frontend/src/components/workflow/NodeThread.tsx
-// One task's conversation — and, since a run has none of its own (FR-030),
+// One task's conversation — and, since a run has none of its own,
 // the only conversation there is.
 //
 // A node opens with its bound skill already driving it, so the ordinary case
 // is that nobody types here at all. The composer exists for the other case:
 // the requirement changed, and the developer says so in ordinary words rather
-// than through a form. What they say stays in this transcript, which is what
-// every later task opens with (FR-029) — so a redirect stated once reaches the
+// than through a form. What they say shapes the deliverable this task writes,
+// and that deliverable is what every later task reads (spec workflow "Open
+// every task with the same four parts") — so a redirect stated once reaches the
 // rest of the run without being restated.
 //
 // The conversation is an ORDINARY Coffer conversation, so the chat layer owns
@@ -45,7 +46,7 @@ function echoAsMessage(echo: PendingEcho, conversationId: string): Message {
 interface Props {
   conversationId: string;
   runId: string;
-  /** The attempt whose approvals belong in this thread (FR-039). */
+  /** The attempt whose approvals belong in this thread. */
   attemptId: string | null | undefined;
   /** The live turn, owned by the workspace because the composer is. */
   turn: UseChatTurnResult;

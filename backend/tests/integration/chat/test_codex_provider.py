@@ -352,7 +352,8 @@ async def test_build_adapter_no_active_key_inherits_daemon_env(tmp_path: Any) ->
 
 
 # ---------------------------------------------------------------------------
-# build_adapter — per-conversation environment (spec workflow FR-035)
+# build_adapter — per-conversation environment (spec workflow
+# "Give the gateway the run's identity at dispatch")
 # ---------------------------------------------------------------------------
 
 

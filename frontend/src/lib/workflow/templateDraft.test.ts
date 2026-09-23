@@ -2,7 +2,7 @@
 // The editor's edits, as pure functions. What is pinned here is the part the
 // developer never sees and would be hurt by if it were wrong:
 //
-//   • a KEY is derived from the name and never asked for (FR-060), so it has
+//   • a KEY is derived from the name and never asked for, so it has
 //     to be unique and stable enough to be readable;
 //   • a stage always has at least one task, because the contract's minimum is
 //     one;

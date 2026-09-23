@@ -1,9 +1,11 @@
 // frontend/src/components/workflow/RunContext.test.tsx
 // The run's one table: what it READS and what it WROTE, side by side
-// (FR-032/FR-041/FR-050/FR-051). The behaviours worth pinning:
+// (spec workflow "List a run's mounted inputs to every node", "Store artifacts as files
+// attributed to their node and attempt", "Add and remove inputs at any point in a run",
+// "Store an uploaded input under the run's directory"). The behaviours worth pinning:
 //   • both halves land in the SAME table, and a row's origin says which it is;
 //   • an artifact has no unmount control, because there is nothing that would
-//     mean — the catalogue is generated from disk (FR-031);
+//     mean — the catalogue is generated from disk;
 //   • a chosen file goes to its OWN route, as bytes, not as a reference —
 //     mixing the two would upload a filename and mount nothing;
 //   • the mount dialog and the unmount dialog both close only on SUCCESS, so a
@@ -61,7 +63,7 @@ function wrap(ownedHere = true) {
   return (
     <QueryClientProvider client={qc}>
       <TooltipProvider>
-        {/* A knowledge row links to the collection's own page (FR-064). */}
+        {/* A knowledge row links to the collection's own page. */}
         <MemoryRouter>
           <RunContext runId="run-1" ownedHere={ownedHere} machine="this-machine" />
         </MemoryRouter>
@@ -239,7 +241,7 @@ describe("RunContext", () => {
     await screen.findByText("Coffer");
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     // The kind decides what the dialog promises: a checkout goes, the source
-    // repository and its working tree do not (FR-058).
+    // repository and its working tree do not.
     expect(
       await screen.findByText(/its branches and its working tree — is untouched/),
     ).toBeInTheDocument();

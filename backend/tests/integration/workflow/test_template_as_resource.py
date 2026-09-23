@@ -1,15 +1,16 @@
-"""A template is a Resource and nothing else (FR-001, FR-008, FR-040).
+"""A template is a Resource and nothing else.
 
 Every other workflow test starts from a template the engine was handed. This
 one starts a step earlier — at the generic resource framework — because that is
-where FR-001's claim lives: the developer writes a template through the same
-path as every other resource, is addressed by the uid it gets back, and leaves a
-trail. Real rows, real audit table: the point is that the framework does this
-for the workflow kind without the kind doing anything of its own.
+where spec workflow "Register a template as a workflow resource" makes its
+claim: the developer writes a template through the same path as every other
+resource, is addressed by the uid it gets back, and leaves a trail. Real rows,
+real audit table: the point is that the framework does this for the workflow
+kind without the kind doing anything of its own.
 
 The second test carries that claim one machine further: the workflow reaches
 the developer's other machine over the same bundle every resource travels in,
-with no path of its own (FR-008).
+with no path of its own ("Sync templates with the vault").
 """
 
 from __future__ import annotations
@@ -61,7 +62,7 @@ async def test_a_registered_template_is_a_workflow_resource_with_an_audit_entry(
         description="Two stages, two tasks",
     )
 
-    # FR-001: it is an ordinary resource of kind `workflow`, and the document
+    # It is an ordinary resource of kind `workflow`, and the document
     # is stored as written.
     assert (created.kind, created.name) == (KIND_WORKFLOW, "ship-a-feature")
     assert created.uid
@@ -72,7 +73,8 @@ async def test_a_registered_template_is_a_workflow_resource_with_an_audit_entry(
     assert (await service.get(created.uid)).config == TEMPLATE
     assert [r.name for r in await service.list(kind=KIND_WORKFLOW)] == ["ship-a-feature"]
 
-    # FR-040: the write left a trail.
+    # The write left a trail (spec workflow "Audit template, run, approval and
+    # gate events").
     # By the resource, not by its label: the trail belongs to the row.
     entries = await audit.query(resource=created)
     assert [e.event_type for e in entries] == [AuditEventType.RESOURCE_CREATED.value]
@@ -113,7 +115,7 @@ async def _resource_service(db: pathlib.Path) -> tuple[ResourceService, object]:
 async def test_a_template_registered_here_arrives_on_the_other_machine(
     tmp_path: pathlib.Path,
 ) -> None:
-    """FR-008: the workflow travels the ordinary resource path and nothing else.
+    """The workflow travels the ordinary resource path and nothing else.
 
     Two registries over two databases, the production exporter writing one
     bundle and the production applier reading it back into the other. Asserted

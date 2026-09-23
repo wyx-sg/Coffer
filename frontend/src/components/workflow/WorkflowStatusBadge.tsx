@@ -4,8 +4,8 @@
 // tokens), never from a palette class picked here.
 //
 // A run has six statuses and a node seven, and they are deliberately different
-// sets: "waiting for the developer" is a property of a NODE, never of a run
-// (FR-013), so no run ever renders a waiting badge.
+// sets: "waiting for the developer" is a property of a NODE, never of a run,
+// so no run ever renders a waiting badge.
 import { useTranslation } from "react-i18next";
 
 import { Badge } from "@/components/ui/badge";

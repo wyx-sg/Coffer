@@ -1,4 +1,4 @@
-"""``/api/v1/workflow/runs`` — create, read, signal, delete (FR-044).
+"""``/api/v1/workflow/runs`` — create, read, signal, delete.
 
 The refusals matter more than the happy paths here: every one of them is a
 domain error travelling through ``surfaces/http/errors.py`` to the status and
@@ -38,7 +38,7 @@ def test_a_created_run_starts_in_draft_and_is_owned_here(surface: Surface) -> No
     assert run["owned_here"] is True
     assert run["template_ref"] == "delivery"
     assert run["version"] == 1
-    # A run has no conversation of its own (FR-030): every conversation in it
+    # A run has no conversation of its own: every conversation in it
     # belongs to one task.
     assert "main_conversation_id" not in run
 
@@ -57,8 +57,10 @@ def test_creating_a_run_from_a_template_that_is_not_there_is_404(surface: Surfac
 def test_creating_a_run_asks_for_a_template_and_a_title_and_nothing_else(
     surface: Surface,
 ) -> None:
-    """FR-011. The working directory is Coffer's own, made per run (FR-053) and
-    reported back; the inputs are mounted afterwards (FR-050). Neither is a
+    """Spec workflow "Create a run from a template and a title alone". The
+    working directory is Coffer's own, made per run ("Give each run a working
+    directory of its own") and reported back; the inputs are mounted afterwards
+    ("Add and remove inputs at any point in a run"). Neither is a
     field of the creation body any more, and a client that still sends one is
     not humoured."""
     run = create_run(surface.client, workdir="/somewhere/else", inputs=[{"kind": "link"}])
@@ -132,7 +134,7 @@ def test_the_detail_carries_the_template_s_stages_and_nodes(surface: Surface) ->
     spec="workflow", scenario="a task is its own conversation, opened from the run"
 )
 def test_a_node_carries_the_conversation_the_ui_opens(surface: Surface) -> None:
-    """A task IS its conversation (FR-030), so the identifier the UI navigates
+    """A task IS its conversation, so the identifier the UI navigates
     to is on the node itself rather than only inside the attempt that happens to
     hold it. It is the LATEST attempt's, which is the one that counts now."""
     run = started_run(surface.client)
@@ -218,7 +220,7 @@ def test_the_four_signals_move_the_run(surface: Surface) -> None:
 
 @pytest.mark.acceptance(spec="workflow", scenario="a stale version is refused rather than applied")
 def test_a_stale_version_is_refused_with_the_run_s_current_position(surface: Surface) -> None:
-    """FR-015: refused, never merged — and the refusal hands the client what it
+    """Refused, never merged — and the refusal hands the client what it
     needs to re-read and decide without a second round trip."""
     run = started_run(surface.client)
     response = signal(surface.client, run["id"], "pause", run["version"] - 1)
@@ -299,7 +301,7 @@ def test_deleting_an_unknown_run_is_404(surface: Surface) -> None:
     spec="workflow", scenario="a run is renamed after the work has shown what it is"
 )
 def test_a_run_is_renamed_after_the_work_has_shown_what_it_is(surface: Surface) -> None:
-    """FR-070: the title is a label, so correcting it moves nothing else."""
+    """The title is a label, so correcting it moves nothing else."""
     run = create_run(surface.client)
     surface.client.post(f"{_RUNS}/{run['id']}/signals", json={"signal": "start", "version": 1})
     before = surface.client.get(f"{_RUNS}/{run['id']}").json()["run"]
@@ -332,8 +334,9 @@ def test_a_run_may_not_be_called_nothing(surface: Surface) -> None:
 
 
 def test_relabelling_a_run_another_machine_owns_is_refused(surface: Surface) -> None:
-    """FR-012: read-only here means read-only, labels included — two machines
-    disagreeing about what one run is called has nothing to reconcile them."""
+    """Spec workflow "Advance a run only on the machine that owns it": read-only
+    here means read-only, labels included — two machines disagreeing about
+    what one run is called has nothing to reconcile them."""
     run = create_run(surface.client)
     surface.engine.machine.machine_id = "somewhere-else"
     response = surface.client.patch(f"{_RUNS}/{run['id']}", json={"title": "mine now"})
@@ -342,7 +345,7 @@ def test_relabelling_a_run_another_machine_owns_is_refused(surface: Surface) -> 
 
 
 def test_retitling_a_run_leaves_the_description_it_was_not_given(surface: Surface) -> None:
-    """FR-070: a body that says nothing about the description says nothing —
+    """A body that says nothing about the description says nothing —
     it does not say "empty". `--title` on its own must not erase the words
     someone wrote about this delivery a week ago."""
     run = create_run(surface.client)

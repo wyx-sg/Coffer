@@ -1,6 +1,6 @@
-// frontend/src/pages/WorkflowTemplatesPage.tsx — spec workflow, FR-054.
+// frontend/src/pages/WorkflowTemplatesPage.tsx — spec workflow "Author templates in the web UI".
 // The workflows: the shapes of work this vault knows how to run, as opposed to
-// the runs carrying one out. This is the resource kind's list page (FR-001) and
+// the runs carrying one out. This is the resource kind's list page and
 // sits with the other kinds under Resources; a RUN of one is operational state
 // and lives under `/runs` with the agents.
 //

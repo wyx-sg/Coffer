@@ -1,4 +1,4 @@
-"""Run, NodeAttempt and Approval value objects (spec workflow FR-011..FR-038)."""
+"""Run, NodeAttempt and Approval value objects."""
 
 from __future__ import annotations
 
@@ -90,7 +90,7 @@ def test_the_status_vocabularies_are_exactly_the_documented_ones():
 
 
 def test_waiting_is_a_property_of_a_node_never_of_a_run():
-    """FR-013: a run whose node sits in review is still `running`."""
+    """A run whose node sits in review is still `running`."""
     assert not any("waiting" in s.value for s in RunStatus)
     assert {s.value for s in NodeStatus if s.value.startswith("waiting")} == {
         "waiting_review",
@@ -169,7 +169,7 @@ def test_a_fresh_attempt_is_pending_with_nothing_recorded_yet():
 
 
 def test_an_interrupted_attempt_keeps_its_conversation():
-    """FR-027: reported, not resumed and not dropped — and still readable."""
+    """Reported, not resumed and not dropped — and still readable."""
     attempt = NodeAttempt(
         id="att-1",
         run_id="run-1",
@@ -199,7 +199,7 @@ def test_an_approved_unexpired_approval_authorises_its_write():
 
 @pytest.mark.acceptance(spec="workflow", scenario="an expired approval does not authorise a write")
 def test_an_approved_approval_past_its_expiry_authorises_nothing():
-    """FR-037: expiry is answered by the clock, not by whether a sweep has run
+    """Expiry is answered by the clock, not by whether a sweep has run
     yet — otherwise a late sweep is a window in which an expired approval
     still carries a write."""
     approval = an_approval(status=ApprovalStatus.APPROVED, expires_at=NOW - timedelta(seconds=1))

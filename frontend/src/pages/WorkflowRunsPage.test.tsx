@@ -1,6 +1,7 @@
 // frontend/src/pages/WorkflowRunsPage.test.tsx
 //
-// The run list surface (spec workflow, FR-045). The data hook and the two
+// The run list surface (spec workflow "Show runs, their tasks and their context in the web
+// UI"). The data hook and the two
 // heavy children (create dialog, table) are mocked so the test asserts this
 // page's own branching — skeleton / error / empty / populated — and that both
 // Create affordances open the same dialog.

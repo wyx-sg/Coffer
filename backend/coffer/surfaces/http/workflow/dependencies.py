@@ -5,18 +5,20 @@ Same ``set_*`` / ``get_*`` singleton shape as ``surfaces.http.memory
 here once on startup, and the routes ask for the matching ``get_*``.
 
 Three services rather than two: ``WorkflowInputsService`` joined when a run's
-inputs became something the developer manages at any point in its life (FR-050)
-rather than a field of the creation body. Its four routes go through it exactly
-as the others do — the guards, the storage of an uploaded file under the run's
-own directory (FR-051) and the deletion of its bytes are all its answers, not
-this surface's.
+inputs became something the developer manages at any point in its life (spec
+workflow "Add and remove inputs at any point in a run") rather than a field of
+the creation body. Its four routes go through it exactly as the others do — the
+guards, the storage of an uploaded file under the run's own directory ("Store
+an uploaded input under the run's directory") and the deletion of its bytes are
+all its answers, not this surface's.
 
 The repositories appear beside the services on purpose. Three routes ask
 questions no service answers — the event log (there is no ``list_events`` on
 ``WorkflowRunService``), the per-node attempt rows a run's detail is assembled
 from, and this machine's id, which is what makes "you do not own this run"
-(FR-012) say *which* machine does. Each is a read-only port the engine already
-declares; none of them is a second way to write.
+("Advance a run only on the machine that owns it") say *which* machine does.
+Each is a read-only port the engine already declares; none of them is a second
+way to write.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 // frontend/src/components/workflow/WorkflowRunsTable.test.tsx
 // The list row has to answer four questions without opening the run: what is
 // it, where did it get to, when did it last move, and which machine is
-// advancing it (FR-012).
+// advancing it.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

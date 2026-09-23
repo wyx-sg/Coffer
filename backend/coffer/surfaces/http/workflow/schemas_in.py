@@ -24,7 +24,8 @@ from coffer.domain.workflow.run import NodeAction, RunInputKind, RunSignal
 
 
 class RunInput(BaseModel):
-    """One mounted input — a knowledge collection, a file or a link (FR-032).
+    """One mounted input — a knowledge collection, a file or a link (spec
+    workflow "List a run's mounted inputs to every node").
 
     ``size`` is bytes, and only an uploaded file has one: a collection's size is
     the collection's business and a link has none. It is on the same model in
@@ -40,9 +41,10 @@ class RunInput(BaseModel):
     #: set for a file and a repo, absent for a collection or a link.
     path: str | None = None
     #: What a ``link`` points at — ``confluence``, ``jira``, ``google_docs``
-    #: … — or null when nothing is known beyond the address (FR-065). DERIVED
-    #: on every read rather than stored, so a link mounted before a provider
-    #: was recognised is recognised now, with no migration. Never sent by a
+    #: … — or null when nothing is known beyond the address (spec workflow
+    #: "Name what a mounted external reference points at"). DERIVED on every
+    #: read rather than stored, so a link mounted before a provider was
+    #: recognised is recognised now, with no migration. Never sent by a
     #: client: `RunInputIn` does not carry it.
     provider: str | None = None
     #: How a repo was given to the run: ``worktree`` (its own checkout on its
@@ -71,12 +73,14 @@ class RunInputIn(BaseModel):
 
 
 class RunCreateIn(BaseModel):
-    """A template and a title, and nothing else (FR-011).
+    """A template and a title, and nothing else (spec workflow "Create a
+    run from a template and a title alone").
 
     Two fields that were here are gone. ``workdir`` went because Coffer makes
-    and owns a working directory per run (FR-053) — it is reported on ``RunOut``
-    and never asked for. ``inputs`` went because they are mounted through
-    ``/runs/{run_id}/inputs`` at any point in the run's life (FR-050), and a
+    and owns a working directory per run ("Give each run a working directory of
+    its own") — it is reported on ``RunOut`` and never asked for. ``inputs``
+    went because they are mounted through ``/runs/{run_id}/inputs`` at any point
+    in the run's life ("Add and remove inputs at any point in a run"), and a
     creation body that also accepted them would be a second way to do the same
     thing, available for one moment only.
     """
@@ -117,7 +121,8 @@ class AdhocTaskIn(BaseModel):
 
 
 class RunNoteIn(BaseModel):
-    """A note the developer wrote themselves (FR-069)."""
+    """A note the developer wrote themselves (spec workflow "Keep the
+    developer's own notes in a run's context")."""
 
     #: Becomes the note's filename and its label. An unusable one is refused by
     #: the path guard rather than repaired.
@@ -132,7 +137,8 @@ class RunNoteEditIn(BaseModel):
 
 
 class SayIn(BaseModel):
-    """One sentence to one task (FR-068).
+    """One sentence to one task (spec workflow "Let the developer speak
+    to a task at any point, in one place").
 
     No ``version``: this is addressed to a named task and means the same
     wherever the run has got to, so it is outside the optimistic lock the way
@@ -156,7 +162,9 @@ class ApprovalDecisionIn(BaseModel):
 
 
 class AssignmentIn(BaseModel):
-    """Who runs a task's next attempt, on what, at what effort (FR-071).
+    """Who runs a task's next attempt, on what, at what effort (spec
+    workflow "Choose a task's agent, model and effort before it
+    starts").
 
     All three are nullable and all three are written verbatim: null CLEARS the
     override and falls back to the template, which is a real choice rather than
@@ -170,7 +178,8 @@ class AssignmentIn(BaseModel):
 
 class RunLabelIn(BaseModel):
     """A run's title and description. No ``version``, and deliberately: this
-    changes no state the optimistic lock guards (FR-070)."""
+    changes no state the optimistic lock guards (spec workflow "Edit a run's
+    title and description as labels")."""
 
     title: str = Field(min_length=1, max_length=200)
     description: str | None = None

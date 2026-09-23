@@ -1,5 +1,6 @@
 // frontend/src/components/workflow/ApprovalCard.tsx
-// One approval: the gate between a run and the outside world (FR-033/FR-034).
+// One approval: the gate between a run and the outside world (spec workflow
+// "Refuse an unapproved write-class tool call made for a run").
 //
 // THE PAYLOAD IS RENDERED VERBATIM. Not a summary, not the first line, not
 // "call Jira with 3 arguments" — the exact arguments that will execute, as
@@ -7,8 +8,8 @@
 // something they cannot see, which is the one thing this surface exists to
 // prevent. Nothing here truncates.
 //
-// Rejecting asks for a reason because the node can act on one (FR-021's
-// feedback is the same idea): "no" with a reason redirects the work, "no"
+// Rejecting asks for a reason because the node can act on one (a node's
+// `feedback` action is the same idea): "no" with a reason redirects the work, "no"
 // alone only stops it.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";

@@ -1,13 +1,16 @@
-"""A run's artifacts on disk — written, listed and read (FR-041, FR-031).
+"""A run's artifacts on disk — written, listed and read (spec workflow
+"Store artifacts as files attributed to their node and attempt",
+"Generate the index of earlier tasks").
 
 The tree is the attribution: ``artifacts/<node_key>/<attempt>/<name>``, so
 which node and which attempt produced a file is a fact about where it is, not
 a row that could drift from it. That is what makes the catalogue safe to
 generate from the directory and safe to delete — the next regeneration
-reproduces it (FR-031).
+reproduces it ("Generate the index of earlier tasks").
 
-Nothing here indexes, chunks or embeds anything (FR-042): the files are the
-only copy, and the reader is ``ripgrep`` or the agent that opens them.
+Nothing here indexes, chunks or embeds anything ("Never index a run's
+directory"): the files are the only copy, and the reader is ``ripgrep`` or
+the agent that opens them.
 
 The catalogue *text* is not written here. This module computes what it says —
 the entries, attributed and dated — and the application layer renders the
@@ -121,7 +124,8 @@ def collect_run_files(
     """Copy what this run is MADE OF into ``destination``, and say how many
     files landed.
 
-    The mechanical half of promotion (FR-043). The run directory is left
+    The mechanical half of promotion (spec workflow "Promote what a run is
+    made of into a knowledge collection"). The run directory is left
     exactly as it was, and the copy is flat and self-describing, because the
     collection that receives it has its own shape and nobody reading it later
     would recognise ``3/`` as an attempt number.

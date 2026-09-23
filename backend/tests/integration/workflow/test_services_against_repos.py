@@ -211,7 +211,8 @@ async def test_a_run_is_created_started_and_advanced_on_real_rows(wired: Wired) 
     )
     assert result.run.current_node_key == "draft_td"
 
-    # FR-023 over the real filesystem: the artifact has to actually be there.
+    # Spec workflow "Hold completion until a required artifact exists", over
+    # the real filesystem: the artifact has to actually be there.
     artifact_store.write_artifact(run.id, "draft_td", 1, "td.md", "# design")
     done = await wired.nodes.record_output(run.id, "draft_td", summary="drafted", tokens=90)
 
@@ -223,7 +224,7 @@ async def test_a_run_is_created_started_and_advanced_on_real_rows(wired: Wired) 
 
 @pytest.mark.acceptance(spec="workflow", scenario="a stale version is refused rather than applied")
 async def test_the_version_race_is_settled_by_the_database(wired: Wired) -> None:
-    """FR-015: two commands, one observed version, one change.
+    """Two commands, one observed version, one change.
 
     Both calls pass the in-memory version check — they read the same row — so
     what refuses the loser is the UPDATE's own WHERE clause, which is exactly
@@ -252,7 +253,9 @@ async def test_the_version_race_is_settled_by_the_database(wired: Wired) -> None
 async def test_a_restart_rebuilds_the_position_and_reports_the_interrupted_node(
     wired: Wired,
 ) -> None:
-    """FR-014 + FR-027, against rows that survive the service that wrote them."""
+    """Spec workflow "Rebuild a run from its event log" and "Report a node
+    interrupted by a restart as failed", against rows that survive the service
+    that wrote them."""
     run = await wired.runs.create_run(template_uid=TEMPLATE_UID, title="Ship it")
     started = await wired.runs.signal(run.id, RunSignal.START, version=run.version)
     await wired.nodes.act(run.id, "draft_td", NodeAction.START, version=started.run.version)
@@ -293,7 +296,8 @@ async def test_deleting_a_run_cascades_its_rows_and_removes_its_directory(
 
 
 async def test_an_adhoc_task_survives_the_round_trip(wired: Wired) -> None:
-    """FR-028: its key, its stage and its instructions come back off the rows."""
+    """An ad-hoc task's key, its stage and its instructions come back off the
+    rows."""
     run = await wired.runs.create_run(template_uid=TEMPLATE_UID, title="Ship it")
     started = await wired.runs.signal(run.id, RunSignal.START, version=run.version)
 

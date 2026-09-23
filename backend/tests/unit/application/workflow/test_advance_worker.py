@@ -1,4 +1,4 @@
-"""The background advancer: one node per run, and no run takes the loop down (FR-017)."""
+"""The background advancer: one node per run, and no run takes the loop down."""
 
 from __future__ import annotations
 
@@ -161,7 +161,8 @@ async def test_stopping_cancels_the_node_in_flight_rather_than_failing_it() -> N
 
     # The attempt was never finished and was never reported as failed: the
     # daemon is going away mid-turn, which start-up reconciliation reports as
-    # interrupted (FR-027).
+    # interrupted (spec workflow "Report a node interrupted by a restart as
+    # failed").
     assert service.finished == []
 
 

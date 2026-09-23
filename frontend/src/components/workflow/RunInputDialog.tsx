@@ -1,7 +1,7 @@
 // frontend/src/components/workflow/RunInputDialog.tsx
 // Add something for a run to read: a knowledge collection, a link, a local
 // repository, a file from this machine, or a note the developer writes
-// themselves (FR-050, FR-051, FR-069).
+// themselves.
 //
 // One dialog, five kinds, and the KIND decides what the second field is. That
 // is the reason this is a dialog rather than the inline row it replaced: the
@@ -19,7 +19,7 @@
 // the last place in the UI where it shows.
 //
 // The dialog closes only on success. A refusal — a run this machine does not
-// advance (FR-012), a repository that is not there (FR-057) — leaves the form
+// advance, a repository that is not there — leaves the form
 // standing with what the developer typed still in it.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";

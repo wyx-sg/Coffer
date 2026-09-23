@@ -38,7 +38,7 @@ async def _running_first_node(engine: Engine) -> tuple[str, int]:
 
 
 async def test_start_opens_an_attempt_and_dispatches_it(engine: Engine) -> None:
-    """FR-019: a node's work is one conversation, in the run's directory."""
+    """A node's work is one conversation, in the run's directory."""
     run = await engine.started()
 
     result = await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
@@ -50,7 +50,7 @@ async def test_start_opens_an_attempt_and_dispatches_it(engine: Engine) -> None:
     assert engine.types(run.id)[-1] == "node.started"
     dispatched = engine.dispatcher.last
     assert dispatched.node.key == "draft_td"
-    # FR-053: the workdir is the one Coffer made for this run, not one
+    # The workdir is the one Coffer made for this run, not one
     # anybody was asked for.
     assert dispatched.workdir == f"/fake/workflows/{run.id}/workspace"
     assert dispatched.agent_key == "claude_code"
@@ -65,7 +65,7 @@ async def test_start_is_refused_while_the_run_is_not_running(engine: Engine) -> 
 
 
 async def test_only_one_node_runs_at_a_time(engine: Engine) -> None:
-    """FR-017: the run has one node in flight, never two."""
+    """The run has one node in flight, never two."""
     run_id, version = await _running_first_node(engine)
 
     with pytest.raises(IllegalTransition) as caught:
@@ -112,7 +112,7 @@ async def test_an_unknown_node_key_is_refused_naming_the_real_ones(engine: Engin
 async def test_output_without_the_required_artifact_waits_for_the_developer(
     engine: Engine,
 ) -> None:
-    """FR-023: a node owing a file it never wrote does not complete itself."""
+    """A node owing a file it never wrote does not complete itself."""
     run_id, _version = await _running_first_node(engine)
 
     result = await engine.nodes.record_output(run_id, "draft_td", summary="drafted", tokens=120)
@@ -126,7 +126,7 @@ async def test_output_without_the_required_artifact_waits_for_the_developer(
 async def test_output_with_its_artifact_completes_and_moves_the_run_on(
     engine: Engine,
 ) -> None:
-    """FR-017: no command between one node finishing and the next being free."""
+    """No command between one node finishing and the next being free."""
     run_id, _version = await _running_first_node(engine)
     engine.artifacts.add(run_id, "draft_td", 1, "td.md")
 
@@ -164,7 +164,7 @@ async def test_complete_refuses_a_missing_required_artifact_and_waiving_allows_i
 async def test_feedback_reopens_the_same_attempt_rather_than_a_new_one(
     engine: Engine,
 ) -> None:
-    """FR-021: feedback is more to do, not another try."""
+    """Feedback is more to do, not another try."""
     run_id, _version = await _running_first_node(engine)
     result = await engine.nodes.record_output(run_id, "draft_td", summary="drafted")
 
@@ -196,7 +196,7 @@ async def test_empty_feedback_is_refused(engine: Engine) -> None:
 async def test_retry_inserts_a_new_attempt_and_leaves_the_old_one_alone(
     engine: Engine,
 ) -> None:
-    """FR-022: the earlier attempt keeps its conversation and its output."""
+    """The earlier attempt keeps its conversation and its output."""
     run_id, _version = await _running_first_node(engine)
     first = (await engine.attempts.latest_attempt(run_id, "draft_td")).id
     await engine.attempts.update_attempt(first, conversation_id="conv-node")
@@ -248,8 +248,8 @@ async def _fail_the_first_task(engine: Engine) -> str:
     spec="workflow", scenario="a failed task does what its workflow said to do about failure"
 )
 async def test_a_failed_task_does_what_its_workflow_declared_about_failure() -> None:
-    """FR-024: three workflows differing in one field, the same task failing in
-    each, three different outcomes — and the engine chose none of them.
+    """Three workflows differing in one field, the same task failing in each,
+    three different outcomes — and the engine chose none of them.
 
     Proved together rather than one behaviour per test because the claim is
     that the DECLARATION decides: three passing tests that each pin one branch
@@ -319,7 +319,7 @@ async def test_skip_settles_a_node_and_restore_opens_the_next_attempt(
 
 @pytest.mark.acceptance(spec="workflow", scenario="a run reaches completed when its last node does")
 async def test_the_last_node_completing_completes_the_run(engine: Engine) -> None:
-    """FR-013: and the completed run refuses everything afterwards."""
+    """And the completed run refuses everything afterwards."""
     run = await engine.started()
     engine.artifacts.add(run.id, "draft_td", 1, "td.md")
     await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
@@ -327,7 +327,7 @@ async def test_the_last_node_completing_completes_the_run(engine: Engine) -> Non
     current = await engine.run_repo.get_run(run.id)
     await engine.nodes.act(run.id, "write_code", NodeAction.START, version=current.version)
     # The last task declares no artifacts of its own, so what it owes is the
-    # default `report.md` (FR-072) — without it the run would stop for the
+    # default `report.md` — without it the run would stop for the
     # developer rather than completing.
     engine.artifacts.add(run.id, "write_code", 1, "report.md")
 
@@ -407,7 +407,8 @@ async def test_the_walk_reports_what_is_open_and_what_may_start(engine: Engine) 
 async def test_the_template_is_read_from_the_snapshot_not_the_resource(
     engine: Engine,
 ) -> None:
-    """FR-010 again, from the node side: a run keeps running its own copy."""
+    """Spec workflow "Freeze the template when a run is created" again, from the
+    node side: a run keeps running its own copy."""
     run = await engine.started()
     engine.templates.configs["delivery"] = {"stages": []}
 
@@ -418,7 +419,7 @@ async def test_the_template_is_read_from_the_snapshot_not_the_resource(
 
 
 async def test_an_explicit_retry_stops_at_the_attempt_ceiling(engine: Engine) -> None:
-    """FR-026: the ceiling is a wall, not a suggestion."""
+    """The attempt ceiling is a wall, not a suggestion."""
     engine = build_engine({"delivery": with_ceiling(1)})
     run_id, _version = await _running_first_node(engine)
     failed = await engine.nodes.record_failure(run_id, "draft_td", detail="boom")
@@ -431,7 +432,8 @@ async def test_an_explicit_retry_stops_at_the_attempt_ceiling(engine: Engine) ->
 async def test_an_interrupted_attempt_can_be_retried_into_a_new_one(
     engine: Engine,
 ) -> None:
-    """FR-027 + FR-022: reported, then recoverable."""
+    """Spec workflow "Report a node interrupted by a restart as failed" and
+    "Keep every attempt when a node is retried": reported, then recoverable."""
     run_id, _version = await _running_first_node(engine)
     await engine.runs.rebuild_projection(run_id)
     current = await engine.run_repo.get_run(run_id)
@@ -446,7 +448,8 @@ async def test_an_interrupted_attempt_can_be_retried_into_a_new_one(
 
 async def test_a_start_refused_by_the_lock_leaves_the_node_startable(engine: Engine) -> None:
     """The advancer reads a run a moment before it acts on it, so any command
-    the developer issues in between refuses its start (FR-015).
+    the developer issues in between refuses its start (spec workflow "Refuse a
+    command carrying a stale version").
 
     What must not survive that refusal is a half-written node. Marking the
     attempt running before the commit left one: nothing may act on a running
@@ -481,7 +484,7 @@ async def test_a_start_refused_by_the_lock_leaves_the_node_startable(engine: Eng
 
 @pytest.mark.acceptance(spec="workflow", scenario="each task is given its own number of tries")
 async def test_each_task_is_given_its_own_number_of_tries() -> None:
-    """FR-026: the limit belongs to the task, so two tasks in one workflow can
+    """The limit belongs to the task, so two tasks in one workflow can
     be allowed different numbers of them — the draft that is cheap to redo and
     the step that must not be repeated are not the same judgement."""
     ceilings = {"draft_td": 3, "write_code": 1}
@@ -528,7 +531,7 @@ async def test_each_task_is_given_its_own_number_of_tries() -> None:
 
 @pytest.mark.acceptance(spec="workflow", scenario="a task is given a bigger model before it runs")
 async def test_a_task_is_given_a_bigger_model_before_it_runs(engine: Engine) -> None:
-    """FR-071: the choice is worth making before the task starts, which is the
+    """The choice is worth making before the task starts, which is the
     one moment no conversation exists to make it in."""
     run = await engine.started()
 
@@ -549,7 +552,7 @@ async def test_a_task_is_given_a_bigger_model_before_it_runs(engine: Engine) -> 
 
 
 async def test_clearing_an_assignment_defers_rather_than_blanking(engine: Engine) -> None:
-    """FR-071: null means "ask the next rung", so a developer who changes their
+    """Null means "ask the next rung", so a developer who changes their
     mind gets the workflow's answer back rather than nothing at all."""
     run = await engine.started()
     await engine.nodes.assign(run.id, "draft_td", agent="codex", model="opus", effort=None)
@@ -564,7 +567,7 @@ async def test_clearing_an_assignment_defers_rather_than_blanking(engine: Engine
 
 
 async def test_a_task_that_has_started_is_the_conversations_to_configure(engine: Engine) -> None:
-    """FR-071: one setting, one writer. Once the turn is in flight the pickers
+    """One setting, one writer. Once the turn is in flight the pickers
     on the conversation own these, so this path refuses rather than competing."""
     run = await engine.started()
     await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
@@ -574,7 +577,8 @@ async def test_a_task_that_has_started_is_the_conversations_to_configure(engine:
 
 
 async def test_an_agent_this_machine_does_not_have_is_refused_when_it_is_chosen() -> None:
-    """FR-071: refused at the moment of the choice.
+    """Spec workflow "Choose a task's agent, model and effort before it starts":
+    refused at the moment of the choice.
 
     Left to the driver, a typed agent key waits until the task starts and then
     surfaces as a failed attempt with an agent error — attributed to the work
@@ -596,13 +600,15 @@ async def test_an_agent_this_machine_does_not_have_is_refused_when_it_is_chosen(
     scenario=("a task whose workflow demands approval holds the run until the developer decides"),
 )
 async def test_a_task_whose_policy_demands_approval_holds_the_run() -> None:
-    """FR-033, as the engine actually implements it.
+    """Spec workflow "Hold a task whose policy requires approval when its turn
+    ends", as the engine actually implements it.
 
     `approval: always` is a decision about WORK, not about a payload: the task
     runs, and then the run stops until the developer says it may go on. There
     is no approval ROW — an approval carries an exact payload, and a task's
     work is a conversation, which has none to carry. What that task's writes
-    needed was decided at the gateway while it ran (FR-034).
+    needed was decided at the gateway while it ran ("Refuse an unapproved
+    write-class tool call made for a run").
 
     The regression this catches is the one that would make the policy
     decorative: the task reaching `completed` on its own, or the task after it

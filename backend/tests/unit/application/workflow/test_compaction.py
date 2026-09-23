@@ -1,4 +1,5 @@
-"""Compacting one node's own conversation (FR-049)."""
+"""Compacting one node's own conversation (spec workflow "Compact a long node
+conversation into a summary")."""
 
 from __future__ import annotations
 
@@ -84,7 +85,7 @@ async def test_with_no_internal_connection_nothing_is_removed_and_the_reason_is_
     assert not result.applied
     assert result.skipped_reason is not None
     assert "no internal model connection" in result.skipped_reason
-    # FR-049's whole point: a conversation that cannot be compacted keeps every
+    # The whole point: a conversation that cannot be compacted keeps every
     # turn rather than losing the oldest ones silently.
     assert conversations.compactions == []
 

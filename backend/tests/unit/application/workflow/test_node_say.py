@@ -1,4 +1,5 @@
-"""Talking to a task, at each point in its life (FR-068).
+"""Talking to a task, at each point in its life (spec workflow "Let the developer
+speak to a task at any point, in one place").
 
 One composer, four meanings, and the meaning is the ENGINE's to decide — a
 surface that worked it out from a status it read three seconds ago would
@@ -17,7 +18,7 @@ from .conftest import TEMPLATE, Engine, build_engine, with_ceiling, with_templat
 
 @pytest.mark.acceptance(spec="workflow", scenario="a task can be told something before it starts")
 async def test_a_task_the_run_has_not_reached_carries_what_it_was_told(engine: Engine) -> None:
-    """FR-068: the brief is written before the task, not shouted after it."""
+    """The brief is written before the task, not shouted after it."""
     run = await engine.started()
 
     await engine.nodes.say(run.id, "write_code", text="  use the 0088 migration style  ")
@@ -69,7 +70,7 @@ async def test_a_task_waiting_for_review_carries_the_same_attempt_on(engine: Eng
 
 @pytest.mark.acceptance(spec="workflow", scenario="talking to a finished task reopens it")
 async def test_talking_to_a_completed_task_opens_its_next_attempt(engine: Engine) -> None:
-    """FR-068: a task the developer is still talking to is not finished."""
+    """A task the developer is still talking to is not finished."""
     run = await engine.started()
     engine.artifacts.add(run.id, "draft_td", 1, "td.md")
     await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
@@ -90,7 +91,8 @@ async def test_talking_to_a_completed_task_opens_its_next_attempt(engine: Engine
 
 
 async def test_reopening_by_talking_stops_at_the_same_ceiling() -> None:
-    """FR-026: one ceiling, however the loop is spelled."""
+    """Spec workflow "Bound each task's attempts by its own ceiling": one
+    ceiling, however the loop is spelled."""
     engine = build_engine({"delivery": with_ceiling(1)})
     run = await engine.started()
     engine.artifacts.add(run.id, "draft_td", 1, "td.md")

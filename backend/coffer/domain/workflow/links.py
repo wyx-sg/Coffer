@@ -1,11 +1,12 @@
-"""What kind of thing a mounted link points at (FR-065).
+"""What kind of thing a mounted link points at (spec workflow "Name what a
+mounted external reference points at").
 
-A run's inputs are LISTED to a node, never pasted in (FR-032) — so a link is
-an address the node has to go and read for itself. "Go and read it" is not one
-operation: a Confluence page is read with the Confluence tool, a Jira issue
-with the Jira tool, an ordinary page by fetching it. A node handed a bare URL
-has to guess which, and a wrong guess is a failed tool call the developer sees
-as the run stalling.
+A run's inputs are LISTED to a node, never pasted in ("List a run's mounted
+inputs to every node") — so a link is an address the node has to go and read for
+itself. "Go and read it" is not one operation: a Confluence page is read with
+the Confluence tool, a Jira issue with the Jira tool, an ordinary page by
+fetching it. A node handed a bare URL has to guess which, and a wrong guess is a
+failed tool call the developer sees as the run stalling.
 
 So the provider is named when it can be recognised, and NOT named when it
 cannot. A `web` fallback would be a guess wearing a label; ``None`` says "this

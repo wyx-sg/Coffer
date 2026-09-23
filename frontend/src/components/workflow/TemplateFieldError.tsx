@@ -1,8 +1,8 @@
 // frontend/src/components/workflow/TemplateFieldError.tsx
-// The refusal, rendered AT the field it names (FR-055).
+// The refusal, rendered AT the field it names.
 //
-// The daemon's refusal already carries the JSON path of the offending field
-// (FR-006), so a banner over the whole form would be throwing away the one
+// The daemon's refusal already carries the JSON path of the offending field,
+// so a banner over the whole form would be throwing away the one
 // thing that makes it actionable. Every control in the editor pairs with one
 // of these and points at it with `aria-describedby`, so the field is announced
 // with its reason rather than merely marked invalid.

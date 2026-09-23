@@ -1,4 +1,5 @@
-"""The adapter behind a task's index of the run so far (spec workflow FR-029).
+"""The adapter behind a task's index of the run so far (spec workflow "Generate
+the index of earlier tasks").
 
 It is the one place that turns attempt ROWS into the index the composer
 renders, so the three judgements it makes are worth pinning: which attempt of a
@@ -80,7 +81,7 @@ async def test_only_the_latest_attempt_of_a_task_is_listed() -> None:
 
     The run reopened the task because what it produced was not right, so
     listing attempt 1 beside attempt 2 would hand the next task a discarded
-    deliverable with nothing to tell it apart from the real one (FR-031).
+    deliverable with nothing to tell it apart from the real one.
     """
     rows = [
         FakeAttempt(id="a1", node_key="draft_td", attempt=1, status="failed"),
@@ -128,7 +129,7 @@ async def test_nothing_from_this_attempt_onwards_is_in_the_index() -> None:
 
 
 async def test_an_adhoc_task_is_named_from_its_key_rather_than_left_as_one() -> None:
-    """FR-028: an unplanned task is in no template, so no lookup answers for it.
+    """An unplanned task is in no template, so no lookup answers for it.
 
     Un-slugging the key is not the name the developer typed, but it is never
     wrong about WHICH task it is, and `fix the parser` reads where

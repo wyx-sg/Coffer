@@ -1,5 +1,5 @@
 // frontend/src/pages/WorkflowNotePage.tsx — one note the developer wrote
-// (spec workflow, FR-069).
+// (spec workflow "Keep the developer's own notes in a run's context").
 //
 // A page rather than a dialog, for the same reason a produced file gets one:
 // this is something you read, come back to, and send someone the link to. The

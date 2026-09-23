@@ -2,7 +2,7 @@
 
 The refusal is the point. A template is hand-written JSON that later runs
 unattended, so the moment to catch a typo is the write — and the refusal is only
-useful if it names the field (FR-006).
+useful if it names the field.
 """
 
 from __future__ import annotations
@@ -30,10 +30,9 @@ def test_the_kind_declares_what_the_framework_needs() -> None:
     # A template has no directory behind it, so the generic create path makes a
     # complete resource.
     assert kind.generic_create_allowed is True
-    # Its scope is read inverted — the agents it may drive (FR-007).
+    # Its scope is read inverted — the agents it may drive.
     assert kind.supports_scope is True
-    # A flow defined here must be available on the developer's other machines
-    # (FR-008).
+    # A flow defined here must be available on the developer's other machines.
     assert kind.converges is True
     # Deleting a template cannot strand a run, which froze its snapshot.
     assert kind.on_delete is None
@@ -74,7 +73,8 @@ def test_a_valid_template_round_trips_unchanged() -> None:
             "stages[0].nodes[0].artifacts[0].name",
         ),
         # A template carrying a route between stages, which is what an editor
-        # written against the old shape would still send (FR-025).
+        # written against the old shape would still send (spec workflow "Send
+        # work back by the developer's hand, never a template route").
         (
             {
                 "stages": [
@@ -117,7 +117,7 @@ def test_a_node_naming_an_unregistered_skill_is_refused() -> None:
 
 
 def test_a_node_naming_an_agent_outside_the_scope_is_refused() -> None:
-    """FR-007: the scope says which agents this template may drive."""
+    """The scope says which agents this template may drive."""
     config = {
         "stages": [
             {

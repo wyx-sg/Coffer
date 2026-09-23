@@ -115,9 +115,10 @@ async def test_initialize_without_agent_meta_leaves_session_agent_uid_none():
 
 @pytest.mark.asyncio
 async def test_initialize_captures_run_context_from_meta():
-    """Spec workflow FR-035: a shim launched inside a node's turn reports the
-    run identity on the same ``_meta`` bag, so the gateway can attribute the
-    tool calls of that session to the run and attempt that caused them."""
+    """Spec workflow "Give the gateway the run's identity at dispatch": a shim
+    launched inside a node's turn reports the run identity on the same
+    ``_meta`` bag, so the gateway can attribute the tool calls of that session
+    to the run and attempt that caused them."""
     session = _session_with(BuiltinToolRegistry())
     await session.handle_initialize(
         {"protocolVersion": "x", "_meta": {"coffer/run": "run_01J/att_07"}}

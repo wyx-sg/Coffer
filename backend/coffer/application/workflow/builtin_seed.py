@@ -1,4 +1,5 @@
-"""Putting Coffer's own workflow into a vault that has never had one (FR-009).
+"""Putting Coffer's own workflow into a vault that has never had one (spec
+workflow "Seed one built-in template").
 
 The shape is ``application.skill.builtin_seed``'s: a boot-time class that puts
 a resource Coffer ships into the same tables, through the same write path and
@@ -8,10 +9,11 @@ differs on exactly one question, and deliberately.
 **The skill seed re-asserts; this one does not.** Coffer's manual is derived
 output — rewritten from the running build at every boot, and refused a delete —
 because a stale manual describes a Coffer that is not there. A workflow is the
-opposite: FR-009 says the developer may edit or delete this template "like any
-other", so from the moment the row exists it is theirs. Re-writing it every
-boot would overwrite their edits; re-creating it after a delete would argue
-with them. So this seeds once and then stops having an opinion.
+opposite: "Seed one built-in template" says the developer may edit or delete
+this template "like any other", so from the moment the row exists it is theirs.
+Re-writing it every boot would overwrite their edits; re-creating it after a
+delete would argue with them. So this seeds once and then stops having an
+opinion.
 
 "Once" needs a record that outlives the row, because the three ways the
 developer can make the row stop matching what was seeded — delete, rename,

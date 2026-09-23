@@ -1,4 +1,4 @@
-"""A workflow that is switched off starts no new runs (FR-066)."""
+"""A workflow that is switched off starts no new runs."""
 
 from __future__ import annotations
 
@@ -27,7 +27,8 @@ def test_a_run_already_created_keeps_going_after_its_workflow_is_switched_off(
     surface: Surface,
 ) -> None:
     # Switching a workflow off retires it from the menu; it does not reach
-    # into work already under way. The run froze its own snapshot (FR-011).
+    # into work already under way. The run froze its own snapshot (spec
+    # workflow "Freeze the template when a run is created").
     run = create_run(surface.client, title="already going")
     surface.engine.templates.disable("delivery")
 

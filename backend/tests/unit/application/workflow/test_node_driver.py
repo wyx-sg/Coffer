@@ -1,4 +1,4 @@
-"""One node attempt: its conversation, its turn, its outcome (FR-019, FR-030)."""
+"""One node attempt: its conversation, its turn, its outcome."""
 
 from __future__ import annotations
 
@@ -140,7 +140,7 @@ class FakeAttempt:
     attempt: int = 1
     status: str = "running"
     conversation_id: str | None = None
-    #: What the developer queued for this attempt before it opened (FR-068).
+    #: What the developer queued for this attempt before it opened.
     instructions: str | None = None
 
 
@@ -193,7 +193,8 @@ async def test_a_nodes_work_happens_in_a_conversation_in_the_runs_workdir() -> N
             "cwd": "/repo",
             "run_context": "run-1/att-1",
             # Nothing assigned it a model or an effort, so the agent's own
-            # configuration decides — as it always did (FR-071).
+            # configuration decides — as it always did (spec workflow "Choose a
+            # task's agent, model and effort before it starts").
             "model": None,
             "effort": None,
         }
@@ -206,7 +207,8 @@ async def test_a_nodes_work_happens_in_a_conversation_in_the_runs_workdir() -> N
 
 @pytest.mark.acceptance(spec="workflow", scenario="a node's work happens in its own conversation")
 async def test_the_conversation_is_recorded_before_the_turn_starts() -> None:
-    # FR-027: an interrupted attempt must still have a readable conversation,
+    # Spec workflow "Report a node interrupted by a restart as failed": an
+    # interrupted attempt must still have a readable conversation,
     # which is only true if the id was reported before anything could be lost.
     done = TurnDone(prompt_tokens=1, completion_tokens=1, stop_reason="end_turn")
     platform = FakePlatform([done])
@@ -381,9 +383,10 @@ async def test_interrupt_reaches_the_platform_and_swallows_its_refusal() -> None
 
 
 async def test_a_follow_up_compacts_the_conversation_before_the_turn_starts() -> None:
-    # FR-049: the follow-up is the only path that runs a turn on a
-    # conversation that already has history, so it is the only one that can be
-    # over its share of the budget.
+    # Spec workflow "Compact a long node conversation into a summary": the
+    # follow-up is the only path that runs a turn on a conversation that
+    # already has history, so it is the only one that can be over its share of
+    # the budget.
     platform = FakePlatform([TextDelta(text="fixed it")])
     compactor = StubCompactor()
     driver, _recorder, _composer = make_driver(platform, compactor=compactor)

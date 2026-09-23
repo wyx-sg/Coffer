@@ -19,7 +19,7 @@ from .conftest import Engine
 
 
 async def test_a_node_that_never_started_can_be_skipped(engine: Engine) -> None:
-    """FR-021: `skip` is legal on `pending`, so it must also be possible."""
+    """`skip` is legal on `pending`, so it must also be possible."""
     run = await engine.started()
 
     result = await engine.nodes.act(run.id, "draft_td", NodeAction.SKIP, version=run.version)

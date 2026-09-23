@@ -1,4 +1,4 @@
-"""CATALOG.md is generated from the directory and never hand-maintained (FR-031)."""
+"""CATALOG.md is generated from the directory and never hand-maintained."""
 
 from __future__ import annotations
 

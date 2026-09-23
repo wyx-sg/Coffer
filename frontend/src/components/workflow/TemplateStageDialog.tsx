@@ -3,11 +3,11 @@
 // where in the order it runs.
 //
 // There is nothing here about sending work back, because a workflow draws no
-// route between stages (FR-025): a finding in a later task is acted on by the
+// route between stages: a finding in a later task is acted on by the
 // developer who is holding it, by retrying the task that was wrong or adding
 // one that fixes it, and neither is a decision a template can make in advance.
 //
-// The stage's KEY is not asked for and not shown (FR-060): it is derived from
+// The stage's KEY is not asked for and not shown: it is derived from
 // the name on save.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";

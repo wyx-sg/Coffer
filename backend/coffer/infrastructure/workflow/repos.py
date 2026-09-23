@@ -1,4 +1,6 @@
-"""Giving a run its own checkout of a local repository (FR-057, FR-058).
+"""Giving a run its own checkout of a local repository (spec workflow
+"Give a mounted repository its own checkout", "Leave the source
+repository untouched on unmount").
 
 A run advances unattended, possibly overnight. Pointing it at the developer's
 working checkout would let an agent commit, stash, check out a branch or
@@ -119,7 +121,8 @@ async def mount_repo(
 
 
 async def unmount_repo(run_id: str, *, source: str, path: str, mount: str) -> None:
-    """Take back exactly what the mount gave, and nothing else (FR-058).
+    """Take back exactly what the mount gave, and nothing else (spec
+    workflow "Leave the source repository untouched on unmount").
 
     Takes the three things the input row records rather than the value object
     the mount returned: the row is what survives a daemon restart, and an

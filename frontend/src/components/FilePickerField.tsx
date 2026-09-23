@@ -9,7 +9,7 @@
 //
 // It shows the NAME and not a path on purpose: a browser hands the page a
 // `File`, never where it came from. The daemon stores the bytes under the
-// run's own directory (workflow FR-051), so the path it will have is the
+// run's own directory, so the path it will have is the
 // run's to decide and not this field's to claim.
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";

@@ -163,6 +163,31 @@ no registration, and the next sweep carries the edit into the rest of the
 collection. Upload is a human surface, not an agent tool; a person may delete
 any document, and no agent-facing tool deletes anything.
 
+The **workflow** layer is thin because it builds on what the vault already has
+([workflow](../openspec/specs/workflow/spec.md)). Running,
+streaming and interrupting an agent is the turn platform (`application/chat/`):
+each task is one ordinary conversation. Reaching an external system goes through the
+MCP gateway and its registered servers. How a job is done is a bound `skill`. An
+approval reaches the developer through the existing `channel` resources. Bulk content is
+plain files, the way knowledge is. What the layer adds is a state machine
+folded from an append-only event log, four tables (`workflow_runs`,
+`workflow_events`, `workflow_node_attempts`, `workflow_approvals`), a background
+advancer that moves only this machine's `running` runs, a context composer, and
+one gate inside the gateway. The gate's three seams outside the layer (the
+shim's `_meta` key, the providers' per-conversation environment, and the
+gateway's `ToolCallGatePort`) are listed in
+[A Workflow Run's Writes Are Gated at the Gateway](decisions/workflow-gates-tool-calls.md).
+
+A run's files live under `~/.coffer/workflows/<run_id>/`: a generated
+`CATALOG.md`, `inputs/` (uploads and notes), `workspace/` (the working
+directory every task's agent runs in, where a mounted repository becomes a git
+worktree), and `artifacts/<node_key>/<attempt>/<name>`. Nothing indexes them.
+`infrastructure/workflow/paths.py` is the only place a run path is built, behind
+the same segment guard as the other file layers. `$COFFER_WORKFLOW_ROOT`
+overrides the root, and **unset it resolves to the developer's real vault**.
+This layer creates, moves and deletes directories there, so its tests pin it,
+as `tests/integration/workflow/conftest.py` does for every test in that tree.
+
 ## Builtin tools
 
 The daemon registers **three** builtin tools in one in-process
@@ -204,7 +229,7 @@ backend/coffer/
 │   ├── memory/                   # fact, partition, budget, delivery, reader protocol
 │   ├── provider/                 # provider config, modality, projection rules
 │   ├── sync/                     # manifest, models, diff, convergence + machine rules
-│   └── workflow/                 # template validation, run/node/approval state, transitions, event fold
+│   └── workflow/                 # template shape + validation, built-in template, run/node/approval state, transitions, event fold
 ├── application/
 │   ├── resource_service.py       # kind-agnostic CRUD; reads app.state.kinds
 │   ├── audit_service.py
@@ -223,7 +248,7 @@ backend/coffer/
 │   ├── engine/                   # which connection Coffer's own unattended passes run on; must not import the provider kind
 │   ├── sync/                     # converge round, exporter, appliers, worker, ports
 │   ├── fs/                       # filesystem browse / pick / open / editor services
-│   └── workflow/                 # run + node services, node driver, context composer, approvals, gate, advancer + make_workflow_kind
+│   └── workflow/                 # run + node services, node driver, context composer + task index, inputs, approvals, gate, advancer + make_workflow_kind
 ├── infrastructure/
 │   ├── persistence/              # SQLAlchemy + Alembic (central metadata)
 │   ├── credentials/              # encrypted credential store + master key — only place importing `keyring`
@@ -241,14 +266,14 @@ backend/coffer/
 │   ├── memory/                   # native-memory readers, store, delivery state
 │   ├── provider/                 # provider introspector
 │   ├── sync/                     # git mirror, tree mirror, bundle, machine id
-│   └── workflow/                 # run/event/attempt/approval repos, run paths, artifact store
+│   └── workflow/                 # run/event/attempt/approval repos, run paths, artifact + input store, repository checkouts
 └── surfaces/
     ├── http/                     # FastAPI app, composition root, per-kind routers + `*_wiring.py`
     │   ├── chat/                 # conversation + turn routes
     │   ├── knowledge/            # knowledge routes
     │   ├── mcp/                  # MCP protocol endpoint, capability + invocation routes
     │   ├── memory/               # memory routes
-    │   └── workflow/             # run, node, approval and artifact routes
+    │   └── workflow/             # run, node, input, approval and artifact routes
     ├── cli/                      # Typer app + per-kind subcommand groups
     ├── shim/                     # coffer-mcp-shim entry
     └── callback/                 # channel callback listener (separate process)

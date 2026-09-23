@@ -1,8 +1,11 @@
 // frontend/src/lib/hooks/useWorkflowRun.ts — one run: its stages and nodes,
-// its node actions, its ad-hoc tasks and its artifacts (spec workflow,
-// FR-019..FR-031, FR-041/FR-043, FR-045).
+// its node actions, its ad-hoc tasks and its artifacts (spec workflow "Run a
+// node's work as one conversation" through "Generate the index of earlier
+// tasks", "Store artifacts as files attributed to their node and attempt",
+// "Promote what a run is made of into a knowledge collection" and "Show runs,
+// their tasks and their context in the web UI").
 //
-// A run has NO conversation of its own (FR-030): every conversation belongs to
+// A run has NO conversation of its own: every conversation belongs to
 // one task, so there is no run-level message hook here and no `/messages`
 // route to call. What the developer says, they say in a node's own
 // conversation, through the ordinary chat layer.
@@ -23,7 +26,7 @@ function isLive(detail: RunDetail | undefined): boolean {
   return detail?.run.status === "running";
 }
 
-/** Choose who runs one task, on what, before it runs (FR-071). Invalidates the
+/** Choose who runs one task, on what, before it runs. Invalidates the
  *  run, because the task's row is where the answer is read back from. */
 export function useAssignNode(runId: string, nodeKey: string) {
   const qc = useQueryClient();
@@ -36,7 +39,7 @@ export function useAssignNode(runId: string, nodeKey: string) {
   });
 }
 
-/** Rewrite a run's title and description (FR-070). Invalidates the run and
+/** Rewrite a run's title and description. Invalidates the run and
  *  the list, because both print the words that just changed. */
 export function useRelabelRun(runId: string) {
   const qc = useQueryClient();
@@ -65,8 +68,8 @@ export function useWorkflowRun(runId: string) {
   });
 }
 
-/** Every artifact the run produced, attributed to node and attempt (FR-031). */
-/** One file's contents, for the preview (FR-064). Never refetched on its
+/** Every artifact the run produced, attributed to node and attempt. */
+/** One file's contents, for the preview. Never refetched on its
  *  own: a run's file is written once by the task that produced it, and an
  *  uploaded input does not change under the developer who uploaded it. */
 export function useWorkflowRunFile(runId: string, path: string | null) {
@@ -87,7 +90,7 @@ export function useWorkflowArtifacts(runId: string, enabled = true) {
 }
 
 /**
- * Add an unplanned task to a stage of a running run (FR-028). It joins as a
+ * Add an unplanned task to a stage of a running run. It joins as a
  * node keyed `adhoc:<slug>` and opens with the same shared context as any
  * template node — which is why it is added here and not run outside the run.
  */
@@ -106,7 +109,7 @@ export function useAddAdhocTask(runId: string) {
 }
 
 /**
- * Say something to one task (FR-068). What it means is the daemon's answer, so
+ * Say something to one task. What it means is the daemon's answer, so
  * this hook carries no rules of its own: it sends the sentence and re-reads the
  * run, because the sentence may have queued a brief, carried an attempt on, or
  * opened the next one.
@@ -127,7 +130,7 @@ export function useSayToTask(runId: string) {
 }
 
 /**
- * Copy the run's artifacts into a knowledge collection (FR-043). The run's own
+ * Copy the run's artifacts into a knowledge collection. The run's own
  * directory is untouched, so this is a copy and the page says so.
  */
 export function usePromoteArtifacts(runId: string) {

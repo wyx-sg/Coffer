@@ -12,7 +12,7 @@ Coffer is the single source of truth instead. Register a tool, deliver a skill, 
 
 ### What Coffer manages
 
-Seven resource kinds ship today:
+Eight resource kinds ship today:
 
 | Kind                                     | What it is                                                                                               |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -23,6 +23,7 @@ Seven resource kinds ship today:
 | [Memory](/guide/web-ui#memory)           | The facts Coffer aggregated out of your agents' own native memory, partitioned by project.               |
 | [Model providers](/guide/web-ui#model-providers) | The vendor endpoints Coffer holds keys for, and the connection its own engine runs on.            |
 | [Channels](/guide/channels)              | Reach your agents from Telegram or SeaTalk — the way you actually talk to them.                          |
+| [Workflows](/guide/workflows)            | The shape of a delivery — stages and tasks — run as one conversation per task, with its writes gated.    |
 
 Plus two cross-cutting capabilities: an [encrypted credential store](/guide/credentials) and [vault sync](/guide/sync).
 

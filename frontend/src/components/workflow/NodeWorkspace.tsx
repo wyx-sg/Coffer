@@ -1,6 +1,6 @@
 // frontend/src/components/workflow/NodeWorkspace.tsx
 // Everything under a task's header: the transcript, what the task is working
-// from, and the one box you type into (FR-029, FR-063).
+// from, and the one box you type into.
 //
 // THE COMPOSER SPANS BOTH COLUMNS. What you type is addressed to the TASK, not
 // to the left-hand column, and a box that stopped at the panel's edge said the
@@ -24,7 +24,7 @@
 // splitting them across two components would mean passing them back up.
 //
 // The AGENT, MODEL and EFFORT bar is the chat layer's own, unchanged. A task's
-// conversation is an ordinary Coffer conversation (FR-019/FR-030), so the
+// conversation is an ordinary Coffer conversation, so the
 // developer who wants this one on a bigger model, or thinking harder, changes
 // it exactly where they would in Chat — and a second set of pickers that wrote
 // the same three fields would eventually disagree with the first.
@@ -75,7 +75,7 @@ interface Props {
   runId: string;
   /** Which task this is — the assignment is addressed to it by key. */
   nodeKey: string;
-  /** What the attempt has been assigned so far, before it opens (FR-071). */
+  /** What the attempt has been assigned so far, before it opens. */
   assigned?: { agent?: string | null; model?: string | null; effort?: string | null } | null;
   /** What the workflow says when the attempt says nothing. */
   templateAgent?: string | null;
@@ -85,7 +85,7 @@ interface Props {
   ownedHere: boolean;
   /** False only while the task has never run. */
   started: boolean;
-  /** What the task has been told so far (FR-068). */
+  /** What the task has been told so far. */
   instructions: string | null | undefined;
   /**
    * Where a typed sentence goes. Null means "into the conversation", which is
@@ -150,7 +150,7 @@ export function NodeWorkspace({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Two writers for one setting, never at once. Before the task starts
-          the answer lives on the attempt it will open with (FR-071); once it
+          the answer lives on the attempt it will open with; once it
           has a conversation, the conversation holds it and the chat layer's
           own bar is what writes it. */}
       {agentKey !== undefined ? (

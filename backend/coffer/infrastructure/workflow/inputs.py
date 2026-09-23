@@ -1,4 +1,5 @@
-"""A run's uploaded inputs on disk (FR-051).
+"""A run's uploaded inputs on disk (spec workflow "Store an uploaded
+input under the run's directory").
 
 An uploaded file lives under the run's own directory, beside the artifacts its
 nodes will write, so a node reads it with the filesystem it already has rather
@@ -73,7 +74,8 @@ def write_input(
     answer than the API does: an upload lands in ``inputs/`` while a node runs
     in ``workspace/``, so a path relative to the working directory would have
     to climb out of it with ``..``, which some agents refuse. The node is told
-    where the file actually is (FR-051).
+    where the file actually is (spec workflow "Store an uploaded input under
+    the run's directory").
     """
     name = safe_input_name(filename, taken=taken)
     target = paths.input_path(run_id, name)

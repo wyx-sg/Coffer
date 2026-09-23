@@ -6,7 +6,7 @@ is gone, because a task now opens with an index of what the run produced rather
 than with anybody else's conversation (``task_index``). What remains is the
 shape of a single conversation's own turns, which ``compaction`` needs in order
 to replace the oldest of them with a summary that stays in the conversation
-(FR-049).
+(spec workflow "Compact a long node conversation into a summary").
 """
 
 from __future__ import annotations

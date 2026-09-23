@@ -1,4 +1,4 @@
-"""What a run reads: add, upload, remove (FR-032, FR-050, FR-051)."""
+"""What a run reads: add, upload, remove."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ async def test_a_run_starts_reading_nothing(engine: Engine) -> None:
 async def test_a_collection_and_a_link_can_be_mounted_while_the_run_is_going(
     engine: Engine,
 ) -> None:
-    """FR-050: at any point in the run's life, not only at creation."""
+    """At any point in the run's life, not only at creation."""
     run = await engine.started()
 
     await engine.inputs.add_input(
@@ -72,7 +72,7 @@ async def test_mounting_an_input_does_not_bump_the_runs_version(engine: Engine) 
     spec="workflow", scenario="an uploaded file becomes an input the nodes can read"
 )
 async def test_an_uploaded_file_lands_under_the_run_and_carries_its_size(engine: Engine) -> None:
-    """FR-051."""
+    """Spec workflow "Store an uploaded input under the run's directory"."""
     run = await engine.create()
 
     mounted = await engine.inputs.upload_input(
@@ -143,7 +143,7 @@ async def test_an_aborted_run_reads_nothing_more(engine: Engine) -> None:
 
 
 async def test_a_run_another_machine_owns_is_read_only_here() -> None:
-    """FR-012."""
+    """Spec workflow "Advance a run only on the machine that owns it"."""
     owner = build_engine(machine_id="machine-a")
     run = await owner.create()
     visitor = build_engine(machine_id="machine-b")
@@ -154,7 +154,7 @@ async def test_a_run_another_machine_owns_is_read_only_here() -> None:
         await visitor.inputs.add_input(run.id, kind=RunInputKind.LINK, ref="https://x.invalid")
 
 
-# -- repository inputs (FR-057, FR-058) ---------------------------------------
+# -- repository inputs -------------------------------------------------------
 
 
 async def test_mounting_a_repository_records_where_the_checkout_landed(engine: Engine) -> None:
@@ -185,8 +185,9 @@ async def test_a_directory_that_is_not_a_repository_is_recorded_as_a_link(engine
         run.id, kind=RunInputKind.REPO, ref="/Users/dev/notes"
     )
 
-    # FR-057: the context has to be able to say which it got, so the input
-    # carries it rather than implying an isolation it does not have.
+    # Spec workflow "Give a mounted repository its own checkout": the context
+    # has to be able to say which it got, so the input carries it rather than
+    # implying an isolation it does not have.
     assert mounted.mount == REPO_MOUNT_LINK
 
 

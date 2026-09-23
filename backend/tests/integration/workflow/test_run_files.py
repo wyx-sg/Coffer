@@ -1,4 +1,4 @@
-"""Reading one file out of a run's directory (FR-064), and the paths refused."""
+"""Reading one file out of a run's directory, and the paths refused."""
 
 from __future__ import annotations
 
@@ -94,7 +94,7 @@ def test_a_symlink_out_of_the_run_is_refused_rather_than_followed(
         files.read_file("run-1", "inputs/link.txt")
 
 
-# --- the bytes, for an image a note refers to (FR-069) ------------------------
+# --- the bytes, for an image a note refers to ---------------------------------
 
 
 def test_an_image_comes_back_as_bytes_with_a_media_type() -> None:

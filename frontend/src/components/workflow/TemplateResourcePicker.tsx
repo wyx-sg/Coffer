@@ -35,7 +35,7 @@ interface Props {
   onChange: (value: string | null) => void;
   /** What `null` reads as — "No skill", "The run's default agent". */
   noneLabel: string;
-  /** This field's JSON path, for the refusal that may name it (FR-055). */
+  /** This field's JSON path, for the refusal that may name it. */
   path: string;
   refusal: TemplateRefusal | null;
 }

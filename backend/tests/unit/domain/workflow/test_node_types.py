@@ -1,4 +1,4 @@
-"""A node's type names WHO does the work, and nothing else (FR-067)."""
+"""A node's type names WHO does the work, and nothing else."""
 
 from __future__ import annotations
 

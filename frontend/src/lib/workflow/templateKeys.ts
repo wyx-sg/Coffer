@@ -1,7 +1,7 @@
 // frontend/src/lib/workflow/templateKeys.ts
-// Deriving the identities the editor never asks for (FR-060).
+// Deriving the identities the editor never asks for.
 //
-// A key is an identity the engine reads no meaning from (FR-003); asking a
+// A key is an identity the engine reads no meaning from; asking a
 // developer to invent one is asking them to do the computer's filing. So a
 // stage's and a task's key are slugs of their name, made unique against
 // whatever is already taken.
@@ -13,7 +13,7 @@
 import type { TemplateConfig } from "@/lib/api/workflow";
 
 /** A lowercase slug the engine reads no meaning from — it is an identity, not
- *  a word (FR-003). Empty input still has to produce something addressable. */
+ *  a word. Empty input still has to produce something addressable. */
 export function slugify(value: string, fallback: string): string {
   const slug = value
     .toLowerCase()

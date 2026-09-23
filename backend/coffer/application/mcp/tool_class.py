@@ -57,8 +57,9 @@ class ResourceToolClassifier:
 
         ``None`` is also the answer for a name no server answers to. Both cases
         mean the same thing to the gate — nobody has said this call is safe —
-        and the gate treats "nobody has said" as write-class (FR-036), which is
-        the direction an error should fall.
+        and the gate treats "nobody has said" as write-class (spec workflow
+        "Treat an unjudged tool as write-class and remember the answer"), which
+        is the direction an error should fall.
         """
         recorded = await self._read_map(server_name)
         value = recorded.get(tool)

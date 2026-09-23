@@ -25,7 +25,8 @@ def link_line(item: RunInput, label: str) -> str:
     is not one operation, and reaching for the wrong tool is a failed call the
     developer sees as the run stalling. An unrecognised link says nothing more
     than that it is a link, so the node fetches it rather than believing it
-    was told something (FR-065).
+    was told something (spec workflow "Name what a mounted external reference
+    points at").
     """
     provider = classify_link(item.ref)
     if provider is None:
@@ -34,7 +35,8 @@ def link_line(item: RunInput, label: str) -> str:
 
 
 def repo_line(item: RunInput, label: str) -> str:
-    """A mounted repository, said honestly (FR-057).
+    """A mounted repository, said honestly (spec workflow "Give a
+    mounted repository its own checkout").
 
     A worktree is the run's own checkout and may be committed to freely; a link
     is somebody else's directory and the message says so, because a node told

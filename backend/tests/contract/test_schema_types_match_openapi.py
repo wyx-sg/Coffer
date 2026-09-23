@@ -145,10 +145,12 @@ _ANNOTATION_KEYS = frozenset(
 _ORPHANS_BY_DESIGN = {
     "openspec/specs/mcp-gateway/contracts/api.openapi.yaml": {"MCPServerConfig"},
     # A workflow template's ``config``, declared for the editor's generated
-    # type (spec workflow FR-054) and served by no route on purpose: a template
-    # is written through the kind-agnostic resource endpoint (FR-056), and a
-    # second write path would be a second contract for the same data. Named by
-    # ``tests/contract/test_workflow_openapi.py``, which walks out from it.
+    # type (spec workflow "Author templates in the web UI") and served by no
+    # route on purpose: a template is written through the kind-agnostic
+    # resource endpoint ("Write templates through the resource endpoint only"),
+    # and a second write path would be a second contract for the same data.
+    # Named by ``tests/contract/test_workflow_openapi.py``, which walks out
+    # from it.
     "openspec/specs/workflow/contracts/api.openapi.yaml": {"WorkflowTemplate"},
 }
 

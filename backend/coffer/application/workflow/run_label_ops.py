@@ -1,4 +1,5 @@
-"""Rewriting what a run is CALLED and what it is for (spec workflow FR-070).
+"""Rewriting what a run is CALLED and what it is for (spec workflow "Edit a
+run's title and description as labels").
 
 Split out of ``WorkflowRunService`` to keep that module under its line ceiling,
 the way the resource lifecycle splits ``scope``, ``delete`` and ``rename`` out
@@ -40,19 +41,20 @@ async def relabel_run(
     title: str,
     description: str | KeepStored | None = KEEP,
 ) -> RunRow:
-    """Rewrite what this run is CALLED and what it is for (FR-070).
+    """Rewrite what this run is CALLED and what it is for (spec workflow
+    "Edit a run's title and description as labels").
 
     Not a signal and not a command: it advances nothing, takes no version
     and appends no event. A run's status, stage and position are folded
-    from its log and only the engine writes them (FR-014); its title is a
-    label the developer typed at the moment they knew least about the work,
-    and a label that cannot be corrected makes a list of forty runs
-    unreadable.
+    from its log and only the engine writes them ("Rebuild a run from its
+    event log"); its title is a label the developer typed at the moment
+    they knew least about the work, and a label that cannot be corrected
+    makes a list of forty runs unreadable.
 
-    Still guarded by ownership (FR-012): a run this machine does not
-    advance is read-only here, and that includes its label — otherwise two
-    machines could disagree about what the same run is called with nothing
-    to reconcile them.
+    Still guarded by ownership ("Advance a run only on the machine that
+    owns it"): a run this machine does not advance is read-only here, and
+    that includes its label — otherwise two machines could disagree about
+    what the same run is called with nothing to reconcile them.
     """
     run = await service._cmd.require_run(run_id)
     service._cmd.guard(run, "relabel", None)

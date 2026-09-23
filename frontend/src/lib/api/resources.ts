@@ -24,10 +24,10 @@ export type ResourceUpdate = components["schemas"]["ResourceUpdate"];
 
 export const resourcesApi = {
   /** Register a resource of any kind whose create the framework allows
-   *  generically (a workflow template is one — FR-056: the editor writes
+   *  generically (a workflow template is one: the editor writes
    *  through this endpoint and has no write path of its own). The refusal is
    *  thrown as-is so a caller can read the offending field's JSON path out of
-   *  it (FR-055). */
+   *  it. */
   create: async (body: ResourceCreate): Promise<void> => {
     const { error } = await getApiClient().POST("/resources", { body });
     if (error) throwApiError(error, "INTERNAL_ERROR", "register failed");

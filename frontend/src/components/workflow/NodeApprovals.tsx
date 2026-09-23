@@ -1,5 +1,6 @@
 // frontend/src/components/workflow/NodeApprovals.tsx
-// The approvals THIS task raised, INSIDE the task's conversation (FR-039).
+// The approvals THIS task raised, INSIDE the task's conversation (spec workflow
+// "Show an approval on its task's conversation and through a bound channel").
 //
 // In the thread and not above it: the agent asking to create a merge request
 // is a thing it did in the conversation, and it reads as the last turn rather
@@ -8,8 +9,9 @@
 // it — which is the whole reason approvals live on this page at all.
 //
 // This is also the one place a button survives the move to conversations
-// (FR-052): Approve / Reject is a decision about an exact payload, and a
-// payload cannot honestly be approved by typing "ok" into a composer.
+// (spec workflow "Offer no run controls on a task's page"): Approve / Reject is a
+// decision about an exact payload, and a payload cannot honestly be approved by
+// typing "ok" into a composer.
 //
 // Renders NOTHING when this task has nothing waiting — an empty "no approvals"
 // card would compete for attention every day for the one day it matters.

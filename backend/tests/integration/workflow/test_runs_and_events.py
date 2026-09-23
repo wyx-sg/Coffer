@@ -1,7 +1,7 @@
 """``workflow_runs`` and ``workflow_events`` against real SQLite.
 
 The round-trips, and the two things the schema exists to make true: a stale
-version loses (FR-015), and a run's log cannot be forked (one ``sequence`` per
+version loses, and a run's log cannot be forked (one ``sequence`` per
 run). The cascade lives here too, because deleting a run is the one write that
 reaches all four tables at once.
 """
@@ -98,7 +98,7 @@ async def test_projection_update_bumps_the_version(repos: Repos) -> None:
 
 @pytest.mark.acceptance(spec="workflow", scenario="a stale version is refused rather than applied")
 async def test_stale_version_is_refused_and_changes_nothing(repos: Repos) -> None:
-    """FR-015: the second of two callers who both observed version 1 loses."""
+    """The second of two callers who both observed version 1 loses."""
     run_id = await _run(repos)
     first = await repos.runs.update_run_projection(
         run_id, 1, RunProjection("running", "design", "draft_td", 10)

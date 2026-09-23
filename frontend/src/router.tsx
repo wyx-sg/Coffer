@@ -78,7 +78,7 @@ export const routes: RouteObject[] = [
         path: "channels/:uid",
         element: lazyPage(() => import("./pages/ChannelDetailPage"), "ChannelDetailPage"),
       },
-      // The WORKFLOWS are the resource (kind `workflow`, FR-001): the shapes
+      // The WORKFLOWS are the resource (kind `workflow`): the shapes
       // of work this vault knows how to run. They live under `/workflows`
       // beside the other kinds' list pages, and a RUN of one lives under
       // `/runs` — a run is operational state, belongs to one machine and does
@@ -102,16 +102,16 @@ export const routes: RouteObject[] = [
         path: "runs/:runId",
         element: lazyPage(() => import("./pages/WorkflowRunPage"), "WorkflowRunPage"),
       },
-      // One task = one conversation, and that is where a run is driven
-      // (FR-030/FR-052). The run's page links here; nothing else does.
+      // One task = one conversation, and that is where a run is driven.
+      // The run's page links here; nothing else does.
       // One file the run reads or wrote. A page rather than a dialog: a file
-      // a task produced is read, scrolled and linked to (FR-064).
+      // a task produced is read, scrolled and linked to.
       {
         path: "runs/:runId/files",
         element: lazyPage(() => import("./pages/WorkflowFilePage"), "WorkflowFilePage"),
       },
       // The developer's own note, which is also the one thing in a run's
-      // context they can rewrite (FR-069).
+      // context they can rewrite.
       {
         path: "runs/:runId/notes/:noteRef",
         element: lazyPage(() => import("./pages/WorkflowNotePage"), "WorkflowNotePage"),

@@ -4,11 +4,13 @@
 rule for a run with nothing but template nodes, and it is deliberately blind to
 two things the domain has no way to see:
 
-* an **ad-hoc task** (FR-028) is not in the template at all — it is an attempt
-  row in a stage, and it holds its stage open exactly as a template node does;
+* an **ad-hoc task** ("Add an ad-hoc task to any stage") is not in the
+  template at all — it is an attempt row in a stage, and it holds its stage
+  open exactly as a template node does;
 * a **failed** node is neither completed nor skipped, so the template walk hands
   it back forever. Whether the run steps over it is its ``on_failure``
-  behaviour's answer (FR-024), not the walk's.
+  behaviour's answer ("Handle a node failure as the node declares"), not the
+  walk's.
 
 So the walk that the advancer and the run-completion check both use lives here,
 over the attempt rows, and both use *this one* — a second implementation would
@@ -36,8 +38,9 @@ from coffer.domain.workflow.transitions import NodePosition
 
 #: Statuses in which a node has finished having things happen to it. A failed
 #: node is settled too: whether the run steps over it or stops on it is its
-#: ``on_failure`` behaviour's answer (FR-024), taken when it failed, not the
-#: walk's to re-decide every time it is asked.
+#: ``on_failure`` behaviour's answer (spec workflow "Handle a node failure as
+#: the node declares"), taken when it failed, not the walk's to re-decide every
+#: time it is asked.
 _SETTLED: frozenset[NodeStatus] = frozenset(
     {NodeStatus.COMPLETED, NodeStatus.SKIPPED, NodeStatus.FAILED}
 )
@@ -53,7 +56,7 @@ class Walk:
     everything is done and when a node is already holding the run, which is why
     ``unfinished`` is reported beside it: the two together tell "the run is
     finished" apart from "the run is busy", and completion needs that
-    distinction to be right (FR-013).
+    distinction to be right (spec workflow "Keep a run to six statuses").
     """
 
     startable: NodePosition | None
@@ -71,16 +74,17 @@ def walk_run(
 
     The rule is one sentence: **the first node that is not settled is where the
     run is**. If it is pending it may start; if it is running, in review or at
-    an approval, nothing else may start behind it — which is FR-017 and, just as
-    importantly, the reason a node awaiting the developer's review is never
-    overtaken by the node after it.
+    an approval, nothing else may start behind it — which is spec workflow "Run
+    at most one node at a time" and, just as importantly, the reason a node
+    awaiting the developer's review is never overtaken by the node after it.
 
     Ordering first-unsettled rather than "is anything open anywhere" is also
-    what makes going backwards work (FR-025): a task the developer adds to an
-    EARLIER stage is handed straight back even though the task that prompted it
-    is still sitting in review, and when the fix is done the walk returns to
-    that task, because it never stopped being open. No route in the template
-    does this — the developer does, having seen what was found.
+    what makes going backwards work ("Send work back by the developer's hand,
+    never a template route"): a task the developer adds to an EARLIER stage is
+    handed straight back even though the task that prompted it is still sitting
+    in review, and when the fix is done the walk returns to that task, because
+    it never stopped being open. No route in the template does this — the
+    developer does, having seen what was found.
 
     An ad-hoc task runs at the END of the stage it was added to: the stage's own
     plan was written first, and a task that joined later has no claim to come
@@ -147,7 +151,8 @@ def adhoc_node(node_key: str, payload: Mapping[str, Any]) -> Node:
     name = payload.get("name")
     agent = payload.get("agent")
     instructions = payload.get("instructions")
-    # The ceiling the task was created with (FR-026). A task created before the
+    # The ceiling the task was created with (spec workflow "Bound each task's
+    # attempts by its own ceiling"). A task created before the
     # ceiling moved onto tasks recorded none, and the default is what it was
     # capped at then too — the workflow-wide number this replaced was 3 unless
     # a template said otherwise, and a template that said otherwise had its
@@ -175,7 +180,8 @@ def adhoc_slug(name: str) -> str:
 
 
 def adhoc_node_key(name: str, taken: Collection[str]) -> str:
-    """``adhoc:<slug>``, unique within the run (FR-028).
+    """``adhoc:<slug>``, unique within the run (spec workflow "Add an
+    ad-hoc task to any stage").
 
     A node key is a path segment on disk and an identifier in every event, so
     the slug is narrowed to what both accept and a repeat of the same name gets
@@ -193,11 +199,13 @@ def adhoc_node_key(name: str, taken: Collection[str]) -> str:
 def artifact_gap(
     store: ArtifactStorePort, run_id: str, node: Node, attempt: int
 ) -> tuple[str, ...]:
-    """The required artifacts this attempt owes and has not written (FR-023).
+    """The required artifacts this attempt owes and has not written (spec
+    workflow "Hold completion until a required artifact exists").
 
     Read from the directory, never from a list something maintained: the
-    catalogue is generated from what is on disk (FR-031), and completion has to
-    answer to the same source or the two would disagree about what exists.
+    catalogue is generated from what is on disk ("Generate the index of earlier
+    tasks"), and completion has to answer to the same source or the two would
+    disagree about what exists.
     """
     required = {spec.name for spec in node.required_artifacts}
     if not required:

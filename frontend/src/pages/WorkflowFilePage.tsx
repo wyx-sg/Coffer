@@ -1,5 +1,5 @@
 // frontend/src/pages/WorkflowFilePage.tsx — one file a run reads or wrote
-// (spec workflow, FR-064).
+// (spec workflow "Read a run's files from the app, bounded").
 //
 // A page and not a dialog. A dialog is for something you answer and dismiss;
 // a file a task produced is something you READ — you scroll it, you come back

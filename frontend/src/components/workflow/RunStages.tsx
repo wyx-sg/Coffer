@@ -1,6 +1,6 @@
 // frontend/src/components/workflow/RunStages.tsx
 // Where the delivery is: the run's stages beside the tasks of the one being
-// looked at (FR-061).
+// looked at.
 //
 // THE SAME PICTURE AS THE TEMPLATE EDITOR, drawn by the same component. A run
 // is the template it froze with state on it, so a developer who has learned to
@@ -9,12 +9,12 @@
 // how much is in a stage; a run marks where it is, because that is the
 // question here.
 //
-// Coffer attaches no meaning to a stage key (FR-003), so nothing here maps a
+// Coffer attaches no meaning to a stage key, so nothing here maps a
 // key onto an icon, a colour or a phase name — a stage is its user-chosen
 // display name and its position, and a template with eight stages named by
 // somebody else's process renders exactly as well as the seeded one.
 //
-// Nothing here advances the run (FR-052). "Add task" is the one control left,
+// Nothing here advances the run. "Add task" is the one control left,
 // and it advances nothing: it opens a NEW conversation, which is where every
 // decision now happens.
 import { useState } from "react";
@@ -31,7 +31,7 @@ import { StageRailList } from "./StageRailList";
 interface Props {
   detail: RunDetail;
   machine: string;
-  /** Opens the "add an unplanned task" dialog for this stage (FR-028). */
+  /** Opens the "add an unplanned task" dialog for this stage. */
   onAddTask: (stageKey: string) => void;
 }
 

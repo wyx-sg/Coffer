@@ -12,7 +12,7 @@ first-time user can register an MCP server and reach a working gateway in-app;
 pointing an MCP client at the shim is documented in the project README.
 
 The sidebar is grouped **by role**: **agents** are the _consumers_ (the agents
-you use, and the chat you hold with one), and **resources** are the _assets_
+you use, the chat you hold with one, and the workflow runs they carry out), and **resources** are the _assets_
 those agents draw on — named, configured, lifecycle-managed entities behind a
 kind-agnostic framework. See
 [Everything Is a Resource Kind](../../../docs/decisions/everything-is-a-resource-kind.md)
@@ -51,22 +51,26 @@ and a record's level had nowhere to live.
 
 ### Requirement: Group the sidebar by role
 The sidebar MUST be grouped by role rather than on one axis: AGENTS for the
-consumers (the agents, and the chat held with one) and RESOURCES for the assets
+consumers (the agents, the chat held with one, and the workflow runs they carry
+out) and RESOURCES for the assets
 those agents draw on, with SYSTEM for the cross-cutting tooling (Activity, Sync
 and Settings), so the navigation stays stable as Coffer grows. Agents are not a
 resource kind and MUST NOT be listed under Resources.
 
-AGENTS holds two entries, and Agents comes first: the agents are the subject,
-and a chat is one thing you do with one of them. The group stays its own even
-though it is the smallest — agents are the one thing in the product that *uses*
-the vault rather than living in it, and collapsing the group would lose that
-distinction to save two lines.
+AGENTS holds three entries, and Agents comes first: the agents are the subject,
+a chat is one thing you do with one of them, and a run is another. A run sits
+here rather than under Resources because it is operational state that belongs
+to one machine, not a vault asset; the workflow it runs from is the resource
+([workflow](../workflow/spec.md) "Keep templates and runs as separate
+surfaces"). The group stays its own even though it is the smallest — agents are
+the one thing in the product that *uses* the vault rather than living in it,
+and collapsing the group would lose that distinction to save three lines.
 
 #### Scenario: the sidebar groups agents, resources and system by role
 - **GIVEN** the app shell is rendered
 - **WHEN** the sidebar lists its entries
 - **THEN** they sit under three headings in the order Agents, Resources, System
-- **AND** Agents holds Agents then Chat, Resources holds no agent entry, and System holds Activity, Sync and Settings
+- **AND** Agents holds Agents, Chat then Runs, Resources holds no agent entry, and System holds Activity, Sync and Settings
 
 ### Requirement: Give every scoped resource kind its own list surface
 Every scoped resource kind MUST have its own list surface, so the navigation and
@@ -92,14 +96,15 @@ participant in convergence rather than a surface of its own.
 - **THEN** each is a link to a route the app serves
 - **AND** none is marked as coming soon or not yet implemented
 
-### Requirement: Keep the sidebar to its eleven entries
+### Requirement: Keep the sidebar to its thirteen entries
 The sidebar's entries MUST be exactly these, in these three groups and at these
-routes — eleven today, and no twelfth:
+routes — thirteen today, and no fourteenth:
 
 ```
  AGENTS
   Agents           /agents            — the consumers (Bot icon)
   Chat             /chat              — a conversation with one of them
+  Runs             /runs              — deliveries of a workflow, on this machine
  RESOURCES
   MCP servers      /mcp-servers       — the aggregated upstream servers
   Skills           /skills            — what Coffer delivers to agents
@@ -107,6 +112,7 @@ routes — eleven today, and no twelfth:
   Memory           /memory            — the partitions aggregated from the agents' own stores
   Model providers  /model-providers   — credentialed vendor endpoints
   Channels         /channels          — the IM transports agents answer on
+  Workflows        /workflows         — the shapes of work a run follows
  SYSTEM
   Activity         /activity          — what changed, what was called, what broke
   Sync             /sync              — converging this vault with a git remote
@@ -119,12 +125,12 @@ routes — eleven today, and no twelfth:
 - **WHEN** they navigate to `http://localhost:5173/` in a real browser
 - **THEN** the index redirects to `/agents` and the page renders the sidebar + main content area within 2 seconds
 - **AND** the main content shows the Agents welcome view (no generic error card)
-- **AND** the sidebar lists exactly Coffer's operational surfaces — Agents, Chat; MCP servers, Skills, Knowledge, Memory, Model providers, Channels; Activity, Sync, Settings — grouped under "Agents", "Resources", and "System" headings, with no other entry
+- **AND** the sidebar lists exactly Coffer's operational surfaces — Agents, Chat, Runs; MCP servers, Skills, Knowledge, Memory, Model providers, Channels, Workflows; Activity, Sync, Settings — grouped under "Agents", "Resources", and "System" headings, with no other entry
 
 ### Requirement: Hold one Resources entry per listed resource kind
 RESOURCES MUST hold exactly one entry per resource kind that has a list UI —
-today six kinds (`mcp_server`, `skill`, `knowledge`, `memory`, `provider`,
-`channel`), six entries. That correspondence is the rule: **Model providers**
+today seven kinds (`mcp_server`, `skill`, `knowledge`, `memory`, `provider`,
+`channel`, `workflow`), seven entries. That correspondence is the rule: **Model providers**
 is filed under Resources rather than Settings, because a `provider` is
 `{protocol, base_url, credential_ref}`, a vendor endpoint and its key, and the
 model is not stored there but chosen at the point of use; **Channels** is filed
@@ -134,7 +140,7 @@ transport the vault owns, not a consumer of the vault.
 #### Scenario: resources holds one entry per kind with a list
 - **GIVEN** the app shell is rendered
 - **WHEN** the Resources group is read
-- **THEN** it holds exactly MCP servers, Skills, Knowledge, Memory, Model providers and Channels, in that order
+- **THEN** it holds exactly MCP servers, Skills, Knowledge, Memory, Model providers, Channels and Workflows, in that order
 
 ### Requirement: Call a surface by one name everywhere
 A surface MUST carry one name in every place it is named — sidebar, page header,

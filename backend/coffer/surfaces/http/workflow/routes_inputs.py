@@ -1,4 +1,6 @@
-"""``/api/v1/workflow/runs/{run_id}/inputs`` — what a run reads (FR-032, FR-050).
+"""``/api/v1/workflow/runs/{run_id}/inputs`` — what a run reads (spec workflow
+"List a run's mounted inputs to every node", "Add and remove inputs at any point
+in a run").
 
 Six routes over one list, and none of them decides anything.
 ``WorkflowInputsService`` owns all of it: which run may be changed, what a
@@ -6,30 +8,33 @@ second ``prd.pdf`` is called, whether unmounting deletes bytes. This module
 turns a request into that call and a value object back onto the wire.
 
 A run's inputs are the developer's **at any point in its life**, not only at
-creation — creating a run is a template and a title and nothing else (FR-011),
-so this is now the only way anything gets mounted. A collection nobody thought
-of until the second stage is mounted then, and one that turned out to mislead is
-unmounted while the run is going. Every route that changes something answers
-with the inputs *after* the change, so a client never has to ask twice.
+creation — creating a run is a template and a title and nothing else ("Create a
+run from a template and a title alone"), so this is now the only way anything
+gets mounted. A collection nobody thought of until the second stage is mounted
+then, and one that turned out to mislead is unmounted while the run is going.
+Every route that changes something answers with the inputs *after* the change,
+so a client never has to ask twice.
 
 The upload has a route of its own rather than a ``kind: file`` body on the one
 next to it, because it carries **bytes** rather than a reference — a different
 content type is a different request, and pretending otherwise would mean a JSON
 body with a base64 field in it. The file lands under the run's own directory and
 its ``ref`` is the path relative to that directory, which is what a node is told
-and what the agent opens from its working directory (FR-051).
+and what the agent opens from its working directory ("Store an uploaded input
+under the run's directory").
 
 A NOTE is the developer's own writing rather than a document they were given
-(FR-069), so it too carries a body — and unlike an upload it can be rewritten,
-because a thought is not finished when it is first written down. It keeps its
-ref across a rewrite: a node that has already read the run's inputs knows the
-note by that name.
+("Keep the developer's own notes in a run's context"), so it too carries a
+body — and unlike an upload it can be rewritten, because a thought is not
+finished when it is first written down. It keeps its ref across a rewrite: a
+node that has already read the run's inputs knows the note by that name.
 
 None of these carries a ``version``. An input is not a move: mounting one does
 not advance the run, and two developers mounting two collections have not
 conflicted — they have mounted two collections. The two refusals that DO apply
 are about the run rather than the command, and the service applies them both: a
-run another machine owns (FR-012) and a run that has ended (FR-013).
+run another machine owns ("Advance a run only on the machine that owns it") and
+a run that has ended ("Keep a run to six statuses").
 """
 
 from __future__ import annotations
@@ -60,7 +65,8 @@ async def list_inputs(
     run_id: str,
     inputs: WorkflowInputsService = Depends(get_workflow_inputs_service),  # noqa: B008
 ) -> InputListOut:
-    """What this run reads — collections, uploaded files and links (FR-032)."""
+    """What this run reads — collections, uploaded files and links (spec
+    workflow "List a run's mounted inputs to every node")."""
     return InputListOut(items=mounted_out(await inputs.list_inputs(run_id)))
 
 
@@ -74,7 +80,8 @@ async def add_input(
     body: RunInputIn,
     inputs: WorkflowInputsService = Depends(get_workflow_inputs_service),  # noqa: B008
 ) -> InputListOut:
-    """Mount a knowledge collection or a link on a running run (FR-050).
+    """Mount a knowledge collection or a link on a running run (spec
+    workflow "Add and remove inputs at any point in a run").
 
     The request shape is narrower than the stored one: ``size``, ``path`` and
     ``mount`` are what the server made of the request, not things a caller gets
@@ -104,7 +111,8 @@ async def upload_input(
     label: str | None = Form(default=None),
     inputs: WorkflowInputsService = Depends(get_workflow_inputs_service),  # noqa: B008
 ) -> InputListOut:
-    """Upload a file for this run to read (FR-051).
+    """Upload a file for this run to read (spec workflow "Store an
+    uploaded input under the run's directory").
 
     The bytes are read here and handed over whole; where they land and what name
     survives a hostile one are questions about paths, and they are answered
@@ -130,7 +138,8 @@ async def add_note(
     body: RunNoteIn,
     inputs: WorkflowInputsService = Depends(get_workflow_inputs_service),  # noqa: B008
 ) -> InputListOut:
-    """Write a note of your own into the run's inputs (FR-069).
+    """Write a note of your own into the run's inputs (spec workflow
+    "Keep the developer's own notes in a run's context").
 
     It becomes a markdown file under the run's own directory, listed to every
     node as the developer's own words. An image pasted into it is an ordinary
@@ -148,7 +157,8 @@ async def rewrite_note(
     body: RunNoteEditIn,
     inputs: WorkflowInputsService = Depends(get_workflow_inputs_service),  # noqa: B008
 ) -> InputListOut:
-    """Replace a note's contents, keeping its name (FR-069)."""
+    """Replace a note's contents, keeping its name (spec workflow "Keep
+    the developer's own notes in a run's context")."""
     items = await inputs.rewrite_note(run_id, input_ref, text=body.text)
     return InputListOut(items=mounted_out(items))
 

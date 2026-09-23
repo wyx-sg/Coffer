@@ -1,4 +1,5 @@
-"""What a run READ, written down so it survives the run (FR-043).
+"""What a run READ, written down so it survives the run (spec workflow
+"Promote what a run is made of into a knowledge collection").
 
 Promotion copies the run's own bytes — its artifacts, its uploads, its notes.
 A link, a knowledge collection and a repository are not the run's bytes: the

@@ -139,7 +139,8 @@ def wire_mcp_kind(
 
     # 5. Build the per-session MCPGatewaySession factory
     # One holder for every session this factory ever builds, so binding the
-    # gate once reaches sessions opened before and after (FR-034).
+    # gate once reaches sessions opened before and after (spec workflow
+    # "Refuse an unapproved write-class tool call made for a run").
     tool_gate = LateBoundToolGate()
 
     def mcp_session_factory(session_id: str) -> MCPGatewaySession:

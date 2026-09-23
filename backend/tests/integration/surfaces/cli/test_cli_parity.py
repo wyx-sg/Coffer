@@ -206,7 +206,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "show",
         "start",
     },
-    # There is no `run say`: a run has no conversation of its own (FR-030), so
+    # There is no `run say`: a run has no conversation of its own, so
     # redirecting one is said in the task's own conversation through the chat
     # surface, not through a command here.
     "workflow run inputs": {"add", "list", "rm", "upload"},
@@ -294,8 +294,9 @@ def _long_options(path: str) -> set[str]:
     spec="workflow", scenario="the same delivery can be driven from the command line"
 )
 def test_a_delivery_can_be_driven_from_the_command_line():
-    """spec workflow FR-046: everything a developer working only from the
-    terminal has to be able to do to a delivery, named one command at a time.
+    """spec workflow "Drive runs from the CLI": everything a developer working
+    only from the terminal has to be able to do to a delivery, named one
+    command at a time.
 
     Asserted from the requirement rather than from ``_EXPECTED_GROUPS``, which
     is a drift detector: that table goes red when the tree changes and would

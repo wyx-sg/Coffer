@@ -15,7 +15,8 @@ Two things cross that ordering, and each is handled rather than worked around:
 * The **run identity a node's agent carries**. It has to be in the environment
   when the agent process starts, so the lookup is passed *into* ``wire_chat``.
   It reads the attempt row rather than a map built at conversation time, which
-  is what keeps a turn started after a daemon restart gated (FR-035).
+  is what keeps a turn started after a daemon restart gated (spec workflow
+  "Give the gateway the run's identity at dispatch").
 
 Nothing here can fail to build. With no channel bound the notifier delivers to
 the run's main thread alone; with no template registered the kind is still
@@ -272,12 +273,16 @@ def wire_workflow_kind(
         )
     )
 
-    # 5. The kind itself. Scope is read inverted — the agents a template may
-    #    drive — so the allowed set is every registered agent (FR-007).
-    app.state.kinds[KIND_WORKFLOW] = make_workflow_kind()
+    # 5. The kind itself, held to its scope — the agents it may drive — on
+    #    both write paths (spec workflow "Read a template's scope as the
+    #    agents it may drive").
+    app.state.kinds[KIND_WORKFLOW] = make_workflow_kind(
+        agents=lambda: resource_svc.list(kind="agent")
+    )
 
     # 6. The advancer. It only ever looks at runs this machine owns, because
-    #    ``next_position`` refuses a run owned elsewhere (FR-012).
+    #    ``next_position`` refuses a run owned elsewhere (spec workflow
+    #    "Advance a run only on the machine that owns it").
     async def _due_runs() -> list[str]:
         return [run.id for run in await run_service.list_runs(status="running")]
 
@@ -288,7 +293,8 @@ def wire_workflow_kind(
         run = await run_service.get_run(run_id)
         # The engine's own move, logged as the engine's rather than as the
         # developer's, and carrying the version it just read — the advancer is
-        # as subject to the optimistic lock as anyone else (FR-015).
+        # as subject to the optimistic lock as anyone else (spec workflow
+        # "Refuse a command carrying a stale version").
         await node_service.act(
             run_id,
             position.node_key,
@@ -361,7 +367,8 @@ async def start_workflow(
 
 
 async def rebuild_workflow_projections(run_service: WorkflowRunService) -> None:
-    """Fold every run's events back into its projection at startup (FR-014).
+    """Fold every run's events back into its projection at startup (spec
+    workflow "Rebuild a run from its event log").
 
     Best-effort by design: a run whose events cannot be folded is a run with a
     problem, and refusing to start the daemon over it would take the whole

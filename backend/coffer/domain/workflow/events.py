@@ -1,9 +1,9 @@
 """The closed event vocabulary and the projection fold (spec workflow).
 
-A run's append-only event log is its record of truth (FR-014); its status,
-stage, node and spend are a projection of that log, carried on the run row only
-so a list query is one row read. :func:`project` is that fold, and it is what
-rebuilds every run on daemon start.
+A run's append-only event log is its record of truth ("Rebuild a run from its
+event log"); its status, stage, node and spend are a projection of that log,
+carried on the run row only so a list query is one row read. :func:`project` is
+that fold, and it is what rebuilds every run on daemon start.
 
 The fold is deliberately pure and takes a plain sequence: the restart test is
 "build a run, drop the projection, rebuild from events, compare", and that test
@@ -68,7 +68,8 @@ class EventType(StrEnum):
     NODE_RESTORED = "node.restored"
     NODE_ADHOC_ADDED = "node.adhoc_added"
     #: The developer wrote something for a task that has not started yet — a
-    #: brief, queued onto the attempt the task will open with (FR-068). It is
+    #: brief, queued onto the attempt the task will open with (spec workflow
+    #: "Let the developer speak to a task at any point, in one place"). It is
     #: NOT a position event: saying what a later task should do does not move
     #: the run to it.
     NODE_BRIEFED = "node.briefed"
@@ -140,7 +141,8 @@ _POSITION_EVENTS: frozenset[EventType] = frozenset(
 
 
 def project(events: Iterable[WorkflowEvent]) -> RunProjection:
-    """Fold a run's events into its status, position and spend (FR-014).
+    """Fold a run's events into its status, position and spend (spec workflow
+    "Rebuild a run from its event log").
 
     Events are folded in ``sequence`` order regardless of the order they arrive
     in, so a repository that reads them back unordered cannot produce a

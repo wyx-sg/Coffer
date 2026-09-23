@@ -1,4 +1,6 @@
-"""``ArtifactStorePort`` over the run directory (spec workflow FR-041, FR-053).
+"""``ArtifactStorePort`` over the run directory (spec workflow "Store artifacts
+as files attributed to their node and attempt", "Give each run a working
+directory of its own").
 
 Split from ``workflow_adapters`` to keep that module under its line ceiling.
 The seam is the one the rest of that file already draws: every other adapter
@@ -34,7 +36,8 @@ class FileArtifactStore:
 
     def workspace_dir(self, run_id: str) -> str:
         """The run's own working directory — what every node's conversation
-        runs in, and what a mounted repository is checked out into (FR-053)."""
+        runs in, and what a mounted repository is checked out into (spec
+        workflow "Give each run a working directory of its own")."""
         return str(wf_paths.workspace_dir(run_id))
 
     def ensure_run_dirs(self, run_id: str) -> None:

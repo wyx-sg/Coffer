@@ -1,5 +1,6 @@
 // frontend/src/components/workflow/NodeAssignmentBar.tsx
-// Who runs this task, on what, before it runs (FR-071).
+// Who runs this task, on what, before it runs (spec workflow "Choose a task's agent,
+// model and effort before it starts").
 //
 // Once a task has started, the bar above its transcript is the chat layer's
 // own: its conversation holds the agent, the model and the effort, and the

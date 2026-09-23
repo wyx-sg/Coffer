@@ -76,9 +76,10 @@ def build_agent_provider_registry(
     is launched with, looked up per turn by conversation id. It exists for the
     workflow kind: a node's turn is a conversation, and the run identity the MCP
     gateway attributes its tool calls to travels there and nowhere else (spec
-    workflow FR-035). The real lookup is the workflow node driver's, supplied
-    one level up in ``wire_chat`` once that engine exists; ``None`` here means
-    every agent process inherits the daemon's environment as it always has.
+    workflow "Give the gateway the run's identity at dispatch"). The real lookup
+    is the workflow node driver's, supplied one level up in ``wire_chat`` once
+    that engine exists; ``None`` here means every agent process inherits the
+    daemon's environment as it always has.
     """
     registry = AgentProviderRegistry()
 

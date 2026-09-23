@@ -1,4 +1,6 @@
-"""``WorkflowInputsService`` — what a run reads (FR-032, FR-050, FR-051).
+"""``WorkflowInputsService`` — what a run reads (spec workflow "List a
+run's mounted inputs to every node", "Add and remove inputs at any point
+in a run", "Store an uploaded input under the run's directory").
 
 A delivery starts from things that already exist: a PRD, a ticket, a design
 doc, a file someone sent. The developer mounts them on the run and every node
@@ -6,18 +8,19 @@ that opens afterwards is told they are there.
 
 Three properties this service exists to keep:
 
-* **At any point in the run's life** (FR-050), not only at creation, and
-  outside the version cycle — mounting a document advances nothing, so it does
-  not bump the version every open client is holding. What it does change is
-  what the NEXT node opens with, which is exactly the requirement.
-* **Listed, never inlined** (FR-032). Nothing here reads a file's contents. A
-  collection can be larger than the whole context budget, and a node is an
-  agent with a filesystem: it is told the path and opens it.
+* **At any point in the run's life**, not only at creation, and outside the
+  version cycle — mounting a document advances nothing, so it does not bump the
+  version every open client is holding. What it does change is what the NEXT
+  node opens with, which is exactly the requirement.
+* **Listed, never inlined** ("List a run's mounted inputs to every node").
+  Nothing here reads a file's contents. A collection can be larger than the
+  whole context budget, and a node is an agent with a filesystem: it is told
+  the path and opens it.
 * **Removing gives back what the run took.** An uploaded file's bytes and a
   mounted repository's checkout are the run's own, so unmounting one removes
   it. A collection and a link were never the run's, so unmounting one only
   unmounts it — and the repository a checkout came from is never touched
-  either way (FR-058).
+  either way ("Leave the source repository untouched on unmount").
 """
 
 from __future__ import annotations
@@ -62,7 +65,7 @@ class InputNotFound(WorkflowError):  # noqa: N818
 
 
 class InputStorePort(Protocol):
-    """An uploaded file's bytes, under the run's own directory (FR-051).
+    """An uploaded file's bytes, under the run's own directory.
 
     Declared beside its only caller rather than in ``ports``: it is not a seam
     to another kind, it is this layer's own file storage, and
@@ -89,7 +92,7 @@ class InputStorePort(Protocol):
         lands in the run's ``inputs/`` while a node runs in its ``workspace/``,
         so a path relative to the working directory would climb out of it with
         ``..`` — which some agents refuse outright. The node is told where the
-        file actually is (FR-051)."""
+        file actually is."""
         ...
 
     def delete_input(self, run_id: str, ref: str) -> None: ...
@@ -110,12 +113,12 @@ class MountedRepoValue(Protocol):
 
     @property
     def mount(self) -> str:
-        """``worktree`` or ``link`` — what the run actually got (FR-057)."""
+        """``worktree`` or ``link`` — what the run actually got."""
         ...
 
 
 class RepoMountPort(Protocol):
-    """Giving a run its own checkout of a local repository (FR-057, FR-058).
+    """Giving a run its own checkout of a local repository.
 
     Beside its only caller for the same reason ``InputStorePort`` is: it is
     this layer's own file and git work, satisfied structurally by
@@ -187,9 +190,9 @@ class WorkflowInputsService:
         there, which reads as a broken run.
 
         A REPO is checked out before the row moves, and a checkout that could
-        not be made refuses the whole add (FR-057): an input pointing at a
-        directory that is not there is a node told to work somewhere that does
-        not exist, which reads as a broken run rather than a failed mount.
+        not be made refuses the whole add: an input pointing at a directory
+        that is not there is a node told to work somewhere that does not
+        exist, which reads as a broken run rather than a failed mount.
         """
         if kind in _OWN_BYTES:
             raise IllegalTransition(
@@ -261,7 +264,7 @@ class WorkflowInputsService:
         title: str,
         text: str,
     ) -> tuple[RunInput, ...]:
-        """Write a note of the developer's own and mount it (FR-069).
+        """Write a note of the developer's own and mount it.
 
         A note is stored exactly as an upload is — a file under the run's own
         inputs — because that is what it is by the time a node reads it. What
@@ -283,7 +286,7 @@ class WorkflowInputsService:
         return await self._write(run_id, (*current, note))
 
     async def rewrite_note(self, run_id: str, ref: str, *, text: str) -> tuple[RunInput, ...]:
-        """Replace a mounted note's contents, keeping its ref (FR-069).
+        """Replace a mounted note's contents, keeping its ref.
 
         Keeping the ref is the point: a note is referred to by name in whatever
         a node has already read, and a second thought that renamed the file
@@ -305,7 +308,7 @@ class WorkflowInputsService:
         )
 
     async def remove_input(self, run_id: str, ref: str) -> tuple[RunInput, ...]:
-        """Unmount ``ref``; an uploaded file's bytes go with it (FR-050)."""
+        """Unmount ``ref``; an uploaded file's bytes go with it."""
         run = await self._require_mutable(run_id, "input.remove")
         current = parse_inputs(run.inputs)
         going = [item for item in current if item.ref == ref]
@@ -329,8 +332,8 @@ class WorkflowInputsService:
             if item.kind in _OWN_BYTES:
                 self._uploads.delete_input(run_id, item.ref)
             elif item.kind is RunInputKind.REPO and item.path and item.mount:
-                # FR-058: this removes the run's checkout. The repository it
-                # came from keeps its working tree and its own branches.
+                # This removes the run's checkout. The repository it came
+                # from keeps its working tree and its own branches.
                 await self._repos.unmount(run_id, source=item.ref, path=item.path, mount=item.mount)
             # A collection and a link were never the run's to delete.
         except (OSError, RuntimeError):
@@ -346,9 +349,9 @@ class WorkflowInputsService:
         """The run, if this machine may change what it reads.
 
         ``version=None``: there is no optimistic lock on the inputs (see
-        ``RunRepoPort.set_inputs``), but the machine check (FR-012) and the
-        terminal-run check (FR-013) both still apply — a run this machine does
-        not advance is read-only here, and an aborted run reads nothing more.
+        ``RunRepoPort.set_inputs``), but the machine check and the terminal-run
+        check both still apply — a run this machine does not advance is
+        read-only here, and an aborted run reads nothing more.
         """
         run = await self._cmd.require_run(run_id)
         self._cmd.guard(run, attempted, None)
@@ -385,7 +388,8 @@ def _checkout_name(item: RunInput) -> str:
 
 
 def _input_dict(item: RunInput) -> dict[str, Any]:
-    """A mounted input as the ``inputs`` JSON column holds it (FR-032)."""
+    """A mounted input as the ``inputs`` JSON column holds it (spec
+    workflow "List a run's mounted inputs to every node")."""
     return {
         "kind": item.kind.value,
         "ref": item.ref,

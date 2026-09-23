@@ -1,20 +1,21 @@
-"""``coffer workflow …`` — delivery runs from the terminal (spec workflow FR-046).
+"""``coffer workflow …`` — delivery runs from the terminal (spec workflow "Drive
+runs from the CLI").
 
 Thin HTTP shells over the daemon, matching the other CLI groups and their
 exit-code mapping (``_cli_client.check``).
 
 One thing this group does on the caller's behalf rather than making them do it:
-every mutating command carries the run's ``version`` (FR-015), and the CLI reads
-the run immediately before sending so the terminal never has to hold a number
-between two commands. That is a convenience, not a weakening — a concurrent
-change between the read and the write still comes back as a conflict, which is
-exactly what the optimistic lock is for. A caller who has a version in hand can
-pass ``--version`` and skip the read.
+every mutating command carries the run's ``version`` ("Refuse a command carrying
+a stale version"), and the CLI reads the run immediately before sending so the
+terminal never has to hold a number between two commands. That is a convenience,
+not a weakening — a concurrent change between the read and the write still comes
+back as a conflict, which is exactly what the optimistic lock is for. A caller
+who has a version in hand can pass ``--version`` and skip the read.
 
-There is no ``run say``: a run has no conversation of its own (FR-030). Every
-conversation belongs to one task, so redirecting a run means saying it in the
-task's own conversation — ``run show`` prints the task and its conversation is
-where the developer speaks.
+There is no ``run say``: a run has no conversation of its own ("Give a run no
+conversation of its own"). Every conversation belongs to one task, so
+redirecting a run means saying it in the task's own conversation —
+``run show`` prints the task and its conversation is where the developer speaks.
 
 The template half lives in ``workflow_template_cmd`` because a template is a
 Resource and speaks to a different route family, and a run's inputs live in
@@ -103,8 +104,9 @@ def _render_run_detail(payload: Any) -> None:
         typer.echo(f"  owned by  {run['machine_id']} — read-only here")
     table = Table(show_header=True, header_style="bold")
     # ``conversation`` is the column a person actually acts through: a task IS
-    # its conversation (FR-030), and ``actions`` says what that conversation
-    # will accept once they are in it (FR-052).
+    # its conversation (spec workflow "Give a run no conversation of its
+    # own"), and ``actions`` says what that conversation will accept once they
+    # are in it ("Offer no run controls on the run's page").
     for column in ("stage", "node", "type", "status", "try", "conversation", "actions"):
         table.add_column(column)
     for stage in payload.get("stages", []):
@@ -131,10 +133,11 @@ def create_run(
 ) -> None:
     """Create a run. It starts in `draft` — `run start` sets it going.
 
-    A template and a title is the whole of it (FR-011). The working directory is
-    Coffer's own, one per run, and anything the run should read is mounted
-    afterwards with `coffer workflow run inputs add` — which can also unmount
-    it, which a flag on this command could never do.
+    A template and a title is the whole of it (spec workflow "Create a run from
+    a template and a title alone"). The working directory is Coffer's own, one
+    per run, and anything the run should read is mounted afterwards with `coffer
+    workflow run inputs add` — which can also unmount it, which a flag on this
+    command could never do.
     """
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -358,7 +361,8 @@ def add_task(
     """Add unplanned work to a stage, with instructions of your own.
 
     It opens with the same shared context as any node and its artifacts are
-    attributed the same way (FR-028).
+    attributed the same way (spec workflow "Add an ad-hoc task to any
+    stage").
     """
     body: dict[str, Any] = {"stage_key": stage_key, "name": name, "instructions": instructions}
     if agent:

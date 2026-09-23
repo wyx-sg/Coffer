@@ -2,18 +2,18 @@
 // One node inside its stage: what it is, where it got to — and a way in.
 //
 // The whole row is a LINK to the node's conversation page and carries no
-// buttons at all (FR-052). Retry, skip, complete and feedback used to live
+// buttons at all. Retry, skip, complete and feedback used to live
 // here; they now live in the conversation, where the thing being decided is in
 // front of the developer. What is left is a map pin: status, attempt, and a
 // click that opens the task.
 //
 // An ad-hoc task renders here like any other node — same row, same status,
 // same attribution — with one "unplanned" chip, because the whole point of
-// FR-028 is that unplanned work joins the run rather than happening beside it.
+// an ad-hoc task is that unplanned work joins the run rather than happening beside it.
 // Hiding it in a separate list would make the run's record untrue.
 //
 // The attempt number is always shown, not only when it is greater than one: a
-// retry appends an attempt and the previous one survives (FR-022), so "which
+// retry appends an attempt and the previous one survives, so "which
 // attempt am I looking at" is a question this row must answer on its face.
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";

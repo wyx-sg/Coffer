@@ -1,7 +1,9 @@
 """``WorkflowNodeService`` — the commands that act on one node (spec workflow).
 
-The six node actions (FR-021), each task's own attempt ceiling (FR-026), the
-ad-hoc task (FR-028), and the reports the driver makes back when a turn ends.
+The six node actions ("Accept the node actions start, feedback, complete,
+retry, skip and restore"), each task's own attempt ceiling ("Bound each
+task's attempts by its own ceiling"), the ad-hoc task ("Add an ad-hoc task to
+any stage"), and the reports the driver makes back when a turn ends.
 
 This service owns node STATE and nothing else. It never opens a conversation:
 when a node becomes ``running`` it hands a ``NodeDispatch`` to the dispatcher
@@ -108,7 +110,9 @@ class WorkflowNodeService:
         waive_artifacts: bool = False,
         actor: EventActor = DEFAULT_ACTOR,
     ) -> CommandResult:
-        """One entry point for the six node actions (FR-021)."""
+        """One entry point for the six node actions (spec workflow
+        "Accept the node actions start, feedback, complete, retry, skip
+        and restore")."""
         ops = self._ops
         run = await ops.cmd.require_run(run_id)
         ops.cmd.guard(run, f"node.{action.value}", version)
@@ -143,7 +147,8 @@ class WorkflowNodeService:
                 actor,
             )
         # `retry` and `restore` both open the NEXT attempt and leave the last
-        # one as it is (FR-022); the event type is their whole difference, so a
+        # one as it is (spec workflow "Keep every attempt when a node is
+        # retried"); the event type is their whole difference, so a
         # restored node still shows that the developer had skipped it.
         event_type = (
             EventType.NODE_RETRIED if action is NodeAction.RETRY else EventType.NODE_RESTORED
@@ -171,13 +176,14 @@ class WorkflowNodeService:
             attempt = await ops.open_attempt(run.id, stage_key, node.key, 1)
         apply_node_action(NodeStatus(attempt.status), NodeAction.START, node.type)
         # COMMIT FIRST, then mark the row running. The commit is where the
-        # optimistic lock is checked (FR-015), and the advancer reads a run a
-        # moment before it acts on it — so any command the developer issues in
-        # between refuses this one. Marking the row first left that node
-        # `running` with no `node.started` event behind it: nothing may act on
-        # a running node, and the advancer never offers it again, so the run
-        # stopped on a node no one could move. Now a refusal touches nothing
-        # and the next tick starts it.
+        # optimistic lock is checked (spec workflow "Refuse a command carrying a
+        # stale version"), and the advancer reads a run a moment before it acts
+        # on it — so any command the developer issues in between refuses this
+        # one. Marking the row first left that node `running` with no
+        # `node.started` event behind it: nothing may act on a running node, and
+        # the advancer never offers it again, so the run stopped on a node no
+        # one could move. Now a refusal touches nothing and the next tick starts
+        # it.
         result = await ops.cmd.commit(
             run,
             [
@@ -217,7 +223,8 @@ class WorkflowNodeService:
         ops = self._ops
         missing = artifact_gap(ops.artifacts, run.id, node, attempt.attempt)
         if missing and not waive_artifacts:
-            # FR-023: the node waits for the developer to supply the file or
+            # Spec workflow "Hold completion until a required artifact
+            # exists": the node waits for the developer to supply the file or
             # waive it. Refusing the command IS that wait — the node keeps the
             # status it had, and nothing about the run moves.
             raise MissingRequiredArtifact(node.key, missing)
@@ -248,7 +255,8 @@ class WorkflowNodeService:
         conversation_id: str | None = None,
         actor: EventActor = ENGINE_ACTOR,
     ) -> CommandResult:
-        """A turn ended and left something behind (FR-017)."""
+        """A turn ended and left something behind (spec workflow "Run at
+        most one node at a time")."""
         return await node_reports.record_output(
             self._ops,
             run_id,
@@ -268,7 +276,8 @@ class WorkflowNodeService:
         detail: str | None = None,
         actor: EventActor = ENGINE_ACTOR,
     ) -> CommandResult:
-        """A turn ended badly; the node's declared behaviour decides (FR-024)."""
+        """A turn ended badly; the node's declared behaviour decides (spec
+        workflow "Handle a node failure as the node declares")."""
         return await node_reports.record_failure(
             self._ops, run_id, node_key, reason=reason, detail=detail, actor=actor
         )
@@ -285,7 +294,8 @@ class WorkflowNodeService:
         No event and no version bump: it is not a state change, it is the
         attempt acquiring the thing that makes an interruption readable. The
         driver calls it before the first turn precisely so a process that dies
-        mid-turn leaves a row that still names the conversation (FR-027).
+        mid-turn leaves a row that still names the conversation (spec
+        workflow "Report a node interrupted by a restart as failed").
         """
         await self._ops.attempts.update_attempt(attempt_id, conversation_id=conversation_id)
 
@@ -310,7 +320,9 @@ class WorkflowNodeService:
         text: str,
         actor: EventActor = DEFAULT_ACTOR,
     ) -> CommandResult:
-        """Say something to one task, whatever state it is in (FR-068)."""
+        """Say something to one task, whatever state it is in (spec
+        workflow "Let the developer speak to a task at any point, in one
+        place")."""
         return await node_say.say(self._ops, run_id, node_key, text=text, actor=actor)
 
     async def assign(
@@ -323,7 +335,9 @@ class WorkflowNodeService:
         effort: str | None,
         actor: EventActor = DEFAULT_ACTOR,
     ) -> CommandResult:
-        """Choose who runs this task, on what, before it runs (FR-071)."""
+        """Choose who runs this task, on what, before it runs (spec
+        workflow "Choose a task's agent, model and effort before it
+        starts")."""
         return await node_assignment.assign(
             self._ops, run_id, node_key, agent=agent, model=model, effort=effort, actor=actor
         )
@@ -342,7 +356,8 @@ class WorkflowNodeService:
         workdir: str | None = None,
         actor: EventActor = DEFAULT_ACTOR,
     ) -> CommandResult:
-        """Add unplanned work to a stage of a run (FR-028)."""
+        """Add unplanned work to a stage of a run (spec workflow "Add an
+        ad-hoc task to any stage")."""
         return await node_tasks.add_adhoc_task(
             self._ops,
             run_id,

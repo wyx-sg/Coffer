@@ -1,6 +1,6 @@
 // frontend/src/components/workflow/TemplateArtifacts.tsx
 // What a node OWES: the files it must leave behind, and which of them block
-// its completion when they were never written (FR-023).
+// its completion when they were never written.
 //
 // A name here is one path segment — no separators, no dots-only (data-model).
 // The editor does not pre-validate it into silence: the daemon owns that rule

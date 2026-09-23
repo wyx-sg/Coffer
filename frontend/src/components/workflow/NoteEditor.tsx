@@ -1,5 +1,5 @@
 // frontend/src/components/workflow/NoteEditor.tsx — writing a note, including
-// the screenshot you pasted into it (FR-069).
+// the screenshot you pasted into it.
 //
 // The paste is the reason this is its own component. A textarea with a paste
 // handler is nearly the whole feature: a clipboard image goes to the run's own

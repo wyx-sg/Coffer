@@ -1,5 +1,5 @@
 // frontend/src/components/workflow/RunFileView.tsx
-// One file out of a run's directory, rendered (FR-064, FR-069).
+// One file out of a run's directory, rendered.
 //
 // Shared by the file's own page and by the panel beside a task's conversation,
 // because "show me this file" is one question and two answers to it would

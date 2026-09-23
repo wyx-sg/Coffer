@@ -1,20 +1,21 @@
 // frontend/src/lib/workflow/templateDraft.ts
-// Pure edits on a template config — the editor's whole vocabulary (FR-054).
+// Pure edits on a template config — the editor's whole vocabulary.
 //
 // A template is a LIST, not a graph: the order the stages sit in is the order
 // they run in, and it is the only thing that says what runs after what. There
 // are no edges of any kind — a finding in a later task is acted on by the
-// developer, by retrying the task that was wrong or adding one that fixes it
-// (FR-025), which is a decision only the person holding the finding can make.
+// developer, by retrying the task that was wrong or adding one that fixes it,
+// which is a decision only the person holding the finding can make.
 // So "reorder the stages" is a list operation and there is no graph to keep
 // consistent alongside it.
 //
-// KEYS ARE DERIVED HERE AND NEVER TYPED (FR-060). A key is an identity the
-// engine reads no meaning from (FR-003); asking a developer to invent one is
+// KEYS ARE DERIVED HERE AND NEVER TYPED. A key is an identity the
+// engine reads no meaning from; asking a developer to invent one is
 // asking them to do the computer's filing. So a stage's and a task's key are
 // slugs of their name, made unique, recomputed whenever the name changes. This
 // is safe because a template is only ever data: a run froze its own copy of it
-// (FR-011), so nothing in flight is reading these keys.
+// (spec workflow "Freeze the template when a run is created"), so nothing in
+// flight is reading these keys.
 //
 // Every function returns a new config; nothing here mutates its argument.
 import type { TemplateConfig, TemplateNode, TemplateStage } from "@/lib/api/workflow";

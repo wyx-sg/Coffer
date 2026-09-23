@@ -20,7 +20,8 @@ class WorkflowError(CofferError):
 
 
 class TemplateInvalid(WorkflowError):  # noqa: N818
-    """A template config failed validation (FR-006).
+    """A template config failed validation (spec workflow "Refuse an invalid
+    template naming the offending path").
 
     ``path`` is the JSON path of the offending field —
     ``stages[1].nodes[0].skill``, not "a node". The refusal is only useful if
@@ -37,7 +38,8 @@ class TemplateInvalid(WorkflowError):  # noqa: N818
 
 
 class WorkflowVersionConflict(WorkflowError):  # noqa: N818
-    """A mutating command carried a stale observed version (FR-015).
+    """A mutating command carried a stale observed version (spec workflow
+    "Refuse a command carrying a stale version").
 
     Carries the run's *current* position as well as its version, because the
     client's next move is to re-read and decide, and the refusal can hand it
@@ -89,7 +91,8 @@ class IllegalTransition(WorkflowError):  # noqa: N818
 
 
 class NotThisMachine(WorkflowError):  # noqa: N818
-    """A mutating command reached the machine that does not own the run (FR-012).
+    """A mutating command reached the machine that does not own the run (spec
+    workflow "Advance a run only on the machine that owns it").
 
     Says which machine does own it: the run is visible everywhere, so the
     developer looking at it here needs to know where to go to advance it.
@@ -108,7 +111,9 @@ class NotThisMachine(WorkflowError):  # noqa: N818
 
 
 class RunTerminal(WorkflowError):  # noqa: N818
-    """A mutating command reached a completed or aborted run (FR-013, FR-016).
+    """A mutating command reached a completed or aborted run (spec workflow
+    "Keep a run to six statuses", "Accept the run signals start, pause, resume
+    and abort").
 
     Distinct from ``IllegalTransition`` because it is a different answer: not
     "not from here", but "never again".
@@ -126,7 +131,8 @@ class RunTerminal(WorkflowError):  # noqa: N818
 
 
 class TemplateDisabled(WorkflowError):  # noqa: N818
-    """A run was asked for from a workflow that is switched off (FR-066).
+    """A run was asked for from a workflow that is switched off (spec workflow
+    "Refuse new runs from a disabled workflow at the daemon").
 
     Enabled is what decides whether a workflow may start new runs, so it is
     refused HERE rather than filtered in one client: a rule that lives only in
@@ -134,8 +140,9 @@ class TemplateDisabled(WorkflowError):  # noqa: N818
     every other caller does not extend.
 
     It says nothing about runs already going. They froze their own snapshot at
-    creation (FR-011) and keep running — switching a workflow off retires it
-    from the menu, it does not stop work that is already under way.
+    creation ("Freeze the template when a run is created") and keep running —
+    switching a workflow off retires it from the menu, it does not stop work
+    that is already under way.
     """
 
     code = "WORKFLOW_TEMPLATE_DISABLED"
@@ -149,7 +156,8 @@ class TemplateDisabled(WorkflowError):  # noqa: N818
 
 
 class UnknownWorkflowAgent(WorkflowError):  # noqa: N818
-    """A task was assigned an agent this machine does not have (FR-071).
+    """A task was assigned an agent this machine does not have (spec workflow
+    "Choose a task's agent, model and effort before it starts").
 
     Refused when the choice is MADE. Left to the moment the task starts, a
     typed agent key becomes a failed attempt with an agent error hours later,
@@ -165,7 +173,8 @@ class UnknownWorkflowAgent(WorkflowError):  # noqa: N818
 
 
 class RunLabelInvalid(WorkflowError):  # noqa: N818
-    """A run was asked to be called nothing at all (FR-070).
+    """A run was asked to be called nothing at all (spec workflow "Edit a run's
+    title and description as labels").
 
     A title is what tells one delivery from another in a list, so a blank one
     is refused rather than stored — an empty row in that list is worse than
@@ -176,7 +185,8 @@ class RunLabelInvalid(WorkflowError):  # noqa: N818
 
 
 class AttemptCeilingReached(WorkflowError):  # noqa: N818
-    """A node would open an attempt past the template's ceiling (FR-026).
+    """A node would open an attempt past the template's ceiling (spec workflow
+    "Bound each task's attempts by its own ceiling").
 
     Raised where the loop would otherwise close — the application turns it into
     a ``run.failed`` event whose reason is ``attempt_ceiling``, which is the

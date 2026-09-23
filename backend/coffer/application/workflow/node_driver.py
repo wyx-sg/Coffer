@@ -1,4 +1,6 @@
-"""One node attempt's life: conversation, turn, outcome (FR-019, FR-030).
+"""One node attempt's life: conversation, turn, outcome (spec workflow
+"Run a node's work as one conversation", "Give a run no conversation of
+its own").
 
 A node's work is **one ordinary Coffer conversation** — there is no second
 agent runtime here. The driver opens it in the run's working directory, starts
@@ -17,18 +19,21 @@ Four shapes are worth knowing before reading the code:
   work (``NodeType.MANUAL``), so the driver reports it as ready for the
   developer immediately — no agent, no turn, no tokens.
 * **A follow-up is not a new node.** ``NodeDispatch.follow_up`` is more to do on
-  the attempt already in flight (FR-021's ``feedback``): it runs a turn on that
+  the attempt already in flight (the ``feedback`` of "Accept the node actions
+  start, feedback, complete, retry, skip and restore"): it runs a turn on that
   attempt's existing conversation and composes nothing, because the agent
   already has the context and re-sending it would read as a restart.
 * **Cancellation is not a failure.** If the daemon is stopping mid-turn the
   driver re-raises rather than reporting, because the attempt genuinely is
   still running; start-up reconciliation is what marks it ``interrupted``
-  (FR-027), and reporting a failure here would race it with a worse answer.
+  ("Report a node interrupted by a restart as failed"), and reporting a
+  failure here would race it with a worse answer.
 * **A long conversation is compacted, not truncated.** Before a turn starts on
-  a conversation that already has history, the driver compacts it (FR-049) —
-  the oldest turns become a summary that stays in the conversation. It is best
-  effort: a conversation that could not be compacted still gets its turn, and
-  the compactor says why rather than dropping anything.
+  a conversation that already has history, the driver compacts it ("Compact a
+  long node conversation into a summary") — the oldest turns become a summary
+  that stays in the conversation. It is best effort: a conversation that could
+  not be compacted still gets its turn, and the compactor says why rather than
+  dropping anything.
 """
 
 from __future__ import annotations
@@ -70,7 +75,8 @@ MANUAL_NODE_SUMMARY = (
 
 #: The attempt's conversation exists and has been opened. Called *before* the
 #: turn starts, which is what makes an interrupted attempt readable: the
-#: conversation id is already on the row when the process stops (FR-027).
+#: conversation id is already on the row when the process stops (spec
+#: workflow "Report a node interrupted by a restart as failed").
 OnConversationOpened = Callable[[str, str], Awaitable[None]]
 
 #: ``(attempt_id, summary, tokens)`` — the node produced its output and is now
@@ -152,11 +158,14 @@ class NodeDriver:
                 agent_key=dispatch.agent_key,
                 cwd=dispatch.workdir,
                 # Read verbatim by the gateway to attribute this agent's tool
-                # calls back to the run and attempt that caused them (FR-035).
+                # calls back to the run and attempt that caused them (spec
+                # workflow "Give the gateway the run's identity at dispatch").
                 # The shape is the contract; do not decorate it.
                 run_context=f"{dispatch.run.id}/{attempt_id}",
-                # What this attempt was told to run on (FR-071). None leaves
-                # the agent's own configuration to decide, as it always did.
+                # What this attempt was told to run on (spec workflow
+                # "Choose a task's agent, model and effort before it
+                # starts"). None leaves the agent's own configuration to
+                # decide, as it always did.
                 model=dispatch.model,
                 effort=dispatch.effort,
             )
@@ -170,7 +179,8 @@ class NodeDriver:
         return conversation_id
 
     async def _compose(self, dispatch: NodeDispatch) -> str | None:
-        """The shared opening context (FR-029), or a reported failure."""
+        """The shared opening context (spec workflow "Open every task
+        with the same four parts"), or a reported failure."""
         attempt_id = dispatch.attempt.id
         try:
             return await self._composer.compose(_request_for(dispatch))
@@ -194,7 +204,8 @@ class NodeDriver:
             return
         # The only path that starts a turn on a conversation that already has
         # history, and therefore the only one that can be over its share of the
-        # budget (FR-049).
+        # budget (spec workflow "Compact a long node conversation into a
+        # summary").
         await self._compact(conversation_id)
         await self._run_turn(dispatch, conversation_id, dispatch.follow_up or "")
 

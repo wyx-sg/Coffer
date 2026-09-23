@@ -1,4 +1,4 @@
-"""``/api/v1/workflow/approvals`` — the decisions waiting on a person (FR-044).
+"""``/api/v1/workflow/approvals`` — the decisions waiting on a person.
 
 The route adds two answers to ``ApprovalService.decide`` and nothing else: 404
 for an approval that is not there, and 409 for one that expired under the
@@ -23,7 +23,7 @@ from .conftest import Surface, code_of, create_run, started_run
 _APPROVALS = "/api/v1/workflow/approvals"
 
 #: A payload with nesting and unicode — anything that "summarises" it mangles at
-#: least one of these, and a decision on a summary is not a decision (FR-033).
+#: least one of these, and a decision on a summary is not a decision.
 VERBATIM: dict[str, Any] = {
     "project": "COF",
     "fields": {"labels": ["urgent", "运维"], "watchers": []},
@@ -116,8 +116,8 @@ def test_a_decision_is_recorded_with_who_made_it_and_where(surface: Surface) -> 
 
 @pytest.mark.acceptance(spec="workflow", scenario="an approval decision is idempotent")
 def test_a_repeated_decision_returns_the_same_terminal_state(surface: Surface) -> None:
-    """FR-038: idempotent, and nothing executes a second time — which here means
-    no second event on the run's log."""
+    """Idempotent, and nothing executes a second time — which here means no
+    second event on the run's log."""
     run = started_run(surface.client)
     asked = _ask(surface, run["id"])
     first = _decide(surface, asked["id"], decision="approved").json()
@@ -138,7 +138,7 @@ def test_a_rejection_keeps_the_reason_the_node_can_act_on(surface: Surface) -> N
 
 
 def test_a_remembered_write_class_reaches_the_tool_s_own_server(surface: Surface) -> None:
-    """FR-036: the same tool is not asked about twice."""
+    """The same tool is not asked about twice."""
     run = started_run(surface.client)
     asked = _ask(surface, run["id"])
     _decide(surface, asked["id"], decision="approved", remember_tool_class="write")
@@ -152,7 +152,8 @@ def test_deciding_an_approval_that_is_not_there_is_404(surface: Surface) -> None
 
 
 def test_deciding_an_expired_approval_is_409(surface: Surface) -> None:
-    """The held call has already been failed (FR-037), so the click did not
+    """The held call has already been failed (spec workflow
+    "Resume or fail a held tool call, never drop it"), so the click did not
     land — and rendering it as though it had would be a lie."""
     run = started_run(surface.client)
     asked = _ask(surface, run["id"], ttl_seconds=60)

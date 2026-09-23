@@ -1,4 +1,4 @@
-"""The gate's decision, on its own (FR-034/036/037/040).
+"""The gate's decision, on its own.
 
 The gateway is not here: this tier asks the gate the question directly and
 checks the four outcomes a held call can have — approved, rejected, expired,
@@ -153,7 +153,7 @@ async def test_an_unprefixed_name_is_left_for_the_gateway_to_refuse() -> None:
 
 @pytest.mark.acceptance(spec="workflow", scenario="an unknown tool is treated as write-class")
 async def test_a_tool_with_no_recorded_judgement_is_held() -> None:
-    """FR-036: unknown means write-class."""
+    """Unknown means write-class."""
     h = build(max_wait_seconds=2.0)
     refusal = await check(h, "jira__never_seen_before")
     assert "no decision" in text_of(refusal)
@@ -161,7 +161,7 @@ async def test_a_tool_with_no_recorded_judgement_is_held() -> None:
 
 
 async def test_a_held_approval_carries_the_arguments_verbatim() -> None:
-    """FR-033: the developer decides on what will execute, not a rendering."""
+    """The developer decides on what will execute, not a rendering."""
     h = build(max_wait_seconds=1.0)
     await check(h)
     row = next(iter(h.repo.rows.values()))
@@ -176,7 +176,7 @@ async def test_a_held_approval_carries_the_arguments_verbatim() -> None:
 
 @pytest.mark.acceptance(spec="workflow", scenario="an approved call goes through exactly once")
 async def test_approved_allows_the_call() -> None:
-    """FR-037: a held call resumes once approved."""
+    """A held call resumes once approved."""
     h = build(known={("jira", "create_issue"): "write"})
     h.ticks.append(decide_on_tick(h, decision=ApprovalStatus.APPROVED))
     assert await check(h) is None
@@ -200,7 +200,7 @@ async def test_rejected_refuses_with_the_developer_s_reason() -> None:
 
 @pytest.mark.acceptance(spec="workflow", scenario="an expired approval does not authorise a write")
 async def test_expiry_refuses_and_says_nothing_was_sent() -> None:
-    """FR-037: an approval past its expiry authorises nothing."""
+    """An approval past its expiry authorises nothing."""
     h = build(ttl_seconds=2, max_wait_seconds=600.0)
     refusal = await check(h)
     assert "expired" in text_of(refusal)
@@ -251,7 +251,7 @@ async def test_a_held_call_never_comes_back_without_a_reason() -> None:
 
 
 async def test_every_held_call_is_audited_exactly_once() -> None:
-    """FR-040: every gated tool call is recorded."""
+    """Every gated tool call is recorded."""
     h = build(max_wait_seconds=1.0)
     await check(h)
     await check(h, "jira__delete_issue")

@@ -92,20 +92,24 @@ class RunOut(BaseModel):
     version: int
     workdir: str
     machine_id: str
-    #: False when another machine advances this run (FR-012).
+    #: False when another machine advances this run (spec workflow
+    #: "Advance a run only on the machine that owns it").
     owned_here: bool
     #: What the developer called this delivery, and what it is for. Labels,
-    #: not projection: neither is folded from the events (FR-070).
+    #: not projection: neither is folded from the events (spec workflow
+    #: "Edit a run's title and description as labels").
     description: str | None = None
     current_stage_key: str | None = None
     #: What the developer CALLED that stage, read from the run's own frozen
     #: snapshot. A key is an identity the engine reads no meaning from and the
-    #: developer never typed (FR-003, FR-060); null when the snapshot no longer
-    #: parses or no longer has that stage.
+    #: developer never typed (spec workflow "Attach no behaviour to a stage
+    #: key", "Derive stage and task keys from their names"); null when the
+    #: snapshot no longer parses or no longer has that stage.
     current_stage_name: str | None = None
     current_node_key: str | None = None
     #: What this run has spent so far. A readout, not a cap: a run is bounded
-    #: by each task's own attempt ceiling (FR-026), not by a number of tokens.
+    #: by each task's own attempt ceiling (spec workflow "Bound each task's
+    #: attempts by its own ceiling"), not by a number of tokens.
     tokens_spent: int = 0
     created_at: datetime
     updated_at: datetime | None = None
@@ -120,7 +124,8 @@ class NodeAttemptOut(BaseModel):
     node_key: str
     stage_key: str
     attempt: int
-    #: What THIS attempt was told to run on (FR-071). Null defers to the task's
+    #: What THIS attempt was told to run on (spec workflow "Choose a task's
+    #: agent, model and effort before it starts"). Null defers to the task's
     #: own answer, whose null defers to the agent's configuration.
     agent: str | None = None
     model: str | None = None
@@ -129,9 +134,10 @@ class NodeAttemptOut(BaseModel):
     conversation_id: str | None = None
     summary: str | None = None
     failure_reason: str | None = None
-    #: What the developer wrote for THIS attempt (FR-068) — the brief it opens
-    #: with, on top of whatever the template said. Readable so a task that has
-    #: not started can show what it has been told it will do.
+    #: What the developer wrote for THIS attempt (spec workflow "Let the
+    #: developer speak to a task at any point, in one place") — the brief it
+    #: opens with, on top of whatever the template said. Readable so a task
+    #: that has not started can show what it has been told it will do.
     instructions: str | None = None
     tokens: int = 0
     started_at: datetime | None = None
@@ -144,26 +150,30 @@ class NodeOut(BaseModel):
     type: str
     skill: str | None = None
     #: What the WORKFLOW says runs this task. Null means the run's own default;
-    #: an attempt may override it either way (FR-071).
+    #: an attempt may override it either way (spec workflow "Choose a
+    #: task's agent, model and effort before it starts").
     agent: str | None = None
     approval: str = "never"
     status: str
     #: How many times this node has been TRIED. 0 until the first turn starts:
     #: an attempt ROW exists before its turn does — a retry opens the next one
-    #: pending, and so does briefing a task that has not started (FR-068) — and
+    #: pending, and so does briefing a task that has not started (spec workflow
+    #: "Let the developer speak to a task at any point, in one place") — and
     #: neither is a try. Claiming 1 before the first one would make "never
     #: started" and "running its first attempt" the same number.
     attempt: int
     adhoc: bool = False
-    #: What this node accepts right now (FR-021), computed from
+    #: What this node accepts right now (spec workflow "Accept the node actions
+    #: start, feedback, complete, retry, skip and restore"), computed from
     #: ``domain.workflow.transitions.allowed_node_actions``. The web UI renders
     #: exactly these, so a wrong value here is a wrong button there.
     allowed_actions: list[str] = Field(default_factory=list)
     #: The latest attempt's conversation — what "open this task" navigates to.
     #: Duplicated out of ``latest`` on purpose: a task IS its conversation now
-    #: (FR-030), so the one identifier a client always needs should not be
-    #: reachable only by digging through the attempt that happens to carry it.
-    #: ``None`` until the node has been started.
+    #: (spec workflow "Give a run no conversation of its own"), so the one
+    #: identifier a client always needs should not be reachable only by
+    #: digging through the attempt that happens to carry it. ``None`` until
+    #: the node has been started.
     conversation_id: str | None = None
     latest: NodeAttemptOut | None = None
 
@@ -221,7 +231,8 @@ class ArtifactOut(BaseModel):
 
 
 class RunFileOut(BaseModel):
-    """One file under a run's directory, for the UI's preview (FR-064)."""
+    """One file under a run's directory, for the UI's preview (spec
+    workflow "Read a run's files from the app, bounded")."""
 
     path: str = Field(description="Path relative to the run's own directory.")
     name: str
@@ -253,8 +264,9 @@ class ApprovalOut(BaseModel):
     tool_name: str | None = None
     status: str
     #: The exact arguments that will execute — verbatim, never a summary
-    #: (FR-033). Required, with no default: an approval whose payload was
-    #: omitted would be a decision about nothing.
+    #: (spec workflow "Refuse an unapproved write-class tool call made
+    #: for a run"). Required, with no default: an approval whose payload
+    #: was omitted would be a decision about nothing.
     payload: dict[str, Any]
     decided_by: str | None = None
     decided_surface: str | None = None

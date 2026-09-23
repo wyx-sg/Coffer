@@ -1,17 +1,17 @@
 // frontend/src/components/workflow/TemplateNodeDialog.tsx
 // One task, in full: what it is called, what kind of work it is, what it runs,
-// what it owes, what happens when it fails, and who runs it (FR-054).
+// what it owes, what happens when it fails, and who runs it.
 //
 // This is where every field a task has now lives, and ONLY its fields. On the
 // map a task is a box with a name and a type; opening it is how you see the
 // rest, and Save inside this dialog is the only thing that writes it — there
-// is no page-level save to forget to press (FR-062).
+// is no page-level save to forget to press.
 //
 // Deleting is not here. It is an act on the box rather than a field of it, so
 // it lives on the box, beside the stage's own bin — a Delete sitting among
 // eight fields reads like a ninth.
 //
-// The task's KEY is not asked for and not shown (FR-060): it is a slug of the
+// The task's KEY is not asked for and not shown: it is a slug of the
 // name, made unique across the template, recomputed on save. Nothing in the
 // template points at a node key, so unlike a stage there is nothing to rewrite.
 import { useState } from "react";
@@ -72,7 +72,7 @@ export function TemplateNodeDialog({
   const stage = config.stages[stageIndex];
   const existing = nodeIndex === null ? undefined : stage?.nodes[nodeIndex];
   // The key is the one field of a node this dialog does not hold: it is
-  // derived from the name on save (FR-060), so carrying it here would be
+  // derived from the name on save, so carrying it here would be
   // carrying a value nothing reads.
   const [values, setValues] = useState<NodeValues>(() =>
     existing === undefined ? blankNode() : nodeValues(existing),

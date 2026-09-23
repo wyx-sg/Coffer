@@ -1,5 +1,5 @@
 // frontend/src/components/workflow/StageRailList.tsx
-// The stages of a flow, in the order they run (FR-061). Used by the template
+// The stages of a flow, in the order they run. Used by the template
 // editor and by a run.
 //
 // SHARED ON PURPOSE. A run is the same shape as the template it froze, with

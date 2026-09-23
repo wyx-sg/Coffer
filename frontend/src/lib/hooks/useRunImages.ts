@@ -1,5 +1,5 @@
 // frontend/src/lib/hooks/useRunImages.ts — the images a note refers to, as
-// object URLs the browser will actually display (FR-069).
+// object URLs the browser will actually display.
 //
 // A note is markdown the developer wrote, and a screenshot they pasted into it
 // is an ordinary uploaded input the note names. Rendering it is not as simple

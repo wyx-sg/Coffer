@@ -41,7 +41,7 @@ const ICONS: Record<ContextKind, typeof BookOpen> = {
 interface Args {
   /** The run these rows belong to, for the file page's link. */
   runId: string;
-  /** False when another machine advances this run (FR-012). */
+  /** False when another machine advances this run. */
   ownedHere: boolean;
   /** Display name of the owning machine, for the read-only tooltip. */
   machine: string;
@@ -136,7 +136,7 @@ export function useRunContextColumns({
             <Icon className="size-4 text-muted-foreground" aria-hidden />
             {/* A recognised link says WHAT it is — Confluence, Jira — rather
                 than "Link", because that is the thing a reader is scanning
-                for and it is the same word the node was told (FR-065). */}
+                for and it is the same word the node was told. */}
             <Badge variant="outline">
               {row.kind === "artifact"
                 ? t("workflow.context.artifact")
@@ -213,7 +213,7 @@ export function useRunContextColumns({
       header: "",
       className: "whitespace-nowrap text-right",
       // Only a mounted input can be unmounted. An artifact is a file a task
-      // wrote, and the catalogue is generated from what is on disk (FR-031) —
+      // wrote, and the catalogue is generated from what is on disk —
       // there is nothing here for a delete button to mean.
       // Icon AND word. An × alone is only unambiguous to someone who already
       // knows what this column does, and "remove" has more than one plausible

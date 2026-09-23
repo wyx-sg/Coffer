@@ -1,4 +1,4 @@
-"""Uploaded inputs on real disk (FR-051), and the guard on a hostile name."""
+"""Uploaded inputs on real disk, and the guard on a hostile name."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def _run_tree(isolated_workflow_root: pathlib.Path) -> None:
     spec="workflow", scenario="a run is created from a template and a title alone"
 )
 def test_the_run_tree_includes_a_workspace_coffer_made() -> None:
-    # FR-053: nobody was asked for a working directory; the run has one anyway.
+    # Nobody was asked for a working directory; the run has one anyway.
     assert paths.workspace_dir("run-1").is_dir()
     assert paths.inputs_dir("run-1").is_dir()
     assert paths.artifacts_dir("run-1").is_dir()
@@ -33,7 +33,7 @@ def test_an_upload_lands_under_the_runs_input_directory_and_reports_its_size() -
     assert ref == "prd.pdf"
     assert size == 10
     assert (paths.inputs_dir("run-1") / "prd.pdf").read_bytes() == b"x" * 10
-    # FR-051: the third value is what the NODE is told, and it has to be
+    # The third value is what the NODE is told, and it has to be
     # openable from the working directory — which is the run's `workspace/`,
     # not its `inputs/`. So it is absolute, and it points at the real file.
     assert pathlib.Path(path).is_absolute()

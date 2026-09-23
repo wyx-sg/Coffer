@@ -5,22 +5,23 @@ paths.py`` on purpose: one root, one guard, one override for tests. The tree
 is the one [`data-model.md`](../../../../openspec/specs/workflow/data-model.md) draws::
 
     ~/.coffer/workflows/<run_id>/
-    ├── CATALOG.md                 # generated, never hand-edited (FR-031)
-    ├── inputs/                    # uploaded files (FR-032)
-    ├── workspace/                 # the run's working directory (FR-011)
+    ├── CATALOG.md                 # generated, never hand-edited
+    ├── inputs/                    # uploaded files
+    ├── workspace/                 # the run's working directory
     └── artifacts/<node_key>/<attempt>/<name>
 
 ``$COFFER_WORKFLOW_ROOT`` overrides the root. **Unset, it resolves to the
-developer's real vault** — the hazard ``quickstart.md`` records — so every
+developer's real vault** — the hazard ``docs/architecture.md`` records — so every
 test in this layer pins it, exactly as the knowledge and memory layers' own
 tests do after one of them once rewrote a real tree.
 
 Two kinds of untrusted string reach a path here. A ``run_id`` is a UUIDv4 the
 system minted, and a ``node_key`` comes from a template the developer wrote —
-including the ``adhoc:<slug>`` form an unplanned task carries (FR-028), whose
-colon is not a legal path segment. ``encode_node_key`` percent-encodes that
-one character and nothing else; because the segment guard refuses a raw ``%``,
-the encoding is unambiguous and ``decode_node_dir`` inverts it exactly.
+including the ``adhoc:<slug>`` form an unplanned task carries (spec workflow
+"Add an ad-hoc task to any stage"), whose colon is not a legal path segment.
+``encode_node_key`` percent-encodes that one character and nothing else;
+because the segment guard refuses a raw ``%``, the encoding is unambiguous and
+``decode_node_dir`` inverts it exactly.
 """
 
 from __future__ import annotations
@@ -123,12 +124,14 @@ def run_dir(run_id: str) -> pathlib.Path:
 
 
 def catalog_path(run_id: str) -> pathlib.Path:
-    """The generated catalogue (FR-031). The text itself is written elsewhere."""
+    """The generated catalogue (spec workflow "Generate the index of earlier
+    tasks"). The text itself is written elsewhere."""
     return run_dir(run_id) / CATALOG_NAME
 
 
 def inputs_dir(run_id: str) -> pathlib.Path:
-    """Where a run's mounted uploads land (FR-032)."""
+    """Where a run's mounted uploads land (spec workflow "Store an
+    uploaded input under the run's directory")."""
     return run_dir(run_id) / INPUTS_DIR_NAME
 
 
@@ -146,7 +149,9 @@ def workspace_dir(run_id: str) -> pathlib.Path:
 
 
 def artifacts_dir(run_id: str) -> pathlib.Path:
-    """The root of the per-node, per-attempt artifact tree (FR-041)."""
+    """The root of the per-node, per-attempt artifact tree (spec
+    workflow "Store artifacts as files attributed to their node and
+    attempt")."""
     return run_dir(run_id) / ARTIFACTS_DIR_NAME
 
 
@@ -158,8 +163,9 @@ def node_dir(run_id: str, node_key: str) -> pathlib.Path:
 def attempt_dir(run_id: str, node_key: str, attempt: int) -> pathlib.Path:
     """One attempt's artifacts.
 
-    A retry never rewrites an earlier attempt (FR-022), so the attempt number
-    is part of the path rather than a version inside a file.
+    A retry never rewrites an earlier attempt (spec workflow "Keep every
+    attempt when a node is retried"), so the attempt number is part of the
+    path rather than a version inside a file.
     """
     check_attempt(attempt)
     return node_dir(run_id, node_key) / str(attempt)
@@ -176,7 +182,8 @@ def artifact_path(run_id: str, node_key: str, attempt: int, name: str) -> pathli
 def workspace_path(run_id: str, name: str) -> pathlib.Path:
     """One entry directly inside the run's working directory.
 
-    Where a mounted repository's checkout lands (FR-057). ``name`` is a single
+    Where a mounted repository's checkout lands (spec workflow "Give a
+    mounted repository its own checkout"). ``name`` is a single
     segment derived from the source path's own basename, so it is user input
     like any other and goes through the same guard.
     """

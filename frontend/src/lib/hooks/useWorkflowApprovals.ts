@@ -1,5 +1,6 @@
 // frontend/src/lib/hooks/useWorkflowApprovals.ts — the gate between a run and
-// the outside world (spec workflow, FR-033..FR-039, FR-045).
+// the outside world (spec workflow "Refuse an unapproved write-class tool call made for a
+// run" through "Show an approval on its task's conversation and through a bound channel").
 //
 // An approval carries the EXACT payload that will execute. Nothing in this
 // file summarises, truncates or reshapes it: the surface renders what the
@@ -30,8 +31,8 @@ export interface ApprovalFilters {
 
 /**
  * Approvals, pending first. Polls while any is pending, both because one
- * arrives without being asked for and because an approval expires on its own
- * (FR-037) — an expiry the page never notices is an approval the developer
+ * arrives without being asked for and because an approval expires on its own —
+ * an expiry the page never notices is an approval the developer
  * would decide too late.
  */
 export function useWorkflowApprovals(filters: ApprovalFilters = {}) {
@@ -52,13 +53,12 @@ export interface DecisionVars {
   decision: "approved" | "rejected";
   /** Free text the node can act on — required by the UI when rejecting. */
   comment?: string | null;
-  /** Remember this tool's write-class judgement so it is not asked twice
-   *  (FR-036). */
+  /** Remember this tool's write-class judgement so it is not asked twice. */
   rememberToolClass?: "read" | "write" | null;
 }
 
 /**
- * Approve or reject one approval. Idempotent on the wire (FR-038), so a
+ * Approve or reject one approval. Idempotent on the wire, so a
  * double-click cannot execute a held call twice.
  *
  * The run is invalidated as well as the approvals list: approving releases the

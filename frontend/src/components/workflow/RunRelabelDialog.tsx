@@ -1,5 +1,6 @@
 // frontend/src/components/workflow/RunRelabelDialog.tsx
-// What a run is CALLED and what it is for (FR-070).
+// What a run is CALLED and what it is for (spec workflow "Edit a run's title and description
+// as labels").
 //
 // The title is typed at the moment the developer knows least about the work —
 // before the first task has opened — and until this dialog existed it could
@@ -9,9 +10,9 @@
 //
 // It is the ONE in-place edit of a run, and it carries no version. A run's
 // status, its stage and its position are folded from its event log and only
-// the engine writes them (FR-014); this touches none of them and appends no
-// event. A run another machine advances refuses it like every other change
-// (FR-012), which is why the caller hides it there rather than letting the
+// the engine writes them; this touches none of them and appends no
+// event. A run another machine advances refuses it like every other change,
+// which is why the caller hides it there rather than letting the
 // daemon be the only one to say no.
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";

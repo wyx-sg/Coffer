@@ -1,4 +1,4 @@
-"""ApprovalService: created once, decided once, expired on a clock (FR-033/036/038/039/040).
+"""ApprovalService: created once, decided once, expired on a clock.
 
 The repository is faked in memory with the same rule the real one enforces in
 SQL — a decision only lands on a row that is still ``pending`` — because that
@@ -213,7 +213,7 @@ async def _held(h: Harness, **overrides: Any) -> FakeRow:
 
 
 async def test_the_payload_is_the_arguments_verbatim() -> None:
-    """FR-033: a decision on a summary is not a decision."""
+    """A decision on a summary is not a decision."""
     h = build()
     row = await _held(h)
     assert row.payload == VERBATIM
@@ -225,7 +225,9 @@ async def test_the_payload_is_the_arguments_verbatim() -> None:
     spec="workflow", scenario="an approval reaches the developer where they are"
 )
 async def test_creating_an_approval_reaches_the_developer() -> None:
-    """FR-039: the main thread and any bound channel, both behind NotifyPort."""
+    """Spec workflow "Show an approval on its task's conversation and through a
+    bound channel": the main thread and any bound channel, both behind
+    NotifyPort."""
     h = build()
     row = await _held(h)
     assert h.notify.asked == [("run1", row.id, h.notify.asked[0][2])]
@@ -243,7 +245,7 @@ async def test_expiry_is_the_ttl_from_now() -> None:
 
 
 async def test_a_decision_is_evented_and_audited() -> None:
-    """FR-040: every approval decision is audited."""
+    """Every approval decision is audited."""
     h = build()
     row = await _held(h)
     decided = await h.service.decide(
@@ -261,7 +263,7 @@ async def test_a_decision_is_evented_and_audited() -> None:
 
 @pytest.mark.acceptance(spec="workflow", scenario="an approval decision is idempotent")
 async def test_a_repeated_decision_changes_nothing_and_records_nothing() -> None:
-    """FR-038: the same terminal state comes back and nothing happens twice."""
+    """The same terminal state comes back and nothing happens twice."""
     h = build()
     row = await _held(h)
     first = await h.service.decide(row.id, decision=ApprovalStatus.APPROVED, decided_by="yuxing")
@@ -314,7 +316,7 @@ async def test_only_a_person_s_two_answers_are_decisions(status: ApprovalStatus)
 
 @pytest.mark.acceptance(spec="workflow", scenario="an unknown tool is treated as write-class")
 async def test_the_answer_is_remembered_on_the_server() -> None:
-    """FR-036: the same tool is not asked about twice."""
+    """The same tool is not asked about twice."""
     h = build()
     row = await _held(h)
     await h.service.decide(row.id, decision=ApprovalStatus.APPROVED, remember_tool_class="write")

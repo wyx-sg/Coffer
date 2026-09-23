@@ -1,8 +1,9 @@
 """Unplanned work — the one command that reshapes a run while it is going.
 
 A template declares the work that was foreseen. Everything else arrives as an
-ad-hoc task (FR-028), and that includes acting on a finding from a later task:
-there is no route back through the template (FR-025), so what the developer
+ad-hoc task, and that includes acting on a finding from a later task: there is
+no route back through the template (spec workflow "Send work back by the
+developer's hand, never a template route"), so what the developer
 does instead — retry the task that was wrong, or add one that fixes it — is
 what this file proves. The regression it guards is the one a delivery engine
 usually ships: a send-back that resets what already passed.
@@ -24,9 +25,9 @@ from .conftest import Engine
 async def test_acting_on_a_finding_leaves_every_task_that_ran_holding_its_result(
     engine: Engine,
 ) -> None:
-    """FR-025/FR-021/FR-028: the coding task is done, the next task found a
-    problem with it, and neither of the two things the developer may do about
-    it touches what already passed.
+    """The coding task is done, the next task found a problem with it, and
+    neither of the two things the developer may do about it touches what
+    already passed.
 
     The engine used to offer a third thing — a route declared in the template
     that fired on a reason and sent the run backwards. It is gone, so the first
@@ -70,7 +71,8 @@ async def test_acting_on_a_finding_leaves_every_task_that_ran_holding_its_result
     assert retried.attempt.attempt == 2
 
     # And attempt 1 is exactly as it was — its result, its conversation and its
-    # artifact all still attributed to it, which is the whole of FR-025.
+    # artifact all still attributed to it, which is the whole of sending work
+    # back by the developer's hand.
     passed = engine.attempts.rows[first_attempt.id]
     assert passed.status == NodeStatus.COMPLETED.value
     assert passed.summary == "drafted"
@@ -90,7 +92,7 @@ async def test_the_walk_hands_back_the_added_task_then_returns_to_the_source(
     """A fix added to an EARLIER stage runs before the task that asked for it,
     and when it is done the walk comes back to that task rather than running on
     past it — which is what makes an ad-hoc task a usable replacement for the
-    route that was deleted (FR-025)."""
+    route that was deleted."""
     run = await engine.started()
     engine.artifacts.add(run.id, "draft_td", 1, "td.md")
     await engine.nodes.act(run.id, "draft_td", NodeAction.START, version=run.version)
@@ -127,7 +129,7 @@ async def test_the_walk_hands_back_the_added_task_then_returns_to_the_source(
     spec="workflow", scenario="an ad-hoc task joins a stage and carries the same context"
 )
 async def test_an_adhoc_task_joins_a_stage_and_runs_like_any_node(engine: Engine) -> None:
-    """FR-028: recorded, contextualised and attributed exactly as a node is."""
+    """Recorded, contextualised and attributed exactly as a node is."""
     run = await engine.started()
 
     added = await engine.nodes.add_adhoc_task(
@@ -234,7 +236,7 @@ async def test_a_pending_task_holds_the_run_open(engine: Engine) -> None:
     current = await engine.run_repo.get_run(run.id)
     await engine.nodes.act(run.id, "write_code", NodeAction.START, version=current.version)
     # `write_code` declares no artifacts, so it owes the default `report.md`
-    # (FR-072) and would otherwise stop for the developer rather than complete.
+    # and would otherwise stop for the developer rather than complete.
     engine.artifacts.add(run.id, "write_code", 1, "report.md")
 
     result = await engine.nodes.record_output(run.id, "write_code", summary="pushed")

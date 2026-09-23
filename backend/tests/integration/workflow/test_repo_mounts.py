@@ -1,4 +1,4 @@
-"""A run's own checkout of a local repository, against real git (FR-057, FR-058).
+"""A run's own checkout of a local repository, against real git.
 
 Real ``git``, not a fake: what this layer promises is that the developer's
 checkout is untouched, and only git can be asked whether that is true.
@@ -109,7 +109,7 @@ async def test_unmounting_removes_the_worktree_and_leaves_the_source_as_it_was(
     # Pruned, so git does not keep offering a worktree that is not there.
     listing = await git(source, "worktree", "list", "--porcelain")
     assert str(checkout) not in listing
-    # FR-058: branches and working tree exactly as they were.
+    # Branches and working tree exactly as they were.
     assert await git(source, "branch", "--list") == before_branches
     assert await git(source, "status", "--porcelain") == before_status
     assert (source / "scratch.txt").read_text(encoding="utf-8") == "uncommitted work\n"

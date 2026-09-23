@@ -8,10 +8,10 @@
 // page, one click away, next to the conversation that is doing it.
 //
 // The stage's NAME, never its key: a key is an identity the engine reads no
-// meaning from and the developer never typed (FR-003, FR-060), so a list that
+// meaning from and the developer never typed, so a list that
 // printed one would be showing them a name they did not choose.
 //
-// The owner column is not decoration. A run belongs to one machine (FR-012)
+// The owner column is not decoration. A run belongs to one machine
 // and only that machine's daemon advances it; everywhere else the run is
 // visible and its commands refused. A row for a foreign run still navigates —
 // reading a run is never gated — and it is the run's own page that disables
@@ -52,7 +52,7 @@ export function WorkflowRunsTable({ runs, isLoading = false, onDelete }: Props) 
       // Text, never a link to the workflow. This is the LABEL the run was
       // started under, frozen at creation: the workflow it names may since
       // have been renamed or deleted, and what the run actually executes is
-      // the snapshot it took (FR-010). Linking would promise that the words
+      // the snapshot it took. Linking would promise that the words
       // still address something.
       cell: (r) => <span className="text-muted-foreground">{r.template_ref}</span>,
     },

@@ -1,6 +1,6 @@
 // frontend/src/pages/WorkflowNotePage.test.tsx
 //
-// The one thing in a run's context the developer WROTE (FR-069). Two things
+// The one thing in a run's context the developer WROTE. Two things
 // are load-bearing here and neither is the markdown:
 //
 //   • THE REWRITE KEEPS THE REF. A note is known to every task by the name it

@@ -82,7 +82,8 @@ class MCPServerConfig(BaseModel):
     # tool name (``create_issue``, not ``jira__create_issue``). A tool absent
     # from the map is treated as write-class by the workflow gate, and the
     # developer's answer to the first approval writes the entry, so the same
-    # tool is not asked about twice (spec workflow FR-036).
+    # tool is not asked about twice (spec workflow "Treat an unjudged tool as
+    # write-class and remember the answer").
     #
     # It lives on the server rather than in a table of its own because whether
     # ``create_issue`` writes is a fact about the tool, not about a machine —

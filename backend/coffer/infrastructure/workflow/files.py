@@ -1,4 +1,5 @@
-"""Reading one file out of a run's directory, for the UI's preview (FR-064).
+"""Reading one file out of a run's directory, for the UI's preview (spec
+workflow "Read a run's files from the app, bounded").
 
 The context table lists what a run reads and what it wrote; this is what makes
 a row openable. Reading and nothing else: no write here, no listing, no
@@ -16,10 +17,11 @@ Two bounds, both deliberate:
   developer something.
 
 ``read_bytes`` is the other half of that last bound rather than an exception to
-it: a screenshot pasted into a note (FR-069) is not text and must still be
-shown, so it is served AS an image — with a media type taken from the name and
-narrowed to a list this module is willing to hand a browser, because a file a
-run produced is not a file a browser should be free to interpret.
+it: a screenshot pasted into a note ("Keep the developer's own notes in a run's
+context") is not text and must still be shown, so it is served AS an image —
+with a media type taken from the name and narrowed to a list this module is
+willing to hand a browser, because a file a run produced is not a file a
+browser should be free to interpret.
 """
 
 from __future__ import annotations

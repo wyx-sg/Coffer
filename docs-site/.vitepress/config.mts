@@ -23,6 +23,7 @@ const guide = [
       { text: 'Knowledge', link: '/guide/knowledge' },
       { text: 'Memory', link: '/guide/memory' },
       { text: 'Channels', link: '/guide/channels' },
+      { text: 'Workflows', link: '/guide/workflows' },
       { text: 'Sync', link: '/guide/sync' },
       { text: 'Credentials', link: '/guide/credentials' },
       { text: 'Activity', link: '/guide/activity' },

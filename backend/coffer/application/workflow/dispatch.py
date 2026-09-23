@@ -29,12 +29,15 @@ class NodeDispatch:
 
     ``node`` is a real :class:`Node` for both a template node and an ad-hoc
     task — an ad-hoc task is "recorded, contextualised and attributed exactly
-    as a template node is" (FR-028), so the driver is deliberately given no way
-    to tell them apart beyond ``node.key``'s ``adhoc:`` prefix.
+    as a template node is" (spec workflow "Add an ad-hoc task to any stage"),
+    so the driver is deliberately given no way to tell them apart beyond
+    ``node.key``'s ``adhoc:`` prefix.
 
-    ``follow_up`` is what makes feedback a message rather than a restart
-    (FR-030, FR-021): ``None`` opens the node's work, and a string is more to
-    do on the attempt already in flight, whose conversation ``attempt`` names.
+    ``follow_up`` is what makes feedback a message rather than a restart (spec
+    workflow "Run a node's work as one conversation", "Accept the node actions
+    start, feedback, complete, retry, skip and restore"): ``None`` opens the
+    node's work, and a string is more to do on the attempt already in flight,
+    whose conversation ``attempt`` names.
     """
 
     run: RunRow
@@ -43,8 +46,9 @@ class NodeDispatch:
     attempt: AttemptRow
     agent_key: str
     workdir: str
-    #: What this attempt runs on (FR-071). ``None`` at either means the agent's
-    #: own configuration decides, which is what it did before any of this.
+    #: What this attempt runs on (spec workflow "Choose a task's agent, model
+    #: and effort before it starts"). ``None`` at either means the agent's own
+    #: configuration decides, which is what it did before any of this.
     model: str | None = None
     effort: str | None = None
     follow_up: str | None = None

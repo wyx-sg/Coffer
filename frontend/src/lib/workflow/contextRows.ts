@@ -1,6 +1,6 @@
 // frontend/src/lib/workflow/contextRows.ts
 // One row model over the two things a run's page used to show in two tabs:
-// what it READS (mounted inputs, FR-032) and what it WROTE (artifacts, FR-041).
+// what it READS (mounted inputs) and what it WROTE (artifacts).
 //
 // They were separate tabs because they arrive from separate routes, which is a
 // fact about the API and not about the work. To the developer they are one
@@ -28,7 +28,7 @@ type ContextOrigin = "mounted" | "produced";
 type ContextOpen =
   /** Show the contents. `path` is relative to the run's own directory. */
   | { how: "preview"; path: string }
-  /** Open the developer's own note, where it can also be rewritten (FR-069). */
+  /** Open the developer's own note, where it can also be rewritten. */
   | { how: "note"; ref: string }
   /** Go to the knowledge collection's own page. */
   | { how: "collection"; name: string }
@@ -56,8 +56,8 @@ export interface ContextRow {
   /** What clicking it does, or null when there is nothing to open. */
   open: ContextOpen | null;
   /** For a link: what the daemon recognised it as — `confluence`, `jira`,
-   *  `google_docs` … — or null when nothing is known beyond the address
-   *  (FR-065). Never computed here: the daemon derives it, tells the NODE the
+   *  `google_docs` … — or null when nothing is known beyond the address.
+   *  Never computed here: the daemon derives it, tells the NODE the
    *  same thing, and a second table in this language would drift from it. */
   provider: string | null;
 }
@@ -132,7 +132,7 @@ function fromArtifact(artifact: Artifact): ContextRow {
  * Not sorted by name or time: the inputs are what the run was pointed at and
  * the artifacts are what came out of it, so reading the table top to bottom is
  * reading the delivery in the direction it ran. Within each half the server's
- * own order is kept — the artifact catalogue is generated from disk (FR-031),
+ * own order is kept — the artifact catalogue is generated from disk,
  * and re-sorting it here would be this table inventing an order the context
  * the agents actually receive does not have.
  */

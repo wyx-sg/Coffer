@@ -1,4 +1,5 @@
-"""Wiring for the built-in workflow seed (spec workflow FR-009).
+"""Wiring for the built-in workflow seed (spec workflow "Seed one
+built-in template").
 
 Two lines of joinery the application layer is not allowed to do for itself: a
 ``SeedRecord`` backed by a file, and the boot call that runs the seed once the

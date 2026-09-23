@@ -1,4 +1,4 @@
-"""What a mounted link points at (FR-065), and what is honestly unknown."""
+"""What a mounted link points at, and what is honestly unknown."""
 
 from __future__ import annotations
 

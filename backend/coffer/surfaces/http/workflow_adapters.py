@@ -55,7 +55,8 @@ logger = logging.getLogger(__name__)
 
 #: The environment variable the MCP shim reads its run identity out of. The
 #: shim stamps it into the ``initialize`` handshake, the gateway captures it,
-#: and the gate attributes a tool call back to the node that made it (FR-035).
+#: and the gate attributes a tool call back to the node that made it (spec
+#: workflow "Give the gateway the run's identity at dispatch").
 RUN_CONTEXT_ENV = "COFFER_RUN_CONTEXT"
 
 
@@ -80,7 +81,8 @@ class ChatTurnPlatform:
         self._orchestrator = orchestrator
         # The registry, so a task can be ASSIGNED an agent that exists: the
         # chat service resolves one at creation and raises then, which is far
-        # too late for a choice made before the task starts (FR-071).
+        # too late for a choice made before the task starts (spec workflow
+        # "Choose a task's agent, model and effort before it starts").
         self._registry = registry
         # Compaction deletes messages, and deleting is the one thing the chat
         # SERVICE does not expose — it has no business doing so for an ordinary
@@ -105,13 +107,15 @@ class ChatTurnPlatform:
         # config as well would be a second copy of the same fact, and the copy
         # that matters is the one that survives a restart.
         # ``owner`` is how it stays out of the developer's own chat list while
-        # staying an ordinary conversation everywhere else (FR-030): this one
-        # belongs to a run, and the chat layer needs to know nothing more.
+        # staying an ordinary conversation everywhere else (spec workflow "Give
+        # a run no conversation of its own"): this one belongs to a run, and
+        # the chat layer needs to know nothing more.
         # ``model`` and ``effort`` go in beside the working directory because
-        # that is where a conversation keeps them (FR-071) — the pickers on a
-        # task's page write the same two fields once it is running, so a task
-        # that was assigned a model opens already set to it rather than being
-        # corrected a moment later.
+        # that is where a conversation keeps them ("Choose a task's agent,
+        # model and effort before it starts") — the pickers on a task's page
+        # write the same two fields once it is running, so a task that was
+        # assigned a model opens already set to it rather than being corrected
+        # a moment later.
         config: dict[str, Any] = {"cwd": cwd}
         if model is not None:
             config["model"] = model
@@ -138,7 +142,8 @@ class ChatTurnPlatform:
 
     async def compact(self, conversation_id: str, *, keep_last: int, summary: str) -> None:
         """Replace everything before the last ``keep_last`` messages with one
-        summary that STAYS in the conversation (FR-049).
+        summary that STAYS in the conversation (spec workflow "Compact a long
+        node conversation into a summary").
 
         The summary is appended BEFORE the old messages are deleted. Ordered
         the other way, an interruption between the two steps would leave the
@@ -162,7 +167,8 @@ class ChatTurnPlatform:
 
 
 class EarlierTasks:
-    """``EarlierTasksPort`` — what the run did before this attempt (FR-029).
+    """``EarlierTasksPort`` — what the run did before this attempt (spec
+    workflow "Open every task with the same four parts").
 
     Answers with the LATEST attempt of each task. An earlier attempt is
     superseded by definition — the run reopened that task because what it
@@ -221,7 +227,8 @@ class EarlierTasks:
 
 
 def _adhoc_name(node_key: str) -> str:
-    """A readable name for a task the template never had (FR-028).
+    """A readable name for a task the template never had (spec workflow
+    "Add an ad-hoc task to any stage").
 
     Its real name lives on the event that recorded it, which this adapter does
     not read; the key was slugged from that name, so un-slugging it gets close
@@ -241,7 +248,7 @@ class SkillText:
             skill = await self._skills.get_skill(skill_name)
         except CofferError:
             # A template naming a skill that has since been deleted must still
-            # run, saying so, rather than stalling the whole delivery (FR-029).
+            # run, saying so, rather than stalling the whole delivery.
             logger.warning("workflow.skill.missing", extra={"skill": skill_name})
             return None
         path = self._skills.master_path(skill.name) + "/SKILL.md"
@@ -262,11 +269,11 @@ class KnowledgeInputs:
     async def describe(self, collection: str) -> str | None:
         for entry in await self._knowledge.list_collections():
             if entry.name == collection:
-                # Two lanes, counted apart, because they answer different
-                # questions for a task: how much material a person put in, and
-                # how much of it an agent can currently read.
+                # Counted apart, because they answer different questions for
+                # a task: how much it can read now, and how much is still
+                # waiting in the inbox to be merged.
                 return entry.description or (
-                    f"{entry.source_count} source(s), {entry.topic_count} topic(s)"
+                    f"{entry.document_count} document(s), {entry.pending_count} pending"
                 )
         return None
 
@@ -276,7 +283,9 @@ class KnowledgeInputs:
 
 
 class WorkflowNotify:
-    """``NotifyPort`` — an approval reaches the developer where they are (FR-039).
+    """``NotifyPort`` — an approval reaches the developer where they are (spec
+    workflow "Show an approval on its task's conversation and through a bound
+    channel").
 
     Two deliveries, and the first is the one that must not fail: the run's main
     thread is the record, so it is written before anything leaves the machine.
@@ -353,7 +362,8 @@ class WorkflowAudit:
 
 
 class ThisMachine:
-    """``MachineIdPort`` — the run's owner (FR-012)."""
+    """``MachineIdPort`` — the run's owner (spec workflow "Advance a run
+    only on the machine that owns it")."""
 
     def current(self) -> str:
         return resolve_identity().machine_id

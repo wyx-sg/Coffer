@@ -59,7 +59,8 @@ def event_actor(actor: str) -> EventActor:
 
 
 def _frozen(run: RunRow) -> WorkflowTemplate | None:
-    """The template this run froze (FR-010), or ``None`` if it no longer parses.
+    """The template this run froze (spec workflow "Freeze the template when a
+    run is created"), or ``None`` if it no longer parses.
 
     ``None`` rather than raising: refusing to show a run over a snapshot this
     build cannot read would hide the very run whose template is broken.
@@ -74,10 +75,11 @@ def _stage_name(template: WorkflowTemplate | None, stage_key: str | None) -> str
     """What the developer CALLED the stage a run is at.
 
     A key is an identity the engine reads no meaning from and the developer
-    never typed (FR-003, FR-060), so a list that printed one would be showing
-    them a name they did not choose. Read from the run's own frozen snapshot,
-    which is the only place that still knows what the stage was called when
-    this run started.
+    never typed (spec workflow "Attach no behaviour to a stage key", "Derive
+    stage and task keys from their names"), so a list that printed one would
+    be showing them a name they did not choose. Read from the run's own
+    frozen snapshot, which is the only place that still knows what the stage
+    was called when this run started.
     """
     if template is None or stage_key is None:
         return None
@@ -144,7 +146,8 @@ def inputs_out(items: Iterable[Mapping[str, Any]]) -> list[RunInput]:
 
 
 def _provider_of(kind: RunInputKind, ref: str) -> str | None:
-    """What a link points at, derived on every read (FR-065).
+    """What a link points at, derived on every read (spec workflow "Name
+    what a mounted external reference points at").
 
     Derived and not stored, so a link mounted before its provider was
     recognisable becomes recognisable the moment the table grows — no

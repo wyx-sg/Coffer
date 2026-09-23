@@ -121,7 +121,7 @@ export const channelStatusKey = (uid: string) => ["channels", uid, "status"] as 
 // workflow — runs, their events/artifacts, and approvals across every run
 // ---------------------------------------------------------------------------
 //
-// Templates are resources of kind `workflow` (FR-001) and live under
+// Templates are resources of kind `workflow` and live under
 // `resourcesKey`, so nothing for them here. Everything else nests under the
 // run it belongs to, so a node action can invalidate `workflowRunKey(id)` and
 // sweep the run's detail, events and artifacts together.
@@ -134,10 +134,10 @@ export const workflowRunKey = (runId: string) => ["workflow", "runs", runId] as 
 export const workflowArtifactsKey = (runId: string) =>
   ["workflow", "runs", runId, "artifacts"] as const;
 /** What the run READS. Its own key because inputs are editable for the whole
- *  of a run's life (FR-050) and change without the run's position moving. */
+ *  of a run's life and change without the run's position moving. */
 export const workflowInputsKey = (runId: string) => ["workflow", "runs", runId, "inputs"] as const;
 /** Approvals are their own subtree, not a child of a run: the page that
- *  decides one lists them across every run (FR-045). The root exists because
+ *  decides one lists them across every run. The root exists because
  *  a decision moves every filtered list at once. */
 export const workflowApprovalsRootKey = ["workflow", "approvals"] as const;
 export const workflowApprovalsKey = (filters: Record<string, unknown>) =>

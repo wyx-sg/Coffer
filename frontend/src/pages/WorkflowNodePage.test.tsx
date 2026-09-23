@@ -1,6 +1,6 @@
 // frontend/src/pages/WorkflowNodePage.test.tsx
 //
-// The task's conversation page — where a run is driven now (FR-030/FR-052).
+// The task's conversation page — where a run is driven now.
 // Two behaviours are load-bearing:
 //
 //   • A PENDING APPROVAL RENDERS ITS ARGUMENTS VERBATIM. Byte-for-byte what
@@ -186,7 +186,7 @@ describe("WorkflowNodePage", () => {
 
     // Not one of them, however the API described this node's allowed actions.
     // "Send back" is in the list because the header carried it longest: a
-    // workflow draws no route between stages now (FR-025), so acting on a
+    // workflow draws no route between stages now, so acting on a
     // finding is retrying a task or adding one, both of which are sentences.
     for (const label of [
       "Start",
@@ -208,7 +208,7 @@ describe("WorkflowNodePage", () => {
     const { container } = render(wrap());
     const thread = await screen.findByRole("region", { name: "Task conversation" });
     // IN the conversation, under the message that led to it — not a banner
-    // over the page (FR-039).
+    // over the page.
     expect(
       await within(thread).findByText(/jira__create_issue is waiting for approval/),
     ).toBeInTheDocument();

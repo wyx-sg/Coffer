@@ -145,8 +145,10 @@ class MCPGatewaySession:
         # still stamps it and this still threads it, so the behaviour outlives its
         # requirement.
         self._session_cwd: str | None = None
-        # FR-035: the workflow run + node attempt whose turn this session
-        # serves, reported by the shim (params._meta["coffer/run"]).
+        # Spec workflow "Give the gateway the run's identity at
+        # dispatch": the workflow run + node attempt whose turn this
+        # session serves, reported by the shim
+        # (params._meta["coffer/run"]).
         self._session_run: str | None = None
         # The gate that holds a run's write-class upstream calls. None here and
         # None above are the same promise, read from two sides: see gateway_gate.
@@ -204,7 +206,8 @@ class MCPGatewaySession:
     @property
     def run_context(self) -> str | None:
         """The run identity this session's calls are attributable to, or None
-        (FR-035). Read-only: only the handshake sets it."""
+        (spec workflow "Give the gateway the run's identity at dispatch").
+        Read-only: only the handshake sets it."""
         return self._session_run
 
     # --- Request dispatch ---

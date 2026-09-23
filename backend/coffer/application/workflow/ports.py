@@ -70,7 +70,8 @@ __all__ = [
 
 
 class ConversationPort(Protocol):
-    """Reading one conversation back, and compacting it (FR-049).
+    """Reading one conversation back, and compacting it (spec workflow
+    "Compact a long node conversation into a summary").
 
     Narrower than ``TurnPlatformPort`` on purpose: ``compaction`` needs to read
     a conversation and rewrite its oldest end, and nothing else, so that is all
@@ -83,25 +84,27 @@ class ConversationPort(Protocol):
 
     async def compact(self, conversation_id: str, *, keep_last: int, summary: str) -> None:
         """Replace everything before the last ``keep_last`` messages with one
-        summary message that STAYS in the conversation (FR-049).
+        summary message that STAYS in the conversation (spec workflow
+        "Compact a long node conversation into a summary").
 
         One call rather than a delete and an append: a process that dies
         between the two would leave a node with a hole where its history was,
-        which is the exact failure FR-049 forbids."""
+        which is the exact failure that requirement forbids."""
         ...
 
 
 class TurnPlatformPort(ConversationPort, Protocol):
     """One node's conversation, from the engine's side.
 
-    A run has no conversation of its own (FR-030) — every conversation this
-    port opens belongs to one task, and what the developer says inside one
-    reaches later tasks by being part of the transcript they open with, not by
-    being copied anywhere.
+    A run has no conversation of its own (spec workflow "Give a run no
+    conversation of its own") — every conversation this port opens belongs to
+    one task, and what the developer says inside one reaches later tasks by
+    being part of the transcript they open with, not by being copied anywhere.
     """
 
     def known_agents(self) -> tuple[str, ...]:
-        """Every registered agent key (FR-071).
+        """Every registered agent key (spec workflow "Choose a task's
+        agent, model and effort before it starts").
 
         Here so a task can be ASSIGNED an agent that exists: without it a typo
         is accepted, waits until the task starts, and surfaces as a failed
@@ -123,7 +126,7 @@ class TurnPlatformPort(ConversationPort, Protocol):
 
         ``run_context`` is stamped into the agent process's environment so the
         gateway can attribute that agent's tool calls back to this run's node
-        (FR-035)."""
+        (spec workflow "Give the gateway the run's identity at dispatch")."""
         ...
 
     async def start_turn(self, conversation_id: str, text: str) -> asyncio.Queue[AgentEvent | None]:
@@ -205,7 +208,8 @@ class ArtifactStorePort(Protocol):
     def workspace_dir(self, run_id: str) -> str:
         """The working directory this run's node conversations run in.
 
-        Coffer's, not the caller's (FR-053)."""
+        Coffer's, not the caller's (spec workflow "Give each run a
+        working directory of its own")."""
         ...
 
     def ensure_run_dirs(self, run_id: str) -> None: ...
@@ -219,13 +223,15 @@ class ArtifactStorePort(Protocol):
     def collect_run_files(
         self, run_id: str, destination: str, *, references: str | None = None
     ) -> int:
-        """Copy what the run is MADE OF into ``destination`` (FR-043) — its
+        """Copy what the run is MADE OF into ``destination`` (spec workflow
+        "Promote what a run is made of into a knowledge collection") — its
         artifacts, its uploads and its notes — plus a ``references.md`` when
         the caller supplies one. Returns how many files landed."""
         ...
 
     def read_file(self, run_id: str, rel_path: str) -> RunFileView | None:
-        """One file under the run's directory, for the UI's preview (FR-064).
+        """One file under the run's directory, for the UI's preview (spec
+        workflow "Read a run's files from the app, bounded").
 
         ``None`` when there is no such file. Raises when the path is not one
         this run may address — the guard is the store's, not the caller's."""
@@ -237,7 +243,8 @@ class ArtifactStorePort(Protocol):
         The sibling above answers "show this to a person"; this answers "put
         this in an <img>". Same guard, same size cap, different question — a
         pasted screenshot has no text to preview and is still the thing the
-        note is about (FR-069)."""
+        note is about (spec workflow "Keep the developer's own notes in a
+        run's context")."""
         ...
 
     def delete_run_dir(self, run_id: str) -> None: ...
@@ -256,7 +263,8 @@ class KnowledgeInputPort(Protocol):
     """A mounted knowledge collection, as a line in the node's context.
 
     Never inlined: a node is an agent with ``coffer__search`` and a
-    filesystem, so it is told what is mounted (FR-032)."""
+    filesystem, so it is told what is mounted (spec workflow
+    "List a run's mounted inputs to every node")."""
 
     async def describe(self, collection: str) -> str | None: ...
 
@@ -264,10 +272,12 @@ class KnowledgeInputPort(Protocol):
 
 
 class NotifyPort(Protocol):
-    """Where an approval and a run's progress reach the developer (FR-039).
+    """Where an approval and a run's progress reach the developer (spec
+    workflow "Show an approval on its task's conversation and through a
+    bound channel").
 
     A vault with no channel bound still works — the approval is on the task's
-    own conversation either way (FR-039) — so every method here is allowed to
+    own conversation either way — so every method here is allowed to
     do nothing."""
 
     async def announce(self, run_id: str, text: str) -> None: ...
@@ -299,7 +309,8 @@ class AuditPort(Protocol):
 
 
 class SummariserPort(Protocol):
-    """One short summary of a long piece of text (FR-049).
+    """One short summary of a long piece of text (spec workflow "Compact
+    a long node conversation into a summary").
 
     The same seam the rest of the vault uses for its own model calls: the
     composition root resolves Coffer's internal-default connection and runs one
@@ -309,13 +320,15 @@ class SummariserPort(Protocol):
     ``None`` is a first-class answer — no internal connection configured, or
     the model could not be reached. Every caller degrades honestly on it: what
     would have been summarised is NAMED instead and the context says so, so
-    nothing is ever silently dropped (FR-047)."""
+    nothing is ever silently dropped (spec workflow "Keep a
+    task's opening context within budget")."""
 
     async def summarise(self, text: str, *, hint: str) -> str | None: ...
 
 
 class MachineIdPort(Protocol):
-    """This machine's stable id — the run's owner (FR-012)."""
+    """This machine's stable id — the run's owner (spec workflow
+    "Advance a run only on the machine that owns it")."""
 
     def current(self) -> str: ...
 
@@ -324,9 +337,10 @@ class ToolClassPort(Protocol):
     """Whether an upstream tool writes, and the memory of being told so.
 
     ``classify`` returns ``None`` for a tool nothing has judged yet, which the
-    gate treats as write-class (FR-036); ``remember`` records the developer's
-    answer on the server that serves the tool, so the same question is asked
-    once.
+    gate treats as write-class (spec workflow "Treat an unjudged tool as
+    write-class and remember the answer"); ``remember`` records the
+    developer's answer on the server that serves the tool, so the same
+    question is asked once.
 
     ``server_name`` is a NAME and not a uid, alone among this release's
     resource references, because it is split out of the gateway tool prefix

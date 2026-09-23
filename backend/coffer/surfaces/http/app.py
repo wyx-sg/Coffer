@@ -224,7 +224,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         credential_store,
         kinds.agent_skill.agent_service,
         resource_svc,
-        # The lookup that gives a node's agent its run identity (workflow FR-035).
+        # The lookup that gives a node's agent its run identity (spec workflow
+        # "Give the gateway the run's identity at dispatch").
         conversation_env_lookup(build_attempt_repo(sm)),
     )
     # The chat session's supervisor stays in session_supervisors so on_delete evicts
@@ -276,9 +277,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # edited, and it is what upgrades a vault that still holds the previous
     # per-agent rendering.
     await run_builtin_guide_refresh(kinds.guide)
-    # Coffer's own workflow, into a vault that has never had one (FR-009).
-    # Unlike the skill above it is NOT re-asserted: the row is the developer's
-    # from the moment it exists, so an edit, a rename or a delete stands.
+    # Coffer's own workflow, into a vault that has never had one (spec
+    # workflow "Seed one built-in template"). Unlike the skill above it is NOT
+    # re-asserted: the row is the developer's from the moment it exists, so an
+    # edit, a rename or a delete stands.
     await run_builtin_workflow_seed(resource_svc)
 
     # CODE-020: start the batched invocation writer alongside the retention

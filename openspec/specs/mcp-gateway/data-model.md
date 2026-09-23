@@ -76,7 +76,7 @@ Pydantic `BaseModel` — this is what `Resource.config` holds for an `mcp_server
 | `spawn_timeout_seconds`   | `int`                                                                     | default `30`; range `5–120`                                           |
 | `request_timeout_seconds` | `int`                                                                     | default `120`; range `5–1800`; reset on progress                      |
 | `idle_timeout_seconds`    | `int`                                                                     | default `600`; range `60–86400`; subprocess GC after this idle period |
-| `tool_write_class`        | `dict[str, Literal["read", "write"]]`                                     | per-tool judgement, keyed by unprefixed tool name; absent means write-class (spec workflow FR-036) |
+| `tool_write_class`        | `dict[str, Literal["read", "write"]]`                                     | per-tool judgement, keyed by unprefixed tool name; absent means write-class (spec workflow "Treat an unjudged tool as write-class and remember the answer") |
 
 `tool_write_class` is the only field here nothing in this spec reads: it is
 written and read by the workflow layer's approval gate, and it lives on the

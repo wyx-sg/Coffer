@@ -1,10 +1,11 @@
 """Reading a workflow template out of the JSON a `resources` row holds.
 
-A template has no table of its own (FR-001) — it is one ``resources`` row whose
-``config`` holds the whole definition. This module is the only place that
-config's shape is known: :func:`parse_template` turns it into the frozen value
-objects of ``template_shape`` or refuses it naming the JSON path of the
-offending field (FR-006).
+A template has no table of its own (spec workflow "Register a template as a
+workflow resource") — it is one ``resources`` row whose ``config`` holds the
+whole definition. This module is the only place that config's shape is known:
+:func:`parse_template` turns it into the frozen value objects of
+``template_shape`` or refuses it naming the JSON path of the offending field
+("Refuse an invalid template naming the offending path").
 
 Every refusal names that path, which is the whole reason these rules are
 hand-written rather than a schema: a caller told "invalid" learns nothing, and
@@ -69,19 +70,21 @@ def parse_template(
 
     ``known_skills`` and ``allowed_agents`` are the two rules the domain cannot
     answer alone: whether a skill is registered, and whether an agent is inside
-    the template's scope (FR-007). ``None`` means "not checked here" — the
-    application passes the real collections at write time; a pure caller
-    (a run replaying its own frozen snapshot) passes neither, because a
-    snapshot was already validated once and re-refusing it would strand a run
-    whose skill has since been renamed.
+    the template's scope (spec workflow "Read a template's scope as the agents
+    it may drive"). ``None`` means "not checked here" — the application passes
+    the real collections at write time; a pure caller (a run replaying its own
+    frozen snapshot) passes neither, because a snapshot was already validated
+    once and re-refusing it would strand a run whose skill has since been
+    renamed.
 
     Raises:
         TemplateInvalid: naming the JSON path of the offending field.
     """
     root = as_object(config, "")
-    # ``edges`` is deliberately NOT accepted. A template that still carries
-    # one is refused naming it, rather than having it dropped in silence: the
-    # route it describes no longer exists (FR-025), and a workflow that still
+    # ``edges`` is deliberately NOT accepted. A template that still carries one
+    # is refused naming it, rather than having it dropped in silence: the route
+    # it describes no longer exists (spec workflow "Send work back by the
+    # developer's hand, never a template route"), and a workflow that still
     # thinks it has one would send work nowhere.
     reject_unknown(root, {"description", "stages"}, "")
 

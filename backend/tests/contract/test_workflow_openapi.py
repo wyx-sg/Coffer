@@ -17,12 +17,14 @@ The same two app-wide notes ``test_memory_openapi.py`` records apply here:
     below, so the yaml cannot drift from the values the engine actually writes.
 
 One more is this contract's own: ``WorkflowTemplate`` and the ``Template*``
-family under it describe a template's ``config`` for the editor (FR-054) and are
-served by NO route here, because a template is written through the
-kind-agnostic resource endpoint (FR-056). They cannot have a generated
-counterpart, so the component sweep walks out from ``WorkflowTemplate`` and
-excludes what it reaches — computed rather than listed, so a new sub-schema of a
-template is covered the day it lands and a schema that stops being one is not.
+family under it describe a template's ``config`` for the editor (spec workflow
+"Author templates in the web UI") and are served by NO route here, because a
+template is written through the kind-agnostic resource endpoint
+("Write templates through the resource endpoint only"). They cannot have a
+generated counterpart, so the component sweep walks out from
+``WorkflowTemplate`` and excludes what it reaches — computed rather than listed,
+so a new sub-schema of a template is covered the day it lands and a schema that
+stops being one is not.
 """
 
 from __future__ import annotations
@@ -168,26 +170,32 @@ def test_the_management_plane_is_twenty_three_routes(spec_doc: dict[str, Any]) -
     decision, not an accident.
 
     It was thirteen while a run had a main thread of its own. Four inputs
-    routes joined (FR-050, FR-051) and the one message route left, because a
-    run has no conversation to say anything in. The seventeenth reads ONE file
-    out of the run's directory (FR-064), so the context table can show what it
-    lists rather than only naming it — read-only, one path, and guarded
-    against everything that is not this run's to read. The eighteenth is one
-    sentence to one task (FR-068) — a run is driven by talking, and until it
-    existed a task could only be talked to during the hours its turn was in
-    flight. The next three are the developer's own notes (FR-069) — writing
-    one, rewriting it, and serving the bytes of an image pasted into it, which
-    the text preview cannot answer for by design. The twenty-second rewrites
-    the run's LABEL (FR-070): its title is typed before the first task has
+    routes joined (spec workflow "Add and remove inputs at any point in a run",
+    "Store an uploaded input under the run's directory") and the one message
+    route left, because a run has no conversation to say anything in. The
+    seventeenth reads ONE file out of the run's directory ("Read a run's files
+    from the app, bounded"), so the context table can show what it lists
+    rather than only naming it — read-only, one path, and guarded against
+    everything that is not this run's to read. The eighteenth is one sentence
+    to one task ("Let the developer speak to a task at any point, in one
+    place") — a run is driven by talking, and until it existed a task could
+    only be talked to during the hours its turn was in flight. The next three
+    are the developer's own notes ("Keep the developer's own notes in a run's
+    context") — writing one, rewriting it, and serving the bytes of an image
+    pasted into it, which the text preview cannot answer for by design. The
+    twenty-second rewrites the run's LABEL ("Edit a run's title and
+    description as labels"): its title is typed before the first task has
     opened, when the developer knows least about the work, and until this
     existed it could never be corrected. The twenty-third chooses who runs a
-    task and on what (FR-071), which the pickers on a conversation cannot
-    answer for a task that has no conversation yet.
+    task and on what ("Choose a task's agent, model and effort before it
+    starts"), which the pickers on a conversation cannot answer for a task
+    that has no conversation yet.
 
     A twenty-fourth was here and is gone: the route that crossed a feedback
     edge. Sending work back is the developer retrying a task or adding one
-    (FR-025), and both of those already had routes — the edge route was a
-    second way to do what `actions` and `tasks` do.
+    ("Send work back by the developer's hand, never a template route"), and
+    both of those already had routes — the edge route was a second way to do
+    what `actions` and `tasks` do.
     """
     assert len(_declared_operations(spec_doc)) == 23
 
@@ -197,14 +205,15 @@ def test_everything_the_engine_holds_is_reachable_over_rest(
     generated_schema: dict[str, Any],
     spec_doc: dict[str, Any],
 ) -> None:
-    """FR-044: a run's tasks, its approvals and its event log are each readable
-    over REST, and the workflow itself is read where every resource is.
+    """Spec workflow "Expose the engine over REST": a run's tasks, its approvals
+    and its event log are each readable over REST, and the workflow itself is
+    read where every resource is.
 
     Asserted against the SERVED schema rather than the yaml, because the claim
     is about what the API offers and a yaml can declare a route the app never
     mounted. What this catches is the failure mode this engine is prone to:
     state that only the daemon's own machinery can see, so a surface that wants
-    it reaches past the API for it (FR-056).
+    it reaches past the API for it.
     """
     served = _served_operations(generated_schema)
     for operation in [
@@ -222,16 +231,19 @@ def test_everything_the_engine_holds_is_reachable_over_rest(
     assert stages["items"]["$ref"].endswith("/StageOut")
     assert "nodes" in spec_doc["components"]["schemas"]["StageOut"]["properties"]
 
-    # And the workflow itself: a template is a resource (FR-001), so it is read
-    # through the kind-agnostic resource routes. This surface offering one of
-    # its own would be the second reader FR-056 forbids.
+    # And the workflow itself: a template is a resource (spec workflow
+    # "Register a template as a workflow resource"), so it is read through the
+    # kind-agnostic resource routes. This surface offering one of its own would
+    # be the second reader "Expose the engine over REST" rules out: no surface
+    # reads the engine another way.
     assert "get" in generated_schema["paths"]["/api/v1/resources/{uid}"]
 
 
 def test_a_template_is_not_written_through_this_surface(spec_doc: dict[str, Any]) -> None:
-    """A workflow template is a Resource (FR-001), so it is created, edited,
-    scoped and deleted through the kind-agnostic resource routes. A second way
-    to write one would be a second contract for the same data."""
+    """A workflow template is a Resource, so it is created, edited, scoped and
+    deleted through the kind-agnostic resource routes (spec workflow "Write
+    templates through the resource endpoint only"). A second way to write one
+    would be a second contract for the same data."""
     template_routes = {
         (method, path) for method, path in _declared_operations(spec_doc) if "template" in path
     }
@@ -239,18 +251,21 @@ def test_a_template_is_not_written_through_this_surface(spec_doc: dict[str, Any]
 
 
 def test_a_run_is_never_edited_in_place(spec_doc: dict[str, Any]) -> None:
-    """A run's POSITION is rebuilt from its event log (FR-014), so no surface
-    may write it in place — one that did would be a second writer of the
-    projection, and the log would stop being the record of truth.
+    """A run's POSITION is rebuilt from its event log (spec workflow
+    "Rebuild a run from its event log"), so no surface may write it in place —
+    one that did would be a second writer of the projection, and the log would
+    stop being the record of truth.
 
     What the invariant protects is the PROJECTION: `status`,
     `current_stage_key`, `current_node_key`, `version`, `tokens_spent`. Two
     kinds of edit are outside it and are named here rather than left to be
     rediscovered:
 
-    * a note's contents — a note is a FILE under the run's directory (FR-069),
-      and replacing a file's bytes is what PUT is for;
-    * the run's LABEL — its title and description (FR-070). A label is what the
+    * a note's contents — a note is a FILE under the run's directory ("Keep the
+      developer's own notes in a run's context"), and replacing a file's bytes
+      is what PUT is for;
+    * the run's LABEL — its title and description
+      ("Edit a run's title and description as labels"). A label is what the
       developer called the work, typed before the first task opened, when they
       knew least about it. It is not folded from anything and it moves the run
       nowhere, which is why it carries no `version` either.
@@ -276,16 +291,18 @@ def test_the_one_editable_thing_on_a_run_is_its_label(spec_doc: dict[str, Any]) 
 
 
 def test_every_mutating_run_command_carries_a_version(spec_doc: dict[str, Any]) -> None:
-    """The optimistic lock is the contract's own rule (FR-015): the three bodies
-    that move a run all require ``version``."""
+    """The optimistic lock is the contract's own rule (spec workflow "Refuse a
+    command carrying a stale version"): the three bodies that move a run all
+    require ``version``."""
     for component in ("RunSignalIn", "NodeActionIn", "AdhocTaskIn"):
         required = set(spec_doc["components"]["schemas"][component]["required"])
         assert "version" in required, f"{component} may be sent without a version"
 
 
 def test_a_run_has_no_conversation_of_its_own(spec_doc: dict[str, Any]) -> None:
-    """Every conversation in a run belongs to one task (FR-030), so there is no
-    route for writing to the run and no field naming a thread it owns.
+    """Every conversation in a run belongs to one task (spec workflow "Give a
+    run no conversation of its own"), so there is no route for writing to the
+    run and no field naming a thread it owns.
 
     This is asserted from the absent side on purpose: the message route and
     ``RunOut.main_conversation_id`` both existed, and a surface that quietly
@@ -306,26 +323,28 @@ def test_a_run_has_no_conversation_of_its_own(spec_doc: dict[str, Any]) -> None:
 def test_a_node_names_the_conversation_that_is_opened(spec_doc: dict[str, Any]) -> None:
     """The counterpart of the rule above: a task IS its conversation, so the
     thing the web UI navigates to has to be on the node the developer clicked,
-    not only inside the attempt row that happens to carry it (FR-030)."""
+    not only inside the attempt row that happens to carry it."""
     assert "conversation_id" in _properties(spec_doc, "NodeOut")
 
 
 def test_the_buttons_moved_rather_than_disappeared(spec_doc: dict[str, Any]) -> None:
     """The run's own page offers nothing that advances or alters the run
-    (FR-052) — every such action is taken in the task's conversation. What a
-    node allows still has to be SAID by this surface, or the conversation page
-    has nothing to draw."""
+    (spec workflow "Offer no run controls on the run's page") — every such
+    action is taken in the task's conversation. What a node allows still has
+    to be SAID by this surface, or the conversation page has nothing to
+    draw."""
     node = spec_doc["components"]["schemas"]["NodeOut"]
     assert "allowed_actions" in node["properties"]
 
 
 def test_an_input_is_managed_at_any_point_in_a_runs_life(spec_doc: dict[str, Any]) -> None:
-    """FR-050. Mounting is not something that happens only at creation, so the
-    inputs are a route family of their own — and every one of the three that
+    """Spec workflow "Add and remove inputs at any point in a run". Mounting is
+    not something that happens only at creation, so the inputs are a route
+    family of their own — and every one of the three that
     changes something answers with the list afterwards, so a client never has
     to ask twice what the run now reads.
 
-    The upload is separate from the add (FR-051) because it carries bytes
+    The upload is separate from the add because it carries bytes
     rather than a reference; that is what makes it ``multipart/form-data``
     rather than a base64 field in a JSON body.
     """
@@ -388,19 +407,21 @@ def test_every_yaml_component_exists_with_its_required_fields(
         missing = set(schema.get("required") or []) - set(generated[name].get("required") or [])
         if missing:
             problems.append(f"{name}: required in the yaml but not generated: {sorted(missing)}")
-    assert not problems, "openspec/specs/workflow/contracts/api.openapi.yaml drift:\n  " + "\n  ".join(
-        problems
+    assert not problems, (
+        "openspec/specs/workflow/contracts/api.openapi.yaml drift:\n  " + "\n  ".join(problems)
     )
 
 
 def test_the_template_shape_is_documented_without_a_route_to_write_it(
     spec_doc: dict[str, Any],
 ) -> None:
-    """``WorkflowTemplate`` exists for the editor (FR-054) and nothing else.
+    """``WorkflowTemplate`` exists for the editor (spec workflow "Author
+    templates in the web UI") and nothing else.
 
     It is the one family this contract declares and does not serve, so the
     exclusion above has to be earned: the schema must be here, and there must
-    still be no route through which a template is written (FR-056, which
+    still be no route through which a template is written
+    ("Write templates through the resource endpoint only", which
     ``test_a_template_is_not_written_through_this_surface`` asserts from the
     route side).
     """
@@ -418,14 +439,15 @@ def test_the_error_envelope_is_never_a_generated_component(
 
 
 def test_owned_here_is_on_every_run_the_api_reports(spec_doc: dict[str, Any]) -> None:
-    """A run belongs to one machine and is read-only everywhere else (FR-012).
+    """A run belongs to one machine and is read-only everywhere else (spec
+    workflow "Advance a run only on the machine that owns it").
     The field is required, so no client can be shown a run without being told
     whether it may act on it."""
     assert "owned_here" in set(spec_doc["components"]["schemas"]["RunOut"]["required"])
 
 
 def test_an_approval_payload_is_the_arguments_themselves(spec_doc: dict[str, Any]) -> None:
-    """A decision on a summary is not a decision (FR-033): ``payload`` is a
+    """A decision on a summary is not a decision: ``payload`` is a
     free-form object — the exact arguments — and it is required."""
     approval = spec_doc["components"]["schemas"]["ApprovalOut"]
     assert "payload" in set(approval["required"])

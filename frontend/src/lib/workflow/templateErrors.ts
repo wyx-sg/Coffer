@@ -1,8 +1,8 @@
 // frontend/src/lib/workflow/templateErrors.ts
-// A refused template, read back as the ONE field that is wrong (FR-055).
+// A refused template, read back as the ONE field that is wrong.
 //
 // The daemon refuses a template config naming the JSON path of the offending
-// field — `stages[1].nodes[0].skill`, not "a node" (FR-006). The editor's job
+// field — `stages[1].nodes[0].skill`, not "a node". The editor's job
 // is to put the message against that field rather than in a banner over a form
 // with forty inputs in it, so this module turns whatever the envelope carried
 // into `{path, message}` and the components ask it whether THEIR path is the

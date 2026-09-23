@@ -1,6 +1,6 @@
 // frontend/src/pages/WorkflowTemplatesPage.test.tsx
 //
-// The template list (FR-054): its branching — skeleton / error / empty /
+// The template list: its branching — skeleton / error / empty /
 // populated — and the two things the list itself has to say, which are the
 // stages IN ORDER and whether the template is enabled. The table is real, so
 // the order summary is asserted where it is rendered.

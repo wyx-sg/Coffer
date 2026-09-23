@@ -1,8 +1,9 @@
 """Run, NodeAttempt and Approval — the execution side of a workflow (spec workflow).
 
-A run is **not** a Resource (FR-011): it is operational state, it belongs to one
-machine, and it does not sync. What travels is the template it froze a snapshot
-of at creation (FR-010); everything in this module is the record of one
+A run is **not** a Resource ("Create a run from a template and a title alone"):
+it is operational state, it belongs to one machine, and it does not sync. What
+travels is the template it froze a snapshot of at creation ("Freeze the template
+when a run is created"); everything in this module is the record of one
 execution of that snapshot.
 
 The enum values are the strings that go on the wire and into SQLite — they are
@@ -20,7 +21,7 @@ from typing import Any
 
 
 class RunStatus(StrEnum):
-    """A run's six statuses (FR-013).
+    """A run's six statuses (spec workflow "Keep a run to six statuses").
 
     "Waiting for the developer" is deliberately absent: waiting is a property
     of a node, never of a run. A run whose node sits in review is still
@@ -35,15 +36,17 @@ class RunStatus(StrEnum):
     FAILED = "failed"
 
 
-#: Statuses from which no mutating command is ever accepted again (FR-013,
-#: FR-016). ``failed`` is **not** here: a failed run is recoverable — the
+#: Statuses from which no mutating command is ever accepted again (spec workflow
+#: "Keep a run to six statuses", "Accept the run signals start, pause, resume
+#: and abort"). ``failed`` is **not** here: a failed run is recoverable — the
 #: developer retries the node that failed and resumes — whereas a completed run
 #: has nowhere left to go and an aborted one was ended on purpose.
 TERMINAL_RUN_STATUSES: frozenset[RunStatus] = frozenset({RunStatus.COMPLETED, RunStatus.ABORTED})
 
 
 class NodeStatus(StrEnum):
-    """A node attempt's seven statuses (FR-020).
+    """A node attempt's seven statuses (spec workflow "Keep a node to seven
+    statuses").
 
     ``waiting_review`` and ``waiting_approval`` are both "stopped at the
     developer", kept apart because the thing being decided differs: the node's
@@ -60,14 +63,16 @@ class NodeStatus(StrEnum):
 
 
 #: Node statuses that will never change again on their own attempt. A retry
-#: does not reopen one of these — it inserts ``attempt + 1`` (FR-022).
+#: does not reopen one of these — it inserts ``attempt + 1`` (spec workflow
+#: "Keep every attempt when a node is retried").
 TERMINAL_NODE_STATUSES: frozenset[NodeStatus] = frozenset(
     {NodeStatus.COMPLETED, NodeStatus.SKIPPED, NodeStatus.FAILED}
 )
 
 
 class RunSignal(StrEnum):
-    """The four commands that act on a run as a whole (FR-016).
+    """The four commands that act on a run as a whole (spec workflow "Accept
+    the run signals start, pause, resume and abort").
 
     Node lifecycle actions are not signals — they are about a node, they have
     their own route, and mixing the two vocabularies is how a surface ends up
@@ -81,7 +86,8 @@ class RunSignal(StrEnum):
 
 
 class NodeAction(StrEnum):
-    """The six commands that act on one node (FR-021)."""
+    """The six commands that act on one node (spec workflow "Accept the node
+    actions start, feedback, complete, retry, skip and restore")."""
 
     START = "start"
     FEEDBACK = "feedback"
@@ -95,7 +101,8 @@ class ApprovalKind(StrEnum):
     """What a pending approval stands in front of.
 
     One value, and the enum is kept for the honesty of saying so: an approval
-    is always a write-class upstream call the gateway is holding (FR-034).
+    is always a write-class upstream call the gateway is holding (spec
+    workflow "Refuse an unapproved write-class tool call made for a run").
 
     There was a second, ``node_action``, for a task whose declared policy is
     ``always``. Nothing ever constructed it. A task's work is a conversation,
@@ -126,7 +133,8 @@ class ApprovalStatus(StrEnum):
 
 
 #: An approval in one of these has been answered for good; a repeated decision
-#: returns it unchanged and executes nothing a second time (FR-038).
+#: returns it unchanged and executes nothing a second time (spec workflow
+#: "Make an approval decision idempotent").
 TERMINAL_APPROVAL_STATUSES: frozenset[ApprovalStatus] = frozenset(
     {
         ApprovalStatus.APPROVED,
@@ -143,7 +151,7 @@ class FailureReason(StrEnum):
 
     ``interrupted`` is the one the daemon writes to itself on start-up: a node
     that was mid-turn when the process stopped is reported, not resumed and not
-    dropped (FR-027).
+    dropped (spec workflow "Report a node interrupted by a restart as failed").
     """
 
     INTERRUPTED = "interrupted"
@@ -153,29 +161,31 @@ class FailureReason(StrEnum):
 
 
 class RunInputKind(StrEnum):
-    """What a mounted input points at (FR-032). Inputs are *listed* to a node,
-    never inlined wholesale — a knowledge collection can be larger than a
-    context window."""
+    """What a mounted input points at (spec workflow "List a run's mounted
+    inputs to every node"). Inputs are *listed* to a node, never inlined
+    wholesale — a knowledge collection can be larger than a context window."""
 
     KNOWLEDGE = "knowledge"
     FILE = "file"
     #: Something the developer wrote themselves rather than uploaded — a
-    #: markdown file under the run's own inputs, editable for as long as the
-    #: run lives (FR-069). It is a file to every reader; the kind exists so the
-    #: app knows which rows it may open an editor on.
+    #: markdown file under the run's own inputs, editable for as long as the run
+    #: lives (spec workflow "Keep the developer's own notes in a run's
+    #: context"). It is a file to every reader; the kind exists so the app knows
+    #: which rows it may open an editor on.
     NOTE = "note"
     LINK = "link"
     #: An absolute path to a local repository. The run never works in the
     #: developer's own checkout — it is given its own inside the run's working
-    #: directory (FR-057).
+    #: directory (spec workflow "Give a mounted repository its own checkout").
     REPO = "repo"
 
 
 #: How a ``repo`` input was actually given to the run. A worktree is the run's
 #: own checkout on its own branch; a link is a directory that is not a git
 #: repository and could only be pointed at. The difference is recorded because
-#: the node's context must be able to say which it got (FR-057) rather than
-#: implying an isolation it does not have.
+#: the node's context must be able to say which it got (spec workflow "Give a
+#: mounted repository its own checkout") rather than implying an isolation it
+#: does not have.
 REPO_MOUNT_WORKTREE = "worktree"
 REPO_MOUNT_LINK = "link"
 
@@ -187,12 +197,13 @@ class RunInput:
     ``size`` is the uploaded file's bytes and is ``None`` for every other kind
     — a collection's size is the knowledge layer's answer, a link's is nobody's
     — and it is carried so the developer can see what a run is dragging around
-    without opening the directory (FR-051).
+    without opening the directory.
 
     ``path`` and ``mount`` belong to a ``repo`` input and are ``None``
-    otherwise: where inside the run's working directory its checkout landed,
-    and whether that checkout is a git worktree of its own or a link to a
-    directory that was not a repository (FR-057).
+    otherwise: where inside the run's working directory its checkout landed, and
+    whether that checkout is a git worktree of its own or a link to a directory
+    that was not a repository (spec workflow "Give a mounted repository its own
+    checkout").
     """
 
     kind: RunInputKind
@@ -208,13 +219,15 @@ class Run:
     """One execution of a frozen template snapshot, in one working directory,
     on one machine.
 
-    A run has **no conversation of its own** (FR-030): every conversation
-    belongs to one task and hangs off its attempt.
+    A run has **no conversation of its own** (spec workflow "Give a run no
+    conversation of its own"): every conversation belongs to one task and hangs
+    off its attempt.
 
     ``status``, ``current_stage_key``, ``current_node_key`` and ``tokens_spent``
-    are **projections** of the event log (FR-014) — they are carried here so a
-    list query is one row read, and rebuilt by ``events.project`` on daemon
-    start. When they disagree with the events, the events win.
+    are **projections** of the event log ("Rebuild a run from its event log") —
+    they are carried here so a list query is one row read, and rebuilt by
+    ``events.project`` on daemon start. When they disagree with the events, the
+    events win.
     """
 
     id: str
@@ -233,14 +246,15 @@ class Run:
     updated_at: datetime | None = None
 
     def owned_by(self, machine_id: str) -> bool:
-        """Whether this machine is the one that advances the run (FR-012)."""
+        """Whether this machine is the one that advances the run (spec workflow
+        "Advance a run only on the machine that owns it")."""
         return self.machine_id == machine_id
 
 
-#: Prefix of an ad-hoc task's node key (FR-028). An ad-hoc task is attributed
-#: exactly as a template node is, so it needs a key in the same namespace —
-#: this prefix is what keeps it from ever colliding with one, since a template
-#: node key may not contain ``:``.
+#: Prefix of an ad-hoc task's node key (spec workflow "Add an ad-hoc task to any
+#: stage"). An ad-hoc task is attributed exactly as a template node is, so it
+#: needs a key in the same namespace — this prefix is what keeps it from ever
+#: colliding with one, since a template node key may not contain ``:``.
 ADHOC_KEY_PREFIX = "adhoc:"
 
 
@@ -253,10 +267,11 @@ def is_adhoc_key(node_key: str) -> bool:
 class NodeAttempt:
     """One try at one node.
 
-    A retry never rewrites an attempt — it inserts ``attempt + 1`` (FR-022), so
-    the earlier attempt's conversation, output and feedback stay readable. That
-    is also what makes an interrupted node honest: its attempt keeps its
-    conversation id and simply says it failed.
+    A retry never rewrites an attempt — it inserts ``attempt + 1`` (spec
+    workflow "Keep every attempt when a node is retried"), so the earlier
+    attempt's conversation, output and feedback stay readable. That is also what
+    makes an interrupted node honest: its attempt keeps its conversation id and
+    simply says it failed.
     """
 
     id: str
@@ -280,7 +295,8 @@ class NodeAttempt:
 
 @dataclass(frozen=True)
 class RunProjection:
-    """The four columns a fold of a run's events produces (FR-014).
+    """The four columns a fold of a run's events produces (spec workflow
+    "Rebuild a run from its event log").
 
     It lives in the domain because BOTH sides need it and neither may import
     the other: the event fold produces one, the repository writes one. Leaving
@@ -333,7 +349,8 @@ class Approval:
 
         Expiry is checked against the clock rather than against ``status``: an
         approval whose ``expires_at`` has passed authorises nothing even if no
-        sweep has moved it to ``expired`` yet (FR-037). An approval that has
-        not been approved authorises nothing either way.
+        sweep has moved it to ``expired`` yet (spec workflow "Resume or fail a
+        held tool call, never drop it"). An approval that has not been approved
+        authorises nothing either way.
         """
         return self.status is ApprovalStatus.APPROVED and now < self.expires_at

@@ -3,7 +3,7 @@
 // The editor, tested through the real hooks against a mocked API CLIENT rather
 // than mocked hooks: two of the three things that matter here are facts about
 // the request the editor makes (it goes through the resource endpoint, and it
-// carries exactly the template that was authored — FR-054/FR-056), and a test
+// carries exactly the template that was authored), and a test
 // that stubbed the mutation could not see either.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
@@ -91,7 +91,7 @@ let api: ApiClientMock;
  * A STATEFUL fake: GET returns whatever the last PATCH stored.
  *
  * The editor holds no draft — each edit is computed from what the cache holds
- * and written straight back (FR-062) — so a fake that always replayed the
+ * and written straight back — so a fake that always replayed the
  * original config would make every edit look like the first one and would
  * hide exactly the bug that costs a developer their work.
  */
@@ -225,7 +225,7 @@ describe("WorkflowTemplatePage", () => {
 
     await waitFor(() => expect(api.PATCH).toHaveBeenCalled());
     // Through the resource endpoint, like every other client of every other
-    // kind (FR-056) — the editor has no write path of its own.
+    // kind — the editor has no write path of its own.
     expect(vi.mocked(api.PATCH).mock.calls[0][0]).toBe("/resources/{uid}");
 
     const config = written();
@@ -237,7 +237,7 @@ describe("WorkflowTemplatePage", () => {
 
   test("a stage's dialog asks for its own fields and no route out of it", async () => {
     // The editor used to offer a route back to an earlier stage here. There is
-    // no such route any more (spec workflow FR-025), and the regression worth
+    // no such route any more, and the regression worth
     // pinning is somebody reintroducing the field rather than the judgement —
     // which stage a finding sends work to is the developer's, made when they
     // have the finding, not the template's, made before the run existed.
@@ -257,7 +257,7 @@ describe("WorkflowTemplatePage", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Remove stage Coding" }));
 
-    // The editor writes every edit the moment it is made (FR-062), so a delete
+    // The editor writes every edit the moment it is made, so a delete
     // IS the save: there is no draft to change your mind in afterwards, and
     // pressing the button must not be the last word.
     const ask = await screen.findByRole("dialog");
@@ -328,7 +328,7 @@ describe("WorkflowTemplatePage", () => {
   );
 
   acceptance("workflow", "a workflow is renamed and re-described in place", async () => {
-    // FR-054: the two fields that are not part of the shape, edited where the
+    // The two fields that are not part of the shape, edited where the
     // shape is — not in a settings tab beside numbers that have moved onto
     // the tasks they bound.
     mount(threeStages());

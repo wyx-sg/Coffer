@@ -1,18 +1,22 @@
-"""Talking to a task — at any point in its life (FR-068).
+"""Talking to a task — at any point in its life (spec workflow "Let the
+developer speak to a task at any point, in one place").
 
-A run is driven by TALKING (FR-063), and the composer on a task's page is
-therefore the whole interface. What one sentence MEANS depends on where the
-task is, and this module is the one place that decides:
+A run is driven by TALKING ("Offer no run controls on a task's page"), and
+the composer on a task's page is therefore the whole interface. What one
+sentence MEANS depends on where the task is, and this module is the one
+place that decides:
 
 * **Not started yet** — the sentence is queued onto the attempt the task will
-  open with, and arrives in its brief (FR-029). This is how a developer says
-  "when you get to the migration, use the 0088 style" before the run reaches it.
+  open with, and arrives in its brief ("Open every task with the same four
+  parts"). This is how a developer says "when you get to the migration, use the
+  0088 style" before the run reaches it.
 * **Waiting for review** — the turn has ended and the task is the developer's
   again, so the sentence reopens that same turn with more to do. Not a new
-  attempt: it is the same piece of work, carrying on (FR-021, FR-022). A
-  MANUAL task has no turn to reopen and no agent to tell, so the sentence joins
-  its brief instead — which is the right place anyway, because the person doing
-  the work is who it is for.
+  attempt: it is the same piece of work, carrying on ("Accept the node actions
+  start, feedback, complete, retry, skip and restore"). A MANUAL task has no
+  turn to reopen and no agent to tell, so the sentence joins its brief instead
+  — which is the right place anyway, because the person doing the work is who
+  it is for.
 * **Finished** — completed, skipped or failed — the sentence opens the NEXT
   attempt with itself as the brief, bounded by the template's ceiling. A task
   the developer is still talking to is not finished, whatever its row says.
@@ -22,7 +26,7 @@ task. While a turn is RUNNING the agent owns it, and the sentence belongs in
 the conversation, which queues it server-side — the surface sends it there
 directly and never through here. While an approval is pending the DECISION owns
 it, and answering an approval in prose is exactly what the gate exists to
-prevent (FR-039).
+prevent ("Offer no run controls on a task's page").
 """
 
 from __future__ import annotations
@@ -53,15 +57,18 @@ async def say(
     text: str,
     actor: EventActor,
 ) -> CommandResult:
-    """Say something to one task, whatever state it is in (FR-068).
+    """Say something to one task, whatever state it is in (spec workflow
+    "Let the developer speak to a task at any point, in one place").
 
     No optimistic lock: the version exists so a decision made against an
-    observed state is not applied to a different one (FR-015), and a sentence
-    addressed to a named task means the same thing wherever the run has got to.
-    A composer that refused text because the run advanced while it was being
-    typed would be a worse engine, not a safer one. The run's other two guards
-    still apply — another machine's run and a finished run refuse this as they
-    refuse everything (FR-012, FR-013).
+    observed state is not applied to a different one (spec workflow "Refuse a
+    command carrying a stale version"), and a sentence addressed to a named
+    task means the same thing wherever the run has got to. A composer that
+    refused text because the run advanced while it was being typed would be a
+    worse engine, not a safer one. The run's other two guards still apply —
+    another machine's run and a finished run refuse this as they refuse
+    everything ("Advance a run only on the machine that owns it", "Keep a run
+    to six statuses").
     """
     words = text.strip()
     if not words:
@@ -120,7 +127,9 @@ async def feedback(
     text: str,
     actor: EventActor,
 ) -> CommandResult:
-    """More to do on the attempt already open — not a new try (FR-021)."""
+    """More to do on the attempt already open — not a new try (spec
+    workflow "Accept the node actions start, feedback, complete, retry,
+    skip and restore")."""
     if not text.strip():
         raise IllegalTransition(
             f"node {node.key!r}", attempt.status, "feedback", (NodeAction.COMPLETE.value,)

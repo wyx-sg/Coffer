@@ -1,4 +1,5 @@
-"""How much a task's opening message may cost, and what gives (FR-047).
+"""How much a task's opening message may cost, and what gives (spec
+workflow "Keep a task's opening context within budget").
 
 The ceiling here is a **backstop, not the mechanism**. What keeps a task's
 opening message small is that almost none of it is content: the deliverables,
@@ -49,10 +50,11 @@ NODE_CONTEXT_TOKEN_BUDGET = 60_000
 #: carried as CONTENT rather than as names — a skill's instructions are a
 #: document, and squeezing them would be squeezing the one thing that says how
 #: the work is done. The index of earlier tasks takes a tenth because every
-#: line of it is a *name*: a path, a task key, never a file's contents
-#: (FR-029). Neither is expected to be reached; they exist so that an enormous
-#: skill or a run hundreds of tasks long degrades by SAYING what it left out
-#: rather than by failing to open at all (FR-047).
+#: line of it is a *name*: a path, a task key, never a file's contents (spec
+#: workflow "Open every task with the same four parts"). Neither is expected
+#: to be reached; they exist so that an enormous skill or a run hundreds of
+#: tasks long degrades by SAYING what it left out rather than by failing to
+#: open at all ("Keep a task's opening context within budget").
 #:
 #: Both are enforced. A share that is declared and never applied is a ceiling
 #: in the documentation and nowhere else — which is what ``BRIEF_SHARE`` was

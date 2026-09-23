@@ -2,13 +2,15 @@
 
 The listing regenerates the catalogue rather than reading whatever ``CATALOG.md``
 happens to hold: the catalogue is generated from the directory and never
-hand-maintained (FR-031), so re-rendering it is how this route stays true, and
-re-rendering the same directory twice produces the same bytes.
+hand-maintained (spec workflow "Generate the index of earlier tasks"), so
+re-rendering it is how this route stays true, and re-rendering the same directory
+twice produces the same bytes.
 
-Promotion copies; it never moves (FR-043). The run's own directory is left
-exactly as it was, which is what makes a delivery's output safe to feed to the
-next delivery as an input. It is deliberately **not** guarded against a finished
-run — a finished run is precisely the one worth promoting.
+Promotion copies; it never moves ("Promote what a run is made of into a
+knowledge collection"). The run's own directory is left exactly as it was, which
+is what makes a delivery's output safe to feed to the next delivery as an input.
+It is deliberately **not** guarded against a finished run — a finished run is
+precisely the one worth promoting.
 """
 
 from __future__ import annotations
@@ -65,7 +67,8 @@ async def read_run_file(
     runs: WorkflowRunService = Depends(get_workflow_run_service),  # noqa: B008
     artifacts: ArtifactStorePort = Depends(get_workflow_artifact_store),  # noqa: B008
 ) -> RunFileOut:
-    """One file the run reads or wrote, so the UI can show it (FR-064).
+    """One file the run reads or wrote, so the UI can show it (spec
+    workflow "Read a run's files from the app, bounded").
 
     Read-only, and bounded: the path is guarded segment by segment against the
     run's own directory, a file that is not there is a 404 rather than an empty
@@ -95,7 +98,8 @@ async def read_run_file_bytes(
     runs: WorkflowRunService = Depends(get_workflow_run_service),  # noqa: B008
     artifacts: ArtifactStorePort = Depends(get_workflow_artifact_store),  # noqa: B008
 ) -> Response:
-    """One file's BYTES, so an image the run holds can be displayed (FR-069).
+    """One file's BYTES, so an image the run holds can be displayed (spec
+    workflow "Keep the developer's own notes in a run's context").
 
     The sibling above answers "show this to a person" and returns text; this
     answers "put this in an <img>". Same guard and the same cap — what differs
@@ -131,7 +135,9 @@ async def promote_artifacts(
     artifacts: ArtifactStorePort = Depends(get_workflow_artifact_store),  # noqa: B008
     knowledge: KnowledgeInputPort = Depends(get_workflow_knowledge_input),  # noqa: B008
 ) -> PromotionOut:
-    """Copy what a run is made of into a knowledge collection (FR-043).
+    """Copy what a run is made of into a knowledge collection (spec
+    workflow "Promote what a run is made of into a knowledge
+    collection").
 
     Its artifacts, its uploaded files and its notes travel as files; the links,
     collections and repositories it read travel as one ``references.md``,

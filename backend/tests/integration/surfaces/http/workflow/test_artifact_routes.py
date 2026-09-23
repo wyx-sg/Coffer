@@ -1,4 +1,4 @@
-"""``…/artifacts`` and ``…/promotion`` — what a run produced (FR-031, FR-043)."""
+"""``…/artifacts`` and ``…/promotion`` — what a run produced."""
 
 from __future__ import annotations
 
@@ -33,8 +33,9 @@ def test_every_artifact_names_the_node_and_attempt_that_produced_it(
 
 
 def test_the_catalogue_is_regenerated_from_the_directory(surface: Surface) -> None:
-    """FR-031: generated, never hand-maintained — so whatever is on disk wins,
-    and the file is rewritten as it is read."""
+    """Spec workflow "Generate the index of earlier tasks": generated, never
+    hand-maintained — so whatever is on disk wins, and the file is rewritten
+    as it is read."""
     run = started_run(surface.client)
     surface.engine.artifacts.catalogues[run["id"]] = "# stale nonsense\n"
     surface.engine.artifacts.add(run["id"], "draft_td", 1, "td.md")
@@ -63,7 +64,8 @@ def test_promotion_copies_into_a_collection_and_leaves_the_run_alone(
 
 def test_a_finished_run_is_exactly_the_one_worth_promoting(surface: Surface) -> None:
     """Promotion is not a mutating command on the run, so a completed or
-    aborted run is not refused it (FR-043)."""
+    aborted run is not refused it (spec workflow "Promote what a run is made of
+    into a knowledge collection")."""
     run = started_run(surface.client)
     surface.engine.artifacts.add(run["id"], "draft_td", 1, "td.md")
     from .conftest import signal
@@ -86,7 +88,7 @@ def test_promoting_an_unknown_run_is_404(surface: Surface) -> None:
 def test_a_run_with_nothing_produced_still_promotes_what_it_was_given(
     surface: Surface,
 ) -> None:
-    """FR-043: a delivery that has so far only been given a brief is one whose
+    """A delivery that has so far only been given a brief is one whose
     brief is worth keeping — the button must not wait for an agent."""
     run = started_run(surface.client)
     surface.client.post(

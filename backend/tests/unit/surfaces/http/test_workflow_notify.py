@@ -1,4 +1,4 @@
-"""``WorkflowNotify`` — an approval reaches the developer where they are (FR-039).
+"""``WorkflowNotify`` — an approval reaches the developer where they are.
 
 The approval service's own suite proves it asks ``NotifyPort`` for a decision.
 What it cannot prove is where that lands, because the port is a fake there.

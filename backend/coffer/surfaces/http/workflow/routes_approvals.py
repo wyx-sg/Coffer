@@ -1,4 +1,5 @@
-"""``/api/v1/workflow/approvals`` — what is waiting for a decision (FR-044).
+"""``/api/v1/workflow/approvals`` — what is waiting for a decision (spec
+workflow "Expose the engine over REST").
 
 Two routes: everything pending across every run, and the one decision.
 
@@ -6,11 +7,12 @@ The decision route adds nothing to ``ApprovalService.decide`` except the two
 answers HTTP has to give that a service call does not: ``404`` for an approval
 that is not there (the service says ``None``), and ``409`` for one that has
 expired — the held call it was guarding has already been failed, so the click
-did not land and rendering it as though it had would be a lie (FR-037).
+did not land and rendering it as though it had would be a lie ("Resume or fail
+a held tool call, never drop it").
 
 Every other repeat is a plain ``200`` with the terminal row, which is exactly
 what idempotence means here: the same state comes back and nothing executes a
-second time (FR-038).
+second time ("Make an approval decision idempotent").
 """
 
 from __future__ import annotations

@@ -1,18 +1,19 @@
-// frontend/src/pages/WorkflowRunPage.tsx — one run (spec workflow, FR-045).
+// frontend/src/pages/WorkflowRunPage.tsx — one run (spec workflow "Show runs, their tasks and
+// their context in the web UI").
 //
-// THIS PAGE IS A MAP, AND A MAP HAS NO CONTROLS (FR-052). It says where the
+// THIS PAGE IS A MAP, AND A MAP HAS NO CONTROLS. It says where the
 // delivery is, what it has produced and what it is reading, and offers nothing
 // that advances or alters it. Start, pause, abort, retry, skip, complete,
 // feedback and Approve / Reject were all here once; every one of them now
 // lives on the conversation of the task it belongs to, where the thing being
-// decided is in front of the developer. A run has no conversation of its own
-// (FR-030), so there is no thread here either — clicking a node opens its.
+// decided is in front of the developer. A run has no conversation of its own,
+// so there is no thread here either — clicking a node opens its.
 //
 // Two tabs, and the tab lives in the URL (`?tab=context`) so a link can land
 // on one and a reload comes back:
 //   • STAGES — the shape of the work and where it got to.
 //   • CONTEXT — what the run reads AND what it has produced, in one table.
-//     Editable (FR-050): mounting a PRD changes what every later task is told
+//     Editable: mounting a PRD changes what every later task is told
 //     about, not where the delivery is, so it is not a control this page is
 //     forbidden to have.
 import { useState } from "react";
@@ -107,8 +108,8 @@ export function WorkflowRunPage() {
               <Badge variant="secondary">{t("workflow.owner.otherMachine", { machine })}</Badge>
             )}
             {/* What it has spent, as a readout. There is no budget to spend it
-                AGAINST: a run is bounded by each task's own attempt ceiling
-                (FR-026), and a number of tokens was never a judgement about
+                AGAINST: a run is bounded by each task's own attempt ceiling,
+                and a number of tokens was never a judgement about
                 whether the work should continue. */}
             {run.tokens_spent ? (
               <Badge variant="outline">
@@ -118,11 +119,12 @@ export function WorkflowRunPage() {
           </div>
         }
         // Edit and Delete, and nothing that MOVES the run: its position is
-        // folded from the event log (FR-014) and is driven from the task's own
+        // folded from the event log and is driven from the task's own
         // page, where what is being decided is in front of the developer
-        // (FR-052). Editing the title and description touches none of that
-        // (FR-070). Neither button is offered for a run this machine does not
-        // advance — it is read-only here, labels included (FR-012).
+        // (spec workflow "Offer no run controls on the run's page"). Editing
+        // the title and description touches none of that. Neither button is
+        // offered for a run this machine does not advance — it is read-only
+        // here, labels included.
         actions={
           run.owned_here ? (
             <div className="flex items-center gap-2">

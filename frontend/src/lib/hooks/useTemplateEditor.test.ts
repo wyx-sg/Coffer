@@ -1,6 +1,6 @@
 // frontend/src/lib/hooks/useTemplateEditor.test.ts
 //
-// The editor holds no draft (FR-062): every edit is computed from what the
+// The editor holds no draft: every edit is computed from what the
 // cache currently holds and written straight back. That makes ONE thing
 // load-bearing, and it is what this file is for — two edits issued before the
 // first has come back must build on each other. If a save only invalidated,

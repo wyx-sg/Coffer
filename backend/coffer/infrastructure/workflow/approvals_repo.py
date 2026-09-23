@@ -7,7 +7,7 @@ Everything here turns on one rule: a decision is taken once. Each write is
 therefore an UPDATE whose WHERE clause carries the state it expects to find —
 ``status = 'pending'`` — so a second decision, an expiry racing a click, and
 an abort racing an approval all lose the race in the database rather than in a
-caller's if-statement (FR-038).
+caller's if-statement (spec workflow "Make an approval decision idempotent").
 """
 
 from __future__ import annotations
@@ -44,7 +44,8 @@ class WorkflowApprovalRepo:
         tool_name: str | None = None,
         now: datetime | None = None,
     ) -> WorkflowApprovalModel:
-        """Hold a decision, carrying the exact payload that will execute (FR-033)."""
+        """Hold a decision, carrying the exact payload that will execute (spec
+        workflow "Refuse an unapproved write-class tool call made for a run")."""
         row = WorkflowApprovalModel(
             id=approval_id,
             run_id=run_id,
@@ -79,11 +80,12 @@ class WorkflowApprovalRepo:
     ) -> WorkflowApprovalModel | None:
         """Decide a pending approval, or hand back the terminal state it already has.
 
-        Idempotent by construction (FR-038): the UPDATE only matches a row
-        still ``pending``, and the row is read back either way — so a repeated
-        approval returns ``approved`` without a second execution being
-        authorised, and an approval that expired a second before the click
-        returns ``expired`` rather than quietly overwriting it.
+        Idempotent by construction (spec workflow "Make an approval decision
+        idempotent"): the UPDATE only matches a row still ``pending``, and the
+        row is read back either way — so a repeated approval returns
+        ``approved`` without a second execution being authorised, and an
+        approval that expired a second before the click returns ``expired``
+        rather than quietly overwriting it.
 
         ``None`` means no such approval, which is the one case a caller must
         distinguish from "already decided".
@@ -132,8 +134,9 @@ class WorkflowApprovalRepo:
         """Move every pending approval past its deadline to ``expired``.
 
         Returns the rows it moved, because a held tool call must fail with an
-        explicit reason rather than be silently dropped (FR-037) — and the
-        thing that tells its caller so is this list.
+        explicit reason rather than be silently dropped (spec workflow
+        "Resume or fail a held tool call, never drop it") — and the thing
+        that tells its caller so is this list.
         """
         stamp = _now(now)
         return await self._transition(

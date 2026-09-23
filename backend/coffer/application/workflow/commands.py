@@ -9,13 +9,13 @@ other is no guard at all.
 Two decisions are worth stating, because neither is obvious from the code:
 
 * **The events are appended before the projection is written.** The log is the
-  record of truth (FR-014), so the write that matters goes first; the
-  projection is a cache of a fold over it. A caller that loses the version race
-  therefore leaves its events behind while its projection write is refused —
-  and that is recoverable exactly because the log is the truth:
-  ``rebuild_projection`` folds them in. The alternative, writing the projection
-  first, would leave the opposite and unrecoverable state, a run that claims a
-  position no event ever produced.
+  record of truth (spec workflow "Rebuild a run from its event log"), so the
+  write that matters goes first; the projection is a cache of a fold over it. A
+  caller that loses the version race therefore leaves its events behind while
+  its projection write is refused — and that is recoverable exactly because the
+  log is the truth: ``rebuild_projection`` folds them in. The alternative,
+  writing the projection first, would leave the opposite and unrecoverable
+  state, a run that claims a position no event ever produced.
 * **The projection is a fold of the whole log, never a patch.** Computing it
   incrementally would give two ways to arrive at a position, and the restart
   test only proves one of them.
@@ -58,7 +58,8 @@ from coffer.domain.workflow.transitions import (
 
 _logger = logging.getLogger(__name__)
 
-#: A run is not a Resource (FR-011), so there is no ``RunNotFound`` of its own.
+#: A run is not a Resource (spec workflow "Create a run from a template and a
+#: title alone"), so there is no ``RunNotFound`` of its own.
 #: ``ResourceNotFound`` is reused for one practical reason: every surface
 #: already maps it to 404, and a bespoke error would have to be wired into each
 #: of them before an unknown run id answered anything but 500.
@@ -74,7 +75,8 @@ DEFAULT_ACTOR = EventActor(actor_kind=ActorKind.USER, source_surface="api")
 ENGINE_ACTOR = EventActor(actor_kind=ActorKind.WORKFLOW, source_surface="daemon")
 
 #: The daemon doing something *to* a run rather than advancing it: rebuilding a
-#: projection, reporting a turn that a restart interrupted (FR-027).
+#: projection, reporting a turn that a restart interrupted (spec workflow
+#: "Report a node interrupted by a restart as failed").
 SYSTEM_ACTOR = EventActor(actor_kind=ActorKind.SYSTEM, source_surface="daemon")
 
 
@@ -151,7 +153,8 @@ def to_domain_event(row: EventRow) -> WorkflowEvent | None:
 
 
 def parse_snapshot(snapshot: Mapping[str, Any]) -> WorkflowTemplate:
-    """A frozen snapshot as value objects (FR-010).
+    """A frozen snapshot as value objects (spec workflow "Freeze the
+    template when a run is created").
 
     Parsed without ``known_skills`` or ``allowed_agents`` on purpose: the
     snapshot passed those checks when the template was written, and re-applying
@@ -162,7 +165,8 @@ def parse_snapshot(snapshot: Mapping[str, Any]) -> WorkflowTemplate:
 
 def template_of(run: RunRow) -> WorkflowTemplate:
     """The template this run executes — its own frozen copy, never the
-    resource as it stands today (FR-010)."""
+    resource as it stands today (spec workflow "Freeze the template when
+    a run is created")."""
     return parse_snapshot(run.template_snapshot)
 
 
@@ -201,11 +205,14 @@ class RunCommands:
     def guard(self, run: RunRow, attempted: str, version: int | None) -> RunStatus:
         """Refuse every caller who may not issue this command.
 
-        The order is deliberate. Machine first (FR-012): a run this machine does
-        not own is read-only here whatever version the caller holds, and telling
-        them their version is stale would send them to re-read a run they still
-        could not advance. Terminal next (FR-013, FR-016): "never again" is a
-        better answer than "not at this version". Version last (FR-015).
+        The order is deliberate. Machine first (spec workflow "Advance a run
+        only on the machine that owns it"): a run this machine does not own is
+        read-only here whatever version the caller holds, and telling them their
+        version is stale would send them to re-read a run they still could not
+        advance. Terminal next ("Keep a run to six statuses", "Accept the run
+        signals start, pause, resume and abort"): "never again" is a better
+        answer than "not at this version". Version last ("Refuse a command
+        carrying a stale version").
 
         ``version=None`` is the engine acting on its own behalf — the driver
         recording the result of a turn it just ran. It has no observed version
@@ -230,7 +237,8 @@ class RunCommands:
         return [event for event in (to_domain_event(row) for row in rows) if event is not None]
 
     async def fold(self, run_id: str) -> RunProjection:
-        """The projection the run's whole log produces right now (FR-014)."""
+        """The projection the run's whole log produces right now (spec
+        workflow "Rebuild a run from its event log")."""
         projection = project(await self.domain_events(run_id))
         return RunProjection(
             status=projection.status.value,
@@ -264,9 +272,10 @@ class RunCommands:
         The projection write carries the version the run was read at, so two
         clients that both passed the version check still produce one change:
         the second one's ``update_run_projection`` finds the version moved and
-        the command is refused (FR-015). It is not retried — the caller's
-        decision was made against a run that has since changed, and re-deciding
-        it here would be this layer inventing an intent.
+        the command is refused (spec workflow "Refuse a command carrying a
+        stale version"). It is not retried — the caller's decision was made
+        against a run that has since changed, and re-deciding it here would be
+        this layer inventing an intent.
         """
         for item in pending:
             await self.append(run.id, item, actor)
@@ -314,7 +323,8 @@ class RunCommands:
         """``(completed, skipped)`` — what ``next_node`` treats as done.
 
         A failed node is in neither: whether the run walks past it is its
-        ``on_failure`` behaviour's answer (FR-024), not the walk's.
+        ``on_failure`` behaviour's answer (spec workflow "Handle a node
+        failure as the node declares"), not the walk's.
         """
         completed = {k for k, row in latest.items() if row.status == NodeStatus.COMPLETED.value}
         skipped = {k for k, row in latest.items() if row.status == NodeStatus.SKIPPED.value}

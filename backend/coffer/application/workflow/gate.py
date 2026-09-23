@@ -1,4 +1,5 @@
-"""The gate: whether a run's upstream tool call happens at all (FR-034).
+"""The gate: whether a run's upstream tool call happens at all (spec
+workflow "Refuse an unapproved write-class tool call made for a run").
 
 Coffer does not gate tool calls. That position stands for every conversation a
 person is driving (``docs/decisions/remove-tool-approval.md``) and this module
@@ -59,7 +60,8 @@ HELD_CALL_MAX_WAIT_SECONDS = 900
 POLL_INTERVAL_SECONDS = 1.0
 
 #: The judgement that lets a call past without asking. Anything else — a
-#: ``write``, or nothing recorded at all — is held (FR-036).
+#: ``write``, or nothing recorded at all — is held (spec workflow "Treat
+#: an unjudged tool as write-class and remember the answer").
 READ_CLASS = "read"
 
 #: Every refusal opens with this, so an agent, a log reader and a diagnosis
@@ -116,8 +118,8 @@ class WorkflowToolGate:
         if await self._tool_class.classify(server, tool) == READ_CLASS:
             # Judged a read. Not audited: a run's reads are its ordinary work,
             # and an audit row per tool call would bury the decisions this log
-            # exists to hold (FR-040 is about gated calls, not about all of
-            # them).
+            # exists to hold (spec workflow "Audit template, run, approval and
+            # gate events" is about gated calls, not about all of them).
             return None
         return await self._hold(
             run_id=run_id,

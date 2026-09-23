@@ -1,4 +1,5 @@
-"""Field-level coercion for a template config (spec workflow FR-006).
+"""Field-level coercion for a template config (spec workflow "Refuse an invalid
+template naming the offending path").
 
 Split out of :mod:`coffer.domain.workflow.template` for the file-size ceiling,
 and it is the natural seam: everything here answers "is this scalar the right
@@ -36,7 +37,8 @@ def reject_unknown(obj: dict[str, Any], allowed: set[str], path: str) -> None:
     """Refuse a field the engine would ignore.
 
     A silently-ignored ``artifact`` (for ``artifacts``) is a template that runs
-    and quietly owes nothing — exactly the stalled run FR-006 exists to stop.
+    and quietly owes nothing — exactly the stalled run template validation
+    exists to stop.
     """
     for name in sorted(obj):
         if name not in allowed:
@@ -63,7 +65,7 @@ def as_artifact_name(raw: Any, path: str) -> str:
         raise TemplateInvalid(path, "must not be dots only")
     # `paths.py` refuses a hidden segment when it builds the artifact path, so
     # accepting one here would store a template that stalls the moment a node
-    # tries to write it — which is the one thing FR-006 forbids.
+    # tries to write it — which is the one thing template validation forbids.
     if value.startswith("."):
         raise TemplateInvalid(path, "must not start with '.'")
     return value
@@ -111,7 +113,8 @@ def as_enum[E: StrEnum](enum_cls: type[E], raw: Any, path: str, *, default: E | 
 
 
 def as_attempt_ceiling(raw: Any, path: str, *, default: int) -> int:
-    """The cap on how many attempts one task may open (FR-026).
+    """The cap on how many attempts one task may open (spec workflow "Bound
+    each task's attempts by its own ceiling").
 
     Absent means the default rather than "no ceiling" — a task without one is
     a task that can loop all night. ``path`` names the task, because that is

@@ -155,12 +155,15 @@ def test_ensure_run_dirs_creates_the_two_fixed_children(
 def test_listing_attributes_every_artifact_to_its_node_and_attempt(
     isolated_workflow_root: pathlib.Path,
 ) -> None:
-    """FR-041 / FR-031: the catalogue's facts come from where the file is.
+    """The catalogue's facts come from where the file is (spec workflow
+    "Store artifacts as files attributed to their node and attempt",
+    "Generate the index of earlier tasks").
 
     ``draft_td`` writes the same deliverable on two attempts, which is the case
-    the attribution exists for (FR-022): the second attempt's copy must not
-    replace the first's or shadow it in the listing, or a run that reopened a
-    task would lose the evidence of what the first try produced.
+    the attribution exists for ("Keep every attempt when a node is retried"):
+    the second attempt's copy must not replace the first's or shadow it in the
+    listing, or a run that reopened a task would lose the evidence of what the
+    first try produced.
     """
     first = artifacts.write_artifact(RUN, "draft_td", 1, "td.md", "first try")
     second = artifacts.write_artifact(RUN, "draft_td", 2, "td.md", "second try, longer")
@@ -216,7 +219,7 @@ def test_listing_skips_what_the_layer_did_not_write(
 def test_collect_copies_every_attempt_and_leaves_the_run_alone(
     isolated_workflow_root: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
-    """FR-043 / FR-042: promotion copies out; the run directory is unchanged."""
+    """Promotion copies out; the run directory is unchanged."""
     artifacts.write_artifact(RUN, "draft_td", 1, "td.md", "first")
     artifacts.write_artifact(RUN, "draft_td", 2, "td.md", "second")
     artifacts.write_artifact(RUN, "adhoc:fix", 1, "notes.md", "n")
@@ -239,7 +242,7 @@ def test_collect_copies_every_attempt_and_leaves_the_run_alone(
 def test_promotion_keeps_what_the_run_was_given_as_well_as_what_it_made(
     isolated_workflow_root: pathlib.Path, tmp_path: pathlib.Path
 ) -> None:
-    """FR-043: a PRD somebody attached and a note somebody wrote are as much a
+    """A PRD somebody attached and a note somebody wrote are as much a
     record of the delivery as the design it produced — and a run whose agents
     have not finished is exactly when the developer wants them kept."""
     artifacts.write_artifact(RUN, "draft_td", 1, "td.md", "the design")

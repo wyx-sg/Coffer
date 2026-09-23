@@ -6,13 +6,16 @@ happens once**. The repository enforces that in SQL — every write is an UPDATE
 whose WHERE clause re-states ``status = 'pending'`` — and this layer never
 tries to enforce it a second time in Python. What it adds is everything a
 decision owes the rest of the system: the run's event log, the audit trail
-(FR-040), the developer's notification (FR-039), and the remembered
-write-class judgement (FR-036).
+("Audit template, run, approval and gate events"), the developer's
+notification ("Show an approval on its task's conversation and through a bound
+channel"), and the remembered write-class judgement ("Treat an unjudged tool
+as write-class and remember the answer").
 
 The service does **not** execute anything. A held tool call is waiting in
 :mod:`coffer.application.workflow.gate`, watching the row this service writes;
 keeping the execution out of here is what makes "a repeated decision executes
-nothing twice" (FR-038) structural rather than careful.
+nothing twice" ("Make an approval decision idempotent") structural rather than
+careful.
 """
 
 from __future__ import annotations
@@ -41,7 +44,8 @@ from coffer.domain.workflow.run import ApprovalKind, ApprovalStatus
 DECIDABLE: frozenset[ApprovalStatus] = frozenset({ApprovalStatus.APPROVED, ApprovalStatus.REJECTED})
 
 #: How much of a payload goes into the notification. The approval row keeps the
-#: arguments verbatim (FR-033); this is the glance that gets the developer to
+#: arguments verbatim (spec workflow "Refuse an unapproved write-class tool
+#: call made for a run"); this is the glance that gets the developer to
 #: open it, and a channel message is not the place to paste an unbounded blob.
 _PREVIEW_CHARS = 400
 
@@ -103,7 +107,8 @@ class ApprovalService:
 
         ``payload`` is stored exactly as given — the arguments that will
         execute, not a rendering of them. A decision on a summary is not a
-        decision (FR-033), so nothing between here and the database is allowed
+        decision (spec workflow "Refuse an unapproved write-class tool call
+        made for a run"), so nothing between here and the database is allowed
         to shorten it; the shortening happens only in the notification.
         """
         now = self._clock()
@@ -123,9 +128,11 @@ class ApprovalService:
             ActorKind.WORKFLOW,
             source_surface="workflow",
         )
-        # FR-039: the main thread always carries it; a bound channel also
-        # delivers it. Both are behind NotifyPort, which is allowed to do
-        # nothing — a vault with no channel is not a broken vault.
+        # Spec workflow "Show an approval on its task's conversation and
+        # through a bound channel": the main thread always carries it; a
+        # bound channel also delivers it. Both are behind NotifyPort,
+        # which is allowed to do nothing — a vault with no channel is not
+        # a broken vault.
         await self._notify.request_approval(run_id, row.id, _preview(row))
         return row
 
@@ -151,7 +158,8 @@ class ApprovalService:
         comment: str | None = None,
         remember_tool_class: str | None = None,
     ) -> ApprovalRow | None:
-        """Decide once; a repeat returns the same terminal state (FR-038).
+        """Decide once; a repeat returns the same terminal state (spec
+        workflow "Make an approval decision idempotent").
 
         ``None`` means there is no such approval — the one case a caller must
         tell apart from "already decided". Otherwise the row comes back in
@@ -194,8 +202,9 @@ class ApprovalService:
         """Move every overdue pending approval to ``expired`` and report them.
 
         The list is the point: a held call must fail with an explicit reason
-        rather than be dropped (FR-037), and these rows are what tell the gate
-        — and the audit log — that the reason is expiry rather than a refusal.
+        rather than be dropped (spec workflow "Resume or fail a held tool
+        call, never drop it"), and these rows are what tell the gate — and the
+        audit log — that the reason is expiry rather than a refusal.
         """
         rows = await self._approvals.expire_due_approvals(now=now or self._clock())
         for row in rows:

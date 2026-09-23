@@ -4,7 +4,8 @@
 // never been touched.
 //
 // The isolated HOME the suite starts its daemon under is the one place a
-// genuinely fresh vault exists, which is why FR-009 is worth proving HERE
+// genuinely fresh vault exists, which is why seeding the built-in template
+// (spec workflow "Seed one built-in template") is worth proving HERE
 // rather than only in a unit test: the built-in template is seeded by a boot
 // hook that reads the environment, writes a marker under ~/.coffer/state and
 // goes through the resource framework. A unit test can hold the document
@@ -49,7 +50,7 @@ acceptance(
     // "Delete workflow: <name>" button, both of which contain the name.
     await expect(page.getByRole("cell", { name: BUILTIN, exact: true })).toBeVisible();
 
-    // It is an ordinary resource of this kind (FR-001): the framework gave it
+    // It is an ordinary resource of this kind: the framework gave it
     // an identity, and the same listing route every other kind answers on
     // answers for it.
     const uid = await resolveResourceUid("workflow", BUILTIN);
@@ -81,7 +82,7 @@ acceptance(
     expect(created.ok()).toBe(true);
     const run = (await created.json()) as { id: string };
 
-    // The runs list, which is NOT where the templates are (FR-059): a template
+    // The runs list, which is NOT where the templates are: a template
     // is a resource and a run is operational state, and reaching either only
     // through the other is what this asserts against.
     await page.goto("/runs");
@@ -92,8 +93,8 @@ acceptance(
     await page.goto(`/runs/${run.id}`);
     await expect(page.getByRole("heading", { name: "Buffer table for int64 userid" })).toBeVisible();
 
-    // The shape it froze at creation (FR-010), shown as stages and tasks — the
-    // map FR-052 describes, with the work laid out rather than a file to open.
+    // The shape it froze at creation, shown as stages and tasks — a map, with
+    // the work laid out rather than a file to open.
     for (const stage of ["Understand", "Plan", "Implement", "Verify", "Report"]) {
       await expect(page.getByText(stage, { exact: false }).first()).toBeVisible();
     }
@@ -101,7 +102,8 @@ acceptance(
 );
 
 test("a run's page offers nothing that advances or alters it", async ({ page }) => {
-  // FR-052. The run page is a map; retrying, redirecting and correcting are
+  // spec workflow "Offer no run controls on the run's page".
+  // The run page is a map; retrying, redirecting and correcting are
   // said in a task's own conversation, where what is being decided is in front
   // of the developer. A button here would be a second place to drive the run,
   // and the two would disagree about what the developer meant.

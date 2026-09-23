@@ -1,4 +1,4 @@
-"""The run and node state machines (spec workflow FR-013..FR-026).
+"""The run and node state machines.
 
 Table-driven both ways: every legal transition asserts the status it leaves
 behind, and every illegal one asserts the refusal. The illegal half is the half
@@ -41,7 +41,7 @@ def template() -> Any:
 
 
 # --------------------------------------------------------------------------
-# Run signals (FR-016)
+# Run signals
 # --------------------------------------------------------------------------
 
 LEGAL_RUN: list[tuple[RunStatus, RunSignal, RunStatus]] = [
@@ -97,8 +97,8 @@ def test_an_illegal_run_signal_is_refused_with_what_was_allowed(
 @pytest.mark.parametrize("status", [RunStatus.COMPLETED, RunStatus.ABORTED])
 @pytest.mark.parametrize("signal", list(RunSignal))
 def test_a_completed_or_aborted_run_refuses_every_signal(status: RunStatus, signal: RunSignal):
-    """FR-013 / FR-016 — and it is `RunTerminal`, not `IllegalTransition`: the
-    answer is "never again", not "not from here"."""
+    """A completed or aborted run is final — and it is `RunTerminal`, not
+    `IllegalTransition`: the answer is "never again", not "not from here"."""
     assert allowed_run_signals(status) == frozenset()
     with pytest.raises(RunTerminal) as caught:
         apply_run_signal(status, signal)
@@ -129,7 +129,7 @@ def test_every_run_status_has_a_signal_row():
 
 
 # --------------------------------------------------------------------------
-# Ownership and the optimistic lock (FR-012, FR-015)
+# Ownership and the optimistic lock
 # --------------------------------------------------------------------------
 
 
@@ -168,7 +168,7 @@ def test_a_stale_version_is_refused_with_the_runs_current_position():
 
 
 # --------------------------------------------------------------------------
-# Node actions (FR-020, FR-021)
+# Node actions
 # --------------------------------------------------------------------------
 
 LEGAL_NODE: list[tuple[NodeStatus, NodeAction, NodeStatus]] = [
@@ -224,7 +224,7 @@ def test_a_running_node_takes_no_action_at_all():
 
 
 def test_a_retry_lands_on_pending_because_it_opens_a_new_attempt():
-    """FR-022: the failed attempt keeps its own status and conversation; the
+    """The failed attempt keeps its own status and conversation; the
     attempt that is starting is pending until the advancer dispatches it."""
     assert apply_node_action(NodeStatus.FAILED, NodeAction.RETRY, NodeType.AI) is NodeStatus.PENDING
 
@@ -260,7 +260,7 @@ def test_only_feedback_is_narrowed_by_the_node_type(node_type: NodeType):
 
 
 # --------------------------------------------------------------------------
-# Walking the template (FR-017, FR-025)
+# Walking the template
 # --------------------------------------------------------------------------
 
 
@@ -287,8 +287,9 @@ def test_the_walk_ends_when_every_node_is_done():
 
 
 def test_the_walk_returns_to_a_reopened_node_and_then_skips_what_is_still_done():
-    """FR-025 in two moves: `implement` was reopened, so the walk hands it back;
-    once it completes again the walk goes to `verify`, not back to `draft_td`."""
+    """Sending work back, in two moves: `implement` was reopened, so the walk
+    hands it back; once it completes again the walk goes to `verify`, not back
+    to `draft_td`."""
     completed = {"draft_td", "verify"}
     reopened = next_node(template(), completed_keys=completed)
     assert reopened is not None and reopened.node_key == "implement"
@@ -297,7 +298,7 @@ def test_the_walk_returns_to_a_reopened_node_and_then_skips_what_is_still_done()
 
 
 # --------------------------------------------------------------------------
-# The attempt ceiling (FR-026)
+# The attempt ceiling
 # --------------------------------------------------------------------------
 
 

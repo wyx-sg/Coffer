@@ -233,7 +233,8 @@ export interface components {
             /**
              * @description Per-tool write-class judgements, keyed by this server's own
              *     unprefixed tool name. A tool absent from the map is treated as
-             *     write-class by the workflow gate (spec workflow FR-036).
+             *     write-class by the workflow gate (spec workflow "Treat an unjudged
+             *     tool as write-class and remember the answer").
              * @default {}
              */
             tool_write_class: {

@@ -1,4 +1,5 @@
-"""The opening message every task of a run receives (FR-029).
+"""The opening message every task of a run receives (spec workflow "Open
+every task with the same four parts").
 
 Four parts, always in this order: the task's own brief with the exact path of
 each deliverable it owes, its bound skill's instructions, an INDEX of the run's
@@ -15,15 +16,16 @@ That rule is why part 3 is an index rather than the earlier tasks'
 conversations. Carrying those forward was tried: the opening message then grows
 with every task that preceded it, and the fortieth task of a delivery cannot
 start at all. So a task hands the next one its **deliverable**, not its
-transcript (FR-072) — which also means a change of direction the developer
-states inside a running task reaches the rest of the run by way of the file
-that task writes (SC-004), and is worth stating while the task is still running
-rather than after it has closed.
+transcript ("Give every task at least one deliverable") — which also means a
+change of direction the developer states inside a running task reaches the rest
+of the run by way of the file that task writes, and is worth stating
+while the task is still running rather than after it has closed.
 
-The whole message is bounded (FR-047), but the bound is a backstop: the index
-costs a line per task, so a run would have to be hundreds of tasks long to
-reach it. Every cut this module does make is stated in the message that carries
-it — a task told nothing works from a hole it cannot see.
+The whole message is bounded ("Keep a task's opening context within budget"),
+but the bound is a backstop: the index costs a line per task, so a run would
+have to be hundreds of tasks long to reach it. Every cut this module does make
+is stated in the message that carries it — a task told nothing works from a
+hole it cannot see.
 """
 
 from __future__ import annotations
@@ -67,7 +69,8 @@ __all__ = [
 #: import: only an ad-hoc key contains a colon, and a raw ``%`` never passes
 #: that module's segment guard, so the escape is unambiguous on both sides. The
 #: composer needs it because the message tells the agent the exact path to
-#: write, and a path that is nearly right is a missing artifact (FR-023).
+#: write, and a path that is nearly right is a missing artifact (spec workflow
+#: "Hold completion until a required artifact exists").
 _COLON_ESCAPE = "%3A"
 
 #: The directory an uploaded input lands in, relative to the run's own
@@ -81,8 +84,9 @@ class NodeContextRequest:
     """Everything the composer needs for one attempt at one node.
 
     ``node`` is the template's own value object; an ad-hoc task arrives as one
-    too, built from the developer's instructions (FR-028), so it is
-    contextualised through exactly this path rather than a second one.
+    too, built from the developer's instructions (spec workflow "Add an ad-hoc
+    task to any stage"), so it is contextualised through exactly this path
+    rather than a second one.
 
     ``attempt_id`` is what bounds the shared context: every task of this run
     that opened before this attempt is history, and this attempt's own
@@ -96,9 +100,11 @@ class NodeContextRequest:
     node: Node
     attempt: int
     inputs: tuple[RunInput, ...] = field(default_factory=tuple)
-    #: What the developer wrote for THIS attempt before it opened (FR-068) —
-    #: the attempt row's own instructions. Separate from ``node.instructions``,
-    #: which is the template's standing brief and is the same on every attempt.
+    #: What the developer wrote for THIS attempt before it opened (spec
+    #: workflow "Let the developer speak to a task at any point, in one place")
+    #: — the attempt row's own instructions. Separate from
+    #: ``node.instructions``, which is the template's standing brief and is the
+    #: same on every attempt.
     instructions: str | None = None
 
 
@@ -119,7 +125,8 @@ class ContextComposer:
         self._earlier = earlier
 
     async def compose(self, request: NodeContextRequest) -> str:
-        """The whole message, in the four-part order FR-029 fixes."""
+        """The whole message, in the four-part order spec workflow "Open
+        every task with the same four parts" fixes."""
         sections = [
             self._preamble(request),
             self._brief(request),
@@ -178,13 +185,15 @@ class ContextComposer:
         """The artifacts this task owes, each with the path to write it at.
 
         Never empty: a task whose workflow declared no deliverable is given a
-        ``report.md`` (FR-072), because a deliverable is the only thing a task
-        says to the tasks after it and one that owes nothing would leave its
-        work behind when its conversation closes.
+        ``report.md`` (spec workflow "Give every task at least one
+        deliverable"), because a deliverable is the only thing a task says to
+        the tasks after it and one that owes nothing would leave its work
+        behind when its conversation closes.
 
         The path is exact and absolute. A required artifact that is not at its
-        path is not produced, and the task will not complete (FR-023) — so
-        guessing at the location is the one mistake worth pre-empting here.
+        path is not produced, and the task will not complete (spec workflow
+        "Hold completion until a required artifact exists") — so guessing at
+        the location is the one mistake worth pre-empting here.
         """
         node = request.node
         attempt_dir = self._attempt_dir(request)
@@ -234,10 +243,12 @@ class ContextComposer:
         tasks = await self._earlier.earlier(request.run_id, request.attempt_id)
         run_dir = self._run_dir(request.run_id)
         # Written, not merely named. The index points at `CATALOG.md` for the
-        # case where it is itself too long to render in full (FR-047), and a
-        # path offered to an agent that resolves to nothing is worse than no
-        # path at all. Regenerating is a directory read, and it keeps the file
-        # honest on the same schedule the index is (FR-031).
+        # case where it is itself too long to render in full (spec workflow
+        # "Keep a task's opening context within budget"), and a path offered
+        # to an agent that resolves to nothing is worse than no path at all.
+        # Regenerating is a directory read, and it keeps the file honest on
+        # the same schedule the index is ("Generate the index of
+        # earlier tasks").
         regenerate_catalogue(self._artifacts, request.run_id)
         lines = [
             "## 3. What this run has done so far",
@@ -308,7 +319,8 @@ class ContextComposer:
 
 
 def _fit_skill(text: str, name: str) -> str:
-    """The skill's instructions, capped at their share of the budget (FR-047).
+    """The skill's instructions, capped at their share of the budget (spec
+    workflow "Keep a task's opening context within budget").
 
     This is the one part of the message carried as CONTENT rather than as a
     name, so it is the one part that can overrun on its own — and a skill is a

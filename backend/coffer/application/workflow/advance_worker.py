@@ -1,4 +1,5 @@
-"""The background advancer: a run moves without being asked (FR-017).
+"""The background advancer: a run moves without being asked (spec
+workflow "Run at most one node at a time").
 
 Shaped like ``RetentionWorker`` and ``ConvergeWorker`` — a catch-up round
 shortly after boot, then a tick on an interval, and a round that raises is
@@ -8,10 +9,11 @@ run's bad state must cost that run and nothing else.
 
 Two rules it enforces itself rather than trusting upstream:
 
-* **One node at a time per run** (FR-017). ``advance_run`` does not return until
-  that run's node has finished its turn, and a run already being advanced is
-  skipped on every later tick. The node service refuses a second running node
-  too; a ceiling only one side honours is not a ceiling.
+* **One node at a time per run** ("Run at most one node at a time").
+  ``advance_run`` does not return until that run's node has finished its turn,
+  and a run already being advanced is skipped on every later tick. The node
+  service refuses a second running node too; a ceiling only one side honours is
+  not a ceiling.
 * **Runs do not block each other.** Each run advances as its own task keyed by
   run id, so a node that spends twenty minutes on a build does not hold up
   another run's first node.
@@ -50,7 +52,8 @@ __all__ = [
 _logger = logging.getLogger(__name__)
 
 #: Long enough that start-up reconciliation — which is what decides an
-#: interrupted node's fate (FR-027) — has finished before the first tick, so
+#: interrupted node's fate (spec workflow "Report a node interrupted by a
+#: restart as failed") — has finished before the first tick, so
 #: the advancer never adopts a node the daemon is still making its mind up
 #: about.
 DEFAULT_START_DELAY_S = 5.0
@@ -162,8 +165,9 @@ class AdvanceWorker:
 
         A cancelled node is left ``running`` on purpose: the process is going
         away mid-turn, which is precisely the state start-up reconciliation
-        reports as ``interrupted`` (FR-027). Writing a failure here would be
-        the daemon guessing at what it is about to lose.
+        reports as ``interrupted`` (spec workflow "Report a node interrupted
+        by a restart as failed"). Writing a failure here would be the daemon
+        guessing at what it is about to lose.
         """
         self._stop.set()
         self._wake.set()
@@ -197,8 +201,9 @@ class AdvanceWorker:
             return
         for run_id in run_ids:
             if run_id in self._inflight:
-                # FR-017, enforced on this side too: the run is already moving,
-                # and a second advance would race its own node.
+                # Spec workflow "Run at most one node at a time", enforced on
+                # this side too: the run is already moving, and a second
+                # advance would race its own node.
                 continue
             self._inflight[run_id] = asyncio.create_task(
                 self._advance(run_id), name=f"workflow-advance:{run_id}"

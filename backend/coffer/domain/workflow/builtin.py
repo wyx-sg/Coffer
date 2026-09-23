@@ -1,17 +1,18 @@
-"""The one template Coffer ships with (spec workflow FR-009).
+"""The one template Coffer ships with (spec workflow "Seed one built-in template").
 
 A vault that has never been touched still has somewhere to start. This is that
 somewhere: five tasks that carry one change from a question to a written
 result. It is a document like any other template the developer writes, and
 from the moment it is seeded it is theirs — editable, renameable, disableable,
-deletable (FR-001).
+deletable.
 
 **It names no skill and no agent**, and that is a hard constraint rather than a
 stylistic one. A skill and an agent are both registered resources, and
-``parse_template`` refuses a task naming one this vault does not have (FR-006,
-FR-007). A built-in that assumed either would validate on the machine it was
-written on and be refused on everyone else's, which would make the seed fail
-exactly where it matters most — a fresh install.
+``parse_template`` refuses a task naming one this vault does not have ("Refuse
+an invalid template naming the offending path", "Read a template's scope as the
+agents it may drive"). A built-in that assumed either would validate on the
+machine it was written on and be refused on everyone else's, which would make
+the seed fail exactly where it matters most — a fresh install.
 
 For the same reason no task names a tool. The instructions say what the task
 owes and why it owes it; *how* to produce it is the agent's problem, and a
@@ -129,10 +130,11 @@ def builtin_template_config() -> dict[str, Any]:
                             "nothing else."
                         ),
                         # Deliberately no `artifacts`: the deliverable is the change,
-                        # not a document about it. FR-072 gives a task that declares
-                        # none a required `report.md` when the template is read, so the
-                        # account the brief asks for is still owed and still checked —
-                        # the seed leans on that default rather than restating it.
+                        # not a document about it. "Give every task at least one
+                        # deliverable" gives a task that declares none a required
+                        # `report.md` when the template is read, so the account the
+                        # brief asks for is still owed and still checked — the seed
+                        # leans on that default rather than restating it.
                     }
                 ],
             },

@@ -1,4 +1,5 @@
-"""The seam a workflow run's tool call can be held at (spec workflow FR-034).
+"""The seam a workflow run's tool call can be held at (spec workflow "Refuse
+an unapproved write-class tool call made for a run").
 
 The gateway does not know what a workflow is, and the import fence in
 ``backend/pyproject.toml`` keeps it that way: ``application.mcp`` may not import
@@ -33,7 +34,7 @@ class ToolCallGatePort(Protocol):
     ``None`` means dispatch. A dict is a ``tools/call`` result the gateway
     returns downstream *instead of* dispatching — an ``isError`` result whose
     text says why, so the agent reads a reason rather than losing a call
-    (FR-037).
+    (spec workflow "Resume or fail a held tool call, never drop it").
 
     The port owns the waiting: by the time it answers, a held call has already
     been approved, rejected, expired or timed out. The gateway therefore sees

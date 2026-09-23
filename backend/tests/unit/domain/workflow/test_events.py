@@ -1,4 +1,5 @@
-"""The event vocabulary and the projection fold (spec workflow FR-014, FR-018).
+"""The event vocabulary and the projection fold (spec workflow "Rebuild a run from
+its event log").
 
 The fold is what rebuilds a run after a restart, so it is tested the way a
 restart exercises it: against a handwritten event list, with no run object in
@@ -245,8 +246,8 @@ def test_a_payload_that_is_not_a_token_count_adds_nothing(bad: Any):
 
 
 def test_a_retry_after_a_failure_projects_the_run_back_to_its_node():
-    """FR-027 then FR-022: the interrupted node is reported, and the retry that
-    follows is an ordinary event the fold reads like any other."""
+    """The interrupted node is reported, and the retry that follows is an
+    ordinary event the fold reads like any other."""
     projection = project(
         [
             _event(1, EventType.RUN_STARTED),

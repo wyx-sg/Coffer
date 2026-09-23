@@ -1,19 +1,21 @@
 // frontend/src/lib/hooks/useWorkflowRuns.ts — TanStack Query bindings for the
-// workflow run LIST (spec workflow, FR-011/FR-012/FR-045).
+// workflow run LIST (spec workflow "Create a run from a template and a title alone",
+// "Advance a run only on the machine that owns it", "Show runs, their tasks and their
+// context in the web UI").
 //
 // One run's detail, its nodes and its artifacts live in useWorkflowRun.ts;
 // approvals in useWorkflowApprovals.ts. Templates are resources of kind
-// `workflow` (FR-001) and have their own hook file (useWorkflowTemplates.ts)
+// `workflow` and have their own hook file (useWorkflowTemplates.ts)
 // over the generic resource endpoint — there is no template endpoint and this
 // file adds none.
 //
-// Every mutating command carries the caller's OBSERVED version (FR-015): the
+// Every mutating command carries the caller's OBSERVED version: the
 // daemon refuses a stale one with the run's current version rather than
 // applying it, which is why `version` is a caller argument here and never
 // something a hook reads back out of the cache for you.
 //
 // The run SIGNALS (start / pause / resume / abort) are not here and have no
-// hook: the run's own page offers nothing that advances or alters it (FR-052),
+// hook: the run's own page offers nothing that advances or alters it,
 // so the web UI never issues one. The route stays in the contract for the CLI.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -47,7 +49,7 @@ export function useWorkflowRuns(status?: RunStatus) {
 
 /**
  * The machine a run belongs to, in words. A run this machine does not own is
- * read-only (FR-012), and saying *which* machine advances it is the whole
+ * read-only, and saying *which* machine advances it is the whole
  * difference between a disabled button and a broken one.
  */
 export function useMachineLabel(): (machineId: string) => string {

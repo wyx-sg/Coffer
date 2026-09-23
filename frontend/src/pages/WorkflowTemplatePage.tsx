@@ -1,22 +1,24 @@
-// frontend/src/pages/WorkflowTemplatePage.tsx — spec workflow, FR-054..FR-056.
+// frontend/src/pages/WorkflowTemplatePage.tsx — spec workflow "Author templates in the web
+// UI", "Show a validation refusal against its field", "Write templates through the resource
+// endpoint only".
 // The workflow editor: the stages, the tasks inside them, and where work is
 // sent back to — authored as a map with a dialog per thing, never in raw JSON.
 //
 // THERE IS NO SETTINGS TAB. It held three fields: a description, which the
 // header already shows and the Edit dialog now writes, and two run-wide
 // numbers that turned out to belong elsewhere — the attempt ceiling is each
-// task's own (FR-026) and the token budget is gone. A tab holding one field
+// task's own and the token budget is gone. A tab holding one field
 // that lives somewhere better is a second place to look for it.
 //
-// THERE IS NO SAVE BUTTON (FR-062). Every edit is written as it is made: a
+// THERE IS NO SAVE BUTTON. Every edit is written as it is made: a
 // dialog's own Save writes the task or the stage it holds, and adding,
 // reordering and deleting on the map write themselves. A page-level Save over
 // a form with forty inputs in it is a thing to forget to press, and the
 // Discard beside it was the only way to undo a typo three tabs away.
 //
 // It writes through `PATCH /resources/{uid}` like every other client of every
-// other kind (FR-056), and it reads a refusal back as the FIELD it names
-// (FR-055): `templateRefusal` turns the daemon's answer into a path, and the
+// other kind, and it reads a refusal back as the FIELD it names:
+// `templateRefusal` turns the daemon's answer into a path, and the
 // dialog holding that path puts the message on the control.
 //
 // The URL carries the workflow's uid, so renaming one from this page is an

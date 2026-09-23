@@ -22,7 +22,8 @@ def _now(now: datetime | None) -> datetime:
 
 
 class WorkflowAttemptRepo:
-    """One row per try at a node. A retry inserts; it never rewrites (FR-022)."""
+    """One row per try at a node. A retry inserts; it never rewrites (spec
+    workflow "Keep every attempt when a node is retried")."""
 
     def __init__(self, sm: async_sessionmaker) -> None:  # type: ignore[type-arg]
         self._sm = sm
@@ -117,7 +118,9 @@ class WorkflowAttemptRepo:
         model: str | None,
         effort: str | None,
     ) -> WorkflowNodeAttemptModel | None:
-        """Write who runs this attempt, on what, at what effort (FR-071).
+        """Write who runs this attempt, on what, at what effort (spec
+        workflow "Choose a task's agent, model and effort before it
+        starts").
 
         Its own method rather than three more arguments on ``update_attempt``,
         because it writes all three VERBATIM: ``None`` here means "clear it,

@@ -1,5 +1,5 @@
 // frontend/src/lib/workflow/templateErrors.test.ts
-// A refusal is only useful if the editor can find the field it names (FR-055),
+// A refusal is only useful if the editor can find the field it names,
 // and the daemon spells that field three different ways depending on how deep
 // the rejection was raised. All three have to reduce to the same path.
 import { describe, expect, test } from "vitest";

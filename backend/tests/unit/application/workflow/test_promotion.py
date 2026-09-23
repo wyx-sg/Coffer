@@ -1,4 +1,4 @@
-"""What a run read, written down so it survives the run (FR-043)."""
+"""What a run read, written down so it survives the run."""
 
 from __future__ import annotations
 

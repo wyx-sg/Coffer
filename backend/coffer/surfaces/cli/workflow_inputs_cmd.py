@@ -3,9 +3,10 @@
 Split out of ``workflow_cmd`` for the file-size cap, and the seam is a real one:
 these four commands are the only ones in the group that do not move the run.
 Mounting a collection, uploading a file and unmounting either are things the
-developer does *alongside* a run at any point in its life (FR-050), which is
-why none of them carries a ``--version`` — an input is not a transition, and two
-people mounting two collections have not conflicted.
+developer does *alongside* a run at any point in its life (spec workflow "Add
+and remove inputs at any point in a run"), which is why none of them carries a
+``--version`` — an input is not a transition, and two people mounting two
+collections have not conflicted.
 
 ``add`` takes its input as ``kind:ref`` — one spelling for every kind a run can
 read, so the thing a person learns once reads the same whether they are mounting

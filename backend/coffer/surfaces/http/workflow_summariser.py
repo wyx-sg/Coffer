@@ -8,7 +8,8 @@ that beside the thin bridges would bury it.
 ``None`` is a first-class answer and the reason this file is so small. With no
 internal connection configured there is nothing to summarise WITH, and every
 caller degrades by naming what it would have summarised rather than dropping it
-(spec workflow FR-047) — so failing here must be cheap and quiet, not fatal.
+(spec workflow "Keep a task's opening context within budget") — so failing here
+must be cheap and quiet, not fatal.
 """
 
 from __future__ import annotations

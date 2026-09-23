@@ -1,22 +1,24 @@
 // frontend/src/pages/WorkflowNodePage.tsx — one task's conversation page
-// (spec workflow, FR-030/FR-039/FR-045/FR-052).
+// (spec workflow "Give a run no conversation of its own", "Show an approval on its task's
+// conversation and through a bound channel", "Show runs, their tasks and their context in the
+// web UI", "Offer no run controls on the run's page").
 //
-// This is where a run is driven, and it is driven by TALKING (FR-063). There
+// This is where a run is driven, and it is driven by TALKING. There
 // is no Retry here and no Skip: they were the last two buttons left over from
 // the form the run used to be, and a button that reruns a task is a worse way
 // of saying "do that again" than saying it. The task's agent is in the thread;
-// what the developer wants is a sentence, and the sentence also stays in the
-// transcript that every later task opens with (FR-029), which a button press
-// never did.
+// what the developer wants is a sentence, and the sentence also shapes the
+// deliverable every later task reads (spec workflow "Open every task with the
+// same four parts"), which a button press never did.
 //
 // The one control that survives is the APPROVAL, and it is IN the thread
-// rather than over it (FR-039): the agent asking to open a merge request is a
+// rather than over it: the agent asking to open a merge request is a
 // thing it did in the conversation, so the decision sits under the message
 // that led to it. Approving an exact payload by typing "ok" into the composer
 // is precisely what the gate exists to prevent, which is why this one is a
 // button and the rest are sentences.
 //
-// The composer is here WHATEVER state the task is in (FR-068), including
+// The composer is here WHATEVER state the task is in, including
 // before it has started: what is typed then is the brief the task will open
 // with. Where the sentence goes is the one thing this page decides — a task
 // whose turn is in flight takes it in its conversation, where it queues for
@@ -115,7 +117,7 @@ export function WorkflowNodePage() {
         started={node.status !== "pending"}
         instructions={latest?.instructions}
         // Only a running task's turn can queue a message; every other state
-        // goes to the engine, which decides what the sentence means (FR-068).
+        // goes to the engine, which decides what the sentence means.
         onSay={
           node.status === "running" && latest?.conversation_id
             ? null

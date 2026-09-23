@@ -1,7 +1,7 @@
 // frontend/src/components/workflow/NodeContextRail.tsx
 // What this task is working FROM, beside the conversation doing the work.
 //
-// A task opens with the run's whole shared context (FR-029) — the mounted
+// A task opens with the run's whole shared context — the mounted
 // inputs, the notes, everything earlier tasks produced — and until now the
 // only way to see any of it was to leave the conversation for the run's own
 // page and come back. The transcript talks about `td.md`; this is where you
@@ -109,7 +109,7 @@ function Row({
       <FileText className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
       <span className="min-w-0 flex-1 truncate">{row.name}</span>
       {/* The same word the table uses, and the same word the node was told a
-          link is (FR-065) — one vocabulary for one thing. */}
+          link is — one vocabulary for one thing. */}
       <span className="shrink-0 text-[10px] text-muted-foreground">
         {row.kind === "artifact"
           ? t("workflow.context.artifact")
