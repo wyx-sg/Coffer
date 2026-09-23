@@ -236,6 +236,12 @@ A pass MUST be bounded to at most **eight** writes — a retire counts as one �
 - **WHEN** a curation pass runs and its agent attempts eleven writes
 - **THEN** the pass stops at the eighth and reports the bound, and the writes that did land are complete files rather than truncated ones
 
+#### Scenario: a pass cut off by the recursion limit reports it and leaves its item owed
+- **GIVEN** a collection whose inbox holds one item of material and an internal connection configured
+- **WHEN** a curation pass over it reaches the recursion limit before the loop completes
+- **THEN** the pass reports status `truncated` with the same counters as `ok` (`written`, `retired`, `refused`, `model`, `item`), the documents it wrote stay in the tree, and the item is still in the inbox for a later sweep to finish
+- **AND** the sweep goes on to the collection's next pending item rather than stopping
+
 ### Requirement: Let newer statements win and a person's edit stand
 Where new material contradicts a document, the **newer statement wins**, and the resulting document MUST keep the superseded statement legible as a correction with the date it changed — a contradiction is knowledge about the world changing, and when it changed is itself worth keeping. Where the item is a **document a person edited**, what they wrote there is the truth: the pass MUST NOT revert or reword it, and carries it outward instead — correcting other documents that say otherwise, and moving a section that belongs elsewhere — leaving the edited document alone unless it now duplicates another. Both rules are instructions to the model, because no code can adjudicate a contradiction.
 
