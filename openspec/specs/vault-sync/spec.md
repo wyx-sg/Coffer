@@ -659,6 +659,8 @@ whose `config_dir` does not exist here — MUST be recorded as **not applicable
 here** rather than pending: preserved like a retry-set path, not retried, not
 reported as an error, and said to be so on the surfaces rather than presented as
 a failure the user has to chase.
+A round re-checks that precondition, never the apply itself: once the agent's
+`config_dir` exists here, the held path is released and applied.
 
 #### Scenario: an agent whose config directory is missing here is not applicable
 - **GIVEN** an `agent` document arriving whose `config_dir` does not exist on this machine
@@ -725,6 +727,13 @@ Joining MUST be explicit and reported: whichever kind it is, the surfaces MUST
 state, before anything is applied, which case it is, when this machine last
 converged, how many documents the remote has changed since, and how many this
 vault has.
+Only an explicit adopt applies a join: `GET /sync/join` states the join and
+applies nothing, `coffer sync adopt` prints it and asks before applying
+(`--yes` skips the question; with no terminal and no `--yes` it refuses), and
+the web Sync page shows it in a dialog and joins only on confirm. An ordinary
+round — the background worker, `coffer sync now`, `POST /sync/run` — on a
+machine that has not joined MUST apply and push nothing and end as
+`awaiting_join`, carrying the same report.
 
 #### Scenario: a join states its case and its counts before applying
 - **GIVEN** a returning machine with no pointer and a remote that has changed documents since it last converged
@@ -766,6 +775,7 @@ forgotten its pointer cannot skip it.
 - **GIVEN** a machine the remote's registry holds, which has lost its pointer
 - **WHEN** an ordinary round runs rather than `coffer sync adopt`
 - **THEN** the round recognises the machine as returning and recovers its base from its descriptor
+- **AND** it reports the join and ends as `awaiting_join`, applying nothing until the machine adopts
 
 ### Requirement: Apply knowledge and skill file changes
 For `knowledge/**` and `skills/**`, an addition or a modification MUST write the
@@ -1316,7 +1326,7 @@ own.
 
 ### Requirement: Cover the sync lifecycle on the command line
 The CLI MUST cover the round and the vault's lifecycle — `coffer sync now`,
-`adopt [<url>] [--keep-local]`, `status`, `history [--limit]`,
+`adopt [<url>] [--keep-local] [--yes]`, `status`, `history [--limit]`,
 `restore [--at <rev|date>]`, `confirm`, `reject`, `rebuild [--yes]`, `rollback`
 — and its administration:
 `remote set <url> [--branch] [--interval <seconds>] [--with-credentials] [--credential-ref]`,
@@ -1327,12 +1337,12 @@ The CLI MUST cover the round and the vault's lifecycle — `coffer sync now`,
 #### Scenario: the command line covers every sync operation
 - **GIVEN** the `coffer sync` command group
 - **WHEN** its commands and options are listed
-- **THEN** it offers `now`, `adopt` with `--keep-local`, `status`, `history` with `--limit`, `restore` with `--at`, `confirm`, `reject`, `rebuild` with `--yes` and `rollback`
+- **THEN** it offers `now`, `adopt` with `--keep-local` and `--yes`, `status`, `history` with `--limit`, `restore` with `--at`, `confirm`, `reject`, `rebuild` with `--yes` and `rollback`
 - **AND** it offers `remote set` with `--branch`, `--interval`, `--with-credentials` and `--credential-ref`, `remote show`, `remote clear`, `machine list`, `machine rename`, `machine remove`, `key export`, `key import` and `key fingerprint`
 
 ### Requirement: Cover the same operations over HTTP
 The HTTP API MUST cover the same operations under `/api/v1/sync`:
-`GET|PUT|DELETE /sync/remote`, `POST /sync/run`, `POST /sync/adopt`,
+`GET|PUT|DELETE /sync/remote`, `POST /sync/run`, `GET /sync/join`, `POST /sync/adopt`,
 `GET /sync/status`, `GET /sync/runs`, `POST /sync/restore`,
 `POST /sync/confirm`, `POST /sync/reject`, `POST /sync/rebuild`,
 `POST /sync/rollback`, `GET /sync/machines`, `PATCH /sync/machines/self`,

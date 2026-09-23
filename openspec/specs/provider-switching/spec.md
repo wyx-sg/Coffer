@@ -459,7 +459,8 @@ as the back-compat form, and MUST refuse a call naming neither.
 
 ### Requirement: Keep ollama connections internal-only
 The `ollama` protocol is internal-only: such a connection MUST reach no agent whatever its scope
-says, MUST never be `is_active`, and activating it MUST write no native config. It has no key to
+says, MUST never be `is_active`, and activating it MUST write no native config: activation is
+refused with `409 PROVIDER_INTERNAL_ONLY` before anything is touched. It has no key to
 write and is used solely by Coffer's internal engine. The rule is enforced in
 `application/provider/targets.py::scoped_targets`, which answers `[]` for `ollama` BEFORE the scope
 is read — it is a rule about projection, not about the config's shape, and scope lives outside the
@@ -468,7 +469,7 @@ config.
 #### Scenario: activating an ollama connection writes no native config
 - **GIVEN** a registered Claude Code agent and an `ollama` connection whose scope names that agent
 - **WHEN** the user activates the connection
-- **THEN** no native config file is written and the connection is not `is_active`
+- **THEN** the activation is refused with `409 PROVIDER_INTERNAL_ONLY`, no native config file is written and the connection is not `is_active`
 - **AND** the connection reports no reachable agent
 
 ### Requirement: Make the credential optional only for ollama

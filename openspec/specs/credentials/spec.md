@@ -227,9 +227,11 @@ MUST fetch the real value through the audited read only when `--show` is given.
 - **THEN** the first prints `[redacted]` and records no audit entry, while the second prints the value and records a `credential_read` entry carrying the ref only.
 
 ### Requirement: List every cited reference with its presence
-`coffer credentials list` MUST show every credential ref cited by a registered resource together
-with whether the store currently holds it, so a vault restored without its secrets says which ones
-are missing.
+`coffer credentials list` MUST show every credential ref cited by a registered resource of any kind,
+together with whether the store currently holds it and which resources cite it, so a vault restored
+without its secrets says which ones are missing; `--json` MUST carry the same presence. It reads
+`GET /api/v1/credentials`, which answers `{refs: [{ref, present, cited_by: [{uid, kind, name}]}]}`,
+decrypts nothing and records no audit entry.
 
 #### Scenario: the command line lists every cited ref with its presence
 - **GIVEN** a registered MCP server citing a stored ref and a registered model provider citing a ref the store does not hold
