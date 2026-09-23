@@ -8,6 +8,7 @@ the CLI call. Nothing here reads or writes the real home directory.
 
 from __future__ import annotations
 
+import builtins
 import json
 import pathlib
 import re
@@ -342,19 +343,62 @@ def test_codex_allowlist_is_exactly_three_files(tmp_path, monkeypatch):
 @pytest.mark.acceptance(spec="agent-registry/codex", scenario="refuse to read auth.json")
 def test_codex_auth_json_is_never_listed_or_readable(tmp_path, monkeypatch):
     codex_dir = _codex_fixture(tmp_path)
-    (codex_dir / "auth.json").write_text('{"OPENAI_API_KEY": "sk-secret"}', encoding="utf-8")
+    auth = codex_dir / "auth.json"
+    auth.write_text('{"OPENAI_API_KEY": "sk-secret"}', encoding="utf-8")
     app = _app(tmp_path, monkeypatch, 61220)
     with _client(app) as c:
         uid = _register(c, "codex", "cx")
 
+        # "No filesystem read": spy on every way the process could touch the
+        # file — open(), the Path readers, and the config store's own read/stat
+        # — from here on. Registration above is excluded; the scenario is about
+        # the listing and the by-key request.
+        touched: list[str] = []
+        real_open = builtins.open
+        real_read_text = pathlib.Path.read_text
+        real_read_bytes = pathlib.Path.read_bytes
+        real_stat = pathlib.Path.stat
+
+        def _note(path: object) -> None:
+            if pathlib.Path(str(path)).name == "auth.json":
+                touched.append(str(path))
+
+        def spy_open(file, *args, **kwargs):
+            if isinstance(file, (str, pathlib.PurePath)):
+                _note(file)
+            return real_open(file, *args, **kwargs)
+
+        def spy_read_text(self, *args, **kwargs):
+            _note(self)
+            return real_read_text(self, *args, **kwargs)
+
+        def spy_read_bytes(self):
+            _note(self)
+            return real_read_bytes(self)
+
+        def spy_stat(self, *args, **kwargs):
+            _note(self)
+            return real_stat(self, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "open", spy_open)
+        monkeypatch.setattr(pathlib.Path, "read_text", spy_read_text)
+        monkeypatch.setattr(pathlib.Path, "read_bytes", spy_read_bytes)
+        monkeypatch.setattr(pathlib.Path, "stat", spy_stat)
+
         listing = c.get(f"/api/v1/agents/{uid}/config-files")
+        assert listing.status_code == 200, listing.text
+        names = {pathlib.Path(f["path"]).name for f in listing.json()["items"]}
+        assert names == {"config.toml", "AGENTS.md", "hooks.json"}
         assert "auth.json" not in listing.text
         assert "sk-secret" not in listing.text
 
         for key in ("auth", "auth.json"):
             r = c.get(f"/api/v1/agents/{uid}/config-files/{key}")
             assert r.status_code == 404, r.text
+            assert r.json()["error"]["code"] == "CONFIG_FILE_NOT_ALLOWED", r.text
             assert "sk-secret" not in r.text
+
+        assert touched == [], f"auth.json was touched on disk: {touched}"
 
 
 @pytest.mark.acceptance(

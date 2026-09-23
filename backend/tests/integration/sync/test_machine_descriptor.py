@@ -56,8 +56,9 @@ async def test_the_published_descriptor_carries_every_fact_the_table_shows(pair)
     a, _b = pair
     await a.register("agent", "claude-code", {"value": "cc"})
     await a.register("agent", "codex", {"value": "codex"})
-    # The first round has no pointer to publish yet; the second fills it in.
-    await a.converge()
+    # The first round (the explicit join) has no pointer to publish yet; the
+    # second fills it in.
+    await a.adopt()
     await a.converge()
 
     doc = await _published(a)
@@ -82,7 +83,7 @@ async def test_the_published_descriptor_carries_every_fact_the_table_shows(pair)
 async def test_the_descriptor_names_the_pointer_this_machine_held(pair) -> None:
     a, _b = pair
     a.write_knowledge("notes", "first", "hello\n")
-    first = await a.converge()
+    first = await a.adopt()
     pointer = await a.state.pointer()
     assert pointer == first.commit
 
@@ -101,7 +102,7 @@ async def test_the_descriptor_names_the_pointer_this_machine_held(pair) -> None:
 async def test_later_rounds_the_same_day_leave_the_descriptor_alone(pair) -> None:
     a, _b = pair
     a.write_knowledge("notes", "first", "hello\n")
-    await a.converge()
+    await a.adopt()
     await a.converge()  # fills in the commit the first round could not name
     stamped = await a.remote_text(_DESCRIPTOR)
     remote_commits = await a.remote_commit_count()

@@ -12,7 +12,7 @@ without touching the history — and both writes happen in one transaction, so
 the newest row here and those columns can never describe different rounds.
 
 Machine-local, like the pointer: ``coffer.db`` is excluded from the bundle
-(spec vault-sync ``## What does not sync``), and a history that travelled would
+(spec vault-sync "Keep reach machine-local"), and a history that travelled would
 be another machine's account of rounds this one never ran.
 
 Nothing is backfilled. The one round the remote row already holds is the round

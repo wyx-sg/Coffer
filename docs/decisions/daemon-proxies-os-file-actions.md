@@ -88,7 +88,7 @@ not run; now that open/reveal always run it serves no purpose, and a personal,
 local-first tool keeps the surface minimal. The `copyPath` / `copyFolderPath` actions
 and their i18n strings are deleted, not demoted.
 
-### 3. "添加 Skill" gets the folder picker (spec skill-manager, `## Assumptions`)
+### 3. "添加 Skill" gets the folder picker (spec skill-manager, `## Purpose`)
 
 The skill import dialog reuses the existing `FolderPicker` (the daemon-backed folder
 browser — spec agent-registry FR-050 / spec daemon FR-019). The folder is **picked**, not typed; the resolved absolute

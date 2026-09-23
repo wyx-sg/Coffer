@@ -201,5 +201,18 @@ async def test_a_built_in_call_gets_the_handshake_identity_or_none(
 
         assert h.seen[0] == {"text": "hi", "agent": "claude-code"}
         assert h.seen[1] == {"text": "hi"}
+
+        # Neither session is offered an ``agent`` to fill in: the gateway threads
+        # the identity itself and adds no such property to what it advertises.
+        # (Every built-in the real composition root wires is checked the same
+        # way in surfaces/http/mcp/test_builtin_tools_advertise_no_agent.py.)
+        for session in (identified, unidentified):
+            listed = await session.handle_request("tools/list")
+            builtins = {t["name"]: t for t in listed["tools"] if t["name"].startswith("coffer__")}
+            assert "coffer__echo" in builtins
+            for tool in builtins.values():
+                schema = tool.get("inputSchema") or {}
+                assert "agent" not in schema.get("properties", {}), tool["name"]
+                assert "agent" not in schema.get("required", []), tool["name"]
     finally:
         await h.close()

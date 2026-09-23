@@ -88,7 +88,7 @@ the domain layer never references a surface.
 One allow-list. `None` on a `Resource` means unscoped — active for every agent;
 `agents=[]` matches nothing, i.e. dormant. There is no machine axis: reach is
 machine-local and is neither carried away by a converge round nor written over
-by one (spec vault-sync, `## What does not sync`). An unknown property on the
+by one (spec vault-sync, "Keep reach machine-local"). An unknown property on the
 wire is rejected rather than ignored, because dropping a withdrawn axis would
 widen the restriction the request was written to make.
 

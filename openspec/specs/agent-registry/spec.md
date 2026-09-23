@@ -23,10 +23,10 @@ The system MUST register each known local agent as a Resource of kind `agent`, i
 ### Requirement: Validate agent configuration against the agent schema
 The system MUST validate agent configuration against a kind-specific schema with fields `type` (enum) and `config_dir` (path, optional absolute-path override; when omitted it defaults to the type's standard location, which that type's child spec names), plus the model binding of "Carry the model binding on the agent record". Skills are delivered to `<config_dir>/skills`. The `agent` kind declares no `scope`: a non-null value is rejected at validation (422) — an agent resource is what other kinds' scopes name, never itself a scope target ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)).
 
-#### Scenario: register an agent with a custom config dir
-- **GIVEN** the daemon is running
-- **WHEN** the user registers an agent of supported type with an explicit, writable `config_dir`
-- **THEN** the agent is persisted with that path (and its `<config_dir>/skills` subdirectory auto-created) and appears in `coffer agent list`
+#### Scenario: an agent cannot be given a scope
+- **GIVEN** a registered agent
+- **WHEN** a scope naming another agent is set on it through the kind-agnostic scope route
+- **THEN** the request is rejected as `unprocessable_entity` (422) and the agent still has no scope
 
 ### Requirement: Support exactly the Claude Code and Codex agent types
 The system MUST support the agent types `claude_code` and `codex`; registering any type outside the manifest (e.g. the `claude_desktop` chat app, a Gemini CLI) is rejected with `unprocessable_entity` (422). Per-type behaviour is defined by the capability manifest (`AGENT_DESCRIPTORS`), so adding a type is one enum value, one descriptor record and one child spec (plus, where the product's wire protocol is new, one chat-provider adapter). Each supported type covers both the CLI and the app/IDE form of that product, which share one config directory.
@@ -89,6 +89,11 @@ At registration the system MUST auto-create the `<config_dir>/skills` subdirecto
 - **GIVEN** the daemon is running
 - **WHEN** the user attempts to register an agent whose `config_dir` resolves under a privileged location (`/etc`, `/usr`, `/bin`, `/sbin`, `/System`, `C:\Windows`, or `C:\Program Files`)
 - **THEN** registration is rejected with `unprocessable_entity` (422) and no resource row, audit event, or filesystem write occurs
+
+#### Scenario: register an agent with a custom config dir
+- **GIVEN** the daemon is running
+- **WHEN** the user registers an agent of supported type with an explicit, writable `config_dir`
+- **THEN** the agent is persisted with that path (and its `<config_dir>/skills` subdirectory auto-created) and appears in `coffer agent list`
 
 ### Requirement: Allow one agent per name and per config directory
 The system MUST reject registration that would create a duplicate agent name (409 `conflict`, as for any kind — the label is unique within its kind even though it is not the identity), and MUST reject registering more than one agent for the same config directory. `config_dir` is derived from the agent type, so each supported type — and thus each on-disk config directory — may be registered at most once; a second attempt is rejected with `conflict` (409) and nothing is persisted.
@@ -238,7 +243,7 @@ Users MUST be able to adopt a direct MCP entry into Coffer, so that it is served
 - **THEN** the created resource is rolled back, the agent's config file is byte-identical to before the attempt, and the failure is reported with a specific error code
 
 ### Requirement: Route secret-like environment values to the credential store on adoption
-Adoption MUST NOT persist secret values into resource config. When an entry's environment carries values under secret-like keys (`TOKEN`, `KEY`, `SECRET`, `PASSWORD` patterns), the adopt request MUST supply a credential mapping for each flagged key or be rejected with the unresolved keys listed. Mapped values are stored as Fernet ciphertext in Coffer's credential store through the daemon (per the credentials invariant); the resource config carries references only. A key is secret-like when its value is non-empty and its name matches `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`/`APIKEY`, `CREDENTIAL` or `AUTHORIZATION`, case-insensitively.
+Adoption MUST NOT persist secret values into resource config. When an entry's environment carries values under secret-like keys (defined below), the adopt request MUST supply a credential mapping for each flagged key or be rejected with the unresolved keys listed. Mapped values are stored as Fernet ciphertext in Coffer's credential store through the daemon (per the credentials invariant); the resource config carries references only. A key is secret-like when its value is non-empty and its name matches `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`/`APIKEY`, `CREDENTIAL` or `AUTHORIZATION`, case-insensitively.
 
 #### Scenario: require a credential mapping for secret-like env values
 - **GIVEN** a direct MCP entry whose environment contains a value under a secret-like key (e.g. `API_TOKEN`)
@@ -317,7 +322,7 @@ Config-file reads (single files and directory children) MUST return a content fi
 - **THEN** the write is rejected with `conflict` (409) and the on-disk file is unchanged; re-reading yields a fresh fingerprint that allows the write
 
 ### Requirement: Annotate a leftover memory-projection block as safe to delete
-When an instructions file still contains the **legacy** memory-projection managed block, the editor MUST annotate it as a leftover that is safe to delete. Coffer no longer writes or parses that block: native projection was retired ([Aggregate Agent Memory, Never Write It](../../../docs/decisions/aggregate-agent-memory-never-write-it.md)), the table behind it was dropped, and [memory](../memory/spec.md) "Present partitions as a table and a file tree" forbids reintroducing it. Detection is by marker prefix only — the block's content is never read. No live feature owns a managed block in these files, so there is no second block to annotate.
+When an instructions file still contains the **legacy** memory-projection managed block, the editor MUST annotate it as a leftover that is safe to delete. Coffer no longer writes or parses that block: native projection was retired ([Aggregate Agent Memory, Never Write It](../../../docs/decisions/aggregate-agent-memory-never-write-it.md)), the table behind it was dropped, and [memory](../memory/spec.md) "Reintroduce no retired mechanism" forbids reintroducing it. Detection is by marker prefix only — the block's content is never read. No live feature owns a managed block in these files, so there is no second block to annotate.
 
 #### Scenario: annotate a leftover memory block in the instructions file
 - **GIVEN** a registered agent whose instructions file still contains the legacy memory-projection block marker
@@ -408,7 +413,7 @@ Coffer does not import a native memory store into its own knowledge layer: the k
 ### Requirement: List an agent's transcript sessions read-only
 The system MUST expose a read-only listing of an agent's local transcript sessions, found at the location that type's child spec names. Each session summary carries its `session_id`, a derived `title` (the session's first *real* user turn, secret-scrubbed — a turn whose text is nothing but an injected markup block was written by the harness, not by a person, and is not a candidate), `project_path`, `message_count`, `started_at`, `last_activity_at`, and the transcript file's absolute `source_path` — the last feeding the open / reveal affordances of "Open config files in an external editor or reveal them". The listing MUST support a case-insensitive substring search over title and project path, an exact `project` filter, sorting by `started_at`, `last_activity_at` (default) or `message_count` in either direction, and `limit`/`offset` paging alongside the matched `total`, because an agent accumulates thousands of sessions and the surface cannot load them all. Parsing is per-file and cached by the file's modification time **and size**; a file that fails to parse is skipped rather than failing the listing. Message text is not carried on the wire by THIS listing and is not retained by it — a body travels only through "Read one transcript session in bounded windows", for the one session a reader opened.
 
-Coffer never writes the transcript files, never stores their content and never sends them anywhere. It does not distil transcripts into memory: the agent's own memory is memory's domain, and [memory](../memory/spec.md) "Present partitions as a table and a file tree" forbids reintroducing a path that writes back into it.
+Coffer never writes the transcript files, never stores their content and never sends them anywhere. It does not distil transcripts into memory: the agent's own memory is memory's domain, and [memory](../memory/spec.md) "Reintroduce no retired mechanism" forbids reintroducing a path that writes back into it.
 
 #### Scenario: browse an agent's transcript history with title, search, and sort
 - **GIVEN** a registered agent with several local transcript sessions across more than one project
@@ -460,6 +465,11 @@ The Agents page in the web UI MUST expose all of these, config-file content writ
 - **WHEN** the user invokes the equivalent `coffer agent config …` / `coffer agent mcp …` CLI subcommands
 - **THEN** each subcommand calls the corresponding REST endpoint and produces equivalent state, and read subcommands accept `--json`
 
+#### Scenario: CLI surface mirrors REST operations
+- **GIVEN** the daemon is running and exposes the REST agent routes
+- **WHEN** the user invokes `coffer agent add`, `list`, `edit`, `rm`, or `detect`
+- **THEN** each subcommand calls the corresponding REST endpoint and produces equivalent state changes, and every read subcommand additionally accepts `--json` for machine-readable output
+
 ### Requirement: Lead a transcript turn with the person's own words
 **Readable means the person's words lead.** A "user turn" in a transcript is not only what the user typed: every harness prepends its own blocks to the same turn — reminders, task notifications, environment dumps. Both surfaces — the contents list and the conversation — MUST read the turn as the person's, not the harness's: the contents list MUST index a turn by the first line the PERSON wrote and MUST omit a turn they wrote no part of, and the conversation MUST lead with their words, with the prepended blocks folded away rather than dropped — the blocks are part of the record and a view that discarded them would be claiming the turn said less than it did. Blocks are identified by SHAPE, not by a list of block names: naming them one at a time never finishes, and prose that merely contains a `<` is not markup.
 
@@ -472,10 +482,10 @@ The Agents page in the web UI MUST expose all of these, config-file content writ
 ### Requirement: Offer JSON output on every CLI read
 The CLI MUST support `--json` for machine-readable output on every read operation.
 
-#### Scenario: CLI surface mirrors REST operations
-- **GIVEN** the daemon is running and exposes the REST agent routes
-- **WHEN** the user invokes `coffer agent add`, `list`, `edit`, `rm`, or `detect`
-- **THEN** each subcommand calls the corresponding REST endpoint and produces equivalent state changes, and every read subcommand additionally accepts `--json` for machine-readable output
+#### Scenario: agent reads print JSON with --json
+- **GIVEN** a registered agent
+- **WHEN** the user runs `coffer agent list --json` and `coffer agent show <name> --json`
+- **THEN** each prints only JSON, carrying the agent's name, type and config directory, and `show` also its uid
 
 ### Requirement: Open config files in an external editor or reveal them
 For each config file (and each directory-entry child) the UI MUST offer **open-in-external-editor** and **reveal-in-file-manager** actions on the file, using the `path` from "List an agent's config files with their locations" and "Read allowlisted config files without creating them". Open and reveal perform the real OS action through the daemon's filesystem-action endpoints (`POST /api/v1/fs/open`, `POST /api/v1/fs/reveal`, and the installed-editor enumeration `GET /api/v1/fs/editors` behind the preference — all owned by the daemon spec, which this spec consumes and does not specify), since the loopback daemon is always on the user's own machine ([Daemon Proxies OS File Actions](../../../docs/decisions/daemon-proxies-os-file-actions.md)). There is no copy-path fallback. The editor used for open-in-external-editor references the user's "preferred external editor" preference defined by web-ui (not re-specified here).

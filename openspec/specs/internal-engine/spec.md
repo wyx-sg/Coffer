@@ -163,8 +163,8 @@ kind-agnostic substrate rather than a facet of the connection registry.
 The same row MUST carry a switch and an interval for each of the three passes
 Coffer runs on its own behalf — `aggregate` (reads the agents' own memory into
 the derived tree, [memory](../memory/spec.md) "Aggregate on an interval and on demand"), `distil` (lets the model rewrite that
-derived digest, [memory](../memory/spec.md) "Bound delivery and prefer the current repository") and `curate` (derives the knowledge documents
-agents read from the sources a person writes, [knowledge](../knowledge/spec.md) "Deliver the catalogue through the coffer-guide skill"). This
+derived digest, [memory](../memory/spec.md) "Distil incrementally in two stages") and `curate` (derives the knowledge documents
+agents read from the sources a person writes, [knowledge](../knowledge/spec.md) "Curate through a fenced four-tool pass"). This
 capability owns only whether and how often they run, one switch and interval
 per pass rather than per target.
 

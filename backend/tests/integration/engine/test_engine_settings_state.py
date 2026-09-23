@@ -8,6 +8,9 @@ it while they run.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import functools
 import pathlib
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -17,6 +20,7 @@ import pytest
 from coffer.application.audit_service import AuditService
 from coffer.application.engine_settings_sync import DOC, EngineSettingsSyncState
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
+from coffer.application.memory import aggregate_worker
 from coffer.application.memory.aggregate_worker import AggregateWorker
 from coffer.application.upkeep_schedule import wait_for_next_pass
 from coffer.domain.internal_engine_config import AGGREGATE, CURATE, DISTIL, UpkeepSetting
@@ -148,35 +152,59 @@ def _interval(service: InternalEngineConfigService, name: str):  # type: ignore[
     scenario="a running worker picks up a changed switch and interval",
 )
 async def test_a_running_worker_follows_the_row_without_being_rebuilt(
-    machine: _Machine,
+    machine: _Machine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    passes: list[str] = []
+    """``run_forever`` itself, on a virtual clock.
+
+    The worker's own wait is the real ``wait_for_next_pass``; only its sleep is
+    swapped for one that advances a counter, so an hour-long interval costs
+    nothing. What the operator changes goes through the settings row while the
+    worker's task is running, and the worker is never rebuilt.
+    """
+    now = 0.0
+    passes: list[float] = []
+    done = asyncio.Event()
 
     async def aggregate(*, actor: str) -> None:
-        passes.append(actor)
+        passes.append(now)
 
+    async def sleep(seconds: float) -> None:
+        nonlocal now
+        now += seconds
+        # Operator actions, at virtual times inside the worker's waits.
+        if now == 60.0:
+            # Mid-way through the first wait, which started at a 3600s interval.
+            await machine.service.set_upkeep(AGGREGATE, UpkeepSetting(enabled=True, interval_s=120))
+        elif now == 150.0:
+            # Inside the second wait: the pass is switched off.
+            await machine.service.set_upkeep(
+                AGGREGATE, UpkeepSetting(enabled=False, interval_s=120)
+            )
+        elif now >= 300.0:
+            done.set()
+            await asyncio.Event().wait()  # park until cancelled
+        await asyncio.sleep(0)
+
+    monkeypatch.setattr(
+        aggregate_worker,
+        "wait_for_next_pass",
+        functools.partial(wait_for_next_pass, slice_s=30.0, sleep=sleep),
+    )
+    await machine.service.set_upkeep(AGGREGATE, UpkeepSetting(enabled=True, interval_s=3600))
     worker = AggregateWorker(
         aggregate=aggregate,
         is_enabled=_enabled(machine.service, AGGREGATE),
         read_interval=_interval(machine.service, AGGREGATE),
     )
-    await worker.run_once()
-    assert len(passes) == 1
 
-    await machine.service.set_upkeep(AGGREGATE, UpkeepSetting(enabled=False))
-    await worker.run_once()
-    assert len(passes) == 1  # switched off: the same worker skips the pass
+    task = asyncio.create_task(worker.run_forever())
+    try:
+        await asyncio.wait_for(done.wait(), timeout=10)
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
-    # A wait already in progress at a 3600s interval ends at the new 120s one.
-    await machine.service.set_upkeep(AGGREGATE, UpkeepSetting(enabled=True, interval_s=3600))
-    slept: list[float] = []
-
-    async def sleep(seconds: float) -> None:
-        slept.append(seconds)
-        if len(slept) == 2:
-            await machine.service.set_upkeep(AGGREGATE, UpkeepSetting(enabled=True, interval_s=120))
-
-    await wait_for_next_pass(
-        _interval(machine.service, AGGREGATE), default_s=3600.0, slice_s=30.0, sleep=sleep
-    )
-    assert sum(slept) == 120.0
+    # The catch-up pass at start; then the wait that began at 3600s ended at
+    # the 120s set during it; then, switched off, the pass due at 240 did not run.
+    assert passes == [0.0, 120.0]

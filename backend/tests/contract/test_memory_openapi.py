@@ -191,8 +191,8 @@ def test_every_yaml_component_exists_with_its_required_fields(
         missing = _required_fields(schema) - _required_fields(generated[name])
         if missing:
             problems.append(f"{name}: required in the yaml but not generated: {sorted(missing)}")
-    assert not problems, "openspec/specs/memory/contracts/api.openapi.yaml drift:\n  " + "\n  ".join(
-        problems
+    assert not problems, (
+        "openspec/specs/memory/contracts/api.openapi.yaml drift:\n  " + "\n  ".join(problems)
     )
 
 

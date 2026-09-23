@@ -241,6 +241,64 @@ async def test_interrupt_pauses_queue() -> None:
     assert orch.pending(conv.id) == ["msg2"]
 
 
+@pytest.mark.acceptance(spec="chat", scenario="the page stops a turn another surface started")
+async def test_the_interrupt_route_stops_a_turn_it_did_not_start() -> None:
+    """The page's Stop reaches whatever turn it is watching.
+
+    The turn here is started through the orchestrator's queue — the path a
+    channel drives — and stopped over ``POST .../interrupt``, the route the page
+    calls. The route must find the turn by conversation, not by who started it.
+    """
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    from coffer.domain.chat.message import Role, TextBlock
+    from coffer.surfaces.http import errors as err_handlers
+    from coffer.surfaces.http.auth import set_active_token
+    from coffer.surfaces.http.chat.dependencies import (
+        get_agent_registry,
+        get_chat_service,
+        get_turn_orchestrator,
+    )
+    from coffer.surfaces.http.chat.turn_routes import router as turn_router
+
+    release = asyncio.Event()
+    orch, chat, _ = _make_orch(_SeqProvider([_BlockingAdapter(release), FakeAgentAdapter([])]))
+    conv = await chat.create_conversation(agent_key="builtin")
+    await orch.enqueue_message(conv.id, "msg1")
+    await asyncio.sleep(0)
+    await orch.enqueue_message(conv.id, "msg2")
+    task = active_turns()[conv.id].task
+    assert task is not None
+
+    app = FastAPI()
+    err_handlers.register(app)
+    app.include_router(turn_router)
+    app.dependency_overrides[get_chat_service] = lambda: chat
+    app.dependency_overrides[get_turn_orchestrator] = lambda: orch
+    app.dependency_overrides[get_agent_registry] = lambda: orch._registry
+    set_active_token("t")
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app), base_url="http://t", headers={"X-Coffer-Token": "t"}
+        ) as client:
+            r = await client.post(f"/api/v1/chat/conversations/{conv.id}/interrupt")
+    finally:
+        set_active_token(None)
+
+    assert r.status_code == 204, r.text
+    await asyncio.wait_for(task, timeout=5)  # stopped without release being set
+    await asyncio.sleep(0.01)
+    assert not release.is_set()
+    assert conv.id not in active_turns()
+    # The partial output is kept, and the queue is paused, not advanced.
+    msgs = await chat.list_messages(conv.id)
+    assistant = [m for m in msgs if m.role == Role.ASSISTANT]
+    assert len(assistant) == 1
+    assert "".join(b.text for b in assistant[0].content if isinstance(b, TextBlock)) == "working"
+    assert orch.pending(conv.id) == ["msg2"]
+
+
 async def test_send_after_interrupt_resumes_queue() -> None:
     release = asyncio.Event()
     resumed = FakeAgentAdapter(

@@ -103,10 +103,13 @@ async def test_generic_create_refuses_a_kind_that_owns_its_creation(tmp_path):
 
 
 class _FailingReleaseStore:
-    """Holds the credential but refuses to delete it."""
+    """Holds the credential but refuses to delete it — recording each attempt,
+    so a delete path that never tries the release cannot pass as "the release
+    failed and the delete still completed"."""
 
     def __init__(self) -> None:
         self.store = {"only-mine": "value"}
+        self.delete_calls: list[str] = []
 
     def get(self, ref: str) -> str | None:
         return self.store.get(ref)
@@ -115,6 +118,7 @@ class _FailingReleaseStore:
         return ref in self.store
 
     def delete(self, ref: str) -> None:
+        self.delete_calls.append(ref)
         raise RuntimeError("keychain unavailable")
 
 
@@ -130,6 +134,7 @@ async def test_delete_runs_cleanup_keeps_history_and_aborts_on_hook_failure(tmp_
     seen_during_hook: list[str] = []
     fail_hook = {"on": False}
     svc: ResourceService
+    creds = _FailingReleaseStore()
 
     async def on_delete(resource: Resource) -> None:
         if fail_hook["on"]:
@@ -150,7 +155,7 @@ async def test_delete_runs_cleanup_keeps_history_and_aborts_on_hook_failure(tmp_
         },
         repo=SqlAlchemyResourceRepo(sm),
         audit=audit,
-        credentials=_FailingReleaseStore(),
+        credentials=creds,
     )
     try:
         created = await svc.register("vault", "a", {"secret_ref": "only-mine"}, "cli")
@@ -159,7 +164,10 @@ async def test_delete_runs_cleanup_keeps_history_and_aborts_on_hook_failure(tmp_
         assert len(before) >= 2
 
         # The credential release fails, yet the completed deletion is not an error.
+        assert creds.delete_calls == []
         await svc.delete(created.uid, actor="cli")
+        assert creds.delete_calls == ["only-mine"]  # the release really was attempted
+        assert creds.store == {"only-mine": "value"}  # ...and really did fail
         assert seen_during_hook == ["a"]
         assert await svc.list() == []
 
@@ -174,6 +182,7 @@ async def test_delete_runs_cleanup_keeps_history_and_aborts_on_hook_failure(tmp_
         with pytest.raises(RuntimeError, match="cleanup failed"):
             await svc.delete(other.uid, actor="cli")
         assert (await svc.get(other.uid)).name == "b"
+        assert creds.delete_calls == ["only-mine"]  # an aborted delete releases nothing
         deleted = await audit.query(event_type=AuditEventType.RESOURCE_DELETED.value)
         assert [e.resource_name for e in deleted] == ["a"]
     finally:

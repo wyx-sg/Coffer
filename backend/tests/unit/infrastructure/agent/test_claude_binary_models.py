@@ -128,15 +128,21 @@ async def test_every_alias_carries_the_runtimes_reasoning_levels(
 ) -> None:
     """The bundle has no per-model effort table, and it would mean nothing if it
     did: Claude takes the level as an option on the session, so the menu is the
-    runtime's and every entry reports the same one."""
-    from coffer.infrastructure.agent.claude_effort import claude_effort_levels
+    runtime's and every entry reports the same one.
 
+    The expected levels are written out literally — the ``EffortLevel`` alias of
+    the SDK version ``uv.lock`` pins — rather than read back through the helper
+    under test, so a helper that drops, reorders or invents a level fails here.
+    An SDK bump that changes the alias fails here too, deliberately: the picker
+    changed, and that deserves a look."""
     _bundle(tmp_path / "claude")
 
     models = await discovery.discover(agent_key="claude_code", config_dir=None)
 
-    assert {m.efforts for m in models} == {claude_effort_levels()}
-    assert all(m.default_effort is None for m in models)
+    assert [m.id for m in models] == ["opus", "haiku"]
+    for model in models:
+        assert model.efforts == ("low", "medium", "high", "xhigh", "max"), model.id
+        assert model.default_effort is None, model.id
 
 
 async def test_the_per_provider_deployments_are_not_aliases(

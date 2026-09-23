@@ -32,7 +32,7 @@ The curated allowlist ([agent-registry](../spec.md) "Define a curated config-fil
 - **GIVEN** a registered `codex` agent whose config directory holds an `auth.json`
 - **WHEN** the user lists the agent's config files and then requests `auth.json` by key
 - **THEN** the listing does not include it
-- **AND** the request is `not_found` (404) with no filesystem read
+- **AND** the request is refused `404 CONFIG_FILE_NOT_ALLOWED` with no filesystem read
 
 ### Requirement: Install Coffer's MCP entry into config.toml preserving its layout
 The `McpInjectionSpec` [agent-registry](../spec.md) "Install Coffer's MCP server into an agent in one action" installs through MUST write `[mcp_servers.coffer]` in `config.toml`, whose `command` is the resolved absolute shim path and whose `args` are `["--agent-uid", "<uid>"]` — the same command-map shape Claude Code's entry uses. Edits to this file MUST preserve the user's comments and key ordering, which is why it is edited as TOML rather than reserialized.

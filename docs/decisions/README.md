@@ -18,7 +18,7 @@ Do **not** write an ADR for:
 
 - Library version bumps that don't change API surface.
 - Routine bug fixes.
-- Scope decisions that belong in a spec's `## Assumptions` or `## Out of Scope`.
+- Scope decisions that belong in a spec's `## Purpose` or in the requirement they bound.
 - Naming or formatting preferences.
 
 ## File naming and lifecycle

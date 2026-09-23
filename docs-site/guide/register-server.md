@@ -25,12 +25,12 @@ The server name (`filesystem` in this example) becomes the namespace prefix that
 Pass `--http` instead of `--stdio` for a server reached over HTTP. When a server needs a secret, store the secret first and hand `mcp add` its **reference**:
 
 ```bash
-printf 'ghp_xxxxxxxxxxxx' | coffer credentials set github-token
-coffer mcp add github --http https://api.github.com/mcp \
+printf 'Bearer ghp_xxxxxxxxxxxx' | coffer credentials set github-token
+coffer mcp add github --http https://api.githubcopilot.com/mcp/ \
   --credential "Authorization=github-token"
 ```
 
-`--credential ENV_OR_HEADER=CREDENTIAL_REF` is repeatable. It names the environment variable (stdio) or header (HTTP) the secret goes into; Coffer resolves the value only when it connects, and only the reference is stored with the server. To rotate the secret later, run `coffer credentials set github-token` again — the server keeps pointing at the same reference. See [Credentials](./credentials).
+`--credential ENV_OR_HEADER=CREDENTIAL_REF` is repeatable. It names the environment variable (stdio) or header (HTTP) the secret goes into; Coffer resolves the value only when it connects, and only the reference is stored with the server. The stored value is sent exactly as it is, so a header that expects a scheme carries it in the secret itself — `Bearer <token>` for GitHub, as above. To rotate the secret later, run `coffer credentials set github-token` again — the server keeps pointing at the same reference. See [Credentials](./credentials).
 
 ## Inspect and maintain a server
 

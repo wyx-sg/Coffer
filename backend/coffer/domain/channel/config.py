@@ -78,7 +78,7 @@ class _CommonChannelFields(BaseModel):
     # the channel's own: it is the framework-level per-agent scope on the
     # resource row (ADR per-agent-resource-scope), not a config field.
     #
-    # The ``machine_id`` (spec vault-sync "Identity is derived") of the ONE
+    # The ``machine_id`` (spec vault-sync "Derive machine identity from the host") of the ONE
     # machine whose daemon starts this channel's adapter. A channel travels
     # again — it is an ordinary synced resource document — and this field is
     # what makes that safe: a bot identity tolerates a single consumer, so the

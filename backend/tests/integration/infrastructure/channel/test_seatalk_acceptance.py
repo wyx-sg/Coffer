@@ -119,14 +119,31 @@ async def test_a_thread_file_and_a_forwarded_image_are_attached(
             },
         ],
     }
+    # Record the Authorization header of every media GET: the file links are
+    # auth-gated, and the scenario's contract is that the app token opens them.
+    download_auth: list[tuple[str, str]] = []
+
+    @fake_seatalk.app.middleware("http")
+    async def _record_download_auth(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        prefix = "/messaging/v2/file/"
+        if request.url.path.startswith(prefix):
+            file_id = request.url.path.removeprefix(prefix)
+            download_auth.append((file_id, request.headers.get("Authorization", "")))
+        return await call_next(request)
+
     adapter = make_seatalk_adapter(fake_seatalk, media_dir=tmp_path)
     try:
         items, atts = await adapter.fetch_thread("gid-1", "t1", limit=50)
     finally:
         await adapter.stop()
 
-    # Both downloaded with the app token, and attached.
+    # Both downloaded with the app token, and attached. The fake grants
+    # ``tok-<n>`` per token call; one grant means the adapter's own token.
     assert sorted(fake_seatalk.file_downloads) == ["fwdimg", "report1"]
+    assert fake_seatalk.token_calls == 1
+    assert sorted(download_auth) == [("fwdimg", "Bearer tok-1"), ("report1", "Bearer tok-1")]
     assert len(atts) == 2
     by_name = {a.filename: a for a in atts}
     assert "report.pdf" in by_name

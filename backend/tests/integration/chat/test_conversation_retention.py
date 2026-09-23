@@ -83,8 +83,15 @@ async def test_idle_conversations_are_archived_then_deleted_with_their_messages(
                 text(_CONV_SQL),
                 {"id": "old", "ts": _NOW - timedelta(days=60), "arch": _NOW - timedelta(days=31)},
             )
-            await s.execute(text(_MSG_SQL), {"id": "m-old", "conv": "old", "ts": _NOW})
-            await s.execute(text(_MSG_SQL), {"id": "m-idle", "conv": "idle", "ts": _NOW})
+            await s.execute(
+                text(_MSG_SQL), {"id": "m-old", "conv": "old", "ts": _NOW - timedelta(days=60)}
+            )
+            # The idle conversation's last message is as old as the conversation
+            # itself: "idle" means no new message for the window, so a message
+            # dated today would make it an active conversation, not an idle one.
+            await s.execute(
+                text(_MSG_SQL), {"id": "m-idle", "conv": "idle", "ts": _NOW - timedelta(days=8)}
+            )
             await s.commit()
 
         await svc.prune(now=_NOW)

@@ -440,7 +440,7 @@ a bot answering itself.
   conversation. That objection is answered rather than avoided by a binding
   (spec channels FR-026): the document travels, the adapter does not, and only
   the machine the document names starts one. The reversal is written up in spec
-  vault-sync's `## What does not sync` amendment.
+  vault-sync's "Keep reach machine-local" amendment.
 - Coffer now writes the vault without a human in the loop. That is the real
   cost of this decision, and it is why the pointer, the snapshot and the
   circuit breaker are normative rather than nice to have.

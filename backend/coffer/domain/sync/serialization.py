@@ -15,7 +15,7 @@ read the remote's history with their own git tools.
 **A resource's reach is not part of the document.** ``enabled`` and ``scope``
 read like two fields but they are one thing: the resource's *reach*, set by one
 control in the UI — whether this resource is live, and for which agents. Reach
-is machine-local (spec vault-sync ``## What does not sync``). It is set on the
+is machine-local (spec vault-sync "Keep reach machine-local"). It is set on the
 machine it applies to and each machine sets its own, so publishing it would let
 one machine silently re-answer a question another machine had already answered
 locally: the laptop that deliberately left a server dark would find it live

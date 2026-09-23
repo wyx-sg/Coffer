@@ -11,7 +11,9 @@ import yaml
 
 from coffer.main import app
 
-_OPENAPI_PATH = Path(__file__).resolve().parents[3] / "openspec/specs/mcp-gateway/contracts/api.openapi.yaml"
+_OPENAPI_PATH = (
+    Path(__file__).resolve().parents[3] / "openspec/specs/mcp-gateway/contracts/api.openapi.yaml"
+)
 
 
 def _contract_info() -> dict:

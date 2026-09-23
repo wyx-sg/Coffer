@@ -137,7 +137,7 @@ delivered(skill, agent)  ⟺  skill.enabled
 object to construct at the composition root and no machine id to bind into one;
 the delivery call sites call the predicate directly. The pair it reads is the
 skill's reach, and reach never leaves this machine (spec vault-sync
-`## What does not sync`) — so a skill dormant here and delivered on the laptop
+"Keep reach machine-local") — so a skill dormant here and delivered on the laptop
 is two rows with two answers, not one scope with two axes.
 
 The agent resource carries **no** skill-delivery policy: `follow_all_skills`
@@ -308,9 +308,9 @@ Stateless helpers beside `service.py` (same pattern as
 surfaces. The **read** helpers (`build_file_tree`, `read_skill_file`) back the
 in-app viewer and surface each node's absolute on-disk path so the UI can offer
 open-in-external-editor / reveal-in-file-manager affordances (spec.md
-`## Assumptions`). A
+`## Purpose`). A
 **write** helper (`write_skill_file`) is the only mutation here, and it serves
-the in-app editor and programmatic REST/CLI clients alike (FR-025) — one
+the in-app editor and programmatic REST/CLI clients alike ("Save an existing skill file conditionally") — one
 endpoint, one code path. The conditional half of that write (comparing the
 caller's `expected_fingerprint` against the bytes on disk and raising for a 409)
 lives one layer up in `content_ops.py`, so the containment helpers stay free of

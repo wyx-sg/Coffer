@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 
 from coffer.application.channel.selection_cards import model_card
+from coffer.infrastructure.channel import live_text
 from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.telegram_draft import TelegramDraftLiveText
 from coffer.infrastructure.channel.telegram_profile import BotIdentity
@@ -202,8 +203,11 @@ async def test_a_structured_reply_goes_out_as_rich_or_falls_back_to_html(
     ),
 )
 async def test_drafts_stream_dms_while_groups_edit_a_status_message(
-    fake_telegram: FakeTelegram,
+    fake_telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # No throttle, so the group's second snapshot is written as an edit now
+    # rather than dropped for arriving inside the 1.5 s window.
+    monkeypatch.setattr(live_text, "TELEGRAM_UPDATE_INTERVAL", 0.0)
     fake_telegram.supports_drafts = True
     adapter = make_telegram_adapter(fake_telegram)
     await adapter.start(RecordingCallbacks().as_callbacks())
@@ -217,6 +221,7 @@ async def test_drafts_stream_dms_while_groups_edit_a_status_message(
         group = await adapter.open_live_text("-100123", chat_kind="group", thread_id="8")
         assert isinstance(group, TelegramLiveText)
         await group.update("group progress")
+        await group.update("group progress, further")
         await group.close("group final")
     finally:
         await adapter.stop()
@@ -229,8 +234,15 @@ async def test_drafts_stream_dms_while_groups_edit_a_status_message(
     # The group used the edited status message: sent, then deleted on close.
     group_sends = [s for s in fake_telegram.calls_for("sendMessage") if s["chat_id"] == "-100123"]
     assert [s["text"] for s in group_sends] == ["group progress"]
+    assert group_sends[0]["message_thread_id"] == 8
+    # The next snapshot rewrote THAT message in place: the fake numbers sends
+    # from 101 and the DM sent none, so the status message is message 101.
+    edits = fake_telegram.calls_for("editMessageText")
+    assert [(e["chat_id"], e["message_id"], e["text"]) for e in edits] == [
+        ("-100123", "101", "group progress, further")
+    ]
     deletes = fake_telegram.calls_for("deleteMessage")
-    assert [d["chat_id"] for d in deletes] == ["-100123"]
+    assert [(d["chat_id"], d["message_id"]) for d in deletes] == [("-100123", "101")]
 
 
 @pytest.mark.acceptance(

@@ -8,6 +8,7 @@ the composition root wires together.
 
 from __future__ import annotations
 
+import asyncio
 import pathlib
 import sqlite3
 from collections.abc import AsyncIterator
@@ -66,6 +67,15 @@ async def _config(c: AsyncClient) -> dict:
     r = await c.get("/internal-engine-config")
     assert r.status_code == 200, r.text
     return r.json()
+
+
+def _store_timeout(tmp_path: pathlib.Path, seconds: int) -> None:
+    conn = sqlite3.connect(tmp_path / "c.db", timeout=30)
+    try:
+        conn.execute("UPDATE internal_engine_config SET model_timeout_s = ?", (seconds,))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def _row(tmp_path: pathlib.Path) -> dict:
@@ -246,12 +256,10 @@ async def test_a_stored_bound_out_of_range_is_clamped_by_a_pass_and_refused_at_t
     # A row a surface would never have written — an older build, a hand edit.
     assert (await api.put("/internal-engine-config", json={"model": "m"})).status_code == 200
     for stored, runs_under in ((1, MIN_MODEL_TIMEOUT_S), (6000, MAX_MODEL_TIMEOUT_S)):
-        conn = sqlite3.connect(tmp_path / "c.db")
-        try:
-            conn.execute("UPDATE internal_engine_config SET model_timeout_s = ?", (stored,))
-            conn.commit()
-        finally:
-            conn.close()
+        # Off the event loop: the app's own background passes write this file
+        # through the loop, and a blocking write here would wait on a lock only
+        # the loop it is blocking can release.
+        await asyncio.to_thread(_store_timeout, tmp_path, stored)
         assert await read_internal_engine_timeout() == stored
         # The reader the passes are wired with, read per call: clamped, not raised.
         assert await resolve_timeout(read_internal_engine_timeout) == float(runs_under)

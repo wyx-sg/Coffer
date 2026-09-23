@@ -25,7 +25,9 @@ import yaml
 
 from coffer.main import app
 
-_CHAT_OPENAPI_PATH = Path(__file__).resolve().parents[3] / "openspec/specs/chat/contracts/api.openapi.yaml"
+_CHAT_OPENAPI_PATH = (
+    Path(__file__).resolve().parents[3] / "openspec/specs/chat/contracts/api.openapi.yaml"
+)
 
 
 @pytest.fixture(scope="module")

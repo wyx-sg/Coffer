@@ -238,7 +238,7 @@ def write_idle_shutdown_hours(hours: float | None) -> None:
 
 # --- machine identity -------------------------------------------------------
 #
-# A machine has two separate things (spec vault-sync "Identity is derived, the
+# A machine has two separate things (spec vault-sync "Derive machine identity from the host", the
 # name is a label"), and this file holds them for opposite reasons.
 #
 # ``machine_name`` is a label the user may change at any time. It lives here

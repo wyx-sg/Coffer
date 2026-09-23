@@ -48,7 +48,7 @@ The webview's content-security policy MUST permit loopback origins on any port a
 - **GIVEN** the webview's content-security policy,
 - **WHEN** its directives are read,
 - **THEN** `connect-src` admits a loopback origin with a wildcarded port and the shell's IPC scheme, and no other host,
-- **AND** scripts load only from the bundle itself (`'self'`), styles only from the bundle or inline in it, and every other fetch falls back to `'self'`.
+- **AND** scripts load only from the bundle itself (`'self'`), styles only from the bundle or inline in it, images only from the bundle, inline `data:` URLs or the shell's asset protocol (`asset:`, `http://asset.localhost`), fonts only from the bundle or inline `data:` URLs, and every other fetch falls back to `'self'`.
 
 ### Requirement: Supply the page its daemon connection over IPC
 The shell MUST supply the frontend with the running daemon's base URL and live API token through an IPC command, and MUST NOT hold up the first render waiting for it. Blocking would contradict "Host the UI locally in an application window": the handshake spawns a daemon and polls when none is running, so awaiting it would leave every launch-after-reboot on an empty window for as long as that takes, which is the failure hosting the UI locally exists to prevent.

@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 
 from coffer.application.channel.selection_cards import agent_card
+from coffer.infrastructure.channel import live_text
 from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.telegram_draft import TelegramDraftLiveText
 
@@ -47,8 +48,11 @@ async def test_a_rejected_capability_latches_off_and_delivery_continues(
     scenario="a chat without the platform streaming surface keeps its old live mechanism",
 )
 async def test_the_streaming_surface_is_used_only_in_the_chats_that_have_it(
-    fake_telegram: FakeTelegram,
+    fake_telegram: FakeTelegram, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # No throttle, so the group's second snapshot is written as an edit now
+    # rather than dropped for arriving inside the 1.5 s window.
+    monkeypatch.setattr(live_text, "TELEGRAM_UPDATE_INTERVAL", 0.0)
     fake_telegram.supports_drafts = True  # drafts exist, for private chats only
     adapter = make_telegram_adapter(fake_telegram)
     await adapter.start(RecordingCallbacks().as_callbacks())
@@ -68,9 +72,15 @@ async def test_the_streaming_surface_is_used_only_in_the_chats_that_have_it(
     drafts = fake_telegram.calls_for("sendMessageDraft")
     assert [d["text"] for d in drafts] == ["thinking in the DM"]
     assert drafts_after_dm == 1  # the group added no streaming-surface call
-    # The group's progress used the edited status message instead.
-    assert fake_telegram.calls_for("sendMessage")[0]["text"] == "thinking in the group"
-    assert str(fake_telegram.calls_for("sendMessage")[0]["chat_id"]) == "-100123"
+    # The group's progress used the edited status message instead: one status
+    # message sent, then rewritten in place with the next snapshot. The fake
+    # numbers sends from 101 and the DM sent none, so that message is message 101.
+    sends = fake_telegram.calls_for("sendMessage")
+    assert [(s["chat_id"], s["text"]) for s in sends] == [("-100123", "thinking in the group")]
+    edits = fake_telegram.calls_for("editMessageText")
+    assert [(e["chat_id"], e["message_id"], e["text"]) for e in edits] == [
+        ("-100123", "101", "thinking in the group, still")
+    ]
 
 
 @pytest.mark.acceptance(

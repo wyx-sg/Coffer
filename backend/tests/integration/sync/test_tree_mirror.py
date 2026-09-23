@@ -1,4 +1,6 @@
-"""What the tree mirror will and will not carry (spec vault-sync ``## What syncs``).
+"""What the tree mirror will and will not carry.
+
+Spec vault-sync "Converge knowledge files and the skill store".
 
 The mirrored trees are the vault's own directories, so almost everything under
 them is source of truth — but not a symlink, whose target is not the vault's,

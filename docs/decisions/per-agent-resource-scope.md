@@ -82,7 +82,7 @@ resource's **reach**, and reach is machine-local.
 2. **Reach is machine-local.** `scope` and `enabled` are one thing — the
    resource's *reach*, written by one control — and neither is serialized into
    the sync bundle or written by a converge round (spec
-   [vault-sync](../../openspec/specs/vault-sync/spec.md) `## What does not sync`). What
+   [vault-sync](../../openspec/specs/vault-sync/spec.md) "Keep reach machine-local"). What
    travels between machines is the resource: what it *is*, and how it is
    configured. What it reaches, here, stays here.
 

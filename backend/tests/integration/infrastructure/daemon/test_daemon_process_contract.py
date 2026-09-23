@@ -56,13 +56,17 @@ def test_a_spawned_daemon_is_detached_and_writes_to_the_daemon_log(
     # Stand in for the daemon: a real child process that reports what it was
     # handed, then refuses on stderr the way a daemon with a squatted port does.
     monkeypatch.setattr(spawn, "daemon_spawn_command", lambda: [sys.executable, "-c", _CHILD])
+    # An earlier daemon's lines are already in the log; a spawn appends to them.
+    log = log_dir / "daemon.log"
+    log_dir.mkdir()
+    earlier = "an earlier daemon's last line\n"
+    log.write_text(earlier)
 
     proc = spawn.spawn_detached_daemon()
     assert proc.wait(timeout=20) == 0
 
-    log = log_dir / "daemon.log"
-    assert log.exists(), "the spawned daemon's output must land in daemon.log"
     text = log.read_text()
+    assert text.startswith(earlier), "the spawn must append to daemon.log, not truncate it"
     assert "stdin_empty=True" in text, "the daemon must be given no stdin"
     sid_line = next(line for line in text.splitlines() if line.startswith("sid="))
     child_sid = int(sid_line.removeprefix("sid="))

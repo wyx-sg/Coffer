@@ -377,6 +377,12 @@ resumes the held queue.
 - **THEN** the turn ends as interrupted and the queued message is held, and the
   peer's next message resumes the queue in order
 
+#### Scenario: interrupting a turn pauses the pending queue
+- **GIVEN** a running turn with messages queued behind it,
+- **WHEN** the turn is interrupted,
+- **THEN** the current turn stops, and the queued messages are held rather than
+  auto-run until they are resumed or dropped.
+
 ### Requirement: Keep partial output when a turn is interrupted or fails
 An interrupted turn — user interrupt, adapter failure, or daemon restart — MUST
 leave the partial assistant message persisted and marked complete rather than
@@ -653,11 +659,11 @@ queue on interrupt": the turn stops with its partial output kept and persisted,
 and the pending queue is **paused** rather than auto-advanced into the turn
 that was just stopped.
 
-#### Scenario: interrupting a turn pauses the pending queue
-- **GIVEN** a running turn with messages queued behind it,
-- **WHEN** the turn is interrupted,
-- **THEN** the current turn stops, and the queued messages are held rather than
-  auto-run until they are resumed or dropped.
+#### Scenario: the page stops a turn another surface started
+- **GIVEN** a turn started by another surface, with a message queued behind it,
+- **WHEN** the page calls `POST .../interrupt` for that conversation,
+- **THEN** the turn stops with its partial output persisted,
+- **AND** the queued message is held rather than auto-run.
 
 ### Requirement: Render tool calls as cards
 The message thread MUST render a turn's tool calls as their own cards rather

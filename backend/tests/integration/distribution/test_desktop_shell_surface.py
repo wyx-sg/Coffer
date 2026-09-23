@@ -225,6 +225,19 @@ def test_the_content_policy_admits_any_loopback_port_and_only_bundled_code() -> 
                 f"{directive} admits the remote origin {src!r}; the page loads nothing remote"
             )
 
+    # Every directive, allowlisted: a directive that is not named here falls
+    # back to default-src, so an added one (object-src, frame-src, …) or a
+    # widened source list is a change to review, not something to slip through.
+    assert csp == {
+        "default-src": ["'self'"],
+        "connect-src": ["'self'", "http://127.0.0.1:*", "ipc:", "http://ipc.localhost"],
+        "script-src": ["'self'"],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        # Inline data images and the shell's asset protocol, nothing remote.
+        "img-src": ["'self'", "data:", "asset:", "http://asset.localhost"],
+        "font-src": ["'self'", "data:"],
+    }
+
 
 _APP_QUARANTINE_STEP = "xattr -dr com.apple.quarantine /Applications/Coffer.app"
 

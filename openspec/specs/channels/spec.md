@@ -121,11 +121,6 @@ pairing again rebinds the channel to the new sender.
 - **THEN** the sender becomes the channel's peer and receives a confirmation
 - **AND** the pairing is audited and the code cannot be reused
 
-#### Scenario: ignore messages from strangers
-- **GIVEN** a paired channel
-- **WHEN** a different account messages the bot
-- **THEN** no reply is sent and no turn or conversation is created
-
 #### Scenario: an expired or wrong code does not pair
 - **GIVEN** an issued pairing code
 - **WHEN** a sender submits a wrong guess repeatedly or the code has expired
@@ -343,6 +338,11 @@ envelopes, and inbound carries the sender's identity for this gate.
 - **GIVEN** a peer paired with a stored sender identity
 - **WHEN** a message arrives with the same chat id but a different sender id
 - **THEN** no reply is sent and no turn is started
+
+#### Scenario: ignore messages from strangers
+- **GIVEN** a paired channel
+- **WHEN** a different account messages the bot
+- **THEN** no reply is sent and no turn or conversation is created
 
 ### Requirement: Summarise only a turn that did not end normally
 After a turn that did not end normally the channel MUST send one compact
@@ -825,7 +825,7 @@ identity — a polled bot, a webhook endpoint, a held WebSocket — tolerates
 exactly ONE consumer, so "which machine answers this bot" must have exactly one
 answer, and that answer is written down. Its configuration carries `runs_on`,
 the `machine_id` of the machine whose daemon starts this channel's adapter
-(spec `vault-sync`, "Identity is derived"). It is configuration and not a
+(spec `vault-sync`, "Derive machine identity from the host"). It is configuration and not a
 property of the row, because it MUST travel with the channel document — every
 machine holding the document reads the same name, and every machine but one
 finds it is not being named; reach MUST NOT travel and MUST NOT be made to carry
@@ -880,7 +880,7 @@ this.
   validating that here would hold a good document out of the registry for a
   fault on nobody's machine.
 - A channel's peer pairings MUST travel with the channel as synced state (spec
-  `vault-sync`, "What syncs"), because a channel that travels without them makes
+  `vault-sync`, "Carry channel pairings as platform identity"), because a channel that travels without them makes
   the owner re-pair from their phone every time it moves, and a rebind is meant
   to be one click. What travels is platform identity — chat id, sender id,
   display name, the chat's sticky agent. The active conversation pointer does

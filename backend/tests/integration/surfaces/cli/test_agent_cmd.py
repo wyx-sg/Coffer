@@ -173,6 +173,7 @@ def test_agent_list_table_default(agent_cli_daemon):
     assert "cur" in result.output
 
 
+@pytest.mark.acceptance(spec="agent-registry", scenario="agent reads print JSON with --json")
 def test_agent_list_shows_registered_json(agent_cli_daemon):
     """`agent list --json` includes a previously-registered agent."""
     config_dir = agent_cli_daemon / "cfg"
@@ -287,6 +288,7 @@ def test_agent_show_existing_text(agent_cli_daemon):
     assert keys[:3] == ["name", "uid", "type"], result.output
 
 
+@pytest.mark.acceptance(spec="agent-registry", scenario="agent reads print JSON with --json")
 def test_agent_show_existing_json(agent_cli_daemon):
     config_dir = agent_cli_daemon / "cfg"
     config_dir.mkdir()

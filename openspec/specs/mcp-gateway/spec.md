@@ -259,7 +259,7 @@ and the routes that write it are [resource-framework](../resource-framework/spec
   editable.
 - The identity of the asking session is the only input the gate takes. Scope names agents and nothing else,
   because a server's reach is machine-local and never arrives from elsewhere
-  ([vault-sync](../vault-sync/spec.md), "What does not sync") — a server that should not run here is simply
+  ([vault-sync](../vault-sync/spec.md), "Keep reach machine-local") — a server that should not run here is simply
   not enabled here.
 - Scope MUST NOT gate spawning: the supervisor holds no policy and has no session identity to test, so the
   decision is enforced above it. Every spawn path runs downstream of the gate (the listing fan-out spawns only
@@ -278,7 +278,7 @@ and the routes that write it are [resource-framework](../resource-framework/spec
 ### Requirement: Take the agent identity from the handshake
 The system MUST accept a self-reported agent identity at MCP handshake as the agent's **uid**
 (`params._meta["coffer/agent-uid"]`, alongside the existing `coffer/cwd` key), written into a managed agent's
-shim invocation as `coffer-mcp-shim --agent-uid <uid>` by the Coffer-MCP install ([agent-registry](../agent-registry/spec.md) "List the MCP entries in the agent's own config files") —
+shim invocation as `coffer-mcp-shim --agent-uid <uid>` by the Coffer-MCP install ([agent-registry](../agent-registry/spec.md) "Install Coffer's MCP server into an agent in one action") —
 the uid rather than the name, because the entry is written once into a file Coffer does not revisit and a name
 goes stale on the first rename. A session's reported identity is carried for the life of that connection and
 used for every subsequent list and call.

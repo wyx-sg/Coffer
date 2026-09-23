@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-12
 **Deciders**: Yuxing Wu
-**Related**: spec [channels/seatalk](../../openspec/specs/channels/seatalk/spec.md) (FR-004, FR-007);
+**Related**: spec [channels/seatalk](../../openspec/specs/channels/seatalk/spec.md) ("Carry no ingress fields on websocket delivery", "Load the websocket client library from an operator-supplied directory");
 [Channel Adapter Framework](channel-adapter-framework.md);
 [Daemon Detect-or-Spawn](daemon-detect-or-spawn.md)
 

@@ -137,7 +137,7 @@ changing it is a modification of one file
 Every kind MUST travel **except one it declares for itself**: a kind sets
 `converges=False` when its rows are derived on each machine rather than
 authored by the user, and `memory` is the only kind that does
-([memory](../memory/spec.md) "Distil incrementally in two stages"). The rule MUST live on the kind rather than as a list in the
+([memory](../memory/spec.md) "Keep the memory tree derived and local"). The rule MUST live on the kind rather than as a list in the
 sync layer; the exporter MUST withhold such rows and the applier MUST ignore
 such a document, so a machine on an older build cannot deliver one either. A
 kind that travels MAY additionally declare that one of its **rows** does not, on

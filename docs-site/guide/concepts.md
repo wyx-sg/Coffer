@@ -20,7 +20,7 @@ The framework is kind-agnostic: adding a new kind in the future requires no chan
 
 ### Working with any resource
 
-Each kind is **created** through its own command — `coffer mcp add`, `coffer skill add`, `coffer agent add`, … — because only the kind knows what a valid one looks like: a skill needs its master folder, an agent has to be found on disk, a channel needs its binding checked. That is why there is no `coffer resource create`. From the moment a resource exists, everything else goes through one kind-agnostic surface, addressed by kind and name:
+Each kind is **created** through its own command — `coffer mcp add`, `coffer skill import`, `coffer agent add`, … — because only the kind knows what a valid one looks like: a skill needs its master folder, an agent has to be found on disk, a channel needs its binding checked. That is why there is no `coffer resource create`. From the moment a resource exists, everything else goes through one kind-agnostic surface, addressed by kind and name:
 
 ```bash
 coffer resource list                      # every kind; --kind agent for one, --json for scripts

@@ -9,7 +9,8 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { acceptance } from "@/test/acceptance";
 import { render, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, matchRoutes } from "react-router-dom";
+import { isValidElement } from "react";
+import { MemoryRouter, Navigate, matchRoutes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -85,6 +86,13 @@ function leafRoute(path: string): string | undefined {
   return matches[matches.length - 1]?.route.path;
 }
 
+/** Whether the leaf route a path resolves to only redirects somewhere else. */
+function isRedirect(path: string): boolean {
+  const matches = matchRoutes(routes, path) ?? [];
+  const element = matches[matches.length - 1]?.route.element;
+  return isValidElement(element) && element.type === Navigate;
+}
+
 function groupLabels(): string[] {
   return Array.from(document.querySelectorAll(".nav-group-label")).map((n) => n.textContent ?? "");
 }
@@ -104,11 +112,15 @@ acceptance("web-ui", "every resource entry opens a list page of its own", () => 
 
   const hrefs = group("Resources").map(([, href]) => href!);
   expect(hrefs).toHaveLength(6);
+  // The check below can tell a redirect apart: the retired /resources is one.
+  expect(isRedirect("/resources")).toBe(true);
   const resolved = hrefs.map((href) => leafRoute(href));
   // Each entry is its own list route — the path itself, never the catch-all.
   resolved.forEach((route, i) => {
     expect(route).not.toBe("*");
     expect(`/${route}`).toBe(hrefs[i]);
+    // A route that only redirects is not a list page of its own.
+    expect(isRedirect(hrefs[i])).toBe(false);
   });
   expect(new Set(resolved).size).toBe(hrefs.length);
 });

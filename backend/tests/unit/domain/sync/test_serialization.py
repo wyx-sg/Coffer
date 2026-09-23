@@ -7,7 +7,7 @@ is what lets a rename cross the remote as a modification of one file.
 
 It is *not* the resource's reach: ``enabled`` and ``scope`` are one decision the
 user makes per machine, on the machine, and they no longer leave it (spec
-vault-sync ``## What does not sync``). That absence is asserted here rather than
+vault-sync "Keep reach machine-local"). That absence is asserted here rather than
 assumed, because it is the whole of the decision at this layer — and so, now, is
 its mirror image: a document that spells one is refused like any other document
 carrying a field this layout does not have.

@@ -1,4 +1,4 @@
-"""HTTP contract tests for /api/v1/sync (spec vault-sync ``## Surfaces``).
+"""HTTP contract tests for /api/v1/sync (spec vault-sync "Cover the same operations over HTTP").
 
 Every route is driven against a **real** :class:`ConvergeService` built by
 ``tests/integration/sync/harness.py``: two whole vaults, two SQLite databases,
@@ -11,7 +11,7 @@ Nothing here may reach the developer's real ``~/.coffer``: the harness pins
 every root under ``tmp_path`` and injects the machine id, and the two roots the
 production code would otherwise read from the environment are pinned as well.
 
-There is no ``/export`` or ``/import`` any more (spec ``## Out of scope``);
+There is no ``/export`` or ``/import`` any more (spec vault-sync ``## Purpose``);
 that they are gone is asserted, and nothing else in this file mentions them.
 """
 
@@ -924,7 +924,7 @@ async def test_adopt_joins_as_returning_when_the_registry_holds_this_machine(cli
     a, _b = fleet
     a.write_knowledge("notes", "one", "first note\n")
     await _configure(client, a)
-    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    assert (await client.post("/api/v1/sync/adopt", json={})).json()["status"] == "ok"
     # The second round is what writes the reached commit into the descriptor.
     await client.post("/api/v1/sync/run", json={})
     assert "last_converged_commit: " in (await a.remote_text(f"machines/{MACHINE_A}.yaml") or "")
@@ -965,7 +965,7 @@ async def test_adopt_refuses_a_returning_machine_whose_base_left_the_history(
     a, _b = fleet
     a.write_knowledge("notes", "one", "first note\n")
     await _configure(client, a)
-    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    assert (await client.post("/api/v1/sync/adopt", json={})).json()["status"] == "ok"
     await client.post("/api/v1/sync/run", json={})
     _rewrite_published_base(a.remote_url, MACHINE_A, tmp_path)
     a.state.forget()
@@ -1000,10 +1000,10 @@ async def test_adopt_refuses_a_returning_machine_whose_base_left_the_history(
 @pytest.mark.acceptance(spec="vault-sync", scenario="a peer holding another master key is flagged")
 async def test_the_published_fingerprint_is_the_one_the_key_route_returns(client, fleet) -> None:
     a, b = fleet
-    await b.converge()
+    assert (await b.adopt()).status == "ok"
     await b.converge()
     await _configure(client, a)
-    assert (await client.post("/api/v1/sync/run", json={})).json()["status"] == "ok"
+    assert (await client.post("/api/v1/sync/adopt", json={})).json()["status"] == "ok"
 
     fingerprint = (await client.get("/api/v1/sync/key/fingerprint")).json()["fingerprint"]
     descriptor = yaml.safe_load(await a.remote_text(f"machines/{MACHINE_A}.yaml") or "")

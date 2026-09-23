@@ -1,4 +1,6 @@
-"""Channel pairings as a synced state area (spec vault-sync ``## What syncs``).
+"""Channel pairings as a synced state area.
+
+Spec vault-sync "Carry channel pairings as platform identity".
 
 A channel travels now, so rebinding it to another machine is a thing that
 happens — and a channel that arrived without its pairings would make the owner

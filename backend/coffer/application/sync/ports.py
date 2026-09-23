@@ -31,7 +31,7 @@ class ImportGate(Protocol):
     A gate sees the config and nothing else. It used to be handed the document's
     activation scope as well, so a scope-aware gate could wave a doc that was
     dormant here past a machine-local precondition — but reach no longer travels
-    (spec vault-sync ``## What does not sync``), and a gate that wants that
+    (spec vault-sync "Keep reach machine-local"), and a gate that wants that
     leniency now reads this machine's own row for it, which is the only place
     the answer was ever a fact about this machine."""
 

@@ -134,8 +134,8 @@ ref spelling the name.
 ### Requirement: Project into Claude Code settings without clobbering them
 The system MUST project into `~/.claude/settings.json` through
 [agent-registry](../agent-registry/spec.md)'s config-write machinery — the atomic write with its
-rotated `.bak` ([agent-registry](../agent-registry/spec.md) "Uninstall Coffer's MCP server from an agent") and the fingerprint that refuses a write onto content that
-changed underneath it ([agent-registry](../agent-registry/spec.md) "Carry reasoning-effort levels beside the model id") — merging only the managed keys and preserving
+rotated `.bak` ([agent-registry](../agent-registry/spec.md) "Write config files atomically with a backup and an audit entry") and the fingerprint that refuses a write onto content that
+changed underneath it ([agent-registry](../agent-registry/spec.md) "Reject stale config-file writes by fingerprint") — merging only the managed keys and preserving
 everything else. Coffer MERGES into the user's existing file and never replaces it; a file that does
 not exist is created with only the managed keys, and activating a connection MUST NOT touch any key
 outside the managed set. The managed key set per agent and the ownership markers that make

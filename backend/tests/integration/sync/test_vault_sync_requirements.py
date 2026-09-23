@@ -94,7 +94,7 @@ async def test_machine_local_files_never_reach_the_working_tree(pair) -> None:
     (a.root / "memory" / "projects" / "p1" / "fact.md").write_text("fact\n", encoding="utf-8")
     a.write_knowledge("notes", "kept", "kept\n")
 
-    run = await a.converge()
+    run = await a.adopt()
 
     assert run.ok, (run.status, run.error)
     tree = a.tree_paths()
@@ -113,7 +113,7 @@ async def test_machine_local_files_never_reach_the_working_tree(pair) -> None:
 async def test_a_round_diffs_from_the_pointer_stored_on_this_machine(pair) -> None:
     a, _b = pair
     a.write_knowledge("notes", "first", "first\n")
-    await a.converge()
+    await a.adopt()
     await a.converge()
     a.write_knowledge("notes", "second", "second\n")
     await a.converge()

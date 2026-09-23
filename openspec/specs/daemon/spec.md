@@ -427,7 +427,7 @@ argument vector and no shell interpolation, and returns `{ available, path }`: `
 when the host has no native dialog tool, `available=true` with `path=null` on cancel, otherwise the
 chosen absolute path. It creates nothing and is guarded by the same loopback + token auth as every
 daemon route. What a caller does when `available=false` is that caller's obligation — for the agent
-config-dir flow, [agent-registry](../agent-registry/spec.md) "Degrade a facet to a parse-error state when its config file is unparseable".
+config-dir flow, [agent-registry](../agent-registry/spec.md) "Offer a folder picker for a custom config directory".
 
 Native open-file and save-file dialogs are not proxied: `POST /api/v1/fs/pick-file` and
 `POST /api/v1/fs/save-file` do not exist. The browser already has both — `<a download>` saves a
@@ -455,7 +455,7 @@ The daemon MUST also expose `GET /api/v1/fs/editors`, which enumerates common GU
 as installed on the host (macOS app-bundle names for `open -a`; Linux/Windows commands on `PATH`).
 It returns each editor's display label and the launcher `value` accepted by `/fs/open`'s `with`,
 reads nothing but app presence, and is guarded by the same loopback + token auth. Its two consumers
-are [agent-registry](../agent-registry/spec.md) "Report no default effort the runtime does not publish" and the web-ui spec's preferred-editor setting.
+are [agent-registry](../agent-registry/spec.md) "Open config files in an external editor or reveal them" and the web-ui spec's preferred-editor setting.
 
 #### Scenario: a path that is not absolute is refused before anything is launched
 - **GIVEN** a relative path, and an absolute path that does not exist,

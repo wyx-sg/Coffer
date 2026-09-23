@@ -26,7 +26,7 @@ import os
 import pathlib
 import time
 import uuid
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
@@ -216,6 +216,164 @@ async def test_export_writes_every_area_and_counts_it(vault: VaultMachine) -> No
     }
     assert summary.path == str(root)
     assert summary.failures == []
+
+
+def _claude_plugin_inventory(home: pathlib.Path) -> None:
+    """One installed Claude Code plugin under ``home/.claude``, as the CLI writes it."""
+    plugins = home / ".claude" / "plugins"
+    install = plugins / "cache" / "mk" / "here" / "1.0.0"
+    install.mkdir(parents=True)
+    (plugins / "installed_plugins.json").write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "plugins": {
+                    "here@mk": [{"scope": "user", "installPath": str(install), "version": "1.0.0"}]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (plugins / "known_marketplaces.json").write_text(
+        json.dumps({"mk": {"source": {"source": "github", "repo": "owner/mk"}}}), encoding="utf-8"
+    )
+    (home / ".claude" / "settings.json").write_text(
+        json.dumps({"enabledPlugins": {"here@mk": True}}), encoding="utf-8"
+    )
+
+
+#: Every shared state area the requirement names, by its directory under ``state/``.
+_SHARED_AREAS = {"settings", "mcp-preferences", "agent-plugins", "channel-peers"}
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="each shared state area reaches the working tree"
+)
+async def test_every_production_state_area_reaches_the_working_tree(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The areas the real daemon registers, each holding a non-default choice.
+
+    The harness above carries a stand-in area; this boots ``create_app`` so the
+    providers are the ones the composition root actually collected. An area
+    whose wiring stops registering its provider, or whose provider stops
+    exporting, leaves its ``state/<area>/`` directory empty and fails here.
+    """
+    from httpx import ASGITransport, AsyncClient
+
+    from coffer.application.channel.store_ports import ChannelPeer
+    from coffer.application.sync.exporter import SyncExporter
+    from coffer.infrastructure.channel.persistence import ChannelPeerRepo
+    from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceRepo
+    from coffer.infrastructure.persistence.engine import (
+        create_async_engine_with_pragmas,
+        session_maker,
+    )
+    from coffer.infrastructure.sync.bundle import Bundle
+    from coffer.surfaces.http.app import create_app
+    from coffer.surfaces.http.auth import set_active_token
+    from coffer.surfaces.http.dependencies import get_resource_service
+
+    home = tmp_path / "home"
+    home.mkdir()
+    db_url = f"sqlite+aiosqlite:///{tmp_path / 'c.db'}"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("COFFER_DB_URL", db_url)
+    monkeypatch.setenv("COFFER_PORT_RANGE_START", "61330")
+    monkeypatch.setenv("COFFER_PORT_RANGE_END", "61339")
+    monkeypatch.setenv("COFFER_MEMORY_ROOT", str(tmp_path / "memory"))
+    shim = tmp_path / "coffer-mcp-shim"
+    shim.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(shim))
+    _claude_plugin_inventory(home)
+
+    app = create_app()
+    set_active_token("t")
+    engine = create_async_engine_with_pragmas(db_url)
+    try:
+        async with (
+            app.router.lifespan_context(app),
+            AsyncClient(
+                transport=ASGITransport(app),
+                base_url="http://127.0.0.1/api/v1",
+                headers={"X-Coffer-Token": "t"},
+            ) as api,
+        ):
+            providers = app.state.sync_contributions.state_providers
+            assert {p.area for p in providers} == _SHARED_AREAS
+
+            resources = get_resource_service()
+            sm = session_maker(engine)
+            # settings: an engine model is a choice a fresh machine does not have.
+            r = await api.put("/internal-engine-config", json={"model": "m"})
+            assert r.status_code == 200, r.text
+            # agent-plugins: an agent whose config dir holds a plugin.
+            r = await api.post("/agents", json={"type": "claude_code", "name": "cc"})
+            assert r.status_code == 201, r.text
+            agent_uid = r.json()["uid"]
+            # mcp-preferences: one capability switched off on one server.
+            server = await resources.register(
+                kind="mcp_server",
+                name="files",
+                config={"transport": {"type": "http", "url": "http://127.0.0.1:9/mcp"}},
+                actor="t",
+            )
+            seen = datetime.now(tz=UTC)
+            await MCPCapabilityPreferenceRepo(sm).insert(server.id, "tool", "x", False, seen, seen)
+            # channel-peers: a channel bound to no machine (so nothing starts)
+            # with one paired chat.
+            r = await api.post(
+                "/credentials", json={"ref": "channel/tg/bot-token", "value": "123:abc"}
+            )
+            assert r.status_code == 204, r.text
+            channel = await resources.register(
+                kind="channel",
+                name="tg",
+                config={
+                    "channel_type": "telegram",
+                    "bot_token_ref": "channel/tg/bot-token",
+                    "default_agent": agent_uid,
+                },
+                actor="t",
+            )
+            await ChannelPeerRepo(sm).upsert(
+                ChannelPeer(
+                    resource_id=channel.id, chat_id="c1", display_name="Owner", paired_at=seen
+                )
+            )
+
+            worktree = tmp_path / "worktree"
+            worktree.mkdir()
+            exporter = SyncExporter(resources, _NoCredentials(), providers, home=str(home))
+            summary = await exporter.export(Bundle(worktree, trees=[]), with_credentials=False)
+    finally:
+        await engine.dispose()
+        set_active_token(None)
+
+    assert summary.failures == []
+    counts = _areas(summary)
+    for area in _SHARED_AREAS:
+        written = sorted(p for p in (worktree / "state" / area).rglob("*") if p.is_file())
+        assert written, f"state/{area}/ is empty"
+        assert counts[f"state/{area}"] == len(written) == 1, area
+    assert _doc(worktree / "state" / "settings" / "internal-engine.yaml")["model"] == "m"
+    assert _doc(worktree / "state" / "mcp-preferences" / f"{server.uid}.yaml")["disabled"] == [
+        {"type": "tool", "key": "x"}
+    ]
+    plugins = _doc(next((worktree / "state" / "agent-plugins").rglob("*.yaml")))
+    assert [p["id"] for p in plugins["plugins"]] == ["here@mk"]
+    peers = _doc(next((worktree / "state" / "channel-peers").rglob("*.yaml")))
+    assert (peers["channel_uid"], peers["chat_id"]) == (channel.uid, "c1")
+
+
+class _NoCredentials:
+    """The export is asked for no credentials, so the port is never read."""
+
+    def list_refs(self) -> list[str]:
+        raise AssertionError("credentials were not requested")
+
+    def read_ciphertext(self, ref: str) -> bytes | None:
+        raise AssertionError("credentials were not requested")
 
 
 async def test_export_leaves_reach_behind(vault: VaultMachine) -> None:
