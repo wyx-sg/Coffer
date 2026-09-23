@@ -3,7 +3,7 @@
 **Status**: Proposed
 **Date**: 2026-06-13
 **Deciders**: Yuxing Wu
-**Related**: `.specify/memory/constitution.md`, [`.agents/testing.md`](../../.agents/testing.md), [`.agents/workflow.md`](../../.agents/workflow.md), [Channel Adapter Framework](channel-adapter-framework.md), [Vault Export and Import](vault-sync.md), specs `channels` / `vault-sync`
+**Related**: [`docs/principles.md`](../principles.md), [`.agents/testing.md`](../../.agents/testing.md), [`.agents/workflow.md`](../../.agents/workflow.md), [Channel Adapter Framework](channel-adapter-framework.md), [Vault Export and Import](vault-sync.md), specs `channels` / `vault-sync`
 
 ## Context
 
@@ -19,8 +19,8 @@ conflating them has cost us clarity:
    it buildable/testable/runnable in a controlled, repeatable, observable way
    (Makefile `verify`, the 4 test tiers, pre-commit, CI). For humans and CI.
 3. **Agent-facing harness (③)** — the scaffolding that lets a coding *agent* work
-   in this repo reliably and safely (AGENTS.md, `.agents/*.md`, `.specify/memory`,
-   ADRs). The interface between ① and our project knowledge.
+   in this repo reliably and safely (AGENTS.md, `.agents/*.md`, `docs/principles.md`,
+   `docs/architecture.md`, ADRs). The interface between ① and our project knowledge.
 
 The unifying principle across all three is one line: **make the right thing the
 easy thing; make feedback fast, deterministic, and legible.** The best state is
@@ -30,7 +30,7 @@ that humans, CI, and agents all call.
 Coffer's ② (feedback) and ③ (knowledge) layers are already strong: a shared
 `make verify`, integration-heavy 4-tier tests with mechanically-enforced unit
 purity, pre-commit (ruff/prettier/commitlint), CI, and a best-in-class knowledge
-surface (AGENTS.md + `.agents/*.md` + constitution/architecture/roadmap + the
+surface (AGENTS.md + `.agents/*.md` + principles/architecture/roadmap + the
 ADRs). Against an industrial-grade bar, four gaps remain — and they cluster, not
 scatter:
 
@@ -87,8 +87,9 @@ plan):
   with the same tools pre-commit uses; `PreToolUse` blocks dangerous Bash and
   guards commits against a stale `make verify`; `SessionStart` injects
   branch/spec/worktree context (mirrors the AGENTS.md session protocol). Repo
-  `skills/` (`/coffer-verify`, `/coffer-spec`) — *skills*, because
-  `.claude/commands/` is gitignored. A new `.agents/harness.md` (+ `.zh`) documents
+  `skills/` (`/coffer-verify` and a spec scaffolder, since replaced by the
+  checked-in OpenSpec `/opsx:*` commands and `openspec-*` skills) — *skills*,
+  because `.claude/commands/` was gitignored. A new `.agents/harness.md` (+ `.zh`) documents
   the layer; AGENTS.md/CLAUDE.md point to it (single source of truth).
 - **B — Hermeticity.** Commit `uv.lock` + `.python-version`; add a
   `.devcontainer/` (uv + node + playwright) to kill "works on my machine" and the

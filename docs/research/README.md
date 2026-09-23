@@ -52,7 +52,7 @@ column says so.
 | 6 | [Knowledge base / RAG](./knowledge-base-rag.md) | spec `knowledge` | Files-as-truth + reindex beats locked-embedding rivals; borrow **RRF fusion + reranking**. _Historical record — read its banner first; there is no index and no `reindex`._ |
 | 7 | [Messaging channels](./messaging-channels.md) | spec `channels` | Channel-as-resource + stealth pairing is distinctive (Anthropic's TG plugin is the only analog); borrow **per-conversation binding**. |
 | 8 | [Multi-machine sync](./multi-machine-sync.md) | spec `vault-sync` | **Reconcile-not-overwrite** is unique; borrow chezmoi's **per-machine templating**. |
-| 9 | [Credentials & secrets](./credentials-secrets.md) | **No spec folder carries this area** — credential handling lives in the constitution's Credentials constraint and in `backend/coffer/infrastructure/credentials/` | Coffer already implements 1Password's "**access without exposure**" ideal; borrow **external-provider refs** (`op://`). |
+| 9 | [Credentials & secrets](./credentials-secrets.md) | **No spec folder carries this area** — credential handling lives in the Credentials constraint of `docs/principles.md` and in `backend/coffer/infrastructure/credentials/` | Coffer already implements 1Password's "**access without exposure**" ideal; borrow **external-provider refs** (`op://`). |
 | 10 | [Observability, audit & MCP security](./observability-governance.md) | Cross-cutting (audit / retention / security) — no spec folder of its own | Governance/audit is **ahead** (free vs Langfuse's paywall); borrow **MCP tool-pinning** (mcp-scan). |
 | 11 | [Agent evaluation](./agent-evaluation.md) | Eval flywheel / harness — no spec folder of its own | **Correction: the flywheel shipped** (the eval-flywheel ADR is accepted, `evals/` exists); borrow **LLM-as-judge**. |
 | 12 | [Memory systems](./memory-systems-landscape.md) | spec `memory` | _Parallel session._ Field splits file-truth vs vector-truth; Coffer was a deliberate hybrid until the index came out — the note's dated updates fold that reversal in. |
@@ -68,7 +68,7 @@ Two named specs have no report here: `provider-switching` and `web-ui`.
 > recommendations have since shipped and several of its claims about Coffer are
 > no longer true; each is corrected inline with a dated note. Treat the
 > section as a record of what the research concluded, and check
-> `.specify/memory/architecture.md` before acting on any line of it.
+> `docs/architecture.md` before acting on any line of it.
 
 Reading across all thirteen reports, a few patterns recur:
 

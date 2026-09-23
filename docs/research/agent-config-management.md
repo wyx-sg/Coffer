@@ -18,7 +18,7 @@
 > `backend/coffer/surfaces/http/agent_instructions_routes.py` — do not exist on
 > disk, so the "headline finding is flipped" claim about a hub-delivered master
 > instruction should not be relied on without re-checking `main`. Read
-> `.specify/memory/architecture.md` and `specs/agent-registry/spec.md` for the
+> `docs/architecture.md` and `specs/agent-registry/spec.md` for the
 > live design; read what follows as the state of the field, and of Coffer, in
 > mid-2026.
 

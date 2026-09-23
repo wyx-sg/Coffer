@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import contextlib
 
-import keyring  # constitutional gatekeeper — the only import of keyring in the codebase
+import keyring  # Credentials-invariant gatekeeper — the only import of keyring in the codebase
 from keyring.errors import KeyringError, KeyringLocked
 
 from coffer.domain.errors import CredentialLocked

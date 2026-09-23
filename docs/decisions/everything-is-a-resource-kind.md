@@ -66,7 +66,7 @@ Concrete consequences:
   the kind's own noun (e.g. "MCP server"), not the word "resource".
 - The rule "don't show unbuilt kinds in the sidebar" trades roadmap
   discoverability for a less noisy day-one UI. Users who want the roadmap
-  read `.specify/memory/roadmap.md`, not the sidebar.
+  run `npx openspec list`, not the sidebar.
 
 ## Alternatives Considered
 
@@ -84,7 +84,7 @@ Rejected.
 - Reads as an unfinished scaffold (the explicit anti-goal in spec web-ui's
   motivation).
 - The forward-visibility benefit is real but small, and already provided by
-  `.specify/memory/roadmap.md`.
+  `npx openspec list`.
 
 **Per-kind separate top-level navigation (no Resources group).** Rejected.
 

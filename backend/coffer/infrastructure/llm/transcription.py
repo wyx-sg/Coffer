@@ -22,7 +22,7 @@ that, read inside a daemon spawned detached from any shell, which made it
 unreachable in a packaged install. Both are settings now (spec internal-engine
 FR-025).
 
-The constitution permits this: cloud services are LLM and tool providers, and a
+Principle I in ``docs/principles.md`` permits this: cloud services are LLM and tool providers, and a
 transcription endpoint is a tool provider. The audio is data in transit, not
 vault state — the transcript lands locally like any other turn text.
 """

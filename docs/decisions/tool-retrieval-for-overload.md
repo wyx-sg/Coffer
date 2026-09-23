@@ -5,7 +5,7 @@
 **Amended by**: [Budget-Driven Tool Tiering](budget-driven-tool-tiering.md) (2026-09-09) — the "nothing is hidden server-side / tool deferral stays the client's choice" clause is replaced by budget-driven tool tiering; `coffer__search_tools` still ranks the full catalogue, and unlisted tools stay callable.
 **Date**: 2026-06-14
 **Deciders**: Yuxing Wu
-**Related**: `.specify/memory/constitution.md`, [spec `mcp-gateway`](../../specs/mcp-gateway/spec.md), [Everything Is a Resource Kind](everything-is-a-resource-kind.md), [Files as Truth](files-as-truth-sqlite-retrieval.md)
+**Related**: [`docs/principles.md`](../principles.md), [spec `mcp-gateway`](../../specs/mcp-gateway/spec.md), [Everything Is a Resource Kind](everything-is-a-resource-kind.md), [Files as Truth](files-as-truth-sqlite-retrieval.md)
 
 ## Context
 

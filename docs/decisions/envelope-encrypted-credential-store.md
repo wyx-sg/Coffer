@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-12
 **Deciders**: Yuxing Wu
-**Related**: `.specify/memory/constitution.md` (Credentials invariant — amended to v0.2.0), spec `mcp-gateway` (data-model: `credentials` table, audit events), [PyInstaller Distribution](distribution-pyinstaller.md) (unsigned macOS distribution)
+**Related**: [`docs/principles.md`](../principles.md) (Credentials invariant — amended by this decision), spec `mcp-gateway` (data-model: `credentials` table, audit events), [PyInstaller Distribution](distribution-pyinstaller.md) (unsigned macOS distribution)
 
 ## Context
 
@@ -73,8 +73,8 @@ keep a single Fernet master key in a `0600` file beside the database by default
   migration. The daemon remains the sole owner of secret material; CLI and web
   go through the HTTP API.
 
-This required amending the constitution's Credentials invariant (v0.1.0 →
-v0.2.0): from "only the credential module accesses the OS keychain; no plaintext
+This required amending the Credentials invariant in the project principles
+(now `docs/principles.md`): from "only the credential module accesses the OS keychain; no plaintext
 in the DB" to "secrets only as Fernet ciphertext in the `credentials` table;
 master key managed solely by `coffer.infrastructure.credentials`, file default /
 keychain opt-in".
@@ -98,7 +98,7 @@ keychain opt-in".
 - **Backup caveat.** `coffer.db` now holds ciphertext; restoring it requires the
   matching `master.key` (or keychain entry). Users must back up the master key
   alongside the database, and docs must say so.
-- **Constitution amendment** (v0.2.0) and a one-time legacy migration path to
+- **Principles amendment** (the Credentials invariant) and a one-time legacy migration path to
   carry, both shipped with this change.
 - **Default mode does not defend against a reader of `~/.coffer/`** — the key
   sits beside the data. This is the same boundary as before, stated plainly so

@@ -12,7 +12,7 @@ Write one for any decision that meets at least one of these:
 - Affects more than one module, or imposes structural constraints on future work.
 - Has non-obvious trade-offs that future engineers (or future you) will question.
 - Diverges from a default, a popular convention, or a project rule
-  (constitution clause, prior ADR).
+  (a clause of `docs/principles.md`, a prior ADR).
 
 Do **not** write an ADR for:
 
@@ -64,7 +64,7 @@ Do **not** write an ADR for:
 ## Context
 
 <What forces are at play? What problem are we solving? Existing constraints,
-related ADRs, relevant constitutional clauses.>
+related ADRs, relevant clauses of docs/principles.md.>
 
 ## Decision
 

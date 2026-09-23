@@ -14,7 +14,7 @@ The MCP gateway, though, is only one capability of a broader vault. Coffer is a 
 
 ## The three principles
 
-The Coffer constitution establishes three non-negotiable principles. Everything else — technology choices, layering, process model, persistence strategy — is a consequence of these three.
+Coffer's principles (`docs/principles.md` in the repository) establish three non-negotiable principles. Everything else — technology choices, layering, process model, persistence strategy — is a consequence of these three.
 
 ### I. Local-First (NON-NEGOTIABLE)
 
@@ -24,15 +24,15 @@ All user data lives on the user's machine. Cloud services are LLM and tool provi
 
 Every vault asset — registered server configs, credential references, audit logs, capability preferences — stays on your device. The HTTP API binds exclusively to `127.0.0.1`. No backup to a vendor cloud and no telemetry leave the machine without the user's explicit action.
 
-"Local-first" does not mean "no network": calling a remote LLM API or invoking a cloud-hosted MCP tool is entirely expected. The constraint is about **where state lives**, not about whether the network is used. The daemon can make outbound HTTP calls to LLM providers; it simply cannot make your vault state visible to a third party without a constitutional amendment.
+"Local-first" does not mean "no network": calling a remote LLM API or invoking a cloud-hosted MCP tool is entirely expected. The constraint is about **where state lives**, not about whether the network is used. The daemon can make outbound HTTP calls to LLM providers; it simply cannot make your vault state visible to a third party without an amendment to the principles.
 
-Replicating user state to a **vendor-controlled** cloud as a system of record requires a formal constitutional amendment — an explicit, recorded decision, not a silent configuration change.
+Replicating user state to a **vendor-controlled** cloud as a system of record requires a formal amendment to the principles — an explicit, recorded decision made in a reviewed PR, not a silent configuration change.
 
-**One bounded exception: a sync remote you own (constitution v0.6.0).** Coffer may converge the vault with a git remote the user owns, so that the user's own machines hold one vault rather than several. Three conditions bound it: the remote is a **rendezvous, never a system of record** — every machine's local vault stays complete, so the remote can be deleted and rebuilt from any one of them; secrets travel as Fernet **ciphertext only** and the master key is bootstrapped onto each machine out-of-band; and the feature is **off by default**, enabled by the user against a repository they own. Convergence is bidirectional under git's own three-way merge, applies a diff against the last state this vault provably held, and stops to ask before an oversized deletion. A hosted endpoint Coffer itself operates stays outside the exception.
+**One bounded exception: a sync remote you own.** Coffer may converge the vault with a git remote the user owns, so that the user's own machines hold one vault rather than several. Three conditions bound it: the remote is a **rendezvous, never a system of record** — every machine's local vault stays complete, so the remote can be deleted and rebuilt from any one of them; secrets travel as Fernet **ciphertext only** and the master key is bootstrapped onto each machine out-of-band; and the feature is **off by default**, enabled by the user against a repository they own. Convergence is bidirectional under git's own three-way merge, applies a diff against the last state this vault provably held, and stops to ask before an oversized deletion. A hosted endpoint Coffer itself operates stays outside the exception.
 
-### II. Spec-as-Truth (Spec-Driven Development)
+### II. Spec-as-Truth (OpenSpec)
 
-Specifications under `specs/` are the canonical product contract. Every pull request that changes externally visible behavior updates the relevant spec **first**, then the code. The spec is not documentation written after the fact — it is the contract the implementation must conform to. If the code disagrees with the spec, the code is wrong.
+Specifications written with [OpenSpec](https://github.com/Fission-AI/OpenSpec) are the canonical product contract. A change to externally visible behavior starts as an OpenSpec change whose spec deltas say what will be true afterwards; it lands with the code that makes it true and is archived into the specs in the same pull request. The spec is not documentation written after the fact — it is the contract the implementation must conform to. If the code disagrees with the spec, the code is wrong.
 
 This principle exists because distributed teams (and AI agents generating code) tend to drift from design intent over time. By making the spec the source of truth and requiring it to be updated before code changes, Coffer ensures that architectural intent is always recorded and verifiable.
 
@@ -40,7 +40,7 @@ This principle exists because distributed teams (and AI agents generating code) 
 
 MIT license, governance rules, contribution flow, and Conventional Commits are present in the repository from v0.0.1, not retrofitted later. This principle prevents the hidden cost of "we'll open-source it later" — retrofitting licenses, attribution, and governance onto a codebase after the fact is expensive and error-prone.
 
-Any change that shortens the open-source readiness checklist — introducing a closed-source dependency without a documented exception, omitting attribution for AI-authored content — violates this principle and requires a constitutional amendment.
+Any change that shortens the open-source readiness checklist — introducing a closed-source dependency without a documented exception, omitting attribution for AI-authored content — violates this principle and requires an amendment to the principles.
 
 ## Guarantees and invariants
 
@@ -60,7 +60,7 @@ Understanding scope is as important as understanding capabilities.
 
 **Not a cloud service.** There is no hosted Coffer, no SaaS plan, no account required. The daemon is a process on your machine.
 
-**Not a hosted sync service.** Coffer converges your machines only through a git remote you own and configure; it ships no remote of its own and no hosted sync endpoint. Offering one would require a constitutional amendment.
+**Not a hosted sync service.** Coffer converges your machines only through a git remote you own and configure; it ships no remote of its own and no hosted sync endpoint. Offering one would require an amendment to the principles.
 
 **Not a model provider.** Coffer is not itself an LLM and does not host one. The MCP gateway routes protocol messages without reasoning about tool outputs, and the turn platform behind the channels drives your registered coding agents, which do invoke LLMs to converse — but those models are external providers Coffer calls, never models Coffer ships or trains. Coffer orchestrates models and tools; it is not the model.
 
@@ -74,4 +74,4 @@ These rejections are recorded in the ADRs; the summaries here anchor the princip
 
 **Why not per-client configuration?** Per-client config is the status quo — it is the problem Coffer solves. The pain it creates (N × M maintenance burden, credential sprawl, identity inconsistency) is precisely the motivation for a central daemon.
 
-**Why not extract cross-cutting abstractions eagerly?** The constitution states that cross-cutting modules should be extracted only when a second feature needs them, to avoid over-engineering. The sole exception is the Resource framework, which was designed upfront because it spans every layer (domain, persistence, audit, surface routing) — retrofitting it after a second resource kind arrived would require a non-trivial migration, not a modest extraction.
+**Why not extract cross-cutting abstractions eagerly?** The principles state that cross-cutting modules should be extracted only when a second feature needs them, to avoid over-engineering. The sole exception is the Resource framework, which was designed upfront because it spans every layer (domain, persistence, audit, surface routing) — retrofitting it after a second resource kind arrived would require a non-trivial migration, not a modest extraction.

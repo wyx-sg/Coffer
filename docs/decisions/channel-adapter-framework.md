@@ -15,7 +15,7 @@ touch agent code, and a new agent must not touch channel code.
 
 Two platform constraints shape the design:
 
-- The constitution requires public-reachable surfaces to run as a separate
+- Coffer's principles require public-reachable surfaces to run as a separate
   process limited to signed callback paths; SeaTalk delivers events only by
   public webhook.
 - The daemon is the single owner of all state and already runs supervised

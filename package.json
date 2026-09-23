@@ -1,0 +1,11 @@
+{
+  "name": "coffer-repo-tools",
+  "private": true,
+  "description": "Repository-level tooling. The OpenSpec CLI validates and archives the spec tree under openspec/.",
+  "scripts": {
+    "openspec": "openspec"
+  },
+  "devDependencies": {
+    "@fission-ai/openspec": "1.13.1"
+  }
+}

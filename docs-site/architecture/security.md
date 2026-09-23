@@ -6,7 +6,7 @@ These rules are non-negotiable and apply to the entire codebase. They are enforc
 1. **Loopback-only binding.** The HTTP API binds exclusively to `127.0.0.1`. Any public-reachable surface runs as a separate process limited to signed callback paths — concretely, the SeaTalk callback listener (see [Channels & the public-reachable surface](#channels-the-public-reachable-surface)).
 2. **Secret plaintext never persists.** Secrets are stored only as Fernet ciphertext in the `credentials` table; configuration stores credential _references_, not values. Plaintext exists in memory solely between decrypt and the spawn/header injection that consumes it — never in SQLite as plaintext, logs, audit, or any structured event. The Fernet master key is managed exclusively by `infrastructure/credentials/`, the only place permitted to import `keyring`.
 3. **Token + CORS on the REST API.** Every management API call requires the `X-Coffer-Token` header. The daemon token lives in `~/.coffer/daemon.json` at mode `0600`.
-4. **Outbound HTTP has real paths today, and exactly one of them is SSRF-guarded.** The daemon makes outbound calls now: provider introspection, remote speech-to-text, the internal engine's LLM calls, the Telegram and SeaTalk APIs, and `git` for sync. A guard exists — `infrastructure/net/ssrf_guard.check_url` — but it has exactly **one** caller, the provider introspector, so "every outbound URL passes through it" is not true and is not claimed. The constitution requires outbound HTTP to go through a guarded client; the open gap is the HTTP-transport MCP client, where the target host comes from user-registered config. See [Outbound HTTP](#outbound-http-one-guarded-path-and-the-rest). Public-reachable surfaces run as a separate process limited to signed callback paths.
+4. **Outbound HTTP has real paths today, and exactly one of them is SSRF-guarded.** The daemon makes outbound calls now: provider introspection, remote speech-to-text, the internal engine's LLM calls, the Telegram and SeaTalk APIs, and `git` for sync. A guard exists — `infrastructure/net/ssrf_guard.check_url` — but it has exactly **one** caller, the provider introspector, so "every outbound URL passes through it" is not true and is not claimed. Coffer's principles require outbound HTTP to go through a guarded client; the open gap is the HTTP-transport MCP client, where the target host comes from user-registered config. See [Outbound HTTP](#outbound-http-one-guarded-path-and-the-rest). Public-reachable surfaces run as a separate process limited to signed callback paths.
    :::
 
 ## Threat model and trust boundaries
@@ -25,7 +25,7 @@ What Coffer does **not** defend against (in the default configuration): a privil
 
 ## Loopback-only HTTP binding
 
-The daemon's FastAPI application binds its HTTP server to `127.0.0.1`, not `0.0.0.0`. This is a constitutional requirement, not a configuration option.
+The daemon's FastAPI application binds its HTTP server to `127.0.0.1`, not `0.0.0.0`. This is required by Coffer's principles, not a configuration option.
 
 The practical effect: no request originating outside the local machine can reach the management API or the MCP protocol endpoint. A remote attacker who cannot first compromise the machine has no network path to Coffer. This makes the daemon safe to run persistently without a firewall rule — the OS rejects out-of-machine connections before they reach the application.
 
@@ -78,7 +78,7 @@ Secrets reach the listener the same way upstream MCP subprocesses get theirs: th
 
 ## Sync security
 
-Vault sync converges the vault **bidirectionally** with a git remote the user owns and configured. It is the one bounded exception to Local-First (constitution v0.6.0), and its security rests on what does and does not travel:
+Vault sync converges the vault **bidirectionally** with a git remote the user owns and configured. It is the one bounded exception to the Local-First principle, and its security rests on what does and does not travel:
 
 - **Network egress is real, and it is to a remote the user named.** A converge round runs `git` against that remote, fetching and pushing. There is no Coffer-operated endpoint involved, and the feature is **off until a remote is configured**.
 - **The remote is a rendezvous, never a system of record.** Every machine's local vault stays complete, so the remote can be deleted and rebuilt from any one of them.

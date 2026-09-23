@@ -4,7 +4,7 @@ Revision ID: 0062
 Revises: 0061
 Create Date: 2026-09-12
 
-Spec vault-sync ``## Backup``, constitution 0.5.0. The table holds a
+Spec vault-sync ``## Backup``, Principle I's sync remote exception. The table holds a
 single row: ``id`` is pinned to 1 by a check constraint, so "at most one backup
 remote" cannot drift into "however many rows got inserted" the first time some
 caller forgets to look before inserting.
