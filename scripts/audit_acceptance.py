@@ -71,7 +71,7 @@ SCENARIO_HEADING_RE = re.compile(r"^###\s+(?:Scenario:\s*)?(.+?)\s*$", re.IGNORE
 REQUIREMENTS_HEADER_RE = re.compile(r"^##\s+Requirements\s*$")
 H2_RE = re.compile(r"^##\s")
 OPENSPEC_SCENARIO_RE = re.compile(r"^####\s+Scenario:\s*(.+?)\s*$")
-FENCE_RE = re.compile(r"^\s*(```|~~~)")
+FENCE_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})")
 # Matches the standalone acceptance helper exported from
 # frontend/src/test/acceptance.ts. See .agents/testing.md.
 #
@@ -127,24 +127,50 @@ def _strip_ts_comments(text: str) -> str:
     return text
 
 
+def _unfenced_lines(text: str) -> list[str]:
+    """The lines outside fenced code blocks.
+
+    A fence closes only on a run of the same character at least as long as the
+    one that opened it, so a ```` fence can show a ``` block without the parser
+    losing track of which side of the fence it is on.
+    """
+    out: list[str] = []
+    fence: str | None = None
+    for line in text.splitlines():
+        m = FENCE_RE.match(line)
+        if fence is None:
+            if m:
+                fence = m.group(1)
+                continue
+            out.append(line)
+        elif m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence):
+            fence = None
+    return out
+
+
+def spec_layout(lines: list[str]) -> str:
+    """`openspec`, `legacy`, or `mixed` — a spec half-way between the two."""
+    legacy = any(ACCEPTANCE_HEADER_RE.match(line) for line in lines)
+    openspec = any(REQUIREMENTS_HEADER_RE.match(line) for line in lines) and any(
+        OPENSPEC_SCENARIO_RE.match(line) for line in lines
+    )
+    if legacy and openspec:
+        return "mixed"
+    return "legacy" if legacy else "openspec"
+
+
 def parse_spec_scenarios(spec_md: Path) -> list[str]:
     """Scenario names in document order, duplicates kept so they can be flagged."""
-    text = spec_md.read_text(encoding="utf-8")
-    if any(ACCEPTANCE_HEADER_RE.match(line) for line in text.splitlines()):
-        return _parse_legacy_scenarios(text)
-    return _parse_openspec_scenarios(text)
+    lines = _unfenced_lines(spec_md.read_text(encoding="utf-8"))
+    if spec_layout(lines) == "legacy":
+        return _parse_legacy_scenarios(lines)
+    return _parse_openspec_scenarios(lines)
 
 
-def _parse_openspec_scenarios(text: str) -> list[str]:
+def _parse_openspec_scenarios(lines: list[str]) -> list[str]:
     scenarios: list[str] = []
     in_requirements = False
-    in_fence = False
-    for line in text.splitlines():
-        if FENCE_RE.match(line):
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            continue
+    for line in lines:
         if REQUIREMENTS_HEADER_RE.match(line):
             in_requirements = True
             continue
@@ -158,10 +184,10 @@ def _parse_openspec_scenarios(text: str) -> list[str]:
     return scenarios
 
 
-def _parse_legacy_scenarios(text: str) -> list[str]:
+def _parse_legacy_scenarios(lines: list[str]) -> list[str]:
     scenarios: list[str] = []
     in_section = False
-    for line in text.splitlines():
+    for line in lines:
         if ACCEPTANCE_HEADER_RE.match(line):
             in_section = True
             continue
@@ -196,7 +222,7 @@ def collect_specs() -> tuple[dict[str, set[str]], list[str]]:
     `channels/telegram` and `agent-registry/telegram` onto the same id.
 
     A problem is a spec present under both roots, or a scenario name used
-    twice within one spec.
+    twice within one spec, or a spec that mixes the two layouts.
     """
     out: dict[str, set[str]] = {}
     problems: list[str] = []
@@ -207,6 +233,12 @@ def collect_specs() -> tuple[dict[str, set[str]], list[str]]:
             spec_id = spec_md.parent.relative_to(root).as_posix()
             if spec_id in out:
                 problems.append(f"{spec_id}: present under both openspec/specs/ and specs/")
+                continue
+            if spec_layout(_unfenced_lines(spec_md.read_text(encoding="utf-8"))) == "mixed":
+                problems.append(
+                    f"{spec_id}: has both '## Acceptance Scenarios' and OpenSpec "
+                    "'#### Scenario:' blocks — finish moving it to one layout"
+                )
                 continue
             names = parse_spec_scenarios(spec_md)
             for dup in _duplicates(names):
@@ -466,8 +498,9 @@ def main() -> int:
         return 0
 
     # A spec.md with zero scenarios is almost certainly a malformed spec
-    # (no `#### Scenario:` under `## Requirements`, or every one deleted). Without this guard the audit silently passes as "0 missing
-    # coverage", giving false confidence.
+    # (no `#### Scenario:` under `## Requirements`, or every one deleted).
+    # Without this guard the audit silently passes as "0 missing coverage",
+    # giving false confidence.
     empty_specs = sorted(
         spec_id for spec_id, scenarios in specs.items() if not scenarios
     )

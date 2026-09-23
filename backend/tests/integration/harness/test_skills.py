@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -43,5 +44,13 @@ def test_skill_has_required_frontmatter(name: str) -> None:
 
 
 def test_no_unexpected_skills() -> None:
-    on_disk = {p.parent.name for p in SKILLS_DIR.glob("*/SKILL.md")}
-    assert on_disk == EXPECTED
+    # What git tracks, not what is on disk: a developer's own untracked skill
+    # under .claude/skills/ is theirs, not the repo's.
+    tracked = subprocess.run(
+        ["git", "ls-files", "--", ".claude/skills/*/SKILL.md"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert {Path(p).parent.name for p in tracked} == EXPECTED

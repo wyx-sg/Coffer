@@ -48,6 +48,7 @@ jobs:
           node-version: "20"
           cache: npm
           cache-dependency-path: |
+            package-lock.json
             frontend/package-lock.json
             e2e/package-lock.json
 
@@ -63,6 +64,9 @@ jobs:
         env:
           UV_PROJECT_ENVIRONMENT: ${{ github.workspace }}/.venv
         run: uv sync --frozen --extra dev --project backend
+
+      - name: install the OpenSpec CLI
+        run: npm ci
 
       - name: install frontend deps
         working-directory: frontend
@@ -98,6 +102,7 @@ jobs:
           node-version: "20"
           cache: npm
           cache-dependency-path: |
+            package-lock.json
             frontend/package-lock.json
             e2e/package-lock.json
 
@@ -110,6 +115,9 @@ jobs:
         env:
           UV_PROJECT_ENVIRONMENT: ${{ github.workspace }}/.venv
         run: uv sync --upgrade --extra dev --project backend
+
+      - name: install the OpenSpec CLI
+        run: npm ci
 
       - name: install frontend deps
         working-directory: frontend

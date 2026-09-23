@@ -111,4 +111,8 @@ Architectural Constraints, or to a Quality Gate requires:
 1. A proposal PR describing motivation, current behavior, proposed behavior,
    downstream impact, alternatives.
 2. Explicit decision recorded in the PR description.
-3. The amending PR updates this file and bumps the
+3. The amending PR updates this file. Its history is the file's git log.
+
+**PR review.** Every PR description must, where applicable, name the
+principles or constraints it affects, and explain why the change respects
+(or formally amends) them.

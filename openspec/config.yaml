@@ -15,8 +15,9 @@ context: |
 
   Invariants (docs/principles.md): the HTTP API binds to 127.0.0.1; secrets
   exist only as Fernet ciphertext outside the moment of use; bulk user content
-  is plain files on disk; outbound HTTP goes through the SSRF guard; the only
-  cloud a vault may reach is a git remote the user owns.
+  is plain files on disk; outbound HTTP goes through the SSRF guard. Cloud
+  services are LLM and tool providers only; the one remote vault state may be
+  replicated to is a git remote the user owns, as ciphertext for secrets.
 
   Every management operation is reachable from both REST and the `coffer`
   CLI. Every shipped capability is an end-to-end deliverable a user can

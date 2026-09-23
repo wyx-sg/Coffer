@@ -35,7 +35,8 @@
 - [ ] 2.18 Fold each `plan.md` and `research.md` into `docs/architecture.md` or an ADR, then delete them
 - [ ] 2.19 Merge each `quickstart.md` into its `docs-site/guide/` page, then delete them
 - [ ] 2.20 Write an acceptance-marked test for every scenario added in 2.2–2.16; list any that exposes a real defect under section 4
-- [ ] 2.21 Run `openspec validate --all --strict` and `make verify`; open PR 2
+- [ ] 2.21 Repoint or drop every link inside `openspec/specs/` to a file phase 1 removed (`.specify/…`, `.agents/sdd.md`)
+- [ ] 2.22 Run `openspec validate --all --strict` and `make verify`; open PR 2
 
 ## 3. Requirement numbers out (PR 3)
 
