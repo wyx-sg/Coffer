@@ -1601,7 +1601,6 @@
       "description": "This puts the vault back to the state it was in immediately before the round that finished {{when}} applied anything. The undo is an ordinary local change: the next round publishes it to the remote, so the other machines follow.",
       "willUndo": "What this round applied here — the undo reverses each of these",
       "morePaths": "…and {{count}} more",
-      "nothingApplied": "This round applied nothing to this vault, so undoing it changes nothing here.",
       "confirm": "Undo round",
       "undoing": "Undoing…",
       "done": "Round undone (+{{added}} ~{{modified}} −{{deleted}} reversed)."

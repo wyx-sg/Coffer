@@ -12,6 +12,7 @@ import { ApiError } from "@/lib/api/errors";
 import type { RunRecord } from "@/lib/api/sync";
 import { formatDateTime } from "@/lib/utils";
 import { SyncRunsTab } from "./SyncRunsTab";
+import { acceptance } from "@/test/acceptance";
 
 vi.mock("@/lib/hooks/useSync", () => ({
   useSyncRuns: vi.fn(),
@@ -278,20 +279,63 @@ describe("SyncRunsTab — undoing a round", () => {
 
   test("looks past a round that never reached the snapshot to the one that did", () => {
     // A conflicted round stops at the merge, before the snapshot step: the
-    // newest snapshot — and so the round a rollback undoes — is the `ok` one
+    // newest snapshot — and so the round a rollback undoes — is the one
     // underneath it.
-    seed([run({ id: 3, status: "conflict", conflicts: ["knowledge/notes/a.md"] }), run({ id: 2 })]);
+    seed([
+      run({ id: 3, status: "conflict", conflicts: ["knowledge/notes/a.md"] }),
+      run({ id: 2, applied: APPLIED }),
+    ]);
     render(<SyncRunsTab enabled />);
 
     expect(undoButtons()).toHaveLength(1);
     expect(within(rows()[1]).getByRole("button", { name: /undo this round/i })).toBeInTheDocument();
   });
 
+  acceptance("vault-sync", "a round can be rolled back", () => {
+    // Every round reaching the apply step tags a snapshot, including one that
+    // applies nothing, so the newest snapshot is then the vault exactly as it
+    // already is. "Undo this round" on a row reading `+0 ~0 −0` offered to
+    // restore the state it was already in.
+    seed([run({ id: 3, status: "no_change" })]);
+    render(<SyncRunsTab enabled />);
+
+    expect(undoButtons()).toHaveLength(0);
+  });
+
+  test("a round that only published offers no undo either", () => {
+    // An undo reverses what was applied HERE. This round pushed local state
+    // up and changed nothing locally, so reversing its snapshot would restore
+    // a tree that never moved — and would not un-publish anything.
+    seed([
+      run({
+        id: 3,
+        status: "ok",
+        published: { added: 4, modified: 0, deleted: 0, changes: [] },
+      }),
+    ]);
+    render(<SyncRunsTab enabled />);
+
+    expect(undoButtons()).toHaveLength(0);
+  });
+
+  test("a quiet round on top hides the undo rather than moving it down", () => {
+    // The quiet round's snapshot is the newest one, so the daemon would
+    // reverse to THAT and leave the applying round standing. A button on the
+    // older row would name one round and undo another.
+    seed([run({ id: 3, status: "no_change" }), run({ id: 2, applied: APPLIED })]);
+    render(<SyncRunsTab enabled />);
+
+    expect(undoButtons()).toHaveLength(0);
+  });
+
   test("offers no undo when the newest round's status cannot say where it stopped", () => {
     // A `failed` round may have died before the snapshot or after it. Naming
     // the round underneath as the one that gets undone would be a guess, and
     // the wrong guess reverses a round the user did not point at.
-    seed([run({ id: 3, status: "failed", error: "network unreachable" }), run({ id: 2 })]);
+    seed([
+      run({ id: 3, status: "failed", error: "network unreachable" }),
+      run({ id: 2, applied: APPLIED }),
+    ]);
     render(<SyncRunsTab enabled />);
 
     expect(undoButtons()).toHaveLength(0);
@@ -309,14 +353,6 @@ describe("SyncRunsTab — undoing a round", () => {
     // What it touched: the paths the row already carries, not a count alone.
     expect(dialog).toHaveTextContent("knowledge/notes/a.md");
     expect(dialog).toHaveTextContent("resources/channel/seatalk.yaml");
-  });
-
-  test("a round that applied nothing here says so instead of listing nothing", () => {
-    seed([run({ id: 3, status: "no_change" })]);
-    render(<SyncRunsTab enabled />);
-
-    fireEvent.click(undoButtons()[0]);
-    expect(screen.getByRole("dialog")).toHaveTextContent(/applied nothing/i);
   });
 
   test("a failed undo keeps the dialog open with the reason", () => {
