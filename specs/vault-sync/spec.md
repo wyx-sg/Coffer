@@ -545,7 +545,15 @@ reported as a conflict.
 - **FR-079**: The push credential MUST be resolved from the credential store at
   push time, named by reference and never by value. It MUST NOT enter the
   repository's git config, MUST NOT appear in a command line, and MUST be
-  redacted from any recorded error.
+  redacted from any recorded error. It MUST reach git as a **credential
+  helper**, which every git consults before it would prompt, and MUST NOT be
+  handed over through a prompt mechanism: a prompt path is optional and
+  platform-dependent — macOS's own git ignores `GIT_ASKPASS` entirely — so a
+  credential delivered that way is not delivered at all on the platform Coffer
+  ships a desktop app for. That failure is invisible by construction while a
+  credential helper in the user's own git configuration happens to answer
+  instead, and this layer pins that configuration away on purpose, so there is
+  nothing left to fall back on when it stops.
 
 ## Restore
 
@@ -973,7 +981,9 @@ reported as a conflict.
 - **Given** a configured remote with a push credential,
 - **When** a round pushes,
 - **Then** the credential is absent from the repository's git config, from the
-  git process's arguments, and from any recorded error text or audit payload.
+  git process's arguments, and from any recorded error text or audit payload,
+- **And** it still authenticates, because it reaches git as a credential helper
+  reading it from the environment rather than as an answer to a prompt.
 
 ### Scenario: the master key never enters the repository
 
