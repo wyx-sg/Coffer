@@ -7,12 +7,14 @@ behaviour, and a mocked subprocess would only assert our own assumptions.
 
 from __future__ import annotations
 
+import os
 import pathlib
 import subprocess
 import tempfile
 
 import pytest
 
+from coffer.infrastructure.sync.git_invoke import _git_env, credential_args
 from coffer.infrastructure.sync.git_mirror import GitMirror, GitMirrorError
 
 
@@ -171,19 +173,65 @@ async def test_the_token_never_lands_in_git_config(
 
 
 @pytest.mark.asyncio
-async def test_the_askpass_helper_does_not_outlive_the_push(
+async def test_the_token_leaves_nothing_behind_in_the_temp_dir(
     worktree: pathlib.Path, remote: pathlib.Path
 ) -> None:
-    """The helper carrying the token is deleted even though the push succeeded."""
+    """Nothing carrying the token is written to disk at all.
+
+    It used to be a temp askpass script, deleted in a `finally`; the token now
+    rides an environment variable read by a helper named on the command line,
+    so there is no file to leak in the first place.
+    """
     tmp = pathlib.Path(tempfile.gettempdir())
-    before = set(tmp.glob("coffer-askpass-*"))
+    before = set(tmp.glob("coffer-*"))
     mirror = GitMirror(worktree)
     await mirror.ensure_repo(remote_url=str(remote), branch="main")
     (worktree / "a.txt").write_text("one")
     await mirror.stage_all()
     await mirror.commit("first")
     await mirror.push(branch="main", token="sup3rsecret")
-    assert set(tmp.glob("coffer-askpass-*")) == before
+    assert set(tmp.glob("coffer-*")) == before
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="the push credential never reaches the repository"
+)
+def test_the_credential_reaches_git_as_a_helper_not_a_prompt() -> None:
+    """The regression that stopped sync dead, and why it was invisible.
+
+    `GIT_ASKPASS` is a *prompt* path. macOS's own git does not take it — it
+    answers `fatal: unable to get password from user` without ever running the
+    helper — so on the platform Coffer ships a desktop app for, the token
+    never reached git. What had been authenticating was the
+    `credential.helper = osxkeychain` line in Xcode's system gitconfig, which
+    `GIT_CONFIG_NOSYSTEM` deliberately switches off; the day that stopped
+    being papered over, every hourly round failed saying only that nobody
+    answered a prompt.
+
+    A helper is asked before any prompt, by every git. Pinning the shape here
+    because the failure needs a Mac, a private remote and an hour to show up.
+    """
+    args = credential_args("sup3rsecret")
+    assert "credential.helper=" in args, "an inherited helper must be cleared first"
+    helper = args[-1]
+    assert helper.startswith("credential.helper=!")
+    # The secret is read from the environment at helper runtime; argv is
+    # readable by every process on the machine.
+    assert "sup3rsecret" not in " ".join(args)
+    assert "$COFFER_GIT_TOKEN" in helper
+    assert _git_env("sup3rsecret")["COFFER_GIT_TOKEN"] == "sup3rsecret"
+    # No token, no credential machinery: a local-path remote pays nothing.
+    assert credential_args(None) == ()
+
+
+def test_a_users_own_git_config_cannot_answer_for_the_daemon() -> None:
+    env = _git_env("sup3rsecret")
+    assert env["GIT_CONFIG_GLOBAL"] == os.devnull
+    assert env["GIT_CONFIG_SYSTEM"] == os.devnull
+    assert env["GIT_CONFIG_NOSYSTEM"] == "1"
+    assert env["GIT_TERMINAL_PROMPT"] == "0"
+    # And whatever prompt helper the user had is dropped rather than inherited.
+    assert "GIT_ASKPASS" not in env
 
 
 @pytest.mark.asyncio
