@@ -14,8 +14,8 @@ The answer is two layers. A single SQLite file at `~/.coffer/coffer.db` is the s
 
 The rejected alternative — a server database like Postgres or MySQL — would require the user to install and manage a database process, configure credentials, and keep a service running. For a single-user local tool, that overhead is pure friction with no benefit.
 
-::: tip Constitutional invariant
-The constitution designates SQLite as the system of record for control-plane state. Bulk user content is stored as files on the local filesystem. Migrating the control plane to a server database requires a constitutional amendment.
+::: tip Principles invariant
+Coffer's principles designate SQLite as the system of record for control-plane state. Bulk user content is stored as files on the local filesystem. Migrating the control plane to a server database requires an amendment to the principles.
 :::
 
 The practical consequences of the SQLite choice shape every detail of the persistence layer:

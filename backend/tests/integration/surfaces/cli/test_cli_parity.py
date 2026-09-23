@@ -165,7 +165,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "sync remote": {"show", "set", "clear"},
     # Coffer's own operating settings (spec internal-engine FR-020/FR-021):
     # the model its passes think with, and the switch and timer of each pass
-    # it runs unattended. Listed here because `.agents/sdd.md` requires every
+    # it runs unattended. Listed here because `.agents/openspec.md` requires every
     # management operation to be reachable from a terminal, and one of these
     # passes rewrites the user's own knowledge files on a timer.
     "engine": {"model", "upkeep", "curate-owner", "timeout", "transcribe-model"},

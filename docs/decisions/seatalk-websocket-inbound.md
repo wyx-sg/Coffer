@@ -15,7 +15,7 @@ public address — has to manufacture one. The apparatus that does it is the mos
 elaborate piece of machinery in the channel layer:
 
 - a **separate listener process**, spawned by the daemon while a SeaTalk channel
-  is enabled, because the constitution will not let a publicly reachable surface
+  is enabled, because Coffer's principles will not let a publicly reachable surface
   live inside the daemon;
 - **signature verification** on every request, which exists solely because the
   endpoint is reachable by anyone who finds it;

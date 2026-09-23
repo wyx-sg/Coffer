@@ -3,13 +3,13 @@
 **Status**: Accepted
 **Date**: 2026-05-20
 **Deciders**: Yuxing Wu
-**Related**: `.specify/memory/constitution.md` (Architectural Constraints), [Resource Framework Upfront](resource-framework-upfront.md)
+**Related**: [`docs/principles.md`](../principles.md) (Technology & Architectural Constraints), [Resource Framework Upfront](resource-framework-upfront.md)
 
 ## Context
 
 [Resource Framework Upfront](resource-framework-upfront.md) commits Coffer to a Resource framework as part of spec
 `mcp-gateway`. Two layouts can realise it while honouring the
-constitutional layered architecture (`surfaces → application → domain` with
+layered architecture fixed by the principles (`surfaces → application → domain` with
 `infrastructure` underneath):
 
 - **Layer-first with kind subdirectories** — each top-level layer holds
@@ -18,7 +18,7 @@ constitutional layered architecture (`surfaces → application → domain` with
   vertical slice with its own internal `domain/ application/ infrastructure/
 surfaces/`.
 
-Both can satisfy the constitution if importlinter contracts enforce dependency
+Both can satisfy the principles if importlinter contracts enforce dependency
 direction. The choice is about navigability, conventions, and how the
 "extract-on-second-feature" rule plays out.
 
@@ -73,7 +73,7 @@ side effects, no `kinds/` directory.
 
 **Positive**
 
-- Mirrors the constitutional `surfaces → application → domain (← infrastructure)`
+- Mirrors the principles' `surfaces → application → domain (← infrastructure)`
   layering literally in the file system. The architecture document reads the
   same as the directory tree.
 - Familiar layout for Python/FastAPI conventions; new contributors recognise
@@ -112,8 +112,8 @@ side effects, no `kinds/` directory.
 **Vertical slice (`kinds/<x>/{domain,application,infrastructure,surfaces}/`)**.
 Rejected.
 
-- Adds a fifth top-level concept (`kinds/`) alongside the constitutional four
-  layers; the architecture document would have to explain both.
+- Adds a fifth top-level concept (`kinds/`) alongside the four
+  layers the principles fix; the architecture document would have to explain both.
 - Introduces dual-decision pain on every cross-kind extraction: "does this
   belong in the top-level layer, or in `kinds/<x>/<layer>/`?" — two questions
   to answer instead of one.

@@ -38,4 +38,4 @@ When the shim starts, it checks `~/.coffer/daemon.json`. If the daemon is not ru
 
 All user state lives on the user's machine. Cloud services — LLMs, tool APIs — are providers only; they never become the system of record for any vault state. The HTTP API binds exclusively to `127.0.0.1`.
 
-This means your list of registered servers, your credentials, and your audit history are never sent to a vendor's cloud. Replicating user state to a vendor-controlled cloud is a constitutional amendment — not a configuration option.
+This means your list of registered servers, your credentials, and your audit history are never sent to a vendor's cloud. Replicating user state to a vendor-controlled cloud needs an amendment to Coffer's principles — not a configuration option.

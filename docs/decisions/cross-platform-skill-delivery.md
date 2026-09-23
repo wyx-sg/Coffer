@@ -123,7 +123,7 @@ Rejected.
   is not stable across versions; touching it is brittle.
 - Some agents do not allow overriding the path at all.
 - Even when feasible, mutating a third-party tool's config is a
-  trust-boundary violation we explicitly avoid in the constitution.
+  trust-boundary violation we explicitly avoid.
 
 **Hard links instead of symlinks/junctions.** Rejected.
 

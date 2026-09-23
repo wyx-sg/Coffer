@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep `.specify/memory/architecture.md` level with the tree.
+"""Keep `docs/architecture.md` level with the tree.
 
 Two things drift silently in that document, and both have: the code-layout
 tree (packages get added, moved or deleted without the tree following) and
@@ -29,7 +29,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_ROOT = REPO_ROOT / "backend" / "coffer"
 LAYERS = ("domain", "application", "infrastructure", "surfaces")
-DOCS = (REPO_ROOT / ".specify" / "memory" / "architecture.md",)
+DOCS = (REPO_ROOT / "docs" / "architecture.md",)
 TOOL_PREFIX = "coffer__"
 _SKIP_DIRS = {"__pycache__"}
 _TOOL_DECL = re.compile(r"BuiltinTool\(\s*name=\"([a-z_]+)\"")

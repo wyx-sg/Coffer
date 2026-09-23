@@ -1,0 +1,43 @@
+schema: spec-driven
+
+# Injected by the OpenSpec CLI into every planning request. The full
+# conventions are in .agents/openspec.md; the invariants in docs/principles.md.
+context: |
+  Coffer is a local-first AI agent vault: a developer's skills, knowledge,
+  MCP servers, credentials and agent configuration live on their own machines,
+  and coding agents (Claude Code, Codex) read and contribute through one local
+  daemon. Single user, one vault across the user's machines, MIT-licensed.
+
+  Stack: Python 3.12+ backend (FastAPI, SQLAlchemy + Alembic on SQLite, Typer
+  CLI, an MCP shim); TypeScript + React + Vite web UI; a Rust/Tauri desktop
+  shell. Layered code: surfaces -> application -> domain; infrastructure
+  adapts to ports in application and is wired only at the composition root.
+
+  Invariants (docs/principles.md): the HTTP API binds to 127.0.0.1; secrets
+  exist only as Fernet ciphertext outside the moment of use; bulk user content
+  is plain files on disk; outbound HTTP goes through the SSRF guard; the only
+  cloud a vault may reach is a git remote the user owns.
+
+  Every management operation is reachable from both REST and the `coffer`
+  CLI. Every shipped capability is an end-to-end deliverable a user can
+  operate. Repository docs are English only.
+
+rules:
+  proposal:
+    - Describe only what the change does; do not list what it leaves out.
+    - Name every capability under openspec/specs/ whose requirements change.
+  specs:
+    - One capability per behaviour, not per layer; a capability covers backend and every surface that delivers it.
+    - A requirement title is a short imperative phrase, unique within its spec. Never number requirements.
+    - State each requirement with SHALL or MUST, as user-observable behaviour; put internal mechanics in design.md.
+    - Every requirement owns at least one "#### Scenario:" written as GIVEN/WHEN/THEN/AND steps.
+    - Scenario names are unique within a spec, because acceptance markers quote them.
+    - Cite a requirement in another spec as a link to that spec plus the requirement title in quotes.
+    - What every child of a capability shares lives in the parent; a child holds only what varies by type.
+  design:
+    - Record choices a reviewer would want explained and the alternatives rejected.
+    - Link docs/architecture.md or an ADR under docs/decisions/ rather than restating them.
+  tasks:
+    - Include a task for every new scenario's test, carrying an acceptance(spec, scenario) marker.
+    - Include tasks to update contracts/api.openapi.yaml, data-model.md, docs-site and ADRs the change touches.
+    - End with running make verify, then archiving the change in the same PR.

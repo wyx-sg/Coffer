@@ -17,7 +17,7 @@ agent" its first job.
 
 That framing has not held up. The convergent direction — recorded while building
 the channel bridge — is that **Coffer is a vault/substrate, not an actor**: the
-constitution defines it as the place "any AI agent reads and contributes through
+principles define it as the place "any AI agent reads and contributes through
 one safe interface." A user-facing chat persona is off that line. It is
 redundant with "Claude Code + Coffer MCP," has no durable usage against the
 agents' own UIs and IM, and quietly re-opens the daily-driver creep that

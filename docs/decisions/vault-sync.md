@@ -4,7 +4,7 @@
 **Date**: 2026-09-13
 **Deciders**: Yuxing Wu
 **Spec**: [vault-sync](../../specs/vault-sync/spec.md)
-**Constitution**: Principle I (0.6.0 — bidirectional convergence with a user-owned sync remote)
+**Principles**: Principle I in [`docs/principles.md`](../principles.md) (the user-owned sync remote exception — bidirectional convergence)
 
 ## Context
 
@@ -388,8 +388,8 @@ a bot answering itself.
   would re-implement outside git four things git already does, and would carry
   forward the projection gap that produced the 2026-07-10 incident.
 - **A hosted Coffer sync endpoint** — best UX, but a vendor-controlled system
-  of record; rejected, and explicitly outside the 0.6.0 exception. It would
-  need a much broader constitutional amendment.
+  of record; rejected, and explicitly outside Principle I's sync remote exception. It
+  would need a much broader amendment to `docs/principles.md`.
 - **Copy `~/.coffer/` wholesale** — simplest, but it carries machine-local
   state (daemon configuration, port allocations, per-machine logs) and a binary
   SQLite file that cannot be merged, inspected, or partially applied; rejected.

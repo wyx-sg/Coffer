@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-05-20
 **Deciders**: Yuxing Wu
-**Related**: `.specify/memory/constitution.md` (II Spec-as-Truth, Architectural Constraints), [Layer-First Code Layout](code-layout-layer-first.md), spec `mcp-gateway`
+**Related**: [`docs/principles.md`](../principles.md) (II Spec-as-Truth, Technology & Architectural Constraints), [Layer-First Code Layout](code-layout-layer-first.md), spec `mcp-gateway`
 
 ## Context
 
@@ -12,7 +12,7 @@ spec (`mcp-gateway`) ships `mcp_server` as the only concrete kind. The
 decision is whether to design the **Resource abstraction** now — while only
 one kind is concrete — or to delay until a second kind lands.
 
-The constitution states:
+The principles state:
 
 > Cross-cutting modules are extracted only after the second feature needs them.
 
@@ -44,7 +44,7 @@ Design the Resource framework as **core domain** in spec `mcp-gateway`:
 - The MCP gateway is the first concrete kind plugged into this framework, not
   a one-off feature.
 
-The constitutional clause about cross-cutting modules does **not** apply,
+The principles' clause about cross-cutting modules does **not** apply,
 because Resource is part of the project's core domain model, not a cross-cutting
 infrastructure module (such as logging, telemetry, or auth middleware).
 
@@ -75,13 +75,13 @@ infrastructure module (such as logging, telemetry, or auth middleware).
 **Follow-ons**
 
 - The first time a _cross-kind_ concern surfaces inside the kind code (e.g., MCP
-  and skill both needing subprocess supervision), apply the constitutional
+  and skill both needing subprocess supervision), apply the principles'
   "extract on second feature" rule normally — the Resource framework is not a
   blanket licence to pre-abstract everything.
 
 ## Alternatives Considered
 
-**Extract on second feature (constitutional default)**. Rejected: a generic
+**Extract on second feature (the principles' default)**. Rejected: a generic
 Resource framework cannot be extracted cleanly from MCP-specific code without
 also re-modelling the audit table, the surface routing, and the retention
 framework. The "second feature" cost would be a substantial refactor, not a

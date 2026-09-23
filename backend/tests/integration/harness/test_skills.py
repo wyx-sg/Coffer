@@ -9,7 +9,16 @@ import pytest
 from .conftest import REPO_ROOT
 
 SKILLS_DIR = REPO_ROOT / ".claude" / "skills"
-EXPECTED = {"coffer-spec"}
+# The checked-in skills are OpenSpec's, written by `openspec init --tools claude`
+# and refreshed by `openspec update`.
+EXPECTED = {
+    "openspec-apply-change",
+    "openspec-archive-change",
+    "openspec-explore",
+    "openspec-propose",
+    "openspec-sync-specs",
+    "openspec-update-change",
+}
 
 
 def _frontmatter(md: Path) -> dict:
@@ -31,3 +40,8 @@ def test_skill_has_required_frontmatter(name: str) -> None:
     fm = _frontmatter(md)
     assert fm.get("name") == name, "skill `name` must equal its directory name"
     assert fm.get("description"), "skill needs a description"
+
+
+def test_no_unexpected_skills() -> None:
+    on_disk = {p.parent.name for p in SKILLS_DIR.glob("*/SKILL.md")}
+    assert on_disk == EXPECTED

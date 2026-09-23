@@ -120,6 +120,6 @@ because the browser deliberately withholds absolute paths.
 - Cross-platform reveal has no universal "select the file" primitive on Linux; the
   daemon degrades to opening the containing folder there. macOS (`open -R`) and
   Windows (`explorer /select`) select the item.
-- Consistent with the personal-tool, local-first posture (ADR-/constitution): the
+- Consistent with the personal-tool, local-first posture (Principle I in `docs/principles.md`): the
   daemon already performs local filesystem work on the user's behalf; opening a path
   the UI surfaced is benign and single-user.

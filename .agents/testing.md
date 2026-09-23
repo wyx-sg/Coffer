@@ -215,7 +215,7 @@ Two consequences worth internalising:
 
 - **A docs-only edit can fail `make lint`.** `check_doc_numbering.py` rejects a
   numbered ADR/spec token and a dead link under `docs/decisions/`;
-  `check_architecture_doc.py` holds `.specify/memory/architecture.md` to the
+  `check_architecture_doc.py` holds `docs/architecture.md` to the
   code. Run `make lint` after touching markdown, not just after touching code.
 - **`lint-imports` is invoked with `PYTHONPATH=$(BACKEND)`, and that is
   load-bearing in a worktree** — a bare invocation resolves `coffer` through

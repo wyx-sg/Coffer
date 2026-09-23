@@ -18,7 +18,7 @@
 > ranking, no chunking and no scores. That is recorded as a deliberate
 > **placeholder** rather than a verdict — semantic retrieval is expected to
 > return ([Product Scope Is Settled](../decisions/product-scope-is-settled.md)).
-> Read `.specify/memory/architecture.md` for the live design; read what follows
+> Read `docs/architecture.md` for the live design; read what follows
 > as the state of the field, and of Coffer, in mid-2026.
 
 > Internal competitive-research report for Coffer's knowledge base (the

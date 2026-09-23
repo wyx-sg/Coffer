@@ -2,12 +2,17 @@
 """Audit acceptance-scenario coverage across spec.md files and test markers.
 
 Convention (see .agents/testing.md "Acceptance Scenarios — Cross-Tier Markers"):
-  * Spec scenarios live in `specs/<id>/spec.md` under '## Acceptance Scenarios'
-    as `### <title>` (or `### Scenario: <title>`) headings.
-  * Spec ID is the spec directory's path relative to `specs/`, so it is the
-    folder name for a top-level spec (`specs/mcp-gateway/spec.md` →
-    'mcp-gateway') and a slash-joined path for a nested child
-    (`specs/channels/telegram/spec.md` → 'channels/telegram').
+  * Spec scenarios live in `openspec/specs/<id>/spec.md` as OpenSpec
+    `#### Scenario: <title>` headings, each inside the `### Requirement:` block
+    it verifies, under `## Requirements`.
+  * While the migration to OpenSpec is in flight, a spec may still sit at the
+    legacy `specs/<id>/spec.md` with a trailing '## Acceptance Scenarios'
+    section of `### <title>` (or `### Scenario: <title>`) headings.
+  * Spec ID is the spec directory's path relative to its spec root, so it is
+    the folder name for a top-level spec (`openspec/specs/mcp-gateway/spec.md`
+    → 'mcp-gateway') and a slash-joined path for a nested child
+    (`openspec/specs/channels/telegram/spec.md` → 'channels/telegram').
+  * Scenario names are unique within a spec, because a marker names one.
   * Python tests carry `@pytest.mark.acceptance(spec="...", scenario="...")`.
   * TS tests use `test.acceptance("spec", "scenario", ...)`.
   * Rust tests carry a line comment directly above the test's attributes:
@@ -44,7 +49,8 @@ from collections import defaultdict
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SPECS_DIR = REPO_ROOT / "specs"
+SPECS_DIR = REPO_ROOT / "openspec" / "specs"
+LEGACY_SPECS_DIR = REPO_ROOT / "specs"
 BACKEND_TESTS = REPO_ROOT / "backend" / "tests"
 # The frontend has no tier-by-directory layout: its tests are co-located
 # `*.test.tsx` under src/. `frontend/tests/` was the first scaffold's shape and
@@ -62,6 +68,10 @@ RUST_ROOTS = [REPO_ROOT / "desktop" / "src"]
 ACCEPTANCE_HEADER_RE = re.compile(r"^##\s+Acceptance\s+Scenarios\s*$", re.IGNORECASE)
 NEXT_H2_RE = re.compile(r"^##\s+(?!Acceptance\s+Scenarios)", re.IGNORECASE)
 SCENARIO_HEADING_RE = re.compile(r"^###\s+(?:Scenario:\s*)?(.+?)\s*$", re.IGNORECASE)
+REQUIREMENTS_HEADER_RE = re.compile(r"^##\s+Requirements\s*$")
+H2_RE = re.compile(r"^##\s")
+OPENSPEC_SCENARIO_RE = re.compile(r"^####\s+Scenario:\s*(.+?)\s*$")
+FENCE_RE = re.compile(r"^\s*(```|~~~)")
 # Matches the standalone acceptance helper exported from
 # frontend/src/test/acceptance.ts. See .agents/testing.md.
 #
@@ -118,9 +128,40 @@ def _strip_ts_comments(text: str) -> str:
 
 
 def parse_spec_scenarios(spec_md: Path) -> list[str]:
+    """Scenario names in document order, duplicates kept so they can be flagged."""
+    text = spec_md.read_text(encoding="utf-8")
+    if any(ACCEPTANCE_HEADER_RE.match(line) for line in text.splitlines()):
+        return _parse_legacy_scenarios(text)
+    return _parse_openspec_scenarios(text)
+
+
+def _parse_openspec_scenarios(text: str) -> list[str]:
+    scenarios: list[str] = []
+    in_requirements = False
+    in_fence = False
+    for line in text.splitlines():
+        if FENCE_RE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if REQUIREMENTS_HEADER_RE.match(line):
+            in_requirements = True
+            continue
+        if in_requirements and H2_RE.match(line):
+            in_requirements = False
+            continue
+        if in_requirements:
+            m = OPENSPEC_SCENARIO_RE.match(line)
+            if m:
+                scenarios.append(m.group(1).strip())
+    return scenarios
+
+
+def _parse_legacy_scenarios(text: str) -> list[str]:
     scenarios: list[str] = []
     in_section = False
-    for line in spec_md.read_text(encoding="utf-8").splitlines():
+    for line in text.splitlines():
         if ACCEPTANCE_HEADER_RE.match(line):
             in_section = True
             continue
@@ -133,24 +174,45 @@ def parse_spec_scenarios(spec_md: Path) -> list[str]:
     return scenarios
 
 
-def collect_specs() -> dict[str, set[str]]:
-    """`{spec_id: {scenario, ...}}` for every spec.md at any depth under specs/.
+def _duplicates(names: list[str]) -> list[str]:
+    seen: set[str] = set()
+    dup: list[str] = []
+    for name in names:
+        if name in seen and name not in dup:
+            dup.append(name)
+        seen.add(name)
+    return dup
 
-    The spec id is the spec directory's path RELATIVE TO `specs/`, so a nested
+
+def collect_specs() -> tuple[dict[str, set[str]], list[str]]:
+    """`({spec_id: {scenario, ...}}, [problem, ...])` for every spec.md at any
+    depth under the spec roots.
+
+    The spec id is the spec directory's path RELATIVE TO its root, so a nested
     child spec is `channels/telegram` while a top-level one stays `channels`.
     The recursive glob and the relative id are what let a parent spec keep its
     own scenarios while its children carry theirs: a `*/spec.md` glob would see
     only the parent, and `spec_md.parent.name` would collapse
-    `specs/channels/telegram` and `specs/agent-registry/telegram` onto the same
-    id. On today's flat tree both spellings produce exactly the same ids.
+    `channels/telegram` and `agent-registry/telegram` onto the same id.
+
+    A problem is a spec present under both roots, or a scenario name used
+    twice within one spec.
     """
     out: dict[str, set[str]] = {}
-    if not SPECS_DIR.exists():
-        return out
-    for spec_md in sorted(SPECS_DIR.rglob("spec.md")):
-        spec_id = spec_md.parent.relative_to(SPECS_DIR).as_posix()
-        out[spec_id] = set(parse_spec_scenarios(spec_md))
-    return out
+    problems: list[str] = []
+    for root in (SPECS_DIR, LEGACY_SPECS_DIR):
+        if not root.exists():
+            continue
+        for spec_md in sorted(root.rglob("spec.md")):
+            spec_id = spec_md.parent.relative_to(root).as_posix()
+            if spec_id in out:
+                problems.append(f"{spec_id}: present under both openspec/specs/ and specs/")
+                continue
+            names = parse_spec_scenarios(spec_md)
+            for dup in _duplicates(names):
+                problems.append(f"{spec_id}: scenario {dup!r} appears more than once")
+            out[spec_id] = set(names)
+    return out, problems
 
 
 def _extract_acceptance_call(node: ast.Call) -> tuple[str, str] | None:
@@ -392,15 +454,19 @@ def main() -> int:
     parser.add_argument("--quiet", action="store_true", help="suppress success output")
     args = parser.parse_args()
 
-    specs = collect_specs()
+    specs, problems = collect_specs()
+    if problems:
+        print("audit_acceptance: FAIL — malformed specs:", file=sys.stderr)
+        for problem in problems:
+            print(f"    - {problem}", file=sys.stderr)
+        return 1
     if not specs:
         if not args.quiet:
-            print("audit_acceptance: no specs/<id>/spec.md found — nothing to audit.")
+            print("audit_acceptance: no openspec/specs/<id>/spec.md found — nothing to audit.")
         return 0
 
     # A spec.md with zero scenarios is almost certainly a malformed spec
-    # (missing the `## Acceptance Scenarios` section, or all `###` subsections
-    # deleted). Without this guard the audit silently passes as "0 missing
+    # (no `#### Scenario:` under `## Requirements`, or every one deleted). Without this guard the audit silently passes as "0 missing
     # coverage", giving false confidence.
     empty_specs = sorted(
         spec_id for spec_id, scenarios in specs.items() if not scenarios
@@ -412,7 +478,7 @@ def main() -> int:
         )
         for spec_id in empty_specs:
             print(
-                f"    - {spec_id} (add `## Acceptance Scenarios` with `### <title>` items)",
+                f"    - {spec_id} (every `### Requirement:` needs a `#### Scenario:`)",
                 file=sys.stderr,
             )
         return 1

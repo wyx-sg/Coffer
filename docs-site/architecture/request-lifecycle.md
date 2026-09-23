@@ -187,7 +187,7 @@ A complete round-trip as seen at the shim's stdin/stdout boundary:
 }
 ```
 
-The daemon adds no wrapper or extra fields to the upstream's success result. The error structure follows JSON-RPC 2.0 with Coffer-specific negative codes in the -32000 range.
+The daemon adds no wrapper or extra fields to the upstream's success result. The error structure follows JSON-RPC 2.0 with Coffer's own negative codes in the -32000 range.
 
 ## Agent-turn lifecycle
 

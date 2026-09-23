@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-05-20 (revised 2026-09-09; see Revision history)
 **Deciders**: Yuxing Wu
-**Related**: `.specify/memory/constitution.md` (Languages), spec daemon FR-025 / SC-003, [Detect-or-Spawn](daemon-detect-or-spawn.md)
+**Related**: [`docs/principles.md`](../principles.md) (Languages), spec daemon FR-025 / SC-003, [Detect-or-Spawn](daemon-detect-or-spawn.md)
 
 ## Context
 

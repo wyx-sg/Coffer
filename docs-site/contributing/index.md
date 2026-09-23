@@ -18,7 +18,7 @@ against `backend/uv.lock`, and rebuild that way first when a local result disagr
 
 ## Project Anchors
 
-- **`.specify/memory/constitution.md`** — what Coffer is and what it must never become.
+- **`docs/principles.md`** — what Coffer is and what it must never become.
 - **`AGENTS.md`** — operating manual; humans can read it too, the rules apply equally.
 
 ## Workflow
@@ -26,7 +26,7 @@ against `backend/uv.lock`, and rebuild that way first when a local result disagr
 Every contribution follows the same six steps:
 
 1. Branch off `main`, following the repository's branch-naming convention.
-2. **Write or update the spec first** if the change is user-visible. Every feature starts with a spec; code follows the spec, not the other way around.
+2. **Propose an OpenSpec change first** if the change is user-visible. Every feature starts with a spec change; code follows the spec, not the other way around.
 3. Implement, with tests in the right tier.
 4. Run `make verify-all` locally.
 5. Open a PR; the title must follow **Conventional Commits** format.
@@ -36,9 +36,9 @@ Every contribution follows the same six steps:
 
 PR titles and commit subjects must follow the [Conventional Commits](https://www.conventionalcommits.org/) specification: `type(scope): description`. The pre-commit hook enforces this. `AGENTS.md` carries the full rules, branch naming, and merge policy.
 
-### Spec-driven development (SDD)
+### OpenSpec
 
-All user-visible changes require a spec — `specs/<name>/spec.md` — to be written or updated **before** implementation begins. Spec folders are named, never numbered; a CI gate rejects a numbered reference. The spec is the contract; the implementation must satisfy it. `AGENTS.md` carries the full SDD discipline.
+Coffer writes its specs with [OpenSpec](https://github.com/Fission-AI/OpenSpec). Every user-visible change starts as an OpenSpec change (`/opsx:propose`) — a proposal, an optional design, a task list and the spec deltas — written **before** implementation begins, and archived into the specs (`/opsx:archive`) in the same PR. Capabilities are named, never numbered; a CI gate rejects a numbered reference. The spec is the contract; the implementation must satisfy it. `.agents/openspec.md` carries the full workflow.
 
 ## Testing
 

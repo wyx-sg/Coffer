@@ -3,11 +3,12 @@
 **Status**: Accepted
 **Date**: 2026-09-16
 **Deciders**: Yuxing Wu
-**Related**: [`.agents/sdd.md`](../../.agents/sdd.md), [Code Layout — Layer-First](code-layout-layer-first.md)
+**Related**: [`.agents/openspec.md`](../../.agents/openspec.md), [Code Layout — Layer-First](code-layout-layer-first.md)
 
 ## Context
 
-`.agents/sdd.md` has always said FR ids are **never reused**: a removed
+The spec convention (now [`.agents/openspec.md`](../../.agents/openspec.md))
+has always said FR ids are **never reused**: a removed
 requirement retires its number rather than handing it to the next one. The
 reason is the same one that removed the numbers from ADR filenames and spec
 directories — a reference to a deleted id is visibly dead, while a reference to
@@ -50,7 +51,7 @@ Concretely:
    between specs after this point gives it a fresh, next-free id in its new home
    and retires the old one; it does not trigger another global reset.
 
-`.agents/sdd.md` states the rule in that form — "reset once, in the restructure;
+The spec convention states the rule in that form — "reset once, in the restructure;
 never reused before or after" — so that the reset is discoverable from the
 convention it appears to contradict.
 
@@ -65,7 +66,7 @@ convention it appears to contradict.
   external note, a chat log, a memory file written before this change — is stale
   and cannot be mechanically detected. The mapping table is the only recovery
   path, so it is kept: see the restructure's commit message and
-  [`.agents/sdd.md`](../../.agents/sdd.md).
+  [`.agents/openspec.md`](../../.agents/openspec.md).
 - Git history before this change cites the old ids. `git log -S'FR-0NN'` reaches
   both eras and will mix them; date-bound the search at 2026-09-16.
 - In exchange, every spec is readable from `FR-001` with no holes on day one,

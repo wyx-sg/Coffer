@@ -5,7 +5,7 @@ FRONTEND := frontend
 
 .PHONY: help install install-e2e-browsers hooks \
 	verify verify-all \
-	verify-unit verify-integration verify-contract verify-e2e verify-acceptance verify-benchmark \
+	verify-unit verify-integration verify-contract verify-e2e verify-acceptance openspec-validate verify-benchmark \
 	coverage lock \
 	eval eval-routing eval-curate \
 	bundle-binaries \
@@ -26,7 +26,7 @@ help:
 	@echo "  make verify-integration    integration tier only"
 	@echo "  make verify-contract       contract tier only"
 	@echo "  make verify-e2e            e2e tier only (Playwright: web + mcp projects)"
-	@echo "  make verify-acceptance     audit spec.md scenarios vs test markers"
+	@echo "  make verify-acceptance     openspec validate + audit scenarios vs test markers"
 	@echo "  make verify-benchmark      SC-003 gateway-overhead benchmark (COFFER_RUN_BENCHMARKS=1)"
 	@echo "  make lint                  ruff + mypy + eslint + tsc + knip + import-linter + file/response_model checks"
 	@echo "  make format                ruff format + prettier"
@@ -64,6 +64,11 @@ install:
 	else \
 		echo "install: skipping frontend npm install (npm or frontend/ missing)"; \
 	fi
+	@if command -v npm >/dev/null 2>&1; then \
+		npm install; \
+	else \
+		echo "install: skipping the OpenSpec CLI (npm missing)"; \
+	fi
 	@if [ -d e2e ] && command -v npm >/dev/null 2>&1; then \
 		cd e2e && npm install; \
 	else \
@@ -92,8 +97,18 @@ verify: lint verify-unit verify-integration verify-contract verify-acceptance
 	@$(PY) scripts/verify_stamp.py write && echo "verify: OK — recorded .coffer-verify.stamp"
 verify-all: verify verify-e2e
 
-verify-acceptance:
+# Two halves of one rule: `openspec validate --strict` fails a requirement
+# that owns no scenario, and audit_acceptance fails a scenario no test covers.
+# The CLI is pinned in the root package.json; `make install` fetches it.
+verify-acceptance: openspec-validate
 	$(PY) scripts/audit_acceptance.py
+
+openspec-validate:
+	@if [ -x node_modules/.bin/openspec ]; then \
+		node_modules/.bin/openspec validate --all --strict --no-interactive; \
+	else \
+		echo "openspec-validate: node_modules/.bin/openspec missing — run 'make install'"; exit 1; \
+	fi
 
 lint:
 	$(PY) scripts/check_file_sizes.py
@@ -201,8 +216,8 @@ eval-curate:
 
 # Coverage on demand. No threshold gates are wired yet — thresholds need
 # empirical data from real feature code. When ready, add `--cov-fail-under=N`
-# here (and `--coverage.thresholds.lines=N` on the vitest side) via a
-# constitutional amendment.
+# here (and `--coverage.thresholds.lines=N` on the vitest side) via an
+# amendment to docs/principles.md.
 coverage:
 	@if [ -d $(BACKEND)/tests ]; then \
 		$(PY) -m pytest $(BACKEND)/tests --cov=coffer --cov-report=term-missing --cov-report=xml; \
