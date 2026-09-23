@@ -219,7 +219,7 @@ def test_agent_add_success(agent_cli_daemon):
 
 
 def test_agent_add_without_name_uses_per_type_default(agent_cli_daemon):
-    """Per "Manage the agent lifecycle without an enable state", --name is
+    """Per "Manage the agent lifecycle", --name is
     optional; omitting it registers under the type's default name (codex ->
     codex, claude_code -> claude-code)."""
     config_dir = agent_cli_daemon / "cfg"

@@ -20,7 +20,7 @@ from collections.abc import Mapping, Sequence
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.appliers_read import read_yaml
 from coffer.application.sync.convergence_ops import is_inapplicable
-from coffer.application.sync.ports import ImportGate
+from coffer.application.sync.ports import ImportGate, ImportNormaliser
 from coffer.domain.error_base import CofferError
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource
@@ -95,12 +95,14 @@ class ResourceApplier:
         *,
         worktree: pathlib.Path,
         gates: Sequence[ImportGate] = (),
+        normalisers: Sequence[ImportNormaliser] = (),
         home: str | None,
         actor: str = "sync",
     ) -> None:
         self._resources = resources
         self._worktree = worktree
         self._gates = {gate.kind: gate for gate in gates}
+        self._normalisers = {n.kind: n for n in normalisers}
         self._home = home
         self._actor = actor
 
@@ -129,7 +131,7 @@ class ResourceApplier:
             return False
         return False
 
-    async def upsert(self, path: str) -> None:
+    async def upsert(self, path: str) -> str | None:
         doc = await asyncio.to_thread(read_yaml, self._worktree / path)
         uid, kind, name = _identity_from(doc, path)
         raw_config = doc.get("config")
@@ -143,7 +145,18 @@ class ResourceApplier:
         # collision to report, not a row to overwrite.
         existing = await self._find(uid)
         if not self._converges(kind, config, existing):
-            return
+            return None
+
+        # A kind may rewrite what arrives before anything else sees it — the
+        # provider kind's one internal-engine default (spec provider-switching
+        # "Keep at most one internal-engine default"). A note means it did, and
+        # travels back to the round to be reported; the path still applies.
+        note: str | None = None
+        normaliser = self._normalisers.get(kind)
+        if normaliser is not None:
+            config, note = await normaliser.normalise(
+                uid, config, lambda other: self._tree_config(kind, other)
+            )
 
         gate = self._gates.get(kind)
         if gate is not None:
@@ -202,6 +215,15 @@ class ResourceApplier:
                 description=description,
                 allow_lifecycle_kind=True,
             )
+        return note
+
+    async def _tree_config(self, kind: str, uid: str) -> Mapping[str, object] | None:
+        """The config of ``resources/<kind>/<uid>.yaml`` in this round's tree."""
+        path = self._worktree / "resources" / kind / f"{uid}.yaml"
+        if not path.is_file():
+            return None
+        raw = (await asyncio.to_thread(read_yaml, path)).get("config")
+        return raw if isinstance(raw, Mapping) else None
 
     async def remove(self, path: str) -> None:
         # A removal has no document left to read, so the path is the only

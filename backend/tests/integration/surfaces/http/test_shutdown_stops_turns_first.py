@@ -21,6 +21,10 @@ async def _done() -> None:
     return None
 
 
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="a shutdown keeps the partial reply",
+)
 async def test_turns_are_stopped_before_the_engine_is_disposed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

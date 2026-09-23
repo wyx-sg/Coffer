@@ -145,7 +145,7 @@ Primary (project repos/docs):
 
 - **Bare, unsandboxed subprocess upstreams.** Each stdio upstream is spawned via
   `mcp.client.stdio.stdio_client(StdioServerParameters(command, args, env, cwd))`
-  as a direct child process. The only hardening is env scoping (CODE-027 minimal
+  as a direct child process. The only hardening is env scoping (a minimal
   allowlist) plus PID-tracking / orphan-reaping — no Docker/Podman/seccomp/
   namespace/firejail/bubblewrap/chroot anywhere in `backend/coffer`. The single
   `sandbox` string in the codebase is `"sandbox": "danger-full-access"` in the

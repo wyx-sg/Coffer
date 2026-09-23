@@ -42,11 +42,11 @@ class AgentCreate(BaseModel):
 
 
 class AgentPatch(BaseModel):
-    # "Manage the agent lifecycle without an enable state": agents have no
-    # enable/disable concept — only config_dir,
-    # description, and the model binding are updatable. (No `enabled` field by
-    # design.) Which skills reach this agent is decided on each skill resource
-    # (`enabled` + `scope`), never here.
+    # Only config_dir, description, and the model binding are updatable here.
+    # The agent's `enabled` flag is the kind-agnostic one, toggled through
+    # POST /resources/{uid}/enable|disable (spec agent-registry "Switch an agent
+    # off with the kind-agnostic enabled flag"). Which skills reach this agent
+    # is decided on each skill resource (`enabled` + `scope`), never here.
     config_dir: str | None = None
     description: str | None = None
     # spec provider-switching "Take projected model keys from the agent's binding":

@@ -157,6 +157,8 @@ through is that spec's too.
 - The `coffer mcp` CLI MUST exit with code 3 and name the condition on stderr when no daemon is reachable
   and one cannot be started (a missing daemon is started on demand, and only a failed or timed-out start
   exits 3), and its `list` and `invocations` subcommands MUST support machine-readable `--json` output.
+  The same exit covers a daemon that stops answering after the command has connected to it: the lost
+  connection is reported once, as a message naming the condition, never as a traceback.
 
 #### Scenario: register a stdio MCP server
 - **GIVEN** the coffer daemon is running and no MCP servers are registered,
@@ -172,6 +174,11 @@ through is that spec's too.
 - **GIVEN** any of `coffer mcp list` or `coffer mcp invocations` supports `--json`,
 - **WHEN** the subcommand is invoked with `--json`,
 - **THEN** stdout is a parseable JSON document with stable top-level keys (`resources` for `list`, `invocations` for `invocations`) and no human-readable framing.
+
+#### Scenario: a daemon lost mid-command exits 3
+- **GIVEN** a `coffer mcp list` whose client was built against a daemon that has since stopped answering,
+- **WHEN** the command makes its request,
+- **THEN** the process exits with code 3, and stderr names the daemon-unreachable condition exactly once and carries no traceback.
 
 ### Requirement: Support stdio and HTTP upstreams
 The system MUST support both stdio and HTTP MCP transports for upstream servers. An HTTP upstream MAY cite a

@@ -225,10 +225,15 @@ def test_cli_key_by_connection_and_scope(provider_daemon):
     assert _runner.invoke(cli_app, ["provider", "key"]).exit_code == 6
 
 
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a disabled or unreached connection's uid helper resolves no key",
+)
 def test_cli_key_by_connection_uid_refuses_a_disabled_connection(provider_daemon):
     """The projected ``apiKeyHelper`` line keeps calling this after the user
     disables the connection; it must then fail loudly rather than hand the
-    agent the key (spec provider-switching "Keys resolve per connection")."""
+    agent the key (spec provider-switching "Resolve a key for exactly one
+    connection")."""
     added = _runner.invoke(
         cli_app,
         [

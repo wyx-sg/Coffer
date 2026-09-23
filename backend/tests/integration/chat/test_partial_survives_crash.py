@@ -62,6 +62,10 @@ class _StreamThenHang:
         await asyncio.Event().wait()
 
 
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="a daemon that dies mid-turn keeps what was streamed",
+)
 async def test_a_crash_keeps_the_flushed_partial_for_the_sweep(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -57,7 +57,8 @@ make verify-all           # verify + e2e
 `make verify` includes `make lint`, which is more than ruff, mypy and the frontend's
 eslint/tsc — it also runs the repository's own gates: file-size limits
 (`check_file_sizes.py`), response-model coverage (`check_response_models.py`), named-not-
-numbered specs and ADRs (`check_doc_numbering.py`), the architecture-doc check
+numbered specs and ADRs (`check_doc_numbering.py`), requirement citations that name a real
+title (`check_spec_citations.py`), the architecture-doc check
 (`check_architecture_doc.py`), the import-linter layering contracts, and the i18n key
 dump. Running the test tiers alone is **not** the same as running `make verify`.
 

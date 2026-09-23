@@ -249,7 +249,11 @@ export interface paths {
          *     is configured, in which case every inbox item was promoted to a document
          *     as it stood and `promoted` lists them; `up_to_date` when nothing is
          *     pending; `too_large` when the item does not fit the model's context
-         *     (`limit` then names the ceiling); and `failed` when the pass did not
+         *     (`limit` then names the ceiling) — such an item is never shown to the
+         *     model and never left pending: material is promoted to a document as it
+         *     stands (`promoted`), and an edited document is stamped curated
+         *     (`stamped`) so the sweep stops re-offering it (see "Report every pass
+         *     outcome as a status"); and `failed` when the pass did not
          *     complete — in which case the item is left as it was, so it is curated
          *     later rather than lost (see "Settle an item only after its pass
          *     completes"). All of them are **200**: none is a fault of the request.
@@ -489,7 +493,8 @@ export interface components {
          *       "documents_after": 23,
          *       "limit": 0,
          *       "promoted": [],
-         *       "gave_up": false
+         *       "gave_up": false,
+         *       "stamped": ""
          *     }
          */
         CurationOut: {
@@ -500,8 +505,11 @@ export interface components {
              *     `no_model` when no internal connection is configured — every inbox
              *     item was promoted to a document as it stood, never an error.
              *     `up_to_date` when nothing is pending. `too_large` when the item
-             *     does not fit, `limit` naming the ceiling. `failed` leaves the item
-             *     as it was so it is curated later rather than lost.
+             *     does not fit, `limit` naming the ceiling: the item is never shown
+             *     to the model and never left pending — material is promoted as it
+             *     stands (`promoted`), an edited document is stamped curated
+             *     (`stamped`). `failed` leaves the item as it was so it is curated
+             *     later rather than lost.
              * @enum {string}
              */
             status: "ok" | "truncated" | "no_model" | "up_to_date" | "too_large" | "failed";
@@ -534,9 +542,11 @@ export interface components {
             /** @description The item-size ceiling, present only with `status` `too_large`. */
             limit: number;
             /**
-             * @description The documents the inbox was promoted into as it stood: every item
+             * @description Documents material was promoted into as it stood: the whole inbox
              *     with `status` `no_model` (see "Promote material directly when no
-             *     model is configured"), or the one item a pass gave up on (`gave_up`).
+             *     model is configured"), the one oversized item of material with
+             *     `status` `too_large`, or the one item a pass gave up on (`gave_up`).
+             *     Empty otherwise.
              */
             promoted: string[];
             /**
@@ -546,6 +556,13 @@ export interface components {
              *     "Bound a pass to eight writes").
              */
             gave_up: boolean;
+            /**
+             * @description The edited document stamped curated without a pass, present only
+             *     with `status` `too_large` when the oversized item was a document —
+             *     there is nothing to promote, and the stamp stops the sweep
+             *     re-offering it. Empty otherwise.
+             */
+            stamped: string;
         };
         /**
          * @description What an upload became. Note `converter` is reported here and written

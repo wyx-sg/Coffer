@@ -24,8 +24,10 @@ Coffer ships a checked-in control layer so the agent-facing harness is enforced,
   Read [`openspec.md`](./openspec.md) for the change workflow they drive.
 - Whatever a change adds, a capability is **named, never numbered**:
   `scripts/check_doc_numbering.py` (run by `make lint`) fails on a spec
-  directory starting with a digit and on any `spec <digits>` token, so a
-  numbered spec cannot be committed.
+  directory starting with a digit and on any `spec <digits>` token, in any
+  case, so a numbered spec cannot be committed. A requirement is cited by
+  title, and `scripts/check_spec_citations.py` (also `make lint`) fails on a
+  citation whose capability or title does not exist in `openspec/specs/`.
 
 ## How it is tested
 

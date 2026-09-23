@@ -30,7 +30,11 @@ point, where the asking identity is known (mcp-gateway at the per-session capabi
 listing, skill-manager at delivery); a second central gate would be unreachable. The
 invocation log is mcp-gateway's; it registers here as a prunable table and nothing more.
 Whether the passes this spec reports run on a timer is internal-engine's, and what each
-pass does is memory's and knowledge's.
+pass does is memory's and knowledge's. `GET /api/v1/upkeep/runs`, the read of the passes
+in flight, is the one management read with no CLI counterpart, deliberately: it is a live,
+read-only status the web UI polls so a Knowledge or Memory page's run-now button shows a
+pass the timer or the CLI started as already running, and a terminal has no button to keep
+in step. The passes themselves are managed from the CLI through `coffer engine upkeep`.
 
 It is a spec, not a rule in the principles, because it owns state and operable surfaces.
 `audit_log` and `retention_policies` are its tables: every kind writes the first, and

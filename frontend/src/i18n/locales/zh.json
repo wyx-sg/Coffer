@@ -723,6 +723,7 @@
     "PLUGIN_UNINSTALL_UNSUPPORTED": "该插件不支持卸载",
     "PRIVILEGED_PATH": "该路径受保护，无法在此使用",
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": "已保存的凭据与内联密钥，二者必须且只能提供一个",
+    "PROVIDER_INTERNAL_DEFAULT_TAKEN": "已有另一个连接是 Coffer 内部引擎的默认连接——请把默认切换到这个连接，而不是直接改这个字段",
     "PROVIDER_INTERNAL_ONLY": "该连接使用 ollama 协议，仅供 Coffer 内部引擎使用，不能为 agent 启用",
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "该连接正在启用中，无法更改协议格式——请先让相关 agent 切回自带登录，再修改协议，然后重新启用",
     "RESOURCE_ALREADY_EXISTS": "同名资源已存在",

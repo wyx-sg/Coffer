@@ -86,6 +86,10 @@ class _StreamThenBlock:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="a stream that ends without a terminal is a failure, not a reply",
+)
 async def test_a_stream_that_stops_without_a_terminal_is_a_stream_ended_error() -> None:
     adapter = FakeAgentAdapter([TurnStarted(), TextDelta(text="cut mid-sen")])
     orchestrator, _conv, msg_repo, _prov = make_orchestrator(adapter=adapter)
@@ -134,6 +138,10 @@ class _FakeClock:
         return self.now
 
 
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="a daemon that dies mid-turn keeps what was streamed",
+)
 async def test_partial_output_is_flushed_to_the_streaming_row(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -160,6 +168,10 @@ async def test_partial_output_is_flushed_to_the_streaming_row(
     await drain_queue(queue)
 
 
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="a daemon that dies mid-turn keeps what was streamed",
+)
 async def test_the_flush_does_not_write_on_every_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -208,6 +220,10 @@ async def test_a_quick_turn_writes_no_partial_at_all() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="a shutdown keeps the partial reply",
+)
 async def test_a_shutdown_cancellation_keeps_the_partial_marked_failed() -> None:
     adapter = _StreamThenBlock(["half an ", "answer"])
     orchestrator, _conv, msg_repo, _prov = make_orchestrator(adapter=adapter)
@@ -261,6 +277,10 @@ async def test_a_user_interrupt_is_unchanged_complete_with_partial() -> None:
     assert (assistant.status, _text(assistant)) == ("complete", "kept")
 
 
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="a shutdown keeps the partial reply",
+)
 async def test_stopping_every_turn_at_shutdown_awaits_them_and_keeps_partials() -> None:
     """The daemon's teardown cancels running turns itself, before the database is
     disposed, and waits for each to finish writing its partial reply — rather than

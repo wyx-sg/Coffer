@@ -283,8 +283,8 @@ class ProviderService:
         disabled, scoped to no agent, or keyless (ollama). Reach is the same
         effective projection the wire form reads (``projection_targets``), so a
         live helper line stops receiving the key the moment the user switches
-        the connection off (spec provider-switching "Keys resolve per
-        connection").
+        the connection off (spec provider-switching "Resolve a key for exactly
+        one connection").
         """
         resource = await self.get(uid)
         cfg = self._cfg(resource)

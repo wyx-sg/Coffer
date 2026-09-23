@@ -109,7 +109,7 @@ coffer knowledge curate handbook
 coffer knowledge curate handbook --document handbook/package-manager.md
 ```
 
-The answer is a status: `ok`, `up_to_date`, `no_model` when no internal connection is configured, `too_large`, or `failed`. A pass that fails leaves its item as it was, so the next sweep tries again. Only one pass per collection runs at a time, whoever started it; a second trigger is refused rather than queued.
+The answer is a status: `ok`, `up_to_date` when nothing is pending, `no_model` when no internal connection is configured, `too_large`, `truncated` when the pass hit its step limit, or `failed`. An item too large for one pass is never shown to the model and never left waiting: material becomes a document as it stands, and an edited document is marked as seen so the sweep stops handing it back — the report names which. A pass that fails or is truncated leaves its item owed, so the next sweep tries again. Only one pass per collection runs at a time, whoever started it; a second trigger is refused rather than queued.
 
 **With no internal model, nothing waits.** Material is promoted to a document of its own the moment it arrives, as it stands, and a pass over a collection with anything left in its inbox promotes all of it and reports `no_model` with the documents it produced. You get a less tidy collection, but never knowledge sitting where no agent can read it.
 

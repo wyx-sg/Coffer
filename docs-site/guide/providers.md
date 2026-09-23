@@ -64,7 +64,7 @@ coffer scope set provider my-gateway --no-agents      # dormant: reaches nothing
 
 That is how an OpenAI-compatible gateway is pointed at **Claude Code**: the projection writer is chosen by the **agent type**, not by the protocol, so a connection reaching `claude_code` writes Claude's `settings.json` in the anthropic shape whatever its own wire says. Coffer translates nothing between protocols — the endpoint really has to speak what the agent sends.
 
-The resource's `enabled` switch narrows the projection and only the projection: a disabled connection writes into nothing and resolves no key, while the reach you configured is still reported, so switching a connection off never looks like it erased the agent list. Scope, like every reach in Coffer, is a per-machine decision and does not travel between machines.
+The resource's `enabled` switch narrows the projection and only the projection: a disabled connection writes into nothing and resolves no key — not even for the `apiKeyHelper` line already written into Claude Code's `settings.json`, whose `coffer provider key --connection-uid <uid>` then exits non-zero with a message instead of printing the secret — while the reach you configured is still reported, so switching a connection off never looks like it erased the agent list. Scope, like every reach in Coffer, is a per-machine decision and does not travel between machines.
 
 ## Switch an agent onto it
 

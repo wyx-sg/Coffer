@@ -199,9 +199,23 @@ async def test_no_model_promotes_the_inbox_as_it_stands(knowledge_root) -> None:
     assert pending_items("shopee") == ()
 
 
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="a collection with nothing pending reports up to date"
+)
 @pytest.mark.anyio
 async def test_nothing_pending_is_up_to_date(knowledge_root) -> None:  # type: ignore[no-untyped-def]
-    assert (await _run(_Loop([])))["status"] == "up_to_date"
+    relpath = _document("Settled", body="already curated")
+    before = fs.read_file(relpath)
+    loop = _Loop([])
+
+    outcome = await _run(loop)
+
+    assert outcome == {"status": "up_to_date", "collection": "shopee"}
+    # No pass ran: the model was never shown anything and nothing was touched.
+    assert loop.prompt == ""
+    assert _documents() == [relpath]
+    after = fs.read_file(relpath)
+    assert (after.body, after.curated_at) == (before.body, before.curated_at)
 
 
 def _pending_count() -> int:
@@ -209,6 +223,7 @@ def _pending_count() -> int:
     return entry.pending_count
 
 
+@pytest.mark.acceptance(spec="knowledge", scenario="oversized material is promoted as it stands")
 @pytest.mark.anyio
 async def test_oversized_material_is_promoted_as_it_stands(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     """Material too large for one pass does not wait in the hidden inbox
@@ -241,6 +256,9 @@ async def test_oversized_material_is_promoted_as_it_stands(knowledge_root) -> No
     assert pending_items("shopee") == ()
 
 
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="an oversized edited document is stamped, not re-offered"
+)
 @pytest.mark.anyio
 async def test_an_oversized_edited_document_is_stamped_and_not_offered_again(
     knowledge_root,

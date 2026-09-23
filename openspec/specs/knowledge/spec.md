@@ -15,7 +15,7 @@ Coffer holds **knowledge about the user's working environment**: their repositor
 
 These are **standing constraints**, not a phase that has passed: no derived index of any kind, no retrieval tool (an audit of 448 Claude Code sessions found the old tools were never called — a tool an agent does not remember to call is not retrieval), no second retrieval surface on the web page, no directory that carries meaning, and no kept originals. Ingestion is an additional entrance, never a required one: writing a Markdown document with any editor stays a complete way to add knowledge, and upload exists because the user's live entrance is often a phone.
 
-Assumptions: the corpus stays in the hundreds of files, so a catalogue of every document fits a skill body (measured at ~5.2K tokens for 58 documents); tens of thousands of files would be a different design and the place embeddings would be reconsidered. Curation rewrites documents with no review step; what stands between a person's work and a bad pass is that a person's edit is never reverted, the eight-write bound, one pass per collection, the audit event every pass records, and — where vault sync is configured — the vault's git history. The internal connection is the one place user content may leave the machine, exactly as [channels](../channels/spec.md) "Transcribe inbound voice only when the user opted in" establishes for voice; curation and an ingested document's generated description are the only things this layer sends there. One item is small enough to hand a model whole; a pass that meets one too large for its context reports rather than truncates.
+Assumptions: the corpus stays in the hundreds of files, so a catalogue of every document fits a skill body (measured at ~5.2K tokens for 58 documents); tens of thousands of files would be a different design and the place embeddings would be reconsidered. Curation rewrites documents with no review step; what stands between a person's work and a bad pass is that a person's edit is never reverted, the eight-write bound, one pass per collection, the audit event every pass records, and — where vault sync is configured — the vault's git history. The internal connection is the one place user content may leave the machine, exactly as [channels](../channels/spec.md) "Transcribe inbound voice only when the user opted in" establishes for voice; curation and an ingested document's generated description are the only things this layer sends there. One item is small enough to hand a model whole; a pass that meets one too large for its context reports it and keeps the item as it stands rather than truncating it.
 
 ## Requirements
 
@@ -261,7 +261,7 @@ A document MUST NOT contain a reference to another knowledge file by file name o
 - **THEN** it is refused and reported, because invariant 3 is enforced at the write rather than asked for in a prompt
 
 ### Requirement: Settle an item only after its pass completes
-An item MUST be settled only after its pass completes: merged material is deleted from the inbox, and an edited document is stamped with `coffer_curated_at` and nothing else about it changes. Every document curation itself writes MUST be stamped as it is written, so the sweep does not hand the pass its own output back as an edit. A stamp MUST set the file's modification time to the stamp, so the stamping itself does not count as an edit. A pass that does not complete MUST leave the item as it was, so it is curated later rather than lost — the one exception being an item cut off three times in a row, which "Bound a pass to eight writes" settles without losing it.
+An item MUST be settled only after its pass completes: merged material is deleted from the inbox, and an edited document is stamped with `coffer_curated_at` and nothing else about it changes. Every document curation itself writes MUST be stamped as it is written, so the sweep does not hand the pass its own output back as an edit. A stamp MUST set the file's modification time to the stamp, so the stamping itself does not count as an edit. A pass that does not complete MUST leave the item as it was, so it is curated later rather than lost. Three ways an item leaves the queue without a completed pass keep it as it stands rather than settle a merge that never happened: no model configured ("Promote material directly when no model is configured"), an item too large for any pass ("Report every pass outcome as a status"), and an item cut off three times in a row ("Bound a pass to eight writes").
 
 #### Scenario: curation merges material into the documents and empties the inbox
 - **GIVEN** a collection whose inbox holds two items and an internal connection configured
@@ -450,3 +450,24 @@ The knowledge layer MUST NOT add any table to `coffer.db`, and MUST NOT create a
 - **WHEN** a collection is created and material is submitted into it
 - **THEN** no table in `coffer.db` is named for knowledge, the collection is one `resources` row of kind `knowledge`
 - **AND** every file the layer wrote lies under the knowledge root
+
+### Requirement: Report every pass outcome as a status
+Every curation outcome MUST be reported as a `status`, and the route that runs a pass MUST answer **200** for each of them, because none is a fault of the request: `ok` when a pass ran and settled its item; `no_model` when no internal connection is configured (see "Promote material directly when no model is configured"); `up_to_date` when nothing is pending, in which case no pass runs and nothing is touched; `too_large` when the item is past the size one pass can hold, with `limit` naming the ceiling; `truncated` when the recursion limit cut the pass off (see "Bound a pass to eight writes"); and `failed` when the pass did not complete. The route MUST answer **404** for an unknown or disabled collection and **409** while a pass over the same collection is running (see "Run one pass per collection at a time"). A `too_large` item MUST never be shown to the model and MUST never be left pending — left where it was it would be offered to every sweep and refused by every pass: material is promoted to a document as it stands, exactly as the no-model path promotes it, and reported in `promoted`; an edited document, which has nothing to promote, is stamped curated and reported in `stamped`. Neither changes a word of the item.
+
+#### Scenario: oversized material is promoted as it stands
+- **GIVEN** a collection whose inbox holds one item of material longer than the item-size ceiling, and an internal connection configured
+- **WHEN** a curation pass runs
+- **THEN** it reports `too_large` with `limit` and lists in `promoted` the document the item became, whose body is the material as submitted and which carries a `coffer_curated_at` stamp
+- **AND** the model was shown nothing, the inbox is empty and nothing is pending
+
+#### Scenario: an oversized edited document is stamped, not re-offered
+- **GIVEN** a document a person edited past the item-size ceiling, owed a pass, and an internal connection configured
+- **WHEN** a curation pass runs
+- **THEN** it reports `too_large` with `limit` and names the document in `stamped`, and the document's body is exactly what the person wrote under a new `coffer_curated_at` stamp
+- **AND** the model was shown nothing and the sweep no longer finds the document pending
+
+#### Scenario: a collection with nothing pending reports up to date
+- **GIVEN** a collection holding only documents curation has already seen, and an internal connection configured
+- **WHEN** a curation pass is run over it
+- **THEN** it reports `up_to_date` with the collection's name and nothing else
+- **AND** the model was shown nothing and every document is unchanged, stamp included

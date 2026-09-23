@@ -216,6 +216,7 @@ mod tests {
         }
     }
 
+    // acceptance(spec = "vault-sync", scenario = "a machine that has not joined says so everywhere")
     #[test]
     fn a_machine_that_has_not_joined_needs_a_human() {
         // The CLI (`_NEEDS_ATTENTION`) and the web (`useSyncAttention.ts`) both
@@ -246,6 +247,7 @@ mod tests {
         assert_eq!(attention_status(&snapshot(false, Some("failed"))), None);
     }
 
+    // acceptance(spec = "vault-sync", scenario = "a paused remote runs no round and asks for nothing")
     #[test]
     fn a_remote_switched_off_is_never_an_attention_state() {
         // The bug this closes: a disabled remote makes the daemon return a

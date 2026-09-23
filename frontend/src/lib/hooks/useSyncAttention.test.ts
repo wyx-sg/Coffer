@@ -4,8 +4,9 @@
 // holding after the next hourly round, and getting it wrong turns the dot
 // into either a nag or a thing that only ever appears once.
 import { describe, expect, test } from "vitest";
-import { attentionMarker } from "./useSyncAttention";
-import type { ConvergeRound } from "@/lib/api/sync";
+import { attentionMarker, syncStatusMarker } from "./useSyncAttention";
+import type { ConvergeRound, SyncStatus } from "@/lib/api/sync";
+import { acceptance } from "@/test/acceptance";
 
 const NO_COUNTS = { added: 0, modified: 0, deleted: 0, changes: [] };
 
@@ -35,7 +36,13 @@ describe("attentionMarker", () => {
   });
 
   test("every status the CLI exits non-zero on raises the dot", () => {
-    for (const status of ["conflict", "awaiting_confirmation", "push_failed", "failed"] as const) {
+    for (const status of [
+      "conflict",
+      "awaiting_confirmation",
+      "push_failed",
+      "failed",
+      "awaiting_join",
+    ] as const) {
       expect(attentionMarker(round({ status }))).not.toBeNull();
     }
   });
@@ -98,5 +105,52 @@ describe("attentionMarker", () => {
       } as Partial<ConvergeRound>),
     );
     expect(marker!.length).toBeLessThan(200);
+  });
+});
+
+function status(enabled: boolean | null, last: Partial<ConvergeRound> | null): SyncStatus {
+  return {
+    configured: enabled !== null,
+    remote:
+      enabled === null
+        ? null
+        : {
+            url: "https://example.invalid/vault.git",
+            branch: "main",
+            credential_ref: null,
+            include_credentials: false,
+            interval_seconds: 3600,
+            enabled,
+            worktree_path: "/tmp/sync",
+          },
+    last_run: last === null ? null : round(last),
+    machine_id: "m-1",
+    machine_id_is_derived: false,
+    joined: true,
+    not_applicable: [],
+  };
+}
+
+describe("syncStatusMarker", () => {
+  acceptance("vault-sync", "a machine that has not joined says so everywhere", () => {
+    // Every round converges nothing until someone adopts, so the Sync entry
+    // carries the dot exactly as it does for a held round.
+    const marker = syncStatusMarker(status(true, { status: "awaiting_join" }));
+    expect(marker).not.toBeNull();
+    expect(marker!.startsWith("awaiting_join|")).toBe(true);
+  });
+
+  acceptance("vault-sync", "a paused remote runs no round and asks for nothing", () => {
+    // Pausing records no round, so `last_run` still holds the hold it was
+    // paused on — and the dot must not keep asking about it.
+    const held = { status: "awaiting_confirmation" } as Partial<ConvergeRound>;
+    expect(syncStatusMarker(status(true, held))).not.toBeNull();
+    expect(syncStatusMarker(status(false, held))).toBeNull();
+    expect(syncStatusMarker(status(false, { status: "awaiting_join" }))).toBeNull();
+  });
+
+  test("no remote and no status have nothing to see", () => {
+    expect(syncStatusMarker(status(null, null))).toBeNull();
+    expect(syncStatusMarker(undefined)).toBeNull();
   });
 });

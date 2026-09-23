@@ -22,11 +22,13 @@ by a message rather than by registration.
 | `archived_at` | TIMESTAMP, NULL | NULL = active. Set by the owner or by the auto-archive stage. |
 | `channel_uid` | TEXT, NULL | Return address: the **uid** of the channel this thread is also reachable on. "Has a binding" iff set. A uid and not a name, because a binding has to keep naming the same channel after the user renames it (ADR resource-identity-is-an-immutable-uid); the label a person or an agent reads is resolved from it at read time. |
 | `peer_chat_id` | TEXT, NULL | The chat id that return address aims at. |
+| `owner` | TEXT, NULL | The surface that owns this conversation, when it is not the developer's own. NULL = the developer's (every conversation chat itself or a channel opens). Written only by a surface that owns its conversations — `ChatService.create_conversation(owner=...)`; no surface currently passes one — and never exposed on the wire. An owned conversation is left out of both listings (see "Show every conversation on the Chat page") and stays readable by id. |
 
 Indexes: `idx_conversations_updated (updated_at)` — the recency ordering of
 "List conversations by latest activity" — and `idx_conversations_archived
 (archived_at)` — the active/archived split, which is two listings rather than
-one filtered list.
+one filtered list — and `idx_conversations_owner (owner)`, because every
+listing filters out owned conversations.
 
 ### `agent_config` — the JSON column's shape
 
@@ -94,13 +96,21 @@ emitted by an adapter, and never accumulated into the assistant message — whic
 is why the bus replays only its latest value (see "Replay without
 double-rendering").
 
+A `turn_error` carries a short machine `code` and a message. Three codes are the
+platform's own rather than an agent's (see "Keep partial output when a turn is
+interrupted or fails"): `stream_ended` — the agent's stream ended without a
+terminal event; `turn_timeout` — the idle watchdog cancelled a silent turn; and
+`daemon_stopped` — the daemon cancelled a running turn on its way down. Every
+other code is the agent adapter's.
+
 ## Non-persistent state
 
 Held per conversation in one process-global dict, never in the database (see
 "Release turn state nobody needs"): the event bus with its replay buffer, the
 in-flight turn, the pending message queue, and the queue's pause flag. A daemon
-restart therefore drops uncommitted queued messages and leaves in-flight turns
-to the startup sweep (see "Sweep streaming rows left by a crashed daemon"). A
+restart therefore drops uncommitted queued messages; a shutdown stops in-flight
+turns itself before the database closes, and a daemon that dies outright leaves
+them to the startup sweep (see "Sweep streaming rows left by a crashed daemon"). A
 conversation's state exists only while a turn, a queued message or a subscriber
 needs it.
 
@@ -144,6 +154,7 @@ need; `20260621_0036_chat_models_to_provider_resources` moved model state out of
 the conversation; `20260916_0083_drop_conversation_model_id` removed the last of
 it, leaving the model on the message that ran (`model_id`) and on
 `agent_config` as an override — one column answering one question each.
+`20260918_0091_conversation_owner` added `owner` and `idx_conversations_owner`;
 `20260918_0096_cross_references_point_at_uids` renamed `channel_name` to
 `channel_uid` and rewrote each stored channel name into that channel's uid;
 `20260923_0102_conversation_agent_key_has_no_default` dropped the `builtin`

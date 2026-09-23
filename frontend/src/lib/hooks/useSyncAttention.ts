@@ -20,7 +20,7 @@
 import { useEffect } from "react";
 import { useMatch } from "react-router-dom";
 
-import type { ConvergeRound, RoundStatus } from "@/lib/api/sync";
+import type { ConvergeRound, RoundStatus, SyncStatus } from "@/lib/api/sync";
 import { useSyncStatus } from "@/lib/hooks/useSync";
 
 const SEEN_KEY = "coffer.sync.attentionSeen";
@@ -70,6 +70,19 @@ export function attentionMarker(round: ConvergeRound | null | undefined): string
   ].join("|");
 }
 
+/**
+ * The marker for a whole `GET /sync/status` body: `attentionMarker` of its last
+ * round, but only while the remote is switched ON. A paused remote makes a round
+ * return `disabled` WITHOUT recording it, so `last_run` keeps whatever it last
+ * was; the CLI (`coffer sync status`) and the desktop shell both stay quiet
+ * then, and so does the dot (spec vault-sync "Pause a configured remote without
+ * forgetting it").
+ */
+export function syncStatusMarker(status: SyncStatus | null | undefined): string | null {
+  if (status?.remote?.enabled !== true) return null;
+  return attentionMarker(status.last_run);
+}
+
 function readSeen(): string | null {
   try {
     return localStorage.getItem(SEEN_KEY);
@@ -99,7 +112,7 @@ function writeSeen(marker: string): void {
 export function useSyncAttention(): boolean {
   const onSyncPage = useMatch("/sync") !== null;
   const { data, isError } = useSyncStatus();
-  const marker = attentionMarker(data?.last_run);
+  const marker = syncStatusMarker(data);
 
   useEffect(() => {
     if (onSyncPage && marker) writeSeen(marker);

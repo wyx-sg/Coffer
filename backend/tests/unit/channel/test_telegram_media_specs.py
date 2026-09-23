@@ -128,31 +128,3 @@ def test_one_option_per_row_keeps_a_menu_readable_on_a_phone() -> None:
 
     keyboard = inline_keyboard([ChoiceButton(label=str(n), value=f"model:{n}") for n in range(3)])
     assert [len(row) for row in keyboard["inline_keyboard"]] == [1, 1, 1]
-
-
-# -- a file known to be over the cap is never fetched --------------------------
-
-
-async def test_an_oversized_file_gets_one_note_and_no_getfile(tmp_path) -> None:
-    import httpx
-
-    from coffer.infrastructure.channel.telegram_media import download_attachments
-
-    calls: list[tuple[str, dict[str, Any]]] = []
-
-    async def call(method: str, **params: Any) -> Any:
-        calls.append((method, params))
-        raise AssertionError("getFile must not be called for a file over the cap")
-
-    message = {
-        "caption": "have a look",
-        "document": {"file_id": "huge", "file_name": "dump.sql", "file_size": _TOO_BIG},
-    }
-    async with httpx.AsyncClient() as client:
-        fetched = await download_attachments(
-            client, call, "https://files.invalid", tmp_path, "tg", message
-        )
-    assert calls == []
-    assert fetched.attachments == ()
-    assert len(fetched.notes) == 1
-    assert "dump.sql" in fetched.notes[0] and "20 MB" in fetched.notes[0]

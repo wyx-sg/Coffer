@@ -96,6 +96,7 @@ value object.
 | `NoActiveProvider` | `NO_ACTIVE_PROVIDER` | 404 | a key was asked for and nothing is active |
 | `ProviderProtocolLockedWhileActive` | `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | a wire change on a connection that is active (see "Refuse to move the wire of a live connection") |
 | `ProviderInternalOnly` | `PROVIDER_INTERNAL_ONLY` | 409 | activating an `ollama` connection (see "Keep ollama connections internal-only") |
+| `ProviderInternalDefaultTaken` | `PROVIDER_INTERNAL_DEFAULT_TAKEN` | 409 | a resource write that would flag a second internal-engine default (see "Keep at most one internal-engine default") |
 
 ### Projection functions (`domain/provider/projection.py`)
 
@@ -291,7 +292,7 @@ kind declares no redactor because its config holds no secret).
 | `delete(uid)` | Guard the owned credential via `find_credential_citations`, remove it when unowned elsewhere, delete the resource. |
 | `activate(uid) -> ActivateResult` | Clear-then-set for the per-agent-type invariant; project into every agent the scope reaches; de-project the agents the previous connection covered and this one does not; emit `provider_switched`. |
 | `deactivate(wire) -> DeactivateResult` | Revert the agent behind that wire to its built-in login; idempotent. |
-| `resolve_connection_key(uid) -> str` | That connection's key — what the projected `apiKeyHelper` calls, by uid. |
+| `resolve_connection_key(uid) -> str` | That connection's key — what the projected `apiKeyHelper` calls, by uid. Raises `NoActiveProvider` when the connection reaches no agent (disabled, scoped to no agent, or keyless), by the same reach test the wire form uses. |
 | `resolve_active_key_for_agent(agent_type) -> str` | The key of the connection active for that agent (what Codex's env var is filled from). |
 | `resolve_active_key(wire) -> str` | The legacy wire-keyed form, resolving through the wire's agent. |
 | `set_internal_default(uid) -> Resource` | The global flag: clear-then-set, the audit event, and the notification that lets the engine apply its own drop rule. |

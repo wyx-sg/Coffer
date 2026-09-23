@@ -1,12 +1,11 @@
 """Pieces of one converge round that need nothing from the round itself.
 
-Extracted to keep ``convergence.py`` under the project's file-size limit,
-following the same pattern as ``resource_delete_ops.py`` beside
-``resource_service.py``. Everything here is a free function over values the
-round already has: the outcome objects it returns, how a failure is classified,
-what a commit says about itself, and the post-apply hook sweep. The **order of
-the seven steps** — the part of this design that is load-bearing — stays in
-``convergence.py`` where it can be read in one screen.
+Extracted to keep ``convergence.py`` under the file-size limit, as
+``resource_delete_ops.py`` is beside ``resource_service.py``. Everything here is
+a free function over values the round already has: the outcome objects it
+returns, how a failure is classified, what a commit says about itself, and the
+post-apply hook sweep. The **order of the seven steps** — the load-bearing part
+of this design — stays in ``convergence.py`` where it can be read in one screen.
 """
 
 from __future__ import annotations
@@ -56,7 +55,8 @@ async def apply_diff(
     """Step 5's body: each path independently, holding what does not apply.
 
     A path that can never apply here is held as not applicable and appended to
-    ``not_applicable`` — it is not a failure, so it is not returned as one.
+    ``not_applicable``; that is not a failure. A path applied other than as
+    written returns a note, reported with the failures and released.
     """
     failures: list[tuple[str, str]] = []
     for change in diff.vault_changes:
@@ -66,8 +66,8 @@ async def apply_diff(
         try:
             if change.status is ChangeStatus.DELETED:
                 await applier.remove(change.path)
-            else:
-                await applier.upsert(change.path)
+            elif note := await applier.upsert(change.path):
+                failures.append((change.path, note))
         except CofferError as e:
             if is_inapplicable(e):
                 if not_applicable is not None:

@@ -723,6 +723,7 @@
     "PLUGIN_UNINSTALL_UNSUPPORTED": "This plugin can't be uninstalled",
     "PRIVILEGED_PATH": "That path is privileged and can't be used here",
     "PROVIDER_CREDENTIAL_SOURCE_INVALID": "Supply exactly one of a saved credential or an inline key",
+    "PROVIDER_INTERNAL_DEFAULT_TAKEN": "Another connection is already Coffer's internal-engine default — move the default to this connection instead of setting the flag directly",
     "PROVIDER_INTERNAL_ONLY": "This connection uses the ollama protocol, which only Coffer's internal engine uses — it can't be switched on for an agent",
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "This connection is switched on, so its wire format can't change — put its agents back on their built-in login first, then edit the wire, then switch it on again",
     "RESOURCE_ALREADY_EXISTS": "A resource with that name already exists",

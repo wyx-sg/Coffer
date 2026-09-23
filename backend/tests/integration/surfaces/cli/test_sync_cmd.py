@@ -179,6 +179,7 @@ def test_remote_set_carries_the_options_it_was_given(fleet: Fleet) -> None:
     assert "credentials included" in result.output
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="reconfiguring a paused remote keeps it paused")
 def test_first_remote_set_leaves_sync_enabled(fleet: Fleet) -> None:
     fleet.ok("sync", "remote", "set", fleet.a.remote_url)
 
@@ -186,6 +187,7 @@ def test_first_remote_set_leaves_sync_enabled(fleet: Fleet) -> None:
     assert stored is not None and stored.enabled is True
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="reconfiguring a paused remote keeps it paused")
 def test_remote_set_on_a_paused_remote_keeps_it_paused(fleet: Fleet) -> None:
     """Re-running ``remote set`` changes what it names — here the interval — and
     nothing else: pausing is the web toggle's decision, not the CLI's to undo."""
@@ -243,6 +245,9 @@ def test_sync_now_publishes_the_vault_and_says_what_it_did(fleet: Fleet) -> None
     assert "knowledge/notes/one.md" in fleet.run(fleet.a.remote_paths())
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a machine that has not joined says so everywhere"
+)
 def test_sync_now_and_status_on_a_machine_that_has_not_joined_point_at_adopt(
     fleet: Fleet,
 ) -> None:
@@ -451,6 +456,35 @@ def test_status_exits_zero_once_sync_is_switched_off(fleet: Fleet) -> None:
     # The round it is still carrying has NOT been rewritten — only the
     # question of whether anyone should be told about it has changed.
     assert "awaiting_confirmation" in result.output
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a paused remote runs no round and asks for nothing"
+)
+def test_a_paused_remote_runs_no_round_and_asks_for_nothing(fleet: Fleet) -> None:
+    """Pausing is not forgetting: the remote, the pointer and the history all
+    stay, a round does nothing and records nothing, and nothing asks for the
+    user — not even over the hold the vault was paused on."""
+    _hold_a_deletion(fleet)
+    remote = fleet.run(fleet.a.service().get_remote())
+    assert remote is not None
+    pointer = fleet.run(fleet.a.state.pointer())
+    runs_before = fleet.run(fleet.a.service().runs())
+    fleet.run(fleet.a.service().set_remote(dataclasses.replace(remote, enabled=False)))
+    fleet.a.write_knowledge("notes", "while-paused", "written while paused\n")
+
+    now = fleet.ok("sync", "now")
+    status = fleet.invoke("sync", "status")
+
+    assert "disabled" in now.output
+    assert status.exit_code == 0, status.output
+    # Nothing recorded, nothing published, nothing forgotten.
+    assert fleet.run(fleet.a.service().runs()) == runs_before
+    assert "knowledge/notes/while-paused.md" not in fleet.run(fleet.a.remote_paths())
+    assert fleet.run(fleet.a.state.pointer()) == pointer
+    kept = fleet.run(fleet.a.service().get_remote())
+    assert kept is not None and kept.url == remote.url and kept.enabled is False
+    assert "no sync remote configured" not in fleet.ok("sync", "remote", "show").output
 
 
 def test_status_exits_zero_once_the_hold_is_answered(fleet: Fleet) -> None:

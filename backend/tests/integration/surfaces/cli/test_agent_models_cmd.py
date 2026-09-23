@@ -85,6 +85,7 @@ def models_daemon(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (client, info))
 
 
+@pytest.mark.acceptance(spec="agent-registry", scenario="the command line lists an agent's models")
 def test_models_lists_one_line_per_model_with_efforts(models_daemon: None) -> None:
     result = _runner.invoke(cli_app, ["agent", "models", "codex"])
     assert result.exit_code == 0, result.output

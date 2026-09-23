@@ -481,8 +481,9 @@ export interface paths {
          *     memory store's files read-only"). `dir` MUST be a
          *     `memory_dir` that listing returned — any other path under the agent's
          *     config dir (its transcripts, its settings, a sibling project) is 404,
-         *     the same answer as a store that is gone, so the difference cannot be
-         *     used to probe the filesystem. The walk is depth-bounded and says so on
+         *     decided by the path's shape alone, so the answer cannot be used to
+         *     probe the filesystem. A store that no longer exists on disk reads as an
+         *     empty tree (200), not a 404. The walk is depth-bounded and says so on
          *     the node it clipped rather than silently truncating. Read-only: Coffer
          *     never writes an agent's own memory, so there is no fingerprint here and
          *     no write to pair it with.
@@ -617,12 +618,12 @@ export interface components {
         AgentPatch: {
             config_dir?: string;
             description?: string | null;
-            /** @description The agent's model binding (see "Carry the model binding on the agent record"); spec provider-switching projects it into the native config. */
-            model?: string | null;
-            /** @description The binding's fast slot. Explicit null clears it. */
+            /** @description The agent's model binding (see "Carry the model binding on the agent record"); spec provider-switching projects it into the native config. Omitted = unchanged; there is no null that unbinds it. */
+            model?: string;
+            /** @description The binding's fast slot. Omitted = unchanged; explicit null clears it. */
             fast_model?: string | null;
-            /** @description The binding's wire. Only "responses" is accepted — see agent-registry/codex "Accept only responses as Codex's wire_api". */
-            wire_api?: string | null;
+            /** @description The binding's wire. Only "responses" is accepted — see agent-registry/codex "Accept only responses as Codex's wire_api". Omitted = unchanged; there is no null that unbinds it. */
+            wire_api?: string;
         };
         AgentOut: {
             /**

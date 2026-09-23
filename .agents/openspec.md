@@ -94,7 +94,13 @@ The system SHALL <behaviour>.
 - A requirement is identified by its **title** — there are no requirement
   numbers. Renaming one is a `RENAMED` delta, so the rename is reviewed like
   any other change. Cite one from outside its spec as a link plus its title:
-  ``[skill-manager](../openspec/specs/skill-manager/spec.md) "Keep one master folder per skill and carry it through a rename"``.
+  ``[skill-manager](../openspec/specs/skill-manager/spec.md) "Keep one master folder per skill and carry it through a rename"``,
+  or in a code comment as ``spec skill-manager "Keep one master folder per skill and carry it through a rename"``.
+  `scripts/check_spec_citations.py` (run by `make lint`) resolves every such
+  citation against the `### Requirement:` headings under `openspec/specs/`, so
+  a rename fails the gate until its citations follow. A title an in-flight
+  change adds or renames to is accepted and listed until that change is
+  archived.
 - A scenario is identified by its **name**, which an acceptance marker quotes;
   renaming a scenario means renaming its markers.
 - When a capability has children, **a requirement lives at the level that owns

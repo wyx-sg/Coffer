@@ -1144,8 +1144,12 @@ def test_the_uid_key_route_resolves_an_enabled_connection_in_reach(tmp_path, mon
         assert r.json() == {"value": "sk-live"}
 
 
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a disabled or unreached connection's uid helper resolves no key",
+)
 def test_the_uid_key_route_resolves_no_key_for_a_disabled_connection(tmp_path, monkeypatch):
-    """Spec provider-switching "Keys resolve per connection": a disabled
+    """Spec provider-switching "Resolve a key for exactly one connection": a disabled
     connection resolves none — including by uid, the form the live helper line
     calls, so disabling a connection stops a running Claude Code getting its key."""
     app = _app(tmp_path, monkeypatch, 59942)
@@ -1160,6 +1164,10 @@ def test_the_uid_key_route_resolves_no_key_for_a_disabled_connection(tmp_path, m
         assert "sk-live" not in r.text
 
 
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a disabled or unreached connection's uid helper resolves no key",
+)
 def test_the_uid_key_route_resolves_no_key_for_a_connection_scoped_to_no_agent(
     tmp_path, monkeypatch
 ):

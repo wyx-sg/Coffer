@@ -167,7 +167,7 @@ export interface paths {
         };
         /**
          * Subscribe to a conversation's live turn events (SSE)
-         * @description Server-Sent Events stream of the conversation's turn events, for any client. On attach, an in-flight turn's events so far are replayed, then streamed live; when idle the connection is held open and the next turn — from any surface, a channel included — is streamed. Event names: `turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_done`, `turn_error`, `queue_changed`.
+         * @description Server-Sent Events stream of the conversation's turn events, for any client. On attach, an in-flight turn's events so far are replayed, then streamed live; when idle the connection is held open and the next turn — from any surface, a channel included — is streamed. Event names: `turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_done`, `turn_error`, `queue_changed`. A `turn_error` carries a `code`; the platform itself raises `stream_ended` (the agent's stream ended without a terminal event), `turn_timeout` (the idle watchdog cancelled a silent turn) and `daemon_stopped` (the daemon cancelled the turn on shutdown), and every other code is the agent's own.
          */
         get: operations["subscribeConversationEvents"];
         put?: never;
@@ -397,7 +397,7 @@ export interface operations {
     listConversations: {
         parameters: {
             query?: {
-                /** @description When true, returns archived conversations; the default lists active (non-archived) conversations only. */
+                /** @description When true, returns archived conversations; the default lists active (non-archived) conversations only. Either listing leaves out a conversation owned by another surface (see "Show every conversation on the Chat page"); such a conversation is still readable by id. */
                 archived?: boolean;
             };
             header?: never;

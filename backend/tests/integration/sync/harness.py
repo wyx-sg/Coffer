@@ -39,6 +39,10 @@ from pydantic import BaseModel, ConfigDict
 
 from coffer.application.audit_service import AuditService
 from coffer.application.credentials.resolver import CredentialResolver
+from coffer.application.provider.internal_default_guard import (
+    ProviderInternalDefaultNormaliser,
+)
+from coffer.application.provider.kind import make_provider_kind
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.appliers import (
     CredentialApplier,
@@ -457,12 +461,17 @@ class VaultMachine:
         key = self.master_key.resolve(allow_create=True)
         assert key is not None
         self.credential_store = EncryptedCredentialStore(self.db_path, key)
+        kinds = vault_kinds()
         self.resources = ResourceService(
-            kinds=vault_kinds(),
+            kinds=kinds,
             repo=SqlAlchemyResourceRepo(sessions),
             audit=self.audit,
             credentials=self.credential_store,
         )
+        # The production provider kind, guarding its one internal-engine
+        # default against this vault's own rows — registered into the dict the
+        # service already holds, exactly as the composition root does.
+        kinds["provider"] = make_provider_kind(self.resources)
         # One resolved key shared by the adapter and the service, as the wiring
         # does, so a key imported through the service is what the adapter reads.
         self.resolved_key = ResolvedMasterKey(self.master_key)
@@ -509,6 +518,7 @@ class VaultMachine:
                     self.resources,
                     worktree=self.worktree,
                     gates=self.gates,
+                    normalisers=[ProviderInternalDefaultNormaliser(self.resources)],
                     home=str(self.home),
                 ),
                 StateApplier([self.state_provider], worktree=self.worktree, home=str(self.home)),

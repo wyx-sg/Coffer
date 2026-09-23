@@ -244,7 +244,11 @@ export interface paths {
          *     moment the user renamed the connection, and re-projecting on every
          *     rename is what the provider-specific rename route used to be for. Not
          *     audited — `apiKeyHelper` polls it frequently. 404 when the connection
-         *     is absent or keyless (ollama).
+         *     is absent, and 404 `NO_ACTIVE_PROVIDER` (the wire form's answer) when
+         *     it reaches no agent — disabled, scoped to no agent, or keyless
+         *     (ollama) — so a helper line still written into an agent's config stops
+         *     receiving the key the moment the user switches the connection off. The
+         *     secret never appears in an error body.
          */
         get: operations["connectionKey"];
         put?: never;
@@ -441,7 +445,7 @@ export interface components {
             internal_default: boolean;
             /** @description Whether Coffer transcribes speech on this connection. At most one connection globally has transcribe_default=true. Separate from internal_default and with no fallback between them: the endpoint that serves chat completions commonly serves no transcription endpoint at all. */
             transcribe_default: boolean;
-            /** @description The user's switch on the resource itself. A disabled connection projects into nothing and resolves no key, while still reporting the reach it is configured for (see `compatible_agents`). Changed through the shared resource enable/disable surface, not here. */
+            /** @description The user's switch on the resource itself. A disabled connection projects into nothing and resolves no key — by uid (`GET /providers/{uid}/key`, the form a projected `apiKeyHelper` calls) as well as by wire — while still reporting the reach it is configured for (see `compatible_agents`). Changed through the shared resource enable/disable surface, not here. */
             enabled: boolean;
             /** @description The connection's own description, as stored on the resource row. */
             description: string | null;
@@ -549,7 +553,14 @@ export interface components {
                 "application/json": components["schemas"]["ErrorOut"];
             };
         };
-        /** @description A resource of kind `provider` with this name already exists */
+        /**
+         * @description A resource of kind `provider` with this name already exists
+         *     (`RESOURCE_ALREADY_EXISTS`). The kind-agnostic resource routes
+         *     (`POST /api/v1/resources`, `PATCH /api/v1/resources/{uid}`) also answer
+         *     409 `PROVIDER_INTERNAL_DEFAULT_TAKEN` when the write would flag a second
+         *     internal-engine default; `POST /providers/{uid}/internal-default` is the
+         *     route that moves the flag.
+         */
         Conflict: {
             headers: {
                 [name: string]: unknown;

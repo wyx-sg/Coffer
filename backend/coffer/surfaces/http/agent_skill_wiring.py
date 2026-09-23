@@ -103,7 +103,7 @@ def wire_agent_and_skill_kinds(
     credential_store: EncryptedCredentialStore,
     sync: SyncContributions,
 ) -> AgentSkillWiring:
-    """Wire the agent + skill kinds (specs agent-registry, 005) into a running app.
+    """Wire the agent + skill kinds (specs agent-registry and skill-manager) into a running app.
 
     Mirrors the `wire_mcp_kind` pattern. Both kinds are wired in lockstep so
     the cross-kind on_delete hook (deleting an agent cascades into skill

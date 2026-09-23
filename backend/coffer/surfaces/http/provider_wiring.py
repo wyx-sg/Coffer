@@ -18,6 +18,9 @@ from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
 from coffer.application.engine.resolve import InternalEngineConnection
 from coffer.application.provider.boot_reconcile import ProviderProjectionBootHeal
+from coffer.application.provider.internal_default_guard import (
+    ProviderInternalDefaultNormaliser,
+)
 from coffer.application.provider.kind import make_provider_kind
 from coffer.application.provider.projector import ProviderProjector
 from coffer.application.provider.service import ProviderService
@@ -63,7 +66,10 @@ def wire_provider_kind(
     sync: SyncContributions,
 ) -> ProviderWiring:
     """Wire the ``provider`` kind (spec provider-switching) into the app."""
-    app.state.kinds["provider"] = make_provider_kind()
+    # Handed the resource table so a direct write cannot flag a second
+    # internal-engine default (spec provider-switching "Keep at most one
+    # internal-engine default").
+    app.state.kinds["provider"] = make_provider_kind(resource_svc)
     provider_svc = ProviderService(
         resources=resource_svc,
         credentials=credential_store,
@@ -89,6 +95,9 @@ def wire_provider_kind(
             projector=ProviderProjector(ConfigFileStore()),
         )
     )
+    # A synced document flagging a second internal default is applied with the
+    # flag cleared and reported, never left to fail every round.
+    sync.import_normalisers.append(ProviderInternalDefaultNormaliser(resource_svc))
     # Boot heal (see run_provider_projection_sweep) — a DIFFERENT direction from
     # the import hook above: it corrects Coffer's own flag, never the agent's
     # config, because a leftover flag carries no warrant to re-route an agent.

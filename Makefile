@@ -114,6 +114,7 @@ lint:
 	$(PY) scripts/check_file_sizes.py
 	$(PY) scripts/check_response_models.py
 	$(PY) scripts/check_doc_numbering.py
+	$(PY) scripts/check_spec_citations.py
 	$(PY) scripts/check_architecture_doc.py
 	$(PY) scripts/check_pyinstaller_specs.py
 # Both trees are checked under the project's rules. `backend/**` gets them

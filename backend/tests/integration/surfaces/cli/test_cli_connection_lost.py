@@ -24,6 +24,7 @@ def _closed_port() -> int:
         return int(s.getsockname()[1])
 
 
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="a daemon lost mid-command exits 3")
 def test_a_connection_lost_mid_command_exits_3_with_a_message(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -36,5 +37,5 @@ def test_a_connection_lost_mid_command_exits_3_with_a_message(
 
     assert exc.value.code == 3
     err = capsys.readouterr().err
-    assert "daemon not reachable" in err
+    assert err.count("daemon not reachable") == 1
     assert "Traceback" not in err
