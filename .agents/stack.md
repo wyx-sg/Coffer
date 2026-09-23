@@ -100,7 +100,7 @@ unusable. The comment above the `dev:` target in the `Makefile` has the detail.
 
 The desktop shell lives in `desktop/`. It is a **native host over the same
 `frontend/dist`** the daemon serves, not a second UI: it hosts the built SPA as
-a local asset, supplies the API token over IPC (because spec daemon FR-017's injection
+a local asset, supplies the API token over IPC (because the daemon spec's "Hand the browser its token in the served page" injection
 cannot reach a document nobody served), runs detect-or-spawn for the daemon, and
 sits in the tray. It owns nothing else — file actions go through the daemon's
 HTTP routes in both hosts, and binary deployment belongs to the daemon's

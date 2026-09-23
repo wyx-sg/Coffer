@@ -4,8 +4,8 @@ supports_live_text → ONE surface the renderer keeps updating for the whole tur
 Telegram's is a message it edits (deleted when the turn ends, the final reply
 sent after it); SeaTalk's is a stream that finishes as the reply itself. A
 transport with neither sends no interim traffic at all. Every turn that ends
-abnormally closes with a compact completion summary (FR-012),
-capability-agnostic.
+abnormally closes with a compact completion summary, capability-agnostic
+("Summarise only a turn that did not end normally").
 """
 
 from __future__ import annotations
@@ -339,7 +339,8 @@ async def test_sentinel_path_with_spaces_is_delivered(tmp_path) -> None:  # type
 async def test_media_returned_in_a_group_thread_is_uploaded_into_that_thread(
     tmp_path,  # type: ignore[no-untyped-def]
 ) -> None:
-    """FR-032: a file the agent returns during a group-thread turn is uploaded
+    """Per "Return outbound media into the originating thread": a file the agent
+    returns during a group-thread turn is uploaded
     back into that same chat_kind + thread — send_media is called with the
     renderer's thread_id and chat_kind, so a generated chart lands in the
     originating thread, not the group main chat."""
@@ -373,7 +374,8 @@ async def test_media_returned_in_a_group_thread_is_uploaded_into_that_thread(
 
 
 # ---------------------------------------------------------------------------
-# FR-039: streaming the reply into one editable status message (supports_edit)
+# Streaming the reply into one editable status message (supports_edit) — see
+# "Grow a reply in place on one live surface"
 # ---------------------------------------------------------------------------
 
 
@@ -484,7 +486,8 @@ async def test_fast_text_only_reply_opens_no_status_message() -> None:
 
 
 # ---------------------------------------------------------------------------
-# FR-039: typing heartbeat on a supports_typing-only transport (SeaTalk)
+# Typing heartbeat on a supports_typing-only transport (SeaTalk) — see "Grow a
+# reply in place on one live surface"
 # ---------------------------------------------------------------------------
 
 
@@ -570,7 +573,8 @@ async def test_typing_heartbeat_re_sends_in_a_group_thread_when_group_typing_is_
 
 
 async def test_no_typing_heartbeat_on_a_transport_that_reacts() -> None:
-    """FR-038: a transport with reactions (Telegram) already acked the user's
+    """Per "Acknowledge receipt and completion by capability", a transport with
+    reactions (Telegram) already acked the user's
     message with 👀 — the heartbeat is gated on the RECEIPT mechanism, so it
     stays off there even in a group where group typing is available."""
     adapter = FakeChannelAdapter(
@@ -653,7 +657,8 @@ async def test_no_interim_signal_without_a_live_text_surface_in_a_group() -> Non
 
 
 # ---------------------------------------------------------------------------
-# FR-039: a transport that cannot edit but CAN stream (SeaTalk)
+# A transport that cannot edit but CAN stream (SeaTalk) — see "Grow a reply in
+# place on one live surface"
 # ---------------------------------------------------------------------------
 
 
@@ -813,7 +818,8 @@ def test_the_typing_heartbeat_outpaces_the_indicator_it_refreshes() -> None:
 
 
 # ---------------------------------------------------------------------------
-# FR-055: a group reply opens by @mentioning whoever asked
+# A group reply opens by @mentioning whoever asked ("Mention the asker in a group
+# answer")
 # ---------------------------------------------------------------------------
 
 #: The fake's mention spelling, shaped like SeaTalk's real one so a test reads

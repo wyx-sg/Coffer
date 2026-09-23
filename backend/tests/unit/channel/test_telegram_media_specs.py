@@ -1,4 +1,5 @@
-"""Inbound media coverage and the oversize notice (spec channels/telegram FR-014)."""
+"""Inbound media coverage and the oversize notice (spec channels/telegram
+"Download every Telegram media type without leaking the token")."""
 
 from __future__ import annotations
 
@@ -94,7 +95,7 @@ def test_reply_survives_a_deleted_target() -> None:
     assert params["reply_parameters"]["allow_sending_without_reply"] is True
 
 
-# -- button vocabulary (FR-054) -----------------------------------------------
+# -- button vocabulary ("Use the platform's button vocabulary on cards") ------
 
 
 def test_a_plain_option_is_an_ordinary_button() -> None:

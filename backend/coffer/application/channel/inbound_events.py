@@ -53,10 +53,10 @@ class InboundEvents:
     #: Stops every live session of one chat — drain task cancelled, running turn
     #: interrupted. The same machinery ``unbind`` uses for a whole channel.
     stop_chat_sessions: Callable[[str, str], None]
-    #: Looks up (creating if absent) the session for one ``(channel, chat,
-    #: thread)`` — the same registry ``InboundProcessor``/``TurnDriver`` share.
-    #: A card tap needs it only for a ``collection:`` choice (spec knowledge
-    #: FR-038): the pending document a `/save` tap saves lives there.
+    #: Looks up (creating if absent) the session for one ``(channel, chat, thread)`` —
+    #: the same registry ``InboundProcessor``/``TurnDriver`` share. A card tap needs it
+    #: only for a ``collection:`` choice (spec channels "Save a sent document into a
+    #: collection"): the pending document a `/save` tap saves lives there.
     session: SessionAccessor
 
     async def on_callback(self, binding: ChannelBinding, cb: InboundCallback) -> None:
@@ -156,13 +156,14 @@ class InboundEvents:
         await self.safe_send(binding, event.chat_id, EXTERNAL_GROUP_WARNING, chat_kind="group")
 
     async def on_stop(self, binding: ChannelBinding, event: InboundStop, *, session: Any) -> None:
-        """The user pressed the platform's own stop control (FR-048).
+        """The user pressed the platform's own stop control (see "Stop the turn from the
+        platform's own stop control").
 
-        Routed to exactly the path a typed ``/stop`` takes, so the two cannot
-        drift apart: same cancellation, same queue pause (spec chat FR-019), same thing
-        said back. Owner-gated like everything else — a stop press from a chat
-        that was never paired is ignored in silence rather than answered, which
-        would confirm to a stranger that this channel exists.
+        Routed to exactly the path a typed ``/stop`` takes, so the two cannot drift
+        apart: same cancellation, same queue pause (spec chat "Pause the pending queue
+        on interrupt"), same thing said back. Owner-gated like everything else — a stop
+        press from a chat that was never paired is ignored in silence rather than
+        answered, which would confirm to a stranger that this channel exists.
         """
         peer = await self.peers.get_by_chat(binding.resource.id, event.chat_id)
         if peer is None:

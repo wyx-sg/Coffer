@@ -5,19 +5,20 @@ catalogue is built from — is ``catalogue.py``. This module is the half that
 changes bytes.
 
 Every operation here is a filesystem operation and nothing else: no index is
-updated, because there is none (spec knowledge FR-001). That is what lets a
-person's edit in their own editor and a curation pass reach the same bytes
-with nothing in between.
+updated, because there is none (spec knowledge "Store each collection as one
+tree of Markdown files"). That is what lets a person's edit in their own
+editor and a curation pass reach the same bytes with nothing in between.
 
 Two kinds of file live under a collection, and this module is where they meet:
 
 * **Documents** — the visible tree. A person edits them in their own editor;
   a curation pass writes them through :func:`write_file`. Each carries
   ``coffer_curated_at``, the moment curation last had it in front of it, and an
-  edit made since is what the sweep comes back for (FR-022).
+  edit made since is what the sweep comes back for.
 * **Material** — the hidden ``.inbox/``. New knowledge waits here until a pass
   folds it into the documents, and is deleted when that pass completes; with no
-  model to fold it, :func:`promote` makes it a document of its own (FR-029).
+  model to fold it, :func:`promote` makes it a document of its own (see
+  "Promote material directly when no model is configured").
 """
 
 from __future__ import annotations
@@ -40,14 +41,16 @@ from coffer.infrastructure.knowledge.frontmatter import (
 from coffer.infrastructure.knowledge.naming import slugify, unique_name
 
 #: Frontmatter key carrying when curation last had a document in front of it
-#: (FR-028). Written into a file a person also edits, deliberately: it is
-#: feedback the person can see in their own editor, and it means the watermark
-#: needs no state file, no table and nothing to keep level with the disk.
+#: (see "Settle an item only after its pass completes"). Written into a file a
+#: person also edits, deliberately: it is feedback the person can see in their
+#: own editor, and it means the watermark needs no state file, no table and
+#: nothing to keep level with the disk.
 CURATED_AT_KEY = "coffer_curated_at"
 
-#: The frontmatter keys this layer writes, in render order (FR-003). Anything
-#: else a person put in the file is kept and rendered after them: FR-003 says
-#: what Coffer writes, not what a person may not.
+#: The frontmatter keys this layer writes, in render order (see "Carry title,
+#: description and actor in frontmatter"). Anything else a person put in the
+#: file is kept and rendered after them: that requirement says what Coffer
+#: writes, not what a person may not.
 _ORDERED_KEYS = ("title", "description", "actor", "created_at", "updated_at", CURATED_AT_KEY)
 
 
@@ -84,7 +87,7 @@ def _atomic_write(path: pathlib.Path, text: str) -> None:
     caller named it, and nothing between then and now may have redirected the
     directory out of the root. The temp file is opened ``O_NOFOLLOW`` and
     ``O_EXCL`` so a planted symlink under its name cannot carry the bytes
-    elsewhere, and the final rename never follows a link (FR-006).
+    elsewhere, and the final rename never follows a link.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     paths.assert_inside_root(path, paths.relative_of(path))
@@ -189,7 +192,7 @@ def _align_mtime(path: pathlib.Path, stamp: str) -> None:
 
 
 def mark_curated(relpath: str, *, when: str | None = None) -> None:
-    """Stamp a document as seen by curation, changing nothing else (FR-028).
+    """Stamp a document as seen by curation, changing nothing else.
 
     Called only after a pass over that document completes. A pass that fails
     leaves the stamp as it was, so the document comes back on a later sweep
@@ -331,7 +334,7 @@ def discard_material(collection: str, name: str) -> None:
 
 
 def promote(collection: str, name: str) -> KnowledgeFile:
-    """Make an inbox item a document of its own, as it stands (FR-029).
+    """Make an inbox item a document of its own, as it stands.
 
     The path with no model to merge it: the material is knowledge the moment it
     arrives, so it must not wait in a hidden directory for a connection that
@@ -353,7 +356,7 @@ def promote(collection: str, name: str) -> KnowledgeFile:
 
 
 def create_collection_dir(name: str) -> pathlib.Path:
-    """Create a collection's directory (FR-008)."""
+    """Create a collection's directory (see "Create collections only deliberately")."""
     directory = paths.collection_dir(name)
     directory.mkdir(parents=True, exist_ok=True)
     return directory

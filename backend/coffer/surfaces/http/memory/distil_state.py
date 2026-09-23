@@ -19,7 +19,7 @@ The ``actor`` keyword is the whole reason this is a Protocol rather than a
 ``Callable`` alias. The worker in ``memory_wiring.start_distil_worker`` passes
 ``distil_worker.WORKER_ACTOR`` and the route passes the requesting actor, which
 is what lets the audit log tell an unattended distillation apart from one a
-person asked for (FR-038).
+person asked for ("Audit every lifecycle act").
 """
 
 from __future__ import annotations
@@ -40,8 +40,9 @@ class DistilRunner(Protocol):
     be the thing that cannot be edited while it runs (ADR
     resource-identity-is-an-immutable-uid); the service resolves the row and
     reads the directory name off it. It is also what makes the route's
-    upkeep-runs claim and the worker's claim collide the way FR-041 needs them
-    to — both key on this same value, with neither translating.
+    upkeep-runs claim and the worker's claim collide the way "Run one distil
+    pass per partition at a time" needs them to — both key on this same value,
+    with neither translating.
     """
 
     async def __call__(self, uid: str, *, actor: str = ...) -> DistilResult: ...

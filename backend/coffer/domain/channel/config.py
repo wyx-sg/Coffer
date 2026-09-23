@@ -64,7 +64,8 @@ class _CommonChannelFields(BaseModel):
     # whichever agent happened to be called ``claude-code``.
     default_agent: str | None = Field(default=None, max_length=64)
     default_agent_config: dict[str, Any] | None = None
-    # Group inbound gating (FR-037). ``require_mention`` (default on) keeps the
+    # Group inbound gating ("Configure when the bot answers in a group").
+    # ``require_mention`` (default on) keeps the
     # bot silent in a group until @mentioned / replied-to; ``ignore_other_mentions``
     # (opt-in) drops a group message that @mentions any non-bot user, even when
     # it also mentions the bot, so the bot never butts into human-aimed traffic.
@@ -84,7 +85,7 @@ class _CommonChannelFields(BaseModel):
     # what makes that safe: a bot identity tolerates a single consumer, so the
     # document says which machine that is and every other machine reads its own
     # id, finds it does not match, and starts nothing. See spec channels
-    # ``## Where a channel runs``.
+    # "Bind each channel to the one machine that runs it".
     #
     # It lives in ``config`` and not on the resource row because it travels:
     # ``config`` is what a resource document carries, while the row's reach
@@ -115,7 +116,8 @@ class SeaTalkChannelConfig(_CommonChannelFields):
     channel_type: Literal["seatalk"] = "seatalk"
     app_id: str = Field(min_length=1, max_length=128)
     app_secret_ref: str = Field(min_length=1, max_length=256)
-    # spec channels/seatalk FR-004: how SeaTalk delivers this bot's events. "webhook" is the HTTPS
+    # spec channels/seatalk "Choose exactly one inbound delivery per channel": how
+    # SeaTalk delivers this bot's events. "webhook" is the HTTPS
     # Event Callback — a public URL the platform POSTs to, which needs a signing
     # secret and some form of ingress. "websocket" is the platform's WebSocket
     # Event Callback: the bot holds one outbound connection and needs no public
@@ -170,7 +172,9 @@ class SeaTalkChannelConfig(_CommonChannelFields):
 
     @model_validator(mode="after")
     def _delivery_decides_which_fields_exist(self) -> SeaTalkChannelConfig:
-        """spec channels/seatalk FR-004: each delivery method owns a disjoint set of fields.
+        """Each delivery method owns a disjoint set of fields.
+
+        Spec channels/seatalk "Carry no ingress fields on websocket delivery".
 
         A field that decides nothing is a lie about the system, so a websocket
         channel may not carry a signing secret, a public base URL or a tunnel

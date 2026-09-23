@@ -1,4 +1,8 @@
-"""Default file→Markdown engine via MarkItDown (spec knowledge FR-024/FR-045).
+"""Default file→Markdown engine via MarkItDown.
+
+Spec knowledge "Convert uploads into material without keeping them" names
+what it must handle; "Carry no vector or embedding dependency" fences who may
+import it.
 
 One of exactly two importers of ``markitdown`` in this codebase — the other is
 ``infrastructure.chat.document_extract`` for inbound channel attachments — and

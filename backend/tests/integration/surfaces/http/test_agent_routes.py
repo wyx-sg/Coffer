@@ -144,8 +144,9 @@ def test_agent_get_one(tmp_path, monkeypatch):
 
 
 def test_agent_out_has_no_capability_matrix(tmp_path, monkeypatch):
-    """spec agent-registry FR-003: with the supported types narrowed to claude_code + codex, every
-    agent supports every facet — so AgentOut carries no capability matrix."""
+    """Per "Support exactly the Claude Code and Codex agent types": with the
+    supported types narrowed to claude_code + codex, every agent supports every
+    facet — so AgentOut carries no capability matrix."""
     app = _app(tmp_path, monkeypatch, 59608)
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()

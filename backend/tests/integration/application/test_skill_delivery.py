@@ -1,4 +1,4 @@
-"""Skill-delivery semantics (FR-012a / FR-025, User Story 11).
+"""Skill-delivery semantics ("Deliver a skill only where it is enabled and in scope").
 
 One rule decides delivery and nothing else does::
 

@@ -11,7 +11,8 @@ per hourly tick, every one of them reading ``+0 ~0 -0`` in both directions
 because the round returned before it computed a diff at all. Ten rows carried
 no more information than one, and the ``+0 ~0 -0`` actively misled: it read as
 though the round had found nothing to do, when what it had found was a question
-nobody had answered (spec vault-sync FR-091, FR-092).
+nobody had answered (spec vault-sync "Release a hold whose diff no longer
+breaches", "Record one outstanding confirmation once").
 """
 
 from __future__ import annotations

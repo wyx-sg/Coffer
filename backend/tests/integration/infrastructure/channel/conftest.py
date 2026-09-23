@@ -86,7 +86,8 @@ class FakeTelegram:
         #: below (getMe, getMyDescription, …) — consulted before the {} default.
         self.results: dict[str, Any] = {}
         #: Whether this server knows Bot API 10.1's sendRichMessage. Defaults to
-        #: NO so the adapter's fallback (FR-044) is what most tests exercise —
+        #: NO so the adapter's fallback (spec channels/telegram "Send rich messages
+        #: where the Bot API offers them") is what most tests exercise —
         #: an older Bot API server is a real deployment, and the fallback is the
         #: path that must never lose a reply. Tests of the rich path flip it on.
         self.supports_rich = False
@@ -193,7 +194,7 @@ class FakeSeaTalk:
         # -- thread fetch (Task 5) --
         self.thread_calls: list[dict[str, Any]] = []  # query params, one per /get_thread... GET
         self.thread_response: dict[str, Any] = {"code": 0, "thread_messages": []}
-        # -- message streaming (FR-039) --
+        # -- message streaming ("Stream the reply under SeaTalk's streaming contract") --
         # (surface, body) per call, where surface is "single_chat"/"group_chat".
         self.init_stream_calls: list[tuple[str, dict[str, Any]]] = []
         self.update_stream_calls: list[tuple[str, dict[str, Any]]] = []
@@ -209,7 +210,7 @@ class FakeSeaTalk:
         self.app.post("/messaging/v2/group_chat")(self._group_chat)
         self.app.post("/messaging/v2/single_chat_typing")(self._typing)
         self.app.post("/messaging/v2/group_chat_typing")(self._group_typing)
-        # -- message streaming (FR-039) --
+        # -- message streaming --
         self.app.post("/messaging/v2/{surface}/init_stream")(self._init_stream)
         self.app.post("/messaging/v2/{surface}/update_stream")(self._update_stream)
         self.app.get("/messaging/v2/group_chat/get_thread_by_thread_id")(self._thread)

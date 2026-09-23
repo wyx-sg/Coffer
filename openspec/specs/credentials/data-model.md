@@ -20,15 +20,15 @@ CREATE TABLE credentials (
 
 | Column       | Notes                                                                                             |
 | ------------ | ------------------------------------------------------------------------------------------------- |
-| `ref`        | The opaque reference (FR-002). Slash-separated `[A-Za-z0-9_.-]` segments; the store reads no meaning into it. |
+| `ref`        | The opaque reference. Slash-separated `[A-Za-z0-9_.-]` segments; the store reads no meaning into it. |
 | `ciphertext` | A Fernet token. Never logged, never audited, never returned except through the audited read.      |
 | `created_at` | Set on first write for the ref; a re-write keeps it.                                              |
 | `updated_at` | Set on every write, so rotation is visible without revealing anything.                            |
 
 There is no `kind` column and no foreign key to `resources`. A reference is
 resolved by string, in the direction resource → credential only, which is why
-"who cites this ref" is answered by scanning resource configs (FR-015) rather
-than by a join.
+"who cites this ref" is answered by scanning resource configs (see "Refuse to
+delete a credential still in use") rather than by a join.
 
 | ORM class         | Table         | Lives in                                 |
 | ----------------- | ------------- | ---------------------------------------- |
@@ -37,7 +37,8 @@ than by a join.
 The store itself (`infrastructure/credentials/encrypted_store.py`) deliberately
 uses stdlib `sqlite3` with a short-lived connection per call, because sync
 callers — the MCP spawn path, register-time probing — need a synchronous
-contract. Its `a*` facade is what async callers use (FR-004).
+contract. Its `a*` facade is what async callers use (see "Keep blocking store
+calls off the event loop").
 
 ## The master key
 
@@ -48,13 +49,13 @@ Not a table. Exactly one of:
 | `file`     | `~/.coffer/master.key`, mode `0600`         | yes     |
 | `keychain` | OS keychain entry under ref `master-key`    | opt-in  |
 
-Resolution reads the file first, then the keychain (FR-007). `MasterKeyManager`
-records which location answered; that value is what `GET /api/v1/settings/
-credentials` reports and what `PUT` compares against before relocating.
+Resolution reads the file first, then the keychain (see "Resolve the master key
+file-first and create it only for an empty store"). `MasterKeyManager` records
+which location answered; that value is what `GET /api/v1/settings/ credentials`
+reports and what `PUT` compares against before relocating.
 
-Relocation writes and verifies the destination, then removes the source
-(FR-009), so the intermediate state is "both copies exist" rather than
-"neither does".
+Relocation writes and verifies the destination, then removes the source, so the
+intermediate state is "both copies exist" rather than "neither does".
 
 ## Credential references
 
@@ -74,10 +75,10 @@ credentials, is never probed at register time, and releases nothing on delete.
 | Code                   | Raised when                                                        | Surfaced as |
 | ---------------------- | ------------------------------------------------------------------ | ----------- |
 | `CREDENTIAL_MISSING`   | A ref a configuration cites does not resolve                        | 400 / startup failure at the citing surface |
-| `CREDENTIAL_IN_USE`    | Delete attempted while a resource config still cites the ref (FR-015) | 409, with `details.references` naming each citer by kind and current label (`channel 'my-bot'`) — never by uid, which is not what the user sees on the page they must visit next |
+| `CREDENTIAL_IN_USE`    | Delete attempted while a resource config still cites the ref | 409, with `details.references` naming each citer by kind and current label (`channel 'my-bot'`) — never by uid, which is not what the user sees on the page they must visit next |
 | `CREDENTIAL_LOCKED`    | The OS keychain refused or could not be read                        | 4xx; the legacy migration treats it as "skip and retry next start" |
-| `CREDENTIAL_UNREADABLE`| Ciphertext will not decrypt with the current key (FR-003)           | 5xx, naming the ref |
-| `MASTER_KEY_MISSING`   | Ciphertext exists and no key resolves, or the key is corrupt (FR-008) | Fatal at daemon startup, naming the path |
+| `CREDENTIAL_UNREADABLE`| Ciphertext will not decrypt with the current key                   | 5xx, naming the ref |
+| `MASTER_KEY_MISSING`   | Ciphertext exists and no key resolves, or the key is corrupt | Fatal at daemon startup, naming the path |
 
 ## Audit events
 
@@ -92,14 +93,16 @@ framework's):
 | `credential_migrated`  | `{ref}`                          |
 | `master_key_relocated` | `{to: "file" \| "keychain"}`     |
 
-No payload carries a value (FR-026). `credential_deleted` is written both by the
-delete route and by the release that follows a resource deletion (FR-024).
+No payload carries a value (see "Keep secret values out of credential audit
+events"). `credential_deleted` is written both by the delete route and by the
+release that follows a resource deletion (see "Release unshared references when
+a resource is deleted").
 
 ## Invariants enforced by importlinter
 
 | Contract | Subject                                                                 |
 | -------- | ------------------------------------------------------------------------ |
-| `keyring` confinement | Only `coffer.infrastructure.credentials` may import `keyring` (FR-006). The CLI, every surface and every other kind are outside it. |
+| `keyring` confinement | Only `coffer.infrastructure.credentials` may import `keyring`. The CLI, every surface and every other kind are outside it. |
 
-That contract predates this spec's extraction; the fence is what makes FR-006
-checkable rather than aspirational.
+That contract predates this spec's extraction; the fence is what makes "Confine
+key management to the credentials package" checkable rather than aspirational.

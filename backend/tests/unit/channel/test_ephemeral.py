@@ -1,4 +1,5 @@
-"""Which group answers are the asker's business alone (FR-049)."""
+"""Which group answers are the asker's business alone (spec channels "Keep
+non-answer chatter private in a group")."""
 
 from __future__ import annotations
 

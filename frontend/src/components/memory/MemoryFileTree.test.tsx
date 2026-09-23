@@ -9,8 +9,8 @@
 // The one asymmetry the tree draws is the one that would mislead if left
 // implicit: `.raw/` is the agents' own words, the INPUT the notes were
 // distilled from, so it is reachable but marked and closed rather than offered
-// as something to read (FR-037). Only the network boundary (the hooks) is
-// mocked, per agents/frontend.md §8.
+// as something to read (see "Present partitions as a table and a file tree"). Only the network
+// boundary (the hooks) is mocked, per agents/frontend.md §8.
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
@@ -191,8 +191,8 @@ describe("MemoryFileTree", () => {
   });
 
   test("no per-note actions — a partition is a folder, and the surface looks like one", () => {
-    // FR-037 states this as a prohibition, so it is asserted as one: nothing
-    // here retires, pins or hides an individual note.
+    // "Present partitions as a table and a file tree" states this as a prohibition, so it is
+    // asserted as one: nothing here retires, pins or hides an individual note.
     stubTree(ROOT);
     stubContent({ content: "body" });
 

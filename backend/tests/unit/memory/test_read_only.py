@@ -1,4 +1,5 @@
-"""The read-only proof (FR-002) — worth more than the rest of the suite.
+"""The read-only proof (see "Never write an agent's native memory") — worth
+more than the rest of the suite.
 
 The whole design's load-bearing constraint is that Coffer never writes an
 agent's native memory. Every other test here exercises what a reader

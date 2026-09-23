@@ -1,31 +1,31 @@
 """The curation pass: one piece of new knowledge, folded into the documents.
 
-A collection is one tree of documents a person and Coffer write together (spec
-knowledge FR-001). New knowledge arrives as **material** in the collection's
-hidden inbox — an upload's extracted text, an agent's ``coffer__write`` — and
-this pass is what folds it into the documents, so the collection grows by
-integration rather than by accumulating a file per arrival (FR-021).
+A collection is one tree of documents a person and Coffer write together (spec knowledge
+"Store each collection as one tree of Markdown files"). New knowledge arrives as
+**material** in the collection's hidden inbox — an upload's extracted text, an agent's
+``coffer__write`` — and this pass is what folds it into the documents, so the collection
+grows by integration rather than by accumulating a file per arrival (see "Curate through
+a fenced four-tool pass").
 
-The same pass also comes back for a **document someone edited** outside it:
-the sweep finds every document whose file changed since curation last stamped
-it (FR-022), and hands it here so the edit is carried into the rest of the
-collection — a correction made in one document reaching the others that say
-the same thing, a new section that belongs in a document of its own moved
-there.
+The same pass also comes back for a **document someone edited** outside it: the sweep
+finds every document whose file changed since curation last stamped it (see "Run
+curation on a sweep and on demand"), and hands it here so the edit is carried into the
+rest of the collection — a correction made in one document reaching the others that say
+the same thing, a new section that belongs in a document of its own moved there.
 
 Four things shape this module:
 
-* **One item per pass.** The context is bounded to that item, at most five
-  candidate documents, and the catalogue of titles (FR-023). A sweep with ten
-  pending items runs ten small passes rather than one large one, so a bad pass
-  is small and the next item is unaffected by it.
+* **One item per pass.** The context is bounded to that item, at most five candidate
+  documents, and the catalogue of titles (see "Assemble a pass from a bounded context").
+  A sweep with ten pending items runs ten small passes rather than one large one, so a
+  bad pass is small and the next item is unaffected by it.
 * **The catalogue is always in the prompt.** Candidate selection is literal and
   therefore crude; the catalogue is what lets a model conclude that none of the
   five is the right home and open a new document instead.
 * **The item is settled last.** Material is deleted from the inbox, and an
   edited document stamped, only after the loop returns. A pass that raises
   leaves both as they were, so a later sweep retries rather than losing what
-  one half-ran over (FR-028).
+  one half-ran over (see "Settle an item only after its pass completes").
 * **langgraph stays out.** The loop is reached only through the injected
   :class:`AgenticCurationPort` (import contract 9a), so this module — and the
   whole ``application.knowledge`` package — never imports langchain.
@@ -187,11 +187,11 @@ async def run_curation(
     thing that cannot change underneath it: the label is read off the row and
     used to build paths, and the row itself is what the audit event is tied to.
 
-    ``status`` is ``no_model`` with no internal connection configured — and
-    then every inbox item is promoted to a document as it stands, so material
-    never waits on a connection nobody configured (FR-029) — ``up_to_date``
-    when nothing is pending, ``too_large`` for an item past
-    :data:`MAX_SOURCE_CHARS`, ``failed`` when the loop raised, and ``ok``
+    ``status`` is ``no_model`` with no internal connection configured — and then every
+    inbox item is promoted to a document as it stands, so material never waits on a
+    connection nobody configured (see "Promote material directly when no model is
+    configured") — ``up_to_date`` when nothing is pending, ``too_large`` for an item
+    past :data:`MAX_SOURCE_CHARS`, ``failed`` when the loop raised, and ``ok``
     otherwise. Only ``ok`` settles the item.
 
     Every outcome carries ``collection`` as the collection's NAME, because the
@@ -354,10 +354,10 @@ class CurationPass:
         self._models = models
         self._credential_resolver = credential_resolver
         self._recursion_limit = recursion_limit
-        # Re-rendering every agent's skill is how a new document becomes
-        # reachable at all (FR-035): until the catalogue is rewritten, the
-        # agent has no path to it. So it hangs off the pass rather than off a
-        # timer — the corpus changing is exactly the event that matters.
+        # Re-rendering every agent's skill is how a new document becomes reachable at
+        # all (see "Deliver the guide as the shared-master link"): until the catalogue
+        # is rewritten, the agent has no path to it. So it hangs off the pass rather
+        # than off a timer — the corpus changing is exactly the event that matters.
         self._on_corpus_changed = on_corpus_changed
 
     async def __call__(

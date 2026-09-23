@@ -1,4 +1,6 @@
-"""One distil pass per partition, whoever started it (FR-041).
+"""One distil pass per partition, whoever started it.
+
+See "Run one distil pass per partition at a time".
 
 The timer and the Distil button are two writers over one directory, so both
 claim the same upkeep-runs key. The two callers want different things from a

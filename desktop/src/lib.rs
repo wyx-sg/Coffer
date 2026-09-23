@@ -63,10 +63,12 @@ pub fn run() {
     // registered, and `Cargo.toml` says why that is the same test rather than
     // an exception to it: no daemon route can raise a macOS notification as
     // Coffer, and nothing in the frontend calls this one — it is Rust-side
-    // only, for a vault held where nobody is looking (spec vault-sync FR-096).
+    // only, for a vault held where nobody is looking (spec vault-sync "Say a
+    // vault needs a human where the user already is").
     //
     // No binary deployment either. The daemon's own frozen-start path
-    // (spec daemon FR-027) deploys `coffer`, `coffer-daemon`,
+    // (spec daemon "Deploy frozen sibling binaries and back up the vault
+    // before migrating") deploys `coffer`, `coffer-daemon`,
     // `coffer-mcp-shim` and `coffer-callback` into ~/.coffer/bin — which is
     // also how installing only the .app installs the CLI. Doing it here as
     // well would put two processes in a race to write that directory.

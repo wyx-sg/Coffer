@@ -1,4 +1,7 @@
-"""HTTP coverage for /api/v1/agents/{uid}/unmanaged-skills (spec skill-manager FR-016/023).
+"""HTTP coverage for /api/v1/agents/{uid}/unmanaged-skills.
+
+See spec skill-manager "List unmanaged skills in an agent's skill locations" and "Offer
+every skill operation on REST, CLI and web".
 
 The agent is addressed by its immutable ``uid``
 (ADR resource-identity-is-an-immutable-uid); ``{skill}`` beside it is a

@@ -90,9 +90,10 @@ String-valued enum.
 
 ### Unmanaged Skill (`domain/skill/scan.py` + `domain/agent/scan.py`) — workspace amendment
 
-A derived (never stored) view of a skill-shaped entry found in an agent's
-skill locations that Coffer does not manage (FR-016). The filesystem is the
-source of truth; adoption or deletion are the only mutations.
+A derived (never stored) view of a skill-shaped entry found in an agent's skill
+locations that Coffer does not manage (see "List unmanaged skills in an agent's
+skill locations"). The filesystem is the source of truth; adoption or deletion
+are the only mutations.
 
 `scan_locations(agent_type, config_dir)` lives in `domain/agent/scan.py`
 (it depends on `AgentType`, which `domain/skill` must not import — Contract
@@ -116,7 +117,7 @@ Surfaced fields (`UnmanagedView` in `application/skill/unmanaged_ops.py`):
 | `name`         | `str`         | folder name                                                               |
 | `path`         | `str`         | absolute path on disk                                                     |
 | `location`     | `str`         | `"skills"` (`<config_dir>/skills`) or `"agents_dir"` (`~/.agents/skills`) |
-| `valid`        | `bool`        | passes AgentSkills validation (FR-004)                                    |
+| `valid`        | `bool`        | passes AgentSkills validation (see "Validate imported skill folders against AgentSkills") |
 | `reason`       | `str \| None` | validation failure reason when invalid                                    |
 | `foreign_link` | `bool`        | symlink targeting outside the master store — surfaced, never adoptable    |
 
@@ -211,8 +212,8 @@ The workspace amendment adds:
 
 | Value                     | When emitted                                                                                               |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `skill_adopted`           | An unmanaged skill folder was adopted into the master store (FR-017)                                       |
-| `skill_unmanaged_deleted` | An unmanaged skill folder was deleted from an agent's workspace (FR-018)                                   |
+| `skill_adopted`           | An unmanaged skill folder was adopted into the master store (see "Adopt an unmanaged skill")                                       |
+| `skill_unmanaged_deleted` | An unmanaged skill folder was deleted from an agent's workspace (see "Delete an unmanaged skill on explicit request")                                   |
 | `skill_relinked`          | A delivered copy's managed link was re-created at a new delivery path (e.g. after a `config_dir` change) |
 
 Skill **removal** has no dedicated event — deleting a skill goes through
@@ -294,12 +295,10 @@ to the skill subpackage, same style as `lifecycle_ops.py`):
 
 | Method                                                                 | Purpose                                                                                                                                                                          |
 | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `list_unmanaged(agent_uid) -> list[UnmanagedView]`                     | FR-016 read-only scan over the agent's skill locations (see Unmanaged Skill above).                                                                                              |
-| `adopt_unmanaged(agent_uid, skill_name, location, actor) -> Resource`  | FR-017: validate → move to `~/.coffer/skills/<name>/` → register → deliver the managed link to `<config_dir>/skills/<name>` → record an enabled binding; audits `skill_adopted`. |
-| `delete_unmanaged(agent_uid, skill_name, location, actor) -> None`     | FR-018: delete only that folder from disk; audits `skill_unmanaged_deleted`.                                                                                                     |
-| `list_skills() -> list[Resource]` (behind `coffer__list_skills`)       | FR-026: every registered `skill` row, name and description only, with no per-agent filter. |
-| `get_skill(uid)` + `master_path(name)` (behind `coffer__load_skill`)  | FR-027: resolve the skill through the registry by uid, then read that master folder's `SKILL.md` verbatim — `master_path` still takes the NAME, because the folder on disk is named after the label; no other file is reachable. |
-| delivery reconciliation (`delivery_ops.py`)                            | FR-019: `apply_scope_for_agent` — recompute the agent's wanted set from `skill.enabled AND is_active(skill.scope, agent)`, deliver what is missing, reclaim what is no longer wanted.                                 |
+| `list_unmanaged(agent_uid) -> list[UnmanagedView]`                     | Read-only scan ("List unmanaged skills in an agent's skill locations") over the agent's skill locations (see Unmanaged Skill above).                                                                                              |
+| `adopt_unmanaged(agent_uid, skill_name, location, actor) -> Resource`  | "Adopt an unmanaged skill": validate → move to `~/.coffer/skills/<name>/` → register → deliver the managed link to `<config_dir>/skills/<name>` → record an enabled binding; audits `skill_adopted`. |
+| `delete_unmanaged(agent_uid, skill_name, location, actor) -> None`     | "Delete an unmanaged skill on explicit request": delete only that folder from disk; audits `skill_unmanaged_deleted`.                                                                                                     |
+| delivery reconciliation (`delivery_ops.py`)                            | "Reconcile deliveries per agent on every trigger": `apply_scope_for_agent` — recompute the agent's wanted set from `skill.enabled AND is_active(skill.scope, agent)`, deliver what is missing, reclaim what is no longer wanted.                                 |
 
 ### File viewer (`application/skill/file_ops.py`)
 
@@ -323,7 +322,7 @@ approach from `domain/skill/validator.py`.
 | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `build_file_tree(master_folder) -> FileNode`                       | Recursively list the master folder; skip symlinks whose real target escapes the folder; never descend symlinked dirs. Each node carries its absolute on-disk path.                                                                                 |
 | `read_skill_file(master_folder, relpath) -> FileContent`           | Resolve `master_folder/relpath`, verify it stays inside the folder (else `ValueError`), read with a size cap, detect binary; returns the file's absolute path and containing folder's absolute path.                                               |
-| `write_skill_file(master_folder, relpath, content) -> FileContent` | FR-025 overwrite of an existing text file under the same containment guard and size cap; refuses to create new files/dirs, write outside the folder, or overwrite a binary file; atomic. Returns the NEW fingerprint, so an editor holding the buffer open can save again without a re-read. |
+| `write_skill_file(master_folder, relpath, content) -> FileContent` | Overwrite ("Save an existing skill file conditionally") of an existing text file under the same containment guard and size cap; refuses to create new files/dirs, write outside the folder, or overwrite a binary file; atomic. Returns the NEW fingerprint, so an editor holding the buffer open can save again without a re-read. |
 
 #### File-node shape (`FileNode` / `SkillFileNodeOut`)
 
@@ -341,7 +340,7 @@ One node in the recursive tree. The root node has `path == ""`.
 #### File-content shape (`FileContent` / `SkillFileContentOut`)
 
 A single file's contents — what the in-app viewer renders and edits, and what
-the write returns (FR-025).
+the write returns (see "Save an existing skill file conditionally").
 
 | Field             | Type   | Notes                                                                            |
 | ----------------- | ------ | -------------------------------------------------------------------------------- |

@@ -1,6 +1,8 @@
-"""spec chat FR-011: a channel conversation is named after what the person typed.
+"""A channel conversation is named after what the person typed.
 
-Every turn's text opens with context blocks the channel folds in — the FR-035
+See spec chat "Persist conversations and messages in SQLite".
+
+Every turn's text opens with context blocks the channel folds in — the
 origin block, and a thread's fetched history — which are the same on every turn
 of every chat. Naming a conversation from that text gave the chat list a column
 of identical `[Message origin] platform: …` titles. The channel passes the

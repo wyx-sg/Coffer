@@ -72,7 +72,8 @@ def wire_provider_kind(
         audit=audit,
         # Coffer's own engine, told when the connection it runs on moves. The
         # engine decides the fate of its model; this kind only reports the move
-        # and the new connection's catalogue (spec internal-engine FR-005).
+        # and the new connection's catalogue (spec internal-engine "Drop the
+        # engine model when its connection moves").
         engine=internal_default_model_guard(),
     )
     set_provider_service(provider_svc)

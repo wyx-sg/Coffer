@@ -1,4 +1,4 @@
-"""FR-037: per-group inbound gating is configurable.
+"""Per-group inbound gating is configurable ("Configure when the bot answers in a group").
 
 ``require_mention`` (default on) keeps the bot silent in a group until it is
 @mentioned/replied-to; turning it off admits an un-addressed (but still

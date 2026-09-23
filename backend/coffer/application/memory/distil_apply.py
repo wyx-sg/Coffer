@@ -1,4 +1,5 @@
-"""Carrying out a distil pass's plan: notes written, notes retired (FR-025).
+"""Carrying out a distil pass's plan: notes written, notes retired (see "Record
+retirements so they stick").
 
 The plan :mod:`~coffer.application.memory.distil_plan` built says what should
 happen; this is where it happens, in an order chosen so that no failure can
@@ -15,11 +16,11 @@ material the note was built from still sits in the agent's own memory, so a
 deletion with no record is undone by the next aggregation — in a store whose
 sources live outside it, that file *is* the deletion.
 
-**An entry the pass kept nothing from is recorded too.** FR-026 forbids
-deleting it from ``.raw/``, so without a record it would be routed again on
-every pass for the rest of the vault's life. Such a record carries the entry
-in ``entry_ids`` and leaves ``slug`` empty: no note ever existed, and naming
-one would print a path into ``RETIRED.md`` that never did either.
+**An entry the pass kept nothing from is recorded too.** "Keep distil out of the raw
+directory" forbids deleting it from ``.raw/``, so without a record it would be routed
+again on every pass for the rest of the vault's life. Such a record carries the entry in
+``entry_ids`` and leaves ``slug`` empty: no note ever existed, and naming one would
+print a path into ``RETIRED.md`` that never did either.
 """
 
 from __future__ import annotations
@@ -47,11 +48,10 @@ DROPPED_REASON_PREFIX = "Kept nothing from this entry: "
 def assemble(target: Target, written: writing.WrittenNote, partition: str) -> Note:
     """One rewritten note: the model's three fields, Coffer's bookkeeping.
 
-    Provenance accumulates rather than being replaced (FR-018) — the note is
-    what answers "which of my agents already knows this", and a merge that
-    forgot its earlier origins would erase half the answer. So does
-    ``created_at``: a note is rewritten, not replaced, so only ``updated_at``
-    moves.
+    Provenance accumulates rather than being replaced (see "Record provenance and merge
+    by meaning") — the note is what answers "which of my agents already knows this", and
+    a merge that forgot its earlier origins would erase half the answer. So does
+    ``created_at``: a note is rewritten, not replaced, so only ``updated_at`` moves.
     """
     existing = target.existing
     origins = list(existing.origins) if existing else []
@@ -102,9 +102,9 @@ async def _write_targets(
             timeout=timeout,
         )
         if result is None:
-            # Degrades to nothing (FR-027): the entries routed here are still
-            # in ``.raw/`` and still unaccounted for, so the next pass sees
-            # them again.
+            # Degrades to nothing (see "Record what each distil pass did"): the entries
+            # routed here are still in ``.raw/`` and still unaccounted for, so the next
+            # pass sees them again.
             logger.warning("memory.distil.note_unwritten; partition=%s slug=%s", partition, slug)
             continue
         store.write_note(assemble(target, result, partition))
@@ -128,8 +128,9 @@ def _retirement_records(
 ) -> list[RetiredNote]:
     """Delete each retired note's file and build its record — both halves.
 
-    A deletion without a record is undone by the next pass, which re-reads the
-    same unchanged raw entry (FR-025), so the two happen in one loop.
+    A deletion without a record is undone by the next pass, which re-reads the same
+    unchanged raw entry (see "Record retirements so they stick"), so the two happen in
+    one loop.
     """
     records: list[RetiredNote] = []
     for slug in sorted(plan.retirements):
@@ -154,12 +155,12 @@ def _retirement_records(
 def _drop_records(partition: str, plan: Plan, counts: Counts) -> list[RetiredNote]:
     """One record per entry the pass kept nothing from.
 
-    FR-026 forbids deleting the entry, so without this the same entry would be
-    routed on every pass for the rest of the vault's life. What excludes it is
-    ``entry_ids``; ``slug`` stays **empty**, because no note was ever written
-    and naming one would print a path into ``RETIRED.md`` that has never
-    existed. The title joins the retired subjects the next routing prompt must
-    not re-open.
+    "Keep distil out of the raw directory" forbids deleting the entry, so without this
+    the same entry would be routed on every pass for the rest of the vault's life. What
+    excludes it is ``entry_ids``; ``slug`` stays **empty**, because no note was ever
+    written and naming one would print a path into ``RETIRED.md`` that has never
+    existed. The title joins the retired subjects the next routing prompt must not
+    re-open.
     """
     stamp = now()
     records: list[RetiredNote] = []
@@ -205,7 +206,8 @@ async def carry_out(
     if records:
         # ``write_retired`` rewrites the whole file, so what was already there
         # goes back down with it — a lossy round-trip here is a note re-opened
-        # on the next pass, which is the failure FR-025 exists to prevent.
+        # on the next pass, which is the failure "Record retirements so they stick"
+        # exists to prevent.
         store.write_retired(partition, [*retired, *records])
     return counts
 

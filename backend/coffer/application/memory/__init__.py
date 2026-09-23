@@ -9,7 +9,7 @@ the partitions a pass files into, and is the one read path — ``notes/``, at
 call time — that delivery and recall compose against.
 :func:`make_memory_kind` wires the ``memory`` Resource kind's lifecycle.
 
-Delivery (FR-031..FR-033) and recall (FR-035) are separate concerns with their
+Delivery and recall are separate concerns with their
 own modules, and are not re-exported here.
 """
 

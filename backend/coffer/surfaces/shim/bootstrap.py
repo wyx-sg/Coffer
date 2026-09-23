@@ -35,7 +35,8 @@ _DAEMON_BOOT_TIMEOUT = 10  # seconds
 #: MCP-reserved extension key the daemon reads the launch cwd from.
 _CWD_META_KEY = "coffer/cwd"
 #: MCP-reserved extension key the daemon reads the shim's self-reported agent
-#: identity from (spec mcp-gateway FR-013, amended). The value is the agent
+#: identity from (spec mcp-gateway "Take the agent identity from the
+#: handshake"). The value is the agent
 #: resource's **uid**, which is why the key is not the older ``coffer/agent``:
 #: that one carried a name, the gateway no longer reads it, and giving the same
 #: key a new meaning would leave an old shim's stale name being matched against

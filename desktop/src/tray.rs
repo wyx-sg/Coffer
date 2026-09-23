@@ -30,9 +30,9 @@ pub fn base_tray_icon(app: &AppHandle) -> Image<'static> {
 }
 
 /// Build the tray. Returns the sync entry, which `lib.rs` hands to the watcher
-/// — the watcher renames it as the vault's state changes (spec vault-sync
-/// FR-096), so the two have to be introduced somewhere and the composition
-/// root is the honest place.
+/// — the watcher renames it as the vault's state changes (spec vault-sync "Say
+/// a vault needs a human where the user already is"), so the two have to be introduced somewhere
+/// and the composition root is the honest place.
 pub fn build_tray(app: &AppHandle) -> tauri::Result<MenuItem<Wry>> {
     let open = MenuItem::with_id(app, "open", "Open Coffer", true, None::<&str>)?;
     // Always present, always a route to the `/sync` page. Its label is where a
@@ -45,7 +45,8 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<MenuItem<Wry>> {
         true,
         None::<&str>,
     )?;
-    // The tray must offer "Restart daemon" (spec desktop-app FR-006). It is one
+    // The tray must offer "Restart daemon" (spec desktop-app "Find or start a
+    // daemon by a fixed resolution order"). It is one
     // of the two places that action lives; the other is the offline banner.
     let restart = MenuItem::with_id(app, "restart_daemon", "Restart daemon", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Coffer", true, None::<&str>)?;
@@ -85,7 +86,8 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<MenuItem<Wry>> {
                 });
             }
             SYNC_MENU_ITEM_ID => {
-                // The click target FR-096 asks for. A desktop notification
+                // The click target spec vault-sync "Say a vault needs a human
+                // where the user already is" asks for. A desktop notification
                 // raised through `tauri-plugin-notification` carries no click
                 // handler on macOS, so this entry — whose label is the alert —
                 // is what takes the user to the page that can resolve it.

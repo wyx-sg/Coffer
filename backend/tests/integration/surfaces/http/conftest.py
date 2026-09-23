@@ -49,9 +49,10 @@ def _submit(
 ) -> str:
     """Submit material through the route and return the document it became.
 
-    The app booted here has no internal model configured, so material is
-    promoted to a document on the spot rather than waiting in the inbox (spec
-    knowledge FR-029) — which is what gives the caller a path to read back.
+    The app booted here has no internal model configured, so material is promoted to
+    a document on the spot rather than waiting in the inbox (spec knowledge "Promote
+    material directly when no model is configured") — which is what gives the caller
+    a path to read back.
     """
     resp = client.post(
         "/api/v1/knowledge/material",

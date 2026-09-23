@@ -161,7 +161,8 @@ async def test_shutdown_signals_termination(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# T1 — daemon-lifecycle audit events (spec resource-framework FR-006)
+# T1 — daemon-lifecycle audit events (spec resource-framework "Audit every lifecycle
+# change")
 # ---------------------------------------------------------------------------
 
 
@@ -230,7 +231,8 @@ async def test_rotate_token_records_token_rotated_audit(tmp_path):
         set_active_token(None)
 
 
-# --- residency: what starts the daemon, and what ends it (FR-028/FR-029) ---
+# --- residency: what starts the daemon, and what ends it ---
+# ("Run as a login service", "Stand down after an idle window")
 
 
 @pytest.mark.asyncio

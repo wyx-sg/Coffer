@@ -1,7 +1,8 @@
 // frontend/src/components/knowledge/KnowledgeUploadButton.tsx
 //
 // Upload one document into the collection currently in view (spec knowledge
-// FR-023/FR-061). An upload is MATERIAL, not a document: its extracted
+// "Convert uploads into material without keeping them" and "Promote material
+// directly when no model is configured"). An upload is MATERIAL, not a document: its extracted
 // Markdown joins the collection's inbox and the next curation pass merges it
 // into the documents — or, with no internal model configured, it is promoted
 // to a document on the spot. The two outcomes look nothing alike on the page

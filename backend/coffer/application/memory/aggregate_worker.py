@@ -1,19 +1,19 @@
 """The background worker that re-aggregates the agents' native memory.
 
-Spec memory FR-007: aggregation MUST run on a worker on an interval and MUST
-also be triggerable by hand. It ran only by hand for its whole first life —
-the Memory page's Sync button and `coffer memory sync` — which made a layer
-whose entire premise is "what your agents already learned is here" quietly
-depend on the user remembering to ask. A lesson an agent recorded this morning
-was not in Coffer until someone clicked.
+Spec memory "Aggregate on an interval and on demand": aggregation MUST run on a worker
+on an interval and MUST also be triggerable by hand. It ran only by hand for its whole
+first life — the Memory page's Sync button and `coffer memory sync` — which made a layer
+whose entire premise is "what your agents already learned is here" quietly depend on the
+user remembering to ask. A lesson an agent recorded this morning was not in Coffer until
+someone clicked.
 
 Shaped like the distil sweep's worker, and on for the same reason: a pass only
 *reads* the agents' own files and only *writes* the derived tree under
-``~/.coffer/memory/`` (FR-019 — deleting that tree and re-running reproduces an
-equivalent one), so there is no unattended-write risk to gate behind an
-operator switch. It is also cheap to repeat: FR-006 skips any source file whose
-content hash is unchanged, so a pass over an idle machine parses nothing and
-writes nothing.
+``~/.coffer/memory/`` ("Keep the memory tree derived and local" — deleting that tree and
+re-running reproduces an equivalent one), so there is no unattended-write risk to gate
+behind an operator switch. It is also cheap to repeat: "Skip unchanged sources" skips
+any source file whose content hash is unchanged, so a pass over an idle machine parses
+nothing and writes nothing.
 
 Unlike the distil sweep this one runs a catch-up pass **on start**, not after a
 delay. Aggregation is what fills the layer, and a daemon that has just started
@@ -49,7 +49,7 @@ async def _unset_interval() -> int | None:
 
 
 #: The actor recorded on an unattended pass's audit event, so the log can tell
-#: a scheduled aggregation apart from one the user asked for (FR-038).
+#: a scheduled aggregation apart from one the user asked for (see "Audit every lifecycle act").
 WORKER_ACTOR = "system:memory-aggregate-worker"
 
 
@@ -78,8 +78,8 @@ class AggregateWorker:
             except Exception:
                 # A failed pass must never end the loop. Aggregation is
                 # idempotent over a derived tree, so the next one is simply a
-                # fresh attempt — and FR-005 already isolates one unreadable
-                # agent from the rest.
+                # fresh attempt — and "Fail a broken reader loudly and in
+                # isolation" already isolates one unreadable agent from the rest.
                 logger.warning("memory.aggregate_worker.pass_failed", exc_info=True)
             # The operator's interval is re-read as the wait runs, so changing
             # it in Settings takes effect within a slice rather than an hour.

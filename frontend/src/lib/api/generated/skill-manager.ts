@@ -127,11 +127,12 @@ export interface paths {
         put?: never;
         /**
          * Opt-in repair that re-delivers repairable drift from the master library
-         * @description Re-delivers repairable drift kinds (missing_link, tampered_link) from the
-         *     master library. Foreign/user content (replaced_with_regular), a missing master,
-         *     and orphan_master entries are left intact and returned in `remaining`. Each
-         *     repair is audited. This endpoint is the HTTP surface for `coffer skill verify
-         *     --fix`; `POST /skills/verify` remains report-only (FR-014).
+         * @description Re-delivers repairable drift kinds (missing_link, tampered_link) from
+         *     the master library. Foreign/user content (replaced_with_regular), a
+         *     missing master, and orphan_master entries are left intact and returned
+         *     in `remaining`. Each repair is audited. This endpoint is the HTTP
+         *     surface for `coffer skill verify --fix`; `POST /skills/verify` remains
+         *     report-only ("Report skill drift on request").
          */
         post: operations["repairSkillDrift"];
         delete?: never;
@@ -154,10 +155,11 @@ export interface paths {
          * List skill-shaped folders in the agent's workspace that Coffer doesn't manage
          * @description Read-only scan of the agent's skill locations — `<config_dir>/skills`
          *     for both types, plus `~/.agents/skills` for codex — derived at request
-         *     time, never stored (FR-016). Coffer-managed links (symlinks resolving
-         *     inside `~/.coffer/skills/`) and dot-entries such as Codex's `.system`
-         *     are excluded. Symlinks pointing outside the master store are listed
-         *     with `foreign_link=true` and are never adoptable.
+         *     time, never stored ("List unmanaged skills in an agent's skill
+         *     locations"). Coffer-managed links (symlinks resolving inside
+         *     `~/.coffer/skills/`) and dot-entries such as Codex's `.system` are
+         *     excluded. Symlinks pointing outside the master store are listed with
+         *     `foreign_link=true` and are never adoptable.
          */
         get: operations["listUnmanagedSkills"];
         put?: never;
@@ -186,7 +188,8 @@ export interface paths {
         /**
          * Delete an unmanaged skill folder from the agent's workspace
          * @description Removes only that entry from disk — never master content or bindings
-         *     (FR-018). Audited as `skill_unmanaged_deleted`.
+         *     ("Delete an unmanaged skill on explicit request"). Audited as
+         *     `skill_unmanaged_deleted`.
          */
         delete: operations["deleteUnmanagedSkill"];
         options?: never;
@@ -209,13 +212,14 @@ export interface paths {
         put?: never;
         /**
          * Adopt an unmanaged skill folder into the Coffer master store
-         * @description Validates the folder, moves it to `~/.coffer/skills/<name>/`,
-         *     registers the `skill` resource, delivers the managed link to
+         * @description Validates the folder, moves it to `~/.coffer/skills/<name>/`, registers
+         *     the `skill` resource, delivers the managed link to
          *     `<config_dir>/skills/<name>`, and records an enabled binding for the
-         *     agent — in that order (FR-017). Adopting from `~/.agents/skills`
-         *     consolidates: the original folder there is removed and the link lands
-         *     in `<config_dir>/skills`. Any failure before registration leaves the
-         *     original folder unmoved. Audited as `skill_adopted`.
+         *     agent — in that order ("Adopt an unmanaged skill"). Adopting from
+         *     `~/.agents/skills` consolidates: the original folder there is removed
+         *     and the link lands in `<config_dir>/skills`. Any failure before
+         *     registration leaves the original folder unmoved. Audited as
+         *     `skill_adopted`.
          */
         post: operations["adoptUnmanagedSkill"];
         delete?: never;
@@ -371,7 +375,7 @@ export interface components {
              * @enum {string}
              */
             location: "skills" | "agents_dir";
-            /** @description Whether the folder passes AgentSkills validation (FR-004). */
+            /** @description Whether the folder passes AgentSkills validation ("Validate imported skill folders against AgentSkills"). */
             valid: boolean;
             /** @description Validation failure reason when `valid` is false; null otherwise. */
             reason: string | null;

@@ -1,4 +1,6 @@
-"""Capability latching (FR-044) and rich-markdown normalisation (FR-046)."""
+"""Capability latching and rich-markdown normalisation (spec channels "Probe
+platform capabilities and latch off rejected ones", "Render replies in the
+platform's rich format")."""
 
 from __future__ import annotations
 

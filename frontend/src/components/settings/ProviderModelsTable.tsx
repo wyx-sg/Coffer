@@ -18,7 +18,8 @@
 //
 // The MODALITY column is why one connection can serve more than chat: the same
 // base URL and key answer for embedding, image, video and speech models, so
-// each row says which kind it is (spec provider-switching FR-031). Introspection
+// each row says which kind it is (spec provider-switching "Store a
+// modality with each curated model"). Introspection
 // GUESSES the value from the id and the user corrects it here; the stored answer
 // is the truth and is never re-derived.
 //

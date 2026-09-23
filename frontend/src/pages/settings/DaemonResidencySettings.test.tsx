@@ -4,7 +4,7 @@
 // believes the daemon's answer rather than the click: a host with no launchd
 // to install into reports the toggle back off, and a card that kept showing
 // it on would be telling the user their daemon starts at login when it does
-// not (spec daemon FR-028).
+// not (spec daemon "Run as a login service").
 import { describe, expect, test, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

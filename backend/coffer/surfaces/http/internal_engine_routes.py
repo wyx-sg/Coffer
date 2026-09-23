@@ -5,8 +5,10 @@ Two things live on one singleton because they are one question with two halves:
 WHICH MODEL Coffer thinks with, and WHAT IT DOES unattended. The model comes
 from here while the endpoint and key come from the ``internal_default``
 connection (spec provider-switching amendment 2026-06-22b); the unattended work
-is the three passes Coffer runs on a timer — aggregation (spec memory FR-007),
-distil (spec memory FR-017) and curate (spec knowledge FR-021) — each with a
+is the three passes Coffer runs on a timer — aggregation (spec memory "Aggregate
+on an interval and on demand"), distil (spec memory "Distil incrementally in two
+stages") and curate (spec knowledge "Curate through a fenced four-tool pass") —
+each with a
 switch and an interval the operator can see and change.
 
 That last part is why the surface exists at all: two of the three had no switch
@@ -16,9 +18,11 @@ timer that rewrites your files is not something to discover.
 
 Two more settings joined them for the same reason, and both are properties of
 the operator's endpoint rather than of Coffer: how long ONE call to Coffer's
-own model may take (spec internal-engine FR-022), which used to be a constant
+own model may take (spec internal-engine "Carry the bound on one model call"),
+which used to be a constant
 per call site and left a slow gateway's passes failing silently at a fraction
-of their rate, and WHICH MODEL transcribes speech (FR-025), which used to be an
+of their rate, and WHICH MODEL transcribes speech ("Transcribe speech on its own
+connection and model"), which used to be an
 environment variable the daemon could not read at all once it was spawned
 detached from a shell. Each writes on its own route, for the reason
 ``UpkeepUpdate`` records below."""

@@ -4,10 +4,11 @@ Two halves of the same start-up conversation with Telegram:
 
 * :func:`probe_identity` reads ``getMe`` for the fields that change what the
   transport may do — the bot's own id/username (@mention matching) and whether
-  privacy mode leaves it able to read group messages (FR-044/spec channels/telegram FR-004).
+  privacy mode leaves it able to read group messages (spec channels/telegram "Report privacy mode
+  that defeats the group configuration").
 * :func:`register_profile` pushes Coffer's command roster into the platform's
   command menu and fills an empty profile so a first-time user does not open a
-  blank chat (FR-050).
+  blank chat ("Register the bot's command menu and profile from one roster").
 
 A helper module beside ``telegram.py`` so that file stays inside the size cap.
 Every call here is best-effort: a bot that cannot describe itself still works.
@@ -53,12 +54,13 @@ class BotIdentity:
     #: ``True`` when privacy mode is DISABLED, i.e. the bot receives ordinary
     #: group messages. ``None`` when unknown (``getMe`` failed, or an older Bot
     #: API server omitted the field) — an unknown state is never reported as a
-    #: problem, only a known-restrictive one is (spec channels/telegram FR-004).
+    #: problem, only a known-restrictive one is.
     reads_all_group_messages: bool | None = None
 
 
 async def probe_identity(call: Call) -> BotIdentity:
-    """Read ``getMe``; never raise. FR-044: what the platform says about itself
+    """Read ``getMe``; never raise. "Probe platform capabilities and latch off rejected
+    ones": what the platform says about itself
     is probed at start-up, not assumed."""
     try:
         me = await call("getMe")
@@ -77,12 +79,13 @@ async def probe_identity(call: Call) -> BotIdentity:
 
 
 def menu_commands() -> list[dict[str, Any]]:
-    """The command roster in Telegram's ``BotCommand`` shape (FR-050).
+    """The command roster in Telegram's ``BotCommand`` shape.
 
     Every handled command is listed — the menu is generated from the same
     roster the help text is, so the two cannot drift apart.
 
-    An asker-only command is registered as ephemeral (FR-049): typing it in a
+    An asker-only command is registered as ephemeral ("Keep non-answer chatter private in a
+    group"): typing it in a
     group does not put it in front of everyone, and it hands the bot the handle
     it needs to answer that member privately without being an administrator.
     """
@@ -97,7 +100,7 @@ def menu_commands() -> list[dict[str, Any]]:
 
 
 async def register_profile(call: Call) -> None:
-    """Register the command menu and fill an empty profile (FR-050).
+    """Register the command menu and fill an empty profile.
 
     The command menu is Coffer's functional contract and is always written.
     The prose profile is only *filled in*, never overwritten: the name and any

@@ -98,7 +98,8 @@ async def distil(
     # show the button as already running instead of inviting the second click.
     #
     # Keyed on the uid, which is exactly what the unattended sweep claims
-    # (``distil_worker``): the collision FR-041 needs only happens if both
+    # (``distil_worker``): the collision "Run one distil pass per partition at a
+    # time" needs only happens if both
     # writers spell the partition the same way, and a label is the one spelling
     # that can change between the two of them reading it.
     with UPKEEP_RUNS.guard(KIND_MEMORY, uid):

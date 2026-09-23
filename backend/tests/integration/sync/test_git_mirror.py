@@ -271,7 +271,8 @@ async def test_a_date_before_any_commit_has_no_revision(
 
 # --- the converge round: merge, diff, snapshot tags ------------------------
 #
-# Spec vault-sync ``## The converge round``, ``## Conflicts`` and ``## Safety``.
+# Spec vault-sync "Run the seven round steps in order", "Abort the round on an
+# unresolved conflict" and "Snapshot before applying and roll back from it".
 
 #: Seven lines so two machines can edit opposite ends of one file and git has
 #: enough context between them to merge without asking.
@@ -543,7 +544,7 @@ async def test_diff_paths_carries_a_content_id_that_pairs_a_move(
 ) -> None:
     """The deletion guard tells a move from a loss by pairing content, so the
     adapter owes it a content id that is an identity and not a prefix of one
-    (spec vault-sync FR-090, domain ``sync.diff.losses``)."""
+    (spec vault-sync "Count losses, not deletions", domain ``sync.diff.losses``)."""
     mirror = await _seeded(worktree, remote, {"knowledge/a.md": "same bytes\n"})
     first = await mirror.head()
     assert first

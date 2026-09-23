@@ -14,9 +14,9 @@ ChannelConfig (discriminator: channel_type)
 ├── common (both types, _CommonChannelFields)
 │   ├── default_agent: str | None = None    # uid of the agent resource this channel drives
 │   ├── default_agent_config: dict | None
-│   ├── require_mention: bool = True        # group gating (FR-036)
-│   ├── ignore_other_mentions: bool = False # group gating (FR-036)
-│   └── runs_on: str | None = None          # machine_id that runs the adapter (FR-026)
+│   ├── require_mention: bool = True        # group gating
+│   ├── ignore_other_mentions: bool = False # group gating
+│   └── runs_on: str | None = None          # machine_id that runs the adapter
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
 │   └── bot_token_ref: str            # credential-store ref, probed at register
@@ -79,7 +79,7 @@ Validation rules:
   (house rule) — `_CommonChannelFields` forbids extra keys, so a row still
   carrying them would fail to validate on load.
 - `runs_on` is the `machine_id` of the one machine whose daemon starts this
-  channel's adapter (FR-026). It lives in `config_json` and not in a column of
+  channel's adapter (see "Bind each channel to the one machine that runs it"). It lives in `config_json` and not in a column of
   its own because it must TRAVEL: config is what a resource document carries
   between machines, while the row's `enabled` / `scope_json` carry reach, which
   deliberately stays home. `None` is unbound and runs nowhere — never "runs
@@ -100,8 +100,8 @@ Validation rules:
   the registry door every round.
 - `delivery` decides which of the SeaTalk fields are legal, and one
   `model_validator(mode="after")` holds the whole rule so the allowed and the
-  forbidden combination can never drift apart (spec channels/seatalk
-  FR-002–FR-005):
+  forbidden combination can never drift apart (spec channels/seatalk, the delivery
+  requirements):
 
   | field                | `delivery: "webhook"`               | `delivery: "websocket"` |
   | -------------------- | ----------------------------------- | ----------------------- |
@@ -146,7 +146,7 @@ unique key is what let group support arrive as new rows rather than a migration.
 | `display_name`           | TEXT                                         | sender's name at pairing time, for UI/status                                                                                                        |
 | `paired_at`              | DATETIME (UTC)                               |                                                                                                                                                     |
 | `sender_id`              | TEXT NULL                                    | paired sender's stable id (Telegram from.id, SeaTalk employee_code); the owner gate checks it when present. NULL → chat-id-only gate (legacy peers) |
-| `active_conversation_id` | TEXT NULL                                    | **vestigial.** The live pointer moved to `channel_thread_conversations` with FR-032; no live path writes this column any more, so it reads NULL      |
+| `active_conversation_id` | TEXT NULL                                    | **vestigial.** The live pointer moved to `channel_thread_conversations` with "Key conversation identity by channel, chat and thread"; no live path writes this column any more, so it reads NULL      |
 | `preferred_agent`        | TEXT NULL                                    | **vestigial** for the same reason — the sticky agent is per thread now. The synced pairing document still carries the field, so a value can arrive from another machine; nothing reads it back |
 
 Constraints: `UNIQUE (resource_id, chat_id)`; index on `resource_id`.
@@ -171,11 +171,12 @@ workspace switching is removed. The model module is imported by
 
 ## Table: `channel_thread_conversations`
 
-**Where a chat's live conversation actually is.** FR-032 moved conversation
-identity off the peer row and onto the `(channel, chat, thread)` triple, because
-a peer is one owner while a group is many threads: keyed by the peer alone,
-two threads of one group collided on one conversation and the second turn was
-refused with "a turn is already running".
+**Where a chat's live conversation actually is.** "Key conversation identity
+by channel, chat and thread" moved conversation identity off the peer row and
+onto the `(channel, chat, thread)` triple, because a peer is one owner while a
+group is many threads: keyed by the peer alone, two threads of one group
+collided on one conversation and the second turn was refused with "a turn is
+already running".
 
 | column                   | type                                         | notes                                                                                                        |
 | ------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
@@ -194,7 +195,7 @@ Constraints: `UNIQUE (resource_id, chat_id, thread_id)`; index on `resource_id`.
 the next inbound message detects the dangling id and opens a fresh one, built
 from this row's sticky agent plus the channel's defaults. The sticky agent is
 dropped in favour of the channel default once the channel's scope no longer
-admits it (FR-025), so narrowing a scope takes effect on the next conversation.
+admits it ("Limit the agents a channel may drive to its scope"), so narrowing a scope takes effect on the next conversation.
 This table is machine-local and does **not** sync — it names conversations, and
 conversations do not travel.
 
@@ -210,8 +211,8 @@ that already holds the table; reversible by dropping it.
 | `20260710_0047_channel_runs_on_to_scope.py` | backfills `scope_json` from the then-current `config_json.runs_on`, for the machine axis on reach that has since been withdrawn |
 | `20260912_0068_drop_channel_model_curation.py` | strips `default_model` and `models` off every stored channel config |
 | `20260914_0079_bind_channels_to_this_machine.py` | writes this machine's id into every channel that carries no `runs_on` |
-| `20260915_0080_repair_stale_channel_bindings.py` | replaces a `runs_on` that **cannot** be a machine id — the withdrawn axis wrote ULIDs under this very key — with this machine, the answer an absent key would have given (FR-026) |
-| `20260915_0081_channel_scope_names_agent_resources.py` | rewrites each channel's stored scope from agent **keys** into agent **resource names**, at the moment the comparison starts reading them that way (FR-025) |
+| `20260915_0080_repair_stale_channel_bindings.py` | replaces a `runs_on` that **cannot** be a machine id — the withdrawn axis wrote ULIDs under this very key — with this machine, the answer an absent key would have given |
+| `20260915_0081_channel_scope_names_agent_resources.py` | rewrites each channel's stored scope from agent **keys** into agent **resource names**, at the moment the comparison starts reading them that way |
 
 All five are one-direction and data-only, with no load-time shim (house rule).
 
@@ -222,7 +223,7 @@ All five are one-direction and data-only, with no load-time shim (house rule).
 | `PairingCode`       | per channel      | code, expiry, remaining attempts; replaced on re-issue, dropped on success/expiry/exhaustion |
 | live-surface state  | per running turn | the handle of the one surface the turn is growing, and the transport's own update buffer     |
 | seatalk token cache | per channel      | app access token + expiry                                                                    |
-| seen-event ids      | per channel      | for de-duplicating a redelivered platform event (FR-039)                                     |
+| seen-event ids      | per channel      | for de-duplicating a redelivered platform event                                              |
 
 **The channel keeps no message queue of its own.** A message arriving mid-turn
 goes to the orchestrator's `enqueue_message` exactly as a web message does, so
@@ -240,21 +241,22 @@ Nothing the user relies on lives only in memory.
 
 ```
 InboundAttachment:  on-disk path, mime, filename — the bytes are already
-                    downloaded and never enter the chat DB (FR-017)
+                    downloaded and never enter the chat DB
 InboundMessage:     channel name, chat_id, text, platform message id, timestamp;
                     the sender as three values — sender_id (the owner gate),
-                    sender_mention_id and sender_mention_email (the @mention,
-                    FR-054) — plus sender_display; chat_kind, chat_title,
+                    sender_mention_id and sender_mention_email (the @mention of
+                    the asker) — plus sender_display; chat_kind, chat_title,
                     thread_id, quoted_message_id; addressed and mentions_others
-                    (group gating, FR-021/FR-036); attachments; ephemeral_id
+                    (group gating); attachments; ephemeral_id
 InboundCallback:    a selection-card tap: the opaque `data` value, callback_id,
                     platform message id, and the same chat/thread/sender
-                    identity a message carries (FR-015, FR-035)
+                    identity a message carries, so a tap is
+                    owner-gated and answered in its own group/thread
 InboundLifecycle:   the bot's own standing in a chat changed — removed, or the
-                    group turned external (FR-042)
-InboundStop:        the platform's own stop control was pressed (FR-047)
+                    group turned external
+InboundStop:        the platform's own stop control was pressed
 ChoiceButton:       label + opaque value; a list of them renders as a card
-EphemeralTarget:    who a privately-delivered reply is addressed to (FR-048)
+EphemeralTarget:    who a privately-delivered reply is addressed to
 SentMessage:        what a send returned, so a later rewrite can address it
 ChannelCapabilities: supports_live_text, live_text_persists, supports_edit,
                     supports_card_update, supports_buttons, supports_typing,
@@ -265,7 +267,7 @@ ChannelCapabilities: supports_live_text, live_text_persists, supports_edit,
 Adapters translate platform payloads to/from these; the application core
 never sees a Telegram update or SeaTalk event shape. `supports_live_text` and
 `supports_edit` are independent on purpose — SeaTalk answers yes to the first
-and no to the second (FR-038).
+and no to the second (see "Grow a reply in place on one live surface").
 
 ## Audit events (spec channels)
 

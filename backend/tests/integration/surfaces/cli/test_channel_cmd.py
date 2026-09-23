@@ -291,9 +291,9 @@ def _register_st(name: str = "st", *, delivery: str = "webhook") -> Any:
         _AGENT_NAME,
     ]
     if delivery == "webhook":
-        # Only webhook delivery has anything signed to verify (spec channels/seatalk FR-004); the
-        # CLI
-        # refuses the flag on websocket delivery.
+        # Only webhook delivery has anything signed to verify (spec channels/seatalk "Carry
+        # no ingress fields on websocket delivery"); the CLI refuses the flag on websocket
+        # delivery.
         argv += ["--signing-secret-ref", _ST_SIGNING_REF]
     return runner.invoke(app, argv)
 
@@ -539,8 +539,9 @@ def test_status_renders_runtime_pairing_and_callback(channel_daemon: _Daemon) ->
     # signing-secret map uses, so a rename must not move it under either.
     st_path = f"/seatalk/{channel_daemon.uid('st')}"
     assert f"inbound:  webhook 127.0.0.1:8787{st_path} (listener up)" in r.output
-    # spec channels/seatalk FR-004: not managed is said, not left blank — the owner may front the
-    # callback themselves and needs to know Coffer is not doing it.
+    # spec channels/seatalk "Keep status truthful per transport": not managed is said,
+    # not left blank — the owner may front the callback themselves and needs to know
+    # Coffer is not doing it.
     assert "tunnel:   not managed by Coffer" in r.output
 
     as_json = runner.invoke(app, ["channel", "status", "st", "--json"])
@@ -567,11 +568,11 @@ def test_status_renders_runtime_pairing_and_callback(channel_daemon: _Daemon) ->
 def test_status_of_a_websocket_channel_reports_no_webhook_facts(
     channel_daemon: _Daemon,
 ) -> None:
-    """spec channels/seatalk FR-004. The service reports ``port=0`` / ``listener_running=False`` /
-    ``path=""`` for a websocket channel deliberately — there is no listener to
-    have. The CLI used to render those as ``callback: 127.0.0.1:0 (listener
-    down)``, i.e. a healthy channel described as broken ingress at a port
-    nothing is on.
+    """Spec channels/seatalk "Keep status truthful per transport". The service
+    reports ``port=0`` / ``listener_running=False`` / ``path=""`` for a websocket
+    channel deliberately — there is no listener to have. The CLI used to render
+    those as ``callback: 127.0.0.1:0 (listener down)``, i.e. a healthy channel
+    described as broken ingress at a port nothing is on.
     """
     assert _register_st(delivery="websocket").exit_code == 0
     channel_daemon.runtime.adapters["st"] = _StubAdapter()

@@ -1,4 +1,4 @@
-"""One-way rewrite of the flat collection into two lanes (spec knowledge FR-042).
+"""One-way rewrite of the flat collection into two lanes (spec knowledge).
 
 Since 0066 a collection has been a flat directory of Markdown beside a hidden
 ``.raw/`` holding the bytes an upload arrived as, and a hidden ``.history/``
@@ -12,8 +12,9 @@ Everything that exists today is a *source*. Nothing in the old tree was derived
 classification problem: every content file moves into ``sources/`` with its
 nesting intact, and ``topics/`` is created **empty**. It stays empty until the
 first curation pass runs, which is why the same upgrade seeds
-``auto_curate_enabled`` on (FR-044): a migrated vault that never curates would
-hand every agent an empty catalogue forever.
+``auto_curate_enabled`` on (spec knowledge "Keep auto-curation on for migrated
+vaults"): a migrated vault that never curates would hand every agent an empty
+catalogue forever.
 
 ``.raw/`` stops being hidden rather than being deleted. A PDF someone uploaded
 is the truest source there is, and the only reason it was hidden was to keep it
@@ -26,12 +27,12 @@ overwritten: two files that happen to share a name are two files.
 only copy of what it said, so replacing one destroyed writing nobody else held.
 Sources are now that copy, and they are never rewritten by anything unattended.
 
-**The backup comes first.** FR-043: the corpus is the user's own writing, this
-pass moves every file in it, and the lane an agent reads is empty on the other
-side. Before a single file moves, the whole root is copied to a sibling
-directory named after this revision, and the path is logged. It is the only
-protection those files have, and a second run reuses it rather than copying a
-tree this pass has already rewritten over the top of the original.
+**The backup comes first.** The corpus is the user's own writing, this pass
+moves every file in it, and the lane an agent reads is empty on the other side.
+Before a single file moves, the whole root is copied to a sibling directory
+named after this revision, and the path is logged. It is the only protection
+those files have, and a second run reuses it rather than copying a tree this
+pass has already rewritten over the top of the original.
 
 Idempotent throughout. A collection with nothing outside its lanes and no
 hidden directory is one this pass walks past — it neither backs up again nor
@@ -41,8 +42,8 @@ backup and a second round of renames.
 Frozen, like ``knowledge_tree_0066``: a migration describes one moment in
 history and must not change behaviour because the product's live path helpers
 later did. The lane names and the root resolution below are copies, not
-imports — including the retired shared master's folder name, which FR-042
-requires this migration to take with it. That one used to be imported from the
+imports — including the retired shared master's folder name, which this
+migration is required to take with it. That one used to be imported from the
 knowledge layer; it is spelled out here now, because the layer stopped writing
 that folder and a one-time script must not depend on today's code to say what
 yesterday's vault looked like.
@@ -134,7 +135,7 @@ def _collections(root: pathlib.Path) -> list[pathlib.Path]:
     """Every collection directory, in a stable order.
 
     Hidden top-level entries are skipped: a collection is a directory a person
-    named, and nothing Coffer writes at the root is one (FR-046).
+    named, and nothing Coffer writes at the root is one.
     """
     if not root.is_dir():
         return []
@@ -148,10 +149,11 @@ def _content_files(collection: pathlib.Path) -> list[tuple[pathlib.Path, pathlib
     and every hidden path is handled separately — ``.raw/`` by
     :func:`_reveal_originals`, ``.history/`` by deletion. The collection's own
     ``README.md`` stays at the root, outside both lanes, because it describes
-    the collection rather than living in it (FR-007); a ``README.md`` inside a
-    *nested* folder is ordinary content and moves with the rest.
+    the collection rather than living in it (see "Keep the collection README
+    out of the corpus"); a ``README.md`` inside a *nested* folder is ordinary
+    content and moves with the rest.
 
-    Extension is not a filter. FR-042 says every content file, and a
+    Extension is not a filter. The rewrite takes every content file, and a
     collection's root may hold an original an older build put there beside the
     Markdown; leaving it behind would strand it in a directory this pass is
     about to declare empty.
@@ -213,7 +215,7 @@ def _move(source: pathlib.Path, destination: pathlib.Path) -> pathlib.Path:
 
 
 def _back_up(root: pathlib.Path, report: TreeMigrationReport) -> None:
-    """Copy the whole root beside itself before anything moves (FR-043).
+    """Copy the whole root beside itself before anything moves.
 
     An existing backup is kept as it is and never refreshed. By the time a
     second run happens the root is already rewritten, so copying over the
@@ -237,7 +239,8 @@ def _move_content(
 
     ``a/b.md`` at the collection root becomes ``sources/a/b.md``: the folders a
     person made are their own organisation of the material, and flattening them
-    would discard a judgement Coffer has no business overruling (FR-004).
+    would discard a judgement Coffer has no business overruling (see "Allow
+    nesting without giving it meaning").
     """
     for path, relative in _content_files(collection):
         _move(path, sources / relative)
@@ -310,7 +313,7 @@ def _ensure_lanes(collection: pathlib.Path, report: TreeMigrationReport) -> path
 
 
 def _retire_shared_skill(master_root: pathlib.Path | None) -> None:
-    """Drop the shared ``coffer-knowledge`` master folder (FR-042).
+    """Drop the shared ``coffer-knowledge`` master folder.
 
     A stale shared master left in the store would keep being delivered beside
     the generated skill — the same layer, described twice, one of the

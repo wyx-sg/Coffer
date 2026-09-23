@@ -1,7 +1,8 @@
 // frontend/src/components/memory/UnresolvableBadge.tsx
 //
 // The one mark a partition wears when the repository it is keyed on is no
-// longer on disk (spec memory FR-016). Rendered identically on the list row and
+// longer on disk (spec memory "Report unresolvable
+// partitions"). Rendered identically on the list row and
 // on the detail header, so the same fact never reads as two different things.
 //
 // Such a partition is delivered to NOBODY: nothing resolves to it any more, and

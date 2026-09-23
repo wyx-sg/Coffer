@@ -17,12 +17,11 @@ from coffer.infrastructure.channel.seatalk_parse import interactive_card, split_
 
 __all__ = ["SEATALK_MENTION_EMAIL_TEMPLATE", "SEATALK_MENTION_TEMPLATE", "send_text_pieces"]
 
-#: FR-055: how SeaTalk spells an @mention inside message content, read from the
-#: "Send Message to Group Chat" formatted-text sample:
-#: ``"Kindly note there's **no meeting** today <mention-tag
-#: target=\"seatalk://user?id=0\"/>."`` The tag is self-closing and carries no
-#: visible text of its own — the client renders the mentioned person's name — so
-#: Coffer needs only an id to build one, never a display name.
+#: "Mention the asker in a group answer": how SeaTalk spells an @mention inside message content,
+#: read from the "Send Message to Group Chat" formatted-text sample: ``"Kindly note there's **no
+#: meeting** today <mention-tag target=\"seatalk://user?id=0\"/>."`` The tag is self-closing and
+#: carries no visible text of its own — the client renders the mentioned person's name — so Coffer
+#: needs only an id to build one, never a display name.
 #:
 #: WHICH id: the ``seatalk_id``, NOT the ``employee_code``. This is an
 #: INFERENCE, and the evidence is worth naming because nothing states it
@@ -40,7 +39,7 @@ __all__ = ["SEATALK_MENTION_EMAIL_TEMPLATE", "SEATALK_MENTION_TEMPLATE", "send_t
 #: ``turn_text.with_mention`` and ``SeaTalkLiveText``).
 SEATALK_MENTION_TEMPLATE = '<mention-tag target="seatalk://user?id={user_id}"/>'
 
-#: FR-055: the SECOND documented mention form, from the same "Send a Message with
+#: The SECOND documented mention form, from the same "Send a Message with
 #: Formats" page, which lists three targets — by email, by SeaTalk id, and
 #: ``id=0`` for every member of the group (that last one only notifies when the
 #: group's "Notify all members with @All" setting is on, so Coffer never sends it).

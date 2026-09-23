@@ -47,14 +47,15 @@ def mirrored_trees() -> list[tuple[str, pathlib.Path]]:
 
 #: Bundle-relative directory prefixes a round neither publishes nor applies —
 #: files inside the mirrored trees that are **derived output**, regenerated on
-#: each machine rather than received from another (spec vault-sync FR-093).
+#: each machine rather than received from another (spec vault-sync "Withhold
+#: derived output in both halves").
 #:
 #: ``skills/coffer-guide/`` is Coffer's own generated skill. Its bytes are a
 #: function of the running build, the knowledge files (which converge on their
 #: own) and this machine's own reach — which collections are enabled, and that
-#: is machine-local by FR-014. Two machines that agree about every file still
-#: render different text, so mirroring it has them overwriting each other and
-#: re-rendering forever.
+#: is machine-local (see "Keep reach machine-local"). Two machines that agree
+#: about every file still render different text, so mirroring it has them
+#: overwriting each other and re-rendering forever.
 #:
 #: The name is a literal here, exactly as the roots above are literals. The
 #: sync slice may not import ``coffer.domain.skill`` or

@@ -56,7 +56,8 @@ real usage ─▶ [honest invocation log] ─▶ [capture sink] ─▶ [curate] 
   in-band `isError` tool result is recorded as `status=error`, not `ok`. The
   error text is upstream-controlled (may echo secrets) so only a fixed
   Coffer-authored marker is persisted, never the result content (preserves
-  SC-010 and the roadmap non-goal "argument/result content stays out of the DB").
+  [credentials](../../openspec/specs/credentials/spec.md) "Hold plaintext only in memory at the moment of use"
+  and [mcp-gateway](../../openspec/specs/mcp-gateway/spec.md) "Record invocations without content").
   *Shipped with this ADR.*
 - **Slice 2 — Capture sink.** An **opt-in, dev-only, local** capture path that
   records the eval-relevant shape of real interactions (tool-routing: intent +

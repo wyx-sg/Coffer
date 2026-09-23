@@ -60,7 +60,8 @@ export function Layout() {
             A vault that needs answering used to float here too. It says the
             same thing better as a dot on the sidebar's Sync entry — in the
             place a user already looks to navigate, cleared by going there
-            rather than by the situation changing (spec vault-sync FR-096). */}
+            rather than by the situation changing (spec vault-sync "Say a vault
+            needs a human where the user already is"). */}
         <FloatingBanners>
           <DaemonOfflineBanner />
         </FloatingBanners>

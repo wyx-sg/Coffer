@@ -23,7 +23,7 @@
 // different questions: how much an agent can read today, and how much is still
 // in the inbox where no agent can see it. A collection with material pending
 // is one curation has not caught up with, which a single total would hide
-// (spec knowledge FR-005).
+// (spec knowledge "Hide dot-prefixed entries except the inbox").
 //
 // `enabled` is a generic Resource field and is NOT on /knowledge/collections
 // (which reads the folders off disk), so it is merged in from

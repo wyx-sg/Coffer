@@ -1,4 +1,5 @@
-"""Skill-delivery reconciliation for SkillService (FR-012 / FR-019).
+"""Skill-delivery reconciliation for SkillService (see "Deliver a skill only where it is
+enabled and in scope" and "Reconcile deliveries per agent on every trigger").
 
 Extracted to keep ``service.py`` under the file-size limit. Free functions
 that take the SkillService instance and reach into its (private) attributes —

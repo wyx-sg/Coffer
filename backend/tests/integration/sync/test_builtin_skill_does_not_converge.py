@@ -1,4 +1,6 @@
-"""Coffer's own generated skill stays home (spec vault-sync FR-093).
+"""Coffer's own generated skill stays home.
+
+See spec vault-sync "Withhold derived output in both halves".
 
 Two whole vaults and one real bare git repository, exactly as the rest of this
 directory: nothing below the git binary is faked, because the claim under test
@@ -7,7 +9,7 @@ is about what two machines end up holding after they have actually talked.
 The defect this file pins down is a loop, not a wrong value. `coffer-guide` is
 rendered locally from the running build, the knowledge files (which converge)
 and **which collections this machine has enabled** — and reach is deliberately
-machine-local (FR-014). So two machines that agree about every file still
+machine-local ("Keep reach machine-local"). So two machines that agree about every file still
 render different bytes. While both halves of a skill converged, each round had
 one machine overwrite the other's master folder and resource row, the
 overwritten machine re-rendered on its next boot or curation tick, and the

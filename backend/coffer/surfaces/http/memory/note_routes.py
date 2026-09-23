@@ -4,7 +4,7 @@ What a distil pass produced, read back: the index of live notes, one note
 whole, and the record of what has been retired. All three are reads of files on
 disk at call time — this layer keeps no cache of them, which is what makes a
 note that left ``notes/`` disappear from the list rather than have to be
-filtered out of it (FR-025).
+filtered out of it ("Record retirements so they stick").
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ async def list_notes(
 
     A retired note is not filtered out of this list — it is not *in* it, because
     retirement takes the file out of that directory and records it in
-    ``RETIRED.md`` (FR-025). Reading the directory rather than a cached value is
+    ``RETIRED.md``. Reading the directory rather than a cached value is
     what keeps that true here.
     """
     partition = await require_partition(uid, resources)
@@ -122,7 +122,7 @@ async def list_retired(
     uid: str,
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> RetiredListOut:
-    """``RETIRED.md``, read back — newest first (FR-025).
+    """``RETIRED.md``, read back — newest first.
 
     The store returns the records in the order they were written and refuses to
     sort them, because a caller appending one rewrites the whole file and a

@@ -1,24 +1,24 @@
 """The recall tool — memory's one built-in, registered apart like search's own
-(spec memory FR-035, FR-034).
+(spec memory "Recall locations by literal match", "Expose only coffer__recall").
 
 Mirrors ``coffer.application.knowledge.builtin_search_tool`` deliberately:
 ``coffer__recall`` is the same shape of thing ``coffer__search`` is — a single
 optional tool wired against its own service rather than the file operations
-knowledge's ``builtin_tools`` module groups — and FR-034 asks for exactly one
-tool here, so there is no sibling module to fold it into. A composition root
-that has not wired the memory layer simply never advertises it; one that has
+knowledge's ``builtin_tools`` module groups — and "Expose only coffer__recall" asks
+for exactly one tool here, so there is no sibling module to fold it into. A
+composition root that has not wired the memory layer simply never advertises it; one that has
 needs nothing else configured, because recall is a literal scan over notes
-already on disk (FR-035).
+already on disk (see "Recall locations by literal match").
 
 The description below is doing real work, so it is worth saying what it must
 convey and why. It **locates**: the answer is paths, and the caller reads the
-file itself, which is the whole shape of this layer (FR-022). It says where
-to reach for it: the session already opened with the full index of the
-partition it is in, so this is for a partition it is *not* in. And it says
-matching is **literal**, because the previous design's opening line asked for
-"a natural-language query" against a tool that has only ever done substring
-matching — an agent that obeyed sent a whole question, matched nothing, and
-read the empty answer as an empty memory.
+file itself, which is the whole shape of this layer (see "Keep notes readable as plain
+files"). It says where to reach for it: the session already opened with the full index
+of the partition it is in, so this is for a partition it is *not* in. And it says
+matching is **literal**, because the previous design's opening line asked for "a
+natural-language query" against a tool that has only ever done substring matching — an
+agent that obeyed sent a whole question, matched nothing, and read the empty answer as
+an empty memory.
 """
 
 from __future__ import annotations

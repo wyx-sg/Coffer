@@ -9,10 +9,12 @@ with. Authority is [`spec.md`](spec.md) and
 
 ## There is no schema
 
-**The knowledge layer owns no table** (FR-046, SC-004). Markdown files are the
-whole of it, and nothing derives anything from them into a database: no
-`documents` row, no chunks, no full-text index, no embeddings — therefore no
-content hash to compare, no reindex, and no reconciliation of any kind (FR-001).
+**The knowledge layer owns no table** (see "Add no table and no directory
+outside the knowledge root"). Markdown files are the whole of it, and nothing
+derives anything from them into a database: no `documents` row, no chunks, no
+full-text index, no embeddings — therefore no content hash to compare, no
+reindex, and no reconciliation of any kind (see "Store each collection as one
+tree of Markdown files").
 
 Curation's state lives in the same directory as everything else. What is still
 waiting to be merged is a file in the collection's hidden `.inbox/`; what a
@@ -25,8 +27,8 @@ with the disk.
 The only database presence a collection has is the same one every Resource has:
 a row in the kind-agnostic `resources` table. That row carries the collection's
 name and its `enabled` flag, and nothing about its contents. There is no
-per-agent reach column in play for this kind (FR-010): the row's one switch is
-`enabled`.
+per-agent reach column in play for this kind (see "Gate collections with enabled
+alone"): the row's one switch is `enabled`.
 
 ## On-disk layout
 
@@ -46,35 +48,40 @@ per-agent reach column in play for this kind (FR-010): the row's one switch is
 
 - `~/.coffer/knowledge/` is the root; `$COFFER_KNOWLEDGE_ROOT` overrides it for
   tests. Path construction lives in exactly one module,
-  `infrastructure/knowledge/paths.py` (FR-006), which also owns the inbox name.
+  `infrastructure/knowledge/paths.py` (see "Guard every path through one
+  module"), which also owns the inbox name.
 - A **collection** is a top-level subdirectory *and* one `knowledge` Resource.
   It is created deliberately, as one directory, and nothing provisions one from
-  a read, a write, or an agent's working directory (FR-008). There is no
-  `global`, no `project-<ULID>`, no git-root resolution and no
-  scope-to-project-root table (FR-009).
+  a read, a write, or an agent's working directory (see "Create collections only
+  deliberately"). There is no `global`, no `project-<ULID>`, no git-root
+  resolution and no scope-to-project-root table (see "Derive no boundary from
+  the working directory").
 - **A collection is one tree of documents**, co-written by people and the
-  curation pass (FR-001). There is no directory that means "who may write
-  here": a person edits any document in their own editor, an agent may edit one
-  with its own file tools, and curation rewrites documents as it merges new
-  material. The nesting is free and the system neither requires nor creates one
-  — whoever files a document chooses where (FR-004).
-- **Dot-prefixed entries are invisible** (FR-005), and Coffer writes exactly one
-  of its own: `.inbox/`, where submitted material waits until a pass folds it
-  in, and from which each item is deleted the moment it has been. It is hidden
-  because it is not knowledge yet — no listing, catalogue or count of documents
-  includes it; the collection list reports it separately as `pending_count`.
-  `.history/` and `.raw/` stay gone. Hidden segments are still *refused* by the
-  path guard rather than merely skipped, so neither the inbox nor anything the
-  user hides for their own reasons is addressable through a surface.
+  curation pass (see "Store each collection as one tree of Markdown files").
+  There is no directory that means "who may write here": a person edits any
+  document in their own editor, an agent may edit one with its own file tools,
+  and curation rewrites documents as it merges new material. The nesting is free
+  and the system neither requires nor creates one — whoever files a document
+  chooses where (see "Allow nesting without giving it meaning").
+- **Dot-prefixed entries are invisible** (see "Hide dot-prefixed entries except
+  the inbox"), and Coffer writes exactly one of its own: `.inbox/`, where
+  submitted material waits until a pass folds it in, and from which each item is
+  deleted the moment it has been. It is hidden because it is not knowledge yet —
+  no listing, catalogue or count of documents includes it; the collection list
+  reports it separately as `pending_count`. `.history/` and `.raw/` stay gone.
+  Hidden segments are still *refused* by the path guard rather than merely
+  skipped, so neither the inbox nor anything the user hides for their own
+  reasons is addressable through a surface.
 
 ### `README.md`
 
 A collection describes itself in a `README.md` at its own root, which is not a
-document: it is never curated, listed as content or counted (FR-007). Its first
-paragraph is the collection's one-line description everywhere one is shown
-(FR-011), read off disk on every listing so it cannot drift from what the person
-browsing the folder reads. `POST /api/v1/knowledge/collections` writes one when
-given a `description`.
+document: it is never curated, listed as content or counted (see "Keep the
+collection README out of the corpus"). Its first paragraph is the collection's
+one-line description everywhere one is shown (see "Read a collection's
+description from its README"), read off disk on every listing so it cannot drift
+from what the person browsing the folder reads.
+`POST /api/v1/knowledge/collections` writes one when given a `description`.
 
 That paragraph does more work than it used to: it is also what the delivered
 skill's frontmatter description draws on, which is the only part of this layer
@@ -103,21 +110,21 @@ Login state is owned by `account.session`.
 | Key | Type | Notes |
 | --- | --- | --- |
 | `title` | `str` | Human-readable. Also the source of the file name on creation. |
-| `description` | `str` | **Required** (FR-003). It is what curation reads first when deciding where material belongs, and what an agent chooses by in the catalogue. |
+| `description` | `str` | **Required** (see "Carry title, description and actor in frontmatter"). It is what curation reads first when deciding where material belongs, and what an agent chooses by in the catalogue. |
 | `actor` | `agent` \| `user` | Who last wrote it. From the `X-Coffer-Actor` header on a submission, or the tool's own actor. |
 | `created_at` | ISO-8601 `str` | Preserved across a rewrite, so a document keeps its own history even though nothing but the file records it. |
 | `updated_at` | ISO-8601 `str` | Set on every write Coffer makes. |
-| `coffer_curated_at` | ISO-8601 `str` | Written by Coffer (FR-003, FR-028): when curation last had this document in front of it. Absent on a document curation has never seen. |
+| `coffer_curated_at` | ISO-8601 `str` | Written by Coffer (see "Carry title, description and actor in frontmatter", "Settle an item only after its pass completes"): when curation last had this document in front of it. Absent on a document curation has never seen. |
 
-These are the keys **Coffer writes**, not the only keys a document may carry.
-A person who adds `tags:` or `reviewed_by:` in their own editor keeps it: every
-rewrite Coffer makes — a pass's `write_document`, the stamp `mark_curated`
-adds — renders the known keys in a fixed order and then everything else
-unharmed, values carried through as parsed rather than stringified. There is
-still no `id` — the path is the identity (FR-002) — and none of the keys that
-described retired machinery (`lane`, `source_path`, `source_sha256`,
-`source_format`, `source_mode`, `converter`, `embed_status`, `content_sha256`,
-`coffer_ingested_at`).
+These are the keys **Coffer writes**, not the only keys a document may carry. A
+person who adds `tags:` or `reviewed_by:` in their own editor keeps it: every
+rewrite Coffer makes — a pass's `write_document`, the stamp `mark_curated` adds
+— renders the known keys in a fixed order and then everything else unharmed,
+values carried through as parsed rather than stringified. There is still no `id`
+— the path is the identity (see "Use the file path as a document's identity") —
+and none of the keys that described retired machinery (`lane`, `source_path`,
+`source_sha256`, `source_format`, `source_mode`, `converter`, `embed_status`,
+`content_sha256`, `coffer_ingested_at`).
 
 Frontmatter parsing degrades rather than raising: a file with no fence, or with
 malformed YAML inside one, yields empty frontmatter and its body, so one
@@ -125,7 +132,8 @@ hand-edited file with a stray colon cannot break a whole collection walk.
 
 ### What the sweep owes a collection, and why there is no state file
 
-`curate.pending_items` answers it from the disk, in this order (FR-022):
+`curate.pending_items` answers it from the disk, in this order (see "Run
+curation on a sweep and on demand"):
 
 1. **Inbox material**, oldest first by modification time (`fs.inbox_items`).
    Material first, because until it is merged it is knowledge no agent can read.
@@ -134,7 +142,8 @@ hand-edited file with a stray colon cannot break a whole collection walk.
    has no stamp at all, like a document a person wrote from scratch. An edit in
    any editor moves the mtime past the stamp, and the next sweep hands the
    document to a pass, which carries the edit into the rest of the collection
-   and never reverts it (FR-026). Nothing has to be told.
+   and never reverts it (see "Let newer statements win and a person's edit
+   stand"). Nothing has to be told.
 
 Two consequences keep this honest:
 
@@ -143,22 +152,25 @@ Two consequences keep this honest:
   itself a modification, `fs.mark_curated` and the curated write both set the
   file's mtime back to the stamp they just wrote. Without that, every document
   would be pending on every sweep forever.
-- **An item is settled only after its pass completes** (FR-028). Material is
-  deleted from the inbox (`fs.discard_material`) and an edited document stamped
-  (`fs.mark_curated`) after the loop returns; a pass that raises leaves both as
-  they were, so a later sweep retries rather than losing what one half-ran over.
+- **An item is settled only after its pass completes** (see "Settle an item only
+  after its pass completes"). Material is deleted from the inbox
+  (`fs.discard_material`) and an edited document stamped (`fs.mark_curated`)
+  after the loop returns; a pass that raises leaves both as they were, so a
+  later sweep retries rather than losing what one half-ran over.
 
 With no internal model configured there is nothing to merge with, so material
-does not wait (FR-029): `KnowledgeService.submit` promotes it on the spot
-(`fs.promote` — a document of its own at the collection root, stamped curated),
-and a pass run with no model promotes whatever is still in the inbox and reports
-`no_model` with the `promoted` paths.
+does not wait (see "Promote material directly when no model is configured"):
+`KnowledgeService.submit` promotes it on the spot (`fs.promote` — a document of
+its own at the collection root, stamped curated), and a pass run with no model
+promotes whatever is still in the inbox and reports `no_model` with the
+`promoted` paths.
 
 ### Naming
 
 A file's name is a readable slug of its title, not an opaque id, because with no
 index mapping an id to a title the name is what a human reads in Finder and what
-an agent sees in the catalogue (FR-002). `infrastructure/knowledge/naming.py`
+an agent sees in the catalogue (see "Use the file path as a document's
+identity"). `infrastructure/knowledge/naming.py`
 owns it:
 
 - NFKC-normalize, lowercase, collapse whitespace / `_` / `/` / `\` to `-`, drop
@@ -171,16 +183,16 @@ owns it:
 
 ### The traversal guard
 
-Every segment that becomes a path component passes `paths.check_segment`
-(FR-006): non-empty, not all dots, not dot-prefixed, and matching
-`[A-Za-z0-9._\- ]` or CJK. A path that must name a document additionally passes
-`paths.require_document`, which refuses the collection itself and its
-`README.md`; the inbox is out of reach already, because it is dot-prefixed. A
-violation is `UnsafeKnowledgePath` (`KNOWLEDGE_PATH_UNSAFE`, HTTP 400). The
-resolved path is checked against the root too, on its nearest existing
-ancestor, so a symlink inside the root cannot carry a read or a write out of it.
-Writes are atomic — same-directory temp file opened `O_NOFOLLOW | O_EXCL`, then
-`replace`.
+Every segment that becomes a path component passes `paths.check_segment` (see
+"Guard every path through one module"): non-empty, not all dots, not
+dot-prefixed, and matching `[A-Za-z0-9._\- ]` or CJK. A path that must name a
+document additionally passes `paths.require_document`, which refuses the
+collection itself and its `README.md`; the inbox is out of reach already,
+because it is dot-prefixed. A violation is `UnsafeKnowledgePath`
+(`KNOWLEDGE_PATH_UNSAFE`, HTTP 400). The resolved path is checked against the
+root too, on its nearest existing ancestor, so a symlink inside the root cannot
+carry a read or a write out of it. Writes are atomic — same-directory temp file
+opened `O_NOFOLLOW | O_EXCL`, then `replace`.
 
 ## Value objects (`backend/coffer/domain/knowledge/entry.py`)
 
@@ -194,7 +206,7 @@ of them is persisted and none of them can be stale.
 | `DirectoryEntry` | `path`, `name`, `file_count` | A subdirectory at the level being listed. `path` is relative to the root — pass it back to descend. |
 | `FileEntry` | `path`, `title`, `description`, `actor`, `updated_at` | One file as a listing or a catalogue shows it: enough to judge relevance without reading the body. |
 | `CatalogueLevel` | `path`, `directories`, `files` | **One level of one collection**, never the whole tree. |
-| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `curated_at` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (FR-041); `curated_at` is empty for a document curation has never seen. |
+| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `curated_at` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); `curated_at` is empty for a document curation has never seen. |
 | `Pending` | `material` \| `document` | One item a pass can take — exactly one field set. `material` is an inbox item's file name, never a path a caller could aim elsewhere; `document` is a knowledge-root-relative document path. |
 | `GrepMatch` | `path`, `line_number`, `line` | One literal hit. |
 | `GrepOutcome` | `matches`, `truncated` | A bounded run of them. |
@@ -210,15 +222,16 @@ and exactly one of `document` — the `KnowledgeFile` it was promoted into — o
 The two grep types survive the removal of `coffer__grep` because ripgrep
 survives it as an **internal** mechanism: `KnowledgeService.match_documents` is
 how a curation pass finds which existing documents a new item might belong to
-(FR-023), and it is reachable by nothing outside the process. It never searches
-the inbox — ripgrep skips hidden directories, and material there is not a
-document yet. There is no `SearchHit`, `SearchOutcome` or `SearchService` any
-more.
+(see "Assemble a pass from a bounded context"), and it is reachable by nothing
+outside the process. It never searches the inbox — ripgrep skips hidden
+directories, and material there is not a document yet. There is no `SearchHit`,
+`SearchOutcome` or `SearchService` any more.
 
-`Conversion` (`domain/knowledge/converter.py`) is what a converter returns for an
-uploaded document: the `markdown`, a `title` (the document's first H1, falling
-back to its file name, FR-017), and which `converter` ran — reported on the
-upload response and written nowhere on disk.
+`Conversion` (`domain/knowledge/converter.py`) is what a converter returns for
+an uploaded document: the `markdown`, a `title` (the document's first H1,
+falling back to its file name; see "Fill frontmatter on converted material"),
+and which `converter` ran — reported on the upload response and written nowhere
+on disk.
 
 The HTTP wire models in `surfaces/http/knowledge/schemas.py` mirror the domain
 types and add the shapes that describe an answer no domain type does:
@@ -249,27 +262,28 @@ in all of it. And at
 `coffer__write`, which refuses a write naming a collection that does not exist or
 is disabled, answering with the ones that are available.
 
-The per-agent reach that used to sit here is withdrawn (FR-010). It was never
-set — every collection's scope was null in the live vault — and it could not have
-withheld anything it was asked to: the skill it narrows hands the agent the
-absolute knowledge root and tells it to grep. `PUT .../scope` on this kind is now
-refused with `SCOPE_INVALID`, and migration `0088` cleared the column for every
-`knowledge` row.
+The per-agent reach that used to sit here is withdrawn (see "Gate collections
+with enabled alone"). It was never set — every collection's scope was null in
+the live vault — and it could not have withheld anything it was asked to: the
+skill it narrows hands the agent the absolute knowledge root and tells it to
+grep. `PUT .../scope` on this kind is now refused with `SCOPE_INVALID`, and
+migration `0088` cleared the column for every `knowledge` row.
 
 `KnowledgeConfig` (`domain/knowledge/config.py`) is **empty and forbids unknown
 keys**. A collection has no settings at all: no retrieval modes, no chunk size,
 no entry-length cap, no embedding fields, no auto-update flag, no display label
-(FR-046). Anything that used to be configured per scope was configuring
-machinery that no longer exists.
+(see "Add no table and no directory outside the knowledge root"). Anything that
+used to be configured per scope was configuring machinery that no longer exists.
 
 What the layer serves is **files on disk**, and `enabled` gates their
-**delivery** rather than their readability (FR-012). An agent that also holds
-shell or file-read tools can read anything under `~/.coffer/knowledge/`, so a
-collection left out of a skill is one no agent is told about, not one no process
-can open — and the system says so rather than implying an isolation it does not
-provide. The per-agent reach this row used to carry is withdrawn for the same
-reason taken one step further: an allow-list that withholds a path from a
-reader already holding the root withheld nothing at all (FR-010).
+**delivery** rather than their readability (see "Present knowledge as files on
+disk"). An agent that also holds shell or file-read tools can read anything
+under `~/.coffer/knowledge/`, so a collection left out of a skill is one no
+agent is told about, not one no process can open — and the system says so rather
+than implying an isolation it does not provide. The per-agent reach this row
+used to carry is withdrawn for the same reason taken one step further: an
+allow-list that withholds a path from a reader already holding the root withheld
+nothing at all (see "Gate collections with enabled alone").
 
 ## Errors
 
@@ -302,11 +316,12 @@ forgotten by one surface.
 The two curation errors are refusals of a *model's* write rather than a user's,
 which is why they exist as codes at all: a pass reports what it was stopped from
 doing. `TopicReferencesFile` (the name predates the one-tree layout; the code is
-unchanged) is FR-027 enforced at `write_document` — a document naming another
-knowledge file is the mechanism that produced 343 broken links, so it is refused
-rather than discouraged in a prompt. `CurationBoundExceeded` is FR-025's
-eight-write ceiling, which is what keeps one item from triggering a corpus-wide
-rewrite however confident the model is.
+unchanged) is "Refuse file-name references in documents" enforced at
+`write_document` — a document naming another knowledge file is the mechanism
+that produced 343 broken links, so it is refused rather than discouraged in a
+prompt. `CurationBoundExceeded` is the bound of "Bound a pass to eight writes":
+the eight-write ceiling, which is what keeps one item from triggering a
+corpus-wide rewrite however confident the model is.
 
 `domain/kb_errors.py` holds two more, re-exported through `domain/errors.py`:
 
@@ -316,16 +331,18 @@ rewrite however confident the model is.
 | `EngineUnavailable` | `ENGINE_UNAVAILABLE` | 503 | a binary or converter library the call needs is absent — `ripgrep` with no Python fallback available, or one of MarkItDown's format backends. The daemon stays up and the caller gets a per-format answer |
 
 And the two ingest refusals are not `CofferError`s at all. `UnsupportedDocument`
-and `EmptyConversion` (`domain/knowledge/converter.py`) carry the *rejected type*
-rather than a code, and the upload route turns both into `INGEST_REJECTED` / 400,
-distinguished by `details.reason` — `unsupported_type`, or `scanned_pdf` /
-`empty_conversion` — so a surface can name the format it will not take and, for
-a PDF with no text layer, say something actionable about why. Either way nothing
-is submitted: no inbox item, no document (FR-019).
+and `EmptyConversion` (`domain/knowledge/converter.py`) carry the *rejected
+type* rather than a code, and the upload route turns both into `INGEST_REJECTED`
+/ 400, distinguished by `details.reason` — `unsupported_type`, or `scanned_pdf`
+/ `empty_conversion` — so a surface can name the format it will not take and,
+for a PDF with no text layer, say something actionable about why. Either way
+nothing is submitted: no inbox item, no document (see "Bound uploads and leave
+nothing behind on failure").
 
 A pass requested while one is already in flight over the same collection answers
-`UPKEEP_ALREADY_RUNNING` / 409 (FR-030). It is refused rather than queued because
-the caller asked to *start* a pass, and no pass is going to start.
+`UPKEEP_ALREADY_RUNNING` / 409 (see "Run one pass per collection at a time"). It
+is refused rather than queued because the caller asked to *start* a pass, and no
+pass is going to start.
 
 ## Audit and invocation records
 
@@ -334,9 +351,10 @@ they are Coffer's own bookkeeping. `coffer__write` records one `mcp_invocations`
 row (tool, actor, duration, outcome — never arguments, never content) and every
 submission — from the tool, the CLI, the REST route, an upload or a channel —
 records one `KNOWLEDGE_WRITTEN` `audit_log` event naming the caller, with the
-document path when it was promoted and `pending` when it waits (FR-014); a
-delete records `KNOWLEDGE_DELETED`. A completed curation pass records
-`KNOWLEDGE_CURATED` with the item, the model and its counts.
+document path when it was promoted and `pending` when it waits (see "Submit
+material through coffer__write"); a delete records `KNOWLEDGE_DELETED`. A
+completed curation pass records `KNOWLEDGE_CURATED` with the item, the model and
+its counts.
 
 Losing the read tools lost the invocation record for reads, and with it the
 ability to answer "is this layer being used" from `mcp_invocations`. That is a
@@ -347,7 +365,7 @@ nothing is lost by not having built it yet.
 ## The installation-wide curation setting
 
 The one setting the layer has is not the layer's. Three columns on the singleton
-`internal_engine_config` row carry it (FR-032):
+`internal_engine_config` row carry it (see "Curate on one owner machine only"):
 
 | column | notes |
 | --- | --- |
@@ -366,7 +384,8 @@ owner is.
 ## What migration 0101 does
 
 `20260923_0101_knowledge_one_tree.py`, with the on-disk rewrite frozen beside it
-in `migrations/knowledge_tree_0101.py` (FR-042, FR-043). It turns 0085's two
+in `migrations/knowledge_tree_0101.py` (see "Migrate the two-lane corpus into
+the inbox", "Back up the knowledge root before migrating"). It turns 0085's two
 lanes into one tree by **re-distilling everything**: nothing in the old tree is
 renamed into the new one.
 
@@ -401,7 +420,7 @@ a document as it stands.
 retired; its rewrite is described here because 0101 runs on top of what it left.
 
 `20260917_0085_knowledge_two_lanes.py`, with the on-disk rewrite frozen beside it
-in `migrations/knowledge_tree_0085.py` (FR-042, FR-043).
+in `migrations/knowledge_tree_0085.py`.
 
 **Order.** The rewrite runs FIRST, before any DDL. It is the only step that
 touches writing the user cannot get back, so running it first means a failure
@@ -430,29 +449,30 @@ table or the row still upgrades:
   SQLite cannot rename a column in place, so all three go through one
   `batch_alter_table` rebuild rather than three.
 - The switch flips **on** and the owner is seeded with this machine, read from
-  `daemon-config.json` beside the database (FR-044). Without it the upgrade would
-  take the corpus away and give nothing back. The owner is only written when it
-  is currently NULL: a user who already chose a machine chose it for the same
-  corpus.
+  `daemon-config.json` beside the database (see "Keep auto-curation on for
+  migrated vaults"). Without it the upgrade would take the corpus away and give
+  nothing back. The owner is only written when it is currently NULL: a user who
+  already chose a machine chose it for the same corpus.
 - `knowledge_tidied` audit rows are **rewritten** to `knowledge_curated`, not
   purged. Unlike the events revisions 0069 and 0077 dropped, this one still has a
   writer — the pass was renamed, not retired — so the history stays readable
   under the name the code now uses. The value is inlined rather than imported
   from `AuditEventType`: a migration must mean the same thing forever.
-- The shared `coffer-knowledge` skill Resource, its agent bindings and its master
-  folder all go (FR-042). At that revision the skill was generated per agent, and
-  a registered shared master left behind would have kept being delivered beside
-  the generated copy — the same layer described twice, one of the descriptions
-  wrong.
+- The shared `coffer-knowledge` skill Resource, its agent bindings and its
+  master folder all go (see "Migrate the two-lane corpus into the inbox"). At
+  that revision the skill was generated per agent, and a registered shared
+  master left behind would have kept being delivered beside the generated copy —
+  the same layer described twice, one of the descriptions wrong.
 - Revision `0089` finishes that retirement from the other end. The catalogue now
   rides Coffer's own `coffer-guide` skill, which *is* a registered Resource with
   a master folder, so what has to go is the per-agent delivery `0085` left in
   place: the migration sweeps each registered agent's resolved skill directory
   and removes `skills/coffer-knowledge` when it is a symlink or a directory
   holding the `SKILL.md`/`README.md` pair that delivery always wrote, and leaves
-  anything else at that name alone (FR-034). Nothing else can clean it up —
-  there was never a binding to reclaim from — and a manual that will never be
-  rewritten again is worse than none.
+  anything else at that name alone (see "Deliver the catalogue through the
+  coffer-guide skill"). Nothing else can clean it up — there was never a binding
+  to reclaim from — and a manual that will never be rewritten again is worse
+  than none.
 
 `downgrade` raises, and **no compatibility shim is left behind anywhere**:
 nothing reads the old column names, the old audit value or the old tree shape

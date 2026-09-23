@@ -4,7 +4,7 @@
 ``application.knowledge.guide_render``, which writes the name into the skill's
 own frontmatter, and once in ``infrastructure.sync.paths``, which is the set of
 tree paths a converge round neither publishes nor applies (spec vault-sync
-FR-093).
+"Withhold derived output in both halves").
 
 The duplication is forced, not careless. import-linter's cross-kind contracts
 forbid the sync slice from importing ``coffer.application.knowledge`` *and*

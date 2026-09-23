@@ -43,8 +43,9 @@ dependencies = [
     "tomlkit>=0.13",
     "pyyaml>=6.0",
     # Document → text, for exactly two callers, which is what Contract 7
-    # ("engine confinement") fences it to: inbound channel attachments
-    # (spec channels FR-030, ``infrastructure/chat``) and knowledge ingest
+    # ("engine confinement") fences it to: inbound channel attachments (spec
+    # channels "Give documents to every agent as extracted text",
+    # ``infrastructure/chat``) and knowledge ingest
     # (``infrastructure/knowledge/converters``, which turns an uploaded file
     # into a markdown knowledge file). What the knowledge layer no longer has
     # is an INDEX — nothing here embeds or retrieves (ADR
@@ -99,9 +100,10 @@ coffer-mcp-shim = "coffer.surfaces.shim.main:run"
 packages = ["coffer"]
 
 [tool.setuptools.package-data]
-# The hand-written half of Coffer's own skill (spec knowledge FR-037) is a
-# markdown file, not a module, so an installed wheel has to be told to carry
-# it. A frozen build is told separately, in backend/coffer-daemon.spec.
+# The hand-written half of Coffer's own skill (spec knowledge "Merge the manual
+# and the catalogue in the skill body") is a markdown file, not a module, so an
+# installed wheel has to be told to carry it. A frozen build is told
+# separately, in backend/coffer-daemon.spec.
 coffer = ["application/knowledge/skill_assets/**/*.md"]
 
 [tool.ruff]
@@ -1055,16 +1057,17 @@ ignore_imports = [
 
 # Contract 7: converter confinement. ``markitdown`` has exactly two consumers —
 # ``infrastructure.chat.document_extract``, which turns an inbound channel
-# attachment into text (spec channels FR-030), and
+# attachment into text (spec channels "Give documents to every agent as
+# extracted text"), and
 # ``infrastructure.knowledge.converters.markitdown_converter``, which turns an
-# uploaded document into a Markdown file (spec knowledge FR-022/FR-037). The
-# source is the whole ``coffer`` package, so a package added later is covered
-# without anyone remembering to list it; the two consumers' own edges are the
-# only ones ignored, which also removes every indirect chain through them. The
-# vector-index and embedding SDKs it also used to fence are gone from the
-# dependency set entirely and are banned by Contract 8 instead, so a
-# reintroduction has to be a deliberate act. Coffer no longer embeds anything
-# at any layer.
+# uploaded document into a Markdown file (spec knowledge "Convert uploads into
+# material without keeping them"). The source is the whole ``coffer`` package,
+# so a package added later is covered without anyone remembering to list it;
+# the two consumers' own edges are the only ones ignored, which also removes
+# every indirect chain through them. The vector-index and embedding SDKs it
+# also used to fence are gone from the dependency set entirely and are banned
+# by Contract 8 instead, so a reintroduction has to be a deliberate act. Coffer
+# no longer embeds anything at any layer.
 [[tool.importlinter.contracts]]
 name = "Engine confinement: markitdown is imported by the channel attachment extractor and the knowledge converter only"
 type = "forbidden"

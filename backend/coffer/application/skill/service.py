@@ -55,9 +55,9 @@ logger = logging.getLogger(__name__)
 # modules (Contract 5).
 AgentSkillDirResolver = Callable[[Resource], pathlib.Path]
 
-# Resolver for an agent's ordered unmanaged-skill scan locations (FR-016).
-# Built at the composition root from AgentConfig +
-# coffer.domain.agent.scan.scan_locations — same Contract 5 seam as above.
+# Resolver for an agent's ordered unmanaged-skill scan locations (see "List unmanaged
+# skills in an agent's skill locations"). Built at the composition root from AgentConfig
+# + coffer.domain.agent.scan.scan_locations — same Contract 5 seam as above.
 AgentScanLocationsResolver = Callable[[Resource], list[pathlib.Path]]
 
 
@@ -85,9 +85,10 @@ class SkillService:
         self._sync = sync_engine
         self._resolve_agent_skill_dir = agent_skill_dir_resolver
         self._size_limit = size_limit_bytes
-        # Unmanaged-skill discovery deps (FR-016). Optional only so existing
-        # construction sites keep working until the composition root wires
-        # them; the unmanaged_* methods guard against missing config.
+        # Unmanaged-skill discovery deps (see "List unmanaged skills in an agent's skill
+        # locations"). Optional only so existing construction sites keep working until
+        # the composition root wires them; the unmanaged_* methods guard against missing
+        # config.
         self._workspace_scan = workspace_scan
         self._resolve_agent_scan_locations = agent_scan_locations_resolver
         self._rmtree = rmtree
@@ -150,7 +151,7 @@ class SkillService:
             service=self, skill_uid=skill_uid, agent_uid=agent_uid, actor=actor
         )
 
-    # ---------- delivery reconciliation (FR-012 / FR-019) ----------
+    # ---------- delivery reconciliation ----------
 
     async def apply_scope_for_agent(self, agent_uid: str, *, actor: str = "system") -> list[str]:
         """Reconcile one agent's delivered set against the delivery predicate.
@@ -235,7 +236,7 @@ class SkillService:
 
         await relink_agent_skills(service=self, agent_uid=agent_uid, actor=actor)
 
-    # ---------- unmanaged skills (FR-016) ----------
+    # ---------- unmanaged skills ----------
 
     def _require_unmanaged_deps(self) -> None:
         if self._workspace_scan is None or self._resolve_agent_scan_locations is None:

@@ -121,9 +121,8 @@ async def test_set_credential_stores_value() -> None:
         )
         assert r.status_code == 204
     assert fake.store["github.GITHUB_TOKEN"] == "ghp_secret"
-    # spec resource-framework FR-006: every credential lifecycle change is audited; secret value
-    # MUST NOT
-    # appear in the audit row — only the ref.
+    # spec resource-framework "Audit every lifecycle change": every credential lifecycle
+    # change is audited; secret value MUST NOT appear in the audit row — only the ref.
     assert len(audit_repo.entries) == 1
     set_entry = audit_repo.entries[0]
     assert set_entry.event_type == "credential_set"

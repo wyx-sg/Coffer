@@ -22,7 +22,8 @@
 // staged model(s) are seeded first, so a model already bound to the agent never
 // vanishes from the list.
 //
-// Both sources are narrowed to modality `text` (spec provider-switching FR-032):
+// Both sources are narrowed to modality `text` (spec provider-switching "Offer
+// only text models to chat pickers"):
 // this is a CHAT binding, so an endpoint's embedding / image / video / audio
 // models are never offered as the model an agent runs on.
 import { useEffect, useMemo, useState } from "react";

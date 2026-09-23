@@ -58,7 +58,8 @@ CARD_BUTTON_GROUPS_MAX = 3
 
 
 def mentions_others(mentioned_list: Sequence[Any] | None) -> bool:
-    """Whether a group message @mentions a user OTHER than the bot (FR-037).
+    """Whether a group message @mentions a user OTHER than the bot (see "Configure when the bot
+    answers in a group").
 
     ``new_mentioned_message_received_from_group_chat`` only fires when the bot
     IS mentioned, so the bot already occupies one slot in ``mentioned_list``;
@@ -246,8 +247,8 @@ def interactive_card(
 
 
 def dedup_key(envelope: dict[str, Any], event: dict[str, Any]) -> str:
-    """The event's unique id for FR-040 de-dup: the top-level ``event_id``, else
-    the message id (on ``message`` for messages, top-level for a card click)."""
+    """The event's unique id for de-dup ("Process each inbound event once"): the top-level
+    ``event_id``, else the message id (on ``message`` for messages, top-level for a card click)."""
     event_id = str(envelope.get("event_id") or "")
     if event_id:
         return event_id

@@ -183,10 +183,9 @@ def _derive_description(body: str) -> str:
 
     Almost nothing in the pre-migration corpus carried a description — it was
     an optional column almost no writer filled. The new catalogue IS the
-    retrieval surface (spec knowledge FR-003), so migrating those files with an
-    empty line would hand over a corpus nothing can find its way around. The
-    first paragraph under the heading is what a person would have written
-    there anyway.
+    retrieval surface, so migrating those files with an empty line would hand
+    over a corpus nothing can find its way around. The first paragraph under
+    the heading is what a person would have written there anyway.
     """
     paragraph: list[str] = []
     for line in body.splitlines():
@@ -363,9 +362,9 @@ def backfill_descriptions(report: MigrationReport) -> None:
     Separate from the move because it has to reach files this run did not move:
     a tree migrated by an earlier run carries whatever the old ``documents``
     rows said, and almost none of them said anything. An empty description is
-    not a cosmetic gap — the catalogue is the only retrieval surface there is
-    (spec knowledge FR-003), so a file that describes nothing is one an agent
-    scrolls past. Idempotent: a file that already has one is left alone.
+    not a cosmetic gap — the catalogue is the only retrieval surface there is,
+    so a file that describes nothing is one an agent scrolls past. Idempotent:
+    a file that already has one is left alone.
     """
     root = knowledge_root()
     if not root.is_dir():

@@ -42,7 +42,8 @@ class AgentCreate(BaseModel):
 
 
 class AgentPatch(BaseModel):
-    # FR-006: agents have no enable/disable concept — only config_dir,
+    # "Manage the agent lifecycle without an enable state": agents have no
+    # enable/disable concept — only config_dir,
     # description, and the model binding are updatable. (No `enabled` field by
     # design.) Which skills reach this agent is decided on each skill resource
     # (`enabled` + `scope`), never here.

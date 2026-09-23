@@ -1,4 +1,5 @@
-"""The distil pass: raw entries in, Coffer's own notes out (spec memory FR-023).
+"""The distil pass: raw entries in, Coffer's own notes out (spec memory "Distil
+incrementally in two stages").
 
 This is the pass the whole layer exists for. Aggregation reads the agents'
 native memories and puts what it found under a partition's ``.raw/``,
@@ -7,14 +8,13 @@ words — and writes the ``MEMORY.md`` a session is actually given.
 
 **The single most important invariant in this module: a retirement is written
 to ``RETIRED.md`` *and* the note file is deleted, and ``RETIRED.md`` is part of
-the next pass's input (FR-025).** Every other rule here can be got wrong and
-cost one pass. This one, got wrong, costs every pass forever: the material a
-note was built from still lives in the agent's own memory, outside anything
-Coffer controls, so the next aggregation reads it again and the next distil
-pass re-opens the note this one removed. In a store whose sources live outside
-it, **an unrecorded deletion is undone**. ``RETIRED.md`` is not a bin, it is
-the mechanism, and every routing prompt is handed its titles with an
-instruction not to re-open them.
+the next pass's input (see "Record retirements so they stick").** Every other rule here
+can be got wrong and cost one pass. This one, got wrong, costs every pass forever: the
+material a note was built from still lives in the agent's own memory, outside anything
+Coffer controls, so the next aggregation reads it again and the next distil pass
+re-opens the note this one removed. In a store whose sources live outside it, **an
+unrecorded deletion is undone**. ``RETIRED.md`` is not a bin, it is the mechanism, and
+every routing prompt is handed its titles with an instruction not to re-open them.
 
 **Two stages, so no single request carries the partition's bodies.** Routing
 (:mod:`~coffer.application.memory.distil_routing`) gets this round's new
@@ -28,41 +28,42 @@ never a hundred bodies. :mod:`~coffer.application.memory.distil_plan` folds
 the routing answers into a plan and
 :mod:`~coffer.application.memory.distil_apply` carries it out.
 
-**``.raw/`` is never written here (FR-026).** Not one call: the pass uses
-``store.list_raw_entries`` and nothing else from the store's raw half, which
-makes the rule checkable by reading the call sites rather than by trusting a
-comment. That separation is what lets a bad distillation be re-run without
-going back to the agents.
+**``.raw/`` is never written here (see "Keep distil out of the raw directory").** Not
+one call: the pass uses ``store.list_raw_entries`` and nothing else from the store's raw
+half, which makes the rule checkable by reading the call sites rather than by trusting a
+comment. That separation is what lets a bad distillation be re-run without going back to
+the agents.
 
-**``MEMORY.md`` is always written, on every path.** Even when nothing changed,
-even when no model was available, even when every model call failed. A pass
-must never leave a partition without an index, because the index *is* the
-delivery (FR-028) — a partition with notes and no index delivers nothing.
+**``MEMORY.md`` is always written, on every path.** Even when nothing changed, even when
+no model was available, even when every model call failed. A pass must never leave a
+partition without an index, because the index *is* the delivery (see "Deliver the index
+and the notes path at session start") — a partition with notes and no index delivers
+nothing.
 
-**No internal connection, no model call — structurally (FR-024).** The
-mechanical path is :func:`_distil_mechanically`, a **synchronous** function
-handed no completion port and no model selector. It cannot call a model
-because it has nothing to call one with, rather than because it was careful
-not to. Each new entry becomes a note of its own, carrying the source's own
-title, description, text, type and search terms, and the index is rendered
-from their frontmatter. Thinner, not absent.
+**No internal connection, no model call — structurally (see "Distil mechanically with no
+internal connection").** The mechanical path is :func:`_distil_mechanically`, a
+**synchronous** function handed no completion port and no model selector. It cannot call
+a model because it has nothing to call one with, rather than because it was careful not
+to. Each new entry becomes a note of its own, carrying the source's own title,
+description, text, type and search terms, and the index is rendered from their
+frontmatter. Thinner, not absent.
 
 **Malformed model output degrades to nothing, never to an exception
-(FR-027).** An unknown slug, a non-JSON answer, an action naming an entry not
-in the batch, a note the writing stage could not produce: each is logged and
-skipped, and the entries involved stay in ``.raw/`` for the next pass to see
-again. This keeps the organise pass's discipline, which was good, and it is
-why a pass against a degraded model is merely useless rather than destructive.
+(see "Record what each distil pass did").** An unknown slug, a non-JSON answer, an
+action naming an entry not in the batch, a note the writing stage could not produce:
+each is logged and skipped, and the entries involved stay in ``.raw/`` for the next pass
+to see again. This keeps the organise pass's discipline, which was good, and it is why a
+pass against a degraded model is merely useless rather than destructive.
 
 **Which entries are new.** An entry is undistilled when its ``entry_id``
 appears neither in any note's ``origins`` nor in any ``RETIRED.md`` record's
 ``entry_ids``. Both halves matter. Without the first, every pass re-routes the
 whole partition. Without the second, an entry the pass deliberately kept
 nothing from would be re-offered forever, since a dropped entry stays in
-``.raw/`` (FR-026 forbids deleting it). So a drop is recorded as a retirement
-record naming the **entry ids** it excludes — the identity of what is being
-left out — and that record's title joins the retired subjects the next routing
-prompt must not re-open.
+``.raw/`` ("Keep distil out of the raw directory" forbids deleting it). So a drop is
+recorded as a retirement record naming the **entry ids** it excludes — the identity of
+what is being left out — and that record's title joins the retired subjects the next
+routing prompt must not re-open.
 
 A retired *note*'s own origins go on its record the same way. Nothing else
 accounts for them once the note file is gone, so leaving them off would send
@@ -93,7 +94,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class DistilResult:
-    """What one distil pass over one partition did (FR-027).
+    """What one distil pass over one partition did (see "Record what each distil pass
+    did").
 
     Enough for a developer to answer why a note reads the way it does: the
     per-action detail goes to the log, and these are the counts the audit
@@ -111,7 +113,8 @@ class DistilResult:
     #: Entries the pass kept nothing from.
     dropped: int
     #: Whether an internal connection was configured at all. False means the
-    #: mechanical path ran (FR-024) — not that a model was asked and declined.
+    #: mechanical path ran (see "Distil mechanically with no internal connection") — not
+    #: that a model was asked and declined.
     model_used: bool
 
 
@@ -122,7 +125,8 @@ def undistilled(
 
     See the module docstring's "Which entries are new": an entry is accounted
     for once its id is in some note's provenance, or once a ``RETIRED.md``
-    record names it. Reads ``.raw/`` and writes nothing (FR-026).
+    record names it. Reads ``.raw/`` and writes nothing (see "Keep distil out of the raw
+    directory").
 
     A retirement record names its entries in ``entry_ids`` whether it retired
     a note or merely kept nothing from what it read. That is what makes both
@@ -153,7 +157,8 @@ def _distil_mechanically(
     entries: Sequence[StoredRawEntry],
     repository_path: str,
 ) -> DistilResult:
-    """Distil without a model: one note per entry, then the index (FR-024).
+    """Distil without a model: one note per entry, then the index (see "Distil
+    mechanically with no internal connection").
 
     Synchronous, and handed neither a completion port nor a model selector —
     which is how "MUST NOT call a model on any path" is held structurally
@@ -211,7 +216,8 @@ async def distil_partition(
     """Distil one partition's new raw entries into its notes, then index it.
 
     With no internal connection — no selector, no model on it, or no
-    completion port — this hands off to :func:`_distil_mechanically` (FR-024).
+    completion port — this hands off to :func:`_distil_mechanically` (see "Distil
+    mechanically with no internal connection").
     With no new entries it writes the index and nothing else, which is what
     makes a sweep over an idle vault free and what the acceptance scenario's
     "a second pass over unchanged sources reinstates nothing" rests on.
@@ -224,7 +230,7 @@ async def distil_partition(
     ``read_timeout`` is read once per pass, not once per request: a pass is
     minutes long and every call in it should be judged by the same bound, so a
     settings change mid-pass takes effect from the next one. ``None`` is the
-    built-in default (spec internal-engine FR-022).
+    built-in default (spec internal-engine "Carry the bound on one model call").
     """
     notes = store.list_notes(partition)
     retired = store.read_retired(partition)

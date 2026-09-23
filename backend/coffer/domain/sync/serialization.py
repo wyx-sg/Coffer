@@ -6,7 +6,7 @@ it is identity plus description plus config — nothing else. The path is keyed
 on the **uid** and the name lives inside the document, which is what makes a
 rename a modification of one file rather than a deletion beside an addition
 (ADR resource-identity-is-an-immutable-uid). Determinism is
-load-bearing (spec vault-sync "Determinism"): machine-local, churn-prone
+load-bearing (spec vault-sync "Serialize deterministically"): machine-local, churn-prone
 fields (``id``, ``created_at``, ``updated_at``) are excluded and the encoder
 (infrastructure) dumps with sorted keys — so an unchanged vault serializes to
 byte-identical files on every machine and on every round, and the user can

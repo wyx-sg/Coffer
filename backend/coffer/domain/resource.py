@@ -127,7 +127,8 @@ class Kind:
     # installed on one machine: publishing those produces, at the other end, a
     # row naming something that machine does not have, with nothing behind it,
     # which the next local pass would recompute away anyway. `memory` is the
-    # only kind that sets it False today (spec memory FR-016). Declared here
+    # only kind that sets it False today (spec memory "Keep the memory tree
+    # derived and local"). Declared here
     # rather than listed in the exporter so the sync layer keeps one rule
     # instead of a table of exceptions — the shape the retired machine-local
     # kind list had.
@@ -146,7 +147,8 @@ class Kind:
     # boot. Publishing it is publishing derived output: two machines with the
     # same files but a different set of collections enabled render different
     # bytes, overwrite each other every round, and never stop. The reasoning is
-    # ``memory``'s (spec memory FR-023) applied to one row instead of a kind,
+    # ``memory``'s (spec memory "Keep the memory tree derived and local")
+    # applied to one row instead of a kind,
     # so it is declared the same way — on the kind, beside the flag it refines
     # — rather than as a name the sync layer would have to recognise.
     #

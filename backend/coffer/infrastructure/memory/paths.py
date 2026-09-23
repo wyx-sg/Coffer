@@ -2,24 +2,26 @@
 
 Mirrors ``infrastructure/knowledge/paths.py`` on purpose: one root, one guard,
 one override for tests. Everything under this root is derived and rebuildable
-(spec memory FR-019), and a partition holds four things with one writer each:
+(spec memory "Keep the memory tree derived and local"), and a partition holds
+four things with one writer each:
 
 ``MEMORY.md``
-    The index (FR-029). What a session is given, and what a human opens
-    first. Written by the distil pass.
+    The index (see "Write each index line to stand on its own"). What a session
+    is given, and what a human opens first. Written by the distil pass.
 
 ``notes/``
-    Coffer's own notes, one topic per file (FR-020, FR-021). Written by the
-    distil pass.
+    Coffer's own notes, one topic per file (see "Write notes in Coffer's own
+    words", "Keep one topic per note"). Written by the distil pass.
 
 ``RETIRED.md``
-    What was retired and why (FR-025) — also the next pass's exclusion list,
-    without which a deletion is undone by the next aggregation. Written by
-    the distil pass.
+    What was retired and why (see "Record retirements so they stick") — also the
+    next pass's exclusion list, without which a deletion is undone by the next
+    aggregation. Written by the distil pass.
 
 ``.raw/``
-    What was read out of the agents, verbatim (FR-008). Written **only** by
-    aggregation, and never by distil (FR-026): that is what lets a bad
+    What was read out of the agents, verbatim (see "Keep raw entries verbatim
+    and hidden"). Written **only** by aggregation, and never by distil (see
+    "Keep distil out of the raw directory"): that is what lets a bad
     distillation be re-run without going back to the agents. Hidden, and
     excluded from the index, from delivery and from recall.
 
@@ -51,7 +53,10 @@ _SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9._\- 一-鿿]+$")
 
 
 class UnsafeMemoryPath(CofferError):  # noqa: N818
-    """A path segment that is hidden, all dots, or otherwise unsafe (FR-044)."""
+    """A path segment that is hidden, all dots, or otherwise unsafe.
+
+    See "Confine reads to registered agents' memory paths".
+    """
 
     code = "MEMORY_UNSAFE_PATH"
 
@@ -73,10 +78,11 @@ def memory_root() -> pathlib.Path:
 def check_segment(segment: str) -> None:
     """Refuse a partition or note name that is hidden, all dots, or unsafe.
 
-    A partition name is produced by ``domain.memory.partition.partition_slug``
-    / ``disambiguate``, which already yield safe slugs — this guard is defence
-    in depth for the case a caller builds one another way, per FR-044: every
-    path built from a source's contents must pass a traversal guard.
+    A partition name is produced by ``domain.memory.partition.partition_slug`` /
+    ``disambiguate``, which already yield safe slugs — this guard is defence in
+    depth for the case a caller builds one another way, per "Confine reads to
+    registered agents' memory paths": every path built from a source's contents
+    must pass a traversal guard.
     """
     if not segment:
         raise UnsafeMemoryPath(segment, "empty path segment")
@@ -106,7 +112,7 @@ def note_path(name: str, slug: str) -> pathlib.Path:
 
 
 def raw_dir(name: str) -> pathlib.Path:
-    """Where aggregation writes what it read, verbatim (FR-008).
+    """Where aggregation writes what it read, verbatim (see "Keep raw entries verbatim and hidden").
 
     Built from ``partition_dir`` and a constant rather than through
     ``check_segment``, which refuses a dot-prefixed segment on purpose: the
@@ -123,12 +129,12 @@ def raw_path(name: str, entry_id: str) -> pathlib.Path:
 
 
 def index_path(name: str) -> pathlib.Path:
-    """The partition's index — the distil pass's to write (FR-029)."""
+    """The partition's index — the distil pass's to write."""
     return partition_dir(name) / INDEX_NAME
 
 
 def retired_path(name: str) -> pathlib.Path:
-    """The partition's retirement record (FR-025)."""
+    """The partition's retirement record (see "Record retirements so they stick")."""
     return partition_dir(name) / RETIRED_NAME
 
 

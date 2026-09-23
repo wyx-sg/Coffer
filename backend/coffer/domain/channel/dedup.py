@@ -1,4 +1,6 @@
-"""Bounded recently-seen-id set for idempotent inbound-event de-dup (FR-040).
+"""Bounded recently-seen-id set for idempotent inbound-event de-dup.
+
+Spec channels "Process each inbound event once".
 
 IM ingress redelivers events: SeaTalk's Open Platform retries a callback when
 the listener does not 2xx quickly, and a network hiccup can double-deliver.

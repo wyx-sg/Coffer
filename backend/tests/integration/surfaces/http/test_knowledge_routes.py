@@ -1,20 +1,24 @@
-"""``/api/v1/knowledge/*`` — the human's side of the directory (FR-039, FR-040).
+"""``/api/v1/knowledge/*`` — the human's side of the directory.
 
-These routes serve the person and the web page, never an agent: the agent
-reads the files themselves at the paths its delivered skill carries (FR-033).
-What that leaves this surface responsible for is the part a person cannot do
-from a shell without knowing the rules — creating a collection, submitting new
-material without choosing where it goes, and being refused when a request aims
+See "Cover collection management on REST and the CLI" and "Present a collection as
+one tree in the web UI".
+
+These routes serve the person and the web page, never an agent: the agent reads the
+files themselves at the paths its delivered skill carries ("Expose exactly one
+knowledge tool"). What that leaves this surface responsible for is the part a person
+cannot do from a shell without knowing the rules — creating a collection, submitting
+new material without choosing where it goes, and being refused when a request aims
 at something that is not a document.
 
-A collection is one tree of documents a person and curation write together.
-New knowledge never arrives as a file write: ``POST /material`` submits it to
-the collection's hidden inbox, and with no internal model configured — the
-state of the app booted here — it is promoted to a document on the spot
-(FR-013, FR-029). ``DELETE`` reaches any document; ``GET`` reads any document.
-The README and the inbox are not documents, and each of those refusals is one
-assertion below, driven through the route rather than the service, because
-the route is where a handler could forget the rule.
+A collection is one tree of documents a person and curation write together. New
+knowledge never arrives as a file write: ``POST /material`` submits it to the
+collection's hidden inbox, and with no internal model configured — the state of the
+app booted here — it is promoted to a document on the spot ("Submit every entrance's
+input as material", "Promote material directly when no model is configured").
+``DELETE`` reaches any document; ``GET`` reads any document. The README and the
+inbox are not documents, and each of those refusals is one assertion below, driven
+through the route rather than the service, because the route is where a handler
+could forget the rule.
 
 ``client``, ``_create_collection``, ``_submit`` and ``_hold_material`` live in
 ``conftest.py``.
@@ -33,7 +37,7 @@ from .conftest import _create_collection, _hold_material, _submit
 def _document(client: TestClient, collection: str, title: str, body: str = "b") -> str:
     """A document written straight into the tree — what a person's editor or a
     curation pass leaves there. No route writes a document, which is the point
-    (FR-013)."""
+    ("Submit every entrance's input as material")."""
     return fs.write_file(
         directory=collection, title=title, description="written", body=body, curated=True
     ).path
@@ -56,7 +60,7 @@ def test_creating_a_collection_creates_one_tree_and_a_readme(client, tmp_path) -
     assert not (collection / "sources").exists()
     assert not (collection / "topics").exists()
     # The description a caller gave becomes the README, which is where every
-    # later read of it comes from (FR-011).
+    # later read of it comes from ("Read a collection's description from its README").
     assert "Internal systems." in (collection / "README.md").read_text(encoding="utf-8")
 
 
@@ -71,7 +75,7 @@ def test_the_listing_counts_documents_and_pending_material_apart(  # type: ignor
     client, monkeypatch
 ) -> None:
     """Material still in the inbox is exactly what an agent cannot read yet,
-    and a single total would hide it (FR-005)."""
+    and a single total would hide it ("Hide dot-prefixed entries except the inbox")."""
     _create_collection(client, "shopee")
     _submit(client, collection="shopee", title="One", description="d", body="b")
     _document(client, "shopee", "Written")
@@ -89,8 +93,8 @@ def test_the_listing_counts_documents_and_pending_material_apart(  # type: ignor
 
 
 def test_the_listing_reads_the_description_off_disk_every_time(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """FR-011: never out of a row — a README edited in an editor is the truth
-    the next listing reports."""
+    """Per "Read a collection's description from its README": never out of a row — a
+    README edited in an editor is the truth the next listing reports."""
     client.post("/api/v1/knowledge/collections", json={"name": "shopee", "description": "First."})
     readme = tmp_path / "knowledge" / "shopee" / "README.md"
     readme.write_text("# shopee\n\nEdited by hand.\n", encoding="utf-8")
@@ -105,8 +109,10 @@ def test_the_listing_reads_the_description_off_disk_every_time(client, tmp_path)
 def test_the_tree_lists_documents_but_not_the_readme_or_the_inbox(  # type: ignore[no-untyped-def]
     client, monkeypatch
 ) -> None:
-    """One tree per collection (FR-040). The README describes it rather than
-    being content in it, and the inbox is not knowledge yet (FR-005, FR-007)."""
+    """One tree per collection ("Present a collection as one tree in the web UI").
+    The README describes it rather than being content in it, and the inbox is not
+    knowledge yet ("Hide dot-prefixed entries except the inbox", "Keep the
+    collection README out of the corpus")."""
     client.post("/api/v1/knowledge/collections", json={"name": "shopee", "description": "d"})
     document = _submit(client, collection="shopee", title="Note", description="d", body="b")
     _hold_material(monkeypatch)
@@ -146,7 +152,8 @@ def test_a_path_escaping_the_root_is_refused(client) -> None:  # type: ignore[no
 
 def test_the_inbox_is_not_addressable(client) -> None:  # type: ignore[no-untyped-def]
     """Hidden entries are refused by the path guard, so no route can list or
-    read material before a pass has merged it (FR-005, FR-006)."""
+    read material before a pass has merged it ("Hide dot-prefixed entries except the
+    inbox", "Guard every path through one module")."""
     _create_collection(client, "shopee")
     resp = client.get("/api/v1/knowledge/tree", params={"path": "shopee/.inbox"})
     assert resp.status_code == 400, resp.text
@@ -157,8 +164,8 @@ def test_the_inbox_is_not_addressable(client) -> None:  # type: ignore[no-untype
 
 
 def test_reading_carries_the_absolute_paths_the_ui_opens_with(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """FR-041: the page offers open-in-editor and reveal-in-file-manager, and
-    neither is possible from a relative path."""
+    """Per "Return absolute paths on reads": the page offers open-in-editor and
+    reveal-in-file-manager, and neither is possible from a relative path."""
     _create_collection(client, "shopee")
     path = _submit(
         client, collection="shopee", title="Session", description="d", body="account.session"
@@ -175,7 +182,8 @@ def test_reading_carries_the_absolute_paths_the_ui_opens_with(client, tmp_path) 
 
 def test_reading_reports_when_curation_last_saw_the_document(client) -> None:  # type: ignore[no-untyped-def]
     """``curated_at`` is what the page reads to say a document is up to date
-    with the rest of the collection, or has been edited since (FR-028)."""
+    with the rest of the collection, or has been edited since ("Settle an item only
+    after its pass completes")."""
     _create_collection(client, "shopee")
     stamped = _document(client, "shopee", "Derived", body="what curation concluded")
     by_hand = fs.write_file(directory="shopee", title="Mine", description="d", body="b").path
@@ -212,8 +220,9 @@ def test_material_becomes_a_document_when_no_model_could_merge_it(client, tmp_pa
     )
     assert resp.status_code == 201, resp.text
     out = resp.json()
-    # No internal model is configured in this app, so nothing would ever merge
-    # the material: it is a document the moment it arrives (FR-029).
+    # No internal model is configured in this app, so nothing would ever merge the
+    # material: it is a document the moment it arrives ("Promote material directly
+    # when no model is configured").
     assert out == {
         "status": "written",
         "collection": "shopee",
@@ -275,7 +284,7 @@ def test_material_for_an_unknown_collection_is_not_found(client, tmp_path) -> No
 
 def test_material_with_no_description_is_refused(client) -> None:  # type: ignore[no-untyped-def]
     """The skill's catalogue is how a document is ever found, so material that
-    fails to describe itself is unfindable (FR-003)."""
+    fails to describe itself is unfindable ("Carry title, description and actor in frontmatter")."""
     _create_collection(client, "shopee")
     resp = client.post(
         "/api/v1/knowledge/material",
@@ -286,7 +295,7 @@ def test_material_with_no_description_is_refused(client) -> None:  # type: ignor
 
 def test_there_is_no_route_that_writes_a_document(client) -> None:  # type: ignore[no-untyped-def]
     """A person edits a document in their own editor; the old write route is
-    gone rather than kept as a second way in (FR-013)."""
+    gone rather than kept as a second way in ("Submit every entrance's input as material")."""
     _create_collection(client, "shopee")
     resp = client.put(
         "/api/v1/knowledge/file",
@@ -310,8 +319,8 @@ def test_deleting_a_document_removes_it_from_disk(client, tmp_path) -> None:  # 
 
 
 def test_deleting_a_document_curation_wrote_is_allowed(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """FR-020: the collection is the person's as much as curation's, so a
-    document curation wrote is theirs to delete too."""
+    """Per "Let only a person delete a document": the collection is the person's as
+    much as curation's, so a document curation wrote is theirs to delete too."""
     _create_collection(client, "shopee")
     derived = _document(client, "shopee/runbooks", "Derived")
 
@@ -322,7 +331,8 @@ def test_deleting_a_document_curation_wrote_is_allowed(client, tmp_path) -> None
 
 def test_deleting_the_readme_is_refused(client, tmp_path) -> None:  # type: ignore[no-untyped-def]
     """The README describes the collection rather than being a document in it
-    (FR-007); removing it goes through the editor, not this route."""
+    ("Keep the collection README out of the corpus"); removing it goes through the
+    editor, not this route."""
     client.post("/api/v1/knowledge/collections", json={"name": "shopee", "description": "d"})
 
     resp = client.delete("/api/v1/knowledge/file", params={"path": "shopee/README.md"})
@@ -339,7 +349,8 @@ def test_curating_with_no_model_promotes_what_the_inbox_holds(  # type: ignore[n
 ) -> None:
     """Material that arrived while a model was configured, and is still waiting
     when there is none, is not stranded: the next pass makes each item a
-    document as it stands and says which (FR-029)."""
+    document as it stands and says which ("Promote material directly when no model
+    is configured")."""
     _create_collection(client, "shopee")
     _hold_material(monkeypatch)
     client.post(

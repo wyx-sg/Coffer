@@ -3,18 +3,18 @@
 Two properties are what the two-stage shape exists for, and both are asserted
 against the request this module actually builds:
 
-* **No note body ever reaches this stage** (FR-023). A partition of a hundred
-  notes that gained three entries must cost one request over a hundred index
-  lines, not a request over a hundred bodies — and this module cannot leak a
-  body because it is never given one.
-* **The retired subjects are input, not decoration** (FR-025). The material a
-  retired note was built from still sits in the agent's own memory, so without
-  that list in front of the model the next pass re-opens what the last one
-  removed.
+* **No note body ever reaches this stage** (see "Distil incrementally in two
+  stages"). A partition of a hundred notes that gained three entries must cost
+  one request over a hundred index lines, not a request over a hundred bodies —
+  and this module cannot leak a body because it is never given one.
+* **The retired subjects are input, not decoration** (see "Record retirements
+  so they stick"). The material a retired note was built from still sits in the
+  agent's own memory, so without that list in front of the model the next pass
+  re-opens what the last one removed.
 
-Everything a model says is then validated against the batch it was asked
-about: an action naming an entry or a slug that does not exist is dropped and
-logged, never applied (FR-027).
+Everything a model says is then validated against the batch it was asked about:
+an action naming an entry or a slug that does not exist is dropped and logged,
+never applied (see "Record what each distil pass did").
 """
 
 from __future__ import annotations
@@ -81,7 +81,8 @@ def test_the_request_carries_the_index_and_never_a_note_body() -> None:
 def test_each_entry_names_the_agent_it_came_from() -> None:
     """The cross-agent merge is the one thing this layer exists for, and
     knowing two entries came from two agents is what makes "same subject, no
-    shared words" a question worth asking (FR-018)."""
+    shared words" a question worth asking (see "Record provenance and merge by
+    meaning")."""
     payload = json.loads(
         routing.routing_payload(
             [_entry("one", agent="claude-code"), _entry("two", agent="codex")],
@@ -145,7 +146,8 @@ def test_a_code_fence_a_model_added_is_stripped(raw: str, expected: str) -> None
 
 @pytest.mark.parametrize("text", ["not json at all", "[1, 2, 3]", "", "null"])
 def test_an_answer_that_is_not_a_json_object_contributes_nothing(text: str) -> None:
-    """As safe as a model that was never asked (FR-027)."""
+    """As safe as a model that was never asked (see "Record what each distil
+    pass did")."""
     assert routing.parse_json_object(text, log_key="t") == {}
 
 
@@ -179,7 +181,8 @@ def test_a_valid_answer_yields_one_action_per_entry() -> None:
 def test_a_merge_may_name_a_sibling_entry_in_the_same_batch() -> None:
     """A first pass over a fresh partition has no index at all, so two agents'
     accounts of one lesson can only become one note by naming each other —
-    which is precisely the cross-agent merge this layer exists for (FR-018)."""
+    which is precisely the cross-agent merge this layer exists for (see "Record
+    provenance and merge by meaning")."""
     answer = json.dumps({"actions": [{"entry": "e2", "action": "merge", "slug": "e1"}]})
 
     (action,) = routing.parse_actions(answer, entry_ids={"e1", "e2"}, slugs=set())
@@ -210,8 +213,8 @@ def test_an_action_naming_something_that_does_not_exist_is_dropped(item: object)
 
 
 def test_the_first_action_for_an_entry_wins() -> None:
-    """FR-023 gives an entry exactly one action, and a model that names two
-    has not decided."""
+    """An entry gets exactly one action (see "Distil incrementally in two
+    stages"), and a model that names two has not decided."""
     answer = json.dumps(
         {
             "actions": [

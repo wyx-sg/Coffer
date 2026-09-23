@@ -210,7 +210,8 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
         # daemon.json from us, so the watcher starts here rather than at boot.
         evictor = asyncio.create_task(_evict_when_superseded(server), name="daemon-orphan-evictor")
         # Unset means "never stand down" — the setting for someone whose
-        # channels must answer at any hour (spec daemon FR-029).
+        # channels must answer at any hour (spec daemon "Stand down after an
+        # idle window").
         idle_hours = daemon_config.read_idle_shutdown_hours()
         idler = (
             None

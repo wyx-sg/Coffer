@@ -1,6 +1,7 @@
 """Unit tests for gateway_handlers helpers.
 
-Covers the SC-010-adjacent contract: arbitrary upstream exception text must
+Covers a contract adjacent to spec credentials "Hold plaintext only in memory
+at the moment of use": arbitrary upstream exception text must
 not leak into the invocation log via str(e). Coffer-internal errors (whose
 text is authored by us) are still preserved for debuggability.
 """

@@ -29,7 +29,8 @@ class RetentionPolicyView:
 
 _logger = logging.getLogger(__name__)
 
-# Result key for the non-table channel-media dir sweep (spec channels FR-033).
+# Result key for the non-table channel-media dir sweep (spec channels "Persist inbound
+# attachments as references").
 MEDIA_RESULT_KEY = "channel_media"
 
 

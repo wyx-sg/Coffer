@@ -1,10 +1,11 @@
 """give every curated model entry a ``modality``
 
-A connection's curated set used to be a list of bare ids, which silently assumed
-every model an endpoint serves is a chat model. It is not: the same credential
-reaches embedding, image, video and speech models, and the global embedding
-setting now picks one of them from a connection the same way the internal engine
-picks a chat model (spec provider-switching FR-031). So each entry becomes
+A connection's curated set used to be a list of bare ids, which silently
+assumed every model an endpoint serves is a chat model. It is not: the same
+credential reaches embedding, image, video and speech models, and the global
+embedding setting now picks one of them from a connection the same way the
+internal engine picks a chat model (spec provider-switching "Store a modality
+with each curated model"). So each entry becomes
 ``{"id": ..., "modality": ...}``.
 
 Rows written before this revision have no answer for entries they already hold,

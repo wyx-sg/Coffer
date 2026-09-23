@@ -170,9 +170,10 @@ class AgentMcpEntryService:
         """Merged MCP entries across all MCP-bearing config files.
 
         Missing files are skipped; unparseable files degrade to an explicit
-        ``ParseErrorInfo`` instead of failing the whole view (spec agent-registry FR-023).
-        Entries (except Coffer's own) are annotated with the name of an
-        equivalent registered ``mcp_server`` resource, if any.
+        ``ParseErrorInfo`` instead of failing the whole view (spec agent-registry
+        "Degrade a facet to a parse-error state when its config file is unparseable").
+        Entries (except Coffer's own) are annotated with the name of an equivalent
+        registered ``mcp_server`` resource, if any.
         """
         cfg = await self._config_for(uid)
         items: list[McpEntry] = []

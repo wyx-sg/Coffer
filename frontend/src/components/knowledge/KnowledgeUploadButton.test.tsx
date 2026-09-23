@@ -1,6 +1,7 @@
 // frontend/src/components/knowledge/KnowledgeUploadButton.test.tsx
 //
-// Upload into the collection in view (spec knowledge FR-040). An upload is
+// Upload into the collection in view (spec knowledge "Present a
+// collection as one tree in the web UI"). An upload is
 // material: it either waits to be merged or, with no internal model, becomes a
 // document on the spot — and the toast must say which.
 // `useUploadKnowledgeFile` runs as a REAL react-query mutation against the

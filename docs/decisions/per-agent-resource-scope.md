@@ -131,7 +131,7 @@ resource's **reach**, and reach is machine-local.
    runs.
 
    `channel` converges like every other kind, and answers "which machine runs
-   it" with a field of its own — `runs_on`, in its config (spec channels FR-026). It is deliberately not a scope axis: reach is the LOCAL answer to
+   it" with a field of its own — `runs_on`, in its config ([channels](../../openspec/specs/channels/spec.md) "Bind each channel to the one machine that runs it"). It is deliberately not a scope axis: reach is the LOCAL answer to
    what runs here, which is why it never travels, while the machine that runs a
    channel is one answer the machines share. A channel briefly did not converge
    at all, for want of anywhere to say that.

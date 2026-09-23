@@ -1,11 +1,11 @@
 """The curation pass, and the boundaries that make it safe to run unattended.
 
 Curation rewrites a collection's documents with no review step (spec knowledge
-FR-021). What makes that acceptable is not a safety net after the fact but the
-properties checked here: it is fenced to one collection's documents, it cannot
-write more than a handful of files, it cannot record a reference that will
-rot, and an item it did not finish absorbing stays owed — material stays in the
-inbox, an edited document stays unstamped.
+"Curate through a fenced four-tool pass"). What makes that acceptable is not a
+safety net after the fact but the properties checked here: it is fenced to one
+collection's documents, it cannot write more than a handful of files, it cannot
+record a reference that will rot, and an item it did not finish absorbing stays
+owed — material stays in the inbox, an edited document stays unstamped.
 """
 
 from __future__ import annotations
@@ -433,7 +433,8 @@ def test_only_this_corpus_s_file_names_are_refused() -> None:
 )
 def test_the_system_prompt_states_the_contradiction_and_edit_rules() -> None:
     # No code can adjudicate a contradiction or tell a deliberate edit from a
-    # mistake, so the instructions are the whole of FR-026 and this pins them.
+    # mistake, so the instructions are the whole of "Let newer statements win
+    # and a person's edit stand", and this pins them.
     lowered = CURATION_SYSTEM.lower()
     assert "the newer statement wins" in lowered
     assert "previously recorded" in lowered

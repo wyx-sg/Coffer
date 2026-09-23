@@ -1,4 +1,5 @@
-"""Unmanaged-skill scan / adopt / delete helpers for SkillService (FR-016).
+"""Unmanaged-skill scan / adopt / delete helpers for SkillService (see
+"List unmanaged skills in an agent's skill locations").
 
 Free functions in the ``lifecycle_ops`` style: they take the SkillService
 instance and reach into its (private) attributes — conceptually private to
@@ -121,7 +122,7 @@ async def adopt_unmanaged(
     agent's canonical delivery location ``<config_dir>/skills/<name>`` —
     in-place replacement when adopting from there, consolidation when
     adopting from ``~/.agents/skills`` (the original is removed; Codex reads
-    both locations, so the skill stays visible). See spec skill-manager FR-017.
+    both locations, so the skill stays visible). See spec skill-manager "Adopt an unmanaged skill".
     Auto-bind inside ``register_from_validated`` skips THIS agent with a
     TargetConflict while the original folder still occupies the link path —
     that is why the rmtree happens first and ``enable_for`` runs after it.

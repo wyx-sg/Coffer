@@ -23,10 +23,10 @@ from coffer.domain.sync.serialization import ResourceDoc
 
 class ImportGate(Protocol):
     """Per-kind validation this machine runs BEFORE upserting a doc (spec
-    vault-sync ``## Applying a diff``). Raise ``CofferError`` to report the doc
-    as a per-path failure — the rest of the round still applies, the path is
-    held, and the next round retries it once this machine satisfies the
-    precondition (e.g. the agent's config dir exists here).
+    vault-sync "Apply resource documents through the resource service"). Raise
+    ``CofferError`` to report the doc as a per-path failure — the rest of the
+    round still applies, the path is held, and the next round retries it once
+    this machine satisfies the precondition (e.g. the agent's config dir exists here).
 
     A gate sees the config and nothing else. It used to be handed the document's
     activation scope as well, so a scope-aware gate could wave a doc that was
@@ -42,7 +42,7 @@ class ImportGate(Protocol):
 
 class PostImportHook(Protocol):
     """Per-kind side-effect reconciliation run AFTER a round applies (spec
-    vault-sync ``## Applying a diff``). Re-applies machine-local side-effects
+    vault-sync "Re-run post-import hooks after applying"). Re-applies machine-local side-effects
     (native config projections, on-disk transforms, deliveries) idempotently
     from current state — not from the diff — and returns error strings, which
     the round reports among its failures."""
@@ -122,7 +122,7 @@ class BundlePort(Protocol):
     Every method is synchronous blocking IO; the application layer runs them
     off the event loop.
 
-    Every write is **differential** (spec vault-sync "Why deletion is safe"):
+    Every write is **differential** (spec vault-sync "Export differentially"):
     a document is written only when its bytes changed and removed only when
     the vault no longer holds it, and no implementation may clear a directory
     and rewrite it. The bundle is the git working tree that gets
@@ -150,11 +150,11 @@ class BundlePort(Protocol):
         trees. Symlinks and anything under a ``.git`` directory are skipped
         and logged, never copied.
 
-        An implementation MAY hold back subtrees that are derived output — a
-        folder every machine regenerates for itself (spec vault-sync FR-093).
-        Held back means invisible in both directions: not copied out, and not
-        removed from the tree either, so a copy an older build published is
-        left inert rather than staged as a deletion the fleet would act on."""
+        An implementation MAY hold back subtrees that are derived output — a folder
+        every machine regenerates for itself (spec vault-sync "Withhold derived output
+        in both halves"). Held back means invisible in both directions: not copied out,
+        and not removed from the tree either, so a copy an older build published is left
+        inert rather than staged as a deletion the fleet would act on."""
 
     def tree_counts(self) -> list[tuple[str, int]]:
         """(subdir, file count) for each mirrored tree present in the bundle,
@@ -198,7 +198,7 @@ class BundlePort(Protocol):
         """Write exactly ``machines/<machine_id>.yaml`` and no other machine's.
 
         Disjoint ownership is what makes the registry unable to conflict (spec
-        vault-sync "The registry is a derived view, not a synced table"): two
+        vault-sync "Derive the registry from the descriptors"): two
         machines never stage the same path, so git merges descriptors trivially
         and the registry is whatever ``machines/*.yaml`` holds."""
 
@@ -330,10 +330,10 @@ class SyncRemoteRepoPort(Protocol):
         """Re-stamp the newest recorded round in place, if it is this one again.
 
         The one case: a confirmation the user has not answered, which the timer
-        re-derives every interval (spec vault-sync FR-092). Ten identical rows
-        carry no more information than one, so the round is written over the
-        row that first reported it rather than appended. Returns False when
-        there is no such row to refresh — the caller then records normally."""
+        re-derives every interval (spec vault-sync "Record one outstanding confirmation
+        once"). Ten identical rows carry no more information than one, so the round is
+        written over the row that first reported it rather than appended. Returns False
+        when there is no such row to refresh — the caller then records normally."""
 
     async def last_run(self) -> ConvergeRun | None: ...
 

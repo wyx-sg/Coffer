@@ -60,7 +60,8 @@ async def test_install_claude_writes_entry_with_backup_and_audit(
     assert st.installed is True
     assert st.command == SHIM
     data = json.loads(claude_json.read_text())
-    # spec agent-registry FR-015 (amended): install threads the agent's own UID
+    # spec agent-registry "Install Coffer's MCP server into an agent in one
+    # action": install threads the agent's own UID
     # through as `--agent-uid <uid>` so the shim self-reports an identity the
     # gateway can still match after the agent is renamed.
     assert data["mcpServers"]["coffer"] == {

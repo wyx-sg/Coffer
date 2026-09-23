@@ -1,6 +1,6 @@
 """The background worker that folds new knowledge into a collection's documents.
 
-It is **on by default** (spec knowledge FR-032): it is what merges each
+It is **on by default** (spec knowledge "Curate on one owner machine only"): it is what merges each
 collection's inbox — uploads, agents' ``coffer__write`` — into the documents an
 agent reads, and what carries a person's edit to one document into the rest.
 A vault where it never runs is one whose new material waits unread.
@@ -86,7 +86,7 @@ class CurationWorker:
         self._interval_s = interval_s
         self._read_interval = read_interval
         # The vault-write lock a converge round also takes (spec vault-sync
-        # ``## Unattended rewriters``): a pass and a round both rewrite vault
+        # "Never overlap a tidy pass and a round"): a pass and a round both rewrite vault
         # content, and an export taken half-way through a rewrite is a torn
         # snapshot that git reads as a deliberate change. None on a vault with
         # no sync wired, where there is nothing to interleave with.
@@ -115,11 +115,11 @@ class CurationWorker:
 
     async def run_once(self) -> None:
         """Re-deliver the skills, then sweep — or not, when curation is off."""
-        # Delivery runs on every tick and OUTSIDE the enabled check, because it
-        # is not part of curating: a collection created, deleted, enabled or
-        # disabled changes what every agent must be told, and that is true on a
-        # machine where curation is switched off or which is not the owner
-        # (FR-035). It is cheap and skips a copy that already matches.
+        # Delivery runs on every tick and OUTSIDE the enabled check, because it is not
+        # part of curating: a collection created, deleted, enabled or disabled changes
+        # what every agent must be told, and that is true on a machine where curation is
+        # switched off or which is not the owner (see "Deliver the guide as the
+        # shared-master link"). It is cheap and skips a copy that already matches.
         if self._deliver is not None:
             try:
                 await self._deliver()

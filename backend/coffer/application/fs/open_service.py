@@ -1,6 +1,6 @@
 """Local-filesystem open / reveal actions for the read-only file viewers.
 
-Spec spec daemon FR-021 (ADR daemon-proxies-os-file-actions). Coffer's
+Spec daemon "Open and reveal existing absolute paths" (ADR daemon-proxies-os-file-actions). Coffer's
 file viewers are read-only; the user edits in their own tools. On the desktop
 the packaged app reaches the OS directly, but the web surface can't — so it
 asks the loopback daemon, which is *always co-located with the web client on

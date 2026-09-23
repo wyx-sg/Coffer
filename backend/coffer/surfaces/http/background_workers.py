@@ -111,7 +111,8 @@ def start_background_workers(
         knowledge_service, curation_pass, guide, resource_svc, engine_config, sync
     )
     distil_task = start_distil_worker(distil, resource_svc, engine_config)
-    # Aggregation (spec memory FR-007): a catch-up pass now, then hourly. It
+    # Aggregation (spec memory "Aggregate on an interval and on demand"): a
+    # catch-up pass now, then hourly. It
     # only reads the agents' own memory and only writes the derived tree, so
     # nothing here has to wait on the vault rewriters above.
     aggregate_task = start_aggregate_worker(memory_service, engine_config)

@@ -1,6 +1,7 @@
 // frontend/src/pages/MemoryPage.test.tsx
 //
-// The Memory page is a list page and must read as one (spec memory FR-037):
+// The Memory page is a list page and must read as one (spec memory "Present
+// partitions as a table and a file tree"):
 // a table, in the same shape whether the vault holds partitions or none, and
 // nothing else. Two surfaces that used to render above and below that table
 // are asserted ABSENT here, because both were duplicates of somewhere better:
@@ -71,7 +72,8 @@ const COFFER: PartitionOut = {
   unresolvable: false,
 };
 
-/** A partition whose repository has been deleted from disk (FR-016). */
+/** A partition whose repository has been deleted from disk (see "Report
+ *  unresolvable partitions"). */
 const GONE: PartitionOut = {
   uid: "mp-0d5c",
   name: "old-api",
@@ -137,8 +139,8 @@ describe("MemoryPage", () => {
   });
 
   test("a partition whose repository is gone is listed, not hidden", () => {
-    // FR-016: it is delivered to nobody, and only the developer can decide
-    // whether to delete it — which they cannot do from a list it is missing
+    // "Report unresolvable partitions": it is delivered to nobody, and only the developer can
+    // decide whether to delete it — which they cannot do from a list it is missing
     // from. So it is on the page, marked.
     stubPartitions([COFFER, GONE]);
     renderPage();

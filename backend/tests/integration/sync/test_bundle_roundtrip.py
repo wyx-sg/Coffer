@@ -428,13 +428,15 @@ async def test_export_writes_a_channel_document_like_any_other(vault: VaultMachi
 async def test_export_withholds_a_kind_whose_rows_are_derived_on_each_machine(
     vault: VaultMachine,
 ) -> None:
-    """A ``memory`` partition row does not travel (spec memory FR-016).
+    """A ``memory`` partition row does not travel (spec memory "Keep the memory tree
+    derived and local").
 
     The tree under ``~/.coffer/memory/`` was already left behind — it is not a
-    mirrored tree — but the partition's Resource ROW was exported like any
-    other, which produces on the second machine exactly the thing memory FR-016
-    forbids: a partition that appears there, naming a project root that machine
-    may not have, with no facts behind it because the facts stayed home.
+    mirrored tree — but the partition's Resource ROW was exported like any other,
+    which produces on the second machine exactly the thing memory "Keep the memory
+    tree derived and local" forbids: a partition that appears there, naming a
+    project root that machine may not have, with no facts behind it because the
+    facts stayed home.
 
     The rule is declared on the kind (``Kind.converges``), not listed in this
     module, so the exporter keeps one rule rather than a table of exceptions.
@@ -502,7 +504,7 @@ async def test_a_second_export_of_an_unchanged_vault_is_identical_and_rewrites_n
 
     await vault.exporter.export(vault.bundle, with_credentials=True)
 
-    # Byte-identical (spec vault-sync "Determinism and path portability") — the
+    # Byte-identical (spec vault-sync "Serialize deterministically") — the
     # manifest included, which is why it can be rewritten harmlessly.
     assert _bytes(root) == before_bytes
     # And not one document was touched: an idle vault stages nothing, so a
@@ -1068,7 +1070,8 @@ async def test_a_channel_deletion_in_the_tree_deletes_the_channel(
 async def test_resource_applier_ignores_a_document_of_a_kind_that_does_not_converge(
     vault: VaultMachine,
 ) -> None:
-    """The import side of spec memory FR-016, and it is not redundant.
+    """The import side of spec memory "Keep the memory tree derived and local", and
+    it is not redundant.
 
     Withholding on export only binds machines running this build. A machine
     still on the older one keeps publishing ``memory`` documents, and this end
@@ -1183,7 +1186,7 @@ async def test_state_applier_routes_to_the_provider_that_claims_the_area(
 
 
 async def test_state_docs_carry_home_as_a_sentinel_both_ways(vault: VaultMachine) -> None:
-    """spec vault-sync ``## Determinism and path portability``: the ``${HOME}``
+    """spec vault-sync "Store home paths against a sentinel": the ``${HOME}``
     rule is one rule for every serialized document, state areas included."""
     home = str(vault.home)
     vault.state_provider.docs["peer-1"] = {"log": f"{home}/logs/peer-1.log", "paired": True}

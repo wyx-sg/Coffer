@@ -50,12 +50,12 @@ async def fetch_thread_context(
     """The thread's own messages, when the message landed inside a thread.
 
     Returns their flattened text AND the images/files they carry, downloaded
-    (FR-030) so a picture in the thread reaches the vision agent instead of a
-    dead auth-gated file link. Degrades to ``([], ())`` on ANY error so a
-    transient failure never breaks the turn, which still runs on the message
-    alone. Group-main @mentions fetch no history — that permission is
-    intentionally not granted; the exclusion is about the group's MAIN chat, not
-    about groups, so a DM thread is read the same way a group thread is.
+    ("Download the media a thread's messages carry") so a picture in the thread reaches the vision
+    agent instead of a dead auth-gated file link. Degrades to ``([], ())`` on ANY error so a
+    transient failure never breaks the turn, which still runs on the message alone. Group-main
+    @mentions fetch no history — that permission is intentionally not granted; the exclusion is
+    about the group's MAIN chat, not about groups, so a DM thread is read the same way a group
+    thread is.
 
     ``chat_kind`` picks the endpoint: ``"group"`` reads a group thread by
     ``group_id``, ``"direct"`` reads a DM thread by ``employee_code`` — which in

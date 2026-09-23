@@ -225,7 +225,7 @@ class ChannelRuntime:
         """Keep the daemon in service for as long as a listener is up.
 
         A daemon stands down when nothing has wanted it for hours
-        (spec daemon FR-029), and "wanted" is measured in requests that
+        (spec daemon "Stand down after an idle window"), and "wanted" is measured in requests that
         arrived. A channel listener is the case that measure gets wrong: its
         job is to be *reachable*, and the request that proves it was worth
         keeping is the one that arrives at nine the next morning — after a

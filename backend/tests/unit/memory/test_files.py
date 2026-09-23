@@ -1,9 +1,10 @@
 """A partition read as a file tree, which is what the surface claims it is.
 
-FR-037's whole claim is that a partition *is* a folder of derived Markdown, so
-all four of its parts are reachable — with ``.raw/`` flagged as the verbatim
-input rather than Coffer's own writing, so a reader can tell the two apart
-without knowing which directory means which.
+"Present partitions as a table and a file tree" rests on the claim that a
+partition *is* a folder of derived Markdown, so all four of its parts are
+reachable — with ``.raw/`` flagged as the verbatim input rather than Coffer's
+own writing, so a reader can tell the two apart without knowing which directory
+means which.
 
 Two things this file is careful about, because both would make the surface lie
 about the partition at exactly the moment a pass is rewriting it: the

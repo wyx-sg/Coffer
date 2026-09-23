@@ -132,7 +132,7 @@ def test_a_file_from_an_older_build_keeps_its_keys_and_still_reads() -> None:
     assert daemon_config.read_machine_name() == "laptop"
 
 
-# --- the idle window (spec daemon FR-029) ----------------------------------
+# --- the idle window (spec daemon "Stand down after an idle window") --------
 #
 # Three states, not two, and the difference matters: absent means "the default
 # applies", null means "the user turned it off", and those must not collapse.

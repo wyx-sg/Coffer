@@ -1,4 +1,7 @@
-"""Repository identity — what a partition is actually keyed on (FR-014, FR-015).
+"""Repository identity — what a partition is actually keyed on.
+
+Spec memory "Identify a partition by its repository" and "Create no partition
+for a non-repository directory".
 
 A partition used to be keyed on the working directory a fact was learned in.
 Measured on the maintainer's live vault, that produced three distinct
@@ -78,7 +81,8 @@ def repository_key(*, remote_url: str, root_path: str) -> str:
     land in one partition. A repository with no usable remote falls back to
     its own root path, which is the only thing that can distinguish it.
     Returns ``""`` when neither is usable — the caller is not looking at a
-    repository, and FR-015 says that gets no partition.
+    repository, and "Create no partition for a non-repository directory" says
+    that gets no partition.
     """
     remote = normalise_remote(remote_url)
     if remote:

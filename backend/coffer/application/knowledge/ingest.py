@@ -1,22 +1,24 @@
 """Turning an uploaded document into new knowledge for a collection.
 
-An upload is one of the entrances new knowledge arrives by — the Knowledge
-page's upload button and a channel attachment (FR-016, FR-018). The document is
-converted to Markdown and **submitted as material**, exactly as an agent's
-``coffer__write`` is: it goes through :meth:`KnowledgeService.submit`, so a
-curation pass folds what is new in it into the collection's documents, and with
-no internal model it becomes a document of its own (FR-029). Nothing else of
-the upload is kept — not the original bytes, not the extracted text as a file
-of its own: what the collection holds is the knowledge, merged, and the
-document it arrived in was only its carrier.
+An upload is one of the entrances new knowledge arrives by — the Knowledge page's upload
+button and a channel attachment (see "Convert uploads into material without keeping
+them" and "Ingest documents sent to a channel"). The document is converted to Markdown
+and **submitted as material**, exactly as an agent's ``coffer__write`` is: it goes
+through :meth:`KnowledgeService.submit`, so a curation pass folds what is new in it into
+the collection's documents, and with no internal model it becomes a document of its own
+(see "Promote material directly when no model is configured"). Nothing else of the
+upload is kept — not the original bytes, not the extracted text as a file of its own:
+what the collection holds is the knowledge, merged, and the document it arrived in was
+only its carrier.
 
 What this module owns that ``submit`` does not need to think about:
 
-* **The description is optional input, never optional output.** The catalogue
-  the delivered skill carries is how an agent learns a document exists
-  (FR-037), so material that arrives with no internal connection configured —
-  or whose connection fails or stalls — still gets a description, drawn from
-  its own opening prose (FR-017).
+* **The description is optional input, never optional output.** The catalogue the
+  delivered skill carries is how an agent learns a document exists (see "Merge the
+  manual and the catalogue in the skill body"), so material that arrives with no
+  internal connection configured — or whose connection fails or stalls — still gets a
+  description, drawn from its own opening prose (see "Fill frontmatter on converted
+  material").
 
 Following ``curate.py``'s shape: the internal connection is reached through
 ``ModelSelectorPort`` + ``LlmCompletionPort``, both optional, and their
@@ -59,22 +61,23 @@ class ConverterRegistry(Protocol):
     async def convert(self, data: bytes, filename: str) -> Conversion: ...
 
 
-#: One upload at a time, bounded so a single call cannot exhaust memory or
-#: disk (FR-019). 20 MB matches the tightest existing bound in this codebase
-#: for a document passed hand-to-hand rather than streamed — Telegram's own
-#: bot-API download cap (``infrastructure/channel/telegram_media.py``) — which
-#: keeps the two entrances FR-018 unifies (the Knowledge page and a channel
-#: attachment) under one honest ceiling rather than the page silently
-#: accepting what a phone never could.
+#: One upload at a time, bounded so a single call cannot exhaust memory or disk (see
+#: "Bound uploads and leave nothing behind on failure"). 20 MB matches the tightest
+#: existing bound in this codebase for a document passed hand-to-hand rather than
+#: streamed — Telegram's own bot-API download cap
+#: (``infrastructure/channel/telegram_media.py``) — which keeps the two entrances
+#: "Ingest documents sent to a channel" unifies (the Knowledge page and a channel
+#: attachment) under one honest ceiling rather than the page silently accepting what a
+#: phone never could.
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 
-#: A one-line description is a small job (spec knowledge FR-017), not an
-#: agentic loop; bounded generously so a slow provider cannot hang an upload,
-#: but nowhere near indefinite.
-#: Superseded by the operator's own bound (spec internal-engine FR-023). The
-#: twenty seconds this used to carry was the tightest bound anywhere in
-#: Coffer, and a description that times out costs the catalogue its one line
-#: about a document — the line every later search reads it by.
+#: A one-line description is a small job (spec knowledge "Fill frontmatter on converted
+#: material"), not an agentic loop; bounded generously so a slow provider cannot hang an
+#: upload, but nowhere near indefinite. Superseded by the operator's own bound (spec
+#: internal-engine "Run every internal model call under the bound"). The twenty seconds
+#: this used to carry was the tightest bound anywhere in Coffer, and a description that
+#: times out costs the catalogue its one line about a document — the line every later
+#: search reads it by.
 _DESCRIPTION_TIMEOUT_SECONDS = DEFAULT_MODEL_TIMEOUT_S
 
 _DESCRIPTION_SYSTEM = (
@@ -143,7 +146,8 @@ class IngestService:
         ``EmptyConversion`` when a converter ran and produced no text, and
         whatever ``KnowledgeService.submit`` raises for an unknown or
         otherwise invalid target — in every one of those cases nothing is
-        written, converted or kept (FR-019).
+        written, converted or kept (see "Bound uploads and leave nothing
+        behind on failure").
         """
         if len(data) > MAX_UPLOAD_BYTES:
             raise UploadTooLarge(len(data), MAX_UPLOAD_BYTES)
@@ -154,11 +158,11 @@ class IngestService:
         await self._knowledge.require_enabled(collection)
 
         conversion = await self._registry.convert(data, filename)
-        # FR-019: a converter that succeeds but extracts nothing (an image-only
-        # PDF is the real case) must not be stored as a titled file with an
-        # empty body. Checked here rather than in each converter so every
-        # format is covered by one rule, and BEFORE the describe call so a
-        # refusal costs no model tokens either.
+        # "Bound uploads and leave nothing behind on failure": a converter that succeeds
+        # but extracts nothing (an image-only PDF is the real case) must not be stored
+        # as a titled file with an empty body. Checked here rather than in each
+        # converter so every format is covered by one rule, and BEFORE the describe call
+        # so a refusal costs no model tokens either.
         if not conversion.markdown.strip():
             raise EmptyConversion(pathlib.Path(filename).suffix.lstrip(".").lower())
         description = await self._describe(conversion.markdown, title=conversion.title)
@@ -206,7 +210,8 @@ class IngestService:
 def _fallback_description(markdown: str, *, title: str) -> str:
     """The document's own opening prose — first paragraph, headings skipped.
 
-    Never empty (FR-003 makes the description required): a document with no
+    Never empty ("Carry title, description and actor in frontmatter" makes the
+    description required): a document with no
     prose of its own — a bare table, a blank file — falls back to its title,
     which ``derive_title`` guarantees is never empty either.
     """

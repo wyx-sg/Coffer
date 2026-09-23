@@ -1,4 +1,5 @@
-"""FR-034 — inbound attachments persisted as references + re-materialised.
+"""Inbound attachments persisted as references + re-materialised (spec channels
+"Persist inbound attachments as references").
 
 Covers the elegant seam: the channel turn persists an ``AttachmentBlock`` into
 the user message (single source of truth); the turn task derives the adapter's

@@ -310,7 +310,8 @@ async def test_a_round_recorded_with_no_remote_reaches_neither_store(
     assert await repo.list_runs() == []
 
 
-# --- one outstanding confirmation, one row (spec vault-sync FR-092) ---------
+# --- one outstanding confirmation, one row ("Record one outstanding confirmation
+# once") ---
 
 
 def _held(at: datetime, *, paths: int = 9) -> ConvergeRun:

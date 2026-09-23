@@ -66,7 +66,8 @@ async def dispatch_builtin_tool(
         return _to_call_tool_result(result)
     except Exception as exc:
         duration_ms = int((clock() - started).total_seconds() * 1000)
-        # Honour SC-010: Coffer-authored errors keep their message; arbitrary
+        # No secret in the invocation log (spec credentials "Hold plaintext only
+        # in memory at the moment of use"): Coffer-authored errors keep their message; arbitrary
         # downstream exceptions are logged as the class name only, so a built-in
         # tool can never leak args/returned content into the invocation log
         # (matches the upstream path's ``_safe_error_summary`` — finding #7).
@@ -209,18 +210,17 @@ def inject_session_context(
 ) -> dict[str, Any]:
     """Thread what the session knows about its caller into a built-in call.
 
-    Two arguments, two rules. ``agent`` names the caller (spec mcp-gateway
-    FR-013), so it is ALWAYS the session's: whatever the client sent under that
-    name is dropped — unconditionally, including when this session has no label
-    of its own to put there — and the label resolved from the handshake identity
-    is written in its place. With no label the argument is simply absent, and the
-    tool treats the caller as unidentified rather than as whoever it claimed to
-    be. See ``AGENT_ARGUMENT`` for why the label is the agent's name and not the
-    uid the scope gate compares. ``cwd`` is context a
-    tool opts into by declaring the property in its input schema; a
-    client-supplied value is respected and a value the session never learned
-    is NOT invented, because the daemon's own cwd would scope an agent's work
-    to whatever project the daemon happens to run in.
+    Two arguments, two rules. ``agent`` names the caller (spec mcp-gateway "Take the
+    agent identity from the handshake"), so it is ALWAYS the session's: whatever the
+    client sent under that name is dropped — unconditionally, including when this
+    session has no label of its own to put there — and the label resolved from the
+    handshake identity is written in its place. With no label the argument is simply
+    absent, and the tool treats the caller as unidentified rather than as whoever it
+    claimed to be. See ``AGENT_ARGUMENT`` for why the label is the agent's name and not
+    the uid the scope gate compares. ``cwd`` is context a tool opts into by declaring
+    the property in its input schema; a client-supplied value is respected and a value
+    the session never learned is NOT invented, because the daemon's own cwd would scope
+    an agent's work to whatever project the daemon happens to run in.
 
     Generic: the gateway never special-cases a kind (Contract 5/6) — it only
     matches property names, so a new kind gets this for free and this module

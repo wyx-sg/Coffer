@@ -1,18 +1,20 @@
 """Ripgrep over the knowledge directory — the whole of literal retrieval.
 
-There is no index behind this (spec knowledge FR-001), so ``rg`` is not a
-fallback mode but the mechanism: it matches bytes, which means CJK matches
-without a tokenizer, and it reads the files themselves, which means a human's
-edit needs no import step to be findable.
+There is no index behind this (spec knowledge "Store each collection as one
+tree of Markdown files"), so ``rg`` is not a fallback mode but the mechanism:
+it matches bytes, which means CJK matches without a tokenizer, and it reads the
+files themselves, which means a human's edit needs no import step to be
+findable.
 
 Ripgrep is preferred, not required. A machine without ``rg`` on its PATH gets
 the same search from ``grep_fallback`` — the same files, the same regex
 semantics, the same bounds — walked in Python and therefore slower. The
-switch is logged once so a slow search has a visible cause (FR-015).
+switch is logged once so a slow search has a visible cause.
 
 ``--no-hidden`` is passed explicitly even though it is ripgrep's default,
 because a user's ``$RIPGREP_CONFIG_PATH`` could otherwise turn ``--hidden`` on
-underneath us and start answering with the revisions in ``.history/`` (FR-035).
+underneath us and start answering with the revisions in ``.history/`` (see "Hide
+dot-prefixed entries except the inbox").
 """
 
 from __future__ import annotations

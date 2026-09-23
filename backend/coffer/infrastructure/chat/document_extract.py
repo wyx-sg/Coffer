@@ -1,4 +1,5 @@
-"""Document text-extraction seam for inbound documents (spec channels FR-030).
+"""Document text-extraction seam for inbound documents (spec channels
+"Give documents to every agent as extracted text").
 
 An inbound document (PDF, docx, pptx, xlsx, …) should reach the agent as
 **extracted text folded into the turn**, not as a vision input or an opaque

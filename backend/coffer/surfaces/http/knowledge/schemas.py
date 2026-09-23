@@ -7,7 +7,8 @@ from the wire never means hiding one from the layer itself.
 
 What is *absent* is the point of the current shape. There is no search request,
 no search hit and no grep match, because this surface exposes no retrieval at
-all (spec knowledge "No retrieval tool", FR-033): an agent reads the files with
+all (spec knowledge "Expose exactly one knowledge tool"): an agent reads the
+files with
 its own tools at the paths its delivered skill carries, and the human reads
 them through ``tree``/``file``. A model here would be a second retrieval
 surface no one asked for.
@@ -26,10 +27,12 @@ class CollectionOut(BaseModel):
     #: A mutable label, and also the name of the directory on disk. Editable
     #: through PATCH, which moves the directory with it.
     name: str
-    #: First paragraph of the collection's ``README.md`` (FR-011).
+    #: First paragraph of the collection's ``README.md`` ("Read a collection's
+    #: description from its README").
     description: str
     #: Documents an agent can read today, and material still waiting in the
-    #: inbox to be merged into them (FR-005) — counted apart because the second
+    #: inbox to be merged into them ("Hide dot-prefixed entries except the
+    #: inbox") — counted apart because the second
     #: is exactly what an agent cannot see yet.
     document_count: int = 0
     pending_count: int = 0
@@ -72,23 +75,27 @@ class FileOut(BaseModel):
     created_at: str
     updated_at: str
     body: str
-    #: Absolute on-disk paths, so the UI can offer open / reveal (FR-041).
+    #: Absolute on-disk paths, so the UI can offer open / reveal ("Return
+    #: absolute paths on reads").
     file_path: str
     folder_path: str
     #: When curation last had this document in front of it; empty when it never
-    #: has (FR-028). A document edited since is what the sweep comes back for.
+    #: has ("Settle an item only after its pass completes"). A document edited
+    #: since is what the sweep comes back for.
     curated_at: str = ""
 
 
 class MaterialIn(BaseModel):
-    """New knowledge for a collection (FR-013)."""
+    """New knowledge for a collection ("Submit every entrance's input as
+    material")."""
 
     #: The collection's directory NAME: a filesystem value, like every path on
     #: this family — see the route module's docstring.
     collection: str = Field(min_length=1)
     title: str = Field(min_length=1)
     #: Required: the skill's catalogue is how a document is ever found, and
-    #: material that fails to describe itself is unfindable (FR-003).
+    #: material that fails to describe itself is unfindable ("Carry title,
+    #: description and actor in frontmatter").
     description: str = Field(min_length=1)
     body: str = ""
 
@@ -98,7 +105,8 @@ class SubmissionOut(BaseModel):
 
     ``status`` is ``pending`` when it waits in the inbox for a pass to merge,
     and ``written`` when it was promoted to a document on the spot because no
-    internal model is configured (FR-029) — ``path`` is that document.
+    internal model is configured ("Promote material directly when no model is
+    configured") — ``path`` is that document.
     """
 
     status: str
@@ -110,7 +118,8 @@ class SubmissionOut(BaseModel):
 class CurationRequest(BaseModel):
     #: One document to carry through, knowledge-root-relative. Omitted, the
     #: pass takes the oldest pending item — inbox material first, then a
-    #: document edited since curation last stamped it (FR-022) — which is what
+    #: document edited since curation last stamped it ("Run curation on a sweep
+    #: and on demand") — which is what
     #: the page's "curate now" button wants.
     document: str | None = None
 
@@ -119,7 +128,7 @@ class CurationOut(BaseModel):
     #: ``ok`` | ``no_model`` | ``up_to_date`` | ``too_large`` | ``failed``.
     #: Every one of them is a 200: a collection with no model configured, or
     #: with nothing pending, is an ordinary state of the feature and not a
-    #: fault of the request (FR-029).
+    #: fault of the request.
     status: str
     #: The collection's NAME, not its uid. The caller sent the uid and still
     #: holds it; what a pass report adds is something to render — "curated
@@ -133,8 +142,9 @@ class CurationOut(BaseModel):
     model: str = ""
     written: int = 0
     retired: int = 0
-    #: Writes the pass refused — a document naming another file (FR-027), or the
-    #: eight-write bound (FR-025). Reported rather than swallowed, because a
+    #: Writes the pass refused — a document naming another file ("Refuse
+    #: file-name references in documents"), or the eight-write bound ("Bound a
+    #: pass to eight writes"). Reported rather than swallowed, because a
     #: pass that hit its bound has more to absorb than it managed.
     refused: int = 0
     documents_before: int = 0
@@ -142,7 +152,8 @@ class CurationOut(BaseModel):
     #: The item-size ceiling, present only with ``status`` ``too_large``.
     limit: int = 0
     #: Documents the inbox was promoted into as it stood, present only with
-    #: ``status`` ``no_model`` (FR-029).
+    #: ``status`` ``no_model`` ("Promote material directly when no model is
+    #: configured").
     promoted: list[str] = Field(default_factory=list)
 
 

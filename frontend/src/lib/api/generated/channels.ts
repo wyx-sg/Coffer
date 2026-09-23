@@ -68,7 +68,7 @@ export interface paths {
          * Probe a SeaTalk channel's public callback path end to end
          * @description Sends the platform's own verification handshake at the channel's configured public URL and reports whether the echo came back — so the whole webhook chain (public URL → tunnel → loopback listener → signature → handshake) is confirmed from one button instead of by watching for a real event. It does NOT confirm the stored signing secret matches SeaTalk's, since both sides of the probe sign with the same stored secret; only a real event shows that.
          *
-         *     A failure is reported as `ok: false` with a `detail` the owner can act on, never as an HTTP error: the probe ran, and what it found is the answer. A Telegram channel, and a SeaTalk channel on **websocket** delivery, are refused the same way — a websocket channel has no public URL to probe at all, and its `websocket_state` is the health answer there (spec channels/seatalk FR-005).
+         *     A failure is reported as `ok: false` with a `detail` the owner can act on, never as an HTTP error: the probe ran, and what it found is the answer. A Telegram channel, and a SeaTalk channel on **websocket** delivery, are refused the same way — a websocket channel has no public URL to probe at all, and its `websocket_state` is the health answer there (spec channels/seatalk "Keep status truthful per transport").
          */
         post: operations["testChannelCallback"];
         delete?: never;

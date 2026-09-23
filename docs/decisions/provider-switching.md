@@ -356,8 +356,8 @@ Authoritative design: the [spec provider-switching Amendment 2026-09-13b](../../
 ## Amendment 2026-09-17 — speech-to-text gets a flag of its own
 
 Authoritative design: [spec provider-switching](../../openspec/specs/provider-switching/spec.md)
-FR-035 and [spec internal-engine](../../openspec/specs/internal-engine/spec.md) FR-025 –
-FR-027.
+"Keep an independent speech-to-text default" and the speech-to-text requirements of
+[spec internal-engine](../../openspec/specs/internal-engine/spec.md).
 
 - **D18 — A second global flag, `transcribe_default`, not a second use of the
   first.** D said one connection, two uses: active for an agent AND the internal

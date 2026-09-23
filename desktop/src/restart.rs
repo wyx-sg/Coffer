@@ -36,7 +36,8 @@ pub fn restart_rate_limit_refusal(
 ///
 /// The window is consumed ONLY by a restart that actually spawned. A failed
 /// spawn leaves `window` untouched, so the user may retry at once rather than
-/// waiting out a cooldown a failure earned (FR-008). The window is a parameter
+/// waiting out a cooldown a failure earned (see "Rate-limit restarts from the
+/// last success"). The window is a parameter
 /// rather than the static, so that rule is unit-testable.
 pub fn record_restart_outcome<T, E>(
     window: &mut Option<std::time::Instant>,
@@ -55,7 +56,8 @@ pub fn record_restart_outcome<T, E>(
 /// was observed free. `Ok(None)` — nothing responsive to stop, so the caller
 /// goes straight to spawning. `Err` — a responsive daemon was asked to stop
 /// and the port never freed; the caller propagates that instead of spawning a
-/// replacement that could not bind (FR-007).
+/// replacement that could not bind (see "Restart by stopping the running daemon
+/// first").
 pub fn stop_running_daemon<R, P, S, F>(
     read_info: R,
     responds: P,
@@ -88,8 +90,8 @@ mod tests {
     use super::*;
     use std::time::{Duration, Instant};
 
-    // --- FR-008: restarts are serialised and rate-limited to one every five
-    // seconds, measured from the last SUCCESSFUL restart. ---
+    // --- "Rate-limit restarts from the last success": restarts are serialised and rate-limited to
+    // one every five seconds, measured from the last SUCCESSFUL restart. ---
 
     // acceptance(spec = "desktop-app", scenario = "restarts are rate-limited, and a failed spawn does not consume the window")
     #[test]
@@ -131,8 +133,8 @@ mod tests {
         );
     }
 
-    /// The other half of FR-008: the window belongs to a restart that actually
-    /// spawned. A failed spawn must leave the user free to retry at once
+    /// The other half of "Rate-limit restarts from the last success": the window belongs to a
+    /// restart that actually spawned. A failed spawn must leave the user free to retry at once
     /// rather than serving out a cooldown its own failure earned.
     // acceptance(spec = "desktop-app", scenario = "restarts are rate-limited, and a failed spawn does not consume the window")
     #[test]
@@ -158,8 +160,8 @@ mod tests {
         assert!(restart_rate_limit_refusal(window, at, Duration::from_secs(5)).is_some());
     }
 
-    // --- FR-007: a restart stops a responsive daemon and observes the port
-    // free before spawning a replacement. ---
+    // --- "Restart by stopping the running daemon first": a restart stops a responsive daemon and
+    // observes the port free before spawning a replacement. ---
 
     /// Records which probe ran, in order, so the sequencing is asserted rather
     /// than assumed.

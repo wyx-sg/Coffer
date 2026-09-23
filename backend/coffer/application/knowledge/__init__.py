@@ -3,7 +3,7 @@
 One tree of Markdown documents per collection, which a person and the curation
 pass write together and an agent reads with its own tools. There is no
 retrieval facade and no reindex routine to re-export, because there is neither
-an index nor a retrieval tool (spec knowledge FR-001, FR-033).
+an index nor a retrieval tool (spec knowledge "Expose exactly one knowledge tool").
 """
 
 from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools

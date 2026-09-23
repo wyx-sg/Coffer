@@ -36,17 +36,18 @@ class AdapterCallbacks:
     # A selection-card button tap (ADR channel-adapter-framework). ``None`` for
     # transports/tests that never emit one; adapters skip the callback when unset.
     on_callback: Callable[[InboundCallback], Awaitable[None]] | None = None
-    # A non-message event about the bot's own standing in a chat (removed from a
-    # group, group turned external), and the platform's own stop control being
-    # pressed (FR-048). Both optional exactly like ``on_callback``: transports
-    # and test fakes that never emit one leave it unset, and adapters skip the
-    # call when it is ``None``.
+    # A non-message event about the bot's own standing in a chat (removed from a group,
+    # group turned external), and the platform's own stop control being pressed (see
+    # "Stop the turn from the platform's own stop control"). Both optional exactly like
+    # ``on_callback``: transports and test fakes that never emit one leave it unset, and
+    # adapters skip the call when it is ``None``.
     on_lifecycle: Callable[[InboundLifecycle], Awaitable[None]] | None = None
     on_stop: Callable[[InboundStop], Awaitable[None]] | None = None
 
 
 class LiveText(Protocol):
-    """A surface the core can keep updating while a turn runs (FR-039).
+    """A surface the core can keep updating while a turn runs (see "Grow a reply in
+    place on one live surface").
 
     One handle == one message that grows in place. ``text`` is ALWAYS the full
     accumulated snapshot, never a delta: the transport underneath may render
@@ -116,25 +117,26 @@ class ChannelAdapter(Protocol):
         line. It applies only to a card: a transport without card titles, or a
         send with no buttons, ignores it.
 
-        The four routing arguments are all requests a transport may ignore when
-        its platform has no such primitive: ``chat_kind`` distinguishes a group
-        ``chat_id`` from a direct one (SeaTalk's group/DM APIs differ; Telegram
-        has one path), ``thread_id`` threads the message, ``reply_to_message_id``
-        attaches it as a platform-level reply so a busy group can tell which
-        question an answer belongs to (FR-053), and ``ephemeral`` asks for it to
-        be shown only to that member (FR-049) — never a guarantee, since a
-        platform that refuses delivers an ordinary message instead.
+        The four routing arguments are all requests a transport may ignore when its
+        platform has no such primitive: ``chat_kind`` distinguishes a group ``chat_id``
+        from a direct one (SeaTalk's group/DM APIs differ; Telegram has one path),
+        ``thread_id`` threads the message, ``reply_to_message_id`` attaches it as a
+        platform-level reply so a busy group can tell which question an answer belongs
+        to (see "Attach a group reply to the message it answers"), and ``ephemeral``
+        asks for it to be shown only to that member (see "Keep non-answer chatter
+        private in a group") — never a guarantee, since a platform that refuses delivers
+        an ordinary message instead.
         """
         ...
 
     async def open_live_text(
         self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
     ) -> LiveText | None:
-        """Open a surface the core can keep updating for this turn (FR-039), or
-        ``None`` when this transport has none — the caller then falls back to
-        sending the finished reply. Only called when the transport declares
-        ``capabilities.supports_live_text``; the mechanism (edit vs streaming)
-        is the adapter's business."""
+        """Open a surface the core can keep updating for this turn (see "Grow a reply in
+        place on one live surface"), or ``None`` when this transport has none — the
+        caller then falls back to sending the finished reply. Only called when the
+        transport declares ``capabilities.supports_live_text``; the mechanism (edit vs
+        streaming) is the adapter's business."""
         ...
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None: ...
@@ -173,9 +175,9 @@ class ChannelAdapter(Protocol):
         ...
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
-        """Set an emoji reaction on ``message_id`` (FR-038: 👀 on receipt, ✅ on
-        completion). Only called when the transport declares
-        ``capabilities.supports_reactions`` — others may raise; the core never
+        """Set an emoji reaction on ``message_id`` ("Acknowledge receipt and completion
+        by capability": 👀 on receipt, ✅ on completion). Only called when the transport
+        declares ``capabilities.supports_reactions`` — others may raise; the core never
         reaches them (SeaTalk uses its typing signal for the same receipt cue).
         Best-effort at the call site: a failed reaction never breaks the turn."""
         ...
@@ -216,7 +218,8 @@ class ChannelBinding:
     default_agent: str
     default_agent_config: dict[str, Any] | None
     adapter: ChannelAdapter
-    # Group inbound gating (FR-037), sourced from the channel config.
+    # Group inbound gating (see "Configure when the bot answers in a group"), sourced
+    # from the channel config.
     require_mention: bool = True
     ignore_other_mentions: bool = False
     # The channel's framework-level ``scope`` off the row (ADR
@@ -277,11 +280,11 @@ class ContextFetchPort(Protocol):
     async def fetch_thread(
         self, chat_id: str, thread_id: str, *, limit: int = 50, chat_kind: str = "group"
     ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
-        """Return the thread's ``(text items, downloaded attachments)``: the
-        flattened text of each thread message plus the images/files those
-        messages carry, already fetched to local paths (FR-030) so an in-thread
-        @mention reaches the turn with the real pictures, not dead file links.
-        Degrades to ``([], ())`` on any error."""
+        """Return the thread's ``(text items, downloaded attachments)``: the flattened
+        text of each thread message plus the images/files those messages carry, already
+        fetched to local paths (see "Download the media a thread's messages carry") so
+        an in-thread @mention reaches the turn with the real pictures, not dead file
+        links. Degrades to ``([], ())`` on any error."""
         ...
 
 

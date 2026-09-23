@@ -4,10 +4,10 @@ Codes are memory-only by design: a daemon restart drops them and the user
 re-issues. 8 characters from an unambiguous alphabet, single use, 1-hour TTL,
 bounded wrong guesses (exhaustion invalidates the code). Fail closed.
 
-FR-051 adds a second way to present the same code — a start link carrying it —
-which arrives as ``/start <CODE>``. It is normalised here rather than at the
-transport so BOTH ways in are governed by one gate: same single use, same TTL,
-same attempt budget.
+"Pair by a one-tap start link" adds a second way to present the same code — a start link
+carrying it — which arrives as ``/start <CODE>``. It is normalised here rather than at
+the transport so BOTH ways in are governed by one gate: same single use, same TTL, same
+attempt budget.
 """
 
 from __future__ import annotations
@@ -102,15 +102,17 @@ class PairingManager:
 
 
 def _presented_code(text: str) -> str:
-    """The code a message presents, however it was presented (FR-051): typed on
+    """The code a message presents, however it was presented (see
+    "Pair by a one-tap start link"): typed on
     its own, or carried by a start link as ``/start <CODE>``."""
     match = _START_PAYLOAD.match(text.strip())
     return (match.group(1) if match else text.strip()).upper()
 
 
 def start_link(bot_username: str, code: str) -> str:
-    """The one-tap pairing link for a Telegram bot (FR-051). Empty when the
-    bot's username is unknown — the typed code is then the only way in."""
+    """The one-tap pairing link for a Telegram bot (see "Pair by a one-tap start link").
+    Empty when the bot's username is unknown — the typed code is then the only way
+    in."""
     return f"https://t.me/{bot_username}?start={code}" if bot_username else ""
 
 

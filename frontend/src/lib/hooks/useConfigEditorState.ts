@@ -49,7 +49,8 @@ export function useConfigEditorState(agentUid: string) {
   const file = useAgentConfigFile(agentUid, selectedChild || isDirSelected ? null : selectedKey);
   const child = useAgentConfigChild(agentUid, selectedKey ?? "", selectedChild ?? "");
 
-  // The curated allowlist (spec agent-registry FR-010 / User Story 7), filtered
+  // The curated allowlist (spec agent-registry "List an agent's config files with
+  // their locations"), filtered
   // to entries that exist on disk — not-yet-created files and empty directories
   // are hidden.
   const allFiles = visibleConfigFiles(files.data ?? []);

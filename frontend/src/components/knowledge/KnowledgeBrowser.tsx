@@ -1,13 +1,15 @@
 // frontend/src/components/knowledge/KnowledgeBrowser.tsx
 //
 // A collection's documents: the tree on the left, the document chosen from it
-// in the pane on the right (spec knowledge FR-040). The tree's root is the
+// in the pane on the right (spec knowledge "Present a collection as one tree in
+// the web UI"). The tree's root is the
 // collection directory itself — there is one tree, and every document in it is
 // one people and curation write together.
 //
 // The input above the tree is a FILTER, not a query. It narrows the names
 // already on screen as the user types — no request, no debounce, no ranking —
-// because this layer exposes no retrieval anywhere (FR-033, FR-040). An agent
+// because this layer exposes no retrieval anywhere (see "Expose exactly one
+// knowledge tool" and "Present a collection as one tree in the web UI"). An agent
 // reads the files with its own tools; a person reads them through this tree.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";

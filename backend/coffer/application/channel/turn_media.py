@@ -40,7 +40,8 @@ def attachment_note(attachments: Sequence[Attachment]) -> str:
 
 
 def conversation_title_hint(text: str, attachments: Sequence[Attachment]) -> str:
-    """What a conversation opened by this message should be named after (spec chat FR-011).
+    """What a conversation opened by this message should be named after (spec chat
+    "Persist conversations and messages in SQLite").
 
     Take it from the message the person sent — its own text, its own files —
     and take it BEFORE any context block (the origin header, fetched thread

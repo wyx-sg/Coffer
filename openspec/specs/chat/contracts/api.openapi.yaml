@@ -492,7 +492,8 @@ components:
           nullable: true
           description: >-
             An `attachment` block references channel media by filename and mime
-            only; the local path is never emitted to the wire (FR-044).
+            only; the local path is never emitted to the wire (see "Re-materialise
+            attachments from persisted history").
         mime: { type: string, nullable: true }
 
     MessageOut:

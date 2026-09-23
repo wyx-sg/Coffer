@@ -4,14 +4,16 @@ Thin HTTP shells over the daemon, matching the other CLI groups and their
 exit-code mapping (``_cli_client.check``).
 
 This group serves the **human**, which is why it still browses and reads while
-the MCP gateway exposes nothing but ``coffer__write`` (spec knowledge FR-033).
+the MCP gateway exposes nothing but ``coffer__write`` (spec knowledge "Expose
+exactly one knowledge tool").
 The two are not the same surface and do not answer to the same rule: an agent
 has ``Read`` and ``Grep`` of its own and is handed absolute paths by the
 delivered skill, so a retrieval tool for it would be a tool it never
 remembers to call; a person at a prompt has neither the paths nor the daemon's
-scope resolution in front of them. What this group must cover is FR-039's
-list — create a collection, list a level, read a document, submit material,
-upload a document, delete a document, trigger curation — and nothing beyond it. There is
+scope resolution in front of them. What this group must cover is the list in
+"Cover collection management on REST and the CLI" — create a collection, list
+a level, read a document, submit material, upload a document, delete a
+document, trigger curation — and nothing beyond it. There is
 deliberately no ``grep`` and no ``search`` command: the corpus is plain
 Markdown under ``~/.coffer/knowledge/``, so a person's own ``grep`` is already
 better than anything this group could wrap, and the group's help says where
@@ -71,7 +73,7 @@ def list_collections(
     table = Table(title="Knowledge collections")
     table.add_column("name")
     # Pending is material still waiting to be merged — what an agent cannot
-    # read yet (spec knowledge FR-005).
+    # read yet (spec knowledge "Hide dot-prefixed entries except the inbox").
     table.add_column("documents", justify="right")
     table.add_column("pending", justify="right")
     table.add_column("description")
@@ -182,7 +184,7 @@ def delete_document(
     ctx: typer.Context,
     path: str = typer.Argument(..., help="Document path, e.g. shopee/gateway.md"),
 ) -> None:
-    """Delete a document (FR-020)."""
+    """Delete a document."""
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.delete("/knowledge/file", params={"path": path})
@@ -201,7 +203,8 @@ def upload(
     """Convert a document to Markdown and add what it says to a collection.
 
     The extracted text is new material: curation merges it into the documents,
-    and neither the original nor the extracted file is kept (FR-016).
+    and neither the original nor the extracted file is kept ("Convert uploads
+    into material without keeping them").
     """
     form: dict[str, str] = {"collection": collection}
     c, _info = _cli_client.client_or_exit()
@@ -229,8 +232,10 @@ def curate(
 
     A pass is bounded and reports why it stopped, so the status is the answer:
     ``ok``, ``up_to_date``, ``no_model`` when no internal connection is
-    configured (FR-029), ``too_large``, or ``failed``. A pass already in
-    flight over the same collection is refused rather than queued (FR-030).
+    configured ("Promote material directly when no model is configured"),
+    ``too_large``, or ``failed``. A pass already in flight over the same
+    collection is refused rather than queued ("Run one pass per collection at
+    a time").
     """
     # The route takes the document in the body, not the query string: a path
     # is content, and a silently-ignored query param would look like a pass

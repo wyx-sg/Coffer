@@ -86,7 +86,7 @@ export interface paths {
          *     is fixed per agent type; files that do not exist yet are listed with
          *     `exists=false`. The `path`/`folder_path` pair backs the read-only UI's
          *     open-in-external-editor / reveal-in-file-manager
-         *     affordances (FR-038).
+         *     affordances (see "Open config files in an external editor or reveal them").
          */
         get: operations["listAgentConfigFiles"];
         put?: never;
@@ -113,9 +113,11 @@ export interface paths {
          * Read one config file's content
          * @description Returns the file's text content, its resolved absolute path and
          *     containing-folder path (`folder_path`), format, existence, and a content
-         *     fingerprint for optimistic-concurrency writes (FR-036). The in-app UI
+         *     fingerprint for optimistic-concurrency writes
+         *     (see "Reject stale config-file writes by fingerprint"). The in-app UI
          *     renders this content read-only; the `path`/`folder_path` pair backs the
-         *     open-in-external-editor / reveal affordances (FR-038). A
+         *     open-in-external-editor / reveal affordances
+         *     (see "Open config files in an external editor or reveal them"). A
          *     file that does not exist returns empty content with `exists=false` and
          *     `fingerprint=""` and is not created. A key outside the agent type's
          *     allowlist returns 404.
@@ -129,7 +131,8 @@ export interface paths {
          *     unchanged. A key outside the agent type's allowlist returns 404 and
          *     performs no filesystem access. When `expected_fingerprint` is supplied
          *     and the on-disk content changed since the read, the write is rejected
-         *     with 409 (`CONFIG_FILE_STALE`) and the file is left untouched (FR-036).
+         *     with 409 (`CONFIG_FILE_STALE`) and the file is left untouched
+         *     (see "Reject stale config-file writes by fingerprint").
          *     Records an `agent_config_file_written` audit entry on success. Returns
          *     the refreshed metadata view.
          */
@@ -150,7 +153,7 @@ export interface paths {
                 uid: string;
                 /** @description Allowlisted directory-entry key (e.g. subagents). */
                 key: string;
-                /** @description Entry-relative POSIX path of the child file (nested paths allowed, e.g. `review/security.md`). Validated server-side before any filesystem access: no `..`, no absolute paths, no backslashes, no hidden segments, `.md` extension required (FR-035). An invalid path returns 404 or 422 without touching disk. */
+                /** @description Entry-relative POSIX path of the child file (nested paths allowed, e.g. `review/security.md`). Validated server-side before any filesystem access: no `..`, no absolute paths, no backslashes, no hidden segments, `.md` extension required (see "Read, write and delete files inside a directory entry"). An invalid path returns 404 or 422 without touching disk. */
                 relpath: string;
             };
             cookie?: never;
@@ -160,8 +163,8 @@ export interface paths {
          * @description Returns the child file's text content, its resolved absolute path and
          *     containing-folder path (`folder_path`), format, existence, and content
          *     fingerprint, like the single-file read. The in-app UI renders this
-         *     content read-only (`path`/`folder_path` back open-in-editor / reveal,
-         *     FR-038). A child that does not exist returns empty content
+         *     content read-only (`path`/`folder_path` back open-in-editor / reveal).
+         *     A child that does not exist returns empty content
          *     with `exists=false` and is not created.
          */
         get: operations["readAgentConfigDirFile"];
@@ -200,10 +203,12 @@ export interface paths {
          * List the MCP server entries in the agent's own config files
          * @description Derived at read time from the agent's MCP-bearing config files
          *     (claude_code: `~/.claude.json` + `settings.json` `mcpServers`; codex:
-         *     `config.toml` `[mcp_servers.*]`) — nothing is stored (FR-025). Env and
+         *     `config.toml` `[mcp_servers.*]`) — nothing is stored (see "List the MCP entries in the agent's own
+         *     config files"). Env and
          *     header VALUES never cross HTTP: each entry exposes key names only,
          *     plus which keys look secret-like. A file that fails to parse degrades
-         *     to an entry in `parse_errors` instead of failing the view (FR-030).
+         *     to an entry in `parse_errors` instead of failing the view
+         *     (see "Degrade a facet to a parse-error state when its config file is unparseable").
          */
         get: operations["listAgentMcpEntries"];
         put?: never;
@@ -233,7 +238,7 @@ export interface paths {
          * Remove one MCP entry from the agent's config file
          * @description Edits only the entry's source file with the atomic-write + `.bak`
          *     machinery and records an `agent_mcp_entry_removed` audit entry
-         *     (FR-026). When the same name exists in several files (claude_code),
+         *     (see "Remove a direct MCP entry from its source file"). When the same name exists in several files (claude_code),
          *     the `source` query parameter disambiguates; omitting it then is
          *     rejected with 422 (`MCP_ENTRY_SOURCE_AMBIGUOUS`). The `coffer` entry
          *     is not removable here (422, `MCP_ENTRY_PROTECTED`) — it is managed by
@@ -263,10 +268,11 @@ export interface paths {
          * @description Registers the entry as an `mcp_server` resource, verifies the resource
          *     reads back, then removes the source entry — strictly in that order;
          *     any failure rolls back a created resource and leaves the agent's
-         *     config byte-identical (FR-028). Secret-looking env/header keys MUST be
-         *     mapped to keychain refs via `secrets`, or the request is rejected with
+         *     config byte-identical (see "Adopt a direct MCP entry into Coffer"). Secret-looking env/header keys MUST be
+         *     mapped to credential refs via `secrets`, or the request is rejected with
          *     422 (`ADOPT_SECRET_UNRESOLVED`) listing the unresolved keys; mapped
-         *     values go into the OS keychain, never into resource config (FR-029).
+         *     values go into the credential store, never into resource config (see "Route
+         *     secret-like environment values to the credential store on adoption").
          *     A name collision returns 409 with `details.suggested_name`. The
          *     `coffer` entry is never adoptable. Audited as
          *     `agent_mcp_entry_adopted`.
@@ -290,12 +296,14 @@ export interface paths {
         };
         /**
          * List the agent's installed plugins and known marketplaces
-         * @description Derived at read time, never stored (FR-031). For `codex` the listing
+         * @description Derived at read time, never stored (see "List an agent's installed plugins
+         *     without writing anything"). For `codex` the listing
          *     comes from `config.toml` (`[plugins.*]`, `[marketplaces.*]`) plus
          *     presence of the documented cache directory; for `claude_code` the
          *     inventory is read-only from `installed_plugins.json` /
          *     `known_marketplaces.json`, with enabled state from `settings.json`
-         *     `enabledPlugins`. Parse failures degrade to `parse_errors` (FR-030).
+         *     `enabledPlugins`. Parse failures degrade to `parse_errors`
+         *     (see "Degrade a facet to a parse-error state when its config file is unparseable").
          *     Backs the agent detail page's Plugins tab: the listing's
          *     `can_uninstall` says whether in-app uninstall can run for this agent
          *     right now (the capability allows it and, for CLI-strategy agents, the
@@ -467,7 +475,8 @@ export interface paths {
         };
         /**
          * One native-memory store's directory, as a read-only tree
-         * @description The tree of one store the listing handed out (FR-049). `dir` MUST be a
+         * @description The tree of one store the listing handed out (see "Read one native
+         *     memory store's files read-only"). `dir` MUST be a
          *     `memory_dir` that listing returned — any other path under the agent's
          *     config dir (its transcripts, its settings, a sibling project) is 404,
          *     the same answer as a store that is gone, so the difference cannot be
@@ -497,13 +506,14 @@ export interface paths {
         };
         /**
          * Read one file inside a native-memory store
-         * @description One file's text, for the read-only preview (FR-049). `dir` is bounded
+         * @description One file's text, for the read-only preview (see "Read one native memory
+         *     store's files read-only"). `dir` is bounded
          *     exactly as the tree read bounds it, and `path` must resolve inside that
          *     store — a store that is not this agent's, a path escaping the store and
          *     a file that does not exist are one answer, 404. Reads are size-capped
          *     and a binary file comes back flagged with empty content rather than as
          *     bytes. The absolute path travels alongside so the viewer can offer
-         *     open / reveal (FR-038).
+         *     open / reveal.
          */
         get: operations["readAgentNativeMemoryFile"];
         put?: never;
@@ -526,7 +536,8 @@ export interface paths {
         };
         /**
          * Read one of the agent's conversations
-         * @description The ONE place a transcript body crosses the wire (FR-048), so every
+         * @description The ONE place a transcript body crosses the wire (see "Read one transcript
+         *     session in bounded windows"), so every
          *     guard is concentrated here. `path` is an absolute `source_path` the
          *     listing gave out and must resolve inside this agent's own transcript
          *     directory; anything else is 404 rather than a file read — the same
@@ -559,7 +570,8 @@ export interface paths {
         /**
          * List the models a picker should offer for an agent
          * @description On the agent's own built-in login, what the installed agent itself
-         *     offers, in the order its own sources offer it (FR-032/FR-033). With a
+         *     offers, in the order its own sources offer it (see "Read the model
+         *     catalogue back from the installed agent"). With a
          *     Coffer connection projected into this agent, that connection's curated
          *     ids are the list instead, in the user's own order — the turns go to
          *     that endpoint, so the agent's own names would be rejected. A connection
@@ -570,7 +582,8 @@ export interface paths {
          *     degrades to nothing on its own: a missing CLI, a changed bundle
          *     layout, an unauthenticated or wedged agent costs the models that
          *     source would have added and nothing else. Reasoning levels travel
-         *     beside the id, never inside it (FR-036). Read-only; emits no audit
+         *     beside the id, never inside it (see "Carry reasoning-effort levels beside
+         *     the model id"). Read-only; emits no audit
          *     event.
          */
         get: operations["listAgentModels"];
@@ -602,11 +615,11 @@ export interface components {
         AgentPatch: {
             config_dir?: string;
             description?: string | null;
-            /** @description The agent's model binding (FR-031); spec provider-switching projects it into the native config. */
+            /** @description The agent's model binding (see "Carry the model binding on the agent record"); spec provider-switching projects it into the native config. */
             model?: string | null;
-            /** @description The binding's fast slot (FR-031). Explicit null clears it. */
+            /** @description The binding's fast slot. Explicit null clears it. */
             fast_model?: string | null;
-            /** @description The binding's wire (FR-031). Only "responses" is accepted — see agent-registry/codex FR-011. */
+            /** @description The binding's wire. Only "responses" is accepted — see agent-registry/codex "Accept only responses as Codex's wire_api". */
             wire_api?: string | null;
         };
         AgentOut: {
@@ -621,7 +634,7 @@ export interface components {
             /** @description Resolved config directory (the type's standard location unless overridden) — where the agent's config files live and skills are delivered under <config_dir>/skills. */
             config_dir: string;
             description?: string | null;
-            /** @description The agent's model binding (FR-031); null = unbound, so the agent runs on its own default. */
+            /** @description The agent's model binding; null = unbound, so the agent runs on its own default. */
             model: string | null;
             fast_model: string | null;
             wire_api: string | null;
@@ -650,7 +663,7 @@ export interface components {
          */
         ConfigFileFormat: "json" | "toml" | "markdown" | "text";
         /**
-         * @description Whether an allowlist entry is a single file or a directory of files (FR-034). For directory entries, `format` describes the CHILD files.
+         * @description Whether an allowlist entry is a single file or a directory of files (see "List directory config entries"). For directory entries, `format` describes the CHILD files.
          * @enum {string}
          */
         ConfigFileKind: "file" | "directory";
@@ -668,7 +681,7 @@ export interface components {
             display_name: string;
             /** @description Resolved absolute path of the file (or directory, for kind=directory entries). */
             path: string;
-            /** @description Absolute path of the file's containing folder (its parent directory). The in-app viewer is read-only; the `path`/`folder_path` pair backs open-in-external-editor / reveal-in-file-manager (FR-038). */
+            /** @description Absolute path of the file's containing folder (its parent directory). The in-app viewer is read-only; the `path`/`folder_path` pair backs open-in-external-editor / reveal-in-file-manager (see "Open config files in an external editor or reveal them"). */
             folder_path: string;
             format: components["schemas"]["ConfigFileFormat"];
             kind: components["schemas"]["ConfigFileKind"];
@@ -685,26 +698,26 @@ export interface components {
         };
         ConfigFileContent: {
             key: string;
-            /** @description Resolved absolute path of the file on disk (for a directory child, the resolved absolute path of that child). The in-app viewer is read-only; this path backs open-in-external-editor / reveal-in-file-manager (FR-038). */
+            /** @description Resolved absolute path of the file on disk (for a directory child, the resolved absolute path of that child). The in-app viewer is read-only; this path backs open-in-external-editor / reveal-in-file-manager. */
             path: string;
-            /** @description Absolute path of the file's containing folder (FR-038). */
+            /** @description Absolute path of the file's containing folder, for reveal-in-file-manager. */
             folder_path: string;
             format: components["schemas"]["ConfigFileFormat"];
             exists: boolean;
             /** @description File text; empty string when the file does not exist. */
             content: string;
-            /** @description Content fingerprint for optimistic-concurrency writes (FR-036); empty string when the file does not exist. */
+            /** @description Content fingerprint for optimistic-concurrency writes (see "Reject stale config-file writes by fingerprint"); empty string when the file does not exist. */
             fingerprint: string;
-            /** @description True when the file contains the managed memory-projection block marker owned by spec knowledge (FR-037) — the editor surfaces a notice, never parses the block. */
+            /** @description True when the file still contains the legacy memory-projection block marker (see "Annotate a leftover memory-projection block as safe to delete") — the editor surfaces a notice, never parses the block. */
             memory_block: boolean;
         };
         ConfigFileWrite: {
             /** @description New file text. Validated against the file's format before writing. */
             content: string;
-            /** @description Fingerprint from the prior read. When supplied and the on-disk content changed since, the write is rejected with 409 (`CONFIG_FILE_STALE`) and the file is left untouched (FR-036). */
+            /** @description Fingerprint from the prior read. When supplied and the on-disk content changed since, the write is rejected with 409 (`CONFIG_FILE_STALE`) and the file is left untouched (see "Reject stale config-file writes by fingerprint"). */
             expected_fingerprint?: string | null;
         };
-        /** @description One agent config file that failed to parse — the facet degrades to this explicit state instead of failing the view (FR-030). */
+        /** @description One agent config file that failed to parse — the facet degrades to this explicit state instead of failing the view (see "Degrade a facet to a parse-error state when its config file is unparseable"). */
         ParseError: {
             /** @description Allowlist key of the file. */
             source: string;
@@ -724,7 +737,7 @@ export interface components {
             args: string[];
             /** @description Env variable KEY NAMES only (sorted); values stay on disk. */
             env_keys: string[];
-            /** @description Env/header key names that look secret-like (TOKEN, SECRET, PASSWORD, API_KEY, CREDENTIAL, AUTHORIZATION patterns). These must be mapped to keychain refs on adopt. */
+            /** @description Env/header key names that look secret-like (TOKEN, SECRET, PASSWORD, API_KEY, CREDENTIAL, AUTHORIZATION patterns). These must be mapped to credential refs on adopt. */
             secret_keys: string[];
             url: string | null;
             /** @description HTTP header KEY NAMES only (sorted); values stay on disk. */
@@ -745,7 +758,7 @@ export interface components {
             source?: string | null;
             /** @description Register the resource under this name instead (e.g. after a 409). */
             new_name?: string | null;
-            /** @description Maps secret-looking env/header KEY names to keychain refs; the VALUES go into the OS keychain server-side, never into the resource config (FR-029). */
+            /** @description Maps secret-looking env/header KEY names to credential refs; the VALUES go into the credential store server-side, never into the resource config (see "Route secret-like environment values to the credential store on adoption"). */
             secrets?: {
                 [key: string]: string;
             } | null;
@@ -1234,7 +1247,7 @@ export interface operations {
                 uid: string;
                 /** @description Allowlisted directory-entry key (e.g. subagents). */
                 key: string;
-                /** @description Entry-relative POSIX path of the child file (nested paths allowed, e.g. `review/security.md`). Validated server-side before any filesystem access: no `..`, no absolute paths, no backslashes, no hidden segments, `.md` extension required (FR-035). An invalid path returns 404 or 422 without touching disk. */
+                /** @description Entry-relative POSIX path of the child file (nested paths allowed, e.g. `review/security.md`). Validated server-side before any filesystem access: no `..`, no absolute paths, no backslashes, no hidden segments, `.md` extension required (see "Read, write and delete files inside a directory entry"). An invalid path returns 404 or 422 without touching disk. */
                 relpath: string;
             };
             cookie?: never;
@@ -1264,7 +1277,7 @@ export interface operations {
                 uid: string;
                 /** @description Allowlisted directory-entry key (e.g. subagents). */
                 key: string;
-                /** @description Entry-relative POSIX path of the child file (nested paths allowed, e.g. `review/security.md`). Validated server-side before any filesystem access: no `..`, no absolute paths, no backslashes, no hidden segments, `.md` extension required (FR-035). An invalid path returns 404 or 422 without touching disk. */
+                /** @description Entry-relative POSIX path of the child file (nested paths allowed, e.g. `review/security.md`). Validated server-side before any filesystem access: no `..`, no absolute paths, no backslashes, no hidden segments, `.md` extension required (see "Read, write and delete files inside a directory entry"). An invalid path returns 404 or 422 without touching disk. */
                 relpath: string;
             };
             cookie?: never;
@@ -1299,7 +1312,7 @@ export interface operations {
                 uid: string;
                 /** @description Allowlisted directory-entry key (e.g. subagents). */
                 key: string;
-                /** @description Entry-relative POSIX path of the child file (nested paths allowed, e.g. `review/security.md`). Validated server-side before any filesystem access: no `..`, no absolute paths, no backslashes, no hidden segments, `.md` extension required (FR-035). An invalid path returns 404 or 422 without touching disk. */
+                /** @description Entry-relative POSIX path of the child file (nested paths allowed, e.g. `review/security.md`). Validated server-side before any filesystem access: no `..`, no absolute paths, no backslashes, no hidden segments, `.md` extension required (see "Read, write and delete files inside a directory entry"). An invalid path returns 404 or 422 without touching disk. */
                 relpath: string;
             };
             cookie?: never;

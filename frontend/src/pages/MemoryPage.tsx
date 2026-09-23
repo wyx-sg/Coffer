@@ -1,4 +1,5 @@
-// frontend/src/pages/MemoryPage.tsx — the Memory surface (spec memory FR-037).
+// frontend/src/pages/MemoryPage.tsx — the Memory surface (spec memory
+// "Present partitions as a table and a file tree").
 //
 // Lists partitions: `global` plus one per repository, distilled from the
 // agents' own native memories, which Coffer only ever reads (ADR

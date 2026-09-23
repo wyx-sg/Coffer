@@ -3,9 +3,10 @@ info:
   title: Coffer — Vault Sync API
   version: 0.4.0
   description: |
-    REST surface for vault sync (spec vault-sync FR-083). Nineteen operations:
-    the round and its answers, the preview of a join, the remote's configuration, the run history, the
-    machine registry, and the master key.
+    REST surface for vault sync (spec vault-sync "Cover the same operations over
+    HTTP"). Nineteen operations: the round and its answers, the preview of a
+    join, the remote's configuration, the run history, the machine registry, and
+    the master key.
 
     Sync is a **cross-cutting service, not a resource kind**, so it has its own
     route family rather than riding `/resources`.
@@ -13,15 +14,17 @@ info:
     ## One operation: the round
 
     The vault **converges bidirectionally** with a git remote the user owns.
-    Every write path here is the same round (FR-035) — apply what the remote
-    has, publish what this vault has, on a diff against a recorded base.
-    `POST /run` is that round; `POST /adopt` is the same round on a machine
-    joining a remote. Whether a machine is joining — and as new or returning —
-    is read from the absence of a pointer rather than from the route (FR-049),
-    so configuring a remote on a machine that forgot its pointer cannot route
-    around the new-versus-returning distinction (FR-042). Joining itself is
-    explicit: only `/adopt` joins, after `GET /join` has stated the join, and
-    `/run` on a machine that has not joined reports `awaiting_join`.
+    Every write path here is the same round ("Run the seven round steps in
+    order") — apply what the remote has, publish what this vault has, on a diff
+    against a recorded base. `POST /run` is that round; `POST /adopt` is the
+    same round on a machine joining a remote. Whether a machine is joining — and
+    as new or returning — is read from the absence of a pointer rather than from
+    the route ("Detect joining on every round without a pointer"), so
+    configuring a remote on a machine that forgot its pointer cannot route
+    around the new-versus-returning distinction ("Tell a new machine from a
+    returning one"). Joining itself is explicit: only `/adopt` joins, after
+    `GET /join` has stated the join, and `/run` on a machine that has not joined
+    reports `awaiting_join`.
 
     There is deliberately **no export and no import route**. Writing a bundle to
     a directory and reading one back was a wholesale overwrite with no base — the
@@ -32,39 +35,44 @@ info:
 
     ## The deletion guard, and the three answers to it
 
-    A round whose diff would delete more of one side than the guard permits
-    does not run (FR-066): it is **held** (FR-067), and `RoundOut.pending`
-    carries which direction tripped (FR-068), the per-area breaches and the
+    A round whose diff would delete more of one side than the guard permits does
+    not run ("Hold a round that would lose too much"): it is **held** ("Ask the
+    user to confirm a tripped breaker"), and `RoundOut.pending` carries which
+    direction tripped ("Guard both directions"), the per-area breaches and the
     paths. Three routes answer a held round, and they are three separate routes
     rather than flags on one:
 
     - `POST /confirm` — apply it anyway.
     - `POST /reject` — leave everything as it is.
     - `POST /rebuild` — rebuild **this** machine from the remote, discarding
-      local-only documents (FR-047). Destructive on purpose: it is the answer
-      for a machine whose vault is gone, which rejoins with a valid base and
-      nothing to publish but the loss (FR-045), so neither other answer serves
-      it.
+      local-only documents ("Rebuild a vault from the remote only on request").
+      Destructive on purpose: it is the answer for a machine whose vault is
+      gone, which rejoins with a valid base and nothing to publish but the loss
+      ("Hold a returning machine's empty vault instead of publishing the loss"),
+      so neither other answer serves it.
 
-    `POST /rollback` undoes the last round (FR-065); `POST /restore` brings the
-    vault back to a sha, a ref, or the last commit at or before a `YYYY-MM-DD`
-    date (FR-080). Restore is always explicit — no round reaches back into
-    history on its own (FR-081).
+    `POST /rollback` undoes the last round ("Snapshot before applying and roll
+    back from it"); `POST /restore` brings the vault back to a sha, a ref, or
+    the last commit at or before a `YYYY-MM-DD` date ("Restore to a revision
+    without discarding later work"). Restore is always explicit — no round
+    reaches back into history on its own ("Restore only on request").
 
     ## Credentials never appear on this surface
 
-    Every remote shape carries `credential_ref` — a name in the credential
-    store — and **never** the push credential itself, so a remote can be
-    rendered in a browser, logged, or pasted into a bug report with nothing to
-    redact. The daemon resolves the ref at push time and nowhere else
-    (FR-079).
+    Every remote shape carries `credential_ref` — a name in the credential store
+    — and **never** the push credential itself, so a remote can be rendered in a
+    browser, logged, or pasted into a bug report with nothing to redact. The
+    daemon resolves the ref at push time and nowhere else ("Hand the push
+    credential to git as a helper").
 
-    The **master key never travels inside the repository** (FR-077); moving it
+    The **master key never travels inside the repository** ("Never write the master
+    key into the repository"); moving it
     is a separate, deliberate act. `POST /key/export` hands its material back over
     the token-guarded loopback API and the caller decides where it lands — the
     daemon never writes to a path a caller named, because a browser has no path
     to give it. Ciphertext applied onto a machine without the matching key is
-    stored as-is and reported in `locked_refs` (FR-078); the affected resources
+    stored as-is and reported in `locked_refs` ("Report refs without a key as
+    locked"); the affected resources
     refuse to spawn rather than failing decryption silently.
 
     These two routes are the only survivors of the deleted export/import pair,
@@ -80,9 +88,10 @@ info:
 
     Retiring a machine removes its descriptor and nothing else — nothing in the
     vault references a machine id, because per-agent reach is machine-local
-    (FR-014) and no scope can name one (FR-032). That is why
-    `MachineRemovedOut` has no second half. Renaming is free for the same
-    reason: the id is derived and the name is only a label (FR-025).
+    ("Keep reach machine-local") and no scope can name one ("Scope names agents
+    only"). That is why `MachineRemovedOut` has no second half. Renaming is free
+    for the same reason: the id is derived and the name is only a label ("Treat
+    the machine name as a label").
 
     ## Errors
 
@@ -92,7 +101,8 @@ info:
     `pattern` catches the shape and the domain's full rule runs in a validator,
     so a bad name is refused here rather than becoming a `git` error later.
     Neither may begin with `-`: git would read it as an option, and
-    `--receive-pack=<cmd>` is a command (FR-016).
+    `--receive-pack=<cmd>` is a command ("Refuse a URL or branch git would read
+    as an option").
 
 servers:
   - url: http://127.0.0.1:8000

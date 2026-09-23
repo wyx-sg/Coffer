@@ -1,8 +1,9 @@
 """Choosing which documents a piece of new material might belong to.
 
-A curation pass is bounded (spec knowledge FR-023): it sees one piece of
-material, at most five existing documents in full, and the collection's whole
-catalogue of titles and descriptions. This module answers the middle one.
+A curation pass is bounded (spec knowledge "Assemble a pass from a bounded context"): it
+sees one piece of material, at most five existing documents in full, and the
+collection's whole catalogue of titles and descriptions. This module answers the middle
+one.
 
 There is no index and no embedding, so selection is literal: pull the strings a
 document about this subject would have to contain — identifiers, headings,
@@ -21,7 +22,7 @@ from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.knowledge.entry import KnowledgeFile
 from coffer.infrastructure.knowledge import paths
 
-#: Candidates handed to one pass (FR-023).
+#: Candidates handed to one pass (see "Assemble a pass from a bounded context").
 DEFAULT_CANDIDATE_LIMIT = 5
 
 #: Terms folded into the one alternation we run. Past this the regex stops

@@ -2,7 +2,8 @@
 // Creating a collection asks two things and nothing else: a name, and a
 // sentence saying what it is for. The description becomes the folder's
 // `README.md`, which is where the catalogue reads it back from — so it is the
-// line an agent sees when deciding whether to look inside (FR-011).
+// line an agent sees when deciding whether to look inside (see "Read a
+// collection's description from its README").
 //
 // There is no question about retrieval or vectors here. Which index a
 // collection carries is not a question, because it carries none.

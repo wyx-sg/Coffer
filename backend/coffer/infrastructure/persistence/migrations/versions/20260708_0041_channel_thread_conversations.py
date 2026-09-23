@@ -1,8 +1,10 @@
-"""channel_thread_conversations: per-thread conversation identity (spec channels FR-032)
+"""channel_thread_conversations: per-thread conversation identity
 
 Revision ID: 0041
 Revises: 0040
 Create Date: 2026-07-08
+
+Spec channels "Key conversation identity by channel, chat and thread".
 
 Conversation identity moves from the peer row (keyed ``(resource_id, chat_id)``)
 to a per-thread binding keyed ``(resource_id, chat_id, thread_id)``. A DM (or a
@@ -10,7 +12,7 @@ group's main chat) is ``thread_id=""``; each thread in a group is its own row
 with its own active conversation and its own sticky agent — so concurrent turns
 in different threads never collide on one conversation ("a turn is already
 running"), and one bot can run different agents in different threads (spec
-channels FR-028).
+channels "Drive every managed agent from one bot").
 
 Pairing/owner identity stays on ``channel_peers``. Every existing peer's active
 conversation + sticky agent are backfilled into the new table as its

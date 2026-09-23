@@ -4,13 +4,15 @@ We boot the full FastAPI app (via ``create_app``) so the knowledge kind is
 wired with its production routes — real SQLite, real markdown files under a
 temp HOME — then route ``_cli_client.client_or_exit`` at a Starlette
 ``TestClient`` over that app. Nothing auto-provisions any more: every
-collection in here exists because a test created it (spec knowledge FR-008).
+collection in here exists because a test created it (spec knowledge "Create
+collections only deliberately").
 
-The group covers exactly FR-039's list and nothing beyond it. There is no
-``grep`` and no ``search`` command any more: the corpus is plain Markdown under
-``~/.coffer/knowledge/``, so a person's own ``grep`` is better than anything
-this group could wrap — and the tests that drove those two commands are gone
-with them rather than softened into asserting a different command.
+The group covers exactly the list in "Cover collection management on REST and
+the CLI" and nothing beyond it. There is no ``grep`` and no ``search`` command
+any more: the corpus is plain Markdown under ``~/.coffer/knowledge/``, so a
+person's own ``grep`` is better than anything this group could wrap — and the
+tests that drove those two commands are gone with them rather than softened into
+asserting a different command.
 """
 
 from __future__ import annotations
@@ -106,9 +108,10 @@ def _write(collection: str, title: str, body: str = "b", description: str = "d")
     """Submit one piece of material and return the line the command printed.
 
     The command takes ``--in <collection>`` and never a path: where knowledge
-    lands is the layer's call (spec knowledge FR-013). The app booted here has
-    no internal model, so the material is promoted to a document on the spot
-    and the line is that document's path (FR-029).
+    lands is the layer's call (spec knowledge "Submit every entrance's input as
+    material"). The app booted here has no internal model, so the material is
+    promoted to a document on the spot and the line is that document's path
+    ("Promote material directly when no model is configured").
     """
     written = _runner.invoke(
         cli_app,
@@ -157,7 +160,8 @@ def test_create_registers_a_collection_and_lists_it(knowledge_cli_daemon, tmp_pa
     assert [c["name"] for c in collections] == ["shopee"]
     assert collections[0]["description"] == "Internal systems"
     # Documents an agent can read, and material still waiting to be merged
-    # into them — the second is what an agent cannot see yet (FR-005).
+    # into them — the second is what an agent cannot see yet ("Hide dot-prefixed
+    # entries except the inbox").
     assert (collections[0]["document_count"], collections[0]["pending_count"]) == (0, 0)
 
 
@@ -171,7 +175,8 @@ def test_catalogue_description_comes_from_the_readme(knowledge_cli_daemon, tmp_p
 
     listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "collections", "--json"])
     collections = json.loads(_extract_json(listed.output))["collections"]
-    # Read off disk on every listing, never out of a row (FR-011) — so the
+    # Read off disk on every listing, never out of a row ("Read a collection's
+    # description from its README") — so the
     # string the creation call supplied is not what comes back.
     assert collections[0]["description"] == "Edited by hand."
 
@@ -215,7 +220,8 @@ def test_write_says_when_the_material_is_queued(knowledge_cli_daemon, tmp_path, 
 
 
 def test_write_takes_no_folder(knowledge_cli_daemon):
-    """Where material lands is curation's call (FR-013): there is no
+    """Where material lands is curation's call ("Submit every entrance's input as
+    material"): there is no
     ``--folder`` and no ``--path`` to aim it."""
     _make_collection("shopee")
     for flag, value in (("--folder", "apis"), ("--path", "shopee/t.md")):
@@ -293,7 +299,10 @@ def test_delete_removes_a_source_from_disk(knowledge_cli_daemon, tmp_path):
 
 
 def test_delete_removes_a_document_curation_wrote(knowledge_cli_daemon, tmp_path):
-    """FR-020: the collection is the person's as much as curation's."""
+    """The collection is the person's as much as curation's.
+
+    See "Let only a person delete a document".
+    """
     _make_collection("shopee")
     _document(tmp_path, "shopee/derived.md", "b")
 
@@ -326,12 +335,13 @@ def test_cli_upload_becomes_one_document_and_keeps_no_original(knowledge_cli_dae
     )
     assert result.exit_code == 0, result.output
     # The Markdown is named for the document's own title, not for the file it
-    # arrived as (FR-002).
+    # arrived as ("Use the file path as a document's identity").
     path = result.output.strip().splitlines()[-1]
     assert path == "shopee/team.md"
     assert (tmp_path / "knowledge" / path).is_file()
     # The original is not kept: the collection holds knowledge, not the
-    # documents it arrived in (FR-016).
+    # documents it arrived in ("Convert uploads into material without keeping
+    # them").
     collection = tmp_path / "knowledge" / "shopee"
     assert sorted(str(p.relative_to(collection)) for p in collection.rglob("*") if p.is_file()) == [
         "README.md",
@@ -352,8 +362,9 @@ def test_cli_upload_of_unsupported_type_is_refused(knowledge_cli_daemon, tmp_pat
 
 
 def test_cli_curate_reports_why_a_pass_did_nothing(knowledge_cli_daemon):
-    """FR-029: with no internal connection configured a pass is a clean no-op,
-    and the status IS the answer — not an error the CLI has to invent."""
+    """Per "Promote material directly when no model is configured": with no
+    internal connection configured a pass is a clean no-op, and the status IS
+    the answer — not an error the CLI has to invent."""
     _make_collection("shopee")
     _write("shopee", "Session")
 

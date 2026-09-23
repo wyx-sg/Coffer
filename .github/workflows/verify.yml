@@ -120,7 +120,8 @@ jobs:
         env:
           UV_PROJECT_ENVIRONMENT: ${{ github.workspace }}/.venv
         run: uv sync --frozen --extra dev --project backend
-      # SC-003 gateway-overhead budget. Benchmark-gated tests are excluded
+      # The gateway-overhead budget (median <= 50 ms per tool call, spec
+      # mcp-gateway "Present Coffer as one MCP server"). Benchmark-gated tests are excluded
       # from the default suite (make verify); this job is the ONLY place they
       # actually execute, so the acceptance marker can't report green while the
       # budget goes unverified.

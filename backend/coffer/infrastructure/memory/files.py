@@ -1,4 +1,5 @@
-"""Reading a partition's directory as a file tree (spec memory FR-037).
+"""Reading a partition's directory as a file tree (spec memory "Present partitions as a
+table and a file tree").
 
 The partition surface shows what is actually on disk: ``MEMORY.md``, the
 ``notes/`` folder of one Markdown file per topic, ``RETIRED.md`` when anything
@@ -8,10 +9,11 @@ of derived Markdown; ``.raw/`` is the only one flagged
 (:attr:`FileNode.derived`), so a reader can tell the verbatim input apart from
 Coffer's own writing without having to know which directory means which.
 
-There is nothing to edit here — the whole tree is derived (FR-019) and the next
-pass would overwrite an edit anyway — so this module reads and never writes.
-That is also why a file's content carries no fingerprint: a fingerprint exists
-to make a later write conditional, and there is no write.
+There is nothing to edit here — the whole tree is derived (see "Keep the memory
+tree derived and local") and the next pass would overwrite an edit anyway — so
+this module reads and never writes. That is also why a file's content carries no
+fingerprint: a fingerprint exists to make a later write conditional, and there
+is no write.
 
 Hidden entries other than ``.raw/`` are left out of the tree and refused on
 read, because the only ones that occur are the ``.<name>.tmp`` files an atomic
@@ -31,11 +33,12 @@ is two short readers with different jobs, which this codebase already prefers
 to one coupling (``application/memory/recall.py``'s own docstring makes the
 same call about knowledge's ripgrep).
 
-Containment is enforced the way ``paths.check_segment`` guards a partition
-name (FR-044): every candidate is resolved and must stay inside the resolved
-partition directory. A symlink whose target escapes is skipped from the tree
-and refused on read, and symlinked directories are never descended into, so a
-cycle cannot send the walk into a loop.
+Containment is enforced the way ``paths.check_segment`` guards a partition name
+(see "Confine reads to registered agents' memory paths"): every candidate is
+resolved and must stay inside the resolved partition directory. A symlink whose
+target escapes is skipped from the tree and refused on read, and symlinked
+directories are never descended into, so a cycle cannot send the walk into a
+loop.
 """
 
 from __future__ import annotations
@@ -86,10 +89,11 @@ class FileNode:
     #: so the surface can say the tree was cut rather than show it as empty.
     truncated: bool = False
     #: Set on ``.raw/`` — what was read out of the agents, verbatim, and the
-    #: distil pass's input rather than its output (FR-008). Everything under a
-    #: partition is derived in the FR-019 sense; this flag marks the narrower
-    #: thing a reader actually needs to know, which is that these are somebody
-    #: else's words and no note is written the way they are.
+    #: distil pass's input rather than its output (see "Keep raw entries
+    #: verbatim and hidden"). Everything under a partition is derived (see "Keep
+    #: the memory tree derived and local"); this flag marks the narrower thing a
+    #: reader actually needs to know, which is that these are somebody else's
+    #: words and no note is written the way they are.
     derived: bool = False
 
 
@@ -178,10 +182,11 @@ def _children(directory: pathlib.Path, root: pathlib.Path, *, depth: int) -> lis
 def _is_listable(name: str, *, depth: int) -> bool:
     """Is this entry addressable through the tree at all?
 
-    ``.raw/`` is, at the partition root, because FR-037 requires it reachable.
-    Every other hidden name is not: the ones that occur are the ``.<name>.tmp``
-    files an atomic write leaves behind for a moment, and a surface that lists
-    them shows the partition mid-rewrite as though that were its content.
+    ``.raw/`` is, at the partition root, because "Present partitions as a table
+    and a file tree" requires it reachable. Every other hidden name is not: the
+    ones that occur are the ``.<name>.tmp`` files an atomic write leaves behind
+    for a moment, and a surface that lists them shows the partition mid-rewrite
+    as though that were its content.
     """
     if not name.startswith("."):
         return True

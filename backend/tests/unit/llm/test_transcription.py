@@ -1,4 +1,5 @@
-"""Remote transcription (spec channels FR-019).
+"""Remote transcription (spec channels "Transcribe inbound voice only when the
+user opted in").
 
 The gate matters more than the happy path: audio must NEVER leave the machine
 unless the user designated an internal connection that can take it. Every test

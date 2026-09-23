@@ -1,9 +1,10 @@
 """The session-start payload: the whole index, and where the bodies are.
 
-Delivery is no longer a digest (FR-028). Every non-retired note in the current
-repository's partition and in ``global`` gets one line, and beneath them sits
-the **absolute path** of the directory those notes live in — named as a
-directory to read files out of, with no tool named for it.
+Delivery is no longer a digest (see "Deliver the index and the notes path at
+session start"). Every non-retired note in the current repository's partition
+and in ``global`` gets one line, and beneath them sits the **absolute path** of
+the directory those notes live in — named as a directory to read files out of,
+with no tool named for it.
 
 Two measured failures are pinned here as tests, because they are the reasons
 this module was rewritten:
@@ -11,7 +12,8 @@ this module was rewritten:
 * The previous design spent a ~600-token budget on ``global`` first and
   therefore delivered, on a live vault of 189 entries, 8 lines of which
   **none** were about the project the session was open in. Under a ceiling the
-  current repository now wins (FR-030).
+  current repository now wins (see "Bound delivery and prefer the current
+  repository").
 * It named a tool as the way to reach a body, and in three weeks no agent ever
   called it. The payload now names a path.
 
@@ -143,7 +145,7 @@ async def test_the_payload_names_the_absolute_notes_path_and_no_tool() -> None:
     assert notes_dir in composed.text
     assert notes_dir.startswith("/")
     assert "read one as a file" in composed.text
-    # FR-028: every consumer reads files already, so no tool is named for it.
+    # Every consumer reads files already, so no tool is named for it.
     for tool in ("coffer__recall", "coffer__read", "coffer__search", "MCP", "tool"):
         assert tool not in composed.text
 
@@ -180,7 +182,8 @@ async def test_a_nested_repository_resolves_to_the_inner_one() -> None:
 
 @pytest.mark.asyncio
 async def test_nothing_to_deliver_is_an_empty_payload_not_a_bare_header() -> None:
-    """FR-031's channel turn appends this only when it is non-empty."""
+    """A channel turn (see "Deliver to channel turns through the system
+    prompt") appends this only when it is non-empty."""
     memory = _FakeMemory({}, partitions=[_Partition("global", "")])
     composed = await compose_context(memory, cwd=_REPOSITORY)
     assert composed.text == ""
@@ -240,7 +243,8 @@ async def _binding_ceiling(memory: _FakeMemory, *, room_for: int) -> int:
 )
 async def test_the_current_repositorys_lines_survive_and_globals_are_dropped() -> None:
     """The reverse of what this layer did before, and the direct cause of the
-    measured 8-of-189 failure (FR-030)."""
+    measured 8-of-189 failure (see "Bound delivery and prefer the current
+    repository")."""
     memory = _memory(project_notes=6, global_notes=6)
     ceiling = await _binding_ceiling(memory, room_for=8)
 

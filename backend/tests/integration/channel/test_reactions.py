@@ -1,4 +1,6 @@
-"""FR-038: capability-gated receipt/completion reaction acks.
+"""Capability-gated receipt/completion reaction acks.
+
+See "Acknowledge receipt and completion by capability".
 
 A ``supports_reactions`` transport (Telegram) reacts 👀 on the owner's own
 inbound message on receipt and ✅ on a clean finish; a transport without

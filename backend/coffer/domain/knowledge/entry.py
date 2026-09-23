@@ -18,7 +18,8 @@ class CollectionEntry:
     """One collection, as the top level of the catalogue shows it.
 
     ``pending_count`` is the material still waiting in the collection's inbox
-    to be merged — what an agent cannot read yet (spec knowledge FR-005).
+    to be merged — what an agent cannot read yet (spec knowledge "Hide
+    dot-prefixed entries except the inbox").
     """
 
     #: The collection resource's identity. Every route that addresses this
@@ -79,12 +80,13 @@ class KnowledgeFile:
     created_at: str
     updated_at: str
     body: str
-    #: Absolute path of the ``.md`` file (spec knowledge FR-041).
+    #: Absolute path of the ``.md`` file (spec knowledge "Return absolute paths
+    #: on reads").
     file_path: str
     #: Absolute path of its containing folder.
     folder_path: str
     #: When curation last had this document in front of it; empty when it
-    #: never has (FR-028).
+    #: never has ("Settle an item only after its pass completes").
     curated_at: str = ""
 
 

@@ -265,7 +265,8 @@ def test_daemon_spec_includes_attachment_and_chat_hidden_imports() -> None:
     attachment and drive the built-in chat agent.
 
     Each of these is a real lazy importer in the codebase:
-      * markitdown  — infrastructure/chat/document_extract.py (spec channels FR-030)
+      * markitdown  — infrastructure/chat/document_extract.py (spec channels "Give
+                      documents to every agent as extracted text")
       * openai      — infrastructure/provider/*
       * langgraph / langchain — infrastructure/llm/*, infrastructure/chat/*
 
@@ -353,7 +354,8 @@ def test_release_workflow_packages_the_cli_archive() -> None:
 
     Every binary the daemon resolves at runtime must be inside it. The daemon
     deploys `coffer-mcp-shim` and `coffer-callback` out of its
-    own directory (spec daemon FR-027) and finds `coffer-daemon` as a sibling
+    own directory (spec daemon "Deploy frozen sibling binaries and back up the vault
+    before migrating") and finds `coffer-daemon` as a sibling
     (ADR daemon-detect-or-spawn), so an archive missing any of them ships a build whose helper
     processes cannot start.
     """
@@ -582,7 +584,8 @@ def test_release_workflow_publishes_the_desktop_tier() -> None:
     """The release produces a second tier beside the CLI archive: the `.dmg`.
 
     Restoring the desktop shell put a self-contained app back in the release
-    (spec daemon FR-025, ADR desktop-shell-over-a-shared-frontend). Every
+    (spec desktop-app "Ship the desktop tier as a macOS arm64 dmg", ADR
+    desktop-shell-over-a-shared-frontend). Every
     invariant that tier depends on is a filename or a path, none of which any
     other test pins, and the feedback loop for getting one wrong is a tagged
     release — the same reason the CLI tier is pinned here.

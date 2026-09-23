@@ -8,8 +8,8 @@ and the desktop needs the same answers; without them the owner re-pairs from
 their phone every time a channel moves, and a rebind is supposed to be one
 click.
 
-Channels travel between machines (spec channels ``## Where a channel runs``),
-which is what makes the pairing worth publishing rather than re-deriving.
+Channels travel between machines (spec channels "Bind each channel to the one
+machine that runs it"), which is what makes the pairing worth publishing rather than re-deriving.
 
 **What a conversation is doing never travels.** The conversation a chat is
 driving, and the agent a thread has stuck to, live in

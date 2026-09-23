@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ADRs and specs are named, not numbered — keep it that way.
+"""ADRs, specs and requirements are named, not numbered — keep it that way.
 
 Both directories used to use a zero-padded ordinal, and both kept deleting
 things: three specs and thirteen ADRs went away in one simplification pass
@@ -18,13 +18,20 @@ this script holds the line:
   3. Every relative markdown link inside `docs/decisions/` resolves.
   4. The ADR README index lists exactly the ADRs that exist, in both
      languages, each linking its own language's file.
-  5. No spec defines the same `FR-<digits>` twice. Requirement ids are the one
-     place numbers survive, and they are what every other spec, every ADR and
-     every code comment cites. Two requirements under one id is the recycled
-     number all over again, at the granularity that actually gets referenced:
-     `openspec/specs/vault-sync/spec.md` carried two different FR-093s for four days
-     after two PRs landed in the same week, and seventeen references across
-     the tree pointed at one of them with nothing to say so.
+  5. No `FR-<digits>` or `SC-<digits>` token survives in a tracked file. Requirements were the
+     last place numbers lived, and they failed the same way: one spec carried
+     two different requirements under one id for four days, and about one
+     cross-spec citation in twelve had drifted onto the wrong requirement by
+     the time OpenSpec replaced them. A requirement is now its
+     `### Requirement:` title, and a citation names it. Numbered success
+     criteria went with them: what they required is now a requirement.
+  6. Nothing of Speckit, the methodology OpenSpec replaced, comes back: no
+     `.specify/` directory, no spec tree at the repository root, and no mention
+     of it by name.
+
+The change folders under `openspec/changes/` are exempt from 5 and 6: a change
+that records why the project moved off numbers and off Speckit has to be able
+to say so, and an archived change is history.
 
 Stdlib only. Exits non-zero on any failure.
 """
@@ -43,11 +50,11 @@ SPECS = REPO_ROOT / "openspec" / "specs"
 NUMBERED_ADR = re.compile(r"ADR-\d+")
 #: `spec 001`, `Specs 004`, `spec-009` — every shape the prose used to take.
 NUMBERED_SPEC = re.compile(r"\b[Ss]pecs?[ -](00[1-9]|0[1-9][0-9])\b")
+NUMBERED_REQUIREMENT = re.compile(r"\b(?:FR|SC)-\d")
+SPECKIT = re.compile(r"spec-?kit|\.specify/", re.IGNORECASE)
+#: Change folders may describe the numbers and the methodology they replaced.
+HISTORY_PREFIX = "openspec/changes/"
 MD_LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
-#: A requirement DEFINITION, which is a top-level bullet: `- **FR-012**: …`.
-#: Deliberately anchored, so a mention of FR-012 inside another requirement's
-#: prose is a reference and not a second definition.
-FR_DEFINITION = re.compile(r"^- \*\*(FR-\d+)\*\*", re.MULTILINE)
 #: An index row links the ADR file as its first cell: `| [Title](slug.md) | … |`
 INDEX_ROW = re.compile(r"^\|\s*\[[^\]]+\]\(([^)]+\.md)\)")
 
@@ -87,6 +94,21 @@ def check_no_numbers(files: list[str]) -> list[str]:
                     f"{rel}:{lineno}: specs are named, not numbered — "
                     f"name the spec instead"
                 )
+            if rel.startswith(HISTORY_PREFIX):
+                continue
+            if NUMBERED_REQUIREMENT.search(line):
+                errors.append(
+                    f"{rel}:{lineno}: requirements are named, not numbered — "
+                    f"cite the requirement's title instead"
+                )
+            if SPECKIT.search(line):
+                errors.append(
+                    f"{rel}:{lineno}: Speckit was replaced by OpenSpec — "
+                    f"describe the OpenSpec layout instead"
+                )
+    for retired in (".specify", "specs"):
+        if (REPO_ROOT / retired).exists():
+            errors.append(f"{retired}/: the spec tree lives under openspec/ now")
     for path in DECISIONS.glob("ADR-*"):
         errors.append(f"{path.relative_to(REPO_ROOT)}: filename still carries a number")
     # Every directory at every depth, not just `openspec/specs/*`: a spec may be a child
@@ -145,26 +167,6 @@ def check_index() -> list[str]:
     return errors
 
 
-def check_unique_requirement_ids() -> list[str]:
-    """No spec defines one `FR-<digits>` twice.
-
-    Scoped per spec file, because ids are only ever cited with their spec —
-    `spec vault-sync FR-093` — so the same number in two different specs is
-    not an ambiguity. Within one spec it is: a reader, and every one of the
-    references in the tree, has no way to tell which requirement was meant.
-    """
-    errors = []
-    for spec in sorted(SPECS.rglob("spec.md")):
-        seen: dict[str, int] = {}
-        for match in FR_DEFINITION.finditer(spec.read_text(encoding="utf-8")):
-            seen[match.group(1)] = seen.get(match.group(1), 0) + 1
-        rel = spec.relative_to(REPO_ROOT)
-        for fr, count in sorted(seen.items()):
-            if count > 1:
-                errors.append(f"{rel}: {fr} is defined {count} times")
-    return errors
-
-
 def main() -> int:
     adrs = adr_files()
     if not adrs:
@@ -178,7 +180,6 @@ def main() -> int:
         check_no_numbers(tracked_files())
         + check_links()
         + check_index()
-        + check_unique_requirement_ids()
     )
     if errors:
         for error in errors:
@@ -191,7 +192,7 @@ def main() -> int:
     specs = sum(1 for _ in SPECS.rglob("spec.md"))
     print(
         f"check_doc_numbering: {len(adrs)} ADRs and {specs} specs, all named, "
-        f"all links resolve, no requirement id defined twice"
+        f"all links resolve, no requirement numbered"
     )
     return 0
 

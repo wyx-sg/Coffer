@@ -35,10 +35,10 @@ _CODEX_UID = "3b7e08d1c4f2456ab90d61ea5c2f7d38"
 
 
 def test_inject_meta_stamps_cwd_and_agent_uid(monkeypatch):
-    """spec mcp-gateway FR-004: the shim reports its launch cwd at the initialize handshake so
-    the daemon can resolve the per-project memory store. spec mcp-gateway FR-013
-    (amended): when an ``--agent-uid`` is known, it rides the same ``_meta``
-    bag under ``coffer/agent-uid``."""
+    """The shim reports its launch cwd at the initialize handshake so the daemon
+    can resolve the per-project memory store. Per spec mcp-gateway "Take the
+    agent identity from the handshake", when an ``--agent-uid`` is known it rides
+    the same ``_meta`` bag under ``coffer/agent-uid``."""
     monkeypatch.setattr("os.getcwd", lambda: "/work/my-repo")
     envelope: dict[str, Any] = {"method": "initialize", "params": {"protocolVersion": "x"}}
     _inject_meta(envelope, _CC_UID)

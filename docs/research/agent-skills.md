@@ -219,7 +219,7 @@ Commentary:
   consumes). Two gaps the report flagged remain by design, not omission: it
   still does **not** enforce `name == parent-directory`, and the `name` regex
   still tolerates underscores (see ✏️ below). [`repo:backend/coffer/domain/skill/frontmatter.py`,
-  `repo:openspec/specs/skill-manager/{spec,data-model,plan}.md`, spec skill-manager FR-004 / FR-005]
+  `repo:openspec/specs/skill-manager/{spec,data-model,plan}.md`, spec skill-manager "Validate imported skill folders against AgentSkills" / "Retain optional AgentSkills frontmatter fields"]
 - **Reversec "Skill Issues" post is real and as described.** "Skill Issues:
   Compromising Claude Code with malicious skills & agents — Part 1," James
   Henderson, published **May 5, 2026** (report's "May 2026" is correct). Thesis
@@ -251,10 +251,10 @@ Commentary:
 - **Internal nit: §1 says `name` is "lowercase alphanumeric + hyphens," but
   Coffer's regex `^[a-z0-9][a-z0-9_-]{0,63}$` also permits underscores**, which
   the standard does not. PR #105 (frontmatter alignment) did **not** remove the
-  underscore — it is now documented in-code and in spec skill-manager FR-004 as a _deliberate
+  underscore — it is now documented in-code and in spec skill-manager "Validate imported skill folders against AgentSkills" as a _deliberate
   backward-compat superset_ (to keep skills already on disk valid), so the
   divergence stands by design, not as an oversight. [`repo:backend/coffer/domain/skill/frontmatter.py`,
-  spec skill-manager FR-004, agentskills.io/specification]
+  spec skill-manager "Validate imported skill folders against AgentSkills", agentskills.io/specification]
 - **§2/§3/§4's headline "no skill scanner / content not scanned" gap is now
   CLOSED (PR #111, 2026-06-18 — skill content trust layer L2).** The report's
   capability table marked Coffer "None (content not scanned)" and named a

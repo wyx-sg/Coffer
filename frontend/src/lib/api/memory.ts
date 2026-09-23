@@ -1,8 +1,8 @@
 // frontend/src/lib/api/memory.ts
 //
 // Request helpers for the `memory` kind's REST family (`/api/v1/memory/*`,
-// spec memory FR-036). Partition lifecycle (delete) is deliberately absent: a
-// partition is one `memory` Resource, so it goes through the kind-agnostic
+// spec memory "Cover memory management on REST and the CLI"). Partition lifecycle (delete) is
+// deliberately absent: a partition is one `memory` Resource, so it goes through the kind-agnostic
 // `DELETE /api/v1/resources/{uid}`, exactly like knowledge's collections.
 //
 // A partition is addressed by its uid and an agent by ITS uid — delivery is a
@@ -54,7 +54,7 @@ export function distil(partitionUid: string): Promise<DistilResultOut> {
   });
 }
 
-// --- a partition's own files (FR-029) ----------------------------------------
+// --- a partition's own files ("Present partitions as a table and a file tree") ---
 
 /** The partition directory as a tree — what the detail page browses. */
 export function listPartitionFiles(partitionUid: string): Promise<MemoryFileTreeOut> {
@@ -70,7 +70,7 @@ export function readPartitionFile(
     `${ROOT}/partitions/${enc(partitionUid)}/files/content?path=${enc(path)}`,
   );
 }
-// --- delivery (FR-021/FR-022) ------------------------------------------------
+// --- delivery ("Install delivery hooks explicitly and removably") ---------------
 
 /** Every agent delivery can be installed for, and whether it is. Omit
  * `agentUid` to list all of them. */

@@ -3,7 +3,7 @@
 // Spawn two shim subprocesses simultaneously against the same daemon.
 // Assert that each sees ALL aggregated tools (gateway merges all servers)
 // and that concurrent tool calls complete independently with no cross-talk
-// (SC-004).
+// (spec mcp-gateway "Present Coffer as one MCP server").
 
 import { expect } from "@playwright/test";
 import { acceptance } from "./_acceptance";

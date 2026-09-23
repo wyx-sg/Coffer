@@ -1,4 +1,5 @@
-"""Stage two of the distil pass: Coffer's own words for one note (FR-020).
+"""Stage two of the distil pass: Coffer's own words for one note (see "Write notes in
+Coffer's own words").
 
 One request per note the routing stage actually touched, carrying **that one
 note's** current text and the entries routed to it. A partition of a hundred
@@ -6,7 +7,7 @@ notes that gained three entries costs at most three of these — which is the
 whole reason routing was a separate stage, and the reason nothing here ever
 sees a note it was not asked to rewrite.
 
-**What comes back is a note, not a copy.** This is the reversal FR-020
+**What comes back is a note, not a copy.** This is the reversal "Write notes in Coffer's own words"
 records: the design this replaces stored the sources' own words, and Codex's
 untitled prose bullets therefore arrived as 284 entries whose title,
 description and body were the same sentence three times over — against the 16
@@ -15,18 +16,19 @@ model is asked to *write*, accumulating what the note already said together
 with what the new entries add, and the verbatim material survives one layer
 down in ``.raw/``, which the note's provenance points at.
 
-**``description`` is the product.** It is not a summary of the note, it is the
-index entry, and the index is the whole of what a session is given (FR-017,
-FR-029). A line that says "notes on the venv situation" costs a file read; a
-line that says "worktrees have no ``.venv`` — symlink the main one first"
-usually ends the errand. The prompt says so in as many words, because this is
-the single sentence the layer's delivery value rests on.
+**``description`` is the product.** It is not a summary of the note, it is the index
+entry, and the index is the whole of what a session is given (see "Store each note as
+one Markdown file with frontmatter" and "Write each index line to stand on its own"). A
+line that says "notes on the venv situation" costs a file read; a line that says
+"worktrees have no ``.venv`` — symlink the main one first" usually ends the errand. The
+prompt says so in as many words, because this is the single sentence the layer's
+delivery value rests on.
 
-**A failure here writes nothing (FR-027).** No completion, a non-JSON answer,
-an answer missing a field: this returns ``None``, the caller skips that note,
-and the entries routed to it stay undistilled in ``.raw/`` for the next pass.
-A half-written note would be worse than no note, because the index line is
-what a session reads instead of the body.
+**A failure here writes nothing (see "Record what each distil pass did").** No
+completion, a non-JSON answer, an answer missing a field: this returns ``None``, the
+caller skips that note, and the entries routed to it stay undistilled in ``.raw/`` for
+the next pass. A half-written note would be worse than no note, because the index line
+is what a session reads instead of the body.
 """
 
 from __future__ import annotations
@@ -46,8 +48,9 @@ from coffer.infrastructure.memory.raw_store import StoredRawEntry
 
 logger = logging.getLogger(__name__)
 
-#: The operator's bound applies here too (spec internal-engine FR-023); this
-#: is only the fallback for a caller with no settings to consult.
+#: The operator's bound applies here too (spec internal-engine "Run every internal model
+#: call under the bound"); this is only the fallback for a caller with no settings to
+#: consult.
 _TIMEOUT_SECONDS = DEFAULT_MODEL_TIMEOUT_S
 
 WRITE_SYSTEM = (
@@ -151,9 +154,10 @@ def parse_written(text: str) -> WrittenNote | None:
     one_line = " ".join(description.split()) if isinstance(description, str) else ""
     return WrittenNote(
         title=title.strip(),
-        # One line, always: ``description`` is rendered into an index line
-        # (FR-017), and a newline in it would break the one-note-per-line shape
-        # both ``MEMORY.md`` and the delivered payload depend on.
+        # One line, always: ``description`` is rendered into an index line (see "Store
+        # each note as one Markdown file with frontmatter"), and a newline in it would
+        # break the one-note-per-line shape both ``MEMORY.md`` and the delivered payload
+        # depend on.
         description=one_line,
         body=body.strip() + "\n",
     )

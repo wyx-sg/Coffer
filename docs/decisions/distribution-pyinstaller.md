@@ -3,21 +3,21 @@
 **Status**: Accepted
 **Date**: 2026-05-20 (revised 2026-09-09; see Revision history)
 **Deciders**: Yuxing Wu
-**Related**: [`docs/principles.md`](../principles.md) (Languages), spec daemon FR-025 / SC-003, [Detect-or-Spawn](daemon-detect-or-spawn.md)
+**Related**: [`docs/principles.md`](../principles.md) (Languages), [daemon](../../openspec/specs/daemon/spec.md) "Release the macOS arm64 terminal archive", [Detect-or-Spawn](daemon-detect-or-spawn.md)
 
 ## Context
 
 Coffer has three runnable entry points: the long-lived `coffer-daemon`,
 the per-MCP-session `coffer-mcp-shim`, and the `coffer` management CLI.
 The target user population includes users without a system Python
-install. Spec daemon commits to this, now as SC-003; it was spec
-`mcp-gateway`'s SC-009 when this ADR was written:
+install. Spec daemon commits to this; when this ADR was written the
+commitment sat in spec `mcp-gateway` as a success criterion:
 
-- **SC-009** — A user on a clean machine (no Python) reaches `status: ready`
+- A user on a clean machine (no Python) reaches `status: ready`
   from a single distributable with no manual steps beyond clicking through
   the installer.
 
-**Spec daemon FR-025** fixes the shape of that distributable: one release archive
+**[daemon](../../openspec/specs/daemon/spec.md) "Release the macOS arm64 terminal archive"** fixes the shape of that distributable: one release archive
 per tag, `coffer-cli-<triple>.tar.gz`, carrying every runnable binary.
 
 That rules out any approach that requires users to install Python,
@@ -44,7 +44,7 @@ Concrete choices:
   first-launch can run `upgrade head` against a fresh DB.
 - **Lazily-imported dependencies must be pinned in `hiddenimports`,** because
   PyInstaller's static analysis cannot see an import that happens inside a
-  function — `markitdown` (inbound channel document extraction, spec channels FR-030), `openai`, `langgraph`, `langchain`. Package *data* needs
+  function — `markitdown` (inbound channel document extraction, [channels](../../openspec/specs/channels/spec.md) "Give documents to every agent as extracted text"), `openai`, `langgraph`, `langchain`. Package *data* needs
   `collect_data_files` on top, since `collect_submodules` only reaches Python
   modules.
   **Revised 2026-09-12:** this bullet used to be about sqlite-vec — its
@@ -65,11 +65,11 @@ Concrete choices:
   manageable — the shim talks to the daemon over loopback HTTP and only
   needs `httpx`.
 - The daemon also serves the built web UI as static files at its own
-  loopback origin (spec daemon FR-016), so the web assets ride along inside
+  loopback origin ([daemon](../../openspec/specs/daemon/spec.md) "Serve the built web UI from the daemon's own origin"), so the web assets ride along inside
   the daemon binary rather than in a separate shell. There is no separate
   GUI artifact to build, sign, or install.
 - **The daemon deploys its sibling binaries on a frozen start**
-  (spec daemon FR-027). When `coffer-daemon` detects it is running from a
+  ([daemon](../../openspec/specs/daemon/spec.md) "Deploy frozen sibling binaries and back up the vault before migrating"). When `coffer-daemon` detects it is running from a
   frozen build, it idempotently copies its siblings — `coffer-mcp-shim`,
   and `coffer-callback` — into `~/.coffer/bin/<version>/`, and flips the
   public `~/.coffer/bin/<name>` symlinks onto that directory atomically,
@@ -86,7 +86,7 @@ Concrete choices:
   from [Detect-or-Spawn](daemon-detect-or-spawn.md), which simplifies the
   user mental model ("everything Coffer lives under `~/.coffer/`"). A
   source install needs none of this — `pip install` already puts the
-  console scripts on `PATH` (spec daemon FR-024).
+  console scripts on `PATH` ([daemon](../../openspec/specs/daemon/spec.md) "Install the console scripts from source").
 - macOS Apple codesigning and notarisation are deferred (they require a
   paid Apple Developer ID). Gatekeeper quarantine therefore still applies
   to the downloaded CLI archive; the current user-visible workaround is
@@ -97,7 +97,7 @@ Concrete choices:
 
 **Positive**
 
-- Satisfies SC-009 and spec daemon FR-025 from day one: `make bundle-binaries`
+- Satisfies the no-system-Python promise of [daemon](../../openspec/specs/daemon/spec.md) "Release the macOS arm64 terminal archive" from day one: `make bundle-binaries`
   produces single-file executables that run on a clean machine with
   no Python.
 - Same binaries work for command-line invocation, MCP-client spawn, and
@@ -144,7 +144,7 @@ Concrete choices:
   `coffer-cli-<triple>.tar.gz` for macOS arm64, containing `coffer`,
   `coffer-daemon`, `coffer-mcp-shim` and the runtime helper binaries
   (`coffer-callback`) — plus one aggregated `SHA256SUMS`
-  file covering every published artifact (spec daemon FR-025 / FR-026).
+  file covering every published artifact ([daemon](../../openspec/specs/daemon/spec.md) "Release the macOS arm64 terminal archive" / "Publish one aggregated checksum file").
 - Before every release, the bundle runs a post-build smoke test
   ([`scripts/smoke_test_bundle.sh`](../../scripts/smoke_test_bundle.sh))
   — must boot the bundled daemon to `status: ready`, serve the bundled web UI
@@ -159,7 +159,7 @@ Concrete choices:
 **Require system Python 3.12+ with a venv (`pip install coffer`).**
 Rejected.
 
-- Directly violates SC-009. Most macOS users with a designer /
+- Directly violates the no-system-Python promise. Most macOS users with a designer /
   non-developer background, and most Windows users, do not have a working
   Python install at the required version.
 - Even on Linux, distro-shipped Python is typically one major version
@@ -238,10 +238,10 @@ Rejected.
   DMG / MSI / AppImage / deb bundles no longer exist;
   (b) the release collapsed to a **single tier** — one
   `coffer-cli-<triple>.tar.gz` per `v*` tag plus one aggregated
-  `SHA256SUMS` covering every artifact (spec daemon FR-025 / FR-026), with the
+  `SHA256SUMS` covering every artifact ([daemon](../../openspec/specs/daemon/spec.md) "Release the macOS arm64 terminal archive" / "Publish one aggregated checksum file"), with the
   `.dmg` and `Coffer-unsigned-<triple>.app.zip` retired;
   (c) binary deployment into `~/.coffer/bin/` **moved into the daemon's
-  frozen-start path** (spec daemon FR-027), keeping the same atomic
+  frozen-start path** ([daemon](../../openspec/specs/daemon/spec.md) "Deploy frozen sibling binaries and back up the vault before migrating"), keeping the same atomic
   temp-copy-then-rename and the same 3-signal staleness check, and now also
   covering `coffer-callback`;
   (d) the macOS notarisation runbook (`docs/distribution/macos-notarization.md`)
@@ -265,12 +265,12 @@ Rejected.
   gone, since those legs were never validated;
   (b) the release regains a **second tier**: `Coffer-unsigned-<triple>.dmg` beside the
   `coffer-cli-<triple>.tar.gz`, both covered by the one aggregated `SHA256SUMS`
-  (spec daemon FR-025 / FR-026). The desktop leg reuses the binaries the
+  ([daemon](../../openspec/specs/daemon/spec.md) "Release the macOS arm64 terminal archive" / "Publish one aggregated checksum file"). The desktop leg reuses the binaries the
   CLI leg already froze rather than running PyInstaller twice, so the second
   tier costs a Tauri build and nothing more;
   (c) **stands unchanged** — binary deployment stays in the daemon's
   frozen-start path, and the shell is explicitly forbidden from duplicating it
-  (spec daemon FR-027 / spec desktop-app FR-011). That was the right home and the shell
+  ([daemon](../../openspec/specs/daemon/spec.md) "Deploy frozen sibling binaries and back up the vault before migrating" / [desktop-app](../../openspec/specs/desktop-app/spec.md) "Reimplement no daemon route in the shell"). That was the right home and the shell
   coming back does not reclaim it;
   (d) **stands, and becomes more expensive.** There is still no notarisation
   runbook and no paid Apple Developer account. An unsigned `.dmg` is worse than

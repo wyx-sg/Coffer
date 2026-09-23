@@ -7,8 +7,8 @@ anywhere near it, and this file stays about *policy* — when a round may run,
 what a held round means, what gets recorded.
 
 One lock guards everything that writes the vault or the working tree. The
-knowledge tidy pass takes the same one (spec vault-sync ``## Unattended
-rewriters``): both rewrite vault content, and an export taken half-way through
+knowledge tidy pass takes the same one (spec vault-sync "Never overlap a
+tidy pass and a round"): both rewrite vault content, and an export taken half-way through
 a rewrite is a torn snapshot that git would read as a deliberate change.
 """
 
@@ -350,11 +350,11 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
     async def _record(self, run: ConvergeRun) -> None:
         waiting = run.hold_already_reported or run.status is ConvergeStatus.AWAITING_JOIN
         if waiting and await self._remotes.refresh_run(run):
-            # The same confirmation the user has not answered yet. It is one
-            # situation, and the timer re-deriving it every interval is not a
-            # new one: the row that first reported it is re-stamped, and no
-            # audit event is written either, so a vault waiting a week is a
-            # single entry everywhere a person might read it (FR-092).
+            # The same confirmation the user has not answered yet. It is one situation,
+            # and the timer re-deriving it every interval is not a new one: the row that
+            # first reported it is re-stamped, and no audit event is written either, so
+            # a vault waiting a week is a single entry everywhere a person might read it
+            # (see "Record one outstanding confirmation once").
             return
         await self._remotes.record_run(run)
         if run.status is ConvergeStatus.DISABLED:

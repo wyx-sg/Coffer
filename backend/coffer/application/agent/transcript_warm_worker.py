@@ -14,8 +14,8 @@ a cold tree — and the daemon serves the MCP gateway from the same loop, so the
 pass runs on a thread.
 
 It is a *cache* pass, not a management operation: it reads the agents' own
-files and writes only the sidecar, so it emits no audit event (FR-048 — no
-workspace listing does).
+files and writes only the sidecar, so it emits no audit event (no workspace listing does:
+see "Audit every agent lifecycle event").
 """
 
 from __future__ import annotations

@@ -161,7 +161,8 @@ def test_toml_uninstall_noop_for_scalar_mcp_servers():
     assert tomlkit.parse(out)["mcp_servers"] == "coffer-ish"
 
 
-# --- self-reported agent identity (spec agent-registry FR-015 amended) ------
+# --- self-reported agent identity -------------------------------------------
+# (spec agent-registry "Install Coffer's MCP server into an agent in one action")
 
 
 # The identity the shim reports is the agent's uid, never its name: the entry

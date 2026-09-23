@@ -140,7 +140,8 @@ acceptance("web-ui", "the sidebar carries no placeholder entries", () => {
   expect(document.body.textContent ?? "").not.toMatch(/coming soon|not yet implemented/i);
 });
 
-// --- the attention dot (spec vault-sync FR-096) ---------------------------
+// --- the attention dot (spec vault-sync "Say a vault needs a human where the user
+// already is") ---
 //
 // It replaced a banner that floated over whatever page the user was on. The
 // dot has to keep the property that mattered — a vault nobody is looking at

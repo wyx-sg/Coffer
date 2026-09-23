@@ -164,7 +164,6 @@ local `make verify` proves nothing about the desktop shell.
 - a marker referring to a scenario / spec ID that doesn't exist (orphan marker — usually means a spec or scenario was renamed)
 - a marker on a test that can never run (`@pytest.mark.skip`, Rust `#[ignore]`)
 - a scenario name used twice in one spec
-- while the migration to OpenSpec is in flight: a spec present under both `openspec/specs/` and the legacy `specs/`, or one spec mixing the legacy `## Acceptance Scenarios` block with OpenSpec scenarios
 
 The audit itself is stdlib-only and runs in milliseconds.
 

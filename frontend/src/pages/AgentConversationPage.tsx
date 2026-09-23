@@ -1,4 +1,5 @@
-// frontend/src/pages/AgentConversationPage.tsx — spec agent-registry FR-040.
+// frontend/src/pages/AgentConversationPage.tsx — spec agent-registry
+// "Read one transcript session in bounded windows".
 // One of the agent's past conversations, reached by clicking its row on the
 // Conversations tab: the session's header (title, project, counts, times), the
 // open-in-editor / reveal actions, and the turns themselves.

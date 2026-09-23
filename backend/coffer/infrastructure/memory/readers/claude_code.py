@@ -17,28 +17,29 @@ first:
 `name` and `description` are the source's own title and description — no
 derivation needed, unlike Codex's untitled bullets. `metadata.type` picks the
 entry's type; `metadata.type: reference` is skipped rather than mapped, because
-Claude Code's own `reference` memories are knowledge the user or the agent
-wrote down about the world, not something the agent learned while working —
-exactly the boundary spec memory's "Memory is not knowledge" section draws.
-`MEMORY.md` in the same directory is Claude Code's own regenerated index and
-is ignored for the same reason knowledge ignores `README.md`: Coffer
-regenerates that role itself (FR-004).
+Claude Code's own `reference` memories are knowledge the user or the agent wrote
+down about the world, not something the agent learned while working — exactly
+the boundary spec memory's overview draws between memory and knowledge. `MEMORY.md`
+in the same directory is Claude Code's own regenerated index and is ignored for
+the same reason knowledge ignores `README.md`: Coffer regenerates that role
+itself (see "Read Claude Code and Codex memory with their search terms").
 
-What comes back is a `RawEntry`, and a raw entry is **the input layer, not
-the product** (FR-008): it is written verbatim under the partition's `.raw/`,
-and the distil pass is what turns entries into Coffer's own notes (FR-020).
-So this reader is not trying to produce anything a person will read, even
-though Claude Code hands it a perfectly good title — it carries the source's
-words across intact and leaves the writing to the pass. The verbatim rule
-that used to govern what Coffer *stored* now governs only this layer, which
-is what keeps a note's claim checkable back against the agent's own file.
+What comes back is a `RawEntry`, and a raw entry is **the input layer, not the
+product** (see "Keep raw entries verbatim and hidden"): it is written verbatim
+under the partition's `.raw/`, and the distil pass is what turns entries into
+Coffer's own notes (see "Write notes in Coffer's own words"). So this reader is
+not trying to produce anything a person will read, even though Claude Code hands
+it a perfectly good title — it carries the source's words across intact and
+leaves the writing to the pass. The verbatim rule that used to govern what
+Coffer *stored* now governs only this layer, which is what keeps a note's claim
+checkable back against the agent's own file.
 
 Claude Code states no search terms anywhere in this format — it relies on its
-own always-loaded index instead — so `RawEntry.search_terms` stays empty
-here. FR-004 asks a reader to carry terms **where the source states them**;
-synthesising them from the body would be precisely the guess that requirement
-exists to replace. Codex is the source that states them, and
-`readers.codex` is where they are carried.
+own always-loaded index instead — so `RawEntry.search_terms` stays empty here.
+"Read Claude Code and Codex memory with their search terms" asks a reader to
+carry terms **where the source states them**; synthesising them from the body
+would be precisely the guess that requirement exists to replace. Codex is the
+source that states them, and `readers.codex` is where they are carried.
 
 An entry's `project_root` is recovered the same way the agent page's
 native-memory listing recovers it (`infrastructure.agent.native_memory_store`):
@@ -105,7 +106,8 @@ class ClaudeCodeMemoryReader:
                 except OSError:
                     # One unreadable file (permissions, a race with deletion)
                     # must not stop the rest of this agent's files listing
-                    # (FR-005's isolation applies here too).
+                    # ("Fail a broken reader loudly and in isolation" applies
+                    # here too).
                     continue
                 out.append(SourceFile(path=str(file), digest=digest))
         return tuple(out)
@@ -175,7 +177,8 @@ def _split_frontmatter(text: str, path: str) -> tuple[dict[str, Any], str]:
     Unlike `infrastructure.knowledge.frontmatter.split_frontmatter` — which
     tolerates a malformed fence by degrading to `({}, text)` — a memory file
     with no readable frontmatter has lost its type, its title and half its
-    identity, so FR-005 wants this loud rather than silently empty.
+    identity, so "Fail a broken reader loudly and in isolation" wants this loud
+    rather than silently empty.
     """
     if not text.startswith(_FENCE):
         raise UnreadableMemory(path, "no YAML frontmatter fence")

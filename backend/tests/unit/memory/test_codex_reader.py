@@ -1,4 +1,5 @@
-"""Codex's `MEMORY.md` task groups and `memory_summary.md` profile (FR-004).
+"""Codex's `MEMORY.md` task groups and `memory_summary.md` profile (see "Read
+Claude Code and Codex memory with their search terms").
 
 Builds a `<config_dir>/memories/` tree under `tmp_path` for each test; nothing
 here touches the real `~/.codex`.
@@ -104,7 +105,8 @@ def _write_codex_memories(tmp_path: pathlib.Path) -> pathlib.Path:
     memories_dir.mkdir(parents=True)
     (memories_dir / "MEMORY.md").write_text(_MEMORY_MD, encoding="utf-8")
     (memories_dir / "memory_summary.md").write_text(_SUMMARY_MD, encoding="utf-8")
-    # Must never be read (FR-003): raw transcripts, not distilled memory.
+    # Must never be read (see "Read no transcripts or rollouts"): raw
+    # transcripts, not distilled memory.
     (memories_dir / "raw_memories.md").write_text("raw transcript dump", encoding="utf-8")
     (memories_dir / "rollout_summaries").mkdir()
     return config_dir
@@ -168,8 +170,9 @@ def test_a_task_group_becomes_one_entry_per_populated_bullet_section(
 def test_each_entry_carries_the_search_terms_its_groups_summary_states(
     tmp_path: pathlib.Path,
 ) -> None:
-    """The source's own answer to "what would you look this up by" (FR-004),
-    which the index line then restates (FR-029)."""
+    """The source's own answer to "what would you look this up by", which the
+    index line then restates (see "Write each index line to stand on its
+    own")."""
     config_dir = _write_codex_memories(tmp_path)
     reader = CodexMemoryReader()
 
@@ -233,7 +236,8 @@ def test_the_profile_becomes_entries_with_an_empty_project_root(tmp_path: pathli
     entries = reader.read(_summary_source(reader, config_dir))
 
     assert len(entries) == 2
-    # An empty project root is what files them into ``global`` (FR-011).
+    # An empty project root is what files them into ``global`` (see "File
+    # personal entries into global").
     assert all(e.project_root == "" for e in entries)
     assert all(e.type == TYPE_USER for e in entries)
 
@@ -267,9 +271,9 @@ def test_the_profile_states_no_search_terms_because_codex_states_none_for_it(
 
 
 def test_anchors_are_stable_across_repeated_reads(tmp_path: pathlib.Path) -> None:
-    """The anchor is half of a note's provenance and the name a raw entry
-    keeps under ``.raw/`` (FR-009), so a re-read of unchanged text must
-    produce the same one."""
+    """The anchor is half of a note's provenance and the name a raw entry keeps
+    under ``.raw/`` (see "Let only aggregation write raw entries"), so a
+    re-read of unchanged text must produce the same one."""
     config_dir = _write_codex_memories(tmp_path)
     reader = CodexMemoryReader()
     source = _memory_source(reader, config_dir)
@@ -299,8 +303,9 @@ def test_a_missing_sibling_summary_costs_the_terms_not_the_entries(
 def test_a_long_bullet_gets_a_trimmed_handle_and_keeps_its_whole_body(
     tmp_path: pathlib.Path,
 ) -> None:
-    """The title is a handle for the distil pass, not a title a person reads
-    — the note's title is Coffer's to write (FR-020)."""
+    """The title is a handle for the distil pass, not a title a person reads —
+    the note's title is Coffer's to write (see "Write notes in Coffer's own
+    words")."""
     long_bullet = "x" * 300
     config_dir = tmp_path / "codex"
     memories_dir = config_dir / "memories"

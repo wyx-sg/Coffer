@@ -115,7 +115,9 @@ _WEBSOCKET_CONFIG = {
     spec="channels/seatalk", scenario="a websocket channel runs without the listener or a tunnel"
 )
 async def test_websocket_only_deployment_keeps_the_listener_stopped(env: ChannelEnv) -> None:
-    """spec channels/seatalk FR-004: websocket delivery needs no inbound HTTP surface at all.
+    """Websocket delivery needs no inbound HTTP surface at all.
+
+    See spec channels/seatalk "Carry no ingress fields on websocket delivery".
 
     The adapter still runs (it sends the replies), and the connection is held —
     but nothing listens on a port and no tunnel is managed, which is the entire

@@ -1,4 +1,6 @@
-"""The loopback-Host guard (spec daemon FR-015).
+"""The loopback-Host guard.
+
+See spec daemon "Refuse a request whose Host is not loopback".
 
 The daemon's served index.html carries the live API token, so a DNS-rebound
 page — one on ``evil.com`` whose hostname resolves to 127.0.0.1, which the

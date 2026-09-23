@@ -115,7 +115,8 @@ def wire_agent_and_skill_kinds(
     sync_engine = SyncEngine()
 
     # Cross-kind resolvers: the skill service needs the agent's effective
-    # skill_dir and its scan locations (FR-022) but cannot import agent-kind
+    # skill_dir and its scan locations (spec skill-manager "List unmanaged
+    # skills in an agent's skill locations") but cannot import agent-kind
     # code itself (Contract 5) — only this composition root may bridge the two
     # kinds. Delivery itself needs nothing from the agent's config: the whole
     # rule lives on the skill resource (``enabled`` + ``scope``).
@@ -149,7 +150,8 @@ def wire_agent_and_skill_kinds(
         await skill_svc.relink_for_agent(agent_uid)
 
     # A newly registered agent gets everything the delivery predicate grants
-    # it right now (FR-012a).
+    # it right now (spec skill-manager "Reconcile deliveries per agent on every
+    # trigger").
     async def _agent_reconcile_skill_delivery(agent_uid: str) -> None:
         await skill_svc.apply_scope_for_agent(agent_uid, actor="system")
 

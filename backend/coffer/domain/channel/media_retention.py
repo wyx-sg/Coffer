@@ -1,4 +1,5 @@
-"""Pure retention decision for the channel-media dir (spec channels — FR-034).
+"""Pure retention decision for the channel-media dir (spec channels "Persist
+inbound attachments as references").
 
 Channel media bytes live under ``~/.coffer/channel-media`` (out-of-band; the
 chat DB keeps only an ``AttachmentBlock`` reference — ADR:

@@ -57,8 +57,8 @@ async def activate(service: ProviderService, uid: str, *, actor: str) -> Activat
 
     # 2) Flip activation: take over from any overlapping active connection,
     #    de-projecting it from the agents this one will not cover. The
-    #    single-process daemon serialises the clear-then-set (provider
-    #    switching / FR-011).
+    #    single-process daemon serialises the clear-then-set (spec
+    #    provider-switching "Keep at most one active connection per agent type").
     mine = set(targets)
     previous: str | None = None
     for r in await service.list():

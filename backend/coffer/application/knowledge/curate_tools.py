@@ -2,15 +2,17 @@
 
 Four operations over ONE collection's documents — list, read, write, retire —
 and the boundaries that make the pass's rules facts rather than requests in a
-prompt (spec knowledge FR-021):
+prompt (spec knowledge "Curate through a fenced four-tool pass"):
 
 * **One collection, documents only.** No handler can name a path in another
   collection, the collection's ``README.md``, or the hidden inbox the material
   came from.
-* **Eight writes, then the pass stops** (FR-025). One piece of material must
-  never be able to trigger a corpus-wide rewrite, however sure the model is.
-* **A document may not name another file** (FR-027). Checked at the write,
-  because asking for it in a prompt is what produced 343 dead references.
+* **Eight writes, then the pass stops** (see "Bound a pass to eight writes"). One piece
+  of material must never be able to trigger a corpus-wide rewrite, however sure the
+  model is.
+* **A document may not name another file** (see "Refuse file-name references in
+  documents"). Checked at the write, because asking for it in a prompt is what produced
+  343 dead references.
 * **A retire must follow the write that kept its content.** A document may be
   retired only after this pass has seen it — in the brief or through
   ``read_document`` — and has since written a *different* document. Code
@@ -36,7 +38,7 @@ from coffer.infrastructure.knowledge import catalogue, fs, paths
 
 logger = logging.getLogger(__name__)
 
-#: Writes one pass may make (FR-025).
+#: Writes one pass may make (see "Bound a pass to eight writes").
 MAX_WRITES_PER_PASS = 8
 
 #: Anything that looks like it names a Markdown file. Only the ones that turn
@@ -75,7 +77,8 @@ def document_count(collection: str) -> int:
 
 
 def offending_reference(body: str, known_names: frozenset[str], *, collection: str) -> str | None:
-    """The first reference to a knowledge file in ``body``, if any (FR-027).
+    """The first reference to a knowledge file in ``body``, if any (see "Refuse file-name references
+    in documents").
 
     ``known_names`` is the set of file names the collection actually holds, so
     the check is "does this name one of ours" rather than "does this contain a

@@ -12,7 +12,8 @@
  * The tempting change is real: firing queries before the connection lands means
  * they come back `DAEMON_NOT_READY` for a moment, and `await`ing the handshake
  * makes that flicker go away. It buys the flicker with the blank window, which
- * is the worse trade and the one spec desktop-app FR-001/FR-004 rule out — and
+ * is the worse trade and the one spec desktop-app rules out ("Host the UI locally
+ * in an application window", "Supply the page its daemon connection over IPC") — and
  * the handshake now retries until it lands, so awaiting it can block the paint
  * for as long as the daemon stays down, i.e. forever.
  *

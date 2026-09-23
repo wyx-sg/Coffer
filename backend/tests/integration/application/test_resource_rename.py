@@ -1,4 +1,6 @@
-"""Renaming a resource is an ordinary edit (spec resource-framework FR-011).
+"""Renaming a resource is an ordinary edit.
+
+See spec resource-framework "Treat a resource's name as a mutable label".
 
 The point of the identity change is that a rename costs nothing: the row keeps
 its uid, so every reference to it — a kind-owned table's foreign key, the audit

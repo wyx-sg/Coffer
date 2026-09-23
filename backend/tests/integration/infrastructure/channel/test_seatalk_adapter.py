@@ -332,11 +332,11 @@ def test_collect_image_urls_direct_and_nested_forwarded() -> None:
 
 
 def test_collect_media_covers_image_file_generic_and_forwarded() -> None:
-    """spec channels/seatalk FR-014: the media collector returns a downloadable ref for an image, a
-    directly-sent file (with its filename + a non-image mime), and — best
-    effort — any other tag whose sub-dict carries a file-URL content
-    (voice/video), recursing forwarded records. A plain text message yields
-    nothing."""
+    """Per "Download every inbound SeaTalk media type": the media collector returns
+    a downloadable ref for an image, a directly-sent file (with its filename + a
+    non-image mime), and — best effort — any other tag whose sub-dict carries a
+    file-URL content (voice/video), recursing forwarded records. A plain text
+    message yields nothing."""
     from coffer.infrastructure.channel.seatalk_media import collect_media
 
     image = collect_media({"tag": "image", "image": {"content": "https://o.io/file/a"}})
@@ -492,12 +492,12 @@ async def test_handle_event_forwarded_record_downloads_images(
 async def test_handle_event_direct_file_downloads_attachment(
     fake_seatalk: FakeSeaTalk, tmp_path: Any
 ) -> None:
-    """spec channels/seatalk FR-014: a directly-sent file (not an image) is fetched (authenticated)
-    and
-    attached with its real filename + a non-image mime, so it drives a turn like
-    a photo does instead of hitting the "unsupported message" branch. Uses the
-    live-captured shape: ``message.file.content`` is the auth-gated URL and
-    ``message.file.filename`` the original name."""
+    """Per "Download every inbound SeaTalk media type": a directly-sent file (not an
+    image) is fetched (authenticated) and attached with its real filename + a
+    non-image mime, so it drives a turn like a photo does instead of hitting the
+    "unsupported message" branch. Uses the live-captured shape:
+    ``message.file.content`` is the auth-gated URL and ``message.file.filename`` the
+    original name."""
     adapter = make_seatalk_adapter(fake_seatalk, media_dir=tmp_path)
     recorder = RecordingCallbacks()
     await adapter.start(recorder.as_callbacks())
@@ -605,15 +605,16 @@ async def test_send_text_group_without_thread_id_omits_thread_field(
     assert "thread_id" not in body["message"]  # and not in the message body
 
 
-# -- outbound media (FR-032) --------------------------------------------------
+# -- outbound media -------------------------------------------------------------
 
 
 async def test_send_media_image_posts_group_image_with_thread_in_body(
     fake_seatalk: FakeSeaTalk, tmp_path: Any
 ) -> None:
-    """FR-032: a returned image during a group-thread turn is uploaded as a
-    SeaTalk ``image`` message (base64 content) to group_chat, with thread_id
-    INSIDE the message body so it lands in the originating thread."""
+    """Per "Upload outbound media into the originating chat and thread": a returned
+    image during a group-thread turn is uploaded as a SeaTalk ``image`` message
+    (base64 content) to group_chat, with thread_id INSIDE the message body so it
+    lands in the originating thread."""
     import base64
 
     img = tmp_path / "chart.png"
@@ -700,9 +701,9 @@ async def test_send_text_direct_still_uses_single_chat(fake_seatalk: FakeSeaTalk
 async def test_send_text_direct_with_thread_id_threads_the_reply(
     fake_seatalk: FakeSeaTalk,
 ) -> None:
-    """spec channels/seatalk FR-018: a DM reply sent inside a thread must carry thread_id on the
-    single_chat message body so SeaTalk threads it — documented wire
-    placement, not yet live-verified against the real platform."""
+    """Per "Identify a thread by its root message": a DM reply sent inside a thread
+    must carry thread_id on the single_chat message body so SeaTalk threads it —
+    documented wire placement, not yet live-verified against the real platform."""
     adapter = make_seatalk_adapter(fake_seatalk)
     try:
         await adapter.send_text("emp-1", "hi", thread_id="t1")
@@ -768,11 +769,12 @@ async def test_interactive_message_click_routes_to_on_callback(fake_seatalk: Fak
 async def test_interactive_message_click_in_group_routes_as_group_callback(
     fake_seatalk: FakeSeaTalk,
 ) -> None:
-    """FR-036: a card tapped in a GROUP arrives with a ``group_id`` (mirroring
-    the group @mention event) and the tapper under ``sender`` — the adapter
-    normalizes it to a group callback (chat_kind="group", chat_id=group_id,
-    thread_id set, sender_id = the tapper's employee_code) so the core
-    owner-gates and replies in the group thread, not a DM."""
+    """Per spec channels "Route group selection-card taps back to the group": a card
+    tapped in a GROUP arrives with a ``group_id`` (mirroring the group @mention
+    event) and the tapper under ``sender`` — the adapter normalizes it to a group
+    callback (chat_kind="group", chat_id=group_id, thread_id set, sender_id = the
+    tapper's employee_code) so the core owner-gates and replies in the group thread,
+    not a DM."""
     adapter = make_seatalk_adapter(fake_seatalk)
     recorder = RecordingCallbacks()
     await adapter.start(recorder.as_callbacks())
@@ -801,7 +803,7 @@ async def test_interactive_message_click_in_group_routes_as_group_callback(
     assert cb.platform_message_id == "card-9"
 
 
-# -- inbound de-duplication (FR-040) ------------------------------------------
+# -- inbound de-duplication (spec channels "Process each inbound event once") ---
 
 
 def _subscriber_text_envelope(*, event_id: str, message_id: str, text: str) -> dict[str, Any]:
@@ -819,9 +821,9 @@ def _subscriber_text_envelope(*, event_id: str, message_id: str, text: str) -> d
 
 @pytest.mark.acceptance(spec="channels", scenario="a redelivered event is processed once")
 async def test_handle_event_dedups_redelivered_event_id(fake_seatalk: FakeSeaTalk) -> None:
-    """FR-040: SeaTalk retries a slow callback, so the SAME event_id can arrive
-    twice — the second delivery must be dropped, driving the turn once. Two
-    DIFFERENT event_ids remain two turns."""
+    """SeaTalk retries a slow callback, so the SAME event_id can arrive twice — the
+    second delivery must be dropped, driving the turn once. Two DIFFERENT event_ids
+    remain two turns."""
     adapter = make_seatalk_adapter(fake_seatalk)
     recorder = RecordingCallbacks()
     await adapter.start(recorder.as_callbacks())
@@ -964,11 +966,12 @@ async def test_fetch_thread_recurses_forwarded_records_in_the_thread(
 async def test_fetch_thread_downloads_thread_images(
     fake_seatalk: FakeSeaTalk, tmp_path: Any
 ) -> None:
-    """FR-030: when the @mention lands inside a thread, the images the thread's
-    own messages carry — a directly-sent image AND one buried in a forwarded
-    record — are downloaded (authenticated) and returned as the second tuple
-    element, so a picture in the thread reaches the vision agent as real bytes
-    instead of a dead auth-gated file link."""
+    """Per spec channels "Download the media a thread's messages carry": when the
+    @mention lands inside a thread, the images the thread's own messages carry — a
+    directly-sent image AND one buried in a forwarded record — are downloaded
+    (authenticated) and returned as the second tuple element, so a picture in the
+    thread reaches the vision agent as real bytes instead of a dead auth-gated file
+    link."""
     fake_seatalk.thread_response = {
         "code": 0,
         "thread_messages": [
@@ -1438,8 +1441,8 @@ async def test_group_converted_to_external_reaches_on_lifecycle(
 
 
 async def test_redelivered_lifecycle_event_fires_once(fake_seatalk: FakeSeaTalk) -> None:
-    """FR-040 covers these like every other event — a retried callback must not
-    report the same removal twice."""
+    """Deduplication ("Process each inbound event once") covers these like every
+    other event — a retried callback must not report the same removal twice."""
     adapter = make_seatalk_adapter(fake_seatalk)
     recorder = LifecycleRecorder()
     await adapter.start(recorder.as_callbacks())
@@ -1504,7 +1507,8 @@ async def test_fetch_thread_degrades_to_empty_list_on_error(
         await adapter.stop()
 
 
-# -- live text: the message-streaming API (FR-039) ----------------------------
+# -- live text: the message-streaming API ("Stream the reply under SeaTalk's
+# streaming contract") -------------------------------------------------------
 
 
 def _ticking(step: float = 1.0) -> Any:
@@ -1547,9 +1551,10 @@ async def test_stream_opens_once_and_updates_carry_full_snapshots(
     assert fake_seatalk.init_stream_calls[0][1] == {
         "employee_code": "emp-1",
         # format 1 even for this opening snapshot: the message must be able to
-        # carry an @mention the instant it is created (FR-055), and a tag in a
-        # format-2 message shows as its own source. Partial text stays literal
-        # because it is ESCAPED, not because the format is plain.
+        # carry an @mention the instant it is created (spec channels "Mention the
+        # asker in a group answer"), and a tag in a format-2 message shows as its
+        # own source. Partial text stays literal because it is ESCAPED, not because
+        # the format is plain.
         "message": {"tag": "text", "text": {"format": 1, "content": "I found"}},
     }
     bodies = [body for _surface, body in fake_seatalk.update_stream_calls]
@@ -1770,7 +1775,7 @@ async def test_a_silent_stream_is_kept_alive_inside_the_30_second_limit(
     assert leftover == ""
 
 
-# -- FR-055: @mentioning the asker in a group reply ---------------------------
+# -- @mentioning the asker in a group reply ("Mention the asker in a group answer")
 
 
 @pytest.mark.acceptance(

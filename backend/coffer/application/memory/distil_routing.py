@@ -1,4 +1,5 @@
-"""Stage one of the distil pass: where each new entry belongs (spec memory FR-023).
+"""Stage one of the distil pass: where each new entry belongs (spec memory "Distil
+incrementally in two stages").
 
 This module asks one question and never writes anything. Given a batch of raw
 entries that have not been distilled yet, the **index** of the notes the
@@ -6,15 +7,14 @@ partition already holds, and the titles it has already retired, it returns one
 action per entry: merge into a named note, open a new one, retire a note this
 entry contradicts, or keep nothing.
 
-**Why the index and not the bodies.** FR-023 makes the pass incremental in one
-specific sense — *no single request carries the partition's bodies*. A
-partition of a hundred notes that gained three entries must cost one request
-over a hundred index lines, not a request over a hundred note bodies. So the
-notes arrive here as :class:`IndexEntry` — slug, title, description — and the
-bodies are the writing stage's business, one note per request. Handing a body
-to this stage would be the easy mistake and it is the one the whole two-stage
-shape exists to make impossible: this module cannot read a body, because it is
-never given one.
+**Why the index and not the bodies.** "Distil incrementally in two stages" makes the
+pass incremental in one specific sense — *no single request carries the partition's
+bodies*. A partition of a hundred notes that gained three entries must cost one request
+over a hundred index lines, not a request over a hundred note bodies. So the notes
+arrive here as :class:`IndexEntry` — slug, title, description — and the bodies are the
+writing stage's business, one note per request. Handing a body to this stage would be
+the easy mistake and it is the one the whole two-stage shape exists to make impossible:
+this module cannot read a body, because it is never given one.
 
 **Judgement is about meaning, and that is the point of the stage existing.**
 The design this replaces matched entries against each other literally, and on
@@ -24,20 +24,19 @@ Each entry therefore carries the agent it came from, so "Claude Code says the
 worktree has no `.venv`" and "Codex says builds fail in a linked checkout" can
 be recognised as one subject by a reader that understands both sentences.
 
-**The retired titles are input, not decoration (FR-025).** The material a
-retired note was built from still sits in the agent's own memory, so the next
-aggregation reads it again and — without this list — the next pass re-opens
-the note the last one removed. Every prompt says, in as many words, not to
+**The retired titles are input, not decoration (see "Record retirements so they
+stick").** The material a retired note was built from still sits in the agent's own
+memory, so the next aggregation reads it again and — without this list — the next pass
+re-opens the note the last one removed. Every prompt says, in as many words, not to
 re-open a subject named in it.
 
-**Malformed output degrades to nothing (FR-027).** A model that answers in
-prose, returns a JSON array, names an entry that is not in the batch, names a
-slug the partition does not have, or invents a fifth action contributes
-nothing for whatever it got wrong — logged, never raised. An entry with no
-usable action is simply not distilled this pass; it is still in ``.raw/`` and
-the next pass sees it again. That is the same "degrade to nothing" discipline
-the organise pass held, and it is why a pass can never leave a partition worse
-than not running would have.
+**Malformed output degrades to nothing (see "Record what each distil pass did").** A
+model that answers in prose, returns a JSON array, names an entry that is not in the
+batch, names a slug the partition does not have, or invents a fifth action contributes
+nothing for whatever it got wrong — logged, never raised. An entry with no usable action
+is simply not distilled this pass; it is still in ``.raw/`` and the next pass sees it
+again. That is the same "degrade to nothing" discipline the organise pass held, and it
+is why a pass can never leave a partition worse than not running would have.
 """
 
 from __future__ import annotations
@@ -56,8 +55,8 @@ from coffer.infrastructure.memory.raw_store import StoredRawEntry
 
 logger = logging.getLogger(__name__)
 
-#: The four actions FR-023 confines the routing stage's output to. Anything
-#: else the model names is dropped with a warning.
+#: The four actions "Distil incrementally in two stages" confines the routing stage's
+#: output to. Anything else the model names is dropped with a warning.
 ACTION_MERGE = "merge"
 ACTION_OPEN = "open"
 ACTION_RETIRE = "retire"
@@ -80,9 +79,10 @@ DEFAULT_MAX_ENTRIES_PER_CHUNK = 20
 #: costs a routing decision some tail context rather than costing a note any.
 MAX_ROUTING_TEXT_CHARS = 2000
 
-#: Replaced by the operator's own bound (spec internal-engine FR-023). Kept as
-#: the signature's default so a caller with no settings to consult — a unit
-#: test, a pass built before the singleton exists — behaves as it always did.
+#: Replaced by the operator's own bound (spec internal-engine "Run every internal model
+#: call under the bound"). Kept as the signature's default so a caller with no settings
+#: to consult — a unit test, a pass built before the singleton exists — behaves as it
+#: always did.
 _TIMEOUT_SECONDS = DEFAULT_MODEL_TIMEOUT_S
 
 ROUTING_SYSTEM = (
@@ -132,8 +132,9 @@ ROUTING_SYSTEM = (
 class IndexEntry:
     """One existing note as the routing stage is allowed to see it.
 
-    Slug, title, description — the index line's own material (FR-017), and
-    deliberately not the body. See the module docstring.
+    Slug, title, description — the index line's own material (see "Store each note as
+    one Markdown file with frontmatter"), and deliberately not the body. See the module
+    docstring.
     """
 
     slug: str
@@ -150,10 +151,10 @@ class RouteAction:
     action: str
     #: The existing note named by a ``merge`` or a ``retire``.
     slug: str = ""
-    #: Another entry in the same batch whose note this one joins. A first pass
-    #: over a fresh partition has no index at all, so two agents' accounts of
-    #: one lesson can only become one note by naming each other — which is
-    #: precisely the cross-agent merge this layer exists for (FR-018).
+    #: Another entry in the same batch whose note this one joins. A first pass over a
+    #: fresh partition has no index at all, so two agents' accounts of one lesson can
+    #: only become one note by naming each other — which is precisely the cross-agent
+    #: merge this layer exists for (see "Record provenance and merge by meaning").
     into_entry: str = ""
     #: The title proposed by an ``open`` (and by a ``retire``'s replacement).
     title: str = ""
@@ -185,8 +186,9 @@ def strip_code_fence(text: str) -> str:
 def parse_json_object(text: str, *, log_key: str) -> dict[str, Any]:
     """One completion as a JSON object, or ``{}`` for anything that is not one.
 
-    Never raises: a model that cannot follow the format contributes nothing,
-    which is exactly as safe as a model that was never asked (FR-027).
+    Never raises: a model that cannot follow the format contributes nothing, which is
+    exactly as safe as a model that was never asked (see "Record what each distil pass
+    did").
     """
     try:
         parsed = json.loads(strip_code_fence(text))
@@ -282,9 +284,9 @@ def _parse_action(item: Any, *, entry_ids: set[str], slugs: set[str]) -> RouteAc
 def parse_actions(text: str, *, entry_ids: set[str], slugs: set[str]) -> tuple[RouteAction, ...]:
     """Parse one routing answer, keeping only actions that name real things.
 
-    The first action for an entry wins; a second one for the same entry is
-    dropped, because FR-023 gives an entry exactly one action and a model that
-    names two has not decided.
+    The first action for an entry wins; a second one for the same entry is dropped,
+    because "Distil incrementally in two stages" gives an entry exactly one action and a
+    model that names two has not decided.
     """
     parsed = parse_json_object(text, log_key="memory.distil.routing")
     raw_actions = parsed.get("actions")

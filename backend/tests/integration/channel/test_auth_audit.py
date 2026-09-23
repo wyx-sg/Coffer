@@ -1,4 +1,7 @@
-"""Sender-identity owner gate + first-class channel-driven audit (FR-011)."""
+"""Sender-identity owner gate + first-class channel-driven audit.
+
+See "Gate inbound traffic on sender identity".
+"""
 
 from __future__ import annotations
 

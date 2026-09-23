@@ -1,7 +1,8 @@
 // frontend/src/components/memory/MemoryPartitionsTable.test.tsx
 //
 // The partitions list: each row carries the repository it is keyed on, its note
-// count and the status control every Resource gets (spec memory FR-037/FR-013)
+// count and the status control every Resource gets (spec memory "Present
+// partitions as a table and a file tree", "Serve every enabled partition to every agent")
 // — ONE button whose label says whether the partition is served, opening a
 // panel where the states are the choices. ScopeControl's own hooks are mocked,
 // mirroring `components/mcp/McpServersTable.test.tsx` — this suite only
@@ -76,7 +77,8 @@ const ROWS: MemoryPartitionRow[] = [
   },
 ];
 
-/** A partition whose repository has been deleted from disk (FR-016). */
+/** A partition whose repository has been deleted from disk (see "Report
+ *  unresolvable partitions"). */
 const GONE: MemoryPartitionRow = {
   uid: "mp-0d5c",
   name: "old-api",
@@ -100,8 +102,8 @@ describe("MemoryPartitionsTable", () => {
   });
 
   test("a partition whose repository is gone stays listed and says so", () => {
-    // FR-016: an orphaned partition is delivered to nobody, and deleting it is
-    // the developer's call — so it must be VISIBLE and marked, never filtered
+    // "Report unresolvable partitions": an orphaned partition is delivered to nobody, and deleting
+    // it is the developer's call — so it must be VISIBLE and marked, never filtered
     // out of the list where nobody would ever meet it again.
     render(<MemoryPartitionsTable rows={[...ROWS, GONE]} />, { wrapper: wrap(null) });
 
