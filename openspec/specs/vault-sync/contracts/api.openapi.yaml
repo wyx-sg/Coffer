@@ -84,14 +84,18 @@ info:
     `remote: null`, not an error. `DELETE /remote` is idempotent and answers
     `cleared: false` when there was nothing to clear.
 
-    ## Reach is machine-local, so no machine id is a foreign key
+    ## Retiring a machine rewrites nothing else
 
-    Retiring a machine removes its descriptor and nothing else — nothing in the
-    vault references a machine id, because per-agent reach is machine-local
-    ("Keep reach machine-local") and no scope can name one ("Scope names agents
-    only"). That is why `MachineRemovedOut` has no second half. Renaming is free
-    for the same reason: the id is derived and the name is only a label ("Treat
-    the machine name as a label").
+    Retiring a machine removes its descriptor and rewrites nothing else. No
+    scope can name a machine, because per-agent reach is machine-local ("Keep
+    reach machine-local", "Scope names agents only"). Two travelling documents
+    do name a machine id — a channel's machine binding and the curation owner in
+    the `internal-engine` settings — and a binding or owner that named the
+    retired machine is then reported as naming a machine the registry does not
+    hold ("Report and change the rewriter's owner"), never silently rewritten.
+    That is why `MachineRemovedOut` has no second half. Renaming is free: the
+    id is derived and nothing keys on the name ("Treat the machine name as a
+    label").
 
     ## Errors
 
@@ -201,6 +205,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RoundOut"
+        "409":
+          description: "`SYNC_NOTHING_PENDING` — no round is held for confirmation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 
   /api/v1/sync/reject:
     post:
@@ -214,6 +224,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SyncRemoteClearedOut"
+        "409":
+          description: "`SYNC_NOTHING_PENDING` — no round is held for confirmation."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 
   /api/v1/sync/rebuild:
     post:
@@ -229,6 +245,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RoundOut"
+        "409":
+          description: |
+            `SYNC_NOTHING_TO_ROLL_BACK` when no remote is configured;
+            `SYNC_BUNDLE_TOO_NEW` when the remote's layout is newer than this
+            build understands.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          $ref: "#/components/responses/GitFailed"
 
   /api/v1/sync/rollback:
     post:
@@ -237,11 +264,19 @@ paths:
       summary: Undo the last round.
       responses:
         "200":
-          description: The rollback round's outcome.
+          description: |
+            The rollback round's outcome. The pointer does not move: the
+            reverted vault is an ordinary local change the next round publishes.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/RoundOut"
+        "409":
+          description: "`SYNC_NOTHING_TO_ROLL_BACK` — no remote, no pointer, or no pre-apply snapshot to return to."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 
   /api/v1/sync/restore:
     post:
@@ -261,6 +296,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RoundOut"
+        "409":
+          description: |
+            `SYNC_NOTHING_TO_ROLL_BACK` when no remote is configured or this
+            machine has no pointer; `SYNC_BUNDLE_TOO_NEW` when the revision's
+            layout is newer than this build understands.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          $ref: "#/components/responses/GitFailed"
 
   /api/v1/sync/remote:
     get:
@@ -369,8 +415,7 @@ paths:
       operationId: renameSelfMachine
       summary: Rename this machine.
       description: |
-        Free — `scope` references the derived id, never the label, so nothing
-        else has to change.
+        Free — nothing keys on the label, so nothing else has to change.
       requestBody:
         required: true
         content:
@@ -384,12 +429,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MachineOut"
+        "422":
+          description: "`BACKUP_REMOTE_INVALID` — the name is empty."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 
   /api/v1/sync/machines/{machine_id}:
     delete:
       tags: [sync]
       operationId: retireSyncMachine
       summary: Retire a machine from the registry.
+      description: |
+        Idempotent: retiring an id the registry does not hold answers
+        `removed: true` as well.
       parameters:
         - name: machine_id
           in: path
@@ -398,13 +452,20 @@ paths:
             type: string
       responses:
         "200":
-          description: Removed. Nothing else in the vault referenced it.
+          description: Removed. Nothing else in the vault is rewritten.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/MachineRemovedOut"
-        "404":
-          $ref: "#/components/responses/NotFound"
+        "422":
+          description: |
+            `SYNC_CANNOT_RETIRE_SELF` when the id is this machine's own;
+            `BACKUP_REMOTE_INVALID` when no sync remote is configured, so there
+            is no registry to retire from.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 
   /api/v1/sync/key/fingerprint:
     get:
@@ -434,6 +495,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/KeyMaterialOut"
+        "422":
+          description: "`MASTER_KEY_FILE_INVALID` — this machine holds no master key to export."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 
   /api/v1/sync/key/import:
     post:
@@ -455,6 +522,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/KeyImportOut"
+        "422":
+          description: "`MASTER_KEY_FILE_INVALID` — no material was supplied, or it is not a valid Fernet key."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 
 components:
   securitySchemes:
@@ -464,14 +537,17 @@ components:
       name: X-Coffer-Token
 
   responses:
-    NotFound:
-      description: No such machine.
+    GitFailed:
+      description: "`GIT_MIRROR_FAILED` — a git operation against the working tree or the remote failed."
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorEnvelope"
     Unprocessable:
-      description: The URL or branch was refused at the wire.
+      description: |
+        The remote was refused: a malformed URL or branch at the wire, or
+        `BACKUP_REMOTE_INVALID` when the working tree is refused or the remote
+        cannot be reached.
       content:
         application/json:
           schema:
@@ -826,8 +902,9 @@ components:
         machine_id_is_derived:
           type: boolean
           description: |
-            `false` when the id came from the host rather than the local fallback
-            file. `true` means it does not survive deleting `~/.coffer`.
+            `true` when the id was derived from the host; `false` when it came
+            from the local fallback file (`~/.coffer/machine-id`), which does
+            not survive deleting `~/.coffer`.
         joined:
           type: boolean
           default: false
@@ -894,9 +971,10 @@ components:
       type: object
       required: [removed]
       description: |
-        Retiring a machine removes its descriptor and nothing else — nothing in
-        the vault references a machine id, which is why this answer has no
-        second half.
+        Retiring a machine removes its descriptor and rewrites nothing else; a
+        channel binding or curation owner that named it is then reported as
+        naming a machine the registry does not hold. That is why this answer
+        has no second half.
       properties:
         removed:
           type: boolean

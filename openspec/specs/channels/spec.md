@@ -134,7 +134,8 @@ channel layer MUST reach agents only through the turn platform's seams:
 conversation service, turn orchestrator (spec `chat`). The conversation is an
 ordinary one, recorded in the vault with full history. When the active
 conversation has been deleted, the peer's next message creates a fresh
-conversation with the default agent; when the daemon restarts mid-turn, the turn
+conversation with the thread's agent — its sticky `/agent` choice, else the
+channel's default agent; when the daemon restarts mid-turn, the turn
 platform's startup sweep marks the orphaned turn failed and the channel
 conversation simply continues on the next message.
 
@@ -184,7 +185,8 @@ when the platform rate-limits outbound sends, sends back off and retry.
 
 ### Requirement: Answer the conversation commands from any paired chat
 Commands `/new`, `/stop`, `/status`, `/help` MUST work from any paired chat.
-`/new` starts a fresh conversation with the channel's default agent, `/stop`
+`/new` starts a fresh conversation with the thread's current agent (its sticky
+`/agent` choice, else the channel's default agent), `/stop`
 interrupts the running turn, `/status` reports the active conversation, agent,
 and turn state, and `/help` lists the commands. `/stop` and `/new` take effect
 even while a turn is running; other messages join the conversation's pending
@@ -204,8 +206,8 @@ stale.
 #### Scenario: /new starts a fresh conversation
 - **GIVEN** a paired channel with an active conversation
 - **WHEN** the peer sends `/new`
-- **THEN** a new conversation with the default agent becomes active and the
-  old one remains in history
+- **THEN** a new conversation with the thread's current agent (the default
+  agent when none was chosen) becomes active and the old one remains in history
 
 #### Scenario: /stop interrupts a running turn
 - **GIVEN** a turn in progress
@@ -244,8 +246,15 @@ reuses.
 The Channels page MUST list channels, register new ones (storing secrets
 through the credential store), show status (adapter running, paired peer,
 ingress facts the channel's type has to report), issue pairing codes, toggle
-enable/disable, and bind each channel to the machine that runs it (see "Bind
-each channel to the one machine that runs it"). The CLI MUST offer parity:
+enable/disable, bind each channel to the machine that runs it (see "Bind
+each channel to the one machine that runs it"), edit a channel, send a test
+notification to its paired owner (see "Notify the paired owner on demand"), and
+delete it. Editing changes the channel's default agent and its type's plain
+settings (a SeaTalk app id), and rotates a secret **in place**: the new value
+MUST be written to the credential store under the ref the channel already cites
+before the configuration is saved, and the saved configuration MUST keep every
+existing ref, so a rotation moves no secret and leaves the channel's machine
+binding and pairing untouched. A secret field left blank rotates nothing. The CLI MUST offer parity:
 `coffer channel list / register / bind / pair / status / notify`.
 
 #### Scenario: register and list channels from the command line
@@ -258,6 +267,15 @@ each channel to the one machine that runs it"). The CLI MUST offer parity:
 - **WHEN** the user queries status via REST and CLI
 - **THEN** adapter run state, paired peer, and the channel type's own ingress
   facts are reported accurately
+
+#### Scenario: rotating a channel secret keeps its refs and pairing
+- **GIVEN** a registered telegram channel whose bot token is stored under a
+  credential ref
+- **WHEN** the owner enters a new bot token in the Channels page's edit dialog
+  and saves
+- **THEN** the new token is written under the channel's existing ref first
+- **AND** the channel's configuration is then saved to the same channel with
+  every ref unchanged, so nothing its pairing and binding hang off moves
 
 ### Requirement: Audit the events that grant the right to drive turns
 Channel events MUST be audited where an event grants or moves the right to
@@ -517,7 +535,8 @@ channel name and mobile-chat guidance — keep replies concise, and it cannot
 click permission or confirmation dialogs on the user's computer (they may be
 away from it). This prevents terminal-sized replies and silent waits on
 un-clickable dialogs. Web-UI turns are unaffected — the note rides only on a
-conversation whose `channel_name` is set.
+conversation whose `channel_uid` is set, and names the channel by its current
+label.
 
 #### Scenario: the channel-driven agent is told it is on a chat channel
 - **GIVEN** a channel-originated conversation
@@ -776,10 +795,10 @@ carry two unrelated answers.
   card rendered before the scope was narrowed.
 
 #### Scenario: a channel's scope names agent resources, not agent keys
-- **GIVEN** a running channel whose default agent is registered as a resource
-  under its own name,
-- **WHEN** the owner narrows the channel's scope to that resource name — the
-  only name the reach control offers,
+- **GIVEN** a running channel whose default agent is registered as an agent
+  resource,
+- **WHEN** the owner narrows the channel's scope to that agent resource — its
+  uid, which is what the reach control offers,
 - **THEN** the edit is accepted, the channel keeps running, and the scope
   reaches `/agent` translated into the agent key that surface speaks.
 
@@ -883,9 +902,9 @@ this.
   `vault-sync`, "Carry channel pairings as platform identity"), because a channel that travels without them makes
   the owner re-pair from their phone every time it moves, and a rebind is meant
   to be one click. What travels is platform identity — chat id, sender id,
-  display name, the chat's sticky agent. The active conversation pointer does
-  not: conversations are machine-local and a published pointer would name a
-  conversation the other machine does not have.
+  display name. The active conversation pointer and the thread's sticky agent
+  do not: both name machine-local things — a conversation the other machine
+  does not have, an agent installed on this machine.
 
 Two adapters can still be pointed at one bot identity only the way they always
 could — by someone registering the same bot twice, by hand, under two names —

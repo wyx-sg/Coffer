@@ -8,7 +8,7 @@ info:
     channel-specific operations: pairing, status, notify, the webhook
     callback probe, and the SeaTalk
     event ingest the callback listener forwards to. The callback listener's
-    own public path (POST /seatalk/{channel}) is served by a separate process
+    own public path (POST /seatalk/{channel_uid}) is served by a separate process
     and is not part of the daemon's API surface.
 
     The conversation, message, pending-queue and SSE routes a channel turn runs
@@ -80,7 +80,17 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
-          description: Channel has no paired peer or is disabled
+          description: >-
+            CHANNEL_NOT_PAIRED (the channel has no paired peer, or `chat_id`
+            names a chat this channel is not paired to) or CHANNEL_NOT_RUNNING
+            (the channel's adapter is not running here, e.g. it is disabled).
+            Nothing is sent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '502':
+          description: CHANNEL_SEND_FAILED — the IM platform refused or failed the send
           content:
             application/json:
               schema:
@@ -199,7 +209,7 @@ components:
 
     ChannelStatusOut:
       type: object
-      required: [uid, name, channel_type, enabled, running, peer, callback]
+      required: [uid, name, channel_type, enabled, running, pending_pairing, peer, callback]
       properties:
         uid:
           type: string
@@ -351,8 +361,8 @@ components:
         detail:
           type: string
           description: >
-            What the probe found, in words the owner can act on — empty on a
-            clean pass.
+            What the probe found, in words the owner can act on — on a pass, a
+            one-line confirmation of the path that was verified.
 
     SeaTalkEventIn:
       type: object

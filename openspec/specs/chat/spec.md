@@ -384,9 +384,10 @@ resumes the held queue.
   auto-run until they are resumed or dropped.
 
 ### Requirement: Keep partial output when a turn is interrupted or fails
-An interrupted turn — user interrupt, adapter failure, or daemon restart — MUST
-leave the partial assistant message persisted and marked complete rather than
-discarded. Stopping a turn is distinct from discarding the conversation, which
+An interrupted or failed turn — user interrupt, adapter failure, timeout, or
+daemon restart — MUST leave its partial assistant message persisted rather than
+discarded: marked `complete` when the owner interrupted it, and `failed` when the
+adapter failed, the turn timed out, or the daemon restarted under it. Stopping a turn is distinct from discarding the conversation, which
 throws the turn away.
 
 Two failures the platform detects itself, agent-agnostically: an agent whose
@@ -580,14 +581,14 @@ rejected.
 
 ### Requirement: Open an archived conversation read-only
 An archived conversation MUST open **read-only**: its history reads normally,
-the composer and the agent/model/effort controls are disabled, and a restore
+the composer and the model/effort controls are disabled, and a restore
 control is offered in their place. Archived is a state the owner leaves
 deliberately, not a thread that silently accepts a turn and unarchives itself.
 
 #### Scenario: an archived conversation opens read-only
 - **GIVEN** an archived conversation,
 - **WHEN** it is opened on the Chat page,
-- **THEN** its history reads normally, the composer and the agent/model/effort
+- **THEN** its history reads normally, the composer and the model/effort
   controls are disabled, and a restore control is offered.
 
 ### Requirement: Send fire-and-return and stream output over one subscription
@@ -705,9 +706,12 @@ and a dismiss that clears it.
   carrying a Retry that re-sends the failed message and a dismiss.
 
 ### Requirement: Let the owner set agent, model and reasoning level
-The page MUST let the owner read and set the conversation's agent configuration
-— which agent it runs on, which model that agent is put on, and how hard that
-model thinks — over `GET|PATCH .../agent-config`, persisting both while
+The page MUST let the owner choose the agent a conversation runs on, on the
+draft surface — once the conversation exists its agent is fixed and shown as a
+label, because its upstream session and working directory belong to that one
+agent (see "Record the agent on each conversation"). The page MUST let the owner
+read and set the conversation's model and how hard that model thinks over
+`GET|PATCH .../agent-config`, persisting both while
 preserving the conversation's working directory and upstream session id, and
 reverting to the agent's own default when either is cleared; a body that
 mentions one leaves the other where it was.
@@ -751,10 +755,13 @@ one rather than by a composer that can only fail.
 
 ### Requirement: Offer models from a fixed dropdown that keeps the current value
 The model picker MUST be a fixed dropdown, never free text. Its options are the
-union, deduped by id, of the agent's own catalogue, the active connection's
-introspected models, and the **current value** — which MUST stay selectable
-whatever else the union contains, so a conversation never shows a picker that
-cannot represent the model it is actually on.
+models the platform offers for the agent
+([provider-switching](../provider-switching/spec.md) "Serve one model list to
+every surface": the agent's own catalogue, or the active connection's curated
+ids when one is active) plus the **current value** — which MUST stay selectable
+whatever that list contains, so a conversation never shows a picker that cannot
+represent the model it is actually on. Nothing else is offered: the page does
+not introspect a connection's endpoint itself.
 
 #### Scenario: the model picker always offers the current value
 - **GIVEN** a conversation set to a model the agent's catalogue does not list,
@@ -832,3 +839,30 @@ through its own hook instead, never both.
 - **WHEN** the turn's system context is composed,
 - **THEN** the channel note, the memory digest and the model note are appended in
   that order; a conversation with no channel receives the model note only.
+
+### Requirement: Search the conversation list by title
+The Chat page's conversation list MUST offer a search box that filters the
+listed conversations by title as the owner types: a conversation stays listed
+when its title contains the query, compared case-insensitively with the query
+trimmed, and clearing the query lists every conversation again. The filter runs
+over the list already loaded for the current view (active or archived). A query
+that matches nothing MUST show a no-match state that is distinct from the
+empty-list state, and the search box MUST stay so the query can be changed; a
+list with no conversations at all shows its empty state and offers no search.
+
+#### Scenario: search narrows the conversation list by title
+- **GIVEN** active conversations titled "Alpha rollout", "beta notes" and "Gamma"
+- **WHEN** the owner types " ALP " into the list's search box
+- **THEN** only "Alpha rollout" is listed
+- **AND** clearing the search lists all three again
+
+#### Scenario: a search that matches nothing is not an empty list
+- **GIVEN** a conversation list holding one conversation
+- **WHEN** the owner searches for text no title contains
+- **THEN** no conversation is listed and the list says nothing matches
+- **AND** it does not show the empty-list message, and the search box keeps the query
+
+#### Scenario: an empty conversation list offers no search
+- **GIVEN** a view with no conversations
+- **WHEN** the conversation list renders
+- **THEN** it shows the empty-list message and no search box

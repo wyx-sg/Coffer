@@ -8,6 +8,7 @@
 import { describe, expect, test, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { acceptance } from "@/test/acceptance";
 import { DaemonResidencySettings } from "./DaemonResidencySettings";
 
 const getMock = vi.fn();
@@ -161,4 +162,71 @@ test("nothing is clickable until the daemon has answered", () => {
 
   expect(screen.getByRole("switch", { name: /start at login/i })).toBeDisabled();
   expect(screen.getByRole("combobox", { name: /stand down after/i })).toBeDisabled();
+});
+
+acceptance("web-ui", "the general tab sets when the daemon runs", async () => {
+  getMock.mockResolvedValue({
+    data: {
+      login_service_supported: true,
+      login_service_installed: false,
+      idle_shutdown_hours: 12,
+    },
+  });
+  // The first write succeeds and the daemon reports what became true; the
+  // second is refused.
+  putMock
+    .mockResolvedValueOnce({
+      data: {
+        login_service_supported: true,
+        login_service_installed: true,
+        idle_shutdown_hours: 12,
+      },
+    })
+    .mockResolvedValueOnce({ error: { error: { code: "INTERNAL_ERROR", message: "nope" } } });
+
+  render(wrap(<DaemonResidencySettings />));
+  expect(await screen.findByText("Coffer's daemon")).toBeInTheDocument();
+
+  // Start at login: one PUT carrying both halves.
+  const toggle = await screen.findByRole("switch", { name: /start at login/i });
+  await waitFor(() => expect(toggle).not.toBeChecked());
+  fireEvent.click(toggle);
+  await waitFor(() =>
+    expect(putMock).toHaveBeenLastCalledWith("/daemon/residency", {
+      body: { login_service_installed: true, idle_shutdown_hours: 12 },
+    }),
+  );
+  await waitFor(() => expect(toggle).toBeChecked());
+
+  // The idle window offers Never as its own option, written as null in the
+  // same one-request shape.
+  const select = screen.getByRole("combobox", { name: /stand down after/i });
+  await waitFor(() => expect(select).not.toBeDisabled());
+  expect(select).toHaveTextContent("12 hours");
+  fireEvent.keyDown(select, { key: "ArrowDown" });
+  expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+    "1 hour",
+    "4 hours",
+    "12 hours",
+    "24 hours",
+    "72 hours",
+    "Never",
+  ]);
+  fireEvent.click(screen.getByRole("option", { name: "Never" }));
+  await waitFor(() =>
+    expect(putMock).toHaveBeenLastCalledWith("/daemon/residency", {
+      body: { login_service_installed: true, idle_shutdown_hours: null },
+    }),
+  );
+  expect(putMock).toHaveBeenCalledTimes(2);
+
+  // That write failed, so the control goes back to what the daemon holds and
+  // the error is shown beside it.
+  await waitFor(() => expect(screen.getByText(/internal error/i)).toBeInTheDocument());
+  await waitFor(() =>
+    expect(screen.getByRole("combobox", { name: /stand down after/i })).toHaveTextContent(
+      "12 hours",
+    ),
+  );
+  expect(toggle).toBeChecked();
 });

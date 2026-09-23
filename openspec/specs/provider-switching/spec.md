@@ -228,8 +228,10 @@ At most one connection per AGENT TYPE MAY have `is_active=true`. Activating a co
 `ResourceService.update_config` calls; the single-process daemon serialises requests so switches
 never interleave. Activating a connection takes its agents over from any previously active
 connection, de-projecting that one from the agents the new one does not cover. Converging a vault
-that holds more than one active connection for an agent type MUST normalise deterministically: keep
-the most-recently-updated, clear the rest.
+that holds more than one active connection for an agent type MUST project deterministically — the
+first of those connections by name wins the agent type — MUST leave every `is_active` flag as it
+stands, and MUST report the conflict naming both connections so the user re-activates one. No
+last-write rule applies: `updated_at` is machine-local and does not travel with the document.
 
 #### Scenario: activating a profile deactivates the previous active profile of the same wire format
 - **GIVEN** connection A is active for an agent type and connection B reaches the same agent type,
@@ -255,9 +257,9 @@ connection active and return a non-empty `skipped` list — NOT an error.
 Reach is the framework's per-agent `scope`
 ([Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)); there is no
 `compatible_agents` field in the config, in `ProviderCreate` or in `ProviderPatch`. A new connection
-is pre-filled from its wire through the kind's `default_scope` hook — both coding agents for a
-credentialed wire (including `unknown`, so an inconclusive probe hides nothing and the user decides),
-nothing for `ollama`. Re-targeting is a scope edit (`PUT /api/v1/resources/{uid}/scope`,
+is pre-filled from its wire through the kind's `default_scope` hook — unscoped for a credentialed
+wire (including `unknown`, so an inconclusive probe hides nothing and the user decides), which reaches
+every agent including one registered later, and nothing (`scope = []`) for `ollama`. Re-targeting is a scope edit (`PUT /api/v1/resources/{uid}/scope`,
 `coffer scope set provider <name> --agents …`). `scope = []` is dormant: the connection reaches no
 agent, so no agent resolves its key. The projection writer MUST be chosen by AGENT type, not by
 protocol: a connection reaching `claude_code` writes Claude's `settings.json` in the anthropic shape
@@ -675,10 +677,11 @@ in-process through the same function. No surface may compute its own — a web p
 introspected the endpoint and offered the union with the agent's catalogue listed ids the endpoint
 would reject and disagreed with the same user's `/model` card.
 
-For Claude Code, the system-prompt append Coffer adds on every turn MUST state which model Coffer put
-the agent on — or that Coffer set no override — and which ids are available, so the agent does not
-confidently name a model it is not running on. Codex's app-server takes no per-thread instructions,
-so Codex gets the accurate catalogue instead of the note.
+The system context Coffer adds on every turn — Claude Code's system-prompt append and Codex's
+`developerInstructions` on `thread/start` and `thread/resume` — MUST state which model Coffer put the
+agent on — or that Coffer set no override — and which ids are available, so the agent does not
+confidently name a model it is not running on ([chat](../chat/spec.md) "Tell the agent which model it
+is on").
 
 #### Scenario: every surface offers the same models
 - **GIVEN** an agent with an active connection that curates two model ids, and an agent catalogue of its own that names different ones,
@@ -708,7 +711,7 @@ effort picker ([channels](../channels/spec.md) "Switch the model and reasoning e
 #### Scenario: the agent's model picker offers a fixed list without free-form entry
 - **GIVEN** an agent whose model is being chosen — on its detail page or in a conversation,
 - **WHEN** the model picker is opened,
-- **THEN** it offers a fixed dropdown with no free-text "Custom…" entry and no text input: the agent's own catalogue (`GET /api/v1/agent-providers/{agent_key}/models`) when it is on its built-in login, and the active connection's introspected models when one overrides it — never a model field stored on the connection, which carries none (TypeScript acceptance test).
+- **THEN** it offers a fixed dropdown with no free-text "Custom…" entry and no text input: the agent's own catalogue (`GET /api/v1/agent-providers/{agent_key}/models`) when it is on its built-in login, and, when a connection overrides it, that connection's curated `text` ids served by the same route — never a model field stored on the connection, which carries none (TypeScript acceptance test).
 
 ### Requirement: Keep an independent speech-to-text default
 `transcribe_default` MUST be a config field of the same shape as `internal_default`: at most one

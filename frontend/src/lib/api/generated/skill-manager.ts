@@ -239,9 +239,9 @@ export interface components {
          */
         ErrorOut: {
             error: {
-                /** @example SKILL_NOT_FOUND */
+                /** @example RESOURCE_NOT_FOUND */
                 code: string;
-                /** @example skill not found: reviewer */
+                /** @example resource not found: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920 */
                 message: string;
                 details?: {
                     [key: string]: unknown;
@@ -291,7 +291,7 @@ export interface components {
             version_hash: string;
             master_path: string;
             /** Format: date-time */
-            last_synced_from_source_at?: string | null;
+            last_synced_from_source_at: string | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -329,7 +329,7 @@ export interface components {
             agent_name: string;
             /** @enum {string} */
             kind: "missing_link" | "tampered_link" | "replaced_with_regular" | "missing_master" | "orphan_master";
-            target_path?: string;
+            target_path: string;
             suggested_remedy: string;
         };
         DriftReport: {
@@ -577,6 +577,15 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            /** @description `RESOURCE_PROTECTED` — the skill is Coffer's builtin skill, which is rewritten from the running build at every start; disable it or narrow its scope instead (see "Refuse deleting a builtin skill"). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorOut"];
+                };
+            };
         };
     };
     listSkillFiles: {

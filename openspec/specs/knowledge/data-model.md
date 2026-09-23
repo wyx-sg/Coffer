@@ -302,10 +302,11 @@ holds the first group:
 | `CurationBoundExceeded` | `KNOWLEDGE_CURATION_BOUND` | 400 |
 | `KnowledgeError` (base) | `KNOWLEDGE_ERROR` | 400 |
 
-A collection an agent is not authorized for answers
-`KNOWLEDGE_COLLECTION_NOT_FOUND`, not a 403: telling an unauthorized caller that
-the name exists is itself a disclosure, so "not visible to you" and "not there"
-are the same answer.
+A disabled collection answers `KNOWLEDGE_COLLECTION_NOT_FOUND`, the same as an
+absent one: collections carry no per-agent reach (see "Gate collections with
+enabled alone"), and to this layer disabled and not-a-collection are one state.
+A uid-addressed route given a uid no resource answers to gives the generic
+`RESOURCE_NOT_FOUND` (404) instead.
 
 `UnsafeKnowledgePath` carries the document rule as well as the traversal one,
 for the same reason both belong to path construction: a delete aimed at a

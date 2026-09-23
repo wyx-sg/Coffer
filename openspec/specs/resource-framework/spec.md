@@ -215,7 +215,8 @@ kind ever had one.
 
 ### Requirement: Audit every lifecycle change
 The system MUST record an audit entry for every lifecycle change to any resource or
-capability, including the actor (CLI / API / UI / system); every lifecycle change made
+capability, including the actor — the originating surface (CLI / API / UI), `system`, or a
+domain actor a kind names itself, such as `user`, `channel` or an agent's name. Every lifecycle change made
 through any surface — REST, CLI, or a kind's own command — MUST appear in the audit log
 with the originating actor, and no surface can mutate a resource without one. Entries
 MUST be readable through both surfaces, filterable by kind, resource, event type and
@@ -279,7 +280,7 @@ so has no narrower home. A spec that cannot honour it records the gap in its own
 #### Scenario: command line covers every visual operation
 - **GIVEN** the daemon is running,
 - **WHEN** the CLI's live command tree is read,
-- **THEN** it is **exactly** the reviewed table of every group the composition root registers and every subcommand under each — `daemon`, `open`, `resource`, `scope`, `audit`, `retention`, `mcp`, `credentials`, `agent`, `channel`, `skill`, `knowledge`, `memory`, `provider`, `sync`, with their nested groups — asserted in both directions, so a UI operation cannot ship a CLI counterpart without a reviewer seeing it here and a CLI command cannot appear without someone deciding it belongs,
+- **THEN** it is **exactly** the reviewed table of every group the composition root registers and every subcommand under each — `daemon`, `open`, `resource`, `scope`, `audit`, `retention`, `mcp`, `credentials`, `agent`, `channel`, `skill`, `knowledge`, `memory`, `provider`, `engine`, `sync`, with their nested groups — asserted in both directions, so a UI operation cannot ship a CLI counterpart without a reviewer seeing it here and a CLI command cannot appear without someone deciding it belongs,
 - **AND** the groups whose surface is options rather than subcommands are claimed by those options instead, since an empty subcommand set would assert nothing about them,
 - **AND** every group's `--help` renders, so an import-time error in one command module cannot wait for a user to reach for it,
 - **AND** machine-readable JSON output is available for scripting.

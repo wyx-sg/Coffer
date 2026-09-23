@@ -255,7 +255,7 @@ export interface components {
             original_name: string;
             description?: string | null;
             arguments?: {
-                name?: string;
+                name: string;
                 description?: string | null;
                 required?: boolean;
             }[];

@@ -400,6 +400,7 @@ components:
         A count of registered MCP upstreams, when the daemon has finished
         wiring them up. Null while it is still starting — the probe must answer
         either way.
+      required: [registered, enabled, healthy, unhealthy]
       properties:
         registered: { type: integer }
         enabled: { type: integer }

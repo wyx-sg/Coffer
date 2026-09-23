@@ -522,7 +522,17 @@ paths:
               schema:
                 $ref: "#/components/schemas/CurationOut"
         "404":
-          $ref: "#/components/responses/CollectionNotFound"
+          description: |
+            `RESOURCE_NOT_FOUND` for a uid no resource answers to, the same as
+            every other uid-addressed route; `KNOWLEDGE_COLLECTION_NOT_FOUND`
+            for a disabled collection, or a uid naming a resource that is not
+            a collection. An unknown uid is always an error — nothing is
+            conjured into existence by being asked for (see "Create
+            collections only deliberately").
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
         "409":
           $ref: "#/components/responses/UpkeepAlreadyRunning"
         "422":

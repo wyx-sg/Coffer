@@ -134,6 +134,14 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: >-
+            `RESOURCE_ALREADY_EXISTS` — a rename onto a name another resource
+            of the same kind already carries (spec resource-framework "Treat a
+            resource's name as a mutable label").
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
     delete:
       tags: [resources]
@@ -142,6 +150,15 @@ paths:
         "204": { description: No Content }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: >-
+            `RESOURCE_PROTECTED` — the kind's pre-write delete guard refused
+            before anything was torn down (spec resource-framework "Let a kind
+            refuse a deletion before anything is torn down"); Coffer's builtin
+            skill is the case today.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   /resources/{uid}/enable:
     parameters:
@@ -257,6 +274,12 @@ paths:
           name: event_type
           schema: { type: string }
         - in: query
+          name: event_prefix
+          description: >-
+            Only events whose type starts with this prefix — `skill_` for one
+            kind's own events, for instance.
+          schema: { type: string }
+        - in: query
           name: since
           schema: { type: string, format: date-time }
         - in: query
@@ -269,6 +292,14 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/AuditListOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: >-
+            `resource_uid` names no resource — a different answer from "that
+            resource has no events", which is an empty list.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
   /retention/policies:
     get:
@@ -465,7 +496,19 @@ components:
         PUT .../scope body. `scope: null` clears back to unscoped — every agent.
       properties:
         scope:
-          $ref: "#/components/schemas/ScopeOut"
+          type: object
+          nullable: true
+          additionalProperties: false
+          description: >-
+            The shape of `ScopeOut`, except that `agents` may be omitted on the
+            way in: an absent `agents` is read as null, i.e. every agent.
+            Unknown properties are still rejected (422).
+          properties:
+            agents:
+              type: array
+              nullable: true
+              description: Agent resource UIDs, not names.
+              items: { type: string }
 
     ResourceOut:
       type: object
@@ -558,7 +601,13 @@ components:
         resource_name:
           type: string
           nullable: true
-        actor: { type: string, enum: [cli, api, ui, system] }
+        actor:
+          type: string
+          description: >-
+            Who made the change: `cli`, `ui` or `api` from the `X-Coffer-Actor`
+            header, `system` for the daemon's own work, or a domain actor a kind
+            names itself — `user`, `channel`, or an agent's name. A free string,
+            not an enum.
         details:
           type: object
           additionalProperties: true

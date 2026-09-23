@@ -310,8 +310,7 @@ paths:
       summary: Compose the session-start context — the whole index, and where the bodies are.
       description: |
         A `POST` despite being a read, because the query is structured rather
-        than a couple of scalar filters (knowledge's `search` is a `POST` for
-        the same reason). Nothing here changes the memory tree.
+        than a couple of scalar filters. Nothing here changes the memory tree.
 
         This is the one route a real agent's own session reaches. It composes
         over every enabled partition, whichever agent is asking ("Serve every

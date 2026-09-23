@@ -33,11 +33,15 @@ module, so the provider domain never imports the agent kind; the application
 layer hydrates them at the projection seam
 (`application/provider/targets.py`).
 
-`default_scope_for_protocol(protocol)` supplies the scope a new connection
-starts with: both coding agents for a credentialed wire, none for `ollama`,
-every agent for `unknown`. It exists because the framework's unscoped default
-means *every* agent, which would widen a fresh connection's reach rather than
-preserve it.
+The scope a new connection starts with comes from the kind's `default_scope`
+hook (`make_provider_kind().default_scope`, `application/provider/kind.py`),
+which reads the wire through `starts_dormant(protocol)`
+(`domain/provider/config.py`): an `ollama` connection starts `scope = []`,
+dormant, because the framework's unscoped default would advertise a reach a
+keyless connection can never have; every other wire, `unknown` included, starts
+unscoped, which reaches every agent and goes on covering one registered later.
+The hook cannot name agents itself — a scope holds agent uids, which no pure
+config function can derive (ADR resource-identity-is-an-immutable-uid).
 
 `model_ids(modality=None)` is the narrowing seam: a chat picker asks for `TEXT`
 and can never be handed an embedding or image id, while an empty list keeps
@@ -86,8 +90,12 @@ value object.
 
 ### Errors (`domain/provider/errors.py`)
 
-`ProviderCredentialSourceInvalid` (both or neither credential source supplied)
-and `NoActiveProvider` (a key was asked for and nothing is active).
+| Error | Code | Status | When |
+|---|---|---|---|
+| `ProviderCredentialSourceInvalid` | `PROVIDER_CREDENTIAL_SOURCE_INVALID` | 422 | both or neither credential source supplied |
+| `NoActiveProvider` | `NO_ACTIVE_PROVIDER` | 404 | a key was asked for and nothing is active |
+| `ProviderProtocolLockedWhileActive` | `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` | 409 | a wire change on a connection that is active (see "Refuse to move the wire of a live connection") |
+| `ProviderInternalOnly` | `PROVIDER_INTERNAL_ONLY` | 409 | activating an `ollama` connection (see "Keep ollama connections internal-only") |
 
 ### Projection functions (`domain/provider/projection.py`)
 
@@ -102,8 +110,8 @@ text, analogous to `domain/agent/mcp_install.py`'s `apply_install`.
   `None` when there is nothing honest to write; `codex_model_catalog_path(dir)`
 - `anthropic_api_key_helper(connection_uid) -> str` — the only helper Coffer
   writes; it cites the connection's uid, so the line survives a rename
-- `ProjectionTarget`, `target_for(protocol)`, `target_for_agent(agent_type)`,
-  `wire_for_agent(agent_type)`
+- `ProjectionTarget`, `target_for_agent(agent_type)`, `wire_for_agent(agent_type)`
+  — the writer is chosen by AGENT type, never by protocol
 - Constants: `CODEX_PROVIDER_ID`, `CODEX_ENV_KEY`, `CODEX_MODEL_CATALOG_FILENAME`,
   `CODEX_MODEL_CATALOG_KEY`, `CODEX_CATALOG_TRUNCATION_LIMIT`,
   `MANAGED_API_KEY_HELPER_PREFIX`
@@ -151,7 +159,7 @@ names the Coffer-owned filename.
 
 ### The internal-engine default flag (`application/provider/`)
 
-`set_internal_default(name)` clears the flag on every other connection then sets
+`set_internal_default(uid)` clears the flag on every other connection then sets
 it on the target (serialised by the single-process daemon), emits
 `provider_internal_default_set`, and notifies the engine that the connection
 moved. `internal_default` is a field on the provider row and the partial unique
@@ -166,7 +174,7 @@ read or migrated by this kind.
 
 ### The speech-to-text default flag (`application/provider/transcribe_default_ops.py`)
 
-`set_transcribe_default(name)` is the twin of the operation above — clear
+`set_transcribe_default(uid)` is the twin of the operation above — clear
 everywhere else, set the target, emit `provider_transcribe_default_set`, notify
 the engine — kept in a module beside it rather than folded into it, because the
 two flags are not the same flag and nothing here falls back to the other one.
@@ -332,11 +340,11 @@ No new directories. Connections travel in the existing sync tree:
 ~/.coffer/sync/
   resources/
     provider/
-      <name>.yaml      # one deterministic YAML per connection (no secret)
+      <uid>.yaml       # one deterministic YAML per connection (no secret),
+                       # keyed on the uid so a rename modifies one file
   credentials/
-    provider/
-      <name>/
-        key.enc        # Fernet ciphertext of the raw API key
+    <credential_ref>.enc   # e.g. provider/<uuid4>/key.enc — Fernet
+                           # ciphertext of the raw API key
 ```
 
 Ciphertext travels only when the remote is configured to carry it, and the

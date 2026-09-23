@@ -83,7 +83,7 @@ The sidebar MUST list only surfaces that have shipped. It MUST NOT carry "not
 yet implemented" placeholders — a sidebar full of "soon" entries reads as an
 unfinished scaffold, not a product; an entry leaves the sidebar when its
 feature does, and returns with it. **Machines** left the sidebar as a top-level
-fleet view and came back as a tab under Sync, where a machine is one
+fleet view and came back under Sync's Setup tab, where a machine is one
 participant in convergence rather than a surface of its own.
 
 #### Scenario: the sidebar carries no placeholder entries
@@ -159,8 +159,8 @@ persist across sessions (`localStorage`).
 
 ### Requirement: Open the app on the Agents page
 The app's index (`/`) MUST redirect to `/agents`, so a first-time visitor lands
-on the Agents surface. Agents live at `/agents` (list) and `/agents/:name`
-(detail), and MUST NOT appear in the `/mcp-servers` kind browser.
+on the Agents surface. Agents live at `/agents` (list) and `/agents/:uid`
+(detail), addressed by uid like every other detail route, and MUST NOT appear in the `/mcp-servers` kind browser.
 
 #### Scenario: the index opens the Agents page
 - **GIVEN** the app's route table
@@ -214,12 +214,15 @@ only that they are tabs on a detail page laid out like every other.
 - **AND** switching tab rewrites the URL the same way on both
 
 ### Requirement: Show reach as a labelled button on every list and detail page
-Every list surface MUST carry a **reach** column — named for what it holds, not
+Every list surface of a scoped kind MUST carry a **reach** column — named for what it holds, not
 for the on/off flag it replaced: one button labelled with the answer it already
 holds — "Every agent", "2 agents", "Disabled", or "No agent selected" for a
 scope narrowed to nobody — so the reader learns the reach by reading it rather
 than by comparing which of three side-by-side segments looks pressed. Every
-detail page MUST carry the same button in its header.
+detail page MUST carry the same button in its header. A kind that declares no
+scope — knowledge, memory — MUST head the same column **Status** instead, and its
+button MUST read "Enabled" or "Disabled", because enabled or disabled is the
+whole of what it reports; see "Offer reach as one choice in a panel".
 
 #### Scenario: the reach button states the reach it holds
 - **GIVEN** resources that reach every agent, two agents, nobody selected, and one that is disabled
@@ -275,9 +278,11 @@ its own button beside it.
 - **AND** every other row is still written, and the one failure is reported in a single summary for the batch
 
 ### Requirement: Filter lists by the same reach states
-The list's reach filter MUST offer the same states the panel does, rather than a
-bare enabled / disabled pair, and the column, the filter and the button MUST all
-use the word *reach*, because they are all asking the one question.
+For a scoped kind, the list's reach filter MUST offer the same states the panel
+does, rather than a bare enabled / disabled pair, and the column, the filter and
+the button MUST all use the word *reach*, because they are all asking the one
+question. A kind that declares no scope MUST head its filter **Status**, like its
+column, and offer only Disabled and Enabled.
 
 #### Scenario: the reach filter offers the panel's states under the reach name
 - **GIVEN** a list surface of a scoped kind
@@ -460,11 +465,11 @@ capability, duration and outcome; a log record's level, logger and message.
 - **THEN** each row carries the time, level and logger its own line stated, and nothing carries a time or a level it never stated
 - **AND** no message renders a terminal escape sequence as text
 - **AND** the traceback rides with the record that raised it rather than becoming rows of its own
-- **AND** the errors-only filter judges each line by its own level rather than treating every non-JSON line as an error
+- **AND** the severity-floor filter judges each line by its own level rather than treating every non-JSON line as an error
 
 ### Requirement: Filter each Activity tab and expand any row
 Every Activity tab MUST filter by free text and time range plus the one filter
-its own record affords (actor, call status, errors only), and any row MUST
+its own record affords (actor, call status, a severity floor), and any row MUST
 expand to its raw underlying record, pretty-printed in a monospace, scrollable
 block.
 
@@ -503,13 +508,13 @@ specifies nothing about it.
 
 ### Requirement: Keep the command-line record readers
 Bringing the three records onto one page MUST NOT change or withdraw the
-command-line readers — `coffer audit` and `coffer mcp invocations` keep working
+command-line readers — `coffer audit` and `coffer mcp invocations <server>` keep working
 as they are, and scripts keep `GET /api/v1/audit`, so a script that read a
 record before this page existed still does.
 
 #### Scenario: the command-line readers still read the records
 - **GIVEN** a running daemon that has recorded an audit entry and an MCP invocation
-- **WHEN** a script runs `coffer audit` and `coffer mcp invocations`
+- **WHEN** a script runs `coffer audit` and `coffer mcp invocations <server>`
 - **THEN** each exits successfully and prints that record's entry
 
 ### Requirement: Render event types as plain-language lines
@@ -534,10 +539,11 @@ rather than resolving to a "page not found" view.
 
 ### Requirement: Organise Settings into five tabs
 Settings MUST carry exactly five tabs, in this order, grouped by what they
-manage rather than by how Coffer is built — **General** (display preferences),
+manage rather than by how Coffer is built — **General** (display preferences, and when the daemon runs),
 **Coffer's model** (at `/settings/engine` — Coffer's own machinery: the internal
-LLM connection and model its own passes run on, and the switch and interval of
-each of those passes), **Data** (retention policy and manual prune), **Security**
+LLM connection and model its own passes run on, the speech-to-text connection
+and model voice messages are transcribed on, and the switch and interval of each
+of those passes), **Data** (retention policy and manual prune), **Security**
 (where the master encryption key lives — beside the database, or in the OS
 keychain), and **About** (version, license, source) — and MUST open on General.
 Clicking a tab swaps the right pane without a full page reload.
@@ -579,17 +585,21 @@ transiently as the target when opening a file.
 ### Requirement: Keep retention and prune on the Data tab
 The Data tab MUST carry the retention policy per log table — Keep forever, or a
 number of days — and a manual prune, with a saved value surviving a reload.
+Edits auto-save, like every settings surface: there is no Save button.
 
 #### Scenario: retention period persists across reload
 - **GIVEN** the user opens the Data settings tab
-- **WHEN** they turn off "Keep forever" for a log table, set a specific number of retention days, and click Save
+- **WHEN** they turn off "Keep forever" for a log table, set a specific number of retention days, and commit the field (blur or Enter), which auto-saves
 - **THEN** reloading the page shows the same retention-days value that was saved
 
 ### Requirement: Keep the daemon out of the user's view
-The daemon MUST NOT be surfaced as a user-facing concept: there is no Daemon tab
-and no read-only daemon-status panel (status / version / port), and a user never
-needs to know Coffer runs a background daemon. A healthy daemon needs no UI, and
-the failure case is owned by the offline banner.
+The daemon MUST NOT be surfaced as a machine to inspect: there is no Daemon tab
+and no read-only daemon-status panel (status / version / port / start time). A
+healthy daemon needs no readout, and the failure case is owned by the offline
+banner. The one daemon setting the UI carries is *when it runs* — whether it
+starts at login and how long it stays up with nothing using it — on the General
+tab (see "Let the user choose when the daemon runs"), because that is a question
+about how the app behaves, asked where a user looks for why it was not running.
 
 #### Scenario: settings shows no daemon tab and no daemon status
 - **GIVEN** the user opens Settings
@@ -625,3 +635,23 @@ next render, with no full page reload, and the choice MUST persist in
 - **WHEN** the user selects 中文 in the sidebar language switcher
 - **THEN** all sidebar labels, page titles, and form labels switch to Chinese without a full page reload, on the very next render
 - **AND** the preference persists across reloads (localStorage `coffer.language`)
+
+### Requirement: Let the user choose when the daemon runs
+The General tab MUST carry a card for when Coffer's daemon runs, with two
+controls: a **Start at login** switch and a **Stand down after** choice of idle
+window that offers a set of hour values and **Never** as its own option, never
+as a number. It MUST read and write both through
+[daemon](../daemon/spec.md) "Change residency from the settings page or the command line",
+and every change MUST send both halves in one request. The controls MUST show
+what the daemon last reported rather than what was clicked: they are disabled
+until the daemon has answered, a window set from the command line that the list
+does not offer is still shown, the switch is shown unavailable rather than off
+on a host with no login service, and a failed write MUST put the controls back to
+what the daemon holds and show the error beside them.
+
+#### Scenario: the general tab sets when the daemon runs
+- **GIVEN** the daemon reports a login service that is supported and not installed, and an idle window of 12 hours
+- **WHEN** the user turns on Start at login, and then picks Never as the idle window
+- **THEN** each change sends one request carrying both halves — first `login_service_installed: true` with `idle_shutdown_hours: 12`, then `login_service_installed: true` with `idle_shutdown_hours: null`
+- **AND** the idle window offers 1, 4, 12, 24 and 72 hours and Never
+- **AND** when the second request fails, the idle window goes back to 12 hours and the error is shown beside it

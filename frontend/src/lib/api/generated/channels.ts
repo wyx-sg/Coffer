@@ -123,7 +123,7 @@ export interface components {
             /** @description Whether the adapter task is currently live */
             running: boolean;
             /** @description Whether an unexpired pairing code is outstanding */
-            pending_pairing?: boolean;
+            pending_pairing: boolean;
             peer: components["schemas"]["ChannelPeerOut"] | null;
             /** @description Present for seatalk channels only */
             callback: components["schemas"]["CallbackInfoOut"] | null;
@@ -184,7 +184,7 @@ export interface components {
         };
         CallbackTestOut: {
             ok: boolean;
-            /** @description What the probe found, in words the owner can act on — empty on a clean pass. */
+            /** @description What the probe found, in words the owner can act on — on a pass, a one-line confirmation of the path that was verified. */
             detail: string;
         };
         SeaTalkEventIn: {
@@ -304,8 +304,17 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            /** @description Channel has no paired peer or is disabled */
+            /** @description CHANNEL_NOT_PAIRED (the channel has no paired peer, or `chat_id` names a chat this channel is not paired to) or CHANNEL_NOT_RUNNING (the channel's adapter is not running here, e.g. it is disabled). Nothing is sent. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description CHANNEL_SEND_FAILED — the IM platform refused or failed the send */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

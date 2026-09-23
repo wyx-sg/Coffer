@@ -30,14 +30,16 @@ of scope.
 
 `AgentDescriptor` carries: `type`, `display_name`, `config_subpath`,
 `config_files` (allowlist builder), `mcp` (`McpInjectionSpec | None`),
-`mcp_source_keys`, `skill_subpath`, `plugins` (`PluginCapability | None`) and
-`enabled` (whether discovery surfaces the type; it never gates registration).
-Each enum value still exposes:
+`mcp_source_keys`, `skill_subpath` and `plugins` (`PluginCapability | None`),
+plus `default_config_dir()` and `detect_marker()`. There is no per-type
+`enabled` flag: discovery scans every `AgentType`, and withdrawing a type means
+removing it from the enum and the manifest. Each enum value still exposes:
 
 - `display_name: str`
 - `default_name() -> str` (stable per-type default resource name — underscores become hyphens, e.g. `claude_code` → `claude-code`; used when the user registers without an explicit name)
-- `default_config_dir() -> Path` (the type's standard config directory, computed per host platform — `~/.claude` / `~/.codex`; used when the user registers without an explicit `config_dir`)
-- `detect_marker() -> Path` (the path checked during discovery; usually the `default_config_dir` itself)
+- `config_dir() -> Path` (the type's standard config directory, computed per host platform — `~/.claude` / `~/.codex`; used when the user registers without an explicit `config_dir`)
+- `default_skill_dir() -> Path` (`<config_dir()>/skills`, the default skills-delivery directory a discovery candidate reports)
+- `detect_marker() -> Path` (the path checked during discovery; the standard config directory itself)
 
 The config-file allowlist and the skills-delivery target (`<config_dir>/skills`) both resolve against the agent's resolved `config_dir`.
 
@@ -48,7 +50,7 @@ Pydantic v2 `BaseModel`. The kind-specific config schema registered with `Resour
 | Field               | Type           | Notes                                                                                                                               |
 | ------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `type`              | `AgentType`    | required; enum value                                                                                                                |
-| `config_dir`        | `Path \| None` | optional absolute-path override; defaults to `type.default_config_dir()` at read time                                               |
+| `config_dir`        | `str \| None`  | optional absolute-path override, stored as a string (`~` expanded before the absolute-path check); `resolved_config_dir()` returns the `Path`, defaulting to `type.config_dir()` |
 | `model`             | `str \| None`  | the model this agent runs on; `None` = the agent's own default (see "Carry the model binding on the agent record")                                                              |
 | `fast_model`        | `str \| None`  | the binding's fast slot; an explicit null unbinds it                                                                       |
 | `wire_api`          | `str \| None`  | the binding's wire; only `responses` is accepted (agent-registry/codex "Accept only responses as Codex's wire_api")                                                       |
@@ -66,7 +68,7 @@ Skills are delivered to `<config_dir>/skills`; the config-file allowlist resolve
 Validators:
 
 - `config_dir` (when set) must be an absolute path; at registration the `<config_dir>/skills` subdirectory is auto-created, then the resolved `config_dir` must be an existing, writable directory.
-- `config_dir` must not point inside `/etc`, `/usr`, `/bin`, `/sbin`, `/System` (POSIX) or `C:\Windows`, `C:\Program Files` (Windows).
+- `config_dir` must not point inside a privileged location (checked by `assert_skill_dir_usable` in `application/agent/service.py`): `/etc`, `/bin`, `/sbin`, `/usr`, `/var`, `/sys`, `/proc`, `/root`, `/boot`, `/dev`, `/System`, `/Library/Application Support/Apple` (POSIX; matched at a path-component boundary on both the expanded and the resolved path, with macOS's `/private` prefix stripped, and `/var/folders/` carved out as usable) or `C:\Windows`, `C:\Program Files`, `C:\Program Files (x86)` (Windows).
 - `model_config = ConfigDict(extra="forbid")` so unknown fields are rejected. There is no tolerance shim for removed keys: a migration strips each one at rest instead (migration `0056` for `disable_native_memory` and `auto_detected`, `0058` for the skill-follow policy, `0063` for `models`), so the model stays honest about the fields it has.
 
 ### `ConfigFileFormat` + config-file allowlist (`domain/agent/config_files.py`)
@@ -82,10 +84,9 @@ containing-folder `folder_path` for those affordances — see "Open config files
 in an external editor or reveal them"). The REST API and CLI expose the same
 write.
 
-`ConfigFileFormat` — `StrEnum` of `json`, `toml`, `yaml`, `markdown`, `text`.
+`ConfigFileFormat` — `StrEnum` of `json`, `toml`, `markdown`.
 Drives save-time validation: `json` parses with `json.loads`, `toml` with
-`tomllib.loads`, `yaml` with `yaml.safe_load`; `markdown` and `text` are always
-valid.
+`tomllib.loads`; `markdown` is always valid.
 
 `ConfigFileKind` — `StrEnum` of `file`, `directory`. A `directory` entry (see
 "List directory config entries") resolves to a directory of files rather than a
@@ -122,7 +123,7 @@ which is spec knowledge's domain):
 
 `~/.codex/auth.json` is deliberately excluded (credential/state, not a
 hand-edited config). `~/.claude.json` is included (per product decision) and
-protected by the `.bak` backup on every write.
+protected by the rotated `.bak` backups on every write.
 
 `validate_content(fmt: ConfigFileFormat, text: str) -> None` raises
 `ConfigFileFormatInvalid` for malformed structured content.
@@ -157,15 +158,16 @@ MCP configuration varies across agents along **two independent axes**, captured
 by `McpInjectionSpec` (held per agent in the manifest):
 
 - **format** — `json` / `toml` — selects the parser/serializer (`json` stdlib, `toml` `tomlkit`).
-- **shape** — `container_key` (the top-level table: `mcpServers` / `mcp_servers`) + `entry_style` (`McpEntryStyle`): `COMMAND_MAP` (`{"command": shim}` — Claude Code/Codex).
+- **shape** — `container_key` (the top-level table: `mcpServers` / `mcp_servers`) + `entry_style` (`McpEntryStyle`): `COMMAND_MAP` (`{"command": shim, "args": ["--agent-uid", uid]}` — Claude Code/Codex; `args` is omitted when no agent uid is given).
 
 `mcp_install.py` builds / detects / removes the `coffer` entry as pure text
 transforms (no filesystem):
 
 - `COFFER_SERVER_KEY = "coffer"`.
-- `apply_install(fmt, text, shim_path, *, container_key=None, entry_style=COMMAND_MAP) -> str`
+- `apply_install(fmt, text, shim_path, *, container_key=None, entry_style=COMMAND_MAP, agent_uid=None) -> str`
   — inserts/updates the `coffer` entry. `container_key` defaults per format
-  (`default_container_key`). Idempotent.
+  (`default_container_key`); `agent_uid` is written as `--agent-uid <uid>` in the
+  entry's `args` so the gateway can attribute the session. Idempotent.
 - `apply_uninstall(fmt, text, *, container_key=None) -> str` — removes the
   `coffer` entry (no-op if absent).
 - `is_installed` / `installed_command` (`*, container_key=None`) — presence /
@@ -186,9 +188,11 @@ discovery is read-only with no suppression list to persist. Spec agent-registry
 creates no table and so introduces no Alembic revision of its own; the head
 revision is whatever the newest file under
 `backend/coffer/infrastructure/persistence/migrations/versions/` declares, and
-it moves with other specs. Two revisions do touch `kind='agent'` rows without
-changing any schema: migration `0056` strips config keys this spec removed, and
-`0063` strips the curated-`models` key.
+it moves with other specs. These revisions rewrite `kind='agent'` rows without
+changing any schema: `0031` and `0048` drop agents of removed types, `0056`
+strips config keys this spec removed, `0058` strips the skill-follow policy,
+`0060` backfills the curated-`models` key, `0061` flips `wire_api` from `chat`
+to `responses`, and `0063` strips the curated-`models` key again.
 
 **Config files and Coffer-MCP install state are NOT persisted in SQLite** — the
 agent's on-disk config files are the source of truth. Install status is derived
@@ -213,7 +217,7 @@ The workspace amendment adds:
 
 | Value                       | When emitted                                                                    |
 | --------------------------- | ------------------------------------------------------------------------------- |
-| `agent_config_file_deleted`  | A directory-entry child file was deleted (prior content preserved as `.bak`)    |
+| `agent_config_file_deleted`  | A directory-entry child file was deleted (prior content preserved as `.bak`, rotating older generations) |
 | `agent_mcp_entry_removed`    | A direct MCP entry was removed from the agent's own config                      |
 | `agent_mcp_entry_adopted`    | A direct MCP entry was adopted into a registered `mcp_server` resource          |
 | `agent_plugin_toggled`       | A plugin was enabled or disabled on its documented surface                      |
@@ -225,12 +229,17 @@ The lifecycle steps required by "Audit every agent lifecycle event" — registra
 
 ### `AgentService`
 
-| Method                                                                            | Purpose                                                                                                                                                                                                                                      |
-| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `register(type, name=None, config_dir=None, description=None, actor) -> Resource` | Auto-create `<config_dir>/skills`, validate the resolved `config_dir`, then delegate to `ResourceService.register(kind='agent', ...)`. `name` is optional — when omitted, derive `type.default_name()` (e.g. `claude_code` → `claude-code`). |
-| `update_config_dir(ref, new_path, actor) -> Resource`                             | Delegate to `ResourceService.update_config`.                                                                                                                                                                                                 |
-| `list() -> list[Resource]`                                                        | Delegate to `ResourceService.list(kind='agent')`.                                                                                                                                                                                            |
-| `remove(ref, actor) -> None`                                                      | Delete via `ResourceService.delete`. Removal is not permanent — there is no suppression list, so the agent re-appears as a discovery candidate on the next scan.                                                                             |
+Every method is keyword-only and addresses an agent by its immutable `uid`
+([ADR resource-identity-is-an-immutable-uid](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
+
+| Method | Purpose |
+| ------ | ------- |
+| `register(*, agent_type, name, config_dir=None, description=None, actor) -> Resource` | Build and validate `AgentConfig`; reject a second agent on the same resolved config dir with `AgentConfigDirRegistered` (→ 409 `AGENT_CONFIG_DIR_REGISTERED`); auto-create `<config_dir>/skills` and validate it (`assert_skill_dir_usable`); then delegate to `ResourceService.register(kind='agent', ...)`. `name` is required here — the surfaces fill `agent_type.default_name()` (e.g. `claude_code` → `claude-code`) when the user gives none. |
+| `list() -> list[Resource]` | Delegate to `ResourceService.list(kind='agent')`. |
+| `get(uid) -> Resource` | Delegate to `ResourceService.get`. |
+| `update_config_dir(*, uid, new_config_dir, actor, description=None) -> Resource` | Re-validate the merged config; only when the effective dir changes, auto-create and check its `skills/`. Then `ResourceService.update_config` (`description` updated alongside) and, on a dir change, the config-dir-changed hook that re-delivers skills to the new location. |
+| `set_model_binding(*, uid, model=None, fast_model=None, clear_fast_model=False, wire_api=None, actor) -> Resource` | The sole writer of the model binding ("Carry the model binding on the agent record"): `None` leaves a field unchanged, `clear_fast_model` unbinds the fast slot; the merged config is re-validated (a bad `wire_api` → 422). |
+| `remove(*, uid, actor) -> None` | Delete via `ResourceService.delete`. Removal is not permanent — there is no suppression list, so the agent re-appears as a discovery candidate on the next scan. |
 
 ### `AutoDetectService`
 
@@ -293,9 +302,13 @@ through the same store. Reuses `domain/agent/mcp_install.py`.
 
 | Method                   | Purpose                                                                                                                                                                                                                                         |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `status(uid) -> bool`   | Read the agent's MCP config file; return `is_installed`.                                                                                                                                                                                        |
-| `install(uid, actor)`   | Resolve the shim path (`COFFER_MCP_SHIM_PATH` → `shutil.which("coffer-mcp-shim")` → interpreter scripts dir → bundled fallback; raise `ShimNotFound` if none). `apply_install`; atomic write + `.bak`; audit `agent_mcp_installed`. Idempotent. |
-| `uninstall(uid, actor)` | `apply_uninstall`; atomic write + `.bak`; audit `agent_mcp_uninstalled`. No-op when absent.                                                                                                                                                     |
+| `status(uid) -> McpInstallStatus`   | Read the agent's MCP config file; return `McpInstallStatus(installed, command)` from `is_installed` / `installed_command`.                                                                                                                       |
+| `install(uid, *, actor) -> McpInstallStatus`   | Resolve the shim path (`COFFER_MCP_SHIM_PATH` → `shutil.which("coffer-mcp-shim")` → interpreter scripts dir → bundled fallback; raise `ShimNotFound` if none). `apply_install` with the agent's uid; atomic write + `.bak`; audit `agent_mcp_installed`. Idempotent. |
+| `uninstall(uid, *, actor) -> McpInstallStatus` | `apply_uninstall`; atomic write + `.bak`; audit `agent_mcp_uninstalled`. No-op when absent (no write, no audit).                                                                                                                    |
+
+`McpInstallStatus` is `(installed: bool, command: str | None)` — the HTTP
+`McpInstallStatusOut` carries the same two fields. A type whose descriptor
+declares no `McpInjectionSpec` raises `McpInstallUnsupported` (→ 422).
 
 ## Workspace amendment — derived entities (never stored)
 
@@ -326,7 +339,8 @@ preserves the user's TOML layout).
 
 Companion helpers: `parse_entries`, `remove_entry` (retained solely for the
 removal step of an adoption), `secret_env_keys`
-(TOKEN/SECRET/PASSWORD/API_KEY/CREDENTIAL/AUTHORIZATION patterns), and
+(TOKEN/SECRET/PASSWORD/PASSWD/API_KEY/APIKEY/CREDENTIAL/AUTHORIZATION patterns,
+applied to the entry's env and HTTP headers alike on adoption), and
 `to_transport_config` (entry → `mcp_server` transport config with secret keys
 moved to `credential_refs` for adoption). Malformed files raise
 `AgentConfigParseError`, which the listing degrades to a `parse_errors` item
@@ -372,6 +386,8 @@ Claude Code splits state across the internal inventory files
 | `marketplace` | `str`  |                                                                     |
 | `enabled`     | `bool` | defaults to `True` when the config carries no explicit flag         |
 | `installed`   | `bool` | present in the install inventory; settings-only orphans get `False` |
+| `version`     | `str \| None` | resolved install version, when the inventory records one (Claude Code) |
+| `install_path` | `str \| None` | install directory, when the inventory records one; the detail reader enumerates bundled skills/commands/MCP servers from it |
 
 `MarketplaceInfo` carries `name`, `source_type`, `source` (read-only). The HTTP
 view (`PluginView`) replaces `installed` with `cache_present` — whether the
@@ -420,7 +436,13 @@ the levels that entry offers.
 
 | Method               | Purpose                                                                                                                                                                      |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `catalogue(agent)`   | Ask each of that type's sources in picker order and concatenate what they answer. A source that raises, finds nothing, or no longer matches its anchor contributes nothing and the others still answer; an unknown agent key is a 404. |
+| `catalogue(agent_key)` | Ask each of that type's sources in picker order and concatenate what they answer. A source that raises, finds nothing, or no longer matches its anchor contributes nothing and the others still answer. Never raises. |
+| `offered(agent_key)` | What a picker offers: an active connection's curated ids when it curates any (keeping the levels of ids the agent also reports), else `catalogue(agent_key)` — spec provider-switching "Serve one model list to every surface". |
+| `efforts(agent_key, model)` | The reasoning levels of `model` within `offered()`; with no model pinned, the first offered entry's. Empty when the agent takes no such setting. |
+| `suggest(agent_key)` | The plain ids of `offered()` — the list a channel's `/model` card presents. |
+
+`GET /api/v1/agent-providers/{agent_key}/models` serves `offered()`; the route,
+not the service, answers 404 for an unregistered `agent_key`.
 
 The sources themselves live in `infrastructure/agent/` — one reader per source,
 each named by the type's child spec (`claude_binary_models.py` and
@@ -440,14 +462,23 @@ import infrastructure directly).
 - `read_text(path) -> str | None` — `None` when the file does not exist.
 - `stat(path) -> FileStat | None` — size + mtime, or `None` when absent.
 - `write_text_atomic(path, text) -> None` — temp file + `os.replace`; if the
-  target exists, copy it to `<path>.bak` first; create parent dirs as needed.
+  target exists, keep it as `<path>.bak` first, rotating the earlier backups to
+  `.bak.1` and `.bak.2` (three generations, `ConfigFileStore.BACKUP_COPIES`);
+  create parent dirs as needed.
 - `list_dir(root) -> list[DirEntryInfo] | None` — recursive listing of regular
   `.md` files under `root` (symlinked files skipped, sorted by relpath);
   `None` when `root` is not a directory.
-- `delete_with_backup(path) -> bool` — copy content to `<path>.bak`, then
-  remove the file.
-- `fingerprint(text) -> str` — content fingerprint backing the "Reject stale
-  config-file writes by fingerprint" check.
+- `delete_with_backup(path) -> bool` — copy content to `<path>.bak` (rotating
+  older generations as a write does), then remove the file; `False` when
+  already absent.
+- `remove_tree(path) -> bool` — remove a directory tree with no backup, used
+  only for content Coffer rendered itself and can regenerate; `False` when
+  already absent.
+- `fingerprint(text: str | None) -> str` — sha256 hex digest backing the
+  "Reject stale config-file writes by fingerprint" check; `""` for a missing
+  file (`None`).
+- `resolved_within(path, root) -> bool` — whether `path` resolves, following
+  symlinks, inside `root`.
 
 ## Kind wiring (`backend/coffer/application/agent/kind.py`)
 
@@ -456,7 +487,8 @@ import infrastructure directly).
 - `name='agent'`
 - `display_name='Agent'`
 - `config_schema=AgentConfig`
-- `on_delete=...` — cascade hook invoked by `ResourceService.delete` to call the **skill-side** binding cleanup (skill module provides the callback; agent kind does not import the skill module directly — wiring is via a setter on the kind module at composition root).
+- `on_delete=...` — cascade hook invoked by `ResourceService.delete` to call the **skill-side** binding cleanup (skill module provides the callback; agent kind does not import the skill module directly — the callback is passed to `make_agent_kind` at the composition root).
+- `generic_create_allowed=False` — the kind-agnostic `POST /api/v1/resources` refuses to create an agent; agents are registered only through `AgentService`, which validates the config directory.
 
 ## Composition root wiring
 

@@ -281,10 +281,10 @@ export interface components {
         };
         /** @description A count of registered MCP upstreams, when the daemon has finished wiring them up. Null while it is still starting — the probe must answer either way. */
         UpstreamSummary: {
-            registered?: number;
-            enabled?: number;
-            healthy?: number;
-            unhealthy?: number;
+            registered: number;
+            enabled: number;
+            healthy: number;
+            unhealthy: number;
         } | null;
         TokenRotationOut: {
             /** @description New token; clients must re-read `~/.coffer/daemon.json`. */

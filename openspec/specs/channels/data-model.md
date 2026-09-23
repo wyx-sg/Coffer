@@ -146,8 +146,6 @@ unique key is what let group support arrive as new rows rather than a migration.
 | `display_name`           | TEXT                                         | sender's name at pairing time, for UI/status                                                                                                        |
 | `paired_at`              | DATETIME (UTC)                               |                                                                                                                                                     |
 | `sender_id`              | TEXT NULL                                    | paired sender's stable id (Telegram from.id, SeaTalk employee_code); the owner gate checks it when present. NULL → chat-id-only gate (legacy peers) |
-| `active_conversation_id` | TEXT NULL                                    | **vestigial.** The live pointer moved to `channel_thread_conversations` with "Key conversation identity by channel, chat and thread"; no live path writes this column any more, so it reads NULL      |
-| `preferred_agent`        | TEXT NULL                                    | **vestigial** for the same reason — the sticky agent is per thread now. The synced pairing document still carries the field, so a value can arrive from another machine; nothing reads it back |
 
 Constraints: `UNIQUE (resource_id, chat_id)`; index on `resource_id`.
 
@@ -166,7 +164,9 @@ Migrations: `20260612_0015_channel_tables.py` (create + symmetric downgrade);
 `20260614_0022_channel_peer_differentiation.py` adds `sender_id`,
 `preferred_agent` and a `preferred_workspace` that
 `20260620_0028_drop_channel_peer_preferred_workspace.py` takes back off when
-workspace switching is removed. The model module is imported by
+workspace switching is removed; `20260916_0084_drop_dead_channel_peer_columns.py`
+drops the superseded `active_conversation_id` and `preferred_agent`, whose live
+copies have been on `channel_thread_conversations` since 0041. The model module is imported by
 `migrations/env.py` so Alembic sees the metadata.
 
 ## Table: `channel_thread_conversations`
@@ -212,9 +212,13 @@ that already holds the table; reversible by dropping it.
 | `20260912_0068_drop_channel_model_curation.py` | strips `default_model` and `models` off every stored channel config |
 | `20260914_0079_bind_channels_to_this_machine.py` | writes this machine's id into every channel that carries no `runs_on` |
 | `20260915_0080_repair_stale_channel_bindings.py` | replaces a `runs_on` that **cannot** be a machine id — the withdrawn axis wrote ULIDs under this very key — with this machine, the answer an absent key would have given |
-| `20260915_0081_channel_scope_names_agent_resources.py` | rewrites each channel's stored scope from agent **keys** into agent **resource names**, at the moment the comparison starts reading them that way |
+| `20260915_0081_channel_scope_names_agent_resources.py` | rewrites each channel's stored scope from agent **keys** into agent **resource names** — an intermediate step, superseded by 0096 |
+| `20260918_0096_cross_references_point_at_uids.py` | rewrites each channel's stored scope from agent resource names into agent **uids**, and its `default_agent` from an agent key into an agent uid (it also renames `conversations.channel_name` to `channel_uid`) |
+| `20260918_0099_credential_refs_stop_naming_their_resource.py` | rewrites every `*_ref` field of a channel config (`bot_token_ref`, `app_secret_ref`, `signing_secret_ref`, `tunnel_token_ref`) from `channel/<name>/<secret>` to an address that does not spell the channel's name, moving the credential row with it |
 
-All five are one-direction and data-only, with no load-time shim (house rule).
+All seven rewrite channel config data in one direction only, with no load-time
+shim (house rule); 0096 also renames a `conversations` column, and that schema
+half reverses on downgrade while the data half does not.
 
 ## In-memory state (never persisted)
 
@@ -261,7 +265,10 @@ SentMessage:        what a send returned, so a later rewrite can address it
 ChannelCapabilities: supports_live_text, live_text_persists, supports_edit,
                     supports_card_update, supports_buttons, supports_typing,
                     supports_reactions, supports_media, supports_groups,
-                    supports_history_fetch, max_message_chars
+                    supports_history_fetch, max_message_chars,
+                    mention_template, mention_email_template — how the
+                    transport spells an @mention of an id (or of an email
+                    address); an empty template means it cannot mention
 ```
 
 Adapters translate platform payloads to/from these; the application core

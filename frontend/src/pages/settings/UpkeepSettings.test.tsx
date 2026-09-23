@@ -68,6 +68,7 @@ const CONFIG: InternalEngineConfig = {
   // The machine allowed to run curation — this one, in the fixture, which is
   // the state that says nothing is wrong.
   curate_owner_machine_id: "machine-here",
+  default_model_timeout_s: 60,
 };
 
 /** The card under one TooltipProvider, which `Layout` mounts in the app: the
