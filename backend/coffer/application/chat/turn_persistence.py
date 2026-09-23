@@ -1,15 +1,16 @@
 """Persistence helpers for the turn orchestrator.
 
 Split out of ``turn_orchestrator.py`` (file-size limit): the ordered fold of a
-turn's events into content blocks, the end-of-turn finalize write, and the
-cancel-raced placeholder recovery. All are pure application-layer helpers over
-the ``ChatService`` port.
+turn's events into content blocks, the throttled mid-turn partial flush, the
+end-of-turn finalize write, and the cancel-raced placeholder recovery. All are
+pure application-layer helpers over the ``ChatService`` port.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 from coffer.application.chat.service import ChatService
 from coffer.domain.chat.events import (
@@ -30,6 +31,14 @@ from coffer.domain.chat.message import (
 )
 
 log = logging.getLogger(__name__)
+
+#: The flush throttle's clock; a module attribute so tests can drive it.
+_clock = time.monotonic
+
+#: At most one mid-turn write of the partial reply per this many seconds. A
+#: daemon that dies mid-turn loses no more than this much of the reply; a turn
+#: streaming hundreds of tokens a second still costs one row update per second.
+DEFAULT_PARTIAL_FLUSH_SECONDS = 1.0
 
 
 class TurnContent:
@@ -78,6 +87,53 @@ class TurnContent:
         if text:
             self._blocks.append(TextBlock(text=text))
         self._text = []
+
+
+class PartialFlusher:
+    """Throttled mid-turn persistence of the reply so far (spec chat "Keep partial
+    output when a turn is interrupted or fails").
+
+    The placeholder row is written empty before the first event and finalised at
+    the end; in between, the text only lived in memory, so a daemon that died
+    mid-turn left the startup sweep an empty ``failed`` row. After each content
+    event this writes the accumulated blocks onto the ``streaming`` row, but at
+    most once per ``interval`` seconds — never per token. ``interval=None``
+    disables it. The write is guarded on ``status='streaming'`` in the store, so
+    a flush racing the finalise cannot clobber it.
+    """
+
+    def __init__(
+        self,
+        chat: ChatService,
+        content: TurnContent,
+        *,
+        interval: float | None = DEFAULT_PARTIAL_FLUSH_SECONDS,
+    ) -> None:
+        self._chat = chat
+        self._content = content
+        self._interval = interval
+        self._last = _clock()
+
+    async def after(self, event: AgentEvent, message_id: str | None) -> None:
+        """Flush if ``event`` changed the content and the interval has passed."""
+        if self._interval is None or message_id is None:
+            return
+        if not isinstance(event, (TextDelta, ToolCall, ToolResult)):
+            return
+        now = _clock()
+        if now - self._last < self._interval:
+            return
+        self._last = now
+        try:
+            # Shielded: a cancellation mid-write leaves the (guarded) write to
+            # finish rather than tearing the session down half-way.
+            await asyncio.shield(
+                self._chat.save_partial_message(message_id, self._content.blocks())
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.warning("Partial flush failed for message %s", message_id, exc_info=True)
 
 
 async def finalize_assistant_message(
@@ -147,4 +203,10 @@ async def recover_placeholder_id(
         return None
 
 
-__all__ = ["TurnContent", "finalize_assistant_message", "recover_placeholder_id"]
+__all__ = [
+    "DEFAULT_PARTIAL_FLUSH_SECONDS",
+    "PartialFlusher",
+    "TurnContent",
+    "finalize_assistant_message",
+    "recover_placeholder_id",
+]

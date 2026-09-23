@@ -204,6 +204,78 @@ async def test_nothing_pending_is_up_to_date(knowledge_root) -> None:  # type: i
     assert (await _run(_Loop([])))["status"] == "up_to_date"
 
 
+def _pending_count() -> int:
+    (entry,) = [e for e in catalogue.list_collections() if e.name == "shopee"]
+    return entry.pending_count
+
+
+@pytest.mark.anyio
+async def test_oversized_material_is_promoted_as_it_stands(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    """Material too large for one pass does not wait in the hidden inbox
+    forever: it becomes a document as it stands, the way the no-model path
+    promotes it, and the report says so."""
+    from coffer.application.knowledge.curate import MAX_SOURCE_CHARS
+
+    body = "x" * (MAX_SOURCE_CHARS + 1)
+    name = _material(title="Huge dump", body=body)
+    assert _pending_count() == 1
+
+    loop = _Loop([])
+    outcome = await _run(loop)
+
+    assert outcome == {
+        "status": "too_large",
+        "collection": "shopee",
+        "item": f"shopee/{paths.INBOX_DIR_NAME}/{name}",
+        "limit": MAX_SOURCE_CHARS,
+        "promoted": ["shopee/huge-dump.md"],
+    }
+    # The model never saw it.
+    assert loop.prompt == ""
+    assert _documents() == ["shopee/huge-dump.md"]
+    promoted = fs.read_file("shopee/huge-dump.md")
+    assert promoted.body.strip() == body
+    assert promoted.curated_at != ""
+    assert fs.inbox_items("shopee") == ()
+    assert _pending_count() == 0
+    assert pending_items("shopee") == ()
+
+
+@pytest.mark.anyio
+async def test_an_oversized_edited_document_is_stamped_and_not_offered_again(
+    knowledge_root,
+) -> None:  # type: ignore[no-untyped-def]
+    """An edited document too large for a pass has nothing to promote — it is
+    already a document — so it is stamped as seen and the sweep stops handing
+    it back, and the person's text is left exactly as they wrote it."""
+    from coffer.application.knowledge.curate import MAX_SOURCE_CHARS
+
+    relpath = _document("Big doc", body="short")
+    target = paths.resolve(relpath)
+    edited = "y" * (MAX_SOURCE_CHARS + 1)
+    target.write_text(target.read_text().replace("short", edited))
+    later = time.time() + 5
+    os.utime(target, (later, later))
+    stamped_before = fs.read_file(relpath).curated_at
+    assert pending_items("shopee") == (Pending(document=relpath),)
+
+    loop = _Loop([])
+    outcome = await _run(loop)
+
+    assert outcome == {
+        "status": "too_large",
+        "collection": "shopee",
+        "item": relpath,
+        "limit": MAX_SOURCE_CHARS,
+        "stamped": relpath,
+    }
+    assert loop.prompt == ""
+    after = fs.read_file(relpath)
+    assert after.curated_at != stamped_before
+    assert after.body.strip() == edited
+    assert pending_items("shopee") == ()
+
+
 @pytest.mark.anyio
 async def test_a_loop_that_raises_leaves_the_material_owed(knowledge_root) -> None:  # type: ignore[no-untyped-def]
     name = _material()

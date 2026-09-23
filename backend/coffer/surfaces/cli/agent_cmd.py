@@ -17,6 +17,7 @@ from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli import agent_config_cmd as _config
+from coffer.surfaces.cli import agent_models_cmd as _models
 from coffer.surfaces.cli import agent_native_memory_cmd as _native_memory
 from coffer.surfaces.cli import agent_transcript_cmd as _transcripts
 from coffer.surfaces.cli import agent_workspace_cmd as _workspace
@@ -300,3 +301,7 @@ _native_memory.attach(app)
 # --- transcript browse command (agent_transcript_cmd.py, same reason) ------
 
 _transcripts.attach(app)
+
+# --- model list command (agent_models_cmd.py, same reason) ----------------
+
+_models.attach(app)

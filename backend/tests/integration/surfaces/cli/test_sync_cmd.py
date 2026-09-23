@@ -179,6 +179,30 @@ def test_remote_set_carries_the_options_it_was_given(fleet: Fleet) -> None:
     assert "credentials included" in result.output
 
 
+def test_first_remote_set_leaves_sync_enabled(fleet: Fleet) -> None:
+    fleet.ok("sync", "remote", "set", fleet.a.remote_url)
+
+    stored = fleet.run(fleet.a.service().get_remote())
+    assert stored is not None and stored.enabled is True
+
+
+def test_remote_set_on_a_paused_remote_keeps_it_paused(fleet: Fleet) -> None:
+    """Re-running ``remote set`` changes what it names — here the interval — and
+    nothing else: pausing is the web toggle's decision, not the CLI's to undo."""
+    fleet.ok("sync", "remote", "set", fleet.a.remote_url)
+    remote = fleet.run(fleet.a.service().get_remote())
+    assert remote is not None
+    fleet.run(fleet.a.service().set_remote(dataclasses.replace(remote, enabled=False)))
+
+    result = fleet.ok("sync", "remote", "set", fleet.a.remote_url, "--interval", "120")
+
+    stored = fleet.run(fleet.a.service().get_remote())
+    assert stored is not None
+    assert stored.interval_seconds == 120
+    assert stored.enabled is False
+    assert "disabled" in result.output
+
+
 def test_remote_set_refuses_a_remote_it_cannot_reach(fleet: Fleet, tmp_path) -> None:
     result = fleet.invoke("sync", "remote", "set", str(tmp_path / "no-such.git"))
 

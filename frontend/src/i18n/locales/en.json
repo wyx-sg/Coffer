@@ -1073,7 +1073,7 @@
         "ok": "Curation pass finished.",
         "no_model": "No internal model is configured, so nothing was merged — pending material became documents as it was ({{count}}).",
         "up_to_date": "Nothing is waiting to be merged.",
-        "too_large": "That item is too large for one pass to take in.",
+        "too_large": "That item is too large for one pass to take in, so it was kept as it stands rather than merged.",
         "truncated": "The curation pass hit its step limit before finishing. What it wrote is kept, and the item will be tried again.",
         "truncatedGaveUp": "The curation pass hit its step limit for the third time in a row, so Coffer kept the item as it stands and will not run it again.",
         "failed": "The curation pass didn't finish. Nothing was lost — it will be tried again."

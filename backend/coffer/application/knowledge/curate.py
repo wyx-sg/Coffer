@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from coffer.application.engine_ports import ModelSelectorPort
 from coffer.application.engine_timeout import TimeoutReader, resolve_timeout
 from coffer.application.knowledge import candidates
+from coffer.application.knowledge.curate_prompt import CURATION_SYSTEM
 from coffer.application.knowledge.curate_settle import (
     MAX_CONSECUTIVE_TRUNCATIONS,
     TruncationLedger,
@@ -50,9 +51,9 @@ from coffer.application.knowledge.curate_settle import (
     pending_items,
     promote_all,
     settle,
+    shelve_oversized,
 )
 from coffer.application.knowledge.curate_tools import (
-    MAX_WRITES_PER_PASS,
     Counters,
     CurationTool,
     build_tools,
@@ -75,40 +76,9 @@ DEFAULT_CURATION_RECURSION_LIMIT = 24
 
 #: How much of one item to hand the model. Material is what a person wrote or
 #: uploaded, so it is bounded by what a person produces; past this the pass
-#: reports rather than silently truncating the material it was asked to keep.
+#: keeps the item as it stands and reports that, rather than silently
+#: truncating the material it was asked to keep.
 MAX_SOURCE_CHARS = 120_000
-
-CURATION_SYSTEM = (
-    "You maintain ONE collection of Markdown knowledge documents that a person and you write "
-    "together. You are given ONE item: either NEW MATERIAL to fold into the documents, or a "
-    "DOCUMENT A PERSON EDITED, whose edit you carry into the rest of the collection.\n\n"
-    "RULES, in order of importance:\n"
-    "1. LOSE NOTHING. Every fact in new material must end up in a document, and every fact "
-    "already in a document you rewrite must survive. Integrate; never regenerate.\n"
-    "2. A PERSON'S EDIT IS DELIBERATE. When the item is an edited document, what the person "
-    "wrote there is the truth: never revert it or reword it. Carry it outward — correct the "
-    "other documents that say otherwise, and move a section that belongs in another document "
-    "there — and leave the edited document alone unless it now duplicates another.\n"
-    "3. READ BEFORE YOU WRITE. Call read_document on any document you intend to change.\n"
-    "4. FIND THE RIGHT HOME. The candidate documents you were shown are a literal-match guess, "
-    "not an answer. Call list_documents and read the titles and descriptions: if none of them "
-    "owns this subject, create a new document rather than forcing the material somewhere it "
-    "does not belong.\n"
-    "5. WHEN NEW MATERIAL CONTRADICTS A DOCUMENT, THE NEWER STATEMENT WINS — and say so in the "
-    "prose. Keep the superseded statement legible with the date it changed, e.g. '(previously "
-    "recorded as X; corrected YYYY-MM-DD)'. Knowledge is about a world that changes, and when "
-    "it changed is worth keeping.\n"
-    "6. NEVER NAME ANOTHER FILE. Document paths move as the collection is reorganised. Name the "
-    "subject in prose. A write that names one of this collection's files is refused.\n"
-    "7. ORGANISE BY SUBJECT, NEVER BY PROVENANCE. A reader wants the document to be about the "
-    "thing; they do not care which upload told you what. Never add sections like 'From the new "
-    "material' — fold it into the section it belongs in, and keep a correction as a sentence "
-    "where the corrected fact is, not as a changelog at the bottom.\n"
-    "8. Give every document a title and a one-line description saying what QUESTION it answers. "
-    "The description is the only thing a future reader chooses by.\n"
-    f"9. You may write at most {MAX_WRITES_PER_PASS} files in this pass. Change nothing that "
-    "does not need changing, and stop when the item is absorbed."
-)
 
 
 class AgenticCurationPort(Protocol):
@@ -186,7 +156,9 @@ async def run_curation(
     inbox item is promoted to a document as it stands, so material never waits on a
     connection nobody configured (see "Promote material directly when no model is
     configured") — ``up_to_date`` when nothing is pending, ``too_large`` for an item
-    past :data:`MAX_SOURCE_CHARS`, ``failed`` when the loop raised, ``truncated``
+    past :data:`MAX_SOURCE_CHARS` (never shown to the model: material is promoted
+    as it stands and reported in ``promoted``, an edited document is stamped and
+    reported in ``stamped``), ``failed`` when the loop raised, ``truncated``
     when the recursion limit cut it off (reported with the same counters as
     ``ok`` — see "Bound a pass to eight writes"), and ``ok`` otherwise. Only
     ``ok`` settles the item — except that, given a ``truncations`` ledger, the
@@ -225,11 +197,15 @@ async def run_curation(
         found = await asyncio.to_thread(fs.read_material, collection, item.material or "")
     label = found.path
     if len(found.body) > MAX_SOURCE_CHARS:
+        # No pass can hold it, so it leaves the queue as it stands rather than
+        # being offered to — and refused by — every sweep for ever.
+        shelved = await asyncio.to_thread(shelve_oversized, collection, item)
         return {
             "status": "too_large",
             "collection": collection,
             "item": label,
             "limit": MAX_SOURCE_CHARS,
+            **shelved,
         }
 
     chosen = await candidates.select(service, collection, found)

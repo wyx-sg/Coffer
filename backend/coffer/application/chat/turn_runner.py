@@ -4,8 +4,15 @@ Extracted from ``TurnOrchestrator`` so the orchestrator file stays focused. The
 task publishes every ``AgentEvent`` to the conversation bus (so any number of web
 subscribers observe it) and, when the turn was started with a dedicated queue
 (a channel renderer's, or ``start_turn``'s), to that queue too — ending it with
-a ``None`` sentinel. The cancellation/shielding semantics are unchanged: a user
-interrupt keeps the partial assistant message; a delete discards it.
+a ``None`` sentinel. Every way a turn ends short keeps what it streamed (spec
+chat "Keep partial output when a turn is interrupted or fails"): a user
+interrupt finalises the partial as complete; an adapter stream that stops
+without a terminal event is reported as ``stream_ended`` and the partial marked
+failed; a daemon shutdown cancelling the task marks it failed too. Only a
+delete (``ActiveTurn.discarded``) throws the turn away. While streaming, the
+reply so far is flushed onto the ``streaming`` row (throttled —
+``PartialFlusher``) so a daemon that dies outright leaves the text for the
+startup sweep.
 
 The idle watchdog
 -----------------
@@ -27,6 +34,8 @@ from collections.abc import AsyncIterator, Sequence
 from coffer.application.chat.ports import AgentAdapter
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_persistence import (
+    DEFAULT_PARTIAL_FLUSH_SECONDS,
+    PartialFlusher,
     TurnContent,
     finalize_assistant_message,
     recover_placeholder_id,
@@ -34,6 +43,8 @@ from coffer.application.chat.turn_persistence import (
 from coffer.application.chat.turn_state import ActiveTurn, release_active
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import (
+    STREAM_ENDED,
+    STREAM_ENDED_MESSAGE,
     TURN_TIMEOUT,
     AgentEvent,
     TurnDone,
@@ -56,6 +67,12 @@ DEFAULT_TURN_IDLE_TIMEOUT_SECONDS = 300.0
 #: rows are the ones that matter for it. A conversation of thousands of
 #: messages must not be loaded whole on every turn.
 HISTORY_LIMIT = 200
+
+#: ``TurnError.code`` when the daemon itself cancels a turn on its way down
+#: (neither a user interrupt nor a delete); the partial is kept, marked failed —
+#: the outcome the startup sweep gives a turn a crash cut short.
+DAEMON_STOPPED = "daemon_stopped"
+DAEMON_STOPPED_MESSAGE = "Coffer stopped before the turn finished"
 
 
 def _attachments_from_history(history: Sequence[Message]) -> list[Attachment]:
@@ -100,6 +117,7 @@ async def run_turn_task(
     adapter: AgentAdapter,
     chat: ChatService,
     idle_timeout: float | None = DEFAULT_TURN_IDLE_TIMEOUT_SECONDS,
+    flush_interval: float | None = DEFAULT_PARTIAL_FLUSH_SECONDS,
 ) -> None:
     """Async task body: drive the adapter, publish events, persist the result.
 
@@ -115,6 +133,7 @@ async def run_turn_task(
 
     # Text and tool blocks in the order the turn emitted them.
     content = TurnContent()
+    flusher = PartialFlusher(chat, content, interval=flush_interval)
     final_done: TurnDone | None = None
     error_event: TurnError | None = None
     # An adapter may expose the resolved model id so the assistant message can
@@ -128,8 +147,9 @@ async def run_turn_task(
         turn_attachments = _attachments_from_history(history)
         # Write a ``streaming`` placeholder assistant row BEFORE the first event. A
         # daemon crash mid-turn then leaves a row the startup sweep flips to ``failed``
-        # (see "Sweep streaming rows left by a crashed daemon"). It is finalised in
-        # place on completion (one row, no dup). The write runs as a shielded task: a
+        # (see "Sweep streaming rows left by a crashed daemon"), carrying whatever the
+        # last partial flush wrote. It is finalised in place on completion (one row,
+        # no dup). The write runs as a shielded task: a
         # cancellation landing between the row's commit and the id assignment leaves the
         # task running, and the CancelledError handler recovers the id.
         append_task = asyncio.create_task(
@@ -167,6 +187,7 @@ async def run_turn_task(
                 break
             emit(event)
             content.add(event)
+            await flusher.after(event, placeholder_id)
             if isinstance(event, TurnDone):
                 final_done = event
             elif isinstance(event, TurnError):
@@ -178,6 +199,18 @@ async def run_turn_task(
                     event.message,
                 )
             # TurnStarted / QueueChanged: forwarded only, not message content.
+
+        if final_done is None and error_event is None:
+            # The stream ran out with no terminal event: the agent died or lost its
+            # connection mid-turn. Detected here, agent-agnostically, so an adapter
+            # that does not synthesise it cannot pass a cut reply off as complete.
+            error_event = TurnError(code=STREAM_ENDED, message=STREAM_ENDED_MESSAGE)
+            log.warning(
+                "Turn for conversation %s ended without a terminal event (%s)",
+                conversation_id,
+                STREAM_ENDED,
+            )
+            emit(error_event)
 
         await finalize_assistant_message(
             chat=chat,
@@ -211,12 +244,30 @@ async def run_turn_task(
                 )
             )
             # Cancellation handled — do NOT re-raise.
-        else:
+        elif active.discarded:
             # Conversation deleted: discard the partial turn entirely — remove the
             # placeholder so no orphan streaming row remains.
             if placeholder_id is not None:
                 await asyncio.shield(chat.delete_message(placeholder_id))
             log.debug("Turn for conversation %s cancelled and discarded", conversation_id)
+            raise
+        else:
+            # Nobody asked for this cancellation: the daemon is going down. Keep the
+            # partial, marked failed — what the startup sweep would give it.
+            error_event = TurnError(code=DAEMON_STOPPED, message=DAEMON_STOPPED_MESSAGE)
+            emit(error_event)
+            await asyncio.shield(
+                finalize_assistant_message(
+                    chat=chat,
+                    conversation_id=conversation_id,
+                    message_id=placeholder_id,
+                    model_id=model_id,
+                    content=content,
+                    final_done=None,
+                    error_event=error_event,
+                )
+            )
+            log.info("Turn for conversation %s stopped by shutdown; partial kept", conversation_id)
             raise
     except Exception as exc:
         log.exception("Unexpected error in turn task for conversation %s", conversation_id)

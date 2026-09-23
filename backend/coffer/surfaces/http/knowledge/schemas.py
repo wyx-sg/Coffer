@@ -153,17 +153,25 @@ class CurationOut(BaseModel):
     refused: int = 0
     documents_before: int = 0
     documents_after: int = 0
-    #: The item-size ceiling, present only with ``status`` ``too_large``.
+    #: The item-size ceiling, present only with ``status`` ``too_large``. Such
+    #: an item is never shown to the model and never left pending: material is
+    #: promoted as it stands (``promoted``), an edited document is stamped
+    #: (``stamped``).
     limit: int = 0
-    #: Documents the inbox was promoted into as it stood: every item with
+    #: Documents material was promoted into as it stood: the whole inbox with
     #: ``status`` ``no_model`` ("Promote material directly when no model is
-    #: configured"), or the one item a pass gave up on (``gave_up``).
+    #: configured"), the one oversized item with ``status`` ``too_large``, or the
+    #: one item a pass gave up on (``gave_up``).
     promoted: list[str] = Field(default_factory=list)
     #: With ``status`` ``truncated``: this was the item's third cut-off in a
     #: row, so the pass settled it instead of leaving it owed — material
     #: promoted as it stood, an edited document stamped ("Bound a pass to
     #: eight writes").
     gave_up: bool = False
+    #: The edited document stamped as seen without a pass, present only with
+    #: ``status`` ``too_large`` when the oversized item was a document — there
+    #: is nothing to promote, and the stamp stops the sweep re-offering it.
+    stamped: str = ""
 
 
 class IngestedDocumentOut(BaseModel):

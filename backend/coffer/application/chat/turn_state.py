@@ -57,7 +57,12 @@ class ActiveTurn:
     # it receives every event plus a ``None`` end-of-stream sentinel.
     primary_queue: asyncio.Queue[AgentEvent | None] | None = None
     task: asyncio.Task[None] | None = None
+    # Why the task was cancelled, set by whoever cancels it: ``interrupted`` (the
+    # user stopped it — keep the partial, complete) or ``discarded`` (the
+    # conversation is being deleted — throw the turn away). A cancellation with
+    # neither is the daemon going down: the partial is kept, marked failed.
     interrupted: bool = field(default=False)
+    discarded: bool = field(default=False)
 
 
 @dataclass
@@ -126,3 +131,25 @@ def held_conversations() -> set[str]:
 def clear_active_turns() -> None:
     """Clear all per-conversation orchestrator state (test teardown only)."""
     _STATES.clear()
+
+
+async def stop_all_turns(*, timeout: float = 5.0) -> int:
+    """Cancel every in-flight turn and wait for each to finish writing its partial.
+
+    Called by the daemon's teardown before the database is disposed. A turn
+    cancelled this way is neither an interrupt nor a delete, so its runner keeps
+    the partial reply and marks it failed (spec chat "Keep partial output when a
+    turn is interrupted or fails"). Waiting is bounded: a turn that does not
+    settle within ``timeout`` is left to the startup sweep. Returns how many
+    turns were cancelled.
+    """
+    tasks = [
+        st.active.task
+        for st in _STATES.values()
+        if st.active is not None and st.active.task is not None and not st.active.task.done()
+    ]
+    for task in tasks:
+        task.cancel()
+    if tasks:
+        await asyncio.wait(tasks, timeout=timeout)
+    return len(tasks)

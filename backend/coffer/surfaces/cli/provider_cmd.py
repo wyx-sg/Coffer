@@ -257,10 +257,17 @@ def key(
 
     --wire is the legacy form, which resolves whichever connection is active for
     that wire's agent instead of naming one.
+
+    Exits 4 with nothing on stdout when the daemon resolves no key — for
+    --connection-uid that includes a connection the user disabled or scoped to
+    no agent, so the agent's helper fails instead of reading a stale key.
     """
     if connection_uid:
         path = f"/providers/{connection_uid}/key"
-        missing = f"no key for connection {connection_uid!r}"
+        missing = (
+            f"no key for connection {connection_uid!r}: it is absent, disabled, "
+            "scoped to no agent, or keyless"
+        )
     elif wire:
         path, missing = f"/providers/active-key/{wire}", f"no active provider for wire {wire!r}"
     else:

@@ -5,10 +5,12 @@ everything, then — forty lines later, after a ``yield`` — stop everything. T
 two halves share nothing but the objects handed over here, and the teardown is
 the half whose ORDER is load-bearing, so it is worth reading on its own.
 
-Three rules the order encodes:
+Four rules the order encodes:
 
 * **Stop what starts work before stopping what work needs.** The channel
   adapters go early because they are what starts agent turns.
+* **Stop running turns while the database is still open.** A turn cut by
+  shutdown writes its partial reply as it unwinds.
 * **Cancel the reconciler before disposing it.** An in-flight tick would
   otherwise resurrect the adapters ``dispose()`` just stopped.
 * **Every step is best-effort.** A dead component must not abort the teardown
@@ -25,6 +27,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from coffer.application.chat.turn_state import stop_all_turns
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.curation_wiring import stop_curation_worker
@@ -87,6 +90,11 @@ async def shutdown(running: Running) -> None:
         "channel_runtime", asyncio.wait_for(running.channel_runtime_task, timeout=2.0)
     )
     await best_effort("channel_runtime.dispose", running.channel_runtime.dispose())
+    # With nothing left to start one, stop the turns still running — here,
+    # while the database is still open, because each writes its partial reply
+    # as it unwinds (spec chat "Keep partial output when a turn is interrupted
+    # or fails").
+    await best_effort("chat_turns", stop_all_turns())
 
     # The retention worker was asked to stop above; give it a grace period to
     # finish an in-flight prune, then cancel it.

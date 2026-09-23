@@ -40,6 +40,7 @@ from collections.abc import Callable, Sequence
 
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService, MessageRepo
+from coffer.application.chat.turn_persistence import DEFAULT_PARTIAL_FLUSH_SECONDS
 from coffer.application.chat.turn_runner import (
     DEFAULT_TURN_IDLE_TIMEOUT_SECONDS,
     run_turn_task,
@@ -74,12 +75,15 @@ class TurnOrchestrator:
         chat_service: ChatService,
         registry: AgentProviderRegistry,
         idle_timeout: float | None = DEFAULT_TURN_IDLE_TIMEOUT_SECONDS,
+        flush_interval: float | None = DEFAULT_PARTIAL_FLUSH_SECONDS,
     ) -> None:
         self._chat = chat_service
         self._registry = registry
         # How long a turn may go without producing an event before the watchdog
         # cancels it (``turn_runner``); ``None`` disables the watchdog.
         self._idle_timeout = idle_timeout
+        # Throttle for persisting the partial reply mid-turn; ``None`` disables it.
+        self._flush_interval = flush_interval
         # Keep references to fire-and-forget advance tasks so they are not GC'd
         # mid-flight; each discards itself on completion.
         self._bg_tasks: set[asyncio.Task[None]] = set()
@@ -229,6 +233,7 @@ class TurnOrchestrator:
             return
         active = state.active
         if active is not None and active.task is not None and not active.task.done():
+            active.discarded = True
             active.task.cancel()
             log.debug("Cancelled turn for conversation %s", conversation_id)
         state.queue.clear()
@@ -341,6 +346,7 @@ class TurnOrchestrator:
                 adapter=adapter,
                 chat=self._chat,
                 idle_timeout=self._idle_timeout,
+                flush_interval=self._flush_interval,
             ),
             name=f"turn:{conversation_id}",
         )

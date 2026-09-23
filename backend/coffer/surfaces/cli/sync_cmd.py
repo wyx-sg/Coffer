@@ -353,7 +353,9 @@ def remote_set(
         None, "--credential-ref", help="Name of the push credential in the credential store"
     ),
 ) -> None:
-    """Configure the remote. It is probed before being accepted."""
+    """Configure the remote. It is probed before being accepted.
+
+    ``enabled`` carries over (a first remote starts enabled): re-running never unpauses."""
     body = {
         "url": url,
         "branch": branch,
@@ -364,6 +366,9 @@ def remote_set(
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
+        current = c.get("/sync/remote")
+        _cli_client.check(current, verbose=verbose)
+        body["enabled"] = (current.json().get("remote") or {}).get("enabled", True)
         r = c.put("/sync/remote", json=body)
         _cli_client.check(r, verbose=verbose)
         _print_remote(r.json())
