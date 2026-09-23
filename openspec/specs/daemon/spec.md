@@ -613,8 +613,9 @@ residency is a settings question asked of a daemon that is working.
 MUST read and write the same settings directly, with no daemon involved and none required, since
 the state they are most often reached from is "no daemon is running". `idle set` MUST refuse a
 window below the floor and write nothing; `idle set` and `idle never` MUST say that the change takes
-effect at the next start. `service` commands MUST refuse with a clear message on a host that has no
-login service. The CLI path records no audit entry, for the reason the port records none: it must
+effect at the next start. On a host that has no login service, `service install` and
+`service uninstall` MUST refuse with a clear message and a non-zero exit, while `service status`
+MUST exit successfully and report that a login service is not supported there. The CLI path records no audit entry, for the reason the port records none: it must
 work with no daemon running, so the audit table is unreachable on exactly the path it serves.
 
 #### Scenario: the settings page changes residency in one request

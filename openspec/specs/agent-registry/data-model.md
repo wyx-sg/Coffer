@@ -488,6 +488,7 @@ import infrastructure directly).
 - `display_name='Agent'`
 - `config_schema=AgentConfig`
 - `on_delete=...` — cascade hook invoked by `ResourceService.delete` to call the **skill-side** binding cleanup (skill module provides the callback; agent kind does not import the skill module directly — the callback is passed to `make_agent_kind` at the composition root).
+- `on_enabled_changed=...` — hook invoked when the row's `enabled` flag changes; the composition root passes one that re-runs skill delivery for that agent (`SkillService.apply_scope_for_agent`, actor `system`).
 - `generic_create_allowed=False` — the kind-agnostic `POST /api/v1/resources` refuses to create an agent; agents are registered only through `AgentService`, which validates the config directory.
 
 ## Composition root wiring

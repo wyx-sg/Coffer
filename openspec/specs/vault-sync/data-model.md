@@ -447,7 +447,7 @@ which each machine renders from its own build, the knowledge files and its own
 reach (see "Withhold derived output in both halves" and "Leave the paths of
 withheld derived output inert"). The name is a literal in the sync layer because
 import-linter's cross-kind fences keep that layer from reading it off the skill
-kind; `tests/contract/test_non_converging_tree_paths.py` pins it to the spelling
+kind; `backend/tests/contract/test_non_converging_tree_paths.py` pins it to the spelling
 the kind uses.
 
 Everything else under `knowledge/` and `skills/` is source of truth, hidden

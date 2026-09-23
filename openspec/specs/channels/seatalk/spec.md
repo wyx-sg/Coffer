@@ -264,8 +264,11 @@ alone, which an agent resolves to a name through the platform's own tools.
 ### Requirement: Render replies as SeaTalk markdown
 A reply MUST be converted from the agent's markdown to **SeaTalk's own markdown**
 (`format: 1` — bold, italic, inline code, fences, ordered and unordered lists),
-chunked to stay under the platform's **4096-byte** message cap: at most 3500
-characters and 3900 bytes per chunk, leaving room for escaping to grow the text.
+chunked to stay under the platform's **4096-byte** message cap in two steps:
+the agent's markdown is first split into chunks of at most 3500 characters,
+each chunk is then rendered and escaped, and a rendered chunk longer than 3900
+UTF-8 bytes is split again at character boundaries until every piece fits, so
+neither escaping nor multi-byte text can push a message past the cap.
 Headings become bold and links become `label (url)`,
 neither being supported there. A literal marker character is escaped with a
 **SINGLE backslash** — two would be one escape too many, SeaTalk consuming the

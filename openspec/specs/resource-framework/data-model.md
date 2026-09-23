@@ -108,7 +108,7 @@ Plain dataclass.
 | `resource_id`   | `int \| None`    | the resource's stable row id — what makes a trail survive a rename; `None` for an event naming no resource, and for rows written before the column existed |
 | `resource_kind` | `str \| None`    | nullable; the LABEL the resource carried at the time    |
 | `resource_name` | `str \| None`    | nullable; daemon-lifecycle events have no resource     |
-| `actor`         | `str`            | free string: `"cli"`, `"api"` or `"ui"` from the `X-Coffer-Actor` header, `"system"`, or a domain actor a kind names itself (`"user"`, `"channel"`, an agent's name) |
+| `actor`         | `str`            | free string: `"cli"`, `"api"` or `"ui"` from the `X-Coffer-Actor` header (`"api"` when it is absent), `"system"` for the daemon's own work, `"sync"` for a change applied from the sync remote, a named worker such as `"system:memory-aggregate-worker"` or `"system:memory-distil-worker"`, or a domain actor a kind names itself (`"user"`, `"channel"`, an agent's name, or `"agent"` for a knowledge write whose session reported no agent) |
 | `details`       | `dict[str, Any]` | JSON-serialisable payload                              |
 
 ### `AuditEventType` (`domain/audit.py`)

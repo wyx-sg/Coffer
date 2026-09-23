@@ -28,5 +28,5 @@
 
 ## 4. Close
 
-- [ ] 4.1 Run `make verify`
+- [x] 4.1 Run `make verify`
 - [x] 4.2 Archive the change (`npx openspec archive align-specs-with-code --yes`)

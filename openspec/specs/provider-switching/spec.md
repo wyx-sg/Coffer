@@ -691,7 +691,11 @@ is on").
 
 ### Requirement: Choose a model from a fixed list
 Every Coffer surface that chooses a model MUST offer a fixed list with no free-text entry, always
-including the current value so it stays selectable; non-chat models are never offered. A model name
+including the current value so it stays selectable; non-chat models are never offered, so an active
+connection that curates models, none of them `text`, offers none. The per-conversation picker also
+always carries a **Default** option that clears the conversation's model, so the agent runs its
+projected default ([chat](../chat/spec.md) "Offer models from a fixed dropdown that keeps the
+current value"). A model name
 and a reasoning level MUST both be passed to the agent verbatim, with no validation against a list of
 Coffer's own: the CLI owns that namespace, so a renamed or added level works the day it ships, and a
 level an account cannot run fails where every other unusable choice fails. A model name is still raw

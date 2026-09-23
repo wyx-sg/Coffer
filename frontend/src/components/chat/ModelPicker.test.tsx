@@ -166,7 +166,10 @@ describe("ModelPicker", () => {
     const trigger = screen.getByRole("combobox", { name: /agent model/i });
     expect(trigger).toHaveTextContent("my-finetune");
     fireEvent.keyDown(trigger, { key: "ArrowDown" });
-    expect(screen.getAllByRole("option").map((o) => o.textContent)).toContain("my-finetune");
+    const options = screen.getAllByRole("option").map((o) => o.textContent);
+    expect(options).toContain("my-finetune");
+    // The Default option leads, followed by the catalogue's models.
+    expect(options).toEqual(["Default", "gpt-5-codex", "gpt-5", "my-finetune"]);
   });
 
   test("choosing Default commits null (inherit the projected default)", () => {

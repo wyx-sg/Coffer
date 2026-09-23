@@ -319,7 +319,7 @@ export interface components {
             event_type: string;
             resource_kind?: string | null;
             resource_name?: string | null;
-            /** @description Who made the change: `cli`, `ui` or `api` from the `X-Coffer-Actor` header, `system` for the daemon's own work, or a domain actor a kind names itself — `user`, `channel`, or an agent's name. A free string, not an enum. */
+            /** @description Who made the change: `cli`, `ui` or `api` from the `X-Coffer-Actor` header (`api` when it is absent), `system` for the daemon's own work, `sync` for a change applied from the sync remote, a named worker such as `system:memory-aggregate-worker` or `system:memory-distil-worker`, or a domain actor a kind names itself — `user`, `channel`, an agent's name, or `agent` for a knowledge write whose session reported no agent. A free string, not an enum. */
             actor: string;
             details?: {
                 [key: string]: unknown;

@@ -214,8 +214,8 @@ Add to `AuditEventType`:
 
 | Value                  | When emitted                                                               |
 | ---------------------- | -------------------------------------------------------------------------- |
-| `skill_imported`       | Local-path import succeeds                                                 |
-| `skill_updated`        | An overwrite re-import replaced the skill (details: the new `version_hash`), or an in-app file save changed one file (details: `path`, `edited_file: true`) |
+| `skill_imported`       | Local-path import succeeds; or the built-in seed registered a Coffer-generated skill for the first time (actor `system`, details: `version_hash`, `builtin: true`) |
+| `skill_updated`        | An overwrite re-import replaced the skill (details: the new `version_hash`), or an in-app file save changed one file (details: `path`, `edited_file: true`); or the built-in seed rewrote a Coffer-generated skill whose text changed (actor `system`, details: the new `version_hash`, `builtin: true`) |
 | `skill_bound`          | A copy was delivered to an agent (symlink created)                         |
 | `skill_unbound`        | A delivered copy was reclaimed from an agent (symlink removed)             |
 
@@ -411,9 +411,11 @@ in lockstep and returns an `AgentSkillWiring`. The wiring function:
 1. Builds `SkillBindingRepo`, `MasterStore`, `SyncEngine`, and the `SkillService`,
    plus the agent services, handing `AgentService` the skill side's
    `relink_for_agent` as its config-dir-changed hook.
-2. Builds the agent `Kind` fresh via `make_agent_kind(on_delete=...)`, whose
-   `on_delete` awaits `skill_svc.cleanup_bindings_for_agent(agent)` before the
-   agent row is removed.
+2. Builds the agent `Kind` fresh via `make_agent_kind(on_delete=...,
+   on_enabled_changed=...)`, whose `on_delete` awaits
+   `skill_svc.cleanup_bindings_for_agent(agent)` before the agent row is removed,
+   and whose `on_enabled_changed` calls
+   `skill_svc.apply_scope_for_agent(agent_uid=..., actor="system")`.
 3. Builds the skill `Kind` via `make_skill_kind(cleanup_bindings_for_skill,
    move_master_folder, on_scope_changed=..., on_enabled_changed=...)`, the two
    hooks re-running delivery for every registered agent.

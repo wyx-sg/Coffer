@@ -215,8 +215,10 @@ kind ever had one.
 
 ### Requirement: Audit every lifecycle change
 The system MUST record an audit entry for every lifecycle change to any resource or
-capability, including the actor — the originating surface (CLI / API / UI), `system`, or a
-domain actor a kind names itself, such as `user`, `channel` or an agent's name. Every lifecycle change made
+capability, including the actor — the originating surface (CLI / API / UI), `system` for the
+daemon's own work, `sync` for a change applied from the sync remote, a named background worker
+such as `system:memory-aggregate-worker`, or a domain actor a kind names itself, such as `user`,
+`channel`, an agent's name, or `agent` for a knowledge write whose session reported no agent. Every lifecycle change made
 through any surface — REST, CLI, or a kind's own command — MUST appear in the audit log
 with the originating actor, and no surface can mutate a resource without one. Entries
 MUST be readable through both surfaces, filterable by kind, resource, event type and
