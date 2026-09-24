@@ -54,6 +54,11 @@ class AgentDescriptor:
     #: (``skills``). Coffer delivers a managed skill by symlinking (copy
     #: fallback) the master folder into it.
     skill_subpath: str = "skills"
+    #: The environment variable the agent's own runtime reads a non-default
+    #: config directory from (``CLAUDE_CONFIG_DIR``, ``CODEX_HOME``). Every
+    #: process Coffer spawns to run the agent carries it for a custom
+    #: ``config_dir`` — see :func:`coffer.domain.agent.home_env.home_env`.
+    home_env_var: str = ""
     #: How Coffer manages this agent's plugins (``None`` = no plugin concept).
     plugins: PluginCapability | None = None
 
@@ -81,6 +86,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         display_name="Claude Code",
         config_subpath=".claude",
         config_files=_claude_code_files,
+        home_env_var="CLAUDE_CONFIG_DIR",
         mcp=McpInjectionSpec(
             config_key="global",
             container_key="mcpServers",
@@ -104,6 +110,7 @@ AGENT_DESCRIPTORS: dict[AgentType, AgentDescriptor] = {
         display_name="OpenAI Codex",
         config_subpath=".codex",
         config_files=_codex_files,
+        home_env_var="CODEX_HOME",
         mcp=McpInjectionSpec(
             config_key="config",
             container_key="mcp_servers",

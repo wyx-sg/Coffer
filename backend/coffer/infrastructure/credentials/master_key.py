@@ -55,19 +55,46 @@ class MasterKeyManager:
 
         Returns None when no key exists and ``allow_create`` is False — the
         caller decides whether that is fatal (it is, when ciphertext exists).
+
+        A keychain that cannot be read right now (``CredentialLocked``) is
+        never taken as "no key" when creating is allowed: the key may sit in
+        it (opted in through :meth:`relocate`), and a file key created now
+        would shadow it on every later start, file-first. So the lock is
+        re-raised and nothing is written (spec credentials "Resolve the master
+        key file-first and create it only for an empty store"). Without
+        ``allow_create`` a locked keychain still reads as None — the caller
+        then refuses on its own terms.
+        """
+        try:
+            key = self.lookup()
+        except CredentialLocked:
+            if allow_create:
+                raise
+            key = None
+        if key is not None or not allow_create:
+            return key
+        return self._create()
+
+    def lookup(self) -> bytes | None:
+        """The key, or None when this machine genuinely holds none.
+
+        Unlike :meth:`resolve`, a key that exists but cannot be read right now
+        is not answered as None: a locked or unavailable keychain raises
+        ``CredentialLocked``, and a key file that cannot be read raises
+        ``OSError``. A caller that must tell "no key" from "unknown" (spec
+        vault-sync "Report refs without a key as locked") uses this.
         """
         if self._key_path.exists():
+            key = self._key_path.read_bytes().strip()
             self._location = "file"
-            return self._key_path.read_bytes().strip()
-        try:
-            stored = self._keyring.get(KEYCHAIN_REF)
-        except CredentialLocked:
-            stored = None
+            return key
+        stored = self._keyring.get(KEYCHAIN_REF)
         if stored:
             self._location = "keychain"
             return stored.encode()
-        if not allow_create:
-            return None
+        return None
+
+    def _create(self) -> bytes:
         key = Fernet.generate_key()
         self._write_file(key)
         self._location = "file"

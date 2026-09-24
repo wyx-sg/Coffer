@@ -924,7 +924,7 @@
       "desc": {
         "settings": "Project-level Claude Code settings: permissions, model, and hooks.",
         "settings_local": "Personal overrides layered on top of the shared settings; not committed.",
-        "global": "Claude Code's global state and user-scope MCP servers (~/.claude.json).",
+        "global": "Claude Code's global state and user-scope MCP servers (.claude.json — beside ~/.claude, or inside a custom config directory).",
         "instructions": "Instructions auto-loaded into every session in this directory.",
         "subagents": "Custom subagent definitions, one Markdown file per subagent.",
         "config": "Codex CLI configuration: model, providers, and tool settings.",

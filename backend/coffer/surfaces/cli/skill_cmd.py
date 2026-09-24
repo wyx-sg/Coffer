@@ -1,5 +1,8 @@
 """coffer skill ... commands (local-folder import only).
 
+The master-folder file commands (``files``/``cat``/``write``) live in
+``skill_file_cmd.py`` and are attached to this group.
+
 Takes NAMES — the skill's, and the agent's where a command names one — and
 resolves each to a uid through ``_resolve`` before it addresses a route
 (ADR resource-identity-is-an-immutable-uid). An UNMANAGED skill is the one
@@ -18,10 +21,13 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli import skill_file_cmd
 from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(help="Manage skills (AgentSkills standard)")
 _console = Console()
+# `files`, `cat`, `write`: the master folder, in their own module (file-size cap).
+skill_file_cmd.attach(app)
 
 
 def _agent_names(c: httpx.Client) -> dict[str, str]:

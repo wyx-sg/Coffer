@@ -204,8 +204,10 @@ export interface paths {
         /**
          * List the MCP server entries in the agent's own config files
          * @description Derived at read time from the agent's MCP-bearing config files
-         *     (claude_code: `~/.claude.json` + `settings.json` `mcpServers`; codex:
-         *     `config.toml` `[mcp_servers.*]`) — nothing is stored (see "List the MCP entries in the agent's own
+         *     (claude_code: the agent's global config file — `~/.claude.json` for
+         *     the default config directory, `<config_dir>/.claude.json` for a custom
+         *     one — + `settings.json` `mcpServers`; codex: `config.toml`
+         *     `[mcp_servers.*]`) — nothing is stored (see "List the MCP entries in the agent's own
          *     config files"). Env and
          *     header VALUES never cross HTTP: each entry exposes key names only,
          *     plus which keys look secret-like. A file that fails to parse degrades
@@ -382,7 +384,10 @@ export interface paths {
          * Install Coffer's MCP server into this agent
          * @description Writes a `coffer` stdio MCP-server entry (command = absolute path to
          *     coffer-mcp-shim, argument `--agent-uid <uid>`) into the agent's MCP
-         *     config file, atomically and with a `.bak` backup. The shim reports
+         *     config file (claude_code: its global config file — `~/.claude.json`
+         *     for the default config directory, `<config_dir>/.claude.json` for a
+         *     custom one; codex: `<config_dir>/config.toml`), atomically and with a
+         *     `.bak` backup. The shim reports
          *     that uid on every call and the gateway matches it against each
          *     resource's `scope.agents`, which is why the argument is the uid and
          *     not the agent's name: this line is written once into a file Coffer

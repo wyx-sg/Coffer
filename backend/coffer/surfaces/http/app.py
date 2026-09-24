@@ -53,7 +53,10 @@ from coffer.infrastructure.persistence.repos import (
 )
 from coffer.surfaces.http import daemon_routes, middleware, webui
 from coffer.surfaces.http import errors as err_handlers
-from coffer.surfaces.http.agent_skill_wiring import run_skill_drift_boot_heal
+from coffer.surfaces.http.agent_skill_wiring import (
+    run_claude_mcp_home_migration,
+    run_skill_drift_boot_heal,
+)
 from coffer.surfaces.http.app_mcp_composition import (
     build_retention_service,
     reaper_kwargs_from_env,
@@ -250,6 +253,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # provider_wiring / agent_skill_wiring for what each corrects).
     await run_provider_projection_sweep(kinds.provider.boot_heal)
     await run_skill_drift_boot_heal(kinds.agent_skill.boot_heal)
+    await run_claude_mcp_home_migration(kinds.agent_skill.mcp_home_migration)
     # Both follow their feature's switch from here on, and at boot already
     # match it (spec experimental-features).
     await run_memory_delivery_boot_heal(kinds.memory.delivery_service, features)

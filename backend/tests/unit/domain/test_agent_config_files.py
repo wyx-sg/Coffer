@@ -36,6 +36,27 @@ def test_claude_code_allowlist(monkeypatch, tmp_path):
     assert by_key["instructions"].format is ConfigFileFormat.MARKDOWN
 
 
+def test_claude_code_global_config_follows_a_custom_config_dir(monkeypatch, tmp_path):
+    """Claude Code run with ``CLAUDE_CONFIG_DIR`` set keeps ``.claude.json``
+    INSIDE that dir (probed against Claude Code 2.1.281: ``claude mcp add -s
+    user`` wrote ``$CLAUDE_CONFIG_DIR/.claude.json`` and never read
+    ``$HOME/.claude.json``), so the ``global`` key must follow it there."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    custom = tmp_path / "work-claude"
+    by_key = {s.key: s for s in config_files_for(AgentType.CLAUDE_CODE, custom)}
+    assert by_key["global"].path == custom / ".claude.json"
+    # The config-dir files themselves are unaffected.
+    assert by_key["settings"].path == custom / "settings.json"
+
+
+def test_claude_code_global_config_for_the_default_dir_passed_explicitly(monkeypatch, tmp_path):
+    """A registered agent carries its resolved ``config_dir`` even when it is
+    the default ``~/.claude`` — that must still mean ``~/.claude.json``."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    default = tmp_path / ".claude"
+    assert spec_for(AgentType.CLAUDE_CODE, "global", default).path == tmp_path / ".claude.json"
+
+
 def test_codex_allowlist(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     specs = config_files_for(AgentType.CODEX)

@@ -61,6 +61,19 @@ Each agent exposes a curated set of config files, addressed by a short **key**:
 | `codex`       | `instructions`   | `~/.codex/AGENTS.md`                                 |
 | `codex`       | `hooks`          | `~/.codex/hooks.json`                                |
 
+Paths are shown for the default config directory; with `--config-dir` they move with it. Claude Code's `global` file is the exception worth knowing: for the default `~/.claude` it is `~/.claude.json`, beside the directory, but for any other config directory it is `<config-dir>/.claude.json`, inside it. That is where Claude Code itself keeps the file when you run it with `CLAUDE_CONFIG_DIR` pointing at that directory — the only way it reads a non-default one — and it never reads `~/.claude.json` then, so Coffer installs its MCP entry, lists MCP entries and reads cached model options from that file too.
+
+When Coffer itself runs an agent with a custom config directory — a turn from the Chat page or a channel, or Codex's model list — it starts the process with that directory: `CLAUDE_CONFIG_DIR=<config-dir>` for Claude Code, `CODEX_HOME=<config-dir>` for Codex. The turn therefore sees the skills, MCP entry and settings Coffer put there, and signs in with whatever login that directory holds. For the default directory nothing is set — and the daemon clears any `CLAUDE_CONFIG_DIR` or `CODEX_HOME` it inherited from the shell that started it (the daemon log names which), so an exported variable never redirects an agent registered on its default directory.
+
+A turn or a model list names an agent **type**, not an agent. When two agents of one type are registered (on different config directories), the enabled one whose name sorts first answers for the type — for Chat and channel turns and for `coffer agent models` alike — so renaming one of them can change which directory is used.
+
+A custom config directory is therefore its own Claude Code or Codex home, with its own login. Sign in once under it before using the agent from Coffer:
+
+```sh
+CLAUDE_CONFIG_DIR=<config-dir> claude      # Claude Code: log in when prompted
+CODEX_HOME=<config-dir> codex login        # Codex
+```
+
 List the keys for an agent, print one, or edit one:
 
 ```bash
@@ -97,7 +110,7 @@ coffer agent mcp install claude-code     # write the coffer entry
 coffer agent mcp uninstall claude-code   # remove it
 ```
 
-Install is idempotent: running it again updates the existing entry in place rather than duplicating it. The entry goes into `~/.claude.json` for Claude Code and `~/.codex/config.toml` for Codex, with a `.bak` of the prior file, and its command is the shim's absolute path, so an agent launched without your shell's `PATH` still finds it. Restart the agent afterwards to pick up Coffer's tools. Once installed, the agent reaches every server whose reach includes this agent through the shim — see [Connect a client](/guide/connect-client).
+Install is idempotent: running it again updates the existing entry in place rather than duplicating it. The entry goes into Claude Code's `global` file (`~/.claude.json`, or `<config-dir>/.claude.json` for a custom config directory) and Codex's `config.toml` (`~/.codex/config.toml`, or `<config-dir>/config.toml` for a custom config directory), with a `.bak` of the prior file, and its command is the shim's absolute path, so an agent launched without your shell's `PATH` still finds it. Restart the agent afterwards to pick up Coffer's tools. An older Coffer wrote the entry for a custom-directory Claude Code agent into `~/.claude.json`, which Claude Code never reads for that directory; the first daemon start after upgrading moves it into `<config-dir>/.claude.json` (backed up and recorded in the audit log like an install), and leaves every other entry in `~/.claude.json` alone. Once installed, the agent reaches every server whose reach includes this agent through the shim — see [Connect a client](/guide/connect-client).
 
 ## The agent's own MCP entries
 

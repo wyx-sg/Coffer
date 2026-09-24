@@ -13,7 +13,17 @@ coffer skill show my-skill          # metadata + where it is delivered
 ```
 
 - `import` takes a copy. `local_import` is the only source **you** can create: there is no Git fetcher and no `update` command. If a skill originally came from a repository, the way to refresh it is to pull that repository yourself and `import` again. The one other source is `builtin`, which only Coffer itself creates — see "Coffer's own skill" below.
-- The master copy lives at `~/.coffer/skills/<name>/`, and it is the source of truth — edit it there (or on the skill's page) and every agent it reaches sees the change without re-delivery.
+- The master copy lives at `~/.coffer/skills/<name>/`, and it is the source of truth — edit it there (or on the skill's page, or with `coffer skill write`) and every agent it reaches sees the change without re-delivery.
+
+```bash
+coffer skill files my-skill                              # the master folder as a tree (--json)
+coffer skill cat my-skill SKILL.md                       # one file; --json adds its fingerprint
+coffer skill write my-skill SKILL.md < SKILL.md.new      # or --from-file SKILL.md.new
+```
+
+`write` overwrites an existing text file only — it never creates one — and is conditional: it sends the fingerprint of a read taken just before the write, or the one you pass with `--fingerprint` (from `skill cat --json`, the read your edit started from). If the file changed on disk since, the write is refused with exit code 5 and the file is left as it was; read it again and reapply. Coffer's own skill is refused the same way, because it is rewritten from the build.
+
+`write` refuses empty content with exit code 2 and saves nothing — stdin that is already at end-of-file (cron, CI, an agent's shell, `</dev/null`) reads as empty. Pass `--allow-empty` when emptying the file is what you mean. Run from a terminal with nothing piped in, it exits 2 straight away rather than wait for input; pipe the content or use `--from-file`. `cat` on a file over the 256 KiB read cap prints the first part, names the file's real size on stderr and exits 1; `cat --json` exits 0 and reports `truncated: true`.
 - An import is refused if `SKILL.md` lacks a non-empty `name` or `description`, if the folder is over 50 MB, or if a skill of that name already exists — `--force` replaces the existing one.
 
 On disk, delivery is a directory link from each agent's skills folder back to the master, so an edit through either path lands in the one copy:

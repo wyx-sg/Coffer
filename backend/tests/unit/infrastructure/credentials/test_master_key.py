@@ -8,7 +8,7 @@ import stat
 import pytest
 from cryptography.fernet import Fernet
 
-from coffer.domain.errors import MasterKeyMissing
+from coffer.domain.errors import CredentialLocked, MasterKeyMissing
 from coffer.infrastructure.credentials.master_key import KEYCHAIN_REF, MasterKeyManager
 
 
@@ -153,3 +153,43 @@ def test_install_key_rejects_malformed_key_before_touching_file(key_path: pathli
         mgr.install_key(b"not-a-fernet-key")
     assert key_path.read_bytes().strip() == old
     assert list(key_path.parent.glob("master.key.bak-*")) == []
+
+
+class LockedKeyring(FakeKeyring):
+    """A keychain that exists but cannot be read right now (locked at login,
+    or the user dismissed the unlock prompt)."""
+
+    def get(self, ref: str) -> str | None:
+        raise CredentialLocked("keychain is locked: test")
+
+
+def test_locked_keychain_never_creates_a_key_even_when_creation_is_allowed(
+    key_path: pathlib.Path,
+) -> None:
+    """The keychain may hold the key (opted in via relocate): a key created in
+    the file now would shadow it from the next start on, file-first."""
+    mgr = MasterKeyManager(key_path=key_path, keyring=LockedKeyring())
+
+    with pytest.raises(CredentialLocked):
+        mgr.resolve(allow_create=True)
+
+    assert not key_path.exists()
+    assert mgr.location is None
+
+
+def test_locked_keychain_with_creation_disallowed_answers_none(key_path: pathlib.Path) -> None:
+    mgr = MasterKeyManager(key_path=key_path, keyring=LockedKeyring())
+
+    assert mgr.resolve(allow_create=False) is None
+    assert not key_path.exists()
+
+
+def test_locked_keychain_does_not_matter_while_the_file_holds_the_key(
+    key_path: pathlib.Path,
+) -> None:
+    key = Fernet.generate_key()
+    key_path.write_bytes(key)
+    mgr = MasterKeyManager(key_path=key_path, keyring=LockedKeyring())
+
+    assert mgr.resolve(allow_create=True) == key
+    assert mgr.location == "file"

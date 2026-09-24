@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
+from coffer.application.agent.answering import AgentLister, answering_agent_config
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.engine.resolve import resolve_transcribe_connection
 from coffer.domain.agent.types import AgentType
@@ -24,7 +25,10 @@ from coffer.infrastructure.chat.adapter_support import (
 from coffer.infrastructure.chat.claude_sdk_provider import ClaudeSdkProvider
 from coffer.infrastructure.chat.codex_provider import CodexAppServerProvider
 from coffer.infrastructure.llm.transcription import remote_transcriber_factory
-from coffer.surfaces.http.agent_dependencies import get_agent_model_catalogue
+from coffer.surfaces.http.agent_dependencies import (
+    get_agent_model_catalogue,
+    get_agent_service,
+)
 from coffer.surfaces.http.engine_config_composition import (
     read_internal_engine_timeout,
     read_transcribe_model,
@@ -33,6 +37,27 @@ from coffer.surfaces.http.provider_dependencies import get_provider_service
 
 if TYPE_CHECKING:
     from coffer.infrastructure.chat.persistence import ConversationRepo
+
+
+def agent_home_env_resolver(
+    agent_type: AgentType, agents: Callable[[], AgentLister] = get_agent_service
+) -> Callable[[], Awaitable[dict[str, str]]]:
+    """The environment a turn on ``agent_type`` runs under, resolved per turn.
+
+    The agent answering for the type (``answering_agent_config`` — the same one
+    the model catalogue reads) decides it: a custom ``config_dir`` becomes
+    ``CLAUDE_CONFIG_DIR`` / ``CODEX_HOME``, the default one (or no registered
+    agent) sets nothing (spec chat "Ship Claude Code and Codex subprocess
+    providers"). ``agents`` is a getter so the registry is read at request
+    time, after the composition root has published it, and so a changed
+    ``config_dir`` takes effect on the next turn without a restart.
+    """
+
+    async def _resolve() -> dict[str, str]:
+        cfg = await answering_agent_config(agents(), agent_type.value)
+        return {} if cfg is None else cfg.runtime_env()
+
+    return _resolve
 
 
 def build_agent_provider_registry(
@@ -105,6 +130,7 @@ def build_agent_provider_registry(
             transcriber_factory=transcriber_factory,
             compose_memory_context=compose_memory_context,
             resolve_channel_name=resolve_channel_name,
+            resolve_home_env=agent_home_env_resolver(AgentType.CLAUDE_CODE),
         ),
         display_name="Claude Code",
     )
@@ -135,6 +161,7 @@ def build_agent_provider_registry(
             list_models=_list_models,
             compose_memory_context=compose_memory_context,
             resolve_channel_name=resolve_channel_name,
+            resolve_home_env=agent_home_env_resolver(AgentType.CODEX),
         ),
         display_name="Codex",
     )

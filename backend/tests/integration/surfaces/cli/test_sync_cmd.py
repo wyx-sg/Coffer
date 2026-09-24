@@ -250,6 +250,62 @@ def test_remote_set_without_credentials_switches_credential_sync_off(
     assert "credentials excluded" in result.output
 
 
+def test_remote_set_moves_the_working_tree_it_names(fleet: Fleet, tmp_path) -> None:
+    """``--worktree`` is the CLI's reach to the ``worktree_path`` REST already
+    takes; every other stored option is left as it was."""
+    before = _configured(fleet, tmp_path)
+    moved = tmp_path / "moved-tree"
+
+    result = fleet.ok("sync", "remote", "set", fleet.a.remote_url, "--worktree", str(moved))
+
+    stored = fleet.run(fleet.a.service().get_remote())
+    assert stored == dataclasses.replace(before, worktree_path=str(moved))
+    assert "working tree: " in result.output
+    assert "moved-tree" in result.output
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="reconfiguring a remote changes only what it names"
+)
+def test_remote_set_without_worktree_keeps_the_stored_working_tree(fleet: Fleet, tmp_path) -> None:
+    before = _configured(fleet, tmp_path)
+
+    fleet.ok("sync", "remote", "set", fleet.a.remote_url, "--branch", "other")
+
+    stored = fleet.run(fleet.a.service().get_remote())
+    assert stored is not None
+    assert stored.worktree_path == before.worktree_path == str(tmp_path / "custom-tree")
+
+
+@pytest.mark.parametrize(
+    ("where", "reason"),
+    [
+        ("knowledge_root", "overlaps the vault directory"),
+        ("skills_root", "overlaps the vault directory"),
+        ("root", "would contain Coffer's own directory"),
+        ("relative", "worktree_path must be absolute"),
+    ],
+)
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a working tree pointed inside the vault is refused"
+)
+def test_remote_set_refuses_a_working_tree_inside_the_vault(
+    fleet: Fleet, where: str, reason: str
+) -> None:
+    """The CLI surfaces the route's refusal — its reason and the invalid-input
+    exit code — and nothing is stored."""
+    set_sync_service(fleet.a.service(guard_worktree=True))
+    path = "relative/sync" if where == "relative" else str(getattr(fleet.a, where))
+
+    result = fleet.invoke("sync", "remote", "set", fleet.a.remote_url, "--worktree", path)
+
+    assert result.exit_code == 6, result.output
+    said = " ".join(result.output.split())
+    assert "backup remote invalid" in said
+    assert reason in said
+    assert "no sync remote configured" in fleet.ok("sync", "remote", "show").output
+
+
 def test_first_remote_set_stores_the_defaults(fleet: Fleet) -> None:
     fleet.ok("sync", "remote", "set", fleet.a.remote_url)
 
@@ -839,6 +895,7 @@ def test_the_sync_group_offers_every_command_and_option_it_owes() -> None:
             "--with-credentials",
             "--without-credentials",
             "--credential-ref",
+            "--worktree",
         },
         ("sync", "remote", "show"): set(),
         ("sync", "remote", "clear"): set(),

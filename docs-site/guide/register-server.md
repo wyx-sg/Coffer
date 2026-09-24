@@ -58,6 +58,7 @@ coffer mcp tool enable filesystem write_file
 
 ```bash
 coffer mcp invocations filesystem              # latest 20 calls
+coffer mcp invocations                         # every server's, Coffer's own tools included
 coffer mcp invocations filesystem --status error --since 2026-09-01T00:00:00Z
 ```
 

@@ -14,8 +14,10 @@ when it is not, the UI keeps the "use the CLI yourself" hint instead.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+from collections.abc import Mapping
 
 from coffer.domain.workspace_errors import PluginUninstallFailed
 
@@ -32,8 +34,12 @@ class ClaudePluginCli:
     def available(self) -> bool:
         return shutil.which(self._executable) is not None
 
-    def uninstall(self, plugin_id: str) -> None:
+    def uninstall(self, plugin_id: str, *, env: Mapping[str, str] | None = None) -> None:
         """Run ``claude plugin uninstall <plugin_id>``.
+
+        ``env`` overrides the inherited environment — ``CLAUDE_CONFIG_DIR`` for
+        an agent whose config dir is not the default, so the CLI uninstalls
+        from that agent's directory rather than from ``~/.claude``.
 
         Raises :class:`PluginUninstallFailed` if the CLI is missing, exits
         non-zero, or times out — the service maps that to an actionable error
@@ -48,6 +54,7 @@ class ClaudePluginCli:
                 text=True,
                 timeout=_UNINSTALL_TIMEOUT_S,
                 check=False,
+                env={**os.environ, **env} if env else None,
             )
         except (OSError, subprocess.SubprocessError) as e:
             raise PluginUninstallFailed(plugin_id, str(e)) from e

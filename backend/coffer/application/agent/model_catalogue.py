@@ -48,9 +48,8 @@ from collections.abc import Iterable
 from dataclasses import replace
 from typing import Protocol
 
-from coffer.domain.agent.config import AgentConfig
+from coffer.application.agent.answering import AgentLister, answering_agent_config
 from coffer.domain.agent.model_catalogue import AgentModel
-from coffer.domain.resource import Resource
 
 _log = logging.getLogger(__name__)
 
@@ -98,13 +97,6 @@ class ActiveProviderModelsPort(Protocol):
     """
 
     async def curated_models(self, agent_key: str) -> list[str] | None: ...
-
-
-class AgentLister(Protocol):
-    """The agent registry, narrowed to the one call this service needs
-    (the same port ``ProviderService`` takes as ``agents``)."""
-
-    async def list(self) -> list[Resource]: ...
 
 
 def _deduped(found: Iterable[AgentModel]) -> list[AgentModel]:
@@ -256,35 +248,12 @@ class AgentModelCatalogueService:
             return None
         return None if models is None else list(models)
 
-    async def _agent(self, agent_key: str) -> Resource | None:
-        """The first ENABLED agent resource of this type, or ``None``.
-
-        One resource answers for the type, so the catalogue of a type is always
-        one agent's answer rather than a blend of several.
-
-        Disabled agents are skipped: the user has told Coffer to leave them
-        alone, so their config should not feed the picker either.
-        """
-        for resource in await self._agents.list():
-            if not resource.enabled:
-                continue
-            try:
-                cfg = AgentConfig.model_validate(resource.config)
-            except ValueError:
-                # A row Coffer can no longer parse is not a reason to fail a
-                # read-only catalogue lookup; the agent routes surface it.
-                continue
-            if cfg.type.value == agent_key:
-                return resource
-        return None
-
     async def _config_dir(self, agent_key: str) -> pathlib.Path | None:
-        """The config dir of the agent answering for this type, or ``None`` when
-        the user has not registered one."""
-        agent = await self._agent(agent_key)
-        if agent is None:
-            return None
-        return AgentConfig.model_validate(agent.config).resolved_config_dir()
+        """The config dir of the agent answering for this type
+        (``answering_agent_config`` — the same agent a chat turn runs against),
+        or ``None`` when the user has not registered one."""
+        cfg = await answering_agent_config(self._agents, agent_key)
+        return None if cfg is None else cfg.resolved_config_dir()
 
     async def _discover(self, agent_key: str, config_dir: pathlib.Path | None) -> list[AgentModel]:
         """Belt-and-braces around the port's never-raise contract — a picker

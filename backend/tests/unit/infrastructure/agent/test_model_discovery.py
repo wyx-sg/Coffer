@@ -42,11 +42,28 @@ def _claude_json(path: pathlib.Path, cache: object = _CACHE) -> None:
     )
 
 
-async def test_claude_json_inside_the_config_dir(tmp_path: pathlib.Path) -> None:
-    """The CLAUDE_CONFIG_DIR layout keeps ``.claude.json`` inside the dir."""
+@pytest.fixture(autouse=True)
+def _home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``$HOME`` is ``tmp_path``, so ``tmp_path / ".claude"`` is the DEFAULT
+    config dir and any other directory is a custom one."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+
+_OTHER = [{"value": "claude-other", "label": "Other", "description": "wrong file"}]
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry/claude-code",
+    scenario="read the extra model options from a custom config directory's .claude.json",
+)
+async def test_claude_json_inside_a_custom_config_dir(tmp_path: pathlib.Path) -> None:
+    """Run with ``CLAUDE_CONFIG_DIR`` set, Claude Code keeps ``.claude.json``
+    inside that dir; a ``$HOME/.claude.json`` beside it belongs to the default
+    install and is not this agent's."""
     config_dir = tmp_path / "custom-claude"
     config_dir.mkdir()
     _claude_json(config_dir / ".claude.json")
+    _claude_json(tmp_path / ".claude.json", cache=_OTHER)
 
     models = await NativeConfigModelDiscovery().discover(
         agent_key="claude_code", config_dir=config_dir
@@ -57,11 +74,25 @@ async def test_claude_json_inside_the_config_dir(tmp_path: pathlib.Path) -> None
     assert models[0].description.startswith("Fable 5.1")
 
 
-async def test_claude_json_beside_the_config_dir(tmp_path: pathlib.Path) -> None:
-    """The default layout is ``~/.claude`` + ``~/.claude.json`` — one level up."""
+async def test_custom_config_dir_never_falls_back_to_the_home_file(tmp_path: pathlib.Path) -> None:
+    config_dir = tmp_path / "custom-claude"
+    config_dir.mkdir()
+    _claude_json(tmp_path / ".claude.json")
+
+    assert (
+        await NativeConfigModelDiscovery().discover(agent_key="claude_code", config_dir=config_dir)
+        == []
+    )
+
+
+async def test_claude_json_beside_the_default_config_dir(tmp_path: pathlib.Path) -> None:
+    """The default layout is ``~/.claude`` + ``~/.claude.json`` — one level up,
+    and only there: a stray ``~/.claude/.claude.json`` is not what Claude Code
+    reads when ``CLAUDE_CONFIG_DIR`` is unset."""
     config_dir = tmp_path / ".claude"
     config_dir.mkdir()
     _claude_json(tmp_path / ".claude.json")
+    _claude_json(config_dir / ".claude.json", cache=_OTHER)
 
     models = await NativeConfigModelDiscovery().discover(
         agent_key="claude_code", config_dir=config_dir

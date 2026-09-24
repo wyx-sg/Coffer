@@ -579,3 +579,46 @@ def test_engine_timeout_and_transcribe_model_set_leave_the_rest_of_the_row(engin
     after = _entries()
     assert len(after) == before + 2
     assert {e["actor"] for e in after[: len(after) - before]} == {"cli"}
+
+
+# --- upkeep runs: what is being rewritten right now --------------------------
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="the command line reads the passes in flight"
+)
+def test_upkeep_runs_names_every_pass_in_flight(engine_cli_daemon):
+    """``engine upkeep runs`` is GET /upkeep/runs: each pass the daemon holds,
+    by kind and target, oldest first."""
+    from coffer.application.upkeep_runs import UPKEEP_RUNS
+
+    assert UPKEEP_RUNS.claim("knowledge", "shopee") is True
+    assert UPKEEP_RUNS.claim("memory", "coffer") is True
+    try:
+        as_json = _runner.invoke(cli_app, ["engine", "upkeep", "runs", "--json"])
+        as_text = _runner.invoke(cli_app, ["engine", "upkeep", "runs"], env={"COLUMNS": "200"})
+    finally:
+        UPKEEP_RUNS.release("knowledge", "shopee")
+        UPKEEP_RUNS.release("memory", "coffer")
+
+    assert as_json.exit_code == 0, as_json.output
+    runs = json.loads(as_json.output)["runs"]
+    assert [(r["kind"], r["name"]) for r in runs] == [("knowledge", "shopee"), ("memory", "coffer")]
+    assert all(r["started_at"] for r in runs)
+    assert as_text.exit_code == 0, as_text.output
+    shopee = next(line for line in as_text.output.splitlines() if "shopee" in line)
+    coffer = next(line for line in as_text.output.splitlines() if "coffer" in line)
+    assert "knowledge" in shopee and "memory" in coffer
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="the command line reads the passes in flight"
+)
+def test_upkeep_runs_says_so_when_nothing_is_running(engine_cli_daemon):
+    as_json = _runner.invoke(cli_app, ["engine", "upkeep", "runs", "--json"])
+    as_text = _runner.invoke(cli_app, ["engine", "upkeep", "runs"])
+
+    assert as_json.exit_code == 0, as_json.output
+    assert json.loads(as_json.output) == {"runs": []}
+    assert as_text.exit_code == 0, as_text.output
+    assert "no upkeep pass is running" in as_text.output

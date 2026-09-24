@@ -20,6 +20,7 @@ from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.infrastructure.chat.adapter_support import (
     ChannelNameResolver,
+    HomeEnvResolver,
     MemoryContextComposer,
     ModelLister,
     compose_system_context,
@@ -73,6 +74,7 @@ class ClaudeSdkProvider:
         transcriber_factory: TranscriberFactory | None = None,
         compose_memory_context: MemoryContextComposer | None = None,
         resolve_channel_name: ChannelNameResolver | None = None,
+        resolve_home_env: HomeEnvResolver | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: SdkSessionFactory = session_factory or default_session_factory
@@ -92,6 +94,11 @@ class ClaudeSdkProvider:
         # just without naming the channel — the uid is what decides that it IS a
         # channel turn, and the label was only ever colour.
         self._resolve_channel_name = resolve_channel_name
+        # Points the spawned Claude Code at the agent's own config dir
+        # (CLAUDE_CONFIG_DIR) when it is not ~/.claude, so a turn reads the
+        # skills, MCP entry and settings Coffer put there. ``None`` ⇒ the
+        # default dir, env untouched.
+        self._resolve_home_env = resolve_home_env
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -147,8 +154,13 @@ class ClaudeSdkProvider:
             resolve_channel_name=self._resolve_channel_name,
         )
 
+        # Overrides only: the SDK merges ``options.env`` over the daemon's own
+        # environment itself. Empty for the default config dir.
+        home_env = await self._resolve_home_env() if self._resolve_home_env else {}
+
         return ClaudeSdkAgentAdapter(
             cwd=config.cwd,
+            env=home_env or None,
             resume_session=config.session_id,
             extra={"model": config.model, "effort": config.effort},
             session_factory=self._session_factory,

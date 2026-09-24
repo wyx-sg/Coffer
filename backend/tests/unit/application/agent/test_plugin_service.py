@@ -193,12 +193,14 @@ class FakeCliRunner:
         self._available = available
         self._fail = fail
         self.calls: list[str] = []
+        self.envs: list[dict[str, str]] = []
 
     def available(self) -> bool:
         return self._available
 
-    def uninstall(self, plugin_id: str) -> None:
+    def uninstall(self, plugin_id: str, *, env: dict[str, str] | None = None) -> None:
         self.calls.append(plugin_id)
+        self.envs.append(dict(env or {}))
         if self._fail is not None:
             raise self._fail
 
@@ -626,6 +628,22 @@ async def test_uninstall_claude_via_cli_calls_runner(store, audit_svc):
     entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_UNINSTALLED.value)
     assert len(entries) == 1
     assert entries[0].details == {"plugin": "plugin-a@npm", "cache_removed": True, "via": "cli"}
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry/claude-code", scenario="uninstall runs against a custom config directory"
+)
+async def test_uninstall_claude_runs_against_the_agents_own_config_dir(store, audit_svc):
+    """`claude plugin uninstall` acts on the config dir it is pointed at, so for
+    an agent whose config dir is not the default one the CLI is handed
+    CLAUDE_CONFIG_DIR — otherwise it would uninstall from ~/.claude instead."""
+    store._files[_CLAUDE_INSTALLED] = _INSTALLED_JSON
+    runner = FakeCliRunner(available=True)
+    svc = _make_svc(store, audit_svc, cli_runner=runner)
+
+    await svc.uninstall(_CC_UID, "plugin-a@npm", actor="cli")
+
+    assert runner.envs == [{"CLAUDE_CONFIG_DIR": str(_CLAUDE_CONFIG_DIR.resolve())}]
 
 
 async def test_uninstall_claude_unknown_plugin_404(store, audit_svc):

@@ -141,6 +141,8 @@ internal engine now uses local-ollama [ollama]
 
 Setting it clears the flag from any previous holder and audits `provider_internal_default_set`. A local `ollama` endpoint is a good choice: it costs nothing and reaches no agent. A connection may also be both active for your agents and the internal default at once: one key, two uses.
 
+With [sync](/guide/sync) on, the flag travels with the connection. Setting it on one machine moves it everywhere at the next round. If two machines each flag a different connection before either has synced, every machine settles on the same one: the connection whose uid sorts first keeps the flag, and the round that drops the other one reports it.
+
 None of this is required. With no connection flagged, or no model chosen, every one of those passes is a clean no-op — nothing errors, and the rest of Coffer works exactly as before.
 
 ### Choose the model
@@ -170,9 +172,10 @@ coffer engine upkeep list                              # switch, chosen interval
 coffer engine upkeep set distil --off
 coffer engine upkeep set curate --on --interval 300    # seconds
 coffer engine upkeep set aggregate --default-interval
+coffer engine upkeep runs                              # passes running right now (--json)
 ```
 
-Each command changes one pass and leaves the others exactly as they stand. A running daemon picks the change up within a short slice of its current wait — no restart. An interval below the floor, or a pass name Coffer does not run, is refused.
+Each `set` changes one pass and leaves the others exactly as they stand. A running daemon picks the change up within a short slice of its current wait — no restart. An interval below the floor, or a pass name Coffer does not run, is refused. `upkeep runs` reads `GET /api/v1/upkeep/runs`: each pass in flight with its kind (`memory` or `knowledge`), the partition or collection it is rewriting and when it started; a target it does not name has no pass running.
 
 If your vault syncs to more than one machine, `coffer engine curate-owner set [machine-id]` names the one machine allowed to run `curate` (no argument means this machine); `show` and `clear` report and remove it.
 

@@ -23,7 +23,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.credential_migration import (
     migrate_legacy_keychain,
 )
-from coffer.domain.credential_errors import MasterKeyMissing
+from coffer.domain.credential_errors import CredentialLocked, MasterKeyMissing
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.resource import Kind
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
@@ -102,11 +102,22 @@ async def init_credential_store(engine: AsyncEngine, db_path: pathlib.Path) -> C
         ciphertext_rows = (
             await conn.execute(_sa_text("SELECT COUNT(*) FROM credentials"))
         ).scalar_one()
-    master_key = await asyncio.get_running_loop().run_in_executor(
-        None, lambda: master_key_manager.resolve(allow_create=ciphertext_rows == 0)
-    )
+    key_path = db_path.parent / "master.key"
+    try:
+        master_key = await asyncio.get_running_loop().run_in_executor(
+            None, lambda: master_key_manager.resolve(allow_create=ciphertext_rows == 0)
+        )
+    except CredentialLocked as e:
+        # The keychain may hold the key; creating one in the file now would
+        # shadow it on every later start (spec credentials "Resolve the master
+        # key file-first and create it only for an empty store").
+        raise CredentialLocked(
+            f"the OS keychain is locked or unreadable ({e}) and may hold Coffer's master "
+            f"key; no key was found at {key_path} and none was created — "
+            "unlock the keychain and start Coffer again"
+        ) from e
     if master_key is None:
-        raise MasterKeyMissing(str(db_path.parent / "master.key"))
+        raise MasterKeyMissing(str(key_path))
     try:
         credential_store = EncryptedCredentialStore(db_path=db_path, key=master_key)
     except ValueError as e:

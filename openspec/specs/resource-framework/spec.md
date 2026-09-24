@@ -31,10 +31,10 @@ listing, skill-manager at delivery); a second central gate would be unreachable.
 invocation log is mcp-gateway's; it registers here as a prunable table and nothing more.
 Whether the passes this spec reports run on a timer is internal-engine's, and what each
 pass does is memory's and knowledge's. `GET /api/v1/upkeep/runs`, the read of the passes
-in flight, is the one management read with no CLI counterpart, deliberately: it is a live,
-read-only status the web UI polls so a Knowledge or Memory page's run-now button shows a
-pass the timer or the CLI started as already running, and a terminal has no button to keep
-in step. The passes themselves are managed from the CLI through `coffer engine upkeep`.
+in flight, is a live, read-only status the web UI polls so a Knowledge or Memory page's
+run-now button shows a pass the timer or the CLI started as already running; a terminal
+reads the same list with `coffer engine upkeep runs`. The passes themselves are managed
+from the CLI through `coffer engine upkeep`.
 
 It is a spec, not a rule in the principles, because it owns state and operable surfaces.
 `audit_log` and `retention_policies` are its tables: every kind writes the first, and
@@ -264,13 +264,21 @@ so that a surface can tell whether a pass is under way without every kind growin
 near-identical endpoint of its own. The read MUST start nothing, and the registry MUST
 NOT outlive the process: a restart ends any pass it was running and the list comes back
 empty, which is the truth rather than a lost record. Whether a pass runs on a timer at
-all is internal-engine's; what a pass *does* is its own kind's.
+all is internal-engine's; what a pass *does* is its own kind's. The read is served over
+REST (`GET /api/v1/upkeep/runs`) and on the command line (`coffer engine upkeep runs
+[--json]`), which prints the same list and says so when nothing is running.
 
 #### Scenario: the daemon names the passes in flight
 - **GIVEN** a long, model-driven pass over one kind's target is running,
 - **WHEN** any surface reads the in-flight list,
 - **THEN** that pass is named with its kind, its target and when it started,
 - **AND** a target absent from the list has no pass running, and the read starts nothing.
+
+#### Scenario: the command line reads the passes in flight
+- **GIVEN** a pass over a knowledge collection and a pass over a memory partition are running
+- **WHEN** the operator runs `coffer engine upkeep runs --json`, and again once both have ended
+- **THEN** the first lists both passes with their kind, target and start time, oldest first,
+- **AND** the second lists none, and the table form says that no pass is running.
 
 ### Requirement: Reach every management operation from both REST and the CLI
 Users MUST be able to perform every management operation through both (a) a REST API and
