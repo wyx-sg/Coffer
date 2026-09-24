@@ -47,10 +47,12 @@ const arch = [
       { text: 'Surfaces', link: '/architecture/surfaces' },
       { text: 'Request lifecycle', link: '/architecture/request-lifecycle' },
       { text: 'Persistence', link: '/architecture/persistence' },
+      { text: 'Vault sync', link: '/architecture/sync' },
       { text: 'Security', link: '/architecture/security' },
       { text: 'Audit & accountability', link: '/architecture/audit' },
       { text: 'Observability', link: '/architecture/observability' },
       { text: 'Distribution', link: '/architecture/distribution' },
+      { text: 'Experimental features', link: '/architecture/experimental-features' },
     ],
   },
 ]

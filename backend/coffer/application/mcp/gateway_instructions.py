@@ -1,4 +1,4 @@
-"""What Coffer tells a client at ``initialize`` (ADR budget-driven-tool-tiering).
+"""What Coffer tells a client at ``initialize`` (ADR tool-overload-tier-the-list-search-the-rest).
 
 The MCP ``instructions`` field is the only channel a server has into the
 client's system prompt, so it is the one place the tiering contract can

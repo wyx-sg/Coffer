@@ -5,7 +5,7 @@ never inline in the chat DB — so conversation history stays small and the same
 reference works for any modality. Each agent adapter *materialises* the reference
 in its own native shape at send time: a vision agent inlines an image/document
 content block (base64 read from ``path``), a path-native agent (Codex) receives
-the path. See the channel-media ADR.
+the path. See the channel-attachments ADR.
 """
 
 from __future__ import annotations

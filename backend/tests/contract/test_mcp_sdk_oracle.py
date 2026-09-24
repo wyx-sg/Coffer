@@ -61,8 +61,8 @@ _RETIRED_KNOWLEDGE_TOOLS = frozenset(
 #: beyond "it is not knowledge's". Named so the wire assertion below can be an
 #: exact one without swallowing a second knowledge tool into a vague
 #: superset. `scripts/check_architecture_doc.py` is the gate that owns the full
-#: roster and reds when a slice registers a tool the architecture doc never
-#: names; here the split is what scopes the claim to one kind.
+#: roster and reds when a slice registers a tool the docs-site architecture
+#: pages never name; here the split is what scopes the claim to one kind.
 _NON_KNOWLEDGE_BUILTIN_TOOLS = frozenset(
     {
         "coffer__recall",

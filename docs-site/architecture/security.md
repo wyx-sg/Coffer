@@ -40,6 +40,8 @@ Secrets are stored as **Fernet ciphertext** in the `credentials` table of `~/.co
 3. **Materialise**: at upstream-spawn time, the daemon reads the ciphertext for each `credential_refs` entry, decrypts it with the master key, injects the plaintext into the subprocess environment (or request headers, for HTTP transport), and then spawns the process. The plaintext is in memory only for the duration of the spawn call; it is never written to a log, an audit entry, or a database column.
 4. **Delete**: the user calls `DELETE /api/v1/credentials/{ref}`. The daemon removes the row and records a `credential_deleted` audit event (without the secret value in the details).
 
+**The daemon is the sole credential-store owner.** Every surface — web UI, CLI, shim — reaches secrets through the daemon's `/api/v1/credentials` routes and toggles master-key storage via `/api/v1/settings/credentials`; the CLI never touches the store in-process (an importlinter contract forbids the CLI from reaching the keychain) (ADR envelope-encrypted-credential-store).
+
 ### The master key
 
 Envelope encryption means there is exactly one piece of secret material outside the database: the Fernet **master key**. It lives in **exactly one** of two places:

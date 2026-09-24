@@ -18,7 +18,7 @@ against `backend/uv.lock`, and rebuild that way first when a local result disagr
 
 ## Project Anchors
 
-- **`docs/principles.md`** — what Coffer is and what it must never become.
+- **[Principles](/architecture/principles)** (`docs-site/architecture/principles.md`) — what Coffer is and what it must never become.
 - **`AGENTS.md`** — operating manual; humans can read it too, the rules apply equally.
 
 ## Workflow

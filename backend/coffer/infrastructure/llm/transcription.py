@@ -22,9 +22,10 @@ inside a daemon spawned detached from any shell, which made it unreachable in a
 packaged install. Both are settings now (spec internal-engine "Transcribe speech
 on its own connection and model").
 
-Principle I in ``docs/principles.md`` permits this: cloud services are LLM and tool providers, and a
-transcription endpoint is a tool provider. The audio is data in transit, not
-vault state — the transcript lands locally like any other turn text.
+Principle I in ``docs-site/architecture/principles.md`` permits this: cloud
+services are LLM and tool providers, and a transcription endpoint is a tool
+provider. The audio is data in transit, not vault state — the transcript
+lands locally like any other turn text.
 """
 
 from __future__ import annotations

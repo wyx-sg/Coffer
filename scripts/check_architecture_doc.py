@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
-"""Keep `docs/architecture.md` level with the tree.
+"""Keep the architecture pages of the docs site level with the tree.
 
-Two things drift silently in that document, and both have: the code-layout
+Two things drift silently in those pages, and both have: the code-layout
 tree (packages get added, moved or deleted without the tree following) and
-the builtin-tool roster (a slice registers a tool the document never names).
+the builtin-tool roster (a slice registers a tool the pages never name).
 This gate fails `make lint` on either.
 
 Checks:
 
   1. Every package directory one level under `backend/coffer/{domain,
      application,infrastructure,surfaces}` is named, under its own layer, in
-     the first fenced block that starts with `backend/coffer/`.
+     the first fenced block that starts with `backend/coffer/` in
+     `docs-site/architecture/layering.md`.
   2. Every file or directory that block names under a layer exists on disk —
      so a deleted module cannot linger in the tree.
   3. Every builtin tool declared as `BuiltinTool(name="<x>")` anywhere under
      `backend/coffer/application/`, plus the gateway's own `search_tools`,
-     appears as `coffer__<x>` somewhere in the document.
+     appears as `coffer__<x>` somewhere under `docs-site/architecture/`
+     (the roster itself is the builtin-tools table in `surfaces.md`).
 
 Stdlib only. Exits non-zero with one line per drift.
 """
@@ -29,7 +31,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_ROOT = REPO_ROOT / "backend" / "coffer"
 LAYERS = ("domain", "application", "infrastructure", "surfaces")
-DOCS = (REPO_ROOT / "docs" / "architecture.md",)
+ARCH_DIR = REPO_ROOT / "docs-site" / "architecture"
+#: The page(s) holding the code-layout tree.
+DOCS = (ARCH_DIR / "layering.md",)
 TOOL_PREFIX = "coffer__"
 _SKIP_DIRS = {"__pycache__"}
 _TOOL_DECL = re.compile(r"BuiltinTool\(\s*name=\"([a-z_]+)\"")
@@ -96,7 +100,7 @@ def parse_tree(lines: list[str]) -> dict[str, set[str]]:
     return tree
 
 
-def check_doc(doc: Path, on_disk: dict[str, set[str]], tools: set[str]) -> list[str]:
+def check_doc(doc: Path, on_disk: dict[str, set[str]]) -> list[str]:
     rel = doc.relative_to(REPO_ROOT)
     text = doc.read_text(encoding="utf-8")
     problems: list[str] = []
@@ -124,12 +128,19 @@ def check_doc(doc: Path, on_disk: dict[str, set[str]], tools: set[str]) -> list[
                     f"{rel}: the code-layout tree names `{layer}/{entry}` but it is not on disk"
                 )
 
-    for name in sorted(tools):
-        if f"{TOOL_PREFIX}{name}" not in text:
-            problems.append(
-                f"{rel}: builtin tool `{TOOL_PREFIX}{name}` is registered but never named"
-            )
     return problems
+
+
+def check_tools(tools: set[str]) -> list[str]:
+    rel = ARCH_DIR.relative_to(REPO_ROOT)
+    text = "\n".join(
+        page.read_text(encoding="utf-8") for page in sorted(ARCH_DIR.glob("*.md"))
+    )
+    return [
+        f"{rel}/: builtin tool `{TOOL_PREFIX}{name}` is registered but never named"
+        for name in sorted(tools)
+        if f"{TOOL_PREFIX}{name}" not in text
+    ]
 
 
 def main() -> int:
@@ -140,10 +151,11 @@ def main() -> int:
         if not doc.exists():
             problems.append(f"{doc.relative_to(REPO_ROOT)}: missing")
             continue
-        problems.extend(check_doc(doc, on_disk, tools))
+        problems.extend(check_doc(doc, on_disk))
+    problems.extend(check_tools(tools))
     if problems:
         print(
-            "check_architecture_doc: FAIL — architecture doc drifted from the tree:",
+            "check_architecture_doc: FAIL — architecture pages drifted from the tree:",
             file=sys.stderr,
         )
         for line in problems:
@@ -151,7 +163,8 @@ def main() -> int:
         return 1
     n_pkgs = sum(len(v) for v in on_disk.values())
     print(
-        f"check_architecture_doc: OK — {n_pkgs} packages and {len(tools)} builtin tools named in the document"
+        f"check_architecture_doc: OK — {n_pkgs} packages and {len(tools)} "
+        "builtin tools named in docs-site/architecture/"
     )
     return 0
 

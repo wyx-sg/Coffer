@@ -1,4 +1,5 @@
-"""Budget-driven selection of the tools the gateway lists (ADR budget-driven-tool-tiering).
+"""Budget-driven selection of the tools the gateway lists
+(ADR tool-overload-tier-the-list-search-the-rest).
 
 Pure: no I/O, no infra import, kind-agnostic (importlinter Contracts 2b/5/6).
 Given the aggregated ``tools/list`` entries and per-(server, tool) invocation

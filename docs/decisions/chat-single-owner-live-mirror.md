@@ -1,204 +1,190 @@
 # Chat Is a Single-Owner Live Mirror
 
 **Status**: Accepted
-**Date**: 2026-06-20 (page removed 2026-09-10, restored 2026-09-12; see Revision history)
+**Date**: 2026-06-20
 **Deciders**: Yuxing Wu
-**Related**: spec [`chat`](../../openspec/specs/chat/spec.md) (the turn platform and the web Chat page), spec [`channels`](../../openspec/specs/channels/spec.md);
-[Built-in Agent Is Internal](builtin-agent-is-internal-capability.md) (chat talks to managed agents only),
-[Remove Tool Approval](remove-tool-approval.md) (full permissions, no approval seat),
-[Channel Adapter Framework](channel-adapter-framework.md) (the channel turn seams)
+**Related**: spec chat ("Send fire-and-return and stream output over one subscription", "Replay the in-flight turn to late subscribers", "Queue messages sent during a turn", "Pause the pending queue on interrupt", "Show every conversation on the Chat page", "Sweep streaming rows left by a crashed daemon"); spec channels;
+[Coffer Model Is an Internal Engine](coffer-model-is-an-internal-engine.md) (chat talks to managed agents only),
+[Managed Agents Run With Full Permissions](managed-agents-run-with-full-permissions.md) (no approval seat),
+[Channels Are Thin Transport Adapters](channel-adapter-framework.md) (the channel turn seam),
+[Driving Agents Through the SDK and App-Server](driving-agents-through-sdk-and-app-server.md),
+[Resource Identity Is an Immutable UID](resource-identity-is-an-immutable-uid.md);
+research note [Agent chat clients](../research/agent-chat-clients.md)
 
 ## Context
 
 The web Chat page had been repositioned twice and had its central concept
-removed, always with the same argument — *Coffer is a vault, not an actor; a
+removed, always on the same argument — *Coffer is a vault, not an actor; a
 browser chat that competes with the coding agents' own UIs and with IM has no
-durable usage*. It was first recast as a **Vault Console** (talk to the vault,
-plus observe and approve channel-driven turns); then the built-in chat persona
-was retired, so chat talked to managed agents only and the surface reverted to
-*Chat*; then tool approval was removed outright, and the channel job shrank from
-*observe + approve* to *observe*.
+durable usage*. It was first a **Vault Console** (talk to the vault, observe
+and approve channel-driven turns); the built-in chat persona was then retired,
+so chat talked to managed agents only; then tool approval was removed, and the
+channel job shrank from *observe + approve* to *observe*. The page was deleted
+on 2026-09-10 (every conversation in the vault had come from a channel, so the
+page looked unused) and restored on 2026-09-12, because watching and steering
+from a desktop a turn started from a phone is something the owner wants and
+no channel can do.
 
-What that left was a half-amputated surface nobody had decided to keep or kill.
+The constraint that decides the design: Coffer channels are **owner-paired**
+([Channel Owner Gate](channel-owner-gate.md)). The person on the IM side is the
+owner on their phone, not a third party. So "take over an IM conversation from
+the browser" is **cross-surface continuity for one person**, not multi-human
+collaboration. That removes the whole multi-human dimension: no peer-identity
+model, no "who may interrupt whom", no message-visibility rules.
 
-The decisive constraint, surfaced while reviewing the channel bridge: Coffer
-channels are **owner-paired** — a paired *owner* chats from the IM app. The "IM
-peer" is therefore the *same person*, the owner on their phone, not a third
-party. So "take over an IM conversation from the browser" is **cross-surface
-continuity for one owner**, not multi-human collaboration. That removes the
-entire multi-human dimension: no peer-identity model, no "who may interrupt
-whom", no message-visibility rules.
+What was actually missing, of observe / interrupt / inject:
 
-This record picks the page's one irreplaceable job and commits to it.
+- **Interrupt** already worked across surfaces — one daemon holds every
+  in-flight turn.
+- **Inject** was a frontend gap.
+- **Observe** was the real gap: the browser could stream only a turn it had
+  started itself; a phone-started turn was visible only by polling persisted
+  rows.
+
+## Options Considered
+
+### Option A — One conversation timeline on two screens: a per-conversation event bus, a shared FIFO queue, origin collapsed (chosen)
+
+**A live conversation bus.** Starting a turn is decoupled from consuming its
+events. Each conversation has a `ConversationBus`
+(`application/chat/bus.py`) that buffers the current turn's events and fans
+them out to every subscriber. Four routes carry it
+(`surfaces/http/chat/turn_routes.py`):
+
+- `POST /api/v1/chat/conversations/{id}/messages` starts or enqueues a turn and
+  returns `202` at once; it does not stream.
+- `GET /api/v1/chat/conversations/{id}/events` is the SSE subscription: on
+  attach it replays the in-flight turn from its beginning, then streams live;
+  with no turn running it stays open and delivers the next turn whichever
+  surface starts it.
+- `PUT /api/v1/chat/conversations/{id}/pending` replaces the pending queue.
+- `POST /api/v1/chat/conversations/{id}/interrupt` stops the running turn and
+  pauses the queue.
+
+All consumption goes through the subscription, so "observe a turn I started"
+and "observe a turn the phone started" are the same code, and the replay
+buffer guarantees the sender misses no early events.
+
+**Send freely; a FIFO pending queue.** The draft surface never locks. A message
+sent during a turn is queued in memory; when the turn ends the orchestrator
+commits the head as the next user message and runs it. One turn per
+conversation still holds — processing is sequential and each queued message is
+its own turn. Pending messages are not committed rows: they take a sequence
+number only when their turn starts, and editing one pulls it back into the
+draft. Interrupt stops the current turn **and** pauses the queue, so the next
+message does not fire into the turn just stopped. The queue advances after any
+turn ends, on either surface, and IM and web share one queue object per
+conversation, so the pending chips show a phone-sent message and `/status`
+counts a web-sent one. Queue changes ride the bus, so a second tab and the
+phone see the same rows. The queue is lost on a daemon restart, like an
+in-flight turn.
+
+**Collapse origin; keep the return address.** With one owner, web-versus-channel
+collapses as a concept: one draft surface, one subscription, no origin
+branching. The channel's uid and the peer chat id stay on the conversation as
+the return address for pushing output back to IM — a conversation "has a
+binding" iff `channel_uid` is set — and the page shows an "also on
+Telegram/SeaTalk" badge. The chat list shows every conversation whose
+`owner` column is null; a conversation created on behalf of another surface
+that owns it (a non-null `owner`) is kept out of the list but readable by id,
+like any transcript (`infrastructure/chat/persistence.py`). No caller on the
+main line sets `owner` today; the column exists so a surface that runs
+conversations for itself does not flood the owner's list.
+
+Pros: the owner can watch a phone-started turn token by token, stop it, and
+keep typing, from the desktop; no event path is special-cased by sender;
+adding a client is adding a subscriber.
+
+Cons: the pending queue and the replay buffer live in memory; a daemon restart
+drops uncommitted messages (an in-flight turn becomes a visibly failed row
+through the startup sweep). One persistent subscription per open conversation
+in the frontend.
+
+Wins because it closes the one real gap (observe) with one mechanism and makes
+the other two fall out of it.
+
+### Option B — Observe only; no interrupt or inject
+
+Pros: smallest change.
+
+Cons: leaves a phone-started conversation un-steerable from the desktop — the
+one thing the web seat is for.
+
+Loses on the use case.
+
+### Option C — Keep the POST streaming back and add a subscription beside it
+
+Pros: the sender gets events without a second request.
+
+Cons: two event paths for the same turn, and races between them; the sender
+becomes a special case.
+
+Loses because one subscription with a replay buffer covers the sender's early
+events.
+
+### Option D — Coalesce pending messages into one combined next turn
+
+Pros: fuller context per turn, fewer turns.
+
+Cons: the owner cannot tell which message the agent is answering; a queued
+correction merges with the thing it corrects.
+
+Loses on predictability; sequential FIFO is the default and coalescing
+remains a small switch if rework churn proves annoying.
+
+### Option E — Persist the pending queue
+
+Pros: queued messages survive a restart.
+
+Cons: a new durable state for a rare event, and queued rows would have to be
+distinguished from committed ones everywhere messages are read.
+
+Loses because daemon restarts are rare and dropping uncommitted messages
+matches how an in-flight turn is treated.
+
+### Option F — Delete the page
+
+How it works — what was done on 2026-09-10.
+
+Pros: a large surface that had never run is a liability.
+
+Cons: removes the only place to watch and steer a phone-started turn from a
+desktop.
+
+Loses because the owner wants exactly that; the page was restored two days
+later.
 
 ## Decision
 
-**Chat is the web surface of the same conversations the owner also drives from
-their phone.** One owner, one conversation timeline, two screens. Behind a
-conversation is one real agent session (one resumed session, one working
-directory), so a turn started on the phone and a turn continued in the browser
-hit the **same** session.
+The web Chat page is the second screen of the same conversations the owner
+drives from their phone: one owner, one timeline, one real agent session per
+conversation. Turns are started fire-and-return and observed through one SSE
+subscription per conversation that replays the in-flight turn; messages sent
+mid-turn join a FIFO queue shared by web and IM; interrupt stops the turn and
+pauses the queue. Origin is not modelled; a channel binding is a return
+address. Conversations with a non-null `owner` are not listed.
 
-From the page the owner can **observe** any conversation live — including turns
-kicked off from the phone, token by token — **interrupt** a running turn, and
-**inject / continue** by typing freely: messages queue, never block.
-
-### 1. A live conversation bus
-
-Of observe / interrupt / inject, only **observe** was actually missing. Interrupt
-already worked cross-surface (a single daemon holds the in-flight turns). Inject
-was a frontend gap. Observe was the real one: the browser could live-stream only
-a turn it had started itself; a turn started from IM was visible only by polling
-persisted rows.
-
-So **starting a turn** is decoupled from **consuming its events**. Each
-conversation gets a broadcaster that appends every turn event to a buffer of the
-current turn and fans it out to every attached subscriber. Four routes carry it:
-
-- `POST /api/v1/chat/conversations/{id}/messages` — **starts or enqueues** a turn
-  and returns `202` at once. It does not own the event stream.
-- `GET /api/v1/chat/conversations/{id}/events` — the SSE **subscription**: on
-  attach it replays the in-flight turn from that turn's beginning, then streams
-  live; with no turn running it holds open and delivers the next turn whenever it
-  starts, from whichever surface starts it.
-- `PUT /api/v1/chat/conversations/{id}/pending` — **replaces** the pending queue.
-- `POST /api/v1/chat/conversations/{id}/interrupt` — **stops** the running turn
-  and **pauses** the queue.
-
-**One event path.** All consumption goes through the subscription; the POST is
-fire-and-return. "Observe a turn I started" and "observe a turn the phone
-started" then travel the same code — the sender is not a special case — and the
-replay buffer guarantees the sender misses no early events.
-
-### 2. Send freely; a FIFO pending queue
-
-"Reject a second message and lock the composer" is replaced: the draft surface
-**never locks**; an over-sent message **enqueues**. Each conversation holds an
-in-memory pending queue; when the current turn completes, the orchestrator
-dequeues the head, commits it as the next user message, and runs its turn. The
-one-turn-per-conversation invariant **stays** — processing is sequential; only
-the answer to over-sending changes.
-
-- **Sequential, not coalesced.** Each queued message is its own turn, FIFO.
-- **Pending is uncommitted.** Queued messages are not written into the committed
-  message sequence; they surface as removable rows and take their sequence number
-  only when their turn starts. Editing one pulls it back into the draft surface;
-  re-sending puts it at the **tail**, because it is a new send.
-- **Interrupt = stop the current turn + pause the queue.** Otherwise the next
-  queued message would fire straight into the turn just stopped.
-- **Cross-surface advance.** The queue auto-advances after *any* turn on the
-  conversation ends — including an IM-driven one — so a message queued from the
-  browser behind a phone-started turn still runs when that turn completes. A
-  message arriving *from* IM mid-turn joins the same queue: IM and web share
-  one queue object per conversation, so the pending chips show a phone-sent
-  message, `/status` counts a web-sent one, and one FIFO orders them all. The
-  channel keeps only its renderer hook (attached when its message's turn
-  starts), never a buffer of its own.
-- **Queue state rides the bus.** A queue-changed event broadcasts the ordered
-  pending items, so a second tab and the phone render the same rows.
-- **In-memory.** The queue is lost on a daemon restart, consistent with an
-  in-flight turn being marked failed on restart.
-
-### 3. Collapse origin; keep the return address
-
-Under the single-owner premise the peer is always the owner, so the
-web-versus-channel dichotomy **collapses as a concept**: one conversation list,
-one draft surface, one subscription, no origin-based branching. But the channel
-name and peer chat id are the **return address** for pushing the agent's output
-back to the IM app, so they stay as an optional channel binding — a conversation
-"has a binding" iff a channel name is set — and the page shows a small "also on
-Telegram/SeaTalk" badge when one exists.
-
-### Invariants
+Invariants:
 
 - **Same seams, no parallel path.** The page drives turns only through the
-  existing conversation and turn ports; an agent cannot tell a web turn from a
-  phone turn. The subscription is read-only observation plus the existing
-  interrupt; it introduces no privileged turn path.
-- **No multi-human model.** The single-owner premise is load-bearing; peer
-  identity and message-visibility rules are out of scope.
-- **Managed agents only.** [Built-in Agent Is Internal](builtin-agent-is-internal-capability.md)
-  stands — no built-in chat persona; the local model stays internal behind
-  `coffer__*`.
+  conversation and turn ports; an agent cannot tell a web turn from a phone
+  turn.
+- **No multi-human model.** The single-owner premise is load-bearing.
+- **Managed agents only.** No built-in chat persona and no approval seat.
 
 ## Consequences
 
-- The page and its routes are described in spec [`chat`](../../openspec/specs/chat/spec.md),
-  on top of the turn platform the same spec describes; the contract lives in that
-  spec's OpenAPI file.
-- The conversation schema carries no `origin` and no peer display name; the
-  channel's uid and the peer chat id remain as the channel binding.
-- The frontend holds one persistent subscription per open conversation rather
-  than a per-turn stream plus polling; the draft surface never locks and renders
-  pending rows.
-- The Vault Console positioning is not restored: no vault persona, and no
-  approval seat ([Remove Tool Approval](remove-tool-approval.md)).
-
-## Alternatives Considered
-
-**Keep observe-only; no interrupt or inject.** Rejected. The owner wants to grab
-the wheel from the browser — stop a runaway turn, keep typing. Observe-only
-leaves the phone-started conversation un-steerable from the desktop, which is the
-one thing the web seat is for.
-
-**Keep the POST streaming back *and* add a subscription.** Rejected. Two event
-paths, redundant. The single subscription makes the sender not a special case and
-removes a class of races; the replay buffer covers the sender's early events.
-
-**Coalesce all pending messages into one combined next turn.** Rejected, kept as
-a one-line switch. Sequential FIFO is the predictable default; coalescing (fuller
-agent context, fewer turns) can be reconsidered if rework churn proves annoying.
-
-**Persist the pending queue across restarts.** Rejected. Daemon restarts are
-rare, and dropping not-yet-committed messages matches the in-flight-turn-marked-failed
-story. Persisting them as queued rows is a later hardening.
-
-**Delete the page instead.** This is what happened on 2026-09-10, and it is the
-reason this record was gone for two days — see below.
-
-## Revision history
-
-- **2026-06-20 — accepted.** The live mirror as described above.
-- **2026-09-10 — page removed, record deleted.** The argument: every conversation
-  in the vault had been created by a channel, the live-mirror job was never
-  exercised, and a large surface that has never run is a liability rather than an
-  option. The turn platform underneath it survived whole, because channels run
-  on it.
-- **2026-09-12 — page restored, record reinstated.** The counterweight the
-  removal itself recorded turned out to be the operative one: driving an agent
-  from a phone while watching and steering it on a desktop is a thing the owner
-  wants, and no channel can do it. The decision is unchanged from 2026-06-20 —
-  only the routes are spelled out here now that they live in the channels spec
-  rather than in a spec of their own.
-- **2026-09-23 — references updated.** The routes are contracted in spec
-  [chat](../../openspec/specs/chat/spec.md) (its own OpenAPI file) since the
-  OpenSpec migration, not in the channels spec. The channel binding is keyed on
-  the channel's uid (`channel_uid`), not its name, so "has a binding" means a
-  channel uid is set ([Resource Identity Is an Immutable
-  UID](resource-identity-is-an-immutable-uid.md)).
-
-## Implementation notes
-
-- **Two seams carry the design.** A new *agent* is one `AgentProvider` /
-  `AgentAdapter` pair registered in `surfaces/http/chat_provider_wiring.py`;
-  every surface resolves agents through `AgentProviderRegistry` and never names
-  a provider. A new *client* is one more subscriber to the per-conversation
-  event bus (`application/chat/bus.py`): a turn is a detached task publishing
-  to subscribers, so the turn the page started and the turn a phone started are
-  the same code path.
-- **Chat stays inside its own kind.** The import-linter contract "Cross-kind
-  imports forbidden (chat)" in `backend/pyproject.toml` carries no
-  `ignore_imports` exceptions. The model catalogue belongs to the agent kind, so
-  chat never imports it: the composition root publishes it into chat's
-  dependencies as `ModelCatalogPort`, and the models route reads only what the
-  port promises.
-- **Failure is contained and visible.** Upstream drift in an agent's CLI breaks
-  one provider and its event-mapping module. A wedged turn is cancelled by the
-  idle watchdog through the adapter's own path, and the startup sweep marks rows
-  a crash left `streaming` as failed, so the lost pending queue on restart is
-  never silent: an uncommitted message was never a row, and an in-flight turn
-  becomes a visibly failed one (spec [chat](../../openspec/specs/chat/spec.md),
-  "Sweep streaming rows left by a crashed daemon").
-- **There is no `coffer chat` command group.** The page and the HTTP routes are
-  the only ways to drive a conversation, so a daemon without the built frontend
-  can be driven only over HTTP — a known gap, not a design choice.
+- The conversation schema carries no origin and no peer display name; the
+  channel uid and peer chat id are the binding.
+- A new agent is one `AgentProvider` / `AgentAdapter` pair registered in
+  `surfaces/http/chat_provider_wiring.py`; every surface resolves agents
+  through the provider registry. A new client is one more bus subscriber.
+- Chat stays inside its kind: the import-linter contract "Cross-kind imports
+  forbidden (chat)" in `backend/pyproject.toml` has no exceptions, and the
+  model catalogue reaches chat only through `ModelCatalogPort`, published by
+  the composition root.
+- A wedged turn is cancelled by the idle watchdog through the adapter's own
+  interrupt path, and the startup sweep marks rows a crash left `streaming` as
+  failed, so a restart is never silent.
+- There is no `coffer chat` command group; the page and the HTTP routes are
+  the ways to drive a conversation.

@@ -170,7 +170,7 @@ def wire_chat(
     gateway session sees all built-in tools.
 
     Chat talks only to Coffer-managed agents (``claude_code`` / ``codex``); the
-    former ``builtin`` chat persona is retired (ADR builtin-agent-is-internal-capability).
+    former ``builtin`` chat persona is retired (ADR coffer-model-is-an-internal-engine).
     """
     # 1. Persistence repos.
     conv_repo = ConversationRepo(sm)

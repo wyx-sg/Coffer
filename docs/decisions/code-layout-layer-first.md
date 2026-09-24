@@ -1,133 +1,154 @@
-# Code Layout — Layer-First with Kind Subdirectories
+# Code Layout Is Layer-First, With One Subdirectory per Kind
 
 **Status**: Accepted
 **Date**: 2026-05-20
 **Deciders**: Yuxing Wu
-**Related**: [`docs/principles.md`](../principles.md) (Technology & Architectural Constraints), [Resource Framework Upfront](resource-framework-upfront.md)
+**Related**: [principles](../../docs-site/architecture/principles.md) (Technology & architectural constraints — the layering), [The Resource Framework Is Core Domain](resource-framework-upfront.md), [Composition Root With Explicit Wiring](composition-root-explicit-wiring.md), [Layering & boundaries](../../docs-site/architecture/layering.md), PR #386
 
 ## Context
 
-[Resource Framework Upfront](resource-framework-upfront.md) commits Coffer to a Resource framework as part of spec
-`mcp-gateway`. Two layouts can realise it while honouring the
-layered architecture fixed by the principles (`surfaces → application → domain` with
-`infrastructure` underneath):
+[The Resource Framework Is Core Domain](resource-framework-upfront.md) commits
+Coffer to a kind-agnostic core with per-kind code plugged into it, in the same
+spec as the first kind. The principles fix the layering —
+`surfaces → application → domain`, with `infrastructure` adapting ports that
+`application` defines and wired only at the composition root — but not how the
+files are arranged. Two axes have to be expressed at once: the layer a module
+belongs to, and the kind (if any) it belongs to.
 
-- **Layer-first with kind subdirectories** — each top-level layer holds
-  kind-agnostic files at its root and one `<kind>/` subdirectory per kind.
-- **Vertical slice** — a new top-level `kinds/` directory, each kind a complete
-  vertical slice with its own internal `domain/ application/ infrastructure/
-surfaces/`.
+Whatever layout is chosen must let two families of rules be enforced
+mechanically by import-linter (`backend/pyproject.toml`): the layer direction,
+and the rule that one kind does not import another. It also has to survive
+scale: today there are seven kinds plus two cross-cutting slices that are
+fenced like kinds (`chat`, the turn platform, and `sync`), and the smallest
+kind (`provider`) is about 2,900 lines across its domain, application and
+infrastructure packages while the largest (`channel`) is about 11,700. The
+backend has a 400-line file cap (`scripts/check_file_sizes.py`), so every kind
+is many files.
 
-Both can satisfy the principles if importlinter contracts enforce dependency
-direction. The choice is about navigability, conventions, and how the
-"extract-on-second-feature" rule plays out.
+## Options Considered
 
-## Decision
+### Option A — Layer-first, with a `<kind>/` subdirectory inside each layer (chosen)
 
-**Layer-first with kind subdirectories.**
+Each top-level layer holds its kind-agnostic modules at its root and one
+subdirectory per kind:
 
 ```
 backend/coffer/
-├── domain/                       # kind-agnostic core
-│   ├── resource.py
-│   ├── audit.py
-│   └── mcp/                      # MCP-specific value objects
-├── application/
-│   ├── resource_service.py       # kind-agnostic CRUD
-│   ├── audit_service.py
-│   ├── retention_service.py
-│   └── mcp/                      # MCP-specific services
-├── infrastructure/
-│   ├── persistence/
-│   ├── credentials/
-│   ├── daemon/
-│   └── mcp/                      # subprocess, http upstream client
+├── domain/            resource.py, scope.py, audit.py, …   + agent/ channel/ mcp/ skill/ …
+├── application/       resource_service.py, audit_service.py, retention_service.py, …
+│                      + agent/ channel/ knowledge/ mcp/ memory/ provider/ skill/ sync/ chat/ …
+├── infrastructure/    persistence/ credentials/ daemon/ net/ llm/ agent_files/ …
+│                      + agent/ channel/ mcp/ skill/ sync/ chat/ …
 └── surfaces/
-    ├── http/
-    │   ├── app.py                # composition root
-    │   ├── resource_routes.py
-    │   └── mcp/                  # MCP HTTP routes
-    ├── cli/
-    │   ├── main.py
-    │   ├── resource_cmd.py
-    │   └── mcp.py
-    └── shim/                     # coffer-mcp-shim (MCP-only by nature)
+    ├── http/          app.py, *_wiring.py, resource_routes.py, dependencies.py, … + mcp/ knowledge/ memory/ chat/
+    ├── cli/           main.py, resource_cmd.py, <kind>_cmd.py, …
+    └── shim/          coffer-mcp-shim
 ```
 
-Each kind's `make_<kind>_kind()` factory (`application/<kind>/kind.py`)
-returns a frozen `Kind` descriptor (`domain/resource.py`); the composition
-root — `surfaces/http/app.py`'s lifespan through per-kind `*_wiring.py`
-modules, and `surfaces/cli/main.py` — registers that `Kind` into the per-app
-`kinds` dict and mounts the kind's routers and CLI groups itself. Wiring is
-explicit: every `wire_*` step returns a small frozen dataclass of what it
-built and `app.py` passes those results forward as parameters (the sync
-registrations flow through one `SyncContributions` collector); no step
-discovers an earlier one through `app.state`. FastAPI dependency providers
-are split the same way: `surfaces/http/dependencies.py` holds only the
-kind-agnostic core (actor, resource, audit, retention, internal-engine
-config) and each kind publishes its own concretely-typed `set_*`/`get_*`
-pairs from its own module. No carrier object, no global registry, no import
-side effects, no `kinds/` directory.
+- **Pros.** The tree reads the same as the layering diagram, so the layer
+  rule is a prefix rule (`coffer.domain` may not import `coffer.application`,
+  …). The cross-kind rule is also a prefix rule, one contract per kind naming
+  that kind's packages as sources and every other kind's as forbidden. When a
+  concern turns out to be shared, there is one question — which layer — and the
+  answer is that layer's root. It is the layout Python/FastAPI contributors
+  expect.
+- **Cons.** One kind's code spans four or five directories. Surface modules
+  for a kind are not always in a subdirectory (`surfaces/http/skill_routes.py`,
+  `surfaces/cli/skill_cmd.py`), so the per-kind contracts list them one by one
+  and the lists must be kept symmetric by hand.
+- **Why it wins.** Both rule families become cheap, prefix-based contracts, and
+  the cost (spread across directories) is a navigation cost that search
+  removes, not a correctness cost.
+
+### Option B — Vertical slice: `kinds/<kind>/{domain,application,infrastructure,surfaces}/`
+
+A fifth top-level directory where each kind is a complete slice with its own
+internal layers.
+
+- **Pros.** Everything about one kind is in one folder; deleting a kind is
+  deleting a folder. It is the modular-monolith / bounded-context shape.
+- **Cons.** It adds a fifth top-level concept beside the four layers the
+  principles fix, so the architecture has to explain both. Every extraction
+  becomes two questions — top-level layer, or `kinds/<x>/<layer>/`? — and the
+  layer contracts have to be written once per slice. The motivations for the
+  pattern (team ownership, independent deploys, a path to services) do not
+  exist in a single-user, single-process app.
+- **Why it loses.** It doubles the layering rules to buy discoverability that
+  IDE search already gives.
+
+### Option C — Flat per-kind module (one package per kind, no internal layering)
+
+`coffer/mcp/`, `coffer/skill/`, … each a flat package, with the kind-agnostic
+core beside them.
+
+- **Pros.** Least ceremony; a small kind could be one or two files.
+- **Cons.** No kind is small: at 2,900 to 11,700 lines under a 400-line cap,
+  every kind is dozens of files, and import-linter cannot enforce a layer
+  direction inside a flat package. Kind code would import SQLAlchemy and FastAPI
+  from wherever it liked.
+- **Why it loses.** It gives up the layering the principles require for the
+  code that most needs it.
+
+### Option D — Loadable plugin per kind
+
+Each kind a package discovered at runtime, with a manifest and isolation.
+This is a packaging and discovery choice rather than a layout, and it is argued
+and rejected in [The Resource Framework Is Core Domain](resource-framework-upfront.md)
+and [Composition Root With Explicit Wiring](composition-root-explicit-wiring.md);
+it appears here only as the heaviest comparator.
+
+## Decision
+
+Layer-first with kind subdirectories. Kind-agnostic modules live at each
+layer's root; a kind's modules live in `<layer>/<kind>/` (or, for a few surface
+modules, a `<kind>_*.py` file at the surface root). The layout is enforced by
+import-linter contracts in `backend/pyproject.toml`:
+
+- **Layer direction.** "Layered architecture: surfaces > application > domain";
+  "Infrastructure does not import surfaces"; "Application does not import
+  infrastructure" (with two listed exceptions: `application.knowledge` and
+  `application.memory` may use their own file substrate in `infrastructure`);
+  "Domain is pure" (no project layer, no FastAPI/SQLAlchemy/sqlite3/httpx/keyring/anyio).
+- **Cross-kind imports forbidden.** One symmetric contract per fenced slice —
+  nine of them: `mcp`, `agent`, `skill`, `knowledge`, `channel`, `chat`,
+  `provider`, `memory`, `sync`. The listed exceptions are a kind's pure domain
+  vocabulary where another kind exists to act on it: `provider` and `memory`
+  may import `domain.agent`, `channel` may import `domain.chat`. Imports under
+  `TYPE_CHECKING` do not count. Everything else crosses through a port the
+  consuming kind declares and the composition root satisfies.
+- **Shared ground** that every kind may import: the kind-agnostic core
+  (Resource, audit, retention, scope, `domain/connection.py`), Coffer's own
+  engine (`application.engine` and the engine modules fenced in the core
+  contract), the knowledge substrate (`domain.knowledge`,
+  `infrastructure.knowledge`), and the kind-agnostic infrastructure packages
+  `infrastructure.net` (the SSRF guard), `infrastructure.agent_files`
+  (Claude Code transcript parsing), `infrastructure.llm` and
+  `infrastructure.persistence`.
+- **Kind-agnostic core does not import kind-specific code.** The core modules
+  (and `surfaces/http/dependencies.py`) may import no kind. Its one listed
+  exception is Alembic's `migrations/env.py`, which imports
+  `infrastructure.channel.persistence` and `infrastructure.mcp.persistence`
+  beside the kind-agnostic `infrastructure.persistence.models`, so those
+  kinds' ORM models are on `Base.metadata`. The exception is listed per module,
+  so a new kind that wants its tables there has to add itself on purpose.
+
+Only the composition root may see two kinds at once; how it does so is
+[Composition Root With Explicit Wiring](composition-root-explicit-wiring.md).
 
 ## Consequences
 
-**Positive**
-
-- Mirrors the principles' `surfaces → application → domain (← infrastructure)`
-  layering literally in the file system. The architecture document reads the
-  same as the directory tree.
-- Familiar layout for Python/FastAPI conventions; new contributors recognise
-  it immediately.
-- When a cross-kind concern surfaces, the question is "which layer does it
-  belong in" — one decision, naturally placed at the layer root.
-- Small kinds pay no ceremony (`domain/profile.py` is a single file; in a
-  vertical slice it would be `kinds/profile/domain/profile.py`).
-- Importlinter rules read naturally:
-  - `domain → infrastructure | surfaces` forbidden
-  - `*/<kind> → */<other_kind>` forbidden — one symmetric "Cross-kind imports
-    forbidden" contract per kind, covering all nine (mcp, agent, skill,
-    knowledge, channel, chat, provider, memory, sync). Two listed exceptions,
-    both about a kind's pure *domain vocabulary* rather than its services:
-    `provider` and `memory` may import `domain.agent` (acting on agents is
-    what those kinds are for), and `channel` may import `domain.chat`
-    (driving turns is what a channel is for). `domain.knowledge` /
-    `infrastructure.knowledge` remain the exempt substrate. Annotation-only
-    (`TYPE_CHECKING`) imports do not count. The one sanctioned
-    central-metadata exception is Alembic's `migrations/env.py`, which imports
-    every kind's ORM model module.
-  - `domain/*` (kind-agnostic) → `domain/<kind>/*` forbidden
-  - Packages two kinds needed land at the layer root, kind-agnostic:
-    `infrastructure/net/` (SSRF guard), `infrastructure/agent_files/` (Claude
-    Code transcript parsing), `domain/connection.py` (`CODEX_ENV_KEY`).
-
-**Negative**
-
-- Code for one kind spans 4–5 directories. Mitigation: IDE search and grep make
-  this a non-issue; the user has confirmed acceptance.
-- Importlinter contracts must enforce two rule families (layered + cross-kind),
-  not one.
-
-## Alternatives Considered
-
-**Vertical slice (`kinds/<x>/{domain,application,infrastructure,surfaces}/`)**.
-Rejected.
-
-- Adds a fifth top-level concept (`kinds/`) alongside the four
-  layers the principles fix; the architecture document would have to explain both.
-- Introduces dual-decision pain on every cross-kind extraction: "does this
-  belong in the top-level layer, or in `kinds/<x>/<layer>/`?" — two questions
-  to answer instead of one.
-- Mostly fits the DDD-bounded-context / modular-monolith pattern, which is
-  motivated by team isolation, independent deploy cadence, or microservice
-  extraction — none of which apply to a single-user local-first OSS app.
-- The "vertical slice is more discoverable" advantage collapses under IDE
-  search; the cost (layout duality) does not.
-
-**Flat per-kind module (no internal layering within the kind)**. Rejected.
-Some kinds will grow large (the MCP kind is already projected at ~1500 lines).
-Importlinter inside a flat module cannot enforce the layered direction.
-
-**Plugin architecture (each kind a loadable plugin with manifest, isolation,
-discovery)**. Considered and deferred: see [Resource Framework Upfront](resource-framework-upfront.md). Not a layout decision in
-itself; relevant here only as the "heaviest" comparator we considered and
-rejected.
+- The architecture document and the directory tree describe the same thing;
+  [Layering & boundaries](../../docs-site/architecture/layering.md) is the
+  reader's guide.
+- A package two kinds need moves to the layer root and becomes kind-agnostic
+  (`infrastructure/net/`, `infrastructure/agent_files/`, `domain/connection.py`
+  for `CODEX_ENV_KEY`), rather than one kind importing the other.
+- Adding a kind means adding its packages to its own contract as sources and
+  to every other contract's forbidden list, by hand; removing one means taking
+  it out of all of them, and an `ignore_imports` entry that no longer matches
+  fails `make verify`.
+- `migrations/env.py` puts only the kind-agnostic models and the `channel`
+  and `mcp` models on `Base.metadata`; `skill_agent_bindings`,
+  `conversations` and `chat_messages` are declared in modules it does not
+  import. No revision in the lineage is autogenerated, so `upgrade head` is
+  unaffected, but autogenerate would not see those tables.

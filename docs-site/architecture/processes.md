@@ -12,6 +12,7 @@ The daemon is the system's center of gravity. It is a FastAPI application bound 
 - Owns all in-memory session state for connected MCP clients.
 - Spawns and supervises upstream MCP server subprocesses (one set per connected client session — see [Upstream session model](#upstream-session-model-adr-session-subprocess-model) below).
 - Persists all control-plane state: resource registrations, capability preferences, audit log, retention policies, the encrypted credential store, chat conversations and turns, channel bindings, and sync state. Knowledge and memory are **not** in that list: they are directories of Markdown files, with nothing in `coffer.db` mirroring or indexing them.
+- Reports its `version`, `executable` and release `channel` at `GET /api/v1/daemon/status`, which is what the CLI's, the shim's and the desktop shell's version-skew checks compare against. A frozen build deploys its sibling binaries into `~/.coffer/bin/<version>/` at start (see [Distribution](/architecture/distribution#binary-deployment-at-frozen-start)).
 - Outlives any single client or CLI invocation. It keeps running until `coffer daemon stop`, a system shutdown, or another daemon superseding it — never stopping on its own for want of use (see [Resident](#resident)).
 
 ### Resident
@@ -39,7 +40,7 @@ The setting lives in **`~/.coffer/daemon-config.json`** (mode `0600`), and it ha
 - It cannot be a database-backed setting, because the port is chosen before the database is opened and before migrations have created any table to read.
 - It cannot be an environment variable, because the daemon is spawned *detached* by whichever surface first needs one — the CLI, an MCP shim, the desktop shell — and inherits **that caller's** environment. A shell profile reaches the user's own terminal and nothing else.
 
-So it is a small file beside `daemon.json`, read with nothing but the standard library. The two files are deliberately a pair and deliberately distinguishable: `daemon-config.json` is configuration, goes *in*, and survives shutdown; `daemon.json` is runtime state, comes *out*, and is unlinked on exit. A hand-mangled config file does not stop the daemon — it warns and falls back to 8000, because an unreadable file that blocked startup would be unrecoverable from a UI that needs a running daemon to appear.
+So it is a small file beside `daemon.json`, read with nothing but the standard library. Besides the optional fixed port it holds the machine name, the cached machine id and this machine's experimental-feature switches (`features`, see [Experimental features](/architecture/experimental-features)) — everything the daemon must read before it binds, and therefore before any database exists. The two files are deliberately a pair and deliberately distinguishable: `daemon-config.json` is configuration, goes *in*, and survives shutdown; `daemon.json` is runtime state, comes *out*, and is unlinked on exit. A hand-mangled config file does not stop the daemon — it warns and falls back to 8000, because an unreadable file that blocked startup would be unrecoverable from a UI that needs a running daemon to appear.
 
 Its only surface is the CLI:
 

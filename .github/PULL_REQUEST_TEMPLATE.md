@@ -40,5 +40,5 @@ enforced. See .agents/workflow.md "Commits" for the full rule set.
 - [ ] `make verify-all` is green locally
 - [ ] PR title matches the squashed commit subject (Conventional Commits, within .commitlintrc.yaml's caps)
 - [ ] AI-authored commits carry `Co-authored-by: <Agent> <noreply@...>`
-- [ ] `docs/principles.md` / .agents/ docs updated if conventions changed
+- [ ] `docs-site/architecture/principles.md` / .agents/ docs updated if conventions changed
 - [ ] OpenSpec change archived in this PR if behaviour changed

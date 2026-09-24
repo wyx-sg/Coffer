@@ -18,7 +18,7 @@ surfaces  →  application  →  domain
             infrastructure
 ```
 
-Arrows show the allowed import direction. `surfaces` may import `application`; `application` may import `domain`; both may import `infrastructure`. The reverse is never allowed: `domain` never imports anything from above it, and `infrastructure` is wired in at the composition root, not imported by application or domain code directly.
+Arrows show the allowed import direction. `surfaces` may import `application`, and `application` may import `domain`. `infrastructure` adapts to ports defined in `application` and is wired in only at the composition root (which lives in `surfaces`): `application` does not import it — save the named substrate exemptions under [Enforcement](#enforcement) — and `domain` never does. The reverse direction is never allowed: `domain` imports nothing from above it, and `infrastructure` never imports `surfaces`.
 
 ### domain/
 
@@ -86,63 +86,72 @@ Both are run on every PR. The combination means that any import that violates th
 
 ## Code layout (ADR code-layout-layer-first)
 
-The full directory tree:
+The full directory tree. `scripts/check_architecture_doc.py` keeps it level with the code: every package one level under each layer must be named here, and nothing named here may be missing from disk.
 
 ```
 backend/coffer/
-├── domain/                       # kind-agnostic entities + kind protocol
-│   ├── resource.py               # Resource (uid + mutable name), Kind (frozen record each factory returns)
-│   ├── audit.py
-│   ├── errors.py
-│   ├── mcp/                      # MCP-specific value objects
-│   ├── agent/                    # agent config value objects
-│   ├── skill/                    # skill value objects
+├── build_channel.py              # CHANNEL = "dev"; the release workflow stamps "stable"
+├── domain/                       # kind-agnostic entities + kind protocol; imports nothing
+│   ├── resource.py               # Resource (uid + mutable name), Kind (frozen record each factory returns), name validation
+│   ├── scope.py                  # is_active(scope, agent) — the one reach predicate
+│   ├── audit.py                  # audit event names + entry
+│   ├── errors.py                 # app-wide error base + codes
+│   ├── features.py               # experimental-feature registry + the surfaces each key owns
+│   ├── mcp/                      # MCP-specific value objects, tool search + tiering
+│   ├── agent/                    # agent-specific value objects (config, facets, model catalogue)
+│   ├── skill/                    # skill-specific value objects
+│   ├── knowledge/                # catalogue + file value objects, errors
 │   ├── channel/                  # channel config, envelopes
-│   ├── knowledge/                # collection config + entry/document value objects
-│   ├── memory/                   # partition + fact value objects
-│   ├── provider/                 # connection protocol + projection value objects
-│   ├── chat/                     # chat turn / message value objects
-│   └── sync/                     # sync value objects
+│   ├── chat/                     # conversation, message, attachment, turn events
+│   ├── memory/                   # fact, partition, budget, delivery, reader protocol
+│   ├── provider/                 # provider config, modality, projection rules
+│   └── sync/                     # manifest, models, diff, convergence + machine rules
 ├── application/
-│   ├── resource_service.py       # kind-agnostic CRUD; takes kinds dict
+│   ├── resource_service.py       # kind-agnostic CRUD; reads app.state.kinds
 │   ├── audit_service.py
-│   ├── retention_service.py
-│   ├── mcp/                      # MCP-specific application services
+│   ├── retention_service.py      # + retention_registry.py, retention_worker.py
+│   ├── builtin_tools.py          # BuiltinTool + BuiltinToolRegistry
+│   ├── diagnostics.py            # coffer__diagnose
+│   ├── log_reader.py             # the one tolerant daemon.log normaliser
+│   ├── features.py               # FeatureService: pin → setting → channel default, change subscribers
+│   ├── credentials/              # cross-cutting — shared CredentialResolver (refs → secrets)
+│   ├── mcp/                      # gateway, supervisor, discovery, search_tools + make_mcp_kind
 │   ├── agent/                    # agent services + make_agent_kind
-│   ├── skill/                    # skill services + make_skill_kind
-│   ├── channel/                  # adapter protocol, pairing, inbound runtime
-│   ├── knowledge/                # service, ingest, curation, guide-skill rendering
-│   ├── memory/                   # aggregation, distil, recall, context + make_memory_kind
-│   ├── chat/                     # TurnOrchestrator, turn state
-│   ├── provider/                 # provider ports, introspection + make_provider_kind
-│   ├── sync/                     # cross-cutting — vault convergence with a git remote (not a kind)
-│   ├── credentials/              # cross-cutting — CredentialResolver (refs → secrets)
-│   └── fs/                       # cross-cutting — filesystem-browse service
+│   ├── skill/                    # skill services, builtin-skill seed + make_skill_kind
+│   ├── knowledge/                # one service, one tool, curation, the guide skill's text + make_knowledge_kind
+│   ├── channel/                  # adapter protocol, pairing, inbound, runtime + make_channel_kind
+│   ├── chat/                     # cross-cutting — turn orchestrator, runner, state, conversation service
+│   ├── memory/                   # aggregate, digest, delivery, recall + make_memory_kind
+│   ├── provider/                 # provider service, projection, reconcile + make_provider_kind
+│   ├── engine/                   # which connection Coffer's own unattended passes run on; must not import the provider kind
+│   ├── sync/                     # cross-cutting — converge round, exporter, appliers, worker, ports (not a kind)
+│   └── fs/                       # cross-cutting — filesystem browse / pick / open / editor services
 ├── infrastructure/
 │   ├── persistence/              # SQLAlchemy + Alembic (central metadata)
-│   ├── daemon/                   # pid_lock, port binding, daemon-config.json
+│   ├── credentials/              # encrypted credential store + master key — only place importing `keyring`
+│   ├── daemon/                   # pid_lock, port binding, child processes, version skew, daemon-config.json (incl. feature_settings.py)
 │   ├── mcp/                      # subprocess transport, HTTP upstream client
-│   ├── agent/                    # agent config-file store
-│   ├── skill/                    # master store, drift engine
-│   ├── channel/                  # telegram/seatalk transports, peer repo, render
-│   ├── knowledge/                # path layout, frontmatter, file store, converters, ripgrep
-│   ├── memory/                   # partition path layout + per-agent native-memory readers
-│   ├── chat/                     # the Claude Code and Codex drivers, turn persistence
-│   ├── provider/                 # provider introspector (the one `check_url` caller)
 │   ├── net/                      # kind-agnostic — the SSRF guard (one call site; see Security)
-│   ├── agent_files/              # kind-agnostic — readers of an agent's own transcripts (agent + memory)
-│   ├── logging/                  # kind-agnostic — structlog setup, eval capture
-│   ├── llm/                      # cross-cutting — internal-engine models, transcription, curation loop
-│   ├── sync/                     # cross-cutting — git mirror the vault converges through (not a kind)
-│   └── credentials/              # cross-cutting — encrypted credential store + master key — only place importing `keyring`
+│   ├── logging/                  # kind-agnostic — structlog setup, log files, eval capture
+│   ├── llm/                      # cross-cutting — internal-engine models, completion, transcription, curation loop
+│   ├── agent/                    # agent config-file store
+│   ├── agent_files/              # kind-agnostic — readers of an agent's own on-disk files (transcripts), shared by agent + memory
+│   ├── skill/                    # master store, sync engine, workspace scan
+│   ├── knowledge/                # path layout, file tree, frontmatter, converters, ripgrep + Python fallback
+│   ├── channel/                  # telegram/seatalk transports (incl. the SeaTalk websocket connector and its operator-supplied SDK loader), peer repo, render
+│   ├── chat/                     # the Claude Code and Codex drivers, turn persistence, document extraction
+│   ├── memory/                   # partition path layout, native-memory readers, store, delivery state
+│   ├── provider/                 # provider introspector (the one `check_url` caller)
+│   └── sync/                     # cross-cutting — git mirror, tree mirror, bundle, machine id (not a kind)
 └── surfaces/
     ├── http/
     │   ├── app.py                # composition root — wires every kind's factory and wiring module
-    │   ├── routing.py            # the one place every sub-router is imported and mounted
+    │   ├── routing.py            # the one place every sub-router is imported and mounted; gates a router by its prefix
     │   ├── kind_wiring.py        # + per-kind *_wiring.py — each returns a typed dataclass app.py passes on
     │   ├── dependencies.py       # kind-agnostic getters; per-kind *_dependencies.py sit beside the routes
+    │   ├── feature_routes.py     # + feature_dependencies.py — the experimental-feature switch and request gate
     │   ├── resource_routes.py
-    │   ├── mcp/                  # MCP HTTP/SSE routes and session handling
+    │   ├── mcp/                  # MCP protocol endpoint, capability + invocation routes
     │   ├── knowledge/            # collections, tree, file, material, upload, curate
     │   ├── memory/               # partitions, notes, files, distil, sync, context, delivery
     │   └── chat/                 # conversations, turns, agent providers
@@ -150,7 +159,8 @@ backend/coffer/
     │   ├── main.py               # composition root — Typer wiring
     │   ├── resource_cmd.py
     │   ├── daemon_cmd.py         # + daemon_port_cmd.py — the one group that needs no daemon
-    │   └── mcp.py
+    │   ├── daemon_features_cmd.py # `coffer daemon features`
+    │   └── mcp.py                # + one *_cmd.py group per kind and cross-cutting concern
     └── shim/                     # coffer-mcp-shim stdio entry point
 ```
 
@@ -183,7 +193,17 @@ Two things keep the composition root explicit without ceremony. First, each kind
 - registers its HTTP sub-router (and, in `surfaces/cli/main.py`, its Typer subcommand group)
 - returns a typed dataclass (`AgentSkillWiring`, `ProviderWiring`, `KnowledgeWiring`, `MemoryWiring`, `McpWiring`, `KindWirings`, `ChatWiring`, `BackgroundWorkers`) holding what later steps need
 
+The factories are `make_mcp_kind`, `make_agent_kind`, `make_skill_kind`, `make_knowledge_kind`, `make_channel_kind`, `make_provider_kind` and `make_memory_kind`, and the wiring modules populate the per-app `app.state.kinds` dict (`kind_name → Kind`) directly: `app_mcp_composition.py` sets `"mcp_server"`, `agent_skill_wiring.py` sets `"agent"` and `"skill"`, `knowledge_wiring.py` sets `"knowledge"`, `channel_wiring.py` sets `"channel"`, `provider_wiring.py` sets `"provider"` and `memory_wiring.py` sets `"memory"`. `ResourceService` reads that dict for kind-agnostic dispatch. The surface-layer artefacts a kind contributes (HTTP routers, Typer groups) are registered by those same wiring modules; there is no carrier object for them, and nothing in `domain/` knows they exist.
+
 `app.py` calls these in dependency order, passes each result forward explicitly — never through an untyped hub — and fills `app.state.kinds` from the factories. No kind is "discovered" by scanning directories, no `__init__.py` side effect registers it, and deleting a kind's factory and wiring module cleanly removes the kind from the system.
+
+### Dependency providers
+
+FastAPI dependency providers are plain module-level `set_*` / `get_*` pairs over module-global singletons. The composition root calls each `set_*` once at startup; the matching `get_*` is the `Depends()` target and raises if accessed before initialisation, rather than hand a route a `None` it would dereference later. `surfaces/http/dependencies.py` holds only the kind-agnostic core (Contract 6); every kind publishes its own services, typed concretely, from its own module (`surfaces/http/{agent,workspace,skill,provider}_dependencies.py`, `surfaces/http/{chat,knowledge,memory,mcp}/dependencies.py`, and `credential_composition.py` for the credential store), so nothing in the core can pull a kind in.
+
+## Frontend layout
+
+The frontend (`frontend/src/`) is React 18 + Vite 5, TanStack Query 5, React Router 6, Tailwind 3 over shadcn/Radix primitives, and react-i18next with one flat catalogue per language (`i18n/locales/en.json`, `zh.json`). It owns no route of its own: every screen renders over another capability's REST contract, through typed clients generated into `lib/api/generated/`. There is no per-kind UI registry — a kind adds pages in `pages/`, components in `components/<kind>/`, hooks and client in `lib/hooks/` and `lib/api/`, and a lazy route in `router.tsx`, with `ResourceDetailPage` dispatching on `kind` (`.agents/frontend.md`). The daemon-served page, the desktop shell and the Vite dev plugin all supply the same `window.__COFFER_BASE_URL__` / `window.__COFFER_TOKEN__`, so each host is a credential supplier, not a code path.
 
 ## Mermaid: allowed import directions
 
@@ -195,9 +215,9 @@ graph TD
     I["infrastructure/\n(persistence · credentials · MCP transport)"]
 
     S -->|"may import"| A
-    S -->|"may import"| I
+    S -->|"wires (composition root)"| I
     A -->|"may import"| D
-    A -->|"may import (via DI)"| I
+    I -->|"implements ports of"| A
     I -->|"may import"| D
 
     style D fill:#e8f4e8,stroke:#4a9e4a

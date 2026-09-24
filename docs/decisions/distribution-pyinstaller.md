@@ -1,312 +1,212 @@
-# Distribution — PyInstaller-Bundled Daemon, Shim, and CLI
+# Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App
 
 **Status**: Accepted
-**Date**: 2026-05-20 (revised 2026-09-24; see Revision history)
+**Date**: 2026-09-12
 **Deciders**: Yuxing Wu
-**Related**: [`docs/principles.md`](../principles.md) (Languages), [daemon](../../openspec/specs/daemon/spec.md) "Release the macOS arm64 terminal archive", [Detect-or-Spawn](daemon-detect-or-spawn.md)
+**Related**: [The Desktop Shell Hosts the Shared Frontend](desktop-shell-over-a-shared-frontend.md), [Daemon Detect-or-Spawn](daemon-detect-or-spawn.md), [Stdio Shim Bridge](stdio-shim-bridge.md), [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md), [principles](../../docs-site/architecture/principles.md), [architecture: distribution](../../docs-site/architecture/distribution.md), spec daemon "Release the macOS arm64 terminal archive", spec daemon "Deploy frozen sibling binaries and back up the vault before migrating", spec desktop-app "Ship the desktop tier as a macOS arm64 dmg", PRs #317, #376, #386
 
 ## Context
 
-Coffer has three runnable entry points: the long-lived `coffer-daemon`,
-the per-MCP-session `coffer-mcp-shim`, and the `coffer` management CLI.
-The target user population includes users without a system Python
-install. Spec daemon commits to this; when this ADR was written the
-commitment sat in spec `mcp-gateway` as a success criterion:
+Coffer is Python: a long-lived daemon (FastAPI, SQLAlchemy/aiosqlite, Alembic,
+`mcp`, `keyring`, the channel SDKs), a stdio shim every MCP client spawns per
+session, and a `coffer` management CLI. The people it is for include developers
+without the Python version it needs, and people who have never opened a terminal
+at all. A user on a clean machine must reach a running daemon from one download
+with nothing installed first.
 
-- A user on a clean machine (no Python) reaches `status: ready`
-  from a single distributable with no manual steps beyond clicking through
-  the installer.
+Three more forces shape the answer:
 
-**[daemon](../../openspec/specs/daemon/spec.md) "Release the macOS arm64 terminal archive"** fixes the shape of that distributable: one release archive
-per tag, `coffer-cli-<triple>.tar.gz`, carrying every runnable binary.
+- **Binaries must find each other.** An MCP client config names
+  `coffer-mcp-shim`; the shim auto-spawns `coffer-daemon` from beside itself
+  after a reboot ([Daemon Detect-or-Spawn](daemon-detect-or-spawn.md)); the CLI
+  does the same. So all three must land at stable absolute paths, together.
+- **Two kinds of user.** A terminal user wants a `curl | sh` and a directory on
+  `PATH`. Everyone else wants a double-click app ([The Desktop Shell Hosts the
+  Shared Frontend](desktop-shell-over-a-shared-frontend.md)).
+- **No paid Apple Developer ID.** Nothing Coffer ships can be signed or
+  notarised today.
 
-That rules out any approach that requires users to install Python,
-maintain a virtualenv, or recover from wheel-build errors. We need to
-decide how Python code is delivered to end users.
+## Options Considered
+
+### Packaging the Python
+
+#### Option A — PyInstaller single-file executables (chosen)
+
+`backend/coffer-daemon.spec`, `backend/coffer-mcp-shim.spec` and
+`backend/coffer.spec` each freeze one entry point into a single-file binary;
+`scripts/build_binaries.sh` (`make bundle-binaries`) runs all three into `dist/`.
+The daemon spec carries its Alembic migrations and the built web UI
+(`frontend/dist`, shipped as `webui/`) as data files, and pins the modules
+imported lazily inside functions — `markitdown` and its document parsers,
+`openai`, `langgraph`, `langchain` — in `hiddenimports`, because PyInstaller's
+static analysis cannot see them. The shim spec excludes the server stack
+(FastAPI, uvicorn, SQLAlchemy, Alembic, structlog) since it only needs `httpx`
+to reach the daemon over loopback, and every spec excludes the heavy ML stack
+(`torch`, `scipy`, …) as a guard — a transitive pull would take a binary from
+about 95 MB to about 260 MB.
+
+Pros: the broadest support for this dependency set (Pydantic 2, SQLAlchemy 2
+async, `keyring` backends) and the largest cookbook of hidden-import fixes; no C
+compiler in CI; nothing in the daemon's runtime contract depends on it, so a
+later switch is bounded. Cons: binaries of roughly 100 MB; a cold start that
+unpacks the archive (acceptable for a daemon that starts once per login, noticed
+on the shim); and the sharp edge that a missing import or data path passes every
+test and fails only in the frozen build. That edge is fenced by two gates:
+`scripts/check_pyinstaller_specs.py` (`make lint`) fails when a spec's entry
+script or `datas` path no longer exists, or when an `EXE` loses the frozen
+`-X utf8` option (without it a binary started from Finder or launchd with no
+`LANG` falls back to ASCII); and `scripts/smoke_test_bundle.sh`, run by the
+release workflow on the built `dist/`, boots the frozen daemon under an isolated
+`HOME` to a live `/daemon/status`, requires it to serve the bundled web UI, and
+exchanges a JSON-RPC `initialize` with the frozen shim. It wins on dependency
+coverage at the lowest build cost.
+
+#### Option B — `pip install` / `pipx install` / `uv tool install`
+
+Publish a wheel and let the user's Python install it. Pros: no freezing, small
+downloads, instant upgrades. Cons: requires the right Python (3.12) on the
+machine, which most of the audience does not have; distro Pythons lag and hit
+wheel builds for `pydantic-core` or `aiosqlite`; and the resulting console
+scripts live wherever that Python's `bin` is, not at the stable paths MCP
+configs and the shim's sibling probe need. It stays the contributor path
+(`pip install -e ./backend`, spec daemon "Install the console scripts from
+source") and loses as the end-user path.
+
+#### Option C — Nuitka
+
+Compile Python to C and link a native binary. Pros: faster start, harder to
+unpack. Cons: a C toolchain in CI, much longer builds (and PyInstaller already
+costs most of a release's wall time), and a thinner record with this async
+stack. It loses on build cost for a start-up gain the daemon does not need.
+
+#### Option D — PyOxidizer
+
+Embed the interpreter and load modules from memory. Pros: one static binary,
+fast import. Cons: many packages that assume a real filesystem (`__file__`,
+package data such as Alembic's templates and `mcp`'s resources) need special
+handling, and the project's development has largely stopped. It loses on
+maintenance risk.
+
+#### Option E — Briefcase
+
+BeeWare's app packager. Pros: produces a proper `.app`/installer per platform.
+Cons: it packages *an application*, not a set of command-line binaries at stable
+paths; the CLI and shim would still need a separate story, and the desktop app
+is already Tauri. It loses because it solves the half of the problem that is
+already solved.
+
+#### Option F — An Electron app carrying an embedded Python
+
+Bundle a Python runtime and the source inside an Electron shell. Pros: one
+installer for the GUI. Cons: two runtimes (Chromium/Node and Python), several
+hundred MB, and still no CLI on `PATH` for MCP clients. It loses on size and
+because the terminal tier would still need Option A.
+
+### How many download tiers
+
+#### Option G — Two tiers built from one freeze: a CLI archive and a desktop `.dmg` (chosen)
+
+Per `v*` tag, `.github/workflows/release.yml` (one leg, `macos-14`,
+`aarch64-apple-darwin`) freezes the three binaries once and wraps them twice:
+
+- `coffer-cli-aarch64-apple-darwin.tar.gz` holding `coffer`, `coffer-daemon`
+  and `coffer-mcp-shim` under their plain names, installed by
+  `curl … install.sh | sh` (served from `docs-site/public/install.sh`) into
+  `~/.coffer/bin`, which it adds to `PATH` (overridable with
+  `COFFER_INSTALL_DIR`, `COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`);
+- `Coffer-unsigned-aarch64-apple-darwin.dmg`, the Tauri app with the **same
+  three files** copied from `dist/` into `desktop/binaries/` as `externalBin` —
+  a copy, not a second PyInstaller run.
+
+One aggregated `SHA256SUMS` covers both (spec daemon "Publish one aggregated
+checksum file"). The `.dmg` needs nothing installed beforehand, and installing
+it installs the CLI too, without the shell doing anything: the first daemon it
+starts deploys all three binaries into `~/.coffer/bin/` (below). Pros: each kind
+of user gets the install they expect; the expensive half (freezing) is done once,
+so the second tier costs one Tauri build in CI; the app and the archive cannot
+disagree about the binaries. Cons: a Rust toolchain in the release job, and an
+unsigned `.dmg` is treated worse by Gatekeeper than a `curl`-downloaded archive.
+
+#### Option H — One tier: the CLI archive only
+
+The shape between PR #317 and PR #376. Pros: one artifact, no Rust, and a
+`curl`-downloaded file is never quarantined. Cons: an app that requires the
+terminal first is not an answer for the people the desktop shell exists for.
+It loses because the second tier costs a Tauri build, not a second freeze.
+
+#### Option I — The desktop app as an optional layer over an installed CLI
+
+Ship a `.dmg` without the binaries and require the CLI first. Pros: a build of
+minutes rather than most of an hour, and the binaries arrive unquarantined via
+`curl`. Cons: needing the CLI first is a permanent second product for exactly
+the user the app is for. It loses; the quarantine step is one documented command.
+
+### Signing
+
+#### Option J — Unsigned, with the quarantine step documented (chosen, for now)
+
+Nothing is signed. A browser-downloaded `.dmg` carries `com.apple.quarantine`
+and macOS refuses the app as damaged until the user runs
+`xattr -dr com.apple.quarantine /Applications/Coffer.app`; a manually extracted
+archive needs the same on `~/.coffer/bin`. `README.md` and the release notes
+carry both commands (spec desktop-app "Document clearing the quarantine
+attribute"). Pros: free, and it ships today. Cons: a real first-run hurdle,
+worst on the desktop tier.
+
+#### Option K — Developer ID signing and notarisation
+
+Pros: the app opens on double-click; the right end state. Cons: requires a paid
+Apple Developer account, which does not exist. It is not rejected on merit; it
+is the single highest-value thing that account would buy, and the release job
+has no signing step until then.
 
 ## Decision
 
-**PyInstaller-built daemon, shim, and management CLI, shipped as two
-download tiers — the CLI archive and the desktop `.dmg` that wraps the same
-frozen binaries — from one CI release job** (the second tier since
-2026-09-12; see Revision history).
+**Coffer freezes `coffer`, `coffer-daemon` and `coffer-mcp-shim` with
+PyInstaller once per release on macOS arm64, and publishes them twice: as
+`coffer-cli-<triple>.tar.gz` and inside the unsigned `Coffer-unsigned-<triple>.dmg`,
+under one `SHA256SUMS`.** Rules that follow:
 
-Concrete choices:
-
-- `backend/coffer-daemon.spec` builds `dist/coffer-daemon` (single-file
-  executable). `backend/coffer-mcp-shim.spec` builds `dist/coffer-mcp-shim`.
-  The `coffer` management CLI is built the same way.
-- `make bundle-binaries` (driven by `scripts/build_binaries.sh`) runs
-  PyInstaller on the current host; the release CI job invokes the same
-  script on a macOS arm64 runner.
-- Each spec pins the `hiddenimports` empirically required at runtime —
-  FastAPI, SQLAlchemy 2 / aiosqlite, Pydantic 2, `mcp`, `keyring`, and
-  (daemon only) Alembic.
-- Alembic migrations ship as data files inside the daemon binary so
-  first-launch can run `upgrade head` against a fresh DB.
-- **Lazily-imported dependencies must be pinned in `hiddenimports`,** because
-  PyInstaller's static analysis cannot see an import that happens inside a
-  function — `markitdown` (inbound channel document extraction, [channels](../../openspec/specs/channels/spec.md) "Give documents to every agent as extracted text"), `openai`, `langgraph`, `langchain`. Package *data* needs
-  `collect_data_files` on top, since `collect_submodules` only reaches Python
-  modules.
-  **Revised 2026-09-12:** this bullet used to be about sqlite-vec — its
-  `vec0.dylib`/`.so`/`.dll` shipped as a data file and the bundle smoke test
-  probed for it, so that a frozen build which lost the extension failed loudly
-  instead of silently degrading vector retrieval to keyword-only. The
-  knowledge layer has no vector index any more
-  ([Knowledge Is Plain Files](knowledge-is-plain-files.md)), so both the
-  `sqlite_vec` collection lines and the probe are gone.
-  **Revised 2026-09-14:** the spec's collection lines had indeed been cleared,
-  but the probe had not — it kept asserting a `vec_available` field the daemon
-  no longer reports, so it failed on every healthy build. A stale assertion is
-  worse than none: it is read as noise, and the step everyone learns to ignore
-  is the step that cannot warn anybody. The data file that genuinely needs
-  guarding is the built web UI, and that is what the step now asserts.
-- The shim binary deliberately excludes server-side heavy dependencies
-  (FastAPI, uvicorn, SQLAlchemy, Alembic, structlog) to keep its size
-  manageable — the shim talks to the daemon over loopback HTTP and only
-  needs `httpx`.
-- The daemon also serves the built web UI as static files at its own
-  loopback origin ([daemon](../../openspec/specs/daemon/spec.md) "Serve the built web UI from the daemon's own origin"), so the web assets ride along inside
-  the daemon binary rather than in a separate shell. The desktop `.dmg`
-  ([The Desktop Shell Returns](desktop-shell-over-a-shared-frontend.md))
-  bundles these same binaries and renders the page the daemon serves; it
-  builds no UI of its own.
-- **The daemon deploys its sibling binaries on a frozen start**
-  ([daemon](../../openspec/specs/daemon/spec.md) "Deploy frozen sibling binaries and back up the vault before migrating"). When `coffer-daemon` detects it is running from a
-  frozen build, it idempotently copies the three frozen binaries — `coffer`,
-  `coffer-daemon` and `coffer-mcp-shim` — into
-  `~/.coffer/bin/<version>/`, and flips the
-  public `~/.coffer/bin/<name>` symlinks onto that directory atomically,
-  using an atomic temp-copy-then-rename and a 2-signal staleness check
-  (byte size, version sentinel — not mtime). Nothing is overwritten in
-  place: the previous version's directory stays for a rollback (the two
-  newest are kept), and removes the public link of any binary the build no
-  longer ships. This makes MCP clients able to resolve the
-  `command: coffer-mcp-shim` config, and it keeps a `coffer-daemon`
-  sibling next to the shim so the frozen shim's detect-or-spawn
-  ([Detect-or-Spawn](daemon-detect-or-spawn.md)) finds a daemon to start
-  after a reboot. The daemon is the natural owner because it is the one
-  process every frozen install starts, whichever tier it came from.
-  `~/.coffer/bin/` co-locates with the daemon's `~/.coffer/daemon.json`
-  from [Detect-or-Spawn](daemon-detect-or-spawn.md), which simplifies the
-  user mental model ("everything Coffer lives under `~/.coffer/`"). A
-  source install needs none of this — `pip install` already puts the
-  console scripts on `PATH` ([daemon](../../openspec/specs/daemon/spec.md) "Install the console scripts from source").
-- macOS Apple codesigning and notarisation are deferred (they require a
-  paid Apple Developer ID). Gatekeeper quarantine therefore still applies
-  to the downloaded CLI archive; the current user-visible workaround is
-  `xattr -d com.apple.quarantine` on the extracted binaries. Codesigning
-  and notarising the CLI binaries is the open follow-up.
+- **The daemon deploys its siblings; nothing else does.** On a frozen start,
+  `deploy_frozen_sidecars` (`backend/coffer/application/binary_deploy.py`,
+  called from the daemon's lifespan in `surfaces/http/app.py`) copies the three binaries into
+  `~/.coffer/bin/<version>/` with a temp-copy-then-rename and flips the public
+  `~/.coffer/bin/<name>` symlinks onto that directory atomically. Staleness is
+  byte size plus a version sentinel written after the copy — not mtime, which
+  re-copied everything after a same-release reinstall. The newest two version
+  directories are kept (`KEEP_VERSIONS`) so the last upgrade can be undone by
+  pointing the links back, and a public link into a version directory under a
+  name the build no longer ships is removed. Before PR #386 the deploy
+  overwrote `~/.coffer/bin/<name>` in place, so a bad build replaced the only
+  copy. The daemon owns this because it is the one process every frozen
+  install starts, whichever tier it came from; the desktop shell is forbidden
+  from writing `~/.coffer/bin/` (spec desktop-app "Reimplement no daemon route
+  in the shell"). A source install skips it — `pip` already put the scripts on
+  `PATH`.
+- **The release channel is stamped before the freeze.** On a tag,
+  `scripts/stamp_channel.py stable` rewrites `backend/coffer/build_channel.py`
+  before `build_binaries.sh` runs, because PyInstaller freezes the module as it
+  is ([Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md)).
+- **The desktop leg reuses the CLI leg's binaries.** No second PyInstaller run.
+- **The spec files stay honest.** A path a spec names must exist and every
+  `EXE` keeps `-X utf8` (`check_pyinstaller_specs.py`); the release refuses to
+  publish if the smoke test fails or the `.dmg` is missing.
+- **macOS arm64 only.** Intel, Linux and Windows were dropped from the release
+  matrix because they were never validated end to end. The specs are
+  platform-neutral, so re-adding a leg is a CI and validation job, not a
+  packaging redesign.
 
 ## Consequences
 
-**Positive**
-
-- Satisfies the no-system-Python promise of [daemon](../../openspec/specs/daemon/spec.md) "Release the macOS arm64 terminal archive" from day one: `make bundle-binaries`
-  produces single-file executables that run on a clean machine with
-  no Python.
-- Same binaries work for command-line invocation, MCP-client spawn, and
-  direct download. No multiple distribution paths to maintain.
-- Cross-platform consistency: the same PyInstaller specs work on macOS,
-  Windows, and Linux unchanged (only `--target-arch` differs per host),
-  so re-widening the release matrix is a CI change, not a redesign.
-- The shim binary stays small because it excludes server-side
-  dependencies — important for MCP clients that re-spawn the shim
-  every session.
-- Updating is cheap: replace the binaries, restart the daemon, hard-refresh
-  the browser. The desktop tier reuses the binaries the CLI leg froze, so it
-  cannot drift from the source they were built from.
-- Forward-compatible with optional "system service install" (an
-  [Detect-or-Spawn](daemon-detect-or-spawn.md) follow-up): launchd, systemd, and Windows service
-  configs all point at the same binary paths.
-
-**Negative**
-
-- Bundle size ≈ 80–120 MB per platform (Python interpreter + httpx +
-  SQLAlchemy + aiosqlite + keyring + Pydantic + structlog + Typer + …).
-  Larger than a comparable native binary but acceptable for a
-  developer-targeted tool.
-- PyInstaller cold-start is ~500–800 ms (vs ~100 ms for system Python).
-  The daemon starts once per OS-login and lives long; the shim starts
-  once per MCP-client startup. Both fit within human-perceivable
-  tolerance.
-- CI maintenance overhead: every dependency upgrade must be validated on
-  a real frozen build, not only against the source tree. Mitigated by the
-  post-build smoke test.
-- macOS Gatekeeper friction until codesigning and notarisation are added.
-  The current user-visible workaround is `xattr -d com.apple.quarantine`
-  on the extracted binaries.
-- PyInstaller has known sharp edges around hidden imports (especially
-  for Pydantic v2 and SQLAlchemy 2). Mitigation: explicit `hiddenimports`
-  lists in the PyInstaller specs, validated by a CI smoke test
-  ([`scripts/smoke_test_bundle.sh`](../../scripts/smoke_test_bundle.sh) — boots the bundled daemon to
-  `status: ready`, requires it to serve the bundled web UI, and exchanges a
-  JSON-RPC `initialize` with the bundled shim).
-
-**Operational follow-ups**
-
-- Per `v*` tag the CI release job produces exactly one archive —
-  `coffer-cli-<triple>.tar.gz` for macOS arm64, containing `coffer`,
-  `coffer-daemon` and `coffer-mcp-shim` and no other binary — plus one
-  aggregated `SHA256SUMS`
-  file covering every published artifact ([daemon](../../openspec/specs/daemon/spec.md) "Release the macOS arm64 terminal archive" / "Publish one aggregated checksum file").
-- Before every release, the bundle runs a post-build smoke test
-  ([`scripts/smoke_test_bundle.sh`](../../scripts/smoke_test_bundle.sh))
-  — must boot the bundled daemon to `status: ready`, serve the bundled web UI
-  at its root, and let the bundled shim exchange a JSON-RPC `initialize` over
-  loopback.
-- The shim binary path is exposed to the user via `coffer daemon status`
-  (and in the daemon-served web UI) so it can be pasted into MCP-client
-  config.
-
-## Alternatives Considered
-
-**Require system Python 3.12+ with a venv (`pip install coffer`).**
-Rejected.
-
-- Directly violates the no-system-Python promise. Most macOS users with a designer /
-  non-developer background, and most Windows users, do not have a working
-  Python install at the required version.
-- Even on Linux, distro-shipped Python is typically one major version
-  behind ours; users hit wheel-build errors for `aiosqlite` or
-  `pydantic-core`.
-- The contributor-facing path (`pip install -e ./backend`) stays
-  in the docs — but it is not the end-user distribution channel.
-
-**Nuitka or PyOxidizer instead of PyInstaller.** Rejected for v0.
-
-- PyInstaller has the broadest support for our dependency set (FastAPI,
-  SQLAlchemy async, `mcp`, `keyring` backends) and the largest community
-  cookbook for hidden imports. Nuitka's AOT compilation is appealing
-  but lengthens the build cycle and pulls platform-specific compilers
-  into CI.
-- Switching packager later is a bounded reversible change: nothing in
-  the daemon's runtime contract is PyInstaller-specific.
-
-**Multiple download tiers (a GUI installer alongside the CLI archive).**
-Rejected at the time; reversed on 2026-09-12 (see Revision history).
-
-- A second tier means a second artifact to build, verify, and keep in
-  step with the first. The single `coffer-cli-<triple>.tar.gz` tier is
-  what ships: it runs headless on a server and, because the daemon serves
-  the web UI itself, it is also the complete graphical install.
-- For developers working from a checkout, `pip install -e ./backend`
-  remains the documented path; they entirely bypass PyInstaller.
-
-## Revision history
-
-- **2026-05-20** — Initial decision (spec mcp-gateway era): PyInstaller binaries,
-  universal macOS binary planned, shim path under
-  `~/Library/Application Support/Coffer/bin/` on macOS.
-- **2026-05-28** (PR #28) — Revised for implementation reality:
-  (a) two separate per-arch macOS artifacts instead of a universal binary
-  (the release pipeline does not run `lipo`); (b) shim path on macOS / Linux
-  moved to `~/.coffer/bin/` to co-locate with `~/.coffer/daemon.json`
-  from Detect-or-Spawn; (c) explicit per-release artifact count with a SHA-256
-  checksum each; (d) cross-links to [`scripts/build_binaries.sh`](../../scripts/build_binaries.sh)
-  and [`scripts/smoke_test_bundle.sh`](../../scripts/smoke_test_bundle.sh)
-  restored.
-- **2026-05-30** — CLI tier expanded: the release now ships **three**
-  PyInstaller binaries — `coffer` (management CLI) added alongside
-  `coffer-daemon` + `coffer-mcp-shim`. The `coffer` management CLI, previously
-  only available via `pip install -e ./backend`, is now a first-class part of
-  the CLI tier. The archive (`coffer-cli-<triple>.tar.gz`) is installed via a
-  one-line script (`install.sh`, served from
-  `https://wyx-sg.github.io/Coffer/`) into `~/.coffer/bin`; the script also
-  adds `~/.coffer/bin` to `PATH` automatically. Env overrides available:
-  `COFFER_INSTALL_DIR`, `COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`.
-- **2026-06-05** — Shipping scope narrowed to **macOS (Apple Silicon) only**.
-  The Linux and Windows release matrix legs were never validated end-to-end,
-  so they are dropped from `release.yml` rather than shipped untested. The
-  PyInstaller mechanism here is unchanged and platform-agnostic; the other
-  targets can be re-enabled once each is actually tested.
-- **2026-06-12** — Binary deploy now covers **both** the shim and the
-  daemon in the user bin dir: `coffer-daemon` is copied to `~/.coffer/bin/`
-  alongside `coffer-mcp-shim` (same idempotent atomic-replace +
-  version-sentinel logic), so the frozen shim's Detect-or-Spawn sibling probe finds
-  a daemon to auto-spawn after a reboot.
-- **2026-09-09** — **The desktop shell was removed and this ADR became a
-  pure PyInstaller distribution decision.** The judgement was about the
-  operating cost of every update, not lines of code: each desktop update
-  required a rebuild plus a reinstall, and the built artifact kept
-  diverging from source. Two incidents are on record — a build made before
-  fetching produced an app running stale code, and a separately-pinned
-  build directory meant UI bug reports had to be re-verified against `main`
-  before they could be trusted. The web form has neither failure mode:
-  restart the daemon, hard-refresh the browser, and you are on the current
-  code. (Supporting datum: 7 of the 15 commits under `desktop/` were fixes,
-  the highest ratio in the project — though all during the build-out, and
-  the tree had been unchanged for two months. So this removed a recurring
-  operating tax, not an actively bleeding wound.) Concretely:
-  (a) the Tauri-sidecar half of the decision is gone — `bundle.externalBin`,
-  sidecar triple-suffix naming, `desktop/tauri.conf.json`, and the
-  DMG / MSI / AppImage / deb bundles no longer exist;
-  (b) the release collapsed to a **single tier** — one
-  `coffer-cli-<triple>.tar.gz` per `v*` tag plus one aggregated
-  `SHA256SUMS` covering every artifact ([daemon](../../openspec/specs/daemon/spec.md) "Release the macOS arm64 terminal archive" / "Publish one aggregated checksum file"), with the
-  `.dmg` and `Coffer-unsigned-<triple>.app.zip` retired;
-  (c) binary deployment into `~/.coffer/bin/` **moved into the daemon's
-  frozen-start path** ([daemon](../../openspec/specs/daemon/spec.md) "Deploy frozen sibling binaries and back up the vault before migrating"), keeping the same atomic
-  temp-copy-then-rename and the same 3-signal staleness check, and now also
-  covering `coffer-callback`;
-  (d) the macOS notarisation runbook (`docs/distribution/macos-notarization.md`)
-  was deleted — every step in it was `cargo tauri build` / `.dmg` signing
-  and stapling for a pipeline that no longer exists; Gatekeeper quarantine
-  on the CLI archive and the `xattr -d com.apple.quarantine` workaround are
-  now noted inline above.
-  The MCP Gateway Desktop spec is retired; its two surviving
-  release-pipeline requirements folded into spec mcp-gateway.
-- **2026-09-12** — **the desktop tier returns, and (a) and (b) above are
-  reversed.** The shell is restored ([The Desktop Shell
-  Returns](./desktop-shell-over-a-shared-frontend.md)) because the 2026-09-09
-  judgement priced the cost of every update and not the cost of access: without
-  it Coffer has no Dock icon and no route to its UI that does not begin in a
-  terminal. Concretely:
-  (a) the Tauri-sidecar half of the decision is back — `bundle.externalBin`
-  with the sidecar triple-suffix naming, and `desktop/tauri.conf.json` — but
-  with **four** binaries rather than the old five (`coffer`, `coffer-daemon`,
-  `coffer-mcp-shim`, `coffer-callback`; `coffer-hook` and `whisper-cli` were
-  retired in the interval), and macOS `.dmg` only — MSI, AppImage and deb stay
-  gone, since those legs were never validated;
-  (b) the release regains a **second tier**: `Coffer-unsigned-<triple>.dmg` beside the
-  `coffer-cli-<triple>.tar.gz`, both covered by the one aggregated `SHA256SUMS`
-  ([daemon](../../openspec/specs/daemon/spec.md) "Release the macOS arm64 terminal archive" / "Publish one aggregated checksum file"). The desktop leg reuses the binaries the
-  CLI leg already froze rather than running PyInstaller twice, so the second
-  tier costs a Tauri build and nothing more;
-  (c) **stands unchanged** — binary deployment stays in the daemon's
-  frozen-start path, and the shell is explicitly forbidden from duplicating it
-  ([daemon](../../openspec/specs/daemon/spec.md) "Deploy frozen sibling binaries and back up the vault before migrating" / [desktop-app](../../openspec/specs/desktop-app/spec.md) "Reimplement no daemon route in the shell"). That was the right home and the shell
-  coming back does not reclaim it;
-  (d) **stands, and becomes more expensive.** There is still no notarisation
-  runbook and no paid Apple Developer account. An unsigned `.dmg` is worse than
-  an unsigned CLI archive — macOS refuses it on double-click with "Coffer is
-  damaged", where a `curl`-installed binary is never quarantined at all — so
-  the `xattr -dr com.apple.quarantine` step is now documented for the app as
-  prominently as for the archive. Notarisation is now the single highest-value
-  thing that account would buy.
-- **2026-09-14** — Versioned deploy directories. `deploy_frozen_sidecars`
-  used to overwrite `~/.coffer/bin/<name>` in place whenever size, mtime or
-  the version sentinel differed, so a bad build replaced the only copy and
-  a same-release reinstall (new mtime, same bytes) re-copied everything on
-  every start. Each build now lands in `~/.coffer/bin/<version>/`, the public
-  names are symlinks flipped atomically onto it, the previous version's
-  directory is kept (two newest survive), and mtime is no longer a
-  staleness signal. Rollback is pointing the links back by hand; the paths
-  every caller uses are unchanged.
-- **2026-09-24** — **Three binaries.** SeaTalk inbound became websocket-only
-  ([SeaTalk Inbound Over WebSocket](seatalk-websocket-inbound.md)), so the
-  `coffer-callback` listener is deleted and both tiers carry `coffer`,
-  `coffer-daemon` and `coffer-mcp-shim` only. A deploy now also removes every
-  public `~/.coffer/bin/<name>` symlink into a version directory under a name
-  the build does not ship, which retires the `coffer-callback` link on existing
-  installs; anything at such a path that is not one of Coffer's symlinks is
-  left alone. The rule is generic, so the next binary a release drops needs no
-  special case.
-
-## Open questions
-
-- **Signing and notarisation.** The frozen binaries and the `.dmg` remain
-  unsigned; the quarantine-clearing step is documentation, and it bites hardest
-  on the desktop tier, where macOS reports a browser-downloaded app as damaged.
-  This stays open until a paid Apple Developer ID exists.
+- A user with no Python reaches a running daemon from either download, and the
+  paths every client uses (`~/.coffer/bin/<name>`, next to
+  `~/.coffer/daemon.json`) are the same whichever tier they came from.
+- The web UI travels inside the daemon binary as data; the `.dmg` hosts the same
+  `frontend/dist` as a local asset. There is still one UI build.
+- Every dependency upgrade must be proven on a frozen build, not only on the
+  source tree; the smoke test and the spec checker are what catch it before a
+  user does.
+- A local `make desktop` takes roughly 50 minutes because it freezes all three
+  binaries first; the release pays the freeze once for both tiers.
+- Until an Apple Developer ID exists, every install starts with a quarantine
+  command, and the desktop tier is where it hurts most.

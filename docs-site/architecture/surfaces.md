@@ -63,6 +63,20 @@ The REST API is the canonical interface — the CLI and the Web UI both call it.
 
 **Security boundary.** The `X-Coffer-Token` is required on the initial connection. Because connections arrive through the stdio shim (which reads the token from `daemon.json`) or directly from a local process, the effective trust boundary is the local user account. Each session is isolated: one client's upstream subprocesses and capability caches are invisible to another client's session.
 
+
+### Builtin tools
+
+Beside the namespaced upstream capabilities, the endpoint lists Coffer's own tools under the `coffer__` prefix. The daemon registers **three** builtin tools in one in-process `BuiltinToolRegistry` (`application/builtin_tools.py`); each is declared as a `BuiltinTool(name=…)` by the slice that owns it and stored unprefixed. One more, `coffer__search_tools`, is the gateway's own: it is answered in `application/mcp/gateway_builtin.py` without passing through the registry. `scripts/check_architecture_doc.py` fails the build if a registered tool is missing from this table.
+
+| Slice       | Tool                   | Declared in                                  |
+| ----------- | ---------------------- | -------------------------------------------- |
+| knowledge   | `coffer__write`        | `application/knowledge/builtin_tools.py`     |
+| memory      | `coffer__recall`       | `application/memory/builtin_recall_tool.py`  |
+| diagnostics | `coffer__diagnose`     | `application/diagnostics.py`                 |
+| gateway     | `coffer__search_tools` (ADR tool-overload-tier-the-list-search-the-rest) | `application/mcp/gateway_builtin.py` |
+
+The gateway threads the session's handshake identity into every builtin call as the `agent` argument the knowledge and memory tools authorize by; no tool advertises that argument, and a value a client supplies is overwritten (spec mcp-gateway "Take the agent identity from the handshake"). The builtin tools of a switched-off [experimental feature](/architecture/experimental-features) leave `tools/list` and answer a call as an unknown tool.
+
 ---
 
 ## CLI (`coffer …`)
@@ -81,6 +95,8 @@ Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `co
 
 `coffer daemon port` is the one exception to "every command calls the daemon": it reads and writes `~/.coffer/daemon-config.json` directly, with no daemon involved and none required. That is the point — the state the port setting most needs changing from is "no daemon is running", which is exactly what a route or a page could not serve.
 
+**Version skew.** Every command compares the daemon's reported `version` with its own build and, on a mismatch, prints a one-line warning on stderr naming the daemon's `executable` — detection, never refusal (spec daemon "Warn on a version mismatch and carry on", ADR daemon-detect-or-spawn).
+
 **Lifecycle.** Spawned on demand; exits after each command completes (or after printing an error). The CLI's exit does not stop the daemon.
 
 **Security boundary.** Token from `~/.coffer/daemon.json` (mode `0600`). The same file-permission boundary as every other surface: only the owner of the user account can read the token and therefore issue authenticated requests.
@@ -96,6 +112,8 @@ Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `co
 **Transport.** The shim reads from stdin and writes to stdout (as far as the MCP client is concerned). Internally, it connects to `127.0.0.1:<port>/mcp` over HTTP/SSE, carrying the `X-Coffer-Token`. JSON-RPC messages arriving on stdin are forwarded as HTTP POST requests to the daemon; notifications from the daemon's SSE stream are written back to stdout.
 
 **Lifecycle.** The shim is spawned by the MCP client using whatever subprocess mechanism that client supports (e.g., `claude mcp add coffer coffer-mcp-shim` for Claude Code). It exits when the MCP client process exits. Its exit does not stop the daemon — other shims and other clients continue unaffected. On startup, the shim applies detect-or-spawn: if no running daemon is found in `daemon.json`, it spawns one, then connects.
+
+The shim runs the same version-skew check as the CLI on its status probe, with the same one-line stderr warning.
 
 **Security boundary.** Same as the CLI: token from `~/.coffer/daemon.json`, file-permission boundary. Because the shim is spawned by the MCP client (which runs as the same local user), the trust boundary is implicit in the process ownership chain. The shim carries the token on every request to the daemon; the daemon validates it.
 
@@ -137,6 +155,16 @@ No "coming soon" placeholders appear — a kind only appears once it works, and 
 
 ---
 
+## SeaTalk websocket connection
+
+**What it is.** SeaTalk's only inbound transport: one outbound websocket connection per SeaTalk channel. It is listed here because it is the one other place events enter the daemon, and it exposes nothing — no listening socket, no public URL. Events land on the channel's one ingest seam (spec channels/seatalk "Receive every event over one outbound websocket connection" / "Report the websocket connection as the channel's inbound state").
+
+**Which process.** A worker thread inside the daemon, reconciled with the channel runtime (see [Daemon & processes](/architecture/processes#supervised-background-workers)).
+
+**Security boundary.** Authenticated once per connection from the channel's app id and app secret (a credential ref). See [Security → Channels without a public surface](/architecture/security#channels-without-a-public-surface).
+
+---
+
 ## Surface comparison
 
 | Surface        | Process type      | Transport to daemon        | Spawned by          | Lifecycle           |
@@ -147,6 +175,7 @@ No "coming soon" placeholders appear — a kind only appears once it works, and 
 | Stdio shim     | Per-session       | HTTP/SSE                   | MCP client          | MCP client session  |
 | Web UI         | Browser tab       | Loopback HTTP (REST)       | `coffer open` / browser | Browser tab session |
 | Desktop shell  | Native app + webview | Loopback HTTP (REST); local page | User (Dock / Spotlight) | Until quit from the tray |
+| SeaTalk websocket | Thread inside daemon | — (outbound to SeaTalk) | Channel reconciler | While the channel is enabled on this machine |
 
 ---
 

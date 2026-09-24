@@ -155,7 +155,7 @@ async def create_conversation(
     """Create a conversation for the named Coffer-managed agent.
 
     ``agent_key`` is required — chat has no built-in agent (ADR
-    builtin-agent-is-internal-capability); ``agent_config`` is validated by that
+    coffer-model-is-an-internal-engine); ``agent_config`` is validated by that
     agent. An unknown agent or an invalid config is rejected with 400.
     """
     conv = await svc.create_conversation(agent_key=body.agent_key, agent_config=body.agent_config)
@@ -185,7 +185,7 @@ async def update_conversation(
     A body that names no ``title`` changes nothing and returns the conversation
     as it stands. The agent's own model is not set here — it lives in the
     conversation's agent_config (PATCH ``/conversations/{id}/agent-config``,
-    ADR provider-switching).
+    ADR model-catalogue-read-from-the-agent).
     """
     if body.title is not None:
         conv = await svc.rename_conversation(id, new_title=body.title)
@@ -214,7 +214,7 @@ async def set_agent_config(
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
 ) -> AgentConfigOut:
     """Set a managed agent's own model and effort for a conversation (ADR
-    builtin-agent-is-internal-capability → ADR provider-switching).
+    coffer-model-is-an-internal-engine → ADR model-catalogue-read-from-the-agent).
 
     Mirrors the channel ``/model`` command: read-then-``replace`` so ``cwd`` and
     ``session_id`` are preserved, and a body that mentions only one of the two

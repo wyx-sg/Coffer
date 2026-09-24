@@ -20,11 +20,11 @@ in its two children: [`channels/telegram`](telegram/spec.md) (the Bot API
 transport) and [`channels/seatalk`](seatalk/spec.md) (the SeaTalk websocket
 transport and SeaTalk's own message shapes). Watching and steering the same
 conversation from the browser is the web Chat page's, in spec `chat`. Channels
-route to **managed** agents (Claude Code, Codex, …) only: [Built-in Agent Is
-Internal](../../../docs/decisions/builtin-agent-is-internal-capability.md)
+route to **managed** agents (Claude Code, Codex, …) only: [Coffer's Model Is an
+Internal Engine](../../../docs/decisions/coffer-model-is-an-internal-engine.md)
 retired the built-in agent as a chat persona, so it is an internal `coffer__*`
 capability and not a channel target. There is no tool-approval flow on a channel
-([Remove Tool Approval](../../../docs/decisions/remove-tool-approval.md)); owner
+([Managed Agents Run With Full Permissions](../../../docs/decisions/managed-agents-run-with-full-permissions.md)); owner
 pairing is the gate.
 
 The user is assumed to be able to create a bot on each platform they register —
@@ -593,7 +593,7 @@ to future modalities (a new type is a new mime, not a new schema). A sticker is
 a picture the user chose deliberately, so it is downloaded like any other
 attachment. Only a message with no text and nothing downloadable at all — a
 location, a contact card — gets the reply that the channel needs text, a photo,
-or a file. See [Channel Media](../../../docs/decisions/channel-media.md).
+or a file. See [Channel Attachments](../../../docs/decisions/channel-attachments.md).
 
 #### Scenario: an inbound photo is downloaded and drives a turn
 - **GIVEN** a paired Telegram channel
@@ -633,7 +633,7 @@ never collides with normal markdown.
 An inbound voice message MUST drive a turn as a transcript. The built-in agents
 (Claude Code, Codex) cannot hear audio, so the adapter transcribes the audio to
 text and folds it into the turn's prompt. Transcription is a per-agent seam
-([Channel Media](../../../docs/decisions/channel-media.md)); a future
+([Channel Attachments](../../../docs/decisions/channel-attachments.md)); a future
 audio-native agent's adapter forwards the audio instead of transcribing.
 
 Transcription runs **remotely**, on the connection the user designated
@@ -1071,7 +1071,7 @@ full-history replay). The path stays inside the daemon: only the agent adapter,
 which must read the bytes, ever sees it. The media dir is bounded by a 30-day
 mtime retention prune on the retention cadence (bytes are re-downloadable; no
 size cap). See
-[Persisted Attachment Reference](../../../docs/decisions/persisted-attachment-reference.md).
+[Channel Attachments](../../../docs/decisions/channel-attachments.md).
 
 #### Scenario: an inbound attachment is persisted as a reference on the user message
 - **GIVEN** a paired channel driving a turn with an image attachment

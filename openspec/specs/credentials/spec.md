@@ -22,7 +22,7 @@ configured. Token authentication and loopback-only binding on these routes are t
 not this capability's. Carrying ciphertext and the master key to another machine is vault-sync's:
 this capability owns where the key lives on this machine, not how a user carries it to the next.
 The product-wide invariants (ciphertext-only storage, the sole key manager, the file-or-keychain
-pair, `keyring` confinement, references everywhere else) are also stated in `docs/principles.md`;
+pair, `keyring` confinement, references everywhere else) are also stated in `docs-site/architecture/principles.md`;
 this is where they become operable behaviour with routes, commands and tests.
 
 The store is not a password manager: it has no sharing model, no expiry, no per-agent scope and no
