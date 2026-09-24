@@ -37,7 +37,7 @@ from coffer.infrastructure.chat.codex_app_server import (
     AppServerSessionFactory,
     CodexAppServerSession,
 )
-from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient
+from coffer.infrastructure.chat.codex_jsonrpc import CodexRpcClient, CodexRpcError
 from coffer.infrastructure.chat.codex_mapping import (
     CodexParseState,
     map_codex_notification,
@@ -139,6 +139,16 @@ class CodexAppServerAdapter:
         ``thread/resume`` the app-server rejects (it has forgotten the thread)
         is retried ONCE as ``thread/start``, whose id then replaces the stored
         one. A failure of that fresh start propagates — it is the turn error.
+
+        "Rejects" means a JSON-RPC error response (``CodexRpcError``) and
+        nothing else. The protocol has no dedicated code for an unknown thread:
+        the generated schema (``codex app-server generate-json-schema``,
+        codex-cli 0.155.1) types every error as a bare ``{code, message}``, and
+        the binary's messages for this case are strings such as "no rollout
+        found for thread id …" / "thread not found: …" / "invalid thread id: …".
+        A transport failure (process death, closed stream, timeout) says
+        nothing about the thread, so it propagates as the turn error and the
+        stored id is kept — a fresh thread there would silently drop context.
         """
         model = self._extra.get("model")
         # Full permissions — Coffer does not gate individual tool calls; the owner
@@ -164,7 +174,7 @@ class CodexAppServerAdapter:
                     "thread/resume", {**thread_params, "threadId": self._resume}
                 )
                 return (thread.get("thread") or {}).get("id") or self._resume
-            except Exception:
+            except CodexRpcError:
                 _logger.warning(
                     "codex_agent.resume_failed_retrying_fresh",
                     extra={"resume": self._resume},

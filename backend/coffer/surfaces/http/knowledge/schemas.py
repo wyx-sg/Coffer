@@ -128,7 +128,8 @@ class CurationOut(BaseModel):
     #: ``ok`` | ``truncated`` | ``no_model`` | ``up_to_date`` | ``too_large`` |
     #: ``failed``. ``truncated`` is a pass the recursion limit cut off: it
     #: carries the same counters as ``ok`` but its item stays pending ("Bound a
-    #: pass to eight writes", "Settle an item only after its pass completes").
+    #: pass to eight writes", "Settle an item only after its pass completes") —
+    #: unless ``gave_up`` is set.
     #: Every one of them is a 200: a collection with no model configured, or
     #: with nothing pending, is an ordinary state of the feature and not a
     #: fault of the request.
@@ -154,10 +155,15 @@ class CurationOut(BaseModel):
     documents_after: int = 0
     #: The item-size ceiling, present only with ``status`` ``too_large``.
     limit: int = 0
-    #: Documents the inbox was promoted into as it stood, present only with
+    #: Documents the inbox was promoted into as it stood: every item with
     #: ``status`` ``no_model`` ("Promote material directly when no model is
-    #: configured").
+    #: configured"), or the one item a pass gave up on (``gave_up``).
     promoted: list[str] = Field(default_factory=list)
+    #: With ``status`` ``truncated``: this was the item's third cut-off in a
+    #: row, so the pass settled it instead of leaving it owed — material
+    #: promoted as it stood, an edited document stamped ("Bound a pass to
+    #: eight writes").
+    gave_up: bool = False
 
 
 class IngestedDocumentOut(BaseModel):

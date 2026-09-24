@@ -645,6 +645,24 @@ async def test_uninstall_claude_unknown_plugin_404(store, audit_svc):
     assert entries == []
 
 
+async def test_uninstall_claude_unparseable_inventory_lets_the_cli_decide(store, audit_svc):
+    """When Claude's inventory cannot be parsed the listing is empty — that is
+    "unknown", not "not installed". The pre-check steps aside and the CLI
+    (which reads its own files) decides, instead of a false 404."""
+    store._files[_CLAUDE_INSTALLED] = "{ not json"
+    runner = FakeCliRunner(available=True)
+    svc = _make_svc(store, audit_svc, cli_runner=runner)
+
+    await svc.uninstall(_CC_UID, "plugin-a@npm", actor="cli")
+
+    assert runner.calls == ["plugin-a@npm"]
+    assert store._writes == []
+    entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_UNINSTALLED.value)
+    assert [e.details for e in entries] == [
+        {"plugin": "plugin-a@npm", "cache_removed": True, "via": "cli"}
+    ]
+
+
 async def test_uninstall_claude_without_cli_runner_rejected(store, audit_svc):
     # No runner wired → uninstall is unavailable (the listing hides the button).
     svc = _make_svc(store, audit_svc)

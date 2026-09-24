@@ -23,13 +23,13 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from coffer.application.channel.turn_text import clip_stream_preview
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.infrastructure.channel.render import markdown_to_seatalk
 from coffer.infrastructure.channel.seatalk_stream_text import (
     _split_for_stream,
     interim_snapshot,
 )
+from coffer.infrastructure.channel.telegram_text import clip_tail_utf16
 
 _logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ MIN_UPDATE_INTERVAL = float(os.environ.get("COFFER_SEATALK_STREAM_INTERVAL", "0.
 #: tighter than a streaming endpoint's.
 TELEGRAM_UPDATE_INTERVAL = 1.5
 
-#: One plain message's cap; the renderer clips to the far larger rich budget.
+#: One plain message's cap in UTF-16 units; the renderer clips to the far larger rich budget.
 TELEGRAM_TEXT_LIMIT = 4096
 
 #: SeaTalk terminates a stream that goes 30 s without an update, and a Telegram
@@ -247,7 +247,7 @@ class TelegramLiveText(LiveTextSurface):
         return await super().close(text)
 
     async def _write(self, text: str) -> None:
-        text = clip_stream_preview(text, TELEGRAM_TEXT_LIMIT)
+        text = clip_tail_utf16(text, TELEGRAM_TEXT_LIMIT)  # the cap counts UTF-16 units
         if not self._message_id:
             extra: dict[str, Any] = {}
             if self._thread_id:

@@ -488,13 +488,15 @@ export interface components {
          *       "documents_before": 22,
          *       "documents_after": 23,
          *       "limit": 0,
-         *       "promoted": []
+         *       "promoted": [],
+         *       "gave_up": false
          *     }
          */
         CurationOut: {
             /**
              * @description `truncated` when the recursion limit cut the pass off: the same
-             *     counters as `ok`, but the item is left pending, not settled.
+             *     counters as `ok`, but the item is left pending, not settled —
+             *     unless `gave_up` is true.
              *     `no_model` when no internal connection is configured — every inbox
              *     item was promoted to a document as it stood, never an error.
              *     `up_to_date` when nothing is pending. `too_large` when the item
@@ -532,11 +534,18 @@ export interface components {
             /** @description The item-size ceiling, present only with `status` `too_large`. */
             limit: number;
             /**
-             * @description The documents the inbox was promoted into as it stood, present only
+             * @description The documents the inbox was promoted into as it stood: every item
              *     with `status` `no_model` (see "Promote material directly when no
-             *     model is configured").
+             *     model is configured"), or the one item a pass gave up on (`gave_up`).
              */
             promoted: string[];
+            /**
+             * @description With `status` `truncated`: the item's third consecutive cut-off, so
+             *     the pass settled it rather than leaving it owed — material promoted
+             *     as it stood (named in `promoted`), an edited document stamped (see
+             *     "Bound a pass to eight writes").
+             */
+            gave_up: boolean;
         };
         /**
          * @description What an upload became. Note `converter` is reported here and written

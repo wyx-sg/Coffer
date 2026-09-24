@@ -25,6 +25,12 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 #: one query.
 DEFAULT_RUN_LIMIT = 500
 
+#: Rounds that converged: each settles whether a conflict is still outstanding.
+#: A push that failed merged and applied all the same. A guard hold does not
+#: count — it is read from ``pending()`` while it stands, and a hold rejected
+#: or raised before the merge proves nothing about an earlier conflict.
+_MERGED = frozenset({ConvergeStatus.OK, ConvergeStatus.NO_CHANGE, ConvergeStatus.PUSH_FAILED})
+
 
 class HistoryMixin:
     """Declares what it borrows from the service it is mixed into.
@@ -55,15 +61,22 @@ class HistoryMixin:
     async def divergence_outstanding(self) -> bool:
         """Whether a round left something the user has not yet answered.
 
-        Either a confirmation held at the deletion guard, or a last round that
-        stopped on a conflict — which holds nothing (the vault is untouched and
-        the pointer has not moved), so only the recorded round says it is
-        there. An unattended rewriter consults this before it runs (spec
-        vault-sync "Never overlap a tidy pass and a round"): a rewrite piled
-        onto an unresolved divergence changes the very documents the user is
-        about to decide between.
+        Either a confirmation held at the deletion guard, or a conflict — which
+        holds nothing (the vault is untouched and the pointer has not moved), so
+        only the recorded rounds say it is there. An unattended rewriter consults
+        this before it runs (spec vault-sync "Never overlap a tidy pass and a
+        round"): a rewrite piled onto an unresolved divergence changes the very
+        documents the user is about to decide between.
+
+        The conflict is read off the newest round that reached the merge, not
+        the newest round: one that failed before it (the network), did not run
+        (sync switched off) or stopped to ask about a join or a guard hold says
+        nothing about whether the conflict was resolved, and only a round that
+        converges again clears it ("once a later round converges cleanly").
         """
         if await self._state.pending() is not None:
             return True
-        last = await self._remotes.last_run()
-        return last is not None and last.status is ConvergeStatus.CONFLICT
+        for record in await self._remotes.list_runs(DEFAULT_RUN_LIMIT):
+            if record.run.status in _MERGED or record.run.status is ConvergeStatus.CONFLICT:
+                return record.run.status is ConvergeStatus.CONFLICT
+        return False

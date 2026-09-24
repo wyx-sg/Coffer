@@ -971,6 +971,7 @@ components:
           documents_after,
           limit,
           promoted,
+          gave_up,
         ]
       properties:
         status:
@@ -978,7 +979,8 @@ components:
           enum: [ok, truncated, no_model, up_to_date, too_large, failed]
           description: |
             `truncated` when the recursion limit cut the pass off: the same
-            counters as `ok`, but the item is left pending, not settled.
+            counters as `ok`, but the item is left pending, not settled —
+            unless `gave_up` is true.
             `no_model` when no internal connection is configured — every inbox
             item was promoted to a document as it stood, never an error.
             `up_to_date` when nothing is pending. `too_large` when the item
@@ -1022,9 +1024,16 @@ components:
           type: array
           items: { type: string }
           description: |
-            The documents the inbox was promoted into as it stood, present only
+            The documents the inbox was promoted into as it stood: every item
             with `status` `no_model` (see "Promote material directly when no
-            model is configured").
+            model is configured"), or the one item a pass gave up on (`gave_up`).
+        gave_up:
+          type: boolean
+          description: |
+            With `status` `truncated`: the item's third consecutive cut-off, so
+            the pass settled it rather than leaving it owed — material promoted
+            as it stood (named in `promoted`), an edited document stamped (see
+            "Bound a pass to eight writes").
       example:
         status: ok
         collection: shopee
@@ -1037,6 +1046,7 @@ components:
         documents_after: 23
         limit: 0
         promoted: []
+        gave_up: false
 
     IngestedDocumentOut:
       type: object

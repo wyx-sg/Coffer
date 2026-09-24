@@ -351,3 +351,47 @@ async def test_a_truncated_item_neither_stops_the_sweep_nor_is_retried_within_it
     await worker.run_once()
 
     assert curated == ["huge.md", "small.md"]
+
+
+@pytest.mark.acceptance(
+    spec="knowledge",
+    scenario="a pass cut off by the recursion limit reports it and leaves its item owed",
+)
+@pytest.mark.anyio
+async def test_an_item_cut_off_last_sweep_goes_behind_the_rest_of_the_inbox(
+    root: pathlib.Path,
+) -> None:
+    # With one pass a sweep, an item cut off every time would otherwise be
+    # first in line every sweep and the rest of the inbox would never be
+    # reached until it was given up on.
+    fs.submit_material("shopee", title="Huge", description="d", body="b", actor="agent")
+    fs.submit_material("shopee", title="Small", description="d", body="b", actor="agent")
+    curated: list[Any] = []
+
+    async def curate(service, uid, *, item, actor):  # type: ignore[no-untyped-def]
+        curated.append(item.material)
+        if item.material == "huge.md":
+            return {"status": "truncated", "gave_up": False}
+        fs.discard_material("shopee", item.material)
+        return {"status": "ok"}
+
+    async def enabled() -> bool:
+        return True
+
+    async def collections() -> list[str]:
+        return ["uid-1"]
+
+    worker = CurationWorker(
+        service=_service("shopee"),
+        curate=curate,
+        deliver=None,
+        is_enabled=enabled,
+        list_collections=collections,
+        runs=UpkeepRunRegistry(),
+        max_passes_per_sweep=1,
+    )
+    await worker.run_once()
+    await worker.run_once()
+    await worker.run_once()
+
+    assert curated == ["huge.md", "small.md", "huge.md"]

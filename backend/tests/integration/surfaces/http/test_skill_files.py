@@ -460,3 +460,53 @@ def test_oversize_file_is_truncated(tmp_path, monkeypatch):
         # otherwise an edit past the cap would slip through the stale check.
         assert body["fingerprint"] == hashlib.sha256(big.encode()).hexdigest()
         assert body["fingerprint"] != hashlib.sha256(body["content"].encode()).hexdigest()
+
+
+def test_write_to_a_builtin_skill_file_is_refused(tmp_path, monkeypatch):
+    """A builtin skill's master folder is rewritten from the build at every
+    start, so a REST/CLI save there would be silently lost. The service refuses
+    it (409 RESOURCE_PROTECTED, saying why) and the file is left untouched,
+    while an imported skill's files stay writable (spec skill-manager
+    "Regenerate Coffer's builtin skill from the build": an edit to a builtin
+    skill does not survive, and the surfaces MUST say so)."""
+    app = _app(tmp_path, monkeypatch, 59830)
+    src = tmp_path / "src"
+    _write_nested_skill_folder(src, name="mine-skill")
+
+    with _client(app) as c:
+        r = c.get("/api/v1/resources", params={"kind": "skill", "name": "coffer-guide"})
+        assert r.status_code == 200, r.text
+        (guide,) = r.json()["resources"]
+        guide_uid = guide["uid"]
+        before = c.get(f"/api/v1/skills/{guide_uid}/files/content", params={"path": "SKILL.md"})
+        assert before.status_code == 200, before.text
+
+        for body in (
+            {"path": "SKILL.md", "content": "hijacked\n"},
+            {
+                "path": "SKILL.md",
+                "content": "hijacked\n",
+                "expected_fingerprint": before.json()["fingerprint"],
+            },
+        ):
+            r = c.put(f"/api/v1/skills/{guide_uid}/files/content", json=body)
+            assert r.status_code == 409, r.text
+            err = r.json()["error"]
+            assert err["code"] == "RESOURCE_PROTECTED"
+            assert "coffer-guide" in err["message"]
+            assert "rewritten" in err["message"]
+
+        after = c.get(f"/api/v1/skills/{guide_uid}/files/content", params={"path": "SKILL.md"})
+        assert after.json()["content"] == before.json()["content"]
+        assert after.json()["fingerprint"] == before.json()["fingerprint"]
+        master = tmp_path / ".coffer" / "skills" / "coffer-guide" / "SKILL.md"
+        assert "hijacked" not in master.read_text(encoding="utf-8")
+
+        # An imported skill is the user's own: still writable.
+        uid = _import(c, src)["uid"]
+        r = c.put(
+            f"/api/v1/skills/{uid}/files/content",
+            json={"path": "scripts/run.py", "content": "print('mine')\n"},
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["content"] == "print('mine')\n"

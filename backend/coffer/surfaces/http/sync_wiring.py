@@ -71,7 +71,7 @@ from coffer.infrastructure.sync.conflict_resolver import (
     AgenticConflictResolver,
     InternalModelPort,
 )
-from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
+from coffer.infrastructure.sync.credentials import CredentialSyncAdapter, ResolvedMasterKey
 from coffer.infrastructure.sync.git_mirror import GitMirror
 from coffer.infrastructure.sync.identity import coffer_dir, machine_name, resolve_identity
 from coffer.infrastructure.sync.paths import (
@@ -96,7 +96,7 @@ class SyncWiring(NamedTuple):
     state: SqlAlchemyConvergenceStateRepo
 
 
-def _key_fingerprint(master_key: MasterKeyManager) -> str | None:
+def _key_fingerprint(master_key: ResolvedMasterKey) -> str | None:
     """The short hash that rides in this machine's descriptor, never the key.
 
     Read once at wiring: a key imported later reaches the descriptor at the
@@ -121,7 +121,11 @@ def wire_sync(
     import_gates: Sequence[ImportGate] = (),
     post_import_hooks: Sequence[PostImportHook] = (),
 ) -> SyncWiring:
-    cred_sync = CredentialSyncAdapter(db_path, master_key)
+    # Resolved once and shared — the fingerprint, every round's locked-ref check
+    # and the key export/import all read this one — so a key kept in the
+    # keychain costs one prompt per daemon start, not one per round.
+    resolved_key = ResolvedMasterKey(master_key)
+    cred_sync = CredentialSyncAdapter(db_path, resolved_key)
     home = str(pathlib.Path.home())
     remotes = SqlAlchemySyncRemoteRepo(sm)
     state = SqlAlchemyConvergenceStateRepo(sm)
@@ -136,7 +140,7 @@ def wire_sync(
         derived=identity.derived,
         coffer_version=coffer.__version__,
         resources=resource_svc,
-        key_fingerprint=_key_fingerprint(master_key),
+        key_fingerprint=_key_fingerprint(resolved_key),
     )
     exporter = SyncExporter(resource_svc, cred_sync, state_providers=providers, home=home)
 
@@ -220,7 +224,7 @@ def wire_sync(
         set_machine_name=write_machine_name,
         credentials=CredentialResolver(credential_store),
         credential_store=cred_sync,
-        master_key=master_key,
+        master_key=resolved_key,
         audit=audit,
         # A working tree may not sit at, inside or above any of these: the
         # round mirrors the first three *into* the tree and ``reset --hard``s

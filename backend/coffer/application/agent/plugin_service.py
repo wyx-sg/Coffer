@@ -305,10 +305,12 @@ class AgentPluginService:
             # An id the agent never installed is a 404 (spec agent-registry
             # "Uninstall a plugin by the type's own strategy"), checked against
             # the listing like the toggle path — the CLI would only fail on it
-            # and surface as a 422. A missing CLI still answers first.
+            # and surface as a 422. A missing CLI still answers first. A listing
+            # that could not be parsed proves nothing about the id, so the check
+            # steps aside and the CLI (which reads its own files) decides.
             if self._cli_runner is not None and self._cli_runner.available():
-                listed = self._list_claude(cfg, cfg.resolved_config_dir()).items
-                if plugin_id not in {p.id for p in listed}:
+                listing = self._list_claude(cfg, cfg.resolved_config_dir())
+                if not listing.parse_errors and plugin_id not in {p.id for p in listing.items}:
                     raise PluginNotFound(plugin_id)
             await uninstall_via_cli(
                 cli_runner=self._cli_runner,

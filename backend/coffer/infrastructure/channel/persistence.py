@@ -6,6 +6,7 @@ must not import from any other kind module.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -167,11 +168,15 @@ class ChannelPeerRepo:
             return row.sender_id if row is not None else None
 
     async def upsert(self, peer: ChannelPeer) -> None:
+        await self.upsert_replacing(peer, ())
+
+    async def upsert_replacing(self, peer: ChannelPeer, unpair: Sequence[str]) -> None:
+        """One session, one commit: the un-pairs and the save land together."""
         async with self._sm() as session:
             await session.execute(
                 delete(ChannelPeerModel).where(
                     ChannelPeerModel.resource_id == peer.resource_id,
-                    ChannelPeerModel.chat_id == peer.chat_id,
+                    ChannelPeerModel.chat_id.in_([peer.chat_id, *unpair]),
                 )
             )
             session.add(

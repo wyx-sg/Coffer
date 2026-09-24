@@ -90,6 +90,7 @@ class FakeCodexAppServer:
         turn_id: str = "turn-1",
         frames: list[_Frame] | None = None,
         fail_methods: set[str] | None = None,
+        die_on_methods: set[str] | None = None,
     ) -> None:
         self.client_to_server = _FakePipe()  # adapter -> peer
         self.server_to_client = _FakePipe()  # peer -> adapter
@@ -99,6 +100,9 @@ class FakeCodexAppServer:
         # Requests answered with a JSON-RPC error instead of a result (e.g. a
         # ``thread/resume`` naming a thread this app-server has forgotten).
         self._fail_methods = fail_methods or set()
+        # Requests on which the peer process "dies": its stdout closes with no
+        # reply, the transport failure a crashed app-server produces.
+        self._die_on_methods = die_on_methods or set()
         # Observed client requests, for assertions.
         self.requests: list[tuple[str, dict[str, Any]]] = []
         self._task: asyncio.Task[None] | None = None
@@ -153,6 +157,9 @@ class FakeCodexAppServer:
         self, method: str, req_id: int, params: dict[str, Any]
     ) -> None:
         self.requests.append((method, params))
+        if method in self._die_on_methods:
+            self.server_to_client.close()
+            return
         if method in self._fail_methods:
             await self._send(
                 {
@@ -478,6 +485,61 @@ async def test_fresh_thread_failing_after_a_forgotten_resume_is_a_turn_error():
     assert errs[0].code == "codex_connect_error"
     assert "thread/start failed" in errs[0].message
     assert events[-1] is errs[0]
+    assert saved == []
+
+
+@pytest.mark.asyncio
+async def test_resume_lost_to_process_death_is_a_turn_error_not_a_fresh_thread():
+    """Only a JSON-RPC error response means "unknown thread". The app-server
+    dying mid-resume is a transport failure: the stored thread may be fine, so
+    a fresh thread must not replace it (its context would be lost silently).
+    """
+    saved: list[str] = []
+
+    async def on_session(sid: str) -> None:
+        saved.append(sid)
+
+    server = FakeCodexAppServer(frames=_basic_frames(), die_on_methods={"thread/resume"})
+    adapter = _adapter(_Factory(server), on_session=on_session, resume="good-thread-id")
+    events = await asyncio.wait_for(_collect(adapter, _user_turn("hi")), timeout=5)
+
+    assert [m for m, _ in server.requests] == ["initialize", "thread/resume"]
+    errs = [e for e in events if isinstance(e, TurnError)]
+    assert len(errs) == 1
+    assert errs[0].code == "codex_connect_error"
+    assert "stream ended" in errs[0].message
+    assert events[-1] is errs[0]
+    assert saved == []  # the stored session id is left as it was
+
+
+class _TimeoutOnResumeRpc(CodexRpcClient):
+    """An RPC client whose ``thread/resume`` times out instead of answering."""
+
+    async def request(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        if method == "thread/resume":
+            raise TimeoutError("thread/resume timed out")
+        return await super().request(method, params)
+
+
+@pytest.mark.asyncio
+async def test_resume_timeout_is_a_turn_error_not_a_fresh_thread():
+    saved: list[str] = []
+
+    async def on_session(sid: str) -> None:
+        saved.append(sid)
+
+    server = FakeCodexAppServer(frames=_basic_frames())
+    server.make_rpc = lambda: _TimeoutOnResumeRpc(  # type: ignore[method-assign]
+        server.server_to_client, server.client_to_server
+    )
+    adapter = _adapter(_Factory(server), on_session=on_session, resume="good-thread-id")
+    events = await asyncio.wait_for(_collect(adapter, _user_turn("hi")), timeout=5)
+
+    assert "thread/start" not in [m for m, _ in server.requests]
+    errs = [e for e in events if isinstance(e, TurnError)]
+    assert len(errs) == 1
+    assert errs[0].code == "codex_connect_error"
+    assert "timed out" in errs[0].message
     assert saved == []
 
 

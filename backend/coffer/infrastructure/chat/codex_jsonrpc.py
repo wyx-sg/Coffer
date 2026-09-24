@@ -40,6 +40,20 @@ _logger = logging.getLogger(__name__)
 RequestHandler = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 
 
+class CodexRpcError(RuntimeError):
+    """The peer answered a request with a JSON-RPC ``error`` response.
+
+    Distinct from transport failures (stream ended, client closed, broken
+    pipe), which stay plain ``RuntimeError``/``OSError``: an error response
+    means the app-server is alive and rejected *this* request.
+    """
+
+    def __init__(self, code: int | None, message: str) -> None:
+        super().__init__(f"codex rpc error: {message}")
+        self.code = code
+        self.rpc_message = message
+
+
 class _Reader(Protocol):
     async def readline(self) -> bytes: ...
 
@@ -107,8 +121,9 @@ class CodexRpcClient:
     async def request(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         """Send a client→server request and await its correlated result.
 
-        Raises ``RuntimeError`` if the server replies with a JSON-RPC ``error``
-        or the client is closed before the response arrives.
+        Raises ``CodexRpcError`` if the server replies with a JSON-RPC
+        ``error``; a plain ``RuntimeError`` if the stream ends or the client is
+        closed before the response arrives.
         """
         self._next_id += 1
         req_id = self._next_id
@@ -185,8 +200,14 @@ class CodexRpcClient:
             return
         if "error" in frame:
             err = frame["error"]
-            message = err.get("message") if isinstance(err, dict) else str(err)
-            future.set_exception(RuntimeError(f"codex rpc error: {message}"))
+            if isinstance(err, dict):
+                code = err.get("code")
+                exc = CodexRpcError(
+                    code if isinstance(code, int) else None, str(err.get("message"))
+                )
+            else:
+                exc = CodexRpcError(None, str(err))
+            future.set_exception(exc)
         else:
             result = frame.get("result")
             future.set_result(result if isinstance(result, dict) else {})
@@ -227,4 +248,4 @@ class CodexRpcClient:
         self._pending.clear()
 
 
-__all__ = ["CodexRpcClient", "RequestHandler"]
+__all__ = ["CodexRpcClient", "CodexRpcError", "RequestHandler"]

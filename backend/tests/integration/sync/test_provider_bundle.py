@@ -36,7 +36,7 @@ from coffer.infrastructure.persistence.engine import (
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
 from coffer.infrastructure.sync.bundle import Bundle
-from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
+from coffer.infrastructure.sync.credentials import CredentialSyncAdapter, ResolvedMasterKey
 from tests.integration.sync.harness import NoKeyring
 
 pytestmark = pytest.mark.timeout(60)
@@ -96,7 +96,7 @@ async def _vault(root: pathlib.Path) -> Vault:
     assert key is not None
     return Vault(
         resources=resources,
-        credentials=CredentialSyncAdapter(db, master_key),
+        credentials=CredentialSyncAdapter(db, ResolvedMasterKey(master_key)),
         home=root,
         engine=engine,
         key=key,

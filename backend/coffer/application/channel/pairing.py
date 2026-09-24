@@ -149,8 +149,9 @@ async def claim_pairing(
         paired_at=datetime.now(tz=UTC),
         sender_id=sender_id or None,
     )
-    await _drop_previous_owner(peers, binding.resource.id, chat_id, peer.sender_id)
-    await peers.upsert(peer)
+    await peers.upsert_replacing(
+        peer, await _previous_owner_chats(peers, binding.resource.id, chat_id, peer.sender_id)
+    )
     await audit.record(
         AuditEventType.CHANNEL_PAIRED.value,
         # The row the binding was built from, so the pairing is filed under the
@@ -164,24 +165,35 @@ async def claim_pairing(
     return peer
 
 
-async def _drop_previous_owner(
+async def _previous_owner_chats(
     peers: ChannelPeerRepoPort, resource_id: int, chat_id: str, sender_id: str | None
-) -> None:
-    """Un-pair every chat that belongs to anyone but the claiming sender.
+) -> list[str]:
+    """The chats to un-pair: every one that belongs to anyone but the claimer.
 
     spec channels "Pair exactly one owner with a single-use code": the code binds
     its sender as the channel's sole peer, replacing any previous peer. A channel
     has one owner identity, and every peer row carries it — the owner's DM and each
     group that inherited the owner's ``sender_id`` ("Treat an addressed group chat
-    as its own peer"). Rows of another sender (or of no known sender) are the
-    previous owner's authority: left in place, their DM still passes the owner
-    gate, ``owner_peer`` still aims ``notify`` at them and ``owner_sender_id``
-    still names them at the group gate. The same sender re-pairing keeps its
-    rows, groups included — that is a rebind, not a change of owner.
+    as its own peer"). Rows of another sender are the previous owner's authority:
+    left in place, their DM still passes the owner gate, ``owner_peer`` still aims
+    ``notify`` at them and ``owner_sender_id`` still names them at the group gate.
+    The same sender re-pairing keeps its rows, groups included — that is a rebind,
+    not a change of owner.
+
+    A row paired before the gate learned sender ids has none. It is kept only when
+    it is provably the claimer's own DM: a DM's chat id IS its person's id
+    (Telegram private chat id = user id, SeaTalk DM chat id = employee_code). Any
+    other identity-less row — another person's DM, a group — proves nothing and
+    goes. The caller writes the un-pairs and the new row as one
+    ``upsert_replacing``, so a failure cannot leave the channel ownerless.
     """
+    drop: list[str] = []
     for existing in await peers.list_by_resource(resource_id):
         if existing.chat_id == chat_id:
             continue  # the upsert rebinds this row in place
         if sender_id is not None and existing.sender_id == sender_id:
             continue
-        await peers.delete_by_chat(resource_id, existing.chat_id)
+        if sender_id is not None and existing.sender_id is None and existing.chat_id == sender_id:
+            continue  # the claimer's own legacy DM
+        drop.append(existing.chat_id)
+    return drop

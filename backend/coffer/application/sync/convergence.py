@@ -37,11 +37,11 @@ loop is still spared the judgement.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 
+from coffer.application.sync.appliers import locked_refs
 from coffer.application.sync.conflicts import ConflictArbiter
 from coffer.application.sync.convergence_backwards import BackwardsMixin
 from coffer.application.sync.convergence_ops import (
@@ -232,8 +232,8 @@ class ConvergeRound(BackwardsMixin, PreviewMixin):
         failures.extend(await reconcile(self._post_import, applied))
         # Ciphertext travels whatever the keys; a ref this machine now holds
         # but cannot open is named, never left to fail at first use (spec
-        # vault-sync "Report refs without a key as locked").
-        locked = await asyncio.to_thread(self._credentials.locked_refs)
+        # vault-sync "Report refs without a key as locked"); never fatal.
+        locked = await locked_refs(self._credentials)
 
         # --- 6 publish ------------------------------------------------------
         status = ConvergeStatus.OK if (published or applied) else ConvergeStatus.NO_CHANGE
@@ -257,7 +257,7 @@ class ConvergeRound(BackwardsMixin, PreviewMixin):
             agent_resolved=tuple(resolved),
             failures=tuple(failures),
             not_applicable=tuple(not_applicable),
-            locked_refs=tuple(locked),
+            locked_refs=locked,
         )
 
     async def _waived_direction(

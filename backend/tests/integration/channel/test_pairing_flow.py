@@ -9,7 +9,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from coffer.application.channel.pairing import claim_pairing
 from coffer.domain.resource import Resource
 
 from .conftest import ChannelEnv, FakeChannelAdapter, inbound, wait_until
@@ -172,3 +174,57 @@ async def test_re_pairing_from_the_same_account_keeps_its_groups(env: ChannelEnv
     ]
     assert await env.peers.owner_sender_id(resource.id) == "old-1"
     assert len(await env.audit_entries("channel_paired", resource)) == 2
+
+
+async def test_re_pairing_keeps_the_same_persons_legacy_dm(env: ChannelEnv) -> None:
+    """A DM paired before the gate learned sender ids has no ``sender_id``, but
+    a DM's chat id IS its person's id (Telegram private chat id = user id,
+    SeaTalk DM chat id = employee_code). That person re-pairing from another
+    chat is a rebind: their old DM stays. Another person's legacy DM and a
+    legacy row that proves nobody's identity (a group) are still dropped."""
+    resource = await env.register_channel("tg")
+    adapter = env.bind(resource)
+    await env.pair(resource, "old-1", sender_id=None)  # the claimant's own legacy DM
+    await env.pair(resource, "someone-else", sender_id=None)  # another person's legacy DM
+    await env.pair(resource, "grp-legacy", sender_id=None)  # legacy group: no identity
+    code, _ = env.pairing.issue("tg")
+    await env.processor.on_message(inbound("tg", "new-chat", code, sender_id="old-1"))
+
+    assert adapter.sent[-1][0] == "new-chat"
+    peers = await env.peers.list_by_resource(resource.id)
+    assert sorted((p.chat_id, p.sender_id) for p in peers) == [
+        ("new-chat", "old-1"),
+        ("old-1", None),
+    ]
+
+
+async def test_a_failed_owner_swap_leaves_the_previous_owner_in_place(
+    env: ChannelEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Replacing the owner is one write: if saving the new owner fails, the
+    previous owner's rows are not already gone — a channel is never left with
+    no owner at all."""
+    resource, _ = await _pair_owner_with_a_group(env)
+    before = sorted((p.chat_id, p.sender_id) for p in await env.peers.list_by_resource(resource.id))
+    code, _ = env.pairing.issue("tg")
+
+    def _refuse_insert(self: AsyncSession, instance: object, _warn: bool = True) -> None:
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(AsyncSession, "add", _refuse_insert)
+    with pytest.raises(RuntimeError, match="disk full"):
+        await claim_pairing(
+            SimpleNamespace(resource=resource),  # type: ignore[arg-type]
+            text=code,
+            chat_id="new-dm",
+            sender_display="New",
+            sender_id="new-1",
+            pairing=env.pairing,
+            peers=env.peers,
+            audit=env.audit,
+        )
+    monkeypatch.undo()
+
+    after = sorted((p.chat_id, p.sender_id) for p in await env.peers.list_by_resource(resource.id))
+    assert after == before == [("grp-1", "old-1"), ("old-dm", "old-1")]
+    assert await env.peers.owner_sender_id(resource.id) == "old-1"
