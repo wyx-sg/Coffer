@@ -1,209 +1,227 @@
-# Layering & Code Boundaries
+---
+title: Layering and code layout
+description: Coffer's four layers, the import-linter contracts that enforce them, the composition root and per-kind wiring, the backend and frontend code trees, and the build gates that keep the structure honest.
+---
 
-::: tip Mental model
-The four layers of Coffer's codebase are not just an organisational preference — they encode a strict, machine-checked contract about who may call whom. `domain` knows nothing about databases, HTTP, or MCP transport. `infrastructure` is never imported by business logic. The composition root wires everything together once, explicitly, with no global state. Follow the import arrows, and the architecture tells you the full picture.
-:::
+# Layering and code layout
 
-## The problem this solves
+Coffer's backend is a layered application: surfaces call application services, application services work with pure domain objects, and infrastructure adapts to ports the application defines. This page explains the layers, the import contracts that make them more than a convention, how the composition root wires each kind explicitly, where code goes in the tree, and the gates that fail the build when the structure slips. Read it before adding a module, a kind, or a dependency.
 
-Without enforced layering, a codebase tends to develop circular imports, accidental coupling between unrelated concerns, and untestable business logic that pulls in database sessions or HTTP clients. Coffer's layering exists to prevent exactly these failure modes: the domain layer can be tested with no database, no MCP server, and no OS keychain in sight. Application services can be tested by injecting test doubles for infrastructure. Every layer has a well-defined job that does not bleed into its neighbours.
+## The problem it solves
 
-## The four layers
+Coffer has seven resource kinds, a turn platform, a sync engine and four surfaces (REST, MCP, CLI, shim), and much of it is written together with AI coding agents. Without enforced boundaries, a codebase like that erodes in predictable ways: a route reaches into SQLAlchemy directly, one kind imports another kind's service because it was convenient, an SDK leaks from the one adapter that needed it into the domain. Each shortcut is small; together they make every change touch everything.
 
-The layering diagram fixed by Coffer's principles is:
+Coffer answers with two rule families, both checked on every build:
 
-```
-surfaces  →  application  →  domain
-                   ↓
-            infrastructure
-```
+1. **Layering:** dependencies point inward, from surfaces to application to domain, with infrastructure plugged in from the outside.
+2. **Kind isolation:** no kind imports another kind. Only the composition root sees two kinds at once.
 
-Arrows show the allowed import direction. `surfaces` may import `application`; `application` may import `domain`; both may import `infrastructure`. The reverse is never allowed: `domain` never imports anything from above it, and `infrastructure` is wired in at the composition root, not imported by application or domain code directly.
-
-### domain/
-
-The domain layer contains the kind-agnostic entities and protocols that define what Coffer manages at the conceptual level. This includes `resource.py` (the Resource entity — its immutable `uid`, its `kind` and its mutable `name` label — the label-validation rule every write path shares, and the frozen `Kind` record every kind's factory returns), `audit.py` (the `AuditEventType` enum and the `AuditEntry` record), `errors.py` (the canonical error hierarchy), and one subdirectory per kind for that kind's value objects — `mcp/` (tool schemas, capability descriptors, session state models), `agent/`, `skill/`, `knowledge/`, `memory/`, `provider/`, `channel/` — plus the cross-cutting `chat/` and `sync/`.
-
-::: warning Absolute invariant
-`domain/` may NOT import from `infrastructure/`, `surfaces/`, or any external SDK. No SQLAlchemy, no FastAPI, no `keyring`, no `httpx` — none of these appear anywhere in the domain layer. If a domain entity needs to validate a URL, it uses Python's standard library. If it needs to represent a credential, it holds a string reference, not a keychain handle.
-:::
-
-This restriction is not just architectural taste — it is what makes the domain layer universally testable. A `pytest` test that exercises domain logic imports only pure Python; it never touches a database, spawns a subprocess, or reaches the network.
-
-### application/
-
-The application layer orchestrates domain entities with infrastructure and surfaces. It defines the services that implement Coffer's use cases: `resource_service.py` for kind-agnostic CRUD (create/read/update/enable/disable/delete for resources of any kind), `audit_service.py` for recording lifecycle events, `retention_service.py` for the background log-pruning worker, and one subdirectory per kind — `application/mcp/` (session management, capability curation, invocation recording), `application/agent/`, `application/skill/`, `application/knowledge/`, `application/memory/`, `application/provider/`, and `application/channel/`. Alongside the kinds sit cross-cutting service slices that are **not** kinds: `application/chat/` (the turn platform the channels run agents on — the `TurnOrchestrator` and its turn state), `application/sync/` (convergence of the vault with a user-owned git remote), `application/credentials/` (the shared `CredentialResolver`), and `application/fs/` (filesystem-browse).
-
-Application services receive their infrastructure dependencies as constructor arguments (repositories, keychain adapters, upstream clients) — they do not instantiate them. This is the dependency-inversion pattern: the application layer defines what it needs (via interfaces or protocol classes in `domain/`), and the composition root provides the concrete implementation.
-
-::: warning Absolute invariant
-`application/` may NOT import from `surfaces/`. An application service must never know whether it is being called from an HTTP request, a CLI command, or a test fixture. This is what allows the same `resource_service.register()` call to be invoked identically from the FastAPI route handler, the Typer CLI command, and the integration test suite.
-:::
-
-### infrastructure/
-
-The infrastructure layer contains all external-I/O-performing code: the SQLAlchemy ORM models and Alembic migrations (`infrastructure/persistence/`), the encrypted credential store and master-key manager (`infrastructure/credentials/` — the single place in the entire codebase allowed to import `keyring`), daemon discovery and the pre-database config file (`infrastructure/daemon/`), the MCP upstream transport implementations (`infrastructure/mcp/` — subprocess management for stdio upstreams, and an HTTP client for HTTP-transport upstreams), and per-kind I/O modules: `infrastructure/agent/` (agent config-file store), `infrastructure/skill/` (master store, drift engine), `infrastructure/channel/` (Telegram/SeaTalk transports, peer repo, render), `infrastructure/knowledge/` (the on-disk path layout, frontmatter parsing, file I/O, the document converters, and the `ripgrep` wrapper), `infrastructure/memory/` (the partition path layout and the per-agent native-memory readers), `infrastructure/provider/` (the connection introspector), and `infrastructure/chat/` (the Claude Code and Codex agent drivers and turn persistence). Two cross-cutting slices are not kinds: `infrastructure/sync/` (the git mirror the vault converges through, and this machine's identity) and `infrastructure/llm/` (the internal engine's model clients, remote transcription, and the agentic loop the knowledge curation pass runs on).
-
-Two kind-agnostic packages sit beside the kinds. `infrastructure/agent_files/` holds readers of an agent's own on-disk transcripts, shared by the agent and memory kinds. `infrastructure/net/` holds the SSRF guard — and it is worth being exact about its reach, because the honest statement is narrower than the module's name suggests: `check_url` has exactly **one** caller, `infrastructure/provider/introspector.py`. It is not a chokepoint every outbound URL passes through, and nothing enforces that it becomes one. See [Outbound HTTP](/architecture/security#outbound-http-one-guarded-path-and-the-rest) for what is and is not covered.
-
-Infrastructure is wired into the system at the composition root, not imported by domain or application code. Application services receive infrastructure objects as injected dependencies. This means you can swap the real SQLAlchemy repository for a test double (an in-memory dictionary or a SQLite `:memory:` database) without changing a line of application or domain code.
-
-The credential module deserves special mention: `infrastructure/credentials/` is the only location in the entire codebase that may import `keyring` (now confined to the master key and the legacy migration). All other code accesses credentials via opaque string references. This single-point-of-access rule is what makes it mechanically verifiable that secret material never reaches any other layer.
-
-### surfaces/
-
-The surfaces layer adapts external protocols to application calls. It contains the FastAPI application (`surfaces/http/`), the Typer CLI (`surfaces/cli/`), and the stdio shim entry point (`surfaces/shim/`). Surfaces are thin: they parse requests, call application services, and format responses. They contain no business logic.
-
-The two composition roots — `surfaces/http/app.py` for the daemon's HTTP server, and `surfaces/cli/main.py` for the CLI — are the only places where all four layers meet. Each kind exposes one factory — `make_<kind>_kind()` in `application/<kind>/kind.py` — that returns a frozen `Kind` (`domain/resource.py`): the kind's identity, config schema and lifecycle hooks, and nothing else. The composition root does the wiring itself, explicitly: `surfaces/http/app.py` hands off to `kind_wiring.py` and the per-kind `*_wiring.py` modules, each of which builds that kind's infrastructure and services, registers its routers, and returns a typed dataclass (`AgentSkillWiring`, `ProviderWiring`, `KnowledgeWiring`, `MemoryWiring`, `McpWiring`, `KindWirings`, `ChatWiring`, `BackgroundWorkers`) that `app.py` passes forward to the next step; the factories' `Kind` records populate `app.state.kinds`. `surfaces/cli/main.py` mounts the Typer groups the same way. Route handlers reach their services through per-kind FastAPI dependency modules (`surfaces/http/{agent,workspace,skill,provider}_dependencies.py`, `surfaces/http/{chat,knowledge,memory,mcp}/dependencies.py`); `surfaces/http/dependencies.py` keeps only the kind-agnostic getters. There is no global kind registry and no import-time side effects. Adding a new kind means creating its subdirectories in each layer, writing its factory, and adding one wiring module the composition root calls.
-
-## Import rules as invariants
-
-The two critical invariants, stated precisely:
-
-::: warning Import rule 1 — domain isolation
-`domain/` may NOT import `infrastructure/`, `surfaces/`, or any external SDK. Violation means domain logic has acquired an I/O dependency that cannot be unit-tested without real infrastructure.
-:::
-
-::: warning Import rule 2 — application isolation from surfaces
-`application/` may NOT import `surfaces/`. Violation means business logic has acquired a surface dependency, making it impossible to call the same logic from a different surface (e.g., a test) without going through an HTTP or CLI stack.
-:::
-
-A third rule governs cross-kind dependencies within a layer: a kind-specific module (`domain/mcp/`, `application/mcp/`, etc.) may not import a different kind's module (`domain/other_kind/`). Cross-kind coupling at the layer level would mean one kind's correctness depends on another's implementation, breaking the clean-extension guarantee.
-
-The "extract cross-cutting modules only when a second feature needs them" rule (from Coffer's principles) is a corollary: shared utilities that live at the layer root (like `domain/errors.py`) are only promoted there when more than one kind genuinely needs them. Premature extraction bloats the shared surface and makes the next kind's author cargo-cult patterns that may not apply.
-
-## Enforcement
-
-These rules are not advisory. They are enforced by two complementary mechanisms in CI:
-
-**importlinter contracts** — declared in `backend/pyproject.toml`, these contracts define the forbidden import pairs and are run as part of `make verify`. A contract violation fails the build with a precise error naming the forbidden import chain. Two families of rules are enforced: layered direction (the four-layer hierarchy) and cross-kind isolation (no `domain/mcp` importing `domain/other_kind`). The "only `infrastructure/credentials/` may import `keyring`" rule is enforced as an importlinter contract.
-
-The "application does not import infrastructure" contract carries a small, named set of exemptions, each written out in the contract's own comment with the reasoning that earned it. They share one shape: the infrastructure in question is a **substrate**, not an engine — path layout, frontmatter parsing, file I/O, the `ripgrep` wrapper, one single-key table's upsert — with nothing behind it that a port/adapter pair would abstract away. `application/knowledge/` composing `infrastructure/knowledge/` is the canonical case: once knowledge became a directory of files, what was left to import was thin enough that routing it through a port would be pure ceremony. Every import not on that list is still a build failure.
-
-**`scripts/check_*.py`** — supplementary Python scripts that enforce architectural rules that importlinter cannot express as simple import graphs, such as the "no cross-cutting extraction before the second feature" rule.
-
-Both are run on every PR. The combination means that any import that violates the four-layer contract or the single-credential-access rule is caught before merge, not discovered in a code review.
-
-## Code layout (ADR code-layout-layer-first)
-
-The full directory tree:
-
-```
-backend/coffer/
-├── domain/                       # kind-agnostic entities + kind protocol
-│   ├── resource.py               # Resource (uid + mutable name), Kind (frozen record each factory returns)
-│   ├── audit.py
-│   ├── errors.py
-│   ├── mcp/                      # MCP-specific value objects
-│   ├── agent/                    # agent config value objects
-│   ├── skill/                    # skill value objects
-│   ├── channel/                  # channel config, envelopes
-│   ├── knowledge/                # collection config + entry/document value objects
-│   ├── memory/                   # partition + fact value objects
-│   ├── provider/                 # connection protocol + projection value objects
-│   ├── chat/                     # chat turn / message value objects
-│   └── sync/                     # sync value objects
-├── application/
-│   ├── resource_service.py       # kind-agnostic CRUD; takes kinds dict
-│   ├── audit_service.py
-│   ├── retention_service.py
-│   ├── mcp/                      # MCP-specific application services
-│   ├── agent/                    # agent services + make_agent_kind
-│   ├── skill/                    # skill services + make_skill_kind
-│   ├── channel/                  # adapter protocol, pairing, inbound runtime
-│   ├── knowledge/                # service, ingest, curation, guide-skill rendering
-│   ├── memory/                   # aggregation, distil, recall, context + make_memory_kind
-│   ├── chat/                     # TurnOrchestrator, turn state
-│   ├── provider/                 # provider ports, introspection + make_provider_kind
-│   ├── sync/                     # cross-cutting — vault convergence with a git remote (not a kind)
-│   ├── credentials/              # cross-cutting — CredentialResolver (refs → secrets)
-│   └── fs/                       # cross-cutting — filesystem-browse service
-├── infrastructure/
-│   ├── persistence/              # SQLAlchemy + Alembic (central metadata)
-│   ├── daemon/                   # pid_lock, port binding, daemon-config.json
-│   ├── mcp/                      # subprocess transport, HTTP upstream client
-│   ├── agent/                    # agent config-file store
-│   ├── skill/                    # master store, drift engine
-│   ├── channel/                  # telegram/seatalk transports, peer repo, render
-│   ├── knowledge/                # path layout, frontmatter, file store, converters, ripgrep
-│   ├── memory/                   # partition path layout + per-agent native-memory readers
-│   ├── chat/                     # the Claude Code and Codex drivers, turn persistence
-│   ├── provider/                 # provider introspector (the one `check_url` caller)
-│   ├── net/                      # kind-agnostic — the SSRF guard (one call site; see Security)
-│   ├── agent_files/              # kind-agnostic — readers of an agent's own transcripts (agent + memory)
-│   ├── logging/                  # kind-agnostic — structlog setup, eval capture
-│   ├── llm/                      # cross-cutting — internal-engine models, transcription, curation loop
-│   ├── sync/                     # cross-cutting — git mirror the vault converges through (not a kind)
-│   └── credentials/              # cross-cutting — encrypted credential store + master key — only place importing `keyring`
-└── surfaces/
-    ├── http/
-    │   ├── app.py                # composition root — wires every kind's factory and wiring module
-    │   ├── routing.py            # the one place every sub-router is imported and mounted
-    │   ├── kind_wiring.py        # + per-kind *_wiring.py — each returns a typed dataclass app.py passes on
-    │   ├── dependencies.py       # kind-agnostic getters; per-kind *_dependencies.py sit beside the routes
-    │   ├── resource_routes.py
-    │   ├── mcp/                  # MCP HTTP/SSE routes and session handling
-    │   ├── knowledge/            # collections, tree, file, material, upload, curate
-    │   ├── memory/               # partitions, notes, files, distil, sync, context, delivery
-    │   └── chat/                 # conversations, turns, agent providers
-    ├── cli/
-    │   ├── main.py               # composition root — Typer wiring
-    │   ├── resource_cmd.py
-    │   ├── daemon_cmd.py         # + daemon_port_cmd.py — the one group that needs no daemon
-    │   └── mcp.py
-    └── shim/                     # coffer-mcp-shim stdio entry point
-```
-
-The `desktop/` crate sits outside `backend/coffer/` entirely — it is Rust, it imports nothing from any of these layers, and it reaches the daemon over the same loopback HTTP every other surface uses. See [Surfaces](/architecture/surfaces#desktop-shell-cofferapp).
-
-Within each layer, the root files are kind-agnostic. Kind-specific code lives under named subdirectories — `mcp/`, `agent/`, `skill/`, `knowledge/`, `memory/`, `provider/`, `channel/` — one per kind, mirrored across `domain/`, `application/`, `infrastructure/`, and (where the kind has its own route package) `surfaces/http/`. When a new kind arrives, its directories appear at each layer without altering the kind-agnostic root files.
-
-A handful of slices are **cross-cutting, not kinds**: `application/sync/` + `infrastructure/sync/` (bidirectional convergence of the vault with a user-owned git remote), `application/credentials/` + `infrastructure/credentials/` (credential resolution and the encrypted store), `application/chat/` + `infrastructure/chat/` (the turn platform that drives the user's own coding agents), `infrastructure/llm/` (the internal engine's model clients and the loop the unattended passes run on), and `application/fs/` (filesystem-browse). These follow the same layering rules as kinds but have no `Kind` factory and no entry in `app.state.kinds` — they are shared services used across kinds.
-
-### Why layer-first, not feature-first (vertical slices)?
-
-The layer-first decision considered and rejected the vertical-slice alternative — a `kinds/` top-level directory where each kind would contain its own `domain/`, `application/`, `infrastructure/`, and `surfaces/` subtree.
-
-The rejection rests on three observations:
-
-1. **A fifth top-level concept.** Vertical slices introduce `kinds/` alongside the four layers the principles fix. Every architecture document would need to explain both organisational axes simultaneously, and every contributor would face the "does this belong in the shared layer root or in `kinds/<x>/<layer>/`?" dual-decision on every cross-kind extraction.
-
-2. **Misapplied pattern.** Vertical slices fit large codebases where team isolation, independent deploy cadence, or microservice extraction is the goal. None of these apply to a single-user local-first application. The benefit (IDE discoverability) largely evaporates under search; the cost (layout duality) does not.
-
-3. **Small kinds pay no ceremony.** A simple future kind might be a single `domain/profile.py` file. In a layer-first layout that is exactly what it looks like. In a vertical-slice layout it becomes `kinds/profile/domain/profile.py` — four levels of directories for one file.
-
-The layer-first layout mirrors the principles' layering diagram directly in the file system. Reading the architecture document and reading the directory tree produce the same mental picture.
-
-### Composition root — no global registry
-
-Two things keep the composition root explicit without ceremony. First, each kind's `make_<kind>_kind()` factory returns a frozen `Kind` — the record the kind-agnostic services (`resource_service.py`, audit, retention, the resource list) consume; it carries the kind's name, config schema and lifecycle hooks and nothing else. Second, each kind has one wiring module at the composition root (`kind_wiring.py` plus the per-kind `*_wiring.py` files under `surfaces/http/`) that:
-
-- instantiates its infrastructure implementations (repository, transport, store)
-- constructs its application services with those injected
-- registers its HTTP sub-router (and, in `surfaces/cli/main.py`, its Typer subcommand group)
-- returns a typed dataclass (`AgentSkillWiring`, `ProviderWiring`, `KnowledgeWiring`, `MemoryWiring`, `McpWiring`, `KindWirings`, `ChatWiring`, `BackgroundWorkers`) holding what later steps need
-
-`app.py` calls these in dependency order, passes each result forward explicitly — never through an untyped hub — and fills `app.state.kinds` from the factories. No kind is "discovered" by scanning directories, no `__init__.py` side effect registers it, and deleting a kind's factory and wiring module cleanly removes the kind from the system.
-
-## Mermaid: allowed import directions
+## The layers
 
 ```mermaid
-graph TD
-    S["surfaces/\n(HTTP · CLI · shim)"]
-    A["application/\n(services · orchestration)"]
-    D["domain/\n(entities · value objects · errors)"]
-    I["infrastructure/\n(persistence · credentials · MCP transport)"]
-
-    S -->|"may import"| A
-    S -->|"may import"| I
-    A -->|"may import"| D
-    A -->|"may import (via DI)"| I
-    I -->|"may import"| D
-
-    style D fill:#e8f4e8,stroke:#4a9e4a
-    style A fill:#e8f0f8,stroke:#4a70b0
-    style I fill:#f8f0e8,stroke:#b07040
-    style S fill:#f0e8f8,stroke:#7040b0
+flowchart TB
+  S["surfaces: http, cli, shim"]
+  A["application: services, ports, workers"]
+  D["domain: entities, value objects, rules"]
+  I["infrastructure: SQLite, keyring, files, SDKs"]
+  CR["composition root"]
+  S --> A
+  A --> D
+  I -.->|implements ports| A
+  I --> D
+  CR --> S
+  CR --> I
 ```
 
-Cross-kind imports within a layer are also forbidden: `domain/mcp/` may not import `domain/some_other_kind/`, and vice versa.
+| Layer | Holds | May import |
+| --- | --- | --- |
+| `domain/` | Entities, value objects and pure rules: `Resource`, `Kind`, `Scope`, audit event names, error codes, each kind's config schemas and domain logic. | The standard library and Pydantic. Nothing else from the project, and none of FastAPI, SQLAlchemy, `sqlite3`, httpx, `keyring` or anyio. |
+| `application/` | Use-case services, the ports (Python `Protocol`s) they need, background workers, the kind factories. | `domain/`. Not `surfaces/`, and not `infrastructure/` — with two named exceptions for the knowledge and memory file substrates. |
+| `infrastructure/` | Adapters: persistence, the credential store, subprocess and HTTP clients, git, file-tree I/O, LLM and agent SDK wrappers. | `domain/`, `application/` ports. Not `surfaces/`. |
+| `surfaces/` | Entry points: the FastAPI app and routes, the Typer CLI, the stdio shim, plus the composition root that wires everything. | Everything below. |
+
+The architectural style is fixed by [`docs/principles.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/principles.md); the choice of a layer-first layout over vertical slices is explained in [Layer-First Code Layout](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/code-layout-layer-first.md).
+
+### Why layer-first with kind subdirectories
+
+Each layer holds kind-agnostic modules at its root and one subdirectory per kind: `domain/skill/`, `application/skill/`, `infrastructure/skill/`, and `surfaces/http/skill_routes.py`. A kind's code therefore spans four directories. The alternative — a `kinds/<kind>/{domain,application,infrastructure,surfaces}` vertical slice — was rejected because it adds a fifth top-level concept beside the four layers, and turns every extraction of shared code into two questions ("which layer?" and "inside the kind or outside?") instead of one. Vertical slices pay off for team isolation and independent deploys, neither of which a single-user local app has. Editor search makes a kind's four directories easy to walk.
+
+## The import contracts
+
+The rules are [import-linter](https://github.com/seddonym/import-linter) contracts in [`backend/pyproject.toml`](https://github.com/wyx-sg/Coffer/blob/main/backend/pyproject.toml), run by `make lint`. Imports inside `if TYPE_CHECKING:` blocks do not count, so a port may be *typed* with another kind's class without executing any of its code. In plain words:
+
+| Contract | What it says |
+| --- | --- |
+| Layered architecture: surfaces > application > domain | Imports flow inward only. A domain module never imports an application module; an application module never imports a surface. |
+| Infrastructure does not import surfaces | Adapters never reach back up into routes or CLI commands. This is why, for example, the daemon entry point reads `daemon.json` itself rather than asking a route module. |
+| Application does not import infrastructure | Application code depends on ports it defines. Exceptions: `application.knowledge` may import `infrastructure.knowledge`, and `application.memory` may import `infrastructure.memory`, because both substrates are thin file-I/O helpers with no engine behind them, where a port would be ceremony. |
+| Domain is pure | Domain imports no other project layer and none of `fastapi`, `sqlalchemy`, `sqlite3`, `httpx`, `keyring` or `anyio`. |
+| keyring confined to infrastructure | Surfaces and application never import `keyring` directly. |
+| CLI does not access the keychain directly | `surfaces.cli` may not import `infrastructure.credentials` at all. The CLI reaches secrets only through the daemon's HTTP API, so the daemon is the only reader of the master key on each machine. |
+| Cross-kind imports forbidden (one per kind) | Nine symmetric contracts — `mcp`, `agent`, `skill`, `knowledge`, `channel`, `chat`, `provider`, `memory`, `sync` — each forbidding that area's modules from importing any other area's modules. Named exceptions cover pure domain vocabulary only: `provider` and `memory` may read `domain.agent`, and `channel` may read `domain.chat`. `domain.knowledge` and `infrastructure.knowledge` are shared substrate. |
+| Kind-agnostic core does not import kind-specific code | `resource_service`, `resource_scope_ops` and `resource_delete_ops`, `AuditService`, the retention service and worker, the builtin tool registry, Coffer's own engine modules, `domain.resource`, `domain.scope`, `domain.audit`, the shared infrastructure packages, the generic dependency providers and the generic routes may import no kind. The one sanctioned exception is Alembic's `migrations/env.py`, which imports every kind's ORM models into one metadata. |
+| Engine confinement: markitdown | Only the channel attachment extractor and the knowledge upload converter may import `markitdown` (or `docling`). |
+| Dropped engines banned everywhere | `llama_index`, `mem0`, `chromadb`, `sentence_transformers`, `sqlite_vec` and `fastembed` may not be imported anywhere. Coffer embeds nothing, and a reintroduction has to be a deliberate change to this contract. |
+| LangGraph and LangChain confined to infrastructure/llm | Coffer's own model calls go through `infrastructure/llm/`. Domain, application, and the chat, MCP, channel, knowledge, persistence, credentials, daemon and logging infrastructure packages may not import `langgraph` or any `langchain*` package; they reach a model through injected ports. |
+| Claude Agent SDK confined | Domain, application and the other infrastructure packages may not import `claude_agent_sdk`. Its homes are `infrastructure/chat` (the agent adapters) and `infrastructure/agent` (reading the installed agent's catalogue). |
+
+When two kinds genuinely need the same code, it moves to a kind-agnostic package at the layer root: [`infrastructure/net/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/net) (the SSRF guard), [`infrastructure/agent_files/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/agent_files) (agent transcript readers shared by `agent` and `memory`), [`domain/connection.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/connection.py). Everything else crosses between kinds through a port the consuming kind declares and the composition root satisfies — for example `application.chat.ports.ModelCatalogPort`, which the chat platform uses to read the agent kind's model catalogue without importing it.
+
+## The composition root
+
+The composition root is the only code allowed to see every kind. It is [`surfaces/http/app.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app.py) for the daemon and [`surfaces/cli/main.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/main.py) for the CLI.
+
+### Explicit per-kind wiring
+
+There is no plugin discovery, no global registry and no import-time side effect. Each kind has a factory, `make_<kind>_kind()` in `application/<kind>/kind.py`, that returns a frozen [`Kind`](/architecture/resource-framework#kind). A per-kind wiring module in `surfaces/http/` builds the kind's services, calls the factory, and stores the result in the per-app dict `app.state.kinds`:
+
+| Wiring module | Sets |
+| --- | --- |
+| `agent_skill_wiring.py` | `"agent"`, `"skill"` |
+| `provider_wiring.py` | `"provider"` |
+| `knowledge_wiring.py` | `"knowledge"` |
+| `memory_wiring.py` | `"memory"` |
+| `app_mcp_composition.py` | `"mcp_server"` |
+| `channel_wiring.py` | `"channel"` |
+
+`ResourceService` is constructed with a reference to that same dict and reads it for every dispatch.
+
+### Wiring order is the dependency order
+
+The daemon's lifespan runs a fixed sequence, and each step *returns* a small frozen dataclass of what it built, which the next step takes as a parameter. No step discovers an earlier one through `app.state`, so the argument lists are the dependency graph.
+
+```mermaid
+flowchart TB
+  M["Run migrations"] --> C["Credential store and master key"]
+  C --> R["ResourceService, audit, retention"]
+  R --> K["Kinds: agent and skill, provider, knowledge, memory, MCP"]
+  K --> CH["Chat platform"]
+  CH --> CU["Curation pass"]
+  CU --> CN["Channel kind and runtime"]
+  CN --> H["Boot heals and guide refresh"]
+  H --> W["Background workers"]
+```
+
+[`kind_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/kind_wiring.py) orders the kinds themselves: provider after agent, because it projects into each agent's config; memory before MCP, so the gateway can advertise `coffer__recall`; MCP last, so it picks up every builtin tool the others registered. The chat platform is wired after all kinds because its internal gateway session needs the complete builtin tool registry; the channel kind comes after chat because it drives turns through chat's handles. What each kind contributes to sync — import gates, post-import hooks, synced state areas — is collected in one `SyncContributions` object and handed to the sync worker at the end.
+
+HTTP routers are included from one table in [`surfaces/http/routing.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/routing.py), which also puts every router under an experimental feature's prefix behind that feature's request-time gate. Typer groups are added in `surfaces/cli/main.py`.
+
+### Dependency providers
+
+FastAPI dependencies are plain module-level `set_*` / `get_*` pairs over module-global singletons. The composition root calls each setter once at startup; routes name the getter as a `Depends()` target; a getter called before its setter raises rather than hand a route `None`. [`surfaces/http/dependencies.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/dependencies.py) holds only the kind-agnostic core (actor, resource service, audit, retention, internal-engine config). Each kind publishes its own concretely typed pairs from its own module — `surfaces/http/mcp/dependencies.py`, `agent_dependencies.py`, `skill_dependencies.py`, `provider_dependencies.py`, and so on — so nothing in the core is typed `Any` and nothing there can pull in a kind. Tests override the same setters.
+
+## The code tree
+
+```text
+backend/coffer/
+├── build_channel.py        # CHANNEL = "dev"; the release workflow stamps "stable"
+├── main.py                 # ASGI entry: create_app()
+├── domain/                 # pure; imports nothing from other layers
+│   ├── resource.py         # Resource, Kind, name validation
+│   ├── scope.py            # Scope and is_active, the one reach predicate
+│   ├── audit.py            # audit event vocabulary
+│   ├── errors.py           # error hierarchy and codes
+│   ├── features.py         # experimental-feature registry
+│   └── mcp/ agent/ skill/ knowledge/ channel/ chat/ memory/ provider/ sync/
+├── application/
+│   ├── resource_service.py # kind-agnostic CRUD, plus resource_*_ops.py
+│   ├── audit_service.py
+│   ├── retention_*.py      # registry, service, worker
+│   ├── builtin_tools.py    # BuiltinTool and its registry
+│   ├── features.py         # FeatureService: pin, machine setting, channel default
+│   ├── upkeep_runs.py      # passes in flight, in process
+│   ├── credentials/        # ref-to-secret resolver
+│   ├── engine/             # which model Coffer's own passes run on
+│   ├── fs/                 # browse, pick, open, editor
+│   └── mcp/ agent/ skill/ knowledge/ channel/ chat/ memory/ provider/ sync/
+│                           # each kind: services, ports, make_<kind>_kind()
+├── infrastructure/
+│   ├── persistence/        # SQLAlchemy engine, ORM models, repos, Alembic
+│   ├── credentials/        # encrypted store, master key; the only keyring user
+│   ├── daemon/             # bootstrap, port, spawn, pid lock, daemon-config.json
+│   ├── net/                # SSRF guard
+│   ├── logging/            # structlog setup, log files
+│   ├── llm/                # LangChain models, completion, transcription
+│   ├── agent_files/        # agent transcript readers shared by two kinds
+│   └── mcp/ agent/ skill/ knowledge/ channel/ chat/ memory/ provider/ sync/
+└── surfaces/
+    ├── http/               # FastAPI app, composition root, routes, *_wiring.py
+    │   └── chat/ knowledge/ mcp/ memory/
+    ├── cli/                # Typer app and one module per command group
+    └── shim/               # coffer-mcp-shim
+```
+
+`scripts/check_architecture_doc.py` keeps the tree in [`docs/architecture.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/architecture.md) level with the real package list, so a package added or removed without updating the document fails the build.
+
+### Where a new piece of code goes
+
+| You are adding | Put it in |
+| --- | --- |
+| A value object or rule with no I/O | `domain/<kind>/` |
+| A use case, or a port it needs | `application/<kind>/` |
+| An adapter for a database table, file tree, subprocess or SDK | `infrastructure/<kind>/`, implementing the port |
+| A route or CLI command | `surfaces/http/<kind>_routes.py` or `surfaces/cli/<kind>_cmd.py` |
+| Wiring the above together | the kind's `surfaces/http/<kind>_wiring.py` |
+| Something a second kind now needs too | a kind-agnostic module at the layer root |
+| A schema change | a new Alembic migration under `infrastructure/persistence/migrations/versions/` |
+
+## The frontend
+
+The web UI in [`frontend/src/`](https://github.com/wyx-sg/Coffer/tree/main/frontend/src) is React 18 with TypeScript, Vite, React Router 6 and TanStack Query 5, styled with Tailwind over shadcn/ui and Radix primitives. It owns no API of its own: every screen renders over a capability's REST contract. The full conventions are in [`.agents/frontend.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/frontend.md) and [Frontend](/contributing/frontend).
+
+| Path | Contents |
+| --- | --- |
+| `pages/` | One page per route, list and detail (`AgentsPage.tsx`, `AgentDetailPage.tsx`, …). Detail pages are code-split with `lazyPage()`. |
+| `components/<feature>/` | Feature components, dialogs and tables. Shared primitives such as `DataTable`, `PageHeader` and `ScopeControl` sit at the root; shadcn components under `components/ui/`. |
+| `lib/hooks/` | Every query and mutation for a feature in one `useX.ts` file. Components never call `useQuery` directly. |
+| `lib/api/` | Request functions per feature, and `queryKeys.ts` for every query key. |
+| `lib/api/generated/` | TypeScript types generated by `npm run codegen` from each spec's `contracts/api.openapi.yaml`. `npm run lint` fails if they drift from the contracts. |
+| `router.tsx` | Every route, addressed by uid (`/agents/:uid`, `/mcp-servers/:uid`). |
+| `i18n/locales/` | `en.json` and `zh.json`, one flat catalogue per language. |
+
+There is no per-kind UI registry. A kind that needs a UI adds pages, a component folder, a hooks file, an API module and a route, the same as any other feature.
+
+The same built `frontend/dist` runs in three hosts, and each is a credential *supplier*, not a code path: the daemon injects `window.__COFFER_TOKEN__` into the `index.html` it serves, the desktop shell supplies the same values over IPC, and the Vite dev server reads them from `~/.coffer/daemon.json`. See [Security model](/architecture/security#the-api-token).
+
+## Gates that keep it honest
+
+A structure that is only a convention erodes one convenient shortcut at a time, so every rule on this page is checked by a gate that `make verify` runs, locally and in CI. These are the gates that hold the *structure*:
+
+| Gate | What it enforces |
+| --- | --- |
+| `lint-imports` | Every import contract above. |
+| [`scripts/check_file_sizes.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_file_sizes.py) | File-size ceilings: backend Python and desktop Rust at most 400 lines; frontend pages 200, components 250, hooks and utilities 300. Generated files are exempt. |
+| [`scripts/check_response_models.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_response_models.py) | Every FastAPI route declares `response_model=` (or `response_class=` for streaming and no-body responses), so no route returns an undeclared `dict`. |
+| [`scripts/check_architecture_doc.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_architecture_doc.py) | The code-layout tree and the builtin-tool list in `docs/architecture.md` match the code. |
+| `make verify-contract` | The runtime OpenAPI document matches each spec's hand-written contract. |
+| `mypy --strict` | Full static typing of `backend/coffer`, so a port and its adapter cannot silently disagree. |
+
+The complete list of gates `make verify` runs, including the spec, documentation and frontend gates, is in [Testing](/contributing/testing#what-make-verify-runs).
+
+The 400-line ceiling shapes the backend visibly: `ResourceService` delegates to `resource_scope_ops.py`, `resource_rename_ops.py`, `resource_delete_ops.py` and `resource_kind_ops.py`, and the composition root is split across `app.py`, `kind_wiring.py`, `routing.py`, `middleware.py` and the per-kind wiring modules.
+
+## Trade-offs
+
+- **A kind spans four directories.** Accepted for one mental model of dependency direction; editor search closes the navigation gap.
+- **Two rule families to maintain.** The cross-kind contracts are nine near-identical blocks kept symmetric by hand: every kind appears as a source in its own contract and as forbidden in every other.
+- **Explicit wiring is verbose.** Every kind's services are constructed by hand in its wiring module. In exchange there is no discovery order to reason about and no import side effect that registers something by accident.
+
+## Where it lives in the code
+
+| Path | Contents |
+| --- | --- |
+| [`backend/pyproject.toml`](https://github.com/wyx-sg/Coffer/blob/main/backend/pyproject.toml) | The import-linter contracts, under `[tool.importlinter]`. |
+| [`backend/coffer/surfaces/http/app.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app.py) | The daemon's composition root and lifespan. |
+| [`backend/coffer/surfaces/http/kind_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/kind_wiring.py) | Kind wiring order. |
+| [`backend/coffer/surfaces/http/routing.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/routing.py) | The router table. |
+| [`backend/coffer/surfaces/cli/main.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/main.py) | The CLI's composition root. |
+| [`Makefile`](https://github.com/wyx-sg/Coffer/blob/main/Makefile) | `make lint`, `make verify` and the other gates. |
+| [`.agents/stack.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/stack.md) | Stack and code-style rules. |
+
+## Related
+
+- [Layer-First Code Layout](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/code-layout-layer-first.md)
+- [Resource Framework Designed Upfront](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-framework-upfront.md)
+- [Resource framework](/architecture/resource-framework)
+- [Design principles](/architecture/design-principles#extract-on-second-use)
+- [Testing](/contributing/testing)

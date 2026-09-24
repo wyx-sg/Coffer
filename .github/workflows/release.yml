@@ -285,7 +285,7 @@ jobs:
           > dragging the app across. A binary installed with the one-line
           > installer is never quarantined, so that path skips this step.
 
-          Full install & usage guide: https://wyx-sg.github.io/Coffer/guide/install
+          Full install & usage guide: https://wyx-sg.github.io/Coffer/start/install
           NOTES
 
       - name: publish GitHub Release

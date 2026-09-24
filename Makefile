@@ -10,7 +10,7 @@ FRONTEND := frontend
 	eval eval-routing eval-curate \
 	bundle-binaries \
 	desktop desktop-stage-binaries desktop-lint desktop-test \
-	frontend-codegen \
+	frontend-codegen docs-reference \
 	lint format dev clean
 
 help:
@@ -45,6 +45,7 @@ help:
 	@echo "  Dev:"
 	@echo "  make dev                   run backend (:8000) + frontend (:5173) in parallel"
 	@echo "  make frontend-codegen      regenerate the frontend's OpenAPI types from the daemon"
+	@echo "  make docs-reference        regenerate the docs site's CLI and REST API reference pages"
 	@echo "  make bundle-binaries       freeze the three CLI binaries with PyInstaller (into dist/)"
 	@echo "  make clean                 remove venv + node_modules + caches"
 
@@ -117,6 +118,7 @@ lint:
 	$(PY) scripts/check_spec_citations.py
 	$(PY) scripts/check_architecture_doc.py
 	$(PY) scripts/check_pyinstaller_specs.py
+	$(PY) scripts/check_cli_reference.py
 # Both trees are checked under the project's rules. `backend/**` gets them
 # from backend/pyproject.toml; `evals/**` used to get ruff's built-in defaults
 # (line-length 88, the starter rule set) because nothing above it carried a
@@ -292,6 +294,12 @@ frontend-codegen:
 	@if [ -d $(FRONTEND) ]; then \
 		cd $(FRONTEND) && npm run codegen; \
 	fi
+
+# The CLI and REST reference pages are generated from the code;
+# scripts/check_cli_reference.py (in `lint`) fails when they drift.
+docs-reference:
+	$(PY) docs-site/scripts/gen_cli_reference.py
+	$(PY) docs-site/scripts/gen_rest_reference.py
 
 bundle-binaries:
 	bash ./scripts/build_binaries.sh

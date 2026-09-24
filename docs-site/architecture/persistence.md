@@ -1,175 +1,208 @@
+---
+title: Persistence
+description: How Coffer stores state — SQLite in WAL mode behind one writer, SQLAlchemy async, Alembic migrations run at startup with pre-migration backups, the tables and what each holds, and what lives on disk as files instead.
+---
+
 # Persistence
 
-::: tip Core anchor
-All Coffer state lives on the user's machine. The daemon is the single writer. Everything needed to restore a working installation — database, daemon config, logs, upstream state — sits under one directory: `~/.coffer/`.
+Coffer keeps its control-plane state in one SQLite database and its bulk content as plain files, all under `~/.coffer/`. This page covers the database engine and its settings, how schema changes are applied and recovered from, every table and its purpose, what deliberately does not live in the database, and the two small JSON files the daemon reads before any database exists. It is for engineers changing the schema, debugging a startup failure, or deciding where new state belongs.
+
+## The problem it solves
+
+Coffer's state has two very different shapes. Control-plane state — which resources exist, their config and reach, the audit trail, encrypted secrets, chat history, sync bookkeeping — is small, relational and written transactionally from many code paths. Bulk content — knowledge documents, memory notes, skill bundles — is large, human-readable, edited by people in their own editors and read by agents with their own file tools.
+
+Putting both in one store would make one of them worse: a database is a poor editor, and a directory of files is a poor transactional store. So Coffer uses each for what it is good at, and draws the line explicitly.
+
+## Design decisions
+
+| Decision | Reason |
+| --- | --- |
+| SQLite, one file, in WAL mode. | No server to install or run; one file to back up; WAL lets readers proceed while the daemon writes. |
+| The daemon is the only writer. | Every client — CLI, web UI, shim, desktop shell — goes through the daemon's HTTP API, so there is no cross-process locking to design. |
+| SQLAlchemy 2.0 async ORM over aiosqlite. | The daemon is an asyncio application; database calls must not block the event loop. |
+| Alembic with one central metadata, migrations run at every startup. | A daemon that starts is a daemon whose schema is current. Every kind registers its ORM models against the same metadata. |
+| Back up before migrating; fail fast on a schema from the future. | A migration that goes wrong is a file rename away from recovery, and a downgrade is refused with a message rather than an opaque Alembic error. |
+| JSON columns stored as `TEXT`, validated by Pydantic at the boundary. | Per-kind config varies by kind; one generic `resources` table with a validated JSON column is simpler than a table per kind. |
+| Knowledge and memory are files, with no table. | Files are the only copy, live the moment they are saved, and need no reconciliation. See [Knowledge](/architecture/knowledge). |
+| Pre-bind settings live in a JSON file, not the database. | The port must be known before the database is opened and migrated. |
+
+## SQLite configuration
+
+The database is `~/.coffer/coffer.db` (override with `COFFER_DB_URL`, a SQLAlchemy URL such as `sqlite+aiosqlite:////tmp/coffer.db`). Every connection the async engine opens runs this pragma suite ([`infrastructure/persistence/engine.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/persistence/engine.py)):
+
+| Pragma | Value | Why |
+| --- | --- | --- |
+| `journal_mode` | `WAL` | Concurrent readers during writes; the `-wal` and `-shm` files sit beside the database. |
+| `foreign_keys` | `ON` | SQLite ignores foreign keys unless asked. Kind-owned tables cascade from `resources.id`. |
+| `synchronous` | `NORMAL` | Safe with WAL, and much cheaper than `FULL`. |
+| `busy_timeout` | `5000` | Wait up to five seconds for a lock instead of failing at once. |
+| `cache_size` | `-64000` | About 64 MB of page cache. |
+| `temp_store` | `MEMORY` | Temporary tables and indexes in memory. |
+
+Sessions come from an `async_sessionmaker` with `expire_on_commit=False`, so objects stay readable after a commit.
+
+### The one synchronous path
+
+The encrypted credential store ([`infrastructure/credentials/encrypted_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/credentials/encrypted_store.py)) deliberately uses the standard-library `sqlite3` module with a short-lived connection per call, because upstream spawning and register-time credential probing are synchronous code paths with no event loop. Async callers go through its `aget` / `aexists` / `aset` / `adelete` wrappers, which run each call in a worker thread. A synchronous call made on the event loop would deadlock against the aiosqlite connection holding the write lock, so the wrappers are mandatory there.
+
+## Migrations
+
+Schema changes are Alembic revisions under [`infrastructure/persistence/migrations/versions/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/persistence/migrations/versions), named `YYYYMMDD_NNNN_<slug>.py` with a four-digit revision id. Every kind's ORM models share one declarative `Base` ([`base.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/persistence/base.py)); `migrations/env.py` imports them all, and is the one module allowed to see every kind's models at once. A schema change is always a migration, never an implicit `create_all`.
+
+Migrations run in the daemon's lifespan, before any service is built ([`surfaces/http/migrations_runner.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/migrations_runner.py)):
+
+```mermaid
+flowchart TB
+  A["Daemon starts"] --> B["Read current revision"]
+  B --> C{"Known to this build?"}
+  C -- no --> X["Fail with DB_SCHEMA_TOO_NEW"]
+  C -- yes --> D{"Already at head?"}
+  D -- yes --> G["Build services"]
+  D -- no --> E["Copy coffer.db to coffer.db.pre-revision"]
+  E --> F["alembic upgrade head"]
+  F --> G
+```
+
+### Pre-migration backups
+
+When an upgrade is due, the runner first copies the database — with its `-wal` and `-shm` companions when present — to `coffer.db.pre-<revision>`, where `<revision>` is the revision the database was at (`base` for an empty one). An existing copy for the same revision is never overwritten; a later attempt lands beside it with a numeric suffix, because the earlier copy is the more trustworthy one if that attempt left the file half-migrated. Only the three newest copies are kept. Nothing is copied when the schema is already current, which is every start except the first after an upgrade.
+
+To roll back a bad migration, stop the daemon, move `coffer.db` aside, rename the matching `coffer.db.pre-*` (and its companions) back to `coffer.db`, and start the previous build.
+
+### A schema from a newer build
+
+If the database's current revision is not in this build's migration tree — it was migrated by a newer release, or by a branch with a divergent migration lineage — the daemon refuses to start with `DB_SCHEMA_TOO_NEW`:
+
+```text
+database schema revision '0104' is newer than this Coffer build understands — it was created
+by a newer or different version. Upgrade Coffer, or back up and remove
+sqlite+aiosqlite:////Users/you/.coffer/coffer.db to start fresh.
+```
+
+This follows the principle of [detecting rather than guessing](/architecture/design-principles#detect-never-refuse): the runner cannot know what a revision it has never seen did, so it stops before touching anything.
+
+Migrations always run, whatever the experimental-feature switches say, so switching a feature on never needs a schema change.
+
+## JSON as TEXT
+
+Several columns hold JSON as `TEXT`: `resources.config_json` and `scope_json`, `audit_log.details_json`, and the payload columns of the sync tables. The database does not interpret them. They are validated at the application boundary: a resource's config against its kind's Pydantic schema when it is written, its scope through `Scope.from_json` when it is read. A migration that changes the shape of JSON data rewrites the rows once and leaves no load-time compatibility shim behind.
+
+## The tables
+
+The ORM models live in [`infrastructure/persistence/models.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/persistence/models.py) (kind-agnostic tables) and in each kind's infrastructure package.
+
+### Kind-agnostic
+
+| Table | Purpose |
+| --- | --- |
+| `resources` | One row per resource of every kind: `id`, `uid`, `kind`, `name` (unique per kind), `description`, `config_json`, `enabled`, `scope_json`, timestamps. See [Resource framework](/architecture/resource-framework). |
+| `audit_log` | Every lifecycle change: time, event type, actor, the resource's `id` plus its kind and name at the time, and redacted details. |
+| `retention_policies` | One row per prunable table: retention days, when it was last pruned and how many rows went. |
+| `credentials` | `ref` → Fernet `ciphertext`. The only place a secret exists at rest. |
+| `internal_engine_config` | A single row: the model Coffer's own passes run on, each unattended pass's switch and interval, the curation owner machine, and the per-call timeout. |
+
+### Kind-owned
+
+| Table | Kind | Purpose |
+| --- | --- | --- |
+| `mcp_capability_preferences` | `mcp_server` | Which of a server's tools, prompts and resources you switched off. Cascades from `resources.id`. |
+| `mcp_server_health` | `mcp_server` | The last "test connection" result per server, keyed by uid. |
+| `mcp_invocations` | `mcp_server` | One row per tool call through the gateway, written by a batched writer. Pruned after 30 days by default. |
+| `skill_agent_bindings` | `skill` | Bookkeeping for each delivered copy of a skill in an agent. A record, not a switch: delivery is decided by `enabled` and scope. |
+| `channel_peers` | `channel` | Paired identities per channel, including the owner. |
+| `channel_thread_conversations` | `channel` | Which chat conversation an IM thread maps to. |
+| `conversations`, `chat_messages` | chat | Conversation metadata and message history for the Chat page and every channel. Idle conversations are auto-archived after 7 days and archived ones deleted after 30, by default. |
+
+### Sync bookkeeping
+
+All four are machine-local. `coffer.db` is not part of the sync bundle, so none of this travels.
+
+| Table | Purpose |
+| --- | --- |
+| `sync_remotes` | The one configured remote (a single-row table): URL, branch, interval, working-tree path (default `~/.coffer/sync`), whether credential ciphertext is carried, and the last round's result. |
+| `sync_runs` | Every converge round this machine has run. Pruned after 90 days by default. |
+| `sync_convergence_state` | The pointer — the commit this vault has provably absorbed — and any round the deletion guard is holding for confirmation. A single row. |
+| `sync_held_paths` | Paths the exporter must not publish as deletions: ones that failed to apply (retried next round) and ones that cannot apply on this machine. |
+
+::: details Tables no code reads
+The migration chain also creates `workflow_runs`, `workflow_events`, `workflow_node_attempts` and `workflow_approvals`. No module in this build has a model for them or reads them; they exist because migrations are a single linear history and later revisions build on the ones that created them.
 :::
 
-## The problem this solves
+The `alembic_version` table holds the current revision.
 
-Coffer is a local-first developer tool: the user's accumulated AI assets — registered MCP servers, capability preferences, audit history, knowledge, chat conversations, channels, and sync state — must never depend on a cloud service to be readable or writable. That constraint demands a persistence layer that is self-contained, zero-configuration, and trivially backed up.
+## Files versus SQLite
 
-The answer is two layers. A single SQLite file at `~/.coffer/coffer.db` is the system of record for all control-plane state. Bulk user content — the knowledge agents and the user write, and documents ingested to markdown — lives as plain files under `~/.coffer/knowledge/`, and the files are the whole of it: no table in `coffer.db` mirrors them and no index sits over them. There is no separate database server to install, no connection pool to tune, no network hop between the daemon and its storage. The user's data is their file.
+| Lives in SQLite | Lives on disk as files |
+| --- | --- |
+| Resource identity, config and reach | Knowledge documents and their `.inbox/` |
+| Audit log and MCP invocation log | Memory partitions: `MEMORY.md`, `notes/`, `RETIRED.md`, `.raw/` |
+| Credential ciphertext | Skill master folders |
+| Chat history | Daemon and upstream logs |
+| Sync pointer, history and held paths | The sync working tree (a git repository) |
+| Channel pairings | Downloaded channel media |
+| Coffer's own model settings | Pre-bind daemon settings (`daemon-config.json`) |
 
-## Why SQLite, not Postgres
+A knowledge collection or memory partition is still a `resources` row — that is what gives it a uid, an audit trail and an `enabled` switch — but its content is only ever the files. There is no documents table, no chunk table and no index to rebuild.
 
-The rejected alternative — a server database like Postgres or MySQL — would require the user to install and manage a database process, configure credentials, and keep a service running. For a single-user local tool, that overhead is pure friction with no benefit.
+### The `~/.coffer` layout
 
-::: tip Principles invariant
-Coffer's principles designate SQLite as the system of record for control-plane state. Bulk user content is stored as files on the local filesystem. Migrating the control plane to a server database requires an amendment to the principles.
+```text
+~/.coffer/
+├── coffer.db                 # SQLite system of record (+ -wal, -shm)
+├── coffer.db.pre-<revision>  # pre-migration backups, newest three kept
+├── master.key                # Fernet master key, 0600 (default key storage)
+├── daemon.json               # runtime discovery: pid, port, token; 0600, removed at exit
+├── daemon-config.json        # pre-bind settings; 0600, survives restarts
+├── daemon.lock               # spawn lock for detect-or-spawn
+├── logs/                     # daemon.log and per-upstream logs
+├── knowledge/<collection>/   # Markdown documents; hidden .inbox/ for new material
+├── memory/<partition>/       # MEMORY.md, notes/, RETIRED.md, hidden .raw/
+├── skills/<name>/            # skill master folders, incl. coffer-guide/
+├── sync/                     # git working tree for vault sync (default location)
+├── bin/                      # frozen builds: versioned binaries and public symlinks
+├── upstream-pids/            # PIDs of spawned upstream servers, swept at startup
+├── channel-media/            # inbound channel attachments
+├── workspace/                # default working directory for chat turns
+├── cache/agent/              # derived caches of agents' own data
+└── vendor/                   # operator-supplied SeaTalk SDK
+```
+
+Tests and development setups redirect the file trees with `COFFER_KNOWLEDGE_ROOT`, `COFFER_MEMORY_ROOT`, `COFFER_SKILLS_ROOT` and `COFFER_LOG_DIR`. The full reference is [Files and directories](/reference/filesystem).
+
+::: warning Back up the key with the database
+`coffer.db` holds credentials only as ciphertext. A copy of the database without the matching `master.key` (or, in keychain mode, the keychain entry) cannot decrypt any secret. Back up `~/.coffer/` as a whole.
 :::
 
-The practical consequences of the SQLite choice shape every detail of the persistence layer:
+## Settings that live outside the database
 
-- **Single writer** — SQLite's write concurrency is bounded; having one writer (the daemon) eliminates all write conflicts by design. The daemon serialises every mutation; surfaces that need to write (CLI commands, HTTP handlers) go through the daemon over loopback HTTP.
-- **WAL mode** — Write-Ahead Logging allows readers (e.g., a CLI `list` command calling the REST API) to proceed concurrently with the writer without blocking on a lock. In practice this means `coffer mcp list` never hangs waiting for an ongoing migration.
-- **Zero-infra copy** — because all Coffer state lives under `~/.coffer/`, moving or duplicating a vault needs no tooling: `cp -r ~/.coffer/ <dest>` with the daemon stopped is a complete byte-copy. Keeping two of your own machines in step is a separate mechanism — bidirectional convergence with a git remote you own — and it is off until you configure one. Coffer ships no backup command of its own; keep `master.key` out of anything copied off-machine.
+Two small JSON files sit beside the database and deliberately stay out of it. `daemon.json` is runtime state the daemon writes at start and removes at exit (pid, port, token). `daemon-config.json` is configuration the daemon reads before it binds: the fixed port, the machine name and id, and the experimental-feature switches. The port has to be known before the database is opened and migrated, and the feature switches are a per-machine decision that must not ride along with synced state, so neither can be a table. Both are written atomically at mode `0600`.
 
-## SQLAlchemy 2.0 async ORM
+Their contents, lifetimes and the reasoning behind each are described once, in [Daemon and processes](/architecture/daemon#two-files-configuration-in-runtime-state-out). The key-by-key reference is in [Configuration](/reference/configuration#daemon-config-json).
 
-The data-access layer uses SQLAlchemy 2.0 in async mode (`AsyncSession`, `create_async_engine` backed by `aiosqlite`). This matches the FastAPI daemon's async I/O model: a request handler awaits a database query without blocking the event loop, keeping the daemon responsive to concurrent MCP client connections.
+## Trade-offs
 
-All ORM models across every resource kind — both kind-agnostic core tables and MCP-specific tables — are registered against a **single central `Base.metadata`** object. This is the architectural decision that makes Alembic migrations straightforward: there is one migration history, one `alembic upgrade head` command, and no coordination between per-kind migration trees.
+- **A single writer caps write throughput.** For one person's vault this is not a constraint, and it removes a class of locking bugs.
+- **JSON in `TEXT` gives up database-level constraints** on config shape. Pydantic validation at every write path, and one-time rewrite migrations, take their place.
+- **Migrations on startup make every upgrade a schema change in place.** The pre-migration copy and the too-new guard are what make that safe.
+- **Leaving content as files means no query over content.** Coffer does not need one: retrieval is an agent reading files, and the catalogue is generated.
 
-The boundary between ORM and domain is explicit. Each repository converts the ORM rows it reads into pure Python domain objects (no SQLAlchemy state) through a private `_to_domain`-style helper beside it, and builds rows from domain values when it writes.
+## Where it lives in the code
 
-Domain objects are plain Python dataclasses; they carry no SQLAlchemy instrumentation. Application services work exclusively with domain objects; ORM models are implementation details of the infrastructure layer.
+| Path | Contents |
+| --- | --- |
+| [`backend/coffer/infrastructure/persistence/engine.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/persistence/engine.py) | Engine factory and pragmas. |
+| [`backend/coffer/infrastructure/persistence/models.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/persistence/models.py) | Kind-agnostic ORM models. |
+| [`backend/coffer/infrastructure/persistence/repos.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/persistence/repos.py) | Resource and audit repositories. |
+| [`backend/coffer/infrastructure/persistence/migrations/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/persistence/migrations) | Alembic environment and revisions. |
+| [`backend/coffer/surfaces/http/migrations_runner.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/migrations_runner.py) | Startup migration, backup and too-new guard. |
+| [`backend/coffer/infrastructure/credentials/encrypted_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/credentials/encrypted_store.py) | The synchronous credential store. |
+| [`backend/coffer/infrastructure/daemon/config.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/config.py) | `daemon-config.json`. |
+| [`backend/coffer/infrastructure/daemon/pid_lock.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/pid_lock.py) | `daemon.json`. |
 
-## JSON fields and Pydantic validation
+## Related
 
-Kind-specific configuration is stored as a `TEXT` column (`config_json` in the `resources` table). SQLite has no native JSON type; storing arbitrary structured configuration as text is the simplest representation that SQLite can handle.
-
-The trade-off is that the database cannot enforce structure on a `TEXT` column — a raw string `"garbage"` is as valid to SQLite as a well-formed JSON object. The guarantee comes from the application boundary: **Pydantic validates every `Resource.config` before it is written and after it is read**. The domain `Kind.config_schema` is a Pydantic `BaseModel` subclass; the application service runs `.model_validate()` on every incoming config dict and `.model_dump(mode="json")` before writing. Nothing unvalidated ever reaches SQLite, and nothing leaves SQLite without being re-validated by Pydantic.
-
-::: warning Serialisation note
-Pydantic fields that use types like `AnyUrl` or `datetime` must be serialised with `model_dump(mode="json")` before passing to `json.dumps()`. The default `model_dump()` keeps these as Python objects, which `json.dumps` rejects. This is an enforced convention, not an optional style choice.
-:::
-
-## Alembic migrations
-
-Schema evolution is managed by Alembic, configured in `backend/alembic.ini` with a single migration history under `backend/coffer/infrastructure/persistence/migrations/`. Revisions accumulate as successive specs land — each spec that needs new tables adds one rather than editing an existing one, and the count only goes up, so the authoritative answer to "how many, and what is head" is `ls` on that directory, not a number written here. The first three set up the MCP control plane:
-
-| Revision | File                                 | Creates                                         |
-| -------- | ------------------------------------ | ----------------------------------------------- |
-| `0001`   | `20260520_0001_initial.py`           | `resources`, `audit_log`, `retention_policies`  |
-| `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`, `mcp_invocations` |
-| `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
-
-Later revisions add the skill, chat, channel, credentials and sync tables (plus index and data-fix revisions), and several are pure subtractions. `20260912_0066_knowledge_is_plain_files.py` drops every table the knowledge layer ever had, replacing none of them; `0078` drops `memory_overrides` when the per-fact decisions it backed were removed from the surface; and `0055`, `0069` and `0077` each purge the rows of a retired audit event type, on the argument that an event nothing can label costs more in `coffer__diagnose` than the record is worth. On first daemon startup, `alembic upgrade head` runs before the HTTP server accepts connections. Because Alembic migrations are bundled as data files inside the PyInstaller daemon binary, end-user installs also get correct schema creation on first launch — no separate migration step.
-
-::: tip The database is copied before it is migrated
-Before `alembic upgrade head` changes an on-disk `coffer.db`, the daemon copies it — with any `-wal` / `-shm` companions — to `coffer.db.pre-<revision>`, keeping the three newest copies. An already-current schema is not copied, and neither is an in-memory database. See [Distribution](/architecture/distribution#binary-deployment-at-frozen-start).
-:::
-
-## Table map
-
-The tables that exist after applying all revisions, grouped by domain:
-
-**Core (kind-agnostic):**
-
-| Table                | Purpose                                                                                                                                                                               |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `resources`          | Kind-agnostic registry of every user-managed resource. One row per registered MCP server (or any future kind). Carries `uid`, `kind`, `name`, `description`, `config_json`, `enabled` flag, `scope_json`, and timestamps. |
-| `audit_log`          | Append-only history of every lifecycle change to any resource or capability. Records event type, actor, resource ref, timestamp, and a structured JSON payload.                       |
-| `retention_policies` | One row per prunable table, recording the configured retention window (days or forever) and the last-prune metadata.                                                                  |
-| `internal_engine_config` | A single row: the connection and model Coffer's own unattended passes run on, plus each pass's switch and interval.                                                               |
-
-**MCP gateway:**
-
-| Table                        | Purpose                                                                                                                                                                             |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `mcp_capability_preferences` | Persists the user's per-capability enable/disable decisions for each registered MCP server. Survives upstream restarts and schema changes. FK-cascades on resource delete.          |
-| `mcp_invocations`            | Time-series log of every tool, resource, and prompt call through the gateway: server name, capability key, duration, status, session ID. Never stores arguments or return contents. |
-| `mcp_server_health`          | Last-known health status (`healthy` / `failing` / `unknown`) for each registered MCP server, written at each health check.                                                          |
-
-**Credentials:**
-
-| Table              | Purpose                                                                                                                                                              |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `credentials`      | Envelope-encrypted secret store: each secret is Fernet-encrypted under a master key before it reaches SQLite. Plaintext never lands on disk. See [Security](/architecture/security) and Envelope-Encrypted Credentials. |
-
-**Knowledge:** no tables. A knowledge collection is a row in the kind-agnostic `resources` table like every other Resource, and its content is the markdown files under `~/.coffer/knowledge/<collection>/`. Nothing about those files is mirrored into SQLite — not their titles, not their text, not a digest of them.
-
-**Chat:**
-
-| Table           | Purpose                                                                       |
-| --------------- | ---------------------------------------------------------------------------- |
-| `conversations` | One row per chat conversation, including archive/retention timestamps.        |
-| `chat_messages` | The messages in each conversation. Cascade-deleted with their conversation.   |
-
-**Channel:**
-
-| Table                           | Purpose                                                              |
-| ------------------------------- | ------------------------------------------------------------------- |
-| `channel_peers`                 | Paired notification channel peers (e.g. Telegram / SeaTalk).         |
-| `channel_thread_conversations`  | Which Coffer conversation a given IM thread is currently bound to.   |
-
-**Skill:**
-
-| Table                  | Purpose                                                       |
-| ---------------------- | ------------------------------------------------------------ |
-| `skill_agent_bindings` | Records which skills are bound to which agent workspaces.     |
-
-**Sync:**
-
-| Table                    | Purpose                                                                                     |
-| ------------------------ | ------------------------------------------------------------------------------------------- |
-| `sync_remotes`           | The configured git remote and its worktree path (default `~/.coffer/sync`). Off until set.  |
-| `sync_runs`           | One row per converge round, with its outcome. Prunable — 90 days by default.                 |
-| `sync_convergence_state` | The last state this vault provably held, which the next diff is applied against.            |
-| `sync_held_paths`        | Paths a round stopped on rather than applying — an oversized deletion waits to be confirmed. |
-
-**Memory:** no tables. A memory partition is a `resources` row, and its facts are files under `~/.coffer/memory/`, derived from the agents' own native memory. `memory_overrides` — the one non-derived thing the kind ever stored — was dropped in revision `0078` along with the per-fact decisions it backed.
-
-## Knowledge is plain files
-
-The control-plane tables above are the system of record for their rows. **Knowledge has no such row.** The markdown files under `~/.coffer/knowledge/` are not a projection of anything and are not projected into anything — they are the knowledge layer, whole.
-
-That is what removes the dual-source-of-truth problem outright rather than managing it. There is nothing to keep level with the disk, so a file the user edited in their editor, an agent wrote, or `git` pulled is readable the instant it lands. An agent greps the files with its own tools, which needs no tokenizer and no import step; Coffer's only use of `ripgrep` is choosing a curation pass's candidates. Backup is one directory tree, and there is no corruption to recover from: titles and descriptions are read out of each file's own frontmatter, because there is nowhere else they could come from.
-
-## Cascade and integrity rules
-
-The schema enforces several invariants that the application layer alone cannot express:
-
-- Deleting a resource cascades to `mcp_capability_preferences` (via `ON DELETE CASCADE`). It does **not** cascade to `audit_log` or `mcp_invocations` — history is preserved even after a server is deleted.
-- `uid` and `kind` are immutable once written. `name` is a mutable label, renamed through `PATCH /api/v1/resources/{uid}` (file-backed kinds move their directory in their `on_rename` hook).
-- `retention_policies` rows are upserted at daemon startup; they are never deleted. The application layer treats them as always-present configuration.
-
-## Everything under `~/.coffer/`
-
-The full set of files Coffer writes:
-
-| Path                          | Contents                                               |
-| ----------------------------- | ------------------------------------------------------ |
-| `~/.coffer/coffer.db`         | SQLite database (WAL mode) — the system of record for control-plane state |
-| `~/.coffer/daemon.json`       | Runtime state: daemon PID, port and bearer token (mode `0600`). Unlinked on exit. |
-| `~/.coffer/daemon-config.json` | Configuration read before the database opens: the fixed port, this machine's name and cached id, and this machine's experimental-feature switches (`features`, machine-local so they never sync) (mode `0600`). Written by `coffer daemon port`, `coffer sync machine rename`, and the daemon itself (the cached machine id, and every feature switch — `coffer daemon features` and the Settings card go through it so the switch takes effect at once). |
-| `~/.coffer/master.key`        | Credential-store master key (file-default; opt-in keychain). See [Security](/architecture/security). |
-| `~/.coffer/machine-id`        | This machine's stable identity for sync                |
-| `~/.coffer/knowledge/`        | One directory per collection of markdown files — the knowledge layer itself, one tree of documents each, plus a hidden `.inbox/` of new material waiting for curation to merge it |
-| `~/.coffer/memory/`           | The facts aggregated out of each agent's own native memory, one directory per partition |
-| `~/.coffer/skills/`           | The canonical master copy of every managed skill       |
-| `~/.coffer/sync/`             | The git working tree the vault converges through (default; the remote's row can name another) |
-| `~/.coffer/workspace/`        | The default working directory a chat turn runs in      |
-| `~/.coffer/vendor/`           | SDKs Coffer deliberately does not bundle — the SeaTalk client library |
-| `~/.coffer/channel-media/`    | Attachments in flight between an IM channel and an agent |
-| `~/.coffer/cache/agent/`      | Derived, rebuildable agent data (transcript summaries) |
-| `~/.coffer/state/`            | One-shot markers for things shown to the user exactly once |
-| `~/.coffer/logs/`             | Structured JSON log files from `structlog`             |
-| `~/.coffer/bin/`              | The four deployed binaries: one directory per version, with the public names as symlinks into the current one |
-| `~/.coffer/upstream-pids/`    | Per-upstream subprocess PID files for session tracking |
-
-Keeping everything under one parent directory makes backup simple, migration unambiguous, and clean-uninstall complete. The daemon's detect-or-spawn protocol (Detect-or-Spawn) also benefits: every process that needs to find the daemon reads `~/.coffer/daemon.json` — there is no registry, no environment variable, and no platform-specific service directory to probe.
-
-## Retention defaults
-
-The `RetentionService.initialize_defaults()` call at daemon startup seeds the `retention_policies` table if rows are absent. The seeds are defined at the composition root, not in migrations, so new prunable tables introduced by later specs can register their own defaults without a new migration revision:
-
-| Policy                  | Action                                          | Default retention |
-| ----------------------- | ----------------------------------------------- | ----------------- |
-| `audit_log`             | Delete rows older than the window               | 365 days          |
-| `mcp_invocations`       | Delete rows older than the window               | 30 days           |
-| `sync_runs`             | Delete converge-round history older than the window | 90 days       |
-| `conversations_archive` | Auto-archive chats idle for this many days      | 7 days            |
-| `conversations`         | Delete archived chats this many days after archival (with their messages) | 30 days |
-
-Conversations follow a two-stage lifecycle: idle threads are auto-archived, then archived threads are deleted later. Any policy can be changed by the user via `PATCH /api/v1/retention/policies/{table_name}` or the equivalent CLI command; the change itself is audited.
+- [Resource framework](/architecture/resource-framework)
+- [Daemon and processes](/architecture/daemon)
+- [Security model](/architecture/security)
+- [Knowledge](/architecture/knowledge) and [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md)
+- Spec: [daemon](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md)

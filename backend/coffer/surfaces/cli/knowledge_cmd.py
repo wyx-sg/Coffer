@@ -108,7 +108,7 @@ def create_collection(
 def list_level(
     ctx: typer.Context,
     path: str = typer.Argument(
-        ..., help="A collection or a folder inside one, e.g. shopee or shopee/apis"
+        ..., help="A collection or a folder inside one, e.g. payments or payments/apis"
     ),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
@@ -182,7 +182,7 @@ def _submission(data: dict[str, object]) -> str:
 @app.command("delete")
 def delete_document(
     ctx: typer.Context,
-    path: str = typer.Argument(..., help="Document path, e.g. shopee/gateway.md"),
+    path: str = typer.Argument(..., help="Document path, e.g. payments/gateway.md"),
 ) -> None:
     """Delete a document."""
     c, _info = _cli_client.client_or_exit()
