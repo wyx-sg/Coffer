@@ -73,8 +73,9 @@ def test_the_keychain_is_read_once_across_rounds(db: pathlib.Path, tmp_path: pat
     assert keychain.reads == 1
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="an unreadable key reports no ref locked")
 def test_an_unavailable_key_reports_nothing_locked_and_is_not_retried(
-    db: pathlib.Path, tmp_path: pathlib.Path
+    db: pathlib.Path, tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     # A locked keychain is not evidence that every credential is locked: the
     # answer is unknown, so the round names none rather than all of them.
@@ -82,7 +83,9 @@ def test_an_unavailable_key_reports_nothing_locked_and_is_not_retried(
     adapter = _adapter(db, tmp_path, keychain)
     adapter.write_ciphertext("mcp/files/token", Fernet(Fernet.generate_key()).encrypt(b"x"))
 
-    assert adapter.locked_refs() == []
+    with caplog.at_level("WARNING"):
+        assert adapter.locked_refs() == []
+    assert [r.getMessage() for r in caplog.records] == ["sync.master_key_unreadable"]
     assert adapter.locked_refs() == []
     assert keychain.reads == 1
 
@@ -103,3 +106,34 @@ def test_an_imported_key_is_what_the_next_check_uses(
     assert adapter.locked_refs() == []
     assert resolved.export_key() == theirs
     assert keychain.reads == 1
+
+
+def test_no_key_at_all_reports_every_ciphertext_ref_locked(
+    db: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    # No key file and nothing in the keychain: this machine genuinely has no
+    # key, so nothing it holds can be opened here — every ref is locked, and
+    # asking again does not prompt again.
+    keychain = _CountingKeychain(None)
+    adapter = _adapter(db, tmp_path, keychain)
+    adapter.write_ciphertext("mcp/files/token", Fernet(Fernet.generate_key()).encrypt(b"x"))
+    adapter.write_ciphertext("provider/gw/key", Fernet(Fernet.generate_key()).encrypt(b"y"))
+
+    assert adapter.locked_refs() == ["mcp/files/token", "provider/gw/key"]
+    assert adapter.locked_refs() == ["mcp/files/token", "provider/gw/key"]
+    assert keychain.reads == 1
+
+
+def test_an_unreadable_key_file_reports_nothing_locked(
+    db: pathlib.Path, tmp_path: pathlib.Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    # A key file that exists but cannot be read right now is not "no key".
+    key_path = tmp_path / "keys" / "master.key"
+    key_path.mkdir(parents=True)  # a directory where the file should be: read fails
+    manager = MasterKeyManager(key_path, _CountingKeychain(None))
+    adapter = CredentialSyncAdapter(db, ResolvedMasterKey(manager))
+    adapter.write_ciphertext("mcp/files/token", Fernet(Fernet.generate_key()).encrypt(b"x"))
+
+    with caplog.at_level("WARNING"):
+        assert adapter.locked_refs() == []
+    assert [r.getMessage() for r in caplog.records] == ["sync.master_key_unreadable"]

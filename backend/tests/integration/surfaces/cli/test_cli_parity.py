@@ -107,7 +107,22 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "agent mcp": {"status", "install", "uninstall", "adopt", "entries", "remove-entry"},
     "agent plugin": {"list", "enable", "disable", "uninstall"},
     "channel": {"register", "list", "status", "pair", "bind", "notify"},
-    "skill": {"list", "show", "import", "adopt", "rm", "unmanaged", "rm-unmanaged", "verify"},
+    # `files`, `cat` and `write` are the skill-file tree the web editor browses
+    # and saves (spec skill-manager "Offer every skill operation on REST, CLI
+    # and web"): GET/PUT /api/v1/skills/{uid}/files[/{path}].
+    "skill": {
+        "list",
+        "show",
+        "import",
+        "adopt",
+        "rm",
+        "unmanaged",
+        "rm-unmanaged",
+        "verify",
+        "files",
+        "cat",
+        "write",
+    },
     # Exactly the list in spec knowledge "Cover collection management on REST and the
     # CLI" and nothing beyond it. `grep` and `search` are gone with the retrieval
     # surface (spec knowledge "Expose exactly one knowledge tool") — the corpus is
@@ -180,7 +195,8 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # passes rewrites the user's own knowledge files on a timer.
     "engine": {"model", "upkeep", "curate-owner", "timeout", "transcribe-model"},
     "engine model": {"show", "set", "clear"},
-    "engine upkeep": {"list", "set"},
+    # `runs` is GET /api/v1/upkeep/runs — which passes are running right now.
+    "engine upkeep": {"list", "set", "runs"},
     # Which MACHINE runs the one pass that may only run on one of them. Shaped
     # like `channel bind` — show, set (defaulting to this machine), clear —
     # because it is the same fact: one machine named in a document every

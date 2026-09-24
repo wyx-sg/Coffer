@@ -21,12 +21,15 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 import pathlib
 import time
 from collections.abc import Callable
 from typing import Any, Protocol
 
+from coffer.domain.agent.home_env import home_env
 from coffer.domain.agent.model_catalogue import AgentModel
+from coffer.domain.agent.types import AgentType
 
 _log = logging.getLogger(__name__)
 
@@ -68,9 +71,15 @@ SessionFactory = Callable[[str, dict[str, str] | None], _Session]
 class CodexRpcModelDiscovery:
     """``ModelDiscoveryPort`` backed by Codex's own ``model/list`` RPC.
 
-    Answers are held for ``ttl`` seconds per agent key: spawning a CLI is far
+    Answers are held for ``ttl`` seconds per config dir: spawning a CLI is far
     too expensive to repeat per HTTP request, and the set of models a release
-    offers does not change minute to minute.
+    offers does not change minute to minute. Keyed by directory, not type,
+    because two Codex homes can be two different logins.
+
+    The probe runs under the agent's own ``CODEX_HOME`` when its config dir is
+    not the default ``~/.codex`` (spec agent-registry/codex "Read Codex models
+    from model/list and config.toml"), so the list is the one that agent's
+    login and config would offer.
     """
 
     def __init__(
@@ -92,7 +101,8 @@ class CodexRpcModelDiscovery:
     ) -> list[AgentModel]:
         if agent_key != _AGENT_KEY:
             return []
-        cached = self._cache.get(agent_key)
+        cache_key = str(config_dir) if config_dir is not None else ""
+        cached = self._cache.get(cache_key)
         if cached is not None and self._clock() < cached[0]:
             return list(cached[1])
         models = await self._probe(config_dir)
@@ -101,7 +111,7 @@ class CodexRpcModelDiscovery:
         # seconds, and caching them would leave the picker empty long after
         # they had. Re-probing costs a spawn we only pay while it is broken.
         if models:
-            self._cache[agent_key] = (self._clock() + self._ttl, models)
+            self._cache[cache_key] = (self._clock() + self._ttl, models)
         return list(models)
 
     # --- internals -----------------------------------------------------------
@@ -112,7 +122,7 @@ class CodexRpcModelDiscovery:
         holding a model picker open."""
         cwd = self._cwd(config_dir)
         try:
-            session = self._session_factory(cwd, None)
+            session = self._session_factory(cwd, self._env(config_dir))
         except Exception:
             # Most often: the CLI is not installed at all.
             _log.debug("agent.model_discovery.codex_unavailable", exc_info=True)
@@ -130,6 +140,16 @@ class CodexRpcModelDiscovery:
             # cancelled mid-handshake.
             with contextlib.suppress(Exception):
                 await session.close()
+
+    @staticmethod
+    def _env(config_dir: pathlib.Path | None) -> dict[str, str] | None:
+        """The spawn environment: the daemon's own plus ``CODEX_HOME`` for a
+        non-default config dir; ``None`` (inherit unchanged) otherwise. Merged
+        rather than bare because the spawn REPLACES the environment."""
+        if config_dir is None:
+            return None
+        overrides = home_env(AgentType.CODEX, config_dir)
+        return {**os.environ, **overrides} if overrides else None
 
     @staticmethod
     def _cwd(config_dir: pathlib.Path | None) -> str:

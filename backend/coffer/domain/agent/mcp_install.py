@@ -119,7 +119,7 @@ def apply_install(
         data = _parse_json(text)
         servers = _json_container_create(data, ck)
         servers[COFFER_SERVER_KEY] = dict(fields)
-        # ensure_ascii=False: ~/.claude.json holds the user's whole machine
+        # ensure_ascii=False: Claude Code's .claude.json holds the user's whole machine
         # state (project paths, history) which may be non-ASCII; escaping it to
         # \uXXXX on every install needlessly rewrites unrelated content.
         return json.dumps(data, indent=2, ensure_ascii=False) + "\n"

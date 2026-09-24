@@ -4,7 +4,8 @@ Reuses the config-file store (atomic write + ``.bak``) and the pure text
 transforms in ``domain/agent/mcp_install.py``. The agent's MCP config file is
 itself an allowlisted config file:
 
-- ``claude_code`` → the ``global`` key (``~/.claude.json``, JSON)
+- ``claude_code`` → the ``global`` key (``.claude.json``, JSON — ``~/.claude.json``
+  for the default config dir, inside a custom one; ``claude_global_config``)
 - ``codex``       → the ``config`` key (``~/.codex/config.toml``, TOML)
 """
 

@@ -22,7 +22,7 @@ adapter only when the agent introduces a genuinely new shape).
 
 | Value         | Display name | Default `config_dir` | MCP file / container / shape               |
 | ------------- | ------------ | -------------------- | ------------------------------------------ |
-| `claude_code` | Claude Code  | `~/.claude`          | `~/.claude.json` · `mcpServers` · map      |
+| `claude_code` | Claude Code  | `~/.claude`          | `.claude.json` · `mcpServers` · map        |
 | `codex`       | OpenAI Codex | `~/.codex`           | `config.toml` · `mcp_servers` · map        |
 
 Skills are delivered to `<config_dir>/skills`. `claude_desktop` (the separate Claude chat app) remains out
@@ -121,7 +121,7 @@ which is spec knowledge's domain):
 | `codex`       | `instructions`   | `~/.codex/AGENTS.md`               | `markdown` | `file`      |
 | `codex`       | `hooks`          | `~/.codex/hooks.json`              | `json`     | `file`      |
 
-(`global` always anchors to `$HOME` — Claude Code keeps `~/.claude.json` at the home root even when the config dir itself is overridden.)
+(Paths are shown for the default config dir. `global` is `~/.claude.json` for the default `~/.claude` and `<config_dir>/.claude.json` for any other `config_dir` — Claude Code run with `CLAUDE_CONFIG_DIR` keeps the file inside that directory and never reads the home one; spec agent-registry/claude-code "Allowlist exactly the files Claude Code reads".)
 
 `~/.codex/auth.json` is deliberately excluded (credential/state, not a
 hand-edited config). `~/.claude.json` is included (per product decision) and

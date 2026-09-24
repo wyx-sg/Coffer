@@ -60,3 +60,30 @@ def test_uninstall_subprocess_error_raises() -> None:
         pytest.raises(PluginUninstallFailed),
     ):
         ClaudePluginCli().uninstall("x@y")
+
+
+def test_uninstall_points_the_cli_at_the_given_config_dir() -> None:
+    with (
+        mock.patch("shutil.which", return_value="/usr/bin/claude"),
+        mock.patch.dict("os.environ", {"PATH": "/usr/bin", "CLAUDE_CONFIG_DIR": "/stale"}),
+        mock.patch(
+            "subprocess.run",
+            return_value=mock.Mock(returncode=0, stdout="", stderr=""),
+        ) as run,
+    ):
+        ClaudePluginCli().uninstall("plugin-a@npm", env={"CLAUDE_CONFIG_DIR": "/agents/cc"})
+    env = run.call_args.kwargs["env"]
+    assert env["CLAUDE_CONFIG_DIR"] == "/agents/cc"
+    assert env["PATH"] == "/usr/bin"
+
+
+def test_uninstall_without_overrides_inherits_the_environment() -> None:
+    with (
+        mock.patch("shutil.which", return_value="/usr/bin/claude"),
+        mock.patch(
+            "subprocess.run",
+            return_value=mock.Mock(returncode=0, stdout="", stderr=""),
+        ) as run,
+    ):
+        ClaudePluginCli().uninstall("plugin-a@npm")
+    assert run.call_args.kwargs.get("env") is None

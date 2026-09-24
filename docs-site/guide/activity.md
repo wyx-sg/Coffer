@@ -57,14 +57,15 @@ The row says who called what, when, and with what outcome, and nothing more. **C
 
 The honest caveat is in `error`. An MCP tool that fails does not raise: per the spec it returns a well-formed result with `isError` set, which a transport-only recorder would count as a success. Coffer inspects that flag for `tools/call` and records `error` — but the message it stores is a fixed, Coffer-authored marker (`upstream tool returned an error result (isError)`), not the upstream's own text, because that text is upstream-controlled and may echo the arguments. So the log tells you a tool failed; it does not tell you why. `resources/read` and `prompts/get` have no equivalent flag, so a resource that returns useless content is recorded as `ok`.
 
-From a terminal, the invocation log is per-server:
+From a terminal, the same log reads across every server or for one:
 
 ```bash
-coffer mcp invocations filesystem --limit 20
-coffer mcp invocations filesystem --status error --since 2026-09-14T00:00:00Z
+coffer mcp invocations --limit 50                     # every server, as the tab shows it
+coffer mcp invocations --status error --json
+coffer mcp invocations filesystem --since 2026-09-14T00:00:00Z
 ```
 
-The cross-server view the tab renders is `GET /api/v1/mcp/invocations` (with `name`, `status`, `since` and `limit`); one server's is `GET /api/v1/resources/mcp_server/{name}/invocations`.
+Without a server the rows include Coffer's own built-in calls (`coffer`) and those of a server deleted before the log was re-keyed (`deleted:<name>`), and the table gains a *Server* column. The cross-server view is `GET /api/v1/mcp/invocations` (with `uid`, `status`, `since` and `limit`); one server's is `GET /api/v1/resources/mcp_server/{uid}/invocations`.
 
 ## The daemon tab, and `coffer__diagnose`
 

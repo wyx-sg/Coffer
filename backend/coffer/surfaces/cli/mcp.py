@@ -222,13 +222,17 @@ def test_cmd(
 @app.command("invocations")
 def invocations(
     ctx: typer.Context,
-    name: str = typer.Argument(...),
+    name: str | None = typer.Argument(None, help="One server; omit for every server"),
     limit: int = typer.Option(20, "--limit", min=1, max=500),
     status_filter: str | None = typer.Option(None, "--status"),
     since: str | None = typer.Option(None, "--since", help="ISO 8601 timestamp"),
     output_json: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Query the invocation log for an MCP server."""
+    """Query the invocation log — one server's calls, or every server's.
+
+    Without a server this reads the same cross-server log the Activity page
+    renders (``GET /mcp/invocations``), Coffer's own built-in calls (``coffer``)
+    and deleted servers' rows (``deleted:<name>``) included."""
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     params: dict[str, Any] = {"limit": limit}
@@ -237,22 +241,31 @@ def invocations(
     if since is not None:
         params["since"] = since
     with c:
-        uid = resolve_uid(c, "mcp_server", name, verbose=verbose)
-        r = c.get(f"/resources/mcp_server/{uid}/invocations", params=params)
+        if name is None:
+            r = c.get("/mcp/invocations", params=params)
+        else:
+            uid = resolve_uid(c, "mcp_server", name, verbose=verbose)
+            r = c.get(f"/resources/mcp_server/{uid}/invocations", params=params)
         _cli_client.check(r, verbose=verbose)
     data = r.json()["invocations"]
     if output_json:
         typer.echo(_json.dumps({"invocations": data}, indent=2))
         return
-    table = Table(title=f"{name} invocations (last {limit})")
+    table = Table(title=f"{name or 'all servers'} invocations (last {limit})")
     table.add_column("Time")
+    if name is None:
+        table.add_column("Server")
     table.add_column("Type")
     table.add_column("Key")
     table.add_column("Duration (ms)")
     table.add_column("Status")
     for inv in data:
+        # A row whose server resolves to nothing (built-in, deleted) shows the
+        # value it was logged under.
+        server = [inv.get("resource_name") or inv["resource_uid"]] if name is None else []
         table.add_row(
             inv["timestamp"],
+            *server,
             inv["capability_type"],
             inv["capability_key"],
             str(inv["duration_ms"]),

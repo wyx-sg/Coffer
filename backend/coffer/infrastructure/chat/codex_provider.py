@@ -23,6 +23,7 @@ from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.domain.connection import CODEX_ENV_KEY
 from coffer.infrastructure.chat.adapter_support import (
     ChannelNameResolver,
+    HomeEnvResolver,
     MemoryContextComposer,
     ModelLister,
     compose_system_context,
@@ -69,6 +70,7 @@ class CodexAppServerProvider:
         list_models: ModelLister | None = None,
         compose_memory_context: MemoryContextComposer | None = None,
         resolve_channel_name: ChannelNameResolver | None = None,
+        resolve_home_env: HomeEnvResolver | None = None,
     ) -> None:
         self._conversations = conversations
         self._session_factory: AppServerSessionFactory = (
@@ -93,6 +95,9 @@ class CodexAppServerProvider:
         # just without naming the channel — the uid is what decides that it IS a
         # channel turn, and the label was only ever colour.
         self._resolve_channel_name = resolve_channel_name
+        # Points the spawned app-server at the agent's own config dir
+        # (CODEX_HOME) when it is not ~/.codex. ``None`` ⇒ the default dir.
+        self._resolve_home_env = resolve_home_env
 
     async def init_conversation(self, conversation_id: str, agent_config: dict[str, Any]) -> None:
         cwd = agent_config.get("cwd")
@@ -140,11 +145,16 @@ class CodexAppServerProvider:
         # there; without it it fails "Missing environment variable:
         # COFFER_PROVIDER_KEY". MERGE with os.environ — create_subprocess_exec
         # REPLACES the environment, so a bare {KEY: ...} would strip PATH etc.
-        env: dict[str, str] | None = None
+        # CODEX_HOME rides the same merged env when the agent has its own
+        # config dir; with neither override the env stays None (inherit as-is).
+        overrides: dict[str, str] = (
+            dict(await self._resolve_home_env()) if self._resolve_home_env else {}
+        )
         if self._resolve_key is not None:
             key = await self._resolve_key()
             if key:
-                env = {**os.environ, CODEX_ENV_KEY: key}
+                overrides[CODEX_ENV_KEY] = key
+        env = {**os.environ, **overrides} if overrides else None
         system_context = await compose_system_context(
             agent_key=self.agent_key,
             channel_uid=conv.channel_uid or "",

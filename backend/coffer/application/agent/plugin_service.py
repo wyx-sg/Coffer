@@ -319,6 +319,7 @@ class AgentPluginService:
                 agent=agent,
                 plugin_id=plugin_id,
                 actor=actor,
+                env=cfg.runtime_env(),
             )
             return
 

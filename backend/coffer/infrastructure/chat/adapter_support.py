@@ -141,6 +141,13 @@ MemoryContextComposer = Callable[[str, str], Awaitable[str | None]]
 #: narrow seam rather than a ``ResourceService`` dependency, so this layer keeps
 #: reading one field out of the registry instead of importing it.
 ChannelNameResolver = Callable[[str], Awaitable[str | None]]
+#: () -> the environment overrides that point the agent's runtime at the config
+#: directory of the agent answering for this provider's type —
+#: ``{"CLAUDE_CONFIG_DIR": dir}`` / ``{"CODEX_HOME": dir}`` for a custom one,
+#: ``{}`` for the default (spec chat "Ship Claude Code and Codex subprocess
+#: providers"). A narrow seam so chat never imports the agent kind; the
+#: composition root builds it over the agent registry.
+HomeEnvResolver = Callable[[], Awaitable[dict[str, str]]]
 
 
 async def compose_system_context(

@@ -1,7 +1,7 @@
 """Parse / edit the MCP server entries in an agent's own config files.
 
 Pure domain text transforms — no filesystem access. Claude Code keeps JSON
-``mcpServers`` maps (``~/.claude.json`` and ``settings.json``); Codex keeps
+``mcpServers`` maps (``.claude.json`` and ``settings.json``); Codex keeps
 ``[mcp_servers.*]`` tables in ``config.toml``. Parser failures surface as
 ``AgentConfigParseError`` so the application layer can degrade the listing to
 an explicit parse-error state (spec agent-registry "Degrade a facet to a parse-error

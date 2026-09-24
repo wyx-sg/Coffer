@@ -98,6 +98,14 @@ class AgentConfig(BaseModel):
             return self.type.config_dir()
         return pathlib.Path(self.config_dir)
 
+    def runtime_env(self) -> dict[str, str]:
+        """Environment overrides that point the agent's own runtime at this
+        agent's config dir — empty for the type's standard location (see
+        :func:`coffer.domain.agent.home_env.home_env`)."""
+        from coffer.domain.agent.home_env import home_env
+
+        return home_env(self.type, self.resolved_config_dir())
+
     def resolved_skill_dir(self) -> pathlib.Path:
         """Where folder-mode skills are delivered: ``<config_dir>/<subpath>``.
 

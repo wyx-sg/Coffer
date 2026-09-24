@@ -27,6 +27,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from coffer.application.agent.model_catalogue import ModelDiscoveryPort
+from coffer.domain.agent.allowlists import claude_global_config
 from coffer.domain.agent.model_catalogue import AgentModel
 from coffer.infrastructure.agent.claude_effort import claude_effort_levels
 
@@ -85,19 +86,18 @@ class NativeConfigModelDiscovery:
     # --- claude code ---------------------------------------------------------
 
     def _claude_code(self, config_dir: pathlib.Path) -> list[AgentModel]:
-        """Claude Code keeps ``.claude.json`` NEXT TO its config dir in the
-        default layout (``~/.claude`` + ``~/.claude.json``) but INSIDE it when
-        ``CLAUDE_CONFIG_DIR`` points elsewhere — try inside first, so a user's
-        explicit override wins over a same-named file one level up."""
-        for candidate in (config_dir / ".claude.json", config_dir.parent / ".claude.json"):
-            data = self._read_json(candidate)
-            if data is None:
-                continue
-            raw = data.get(_CLAUDE_CACHE_KEY)
-            if not isinstance(raw, list):
-                return []
-            return [m for m in (self._claude_model(e) for e in raw) if m is not None]
-        return []
+        """Read the one ``.claude.json`` Claude Code uses for ``config_dir`` —
+        ``~/.claude.json`` for the default ``~/.claude``, ``<config_dir>/.claude.json``
+        for a custom one (``claude_global_config``, the same resolution the
+        ``global`` allowlist key uses). No fallback: a file in the other place
+        belongs to a different Claude Code install."""
+        data = self._read_json(claude_global_config(config_dir))
+        if data is None:
+            return []
+        raw = data.get(_CLAUDE_CACHE_KEY)
+        if not isinstance(raw, list):
+            return []
+        return [m for m in (self._claude_model(e) for e in raw) if m is not None]
 
     @staticmethod
     def _claude_model(entry: Any) -> AgentModel | None:

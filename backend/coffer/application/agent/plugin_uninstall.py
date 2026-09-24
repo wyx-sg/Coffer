@@ -56,8 +56,12 @@ async def uninstall_via_cli(
     agent: Resource,
     plugin_id: str,
     actor: str,
+    env: dict[str, str] | None = None,
 ) -> None:
     """Delegate uninstall to the agent's own plugin CLI (Claude).
+
+    ``env`` points the CLI at this agent's config dir when it is not the
+    default (spec agent-registry/claude-code "Locate Claude Code at ~/.claude").
 
     Runs off the event loop (the subprocess can take seconds). A missing CLI
     surfaces as ``PluginUninstallUnsupported`` (the listing already hides the
@@ -66,7 +70,7 @@ async def uninstall_via_cli(
     """
     if cli_runner is None or not cli_runner.available():
         raise PluginUninstallUnsupported(agent_type)
-    await asyncio.to_thread(cli_runner.uninstall, plugin_id)
+    await asyncio.to_thread(lambda: cli_runner.uninstall(plugin_id, env=env))
     await audit.record(
         _UNINSTALLED,
         resource=agent,

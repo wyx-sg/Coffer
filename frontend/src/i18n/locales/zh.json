@@ -924,7 +924,7 @@
       "desc": {
         "settings": "项目级 Claude Code 设置：权限、模型与钩子。",
         "settings_local": "叠加在共享设置之上的个人覆盖项；不提交到仓库。",
-        "global": "Claude Code 的全局状态及用户级 MCP 服务器（~/.claude.json）。",
+        "global": "Claude Code 的全局状态及用户级 MCP 服务器（.claude.json：默认在 ~/.claude 旁边，自定义配置目录时在该目录内）。",
         "instructions": "在该目录下每个会话都会自动加载的指令。",
         "subagents": "自定义子 Agent 定义，每个子 Agent 一个 Markdown 文件。",
         "config": "Codex CLI 配置：模型、供应商与工具设置。",

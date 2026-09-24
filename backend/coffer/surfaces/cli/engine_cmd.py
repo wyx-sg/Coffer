@@ -2,12 +2,14 @@
 
 The same settings the Settings → Engine page shows: WHICH MODEL Coffer thinks
 with (``engine model``), WHAT IT DOES while nobody is looking (``engine
-upkeep``), WHICH MACHINE does the one unattended thing that may only happen
-once (``engine curate-owner``), HOW LONG one call to that model may take
+upkeep``, and ``engine upkeep runs`` for what is running right now), WHICH
+MACHINE does the one unattended thing that may only happen once (``engine
+curate-owner``), HOW LONG one call to that model may take
 (``engine timeout``) and WHICH MODEL hears speech (``engine
 transcribe-model``). All five are thin shells over
 ``/api/v1/internal-engine-config``, so the terminal and the page write the same
-row through the same service and record the same audit entry.
+row through the same service and record the same audit entry. ``upkeep runs``
+is the one read that is not a setting: it is ``GET /api/v1/upkeep/runs``.
 
 The upkeep half is why this group must exist rather than being a page-only
 surface (spec internal-engine "List and change each unattended pass from the
@@ -184,6 +186,35 @@ def upkeep_set(
         f"{pass_name}: {'on' if setting['enabled'] else 'off'}, every {chosen} "
         f"(default {setting['default_interval_s']}s)"
     )
+
+
+@upkeep_app.command("runs")
+def upkeep_runs(
+    ctx: typer.Context,
+    output_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Show which passes are running right now, per collection or partition.
+
+    ``GET /upkeep/runs``: the daemon's own table of passes in flight, oldest
+    first. A target not listed has no pass running."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get("/upkeep/runs")
+        _cli_client.check(r, verbose=_verbose(ctx))
+    runs = r.json()["runs"]
+    if output_json:
+        typer.echo(_json.dumps({"runs": runs}, indent=2))
+        return
+    if not runs:
+        typer.echo("no upkeep pass is running")
+        return
+    table = Table(title="Passes running now")
+    table.add_column("Kind")
+    table.add_column("Target")
+    table.add_column("Started")
+    for run in runs:
+        table.add_row(run["kind"], run["name"], run["started_at"])
+    _console.print(table)
 
 
 @timeout_app.command("show")

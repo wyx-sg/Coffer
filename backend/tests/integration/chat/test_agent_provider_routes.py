@@ -42,6 +42,14 @@ _HEADERS = {"X-Coffer-Token": _TOKEN}
 _NOW = dt.datetime(2026, 9, 9, tzinfo=dt.UTC)
 
 
+@pytest.fixture(autouse=True)
+def _home(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``$HOME`` is ``tmp_path``: ``tmp_path / ".claude"`` is then the DEFAULT
+    config dir, whose ``.claude.json`` is the sibling ``tmp_path / ".claude.json"``
+    (spec agent-registry/claude-code "Allowlist exactly the files Claude Code reads")."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+
 class _FakeAgents:
     def __init__(self, resources: list[Resource]) -> None:
         self._resources = resources

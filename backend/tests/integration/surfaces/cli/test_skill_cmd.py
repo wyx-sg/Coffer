@@ -619,3 +619,151 @@ def test_unmanaged_skill_operations_live_under_coffer_skill(skill_cli_daemon):
     agent_group = typer.main.get_command(cli_app).commands["agent"]  # type: ignore[attr-defined]
     assert "config" in agent_group.commands
     assert not {"unmanaged", "adopt", "rm-unmanaged"} & set(agent_group.commands)
+
+
+# ---------------------------------------------------------------------------
+# skill files / cat / write — the master folder from a terminal
+# ---------------------------------------------------------------------------
+
+
+def _import_with_nested_file(home: pathlib.Path, name: str) -> pathlib.Path:
+    """Import a skill carrying ``refs/notes.txt``; hand back its master folder."""
+    src = _write_skill_folder(home / f"src-{name}", name=name)
+    (src / "refs").mkdir()
+    (src / "refs" / "notes.txt").write_text("first\n", encoding="utf-8")
+    r = _runner.invoke(cli_app, ["skill", "import", str(src)])
+    assert r.exit_code == 0, r.output
+    show = _runner.invoke(cli_app, ["skill", "show", name, "--json"])
+    return pathlib.Path(json.loads(_extract_json(show.output))["master_path"])
+
+
+def _walk(node: dict) -> list[tuple[str, str]]:  # type: ignore[type-arg]
+    out = [(node["path"], node["type"])]
+    for child in node["children"]:
+        out.extend(_walk(child))
+    return out
+
+
+@pytest.mark.acceptance(spec="skill-manager", scenario="desktop and CLI cover every operation")
+def test_skill_files_lists_the_master_folder_tree(skill_cli_daemon):
+    _import_with_nested_file(skill_cli_daemon, "tree-1")
+
+    as_json = _runner.invoke(cli_app, ["skill", "files", "tree-1", "--json"])
+    as_text = _runner.invoke(cli_app, ["skill", "files", "tree-1"])
+
+    assert as_json.exit_code == 0, as_json.output
+    root = json.loads(_extract_json(as_json.output))["root"]
+    assert _walk(root) == [
+        ("", "dir"),
+        ("refs", "dir"),
+        ("refs/notes.txt", "file"),
+        (".coffer.meta.json", "file"),
+        ("SKILL.md", "file"),
+    ]
+    assert as_text.exit_code == 0, as_text.output
+    assert "refs/notes.txt" in as_text.output
+    assert "SKILL.md" in as_text.output
+
+
+@pytest.mark.acceptance(spec="skill-manager", scenario="desktop and CLI cover every operation")
+def test_skill_cat_prints_the_file_and_its_fingerprint(skill_cli_daemon):
+    import hashlib
+
+    master = _import_with_nested_file(skill_cli_daemon, "cat-1")
+
+    plain = _runner.invoke(cli_app, ["skill", "cat", "cat-1", "refs/notes.txt"])
+    as_json = _runner.invoke(cli_app, ["skill", "cat", "cat-1", "refs/notes.txt", "--json"])
+
+    assert plain.exit_code == 0, plain.output
+    assert plain.output.endswith("first\n")
+    assert as_json.exit_code == 0, as_json.output
+    data = json.loads(_extract_json(as_json.output))
+    assert data["content"] == "first\n"
+    raw = (master / "refs" / "notes.txt").read_bytes()
+    assert data["fingerprint"] == hashlib.sha256(raw).hexdigest()
+
+
+def test_skill_cat_of_a_missing_file_exits_4(skill_cli_daemon):
+    _import_with_nested_file(skill_cli_daemon, "cat-2")
+
+    r = _runner.invoke(cli_app, ["skill", "cat", "cat-2", "refs/absent.txt"])
+
+    assert r.exit_code == 4, r.output
+    assert "no such file in skill: refs/absent.txt" in r.output
+
+
+def test_skill_cat_outside_the_folder_is_refused(skill_cli_daemon):
+    _import_with_nested_file(skill_cli_daemon, "cat-3")
+
+    r = _runner.invoke(cli_app, ["skill", "cat", "cat-3", "../../etc/passwd"])
+
+    assert r.exit_code == 6, r.output
+    assert "outside the skill folder" in r.output
+
+
+@pytest.mark.acceptance(spec="skill-manager", scenario="desktop and CLI cover every operation")
+def test_skill_write_from_stdin_saves_the_file(skill_cli_daemon):
+    master = _import_with_nested_file(skill_cli_daemon, "wr-1")
+
+    r = _runner.invoke(cli_app, ["skill", "write", "wr-1", "refs/notes.txt"], input="second\n")
+
+    assert r.exit_code == 0, r.output
+    assert (master / "refs" / "notes.txt").read_text(encoding="utf-8") == "second\n"
+    back = _runner.invoke(cli_app, ["skill", "cat", "wr-1", "refs/notes.txt"])
+    assert back.output.endswith("second\n")
+
+
+def test_skill_write_from_file_saves_the_file(skill_cli_daemon):
+    master = _import_with_nested_file(skill_cli_daemon, "wr-2")
+    new = skill_cli_daemon / "new.txt"
+    new.write_text("from a file\n", encoding="utf-8")
+
+    r = _runner.invoke(
+        cli_app, ["skill", "write", "wr-2", "refs/notes.txt", "--from-file", str(new)]
+    )
+
+    assert r.exit_code == 0, r.output
+    assert (master / "refs" / "notes.txt").read_text(encoding="utf-8") == "from a file\n"
+
+
+@pytest.mark.acceptance(spec="skill-manager", scenario="reject a stale save of a skill file")
+def test_skill_write_with_a_stale_fingerprint_exits_5_and_leaves_the_file(skill_cli_daemon):
+    master = _import_with_nested_file(skill_cli_daemon, "wr-3")
+    read = _runner.invoke(cli_app, ["skill", "cat", "wr-3", "refs/notes.txt", "--json"])
+    seen = json.loads(_extract_json(read.output))["fingerprint"]
+    # Someone edits the file in their own editor after that read.
+    (master / "refs" / "notes.txt").write_text("edited elsewhere\n", encoding="utf-8")
+
+    r = _runner.invoke(
+        cli_app,
+        ["skill", "write", "wr-3", "refs/notes.txt", "--fingerprint", seen],
+        input="my buffer\n",
+    )
+
+    assert r.exit_code == 5, r.output
+    assert "changed on disk since last read" in r.output
+    assert (master / "refs" / "notes.txt").read_text(encoding="utf-8") == "edited elsewhere\n"
+
+
+def test_skill_write_to_coffers_own_skill_is_refused(skill_cli_daemon):
+    show = _runner.invoke(cli_app, ["skill", "show", "coffer-guide", "--json"])
+    master = pathlib.Path(json.loads(_extract_json(show.output))["master_path"])
+    before = (master / "SKILL.md").read_bytes()
+
+    r = _runner.invoke(cli_app, ["skill", "write", "coffer-guide", "SKILL.md"], input="mine\n")
+
+    assert r.exit_code == 5, r.output
+    assert "is managed by Coffer" in r.output
+    assert "rewritten from the running build" in " ".join(r.output.split())
+    assert (master / "SKILL.md").read_bytes() == before
+
+
+def test_skill_file_commands_on_an_unknown_skill_exit_4(skill_cli_daemon):
+    for argv in (
+        ["skill", "files", "ghost"],
+        ["skill", "cat", "ghost", "SKILL.md"],
+        ["skill", "write", "ghost", "SKILL.md"],
+    ):
+        r = _runner.invoke(cli_app, argv, input="x")
+        assert r.exit_code == 4, (argv, r.output)
+        assert "no skill named 'ghost'" in r.output

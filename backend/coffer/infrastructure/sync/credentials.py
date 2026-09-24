@@ -9,13 +9,17 @@ encrypted under a different key whose owner hasn't bootstrapped here yet).
 A round asks for the locked refs every time it runs, so the key is read through a
 :class:`ResolvedMasterKey`, which resolves it once: ``master_key.py`` promises at
 most one keychain prompt per daemon start, and a key that lives in the keychain
-would otherwise be read — and prompted for — every round. A key that could not be
-read at all (a locked keychain) says nothing about which refs are locked, so none
-are reported, rather than every one.
+would otherwise be read — and prompted for — every round. Two absences are told
+apart (spec vault-sync "Report refs without a key as locked"): a machine that
+genuinely holds no key can open none of its ciphertext, so every ref is locked;
+a key that exists but could not be read (a locked keychain, an unreadable key
+file) says nothing about which refs are locked, so none are reported, rather
+than every one, and the log says why.
 """
 
 from __future__ import annotations
 
+import logging
 import pathlib
 import sqlite3
 import threading
@@ -24,15 +28,19 @@ from datetime import UTC, datetime
 
 from cryptography.fernet import Fernet, InvalidToken
 
+from coffer.domain.credential_errors import CredentialLocked
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
+
+_logger = logging.getLogger(__name__)
 
 
 class ResolvedMasterKey:
     """The master key, read from where it lives once and kept.
 
     Implements ``application.sync.ports.MasterKeyPort``. The first answer is
-    kept whatever it was — a key or ``None`` — so a locked keychain is asked
-    once, not every round; a key installed through it replaces the answer.
+    kept whatever it was — a key, no key, or a key that could not be read — so
+    a locked keychain is asked once, not every round; a key installed through
+    it replaces the answer.
     """
 
     def __init__(self, manager: MasterKeyManager) -> None:
@@ -40,18 +48,33 @@ class ResolvedMasterKey:
         self._lock = threading.Lock()
         self._resolved = False
         self._key: bytes | None = None
+        self._unreadable = False
+
+    def _resolve(self) -> None:
+        if self._resolved:
+            return
+        try:
+            self._key = self._manager.lookup()
+        except (CredentialLocked, OSError) as e:
+            self._key, self._unreadable = None, True
+            _logger.warning("sync.master_key_unreadable", extra={"reason": str(e)})
+        self._resolved = True
 
     def export_key(self) -> bytes | None:
         with self._lock:
-            if not self._resolved:
-                self._key = self._manager.export_key()
-                self._resolved = True
+            self._resolve()
             return self._key
+
+    def unreadable(self) -> bool:
+        """Whether a key exists here but could not be read when resolved."""
+        with self._lock:
+            self._resolve()
+            return self._unreadable
 
     def install_key(self, key: bytes) -> None:
         self._manager.install_key(key)
         with self._lock:
-            self._key, self._resolved = key.strip(), True
+            self._key, self._resolved, self._unreadable = key.strip(), True, False
 
 
 class CredentialSyncAdapter:
@@ -107,10 +130,15 @@ class CredentialSyncAdapter:
             return []
         key = self._master_key.export_key()
         if key is None:
-            # The key could not be read — in practice a locked keychain, since
-            # the daemon creates a key at start when it holds no ciphertext.
-            # Which refs it would open is unknown, and "unknown" is not "all".
-            return []
+            if self._master_key.unreadable():
+                # A key is there but could not be read (a locked keychain):
+                # which refs it would open is unknown, and "unknown" is not
+                # "all". Logged once, when the key was resolved.
+                return []
+            # No key at all, while holding ciphertext — ciphertext that
+            # arrived from another machine before its key did. None of it can
+            # be opened here.
+            return [ref for ref in refs if self.read_ciphertext(ref) is not None]
         fernet = Fernet(key)
         locked: list[str] = []
         for ref in refs:

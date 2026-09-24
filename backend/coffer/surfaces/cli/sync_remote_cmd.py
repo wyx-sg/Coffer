@@ -81,12 +81,19 @@ def remote_set(
         "--credential-ref",
         help="Name of the push credential in the credential store ('' removes it)",
     ),
+    worktree: str | None = typer.Option(
+        None,
+        "--worktree",
+        help="Absolute path of the git working tree, outside the vault (default ~/.coffer/sync)",
+    ),
 ) -> None:
     """Configure the remote. It is probed before being accepted.
 
     On a configured remote an option not given keeps its stored value, and
     ``enabled`` is never changed here: re-running never unpauses. A remote set
-    for the first time takes the defaults and starts enabled."""
+    for the first time takes the defaults and starts enabled. A working tree
+    at, inside or above the vault is refused by the daemon with its reason
+    (spec vault-sync "Keep the working tree outside the vault")."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -99,6 +106,7 @@ def remote_set(
             interval_seconds=interval,
             include_credentials=with_credentials,
             credential_ref=credential_ref,
+            worktree_path=worktree,
         )
         r = c.put("/sync/remote", json=body)
         _cli_client.check(r, verbose=verbose)

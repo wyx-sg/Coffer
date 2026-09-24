@@ -12,14 +12,22 @@ neither may leave a second one — which the partial unique index
   (:func:`refusing_hooks`), so the holder keeps the flag and nothing is written.
 - **A synced document** (spec vault-sync). Refusing it would hold the path for
   retry every round forever, so :class:`ProviderInternalDefaultNormaliser`
-  applies it with the flag cleared and hands the round a note to report. The
-  exception is a *move*: when the tree this round is applying also clears the
-  flag on the local holder, another machine moved it, and the holder is
-  released ahead of the target so the move lands whatever order the two
-  documents apply in. The release is handed back as a :class:`_ReleaseHolder`
-  rather than written here: the applier runs it after the target's gate, just
-  before the target's write, and reverts it if that write fails — so a target
-  that cannot land leaves this machine its internal default.
+  settles it instead. A *move* lands: when the tree this round is applying
+  also clears the flag on the local holder, another machine moved it. Any
+  other clash — two machines each flagged a different connection between
+  rounds — is settled by a tie-break every machine computes the same way: the
+  connection whose uid sorts first keeps the flag. If that is the incoming
+  one, the local holder is released and the document applies as written;
+  otherwise the document applies with the flag cleared and the round is handed
+  a note to report. "The flag already held here keeps it" was the rule before,
+  and each machine answered it for itself: both kept their own, published the
+  other as cleared, then received a clear for the one they kept, and ended
+  with none.
+
+  A release is handed back as a :class:`_ReleaseHolder` rather than written
+  here: the applier runs it after the target's gate, just before the target's
+  write, and reverts it if that write fails — so a target that cannot land
+  leaves this machine its internal default.
 """
 
 from __future__ import annotations
@@ -135,10 +143,14 @@ class ProviderInternalDefaultNormaliser:
             # write rather than left to that document's own turn, which may
             # come after this one.
             return out, None, _ReleaseHolder(self._rows, holder, self._actor)
+        if uid < holder.uid:
+            # Two flags, no move: the uid that sorts first keeps it — the same
+            # answer the other machine reaches when it meets this one's flag.
+            return out, None, _ReleaseHolder(self._rows, holder, self._actor)
         out[_FLAG] = False
         return (
             out,
             f"applied without internal_default: connection {holder.name!r} "
-            f"is this machine's internal-engine default and keeps it",
+            f"keeps the internal-engine default (its uid sorts first)",
             None,
         )

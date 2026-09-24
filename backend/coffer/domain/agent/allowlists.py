@@ -25,6 +25,27 @@ def _home() -> pathlib.Path:
     return pathlib.Path(os.environ.get("HOME", os.path.expanduser("~")))
 
 
+def claude_global_config(cfg: pathlib.Path) -> pathlib.Path:
+    """Where Claude Code keeps ``.claude.json`` for the config dir ``cfg``.
+
+    ``$HOME/.claude.json`` for the default ``~/.claude`` (``CLAUDE_CONFIG_DIR``
+    unset); ``<cfg>/.claude.json`` for any other dir, because the only way
+    Claude Code reads a non-default config dir is ``CLAUDE_CONFIG_DIR``, and
+    then it keeps the file inside that dir and never reads the home one.
+    Probed on Claude Code 2.1.281 with a throwaway ``HOME``: ``claude mcp add
+    -s user`` under ``CLAUDE_CONFIG_DIR=$T/cfg`` wrote ``$T/cfg/.claude.json``,
+    and ``claude mcp get`` did not see a server kept in ``$HOME/.claude.json``.
+    One answer for every reader — the ``global`` allowlist key (MCP install
+    target, MCP-entry source, config-file editor) and model discovery — per
+    spec agent-registry/claude-code "Allowlist exactly the files Claude Code
+    reads".
+    """
+    default = _home() / ".claude"
+    if cfg.expanduser().resolve() == default.resolve():
+        return _home() / ".claude.json"
+    return cfg / ".claude.json"
+
+
 def _claude_code_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
     return (
         ConfigFileSpec("settings", "User settings", cfg / "settings.json", ConfigFileFormat.JSON),
@@ -34,10 +55,9 @@ def _claude_code_files(cfg: pathlib.Path) -> tuple[ConfigFileSpec, ...]:
             cfg / "settings.local.json",
             ConfigFileFormat.JSON,
         ),
-        # Claude Code's global state/config file always lives at the home root
-        # (``~/.claude.json``), regardless of where the config dir points — it
-        # also holds user-scope MCP servers.
-        ConfigFileSpec("global", "Global config", _home() / ".claude.json", ConfigFileFormat.JSON),
+        # Claude Code's global state/config file — it also holds user-scope MCP
+        # servers. Beside the default dir, inside a custom one.
+        ConfigFileSpec("global", "Global config", claude_global_config(cfg), ConfigFileFormat.JSON),
         ConfigFileSpec(
             "instructions",
             "User instructions (CLAUDE.md)",

@@ -393,7 +393,7 @@ record's level would have had nowhere to go. Reading *across* them is your
 agent's job, not a filter's: **`coffer__diagnose`** returns the changes and the
 daemon log together over one window, so "why did that fail?" is a question you
 can just ask. (It does not carry the MCP calls — those are read here, or with
-`coffer mcp invocations <server>`.)
+`coffer mcp invocations [<server>]`.)
 
 For scripting, `GET /api/v1/audit` and `coffer audit` are unchanged. `/audit` and
 `/observability` redirect here.
