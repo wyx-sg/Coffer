@@ -44,7 +44,11 @@ def flatten_context(items: Sequence[ForwardedItem], *, title: str) -> str:
 
 
 def quote_prefix(sender: str, text: str) -> str:
-    return f"> {sender or 'unknown'}: {text}\n"
+    """``text`` as a quote block. Every line is marked, not just the first: an
+    unmarked second line would read as the asker's own words — including an
+    instruction someone else wrote."""
+    first, *rest = text.split("\n") or [""]
+    return "".join([f"> {sender or 'unknown'}: {first}\n", *(f"> {line}\n" for line in rest)])
 
 
 #: A group title is chat-member-settable, so it is clipped before it reaches the
@@ -87,9 +91,9 @@ def format_origin(msg: InboundMessage, *, platform: str) -> str:
     if msg.thread_id:
         lines.append(f"thread: {msg.thread_id}")
     # Without this line "接着上面那条说" points at nothing the agent can see — the
-    # quote is a platform-side link the message text never spells out. The id is
-    # also the handle a platform tool call takes to fetch the quoted body, which
-    # is why the id (not a resolved body) is what the origin block carries.
+    # quote is a platform-side link the message text never spells out. The body
+    # is folded into the turn separately; if that lookup failed, this id is the
+    # only trace of what was quoted.
     if msg.quoted_message_id:
         lines.append(f"quoted message: {msg.quoted_message_id}")
     # The display name is what a human recognises; the sender id (SeaTalk

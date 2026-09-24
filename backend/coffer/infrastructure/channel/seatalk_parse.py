@@ -7,6 +7,7 @@ only the transport/lifecycle/I-O surface.
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Sequence
 from typing import Any
 
@@ -50,11 +51,18 @@ CARD_DESCRIPTION_MAX_CHARS = 1000
 #: is to drop choices the caller asked for — worse than a refused card, which the
 #: command handler already falls back from to a plain-text list. The invariant
 #: lives at the caller instead: ``selection_cards.MAX_CARD_BUTTONS`` (6) paginates
-#: every list down to two rows, well under the three allowed. A future caller that
-#: hands over more than nine buttons gets a refused card and that fallback — the
-#: derived ceiling is written down here so the arithmetic is checkable.
+#: every list down to six buttons, which always pack into the three rows allowed.
+#: A future caller that hands over more than nine buttons gets a refused card and
+#: that fallback — the derived ceiling is written down here so the arithmetic is
+#: checkable.
 CARD_BUTTONS_PER_GROUP = 3
 CARD_BUTTON_GROUPS_MAX = 3
+
+#: The widest label, in display columns, a button shows untruncated when its row
+#: holds 1, 2 or 3 buttons. SeaTalk splits a row evenly and sizes the card to its
+#: body, so these are read off the narrowest card Coffer sends (a two-line
+#: "Current agent" body): "Claude Code" was cut to "Claude C…" two to a row.
+_ROW_LABEL_COLUMNS = {1: 18, 2: 8, 3: 5}
 
 
 def mentions_others(mentioned_list: Sequence[Any] | None) -> bool:
@@ -186,6 +194,34 @@ def _clamp(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+def _columns(label: str) -> int:
+    """``label``'s display width: a wide (CJK) character takes two columns."""
+    return sum(2 if unicodedata.east_asian_width(ch) in "WF" else 1 for ch in label)
+
+
+def button_rows(buttons: Sequence[ChoiceButton]) -> list[list[ChoiceButton]]:
+    """``buttons`` packed into ``button_group`` rows that show every label whole.
+
+    Greedy and order-keeping: a row takes the next button only while every label
+    in it still fits the per-button width a row of that size leaves, so a long
+    label ends up on a row of its own and short ones share. When that needs more
+    rows than a card holds, spread the buttons evenly over the rows allowed —
+    as few to a row as fits, since a truncated label beats a refused card.
+    """
+    rows: list[list[ChoiceButton]] = []
+    for button in buttons:
+        row = rows[-1] if rows else []
+        widest = max((_columns(b.label) for b in [*row, button]), default=0)
+        if row and len(row) < CARD_BUTTONS_PER_GROUP and widest <= _ROW_LABEL_COLUMNS[len(row) + 1]:
+            row.append(button)
+        else:
+            rows.append([button])
+    if len(rows) > CARD_BUTTON_GROUPS_MAX:
+        per_row = min(-(-len(buttons) // CARD_BUTTON_GROUPS_MAX), CARD_BUTTONS_PER_GROUP)
+        return [list(buttons[i : i + per_row]) for i in range(0, len(buttons), per_row)]
+    return rows
+
+
 def interactive_card(
     text: str, buttons: Sequence[ChoiceButton], *, title: str = ""
 ) -> dict[str, Any]:
@@ -209,6 +245,8 @@ def interactive_card(
     fields and emits buttons as ``button_group`` rows instead of bare buttons —
     the rows are what make more than five choices legal at all, and they render
     on one line each, which reads better than a column of full-width buttons.
+    How many share a row depends on their labels (``button_rows``), because a
+    row splits the card's width evenly and cuts a label that does not fit.
     Buttons inside a row are BARE button objects, not ``element_type`` pairs.
 
     No ``default``/language-code wrapper: multi-language card content is a Send
@@ -238,10 +276,7 @@ def interactive_card(
                 {"button_type": "callback", "text": b.label, "value": b.value} for b in row
             ],
         }
-        for row in (
-            buttons[start : start + CARD_BUTTONS_PER_GROUP]
-            for start in range(0, len(buttons), CARD_BUTTONS_PER_GROUP)
-        )
+        for row in button_rows(buttons)
     )
     return {"tag": "interactive_message", "interactive_message": {"elements": elements}}
 

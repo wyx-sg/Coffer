@@ -15,7 +15,7 @@ from typing import Any
 
 import httpx
 
-from coffer.application.channel.ports import AdapterCallbacks
+from coffer.application.channel.ports import AdapterCallbacks, FetchedContext
 from coffer.domain.channel.dedup import SeenIds
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
@@ -25,7 +25,6 @@ from coffer.domain.channel.envelopes import (
     InboundMessage,
     SentMessage,
 )
-from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.telegram_album import AlbumBuffer
 from coffer.infrastructure.channel.telegram_cards import edit_card
@@ -386,11 +385,12 @@ class TelegramAdapter:
     # -- context fetch (ContextFetchPort) -------------------------------------
 
     async def fetch_thread(
-        self, chat_id: str, thread_id: str, *, limit: int = 50, chat_kind: str = "group"
-    ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
-        # Bot API has no history-fetch method — a bot only ever sees updates
-        # pushed to it, never past thread history. Always empty.
-        return [], ()
+        self, chat_id: str, thread_id: str, *, limit: int = 100, chat_kind: str = "group"
+    ) -> FetchedContext:
+        return [], ()  # the Bot API has no history-fetch method
+
+    async def fetch_quoted(self, message_id: str) -> FetchedContext:
+        return [], ()  # a quote already rides inline, as ``reply_to_message``
 
     # -- transport -------------------------------------------------------------
 

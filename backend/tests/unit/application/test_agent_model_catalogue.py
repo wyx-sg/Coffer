@@ -310,3 +310,28 @@ async def test_an_active_connection_keeps_the_levels_of_ids_the_agent_knows() ->
     # user's own text and only the endpoint could describe it.
     assert offered[0].label == ""
     assert await svc.efforts("codex", "gpt-5") == ["low", "high"]
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a model card button shows the model's name")
+async def test_model_labels_name_each_choice_and_spell_out_the_1m_variant(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The live `/model` card: the ``fable`` alias and Claude Code's cached
+    ``claude-fable-5-1[1m]`` option (labelled just "Fable") read as a duplicate
+    once the id was cut. A name-less entry falls back to its id."""
+    svc = AgentModelCatalogueService(
+        agents=_FakeAgents([_agent("cc", "claude_code", str(tmp_path))]),
+        discovery=_FakeDiscovery(
+            [
+                AgentModel("fable", "Fable 5.1"),
+                AgentModel("claude-fable-5-1[1m]", "Fable"),
+                AgentModel("custom-model"),
+            ]
+        ),
+    )
+
+    assert await svc.model_labels("claude_code") == {
+        "fable": "Fable 5.1",
+        "claude-fable-5-1[1m]": "Fable 1M",
+        "custom-model": "custom-model",
+    }

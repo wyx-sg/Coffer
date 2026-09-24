@@ -57,8 +57,8 @@ async def cmd_model(
         if binding.adapter.capabilities.supports_buttons:
             row = await commands._threads.get(binding.resource.id, peer.chat_id, thread_id)
             key = effective_agent(binding, row.preferred_agent if row is not None else None)
-            picks = await commands._model_suggestions.suggest(key)
-            card = model_card(current=cfg.model, picks=picks)
+            labels = await commands._model_suggestions.model_labels(key)
+            card = model_card(current=cfg.model, picks=list(labels), labels=labels)
             # Same fallback as /agent: a refused card degrades to text.
             if await deliver_card(binding, peer, card, chat_kind=chat_kind, thread_id=thread_id):
                 return

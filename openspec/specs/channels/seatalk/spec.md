@@ -371,16 +371,24 @@ descriptions, 5 buttons, 3 button groups and 3 images**, with a title of at most
 120 characters and a description of at most 1000. Buttons are therefore laid out
 in **button groups** (an element holding up to three buttons on one line) rather
 than one element each: the parent's six-button bound ([channels](../spec.md) "Offer command choices as owner-gated selection cards")
-occupies two of the three group slots, is legal by the published rules, and reads
-as two rows rather than a six-high stack. Title and description text are clamped
-to their documented lengths, so a long body degrades to a truncated card instead
-of a refused one.
+always fits in the three group slots and reads as rows rather than a six-high
+stack. A row splits the card's width evenly, so how many buttons share a row
+depends on their labels: a row takes the next button only while every label in
+it fits the width a row of that size leaves, and a long label gets a row of its
+own. When that would need more than three rows, the buttons are spread evenly
+over three. Title and description text are clamped to their documented lengths,
+so a long body degrades to a truncated card instead of a refused one.
 
 #### Scenario: a six-button card is laid out as two button groups with clamped text
-- **GIVEN** a selection card with six buttons, a title over 120 characters and a body over 1000 characters
+- **GIVEN** a selection card with six short-labelled buttons, a title over 120 characters and a body over 1000 characters
 - **WHEN** it is built as a SeaTalk interactive card
 - **THEN** the payload is one flat `elements` array whose buttons sit in two button-group elements of three
 - **AND** the title is truncated to 120 characters and the description to 1000
+
+#### Scenario: a long button label gets a row of its own
+- **GIVEN** a selection card whose buttons include a label too wide to share a row, such as "Claude Code" beside "Codex"
+- **WHEN** it is built as a SeaTalk interactive card
+- **THEN** that button sits alone in its button group, while short labels still share one
 
 ### Requirement: Degrade card rewrites outside SeaTalk's update window
 A card rewrite ([channels](../spec.md) "Switch the conversation's agent from chat", [channels](../spec.md) "Offer command choices as owner-gated selection cards") reaches only
@@ -482,20 +490,27 @@ corresponding SeaTalk permission is not granted to Coffer's app.
 - **THEN** it calls the direct-chat thread endpoint keyed by the owner's employee code
 - **AND** it calls neither the group-thread endpoint nor the group-chat history endpoint
 
-### Requirement: Keep the quoted message id as a handle
+### Requirement: Resolve a quoted message with the bot's own token
 Both SeaTalk inbound message events carry a **`quoted_message_id`** when the user
-replied by quoting. The envelope MUST keep it and the origin block names it
-([channels](../spec.md) "Name a quoted message without fetching it"); fetching the quoted body is a single documented call the
-platform's own MCP server already exposes as a tool, so it is a lookup the agent
-performs for itself. The id is scoped to this bot — the platform deliberately
-gives one message different ids to different apps — so it is a handle, not a
-durable identifier.
+replied by quoting. The envelope MUST keep it, and the transport MUST resolve it
+through `GET /messaging/v2/get_message_by_message_id` with the app's own token
+([channels](../spec.md) "Ground a turn in the message it quotes"). SeaTalk gives
+one message a different id per app, so only the app that received the event
+can resolve this one. The response has a thread message's shape, so it is
+flattened, and its images and files downloaded, the same way. Any error or
+non-zero `code` resolves to nothing, and the turn runs on the message alone.
 
 #### Scenario: a quoting seatalk message keeps the quoted id on the envelope
 - **GIVEN** a SeaTalk direct message and a SeaTalk group message that each quote an earlier message
 - **WHEN** the transport normalizes them
 - **THEN** each envelope carries the event's `quoted_message_id`
-- **AND** the transport makes no call to fetch the quoted message
+
+#### Scenario: a quoted seatalk message is resolved by its id
+- **GIVEN** a quoted message id this app received
+- **WHEN** the transport resolves it
+- **THEN** it calls `get_message_by_message_id` with that id and returns the
+  message's sender and text
+- **AND** a failed or refused lookup returns nothing rather than failing the turn
 
 ### Requirement: Normalise SeaTalk's two lifecycle events
 Two SeaTalk events change what a binding *is* rather than driving a turn, and
@@ -510,3 +525,16 @@ other organisations may now read a chat the owner paired.
 - **WHEN** it receives a `bot_removed_from_group_chat` event and a `group_chat_converted_to_external_group` event
 - **THEN** each is delivered on the lifecycle callback as a removal and an external conversion for that group
 - **AND** neither is delivered as an inbound message
+
+### Requirement: Read every page of a thread
+A thread read MUST follow `next_cursor` until SeaTalk returns none. The thread
+endpoints page oldest-first at no more than 100 messages a page, so reading one
+page would drop the messages written just before the @mention. The read stops
+after a fixed number of pages so a runaway cursor cannot stall the turn. A
+later page that fails keeps the pages already read.
+
+#### Scenario: a thread longer than one page is read to its last message
+- **GIVEN** a SeaTalk thread whose first page carries a `next_cursor`
+- **WHEN** the adapter fetches the thread
+- **THEN** it requests the next page with that cursor and returns the messages
+  of both pages in order

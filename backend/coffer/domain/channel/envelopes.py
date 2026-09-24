@@ -64,10 +64,9 @@ class InboundMessage:
     # The message this one quotes/replies-to; "" when it quotes nothing. SeaTalk
     # delivers it on BOTH the DM (``message_from_bot_subscriber``) and the
     # group-@mention event, so it is envelope-level rather than group-only.
-    # Coffer surfaces the id and deliberately does NOT resolve the quoted body
-    # itself: that lookup (``get_message_by_message_id``) is an agent-invoked MCP
-    # tool, so the transport's job ends at telling the agent that a quote exists
-    # and what its id is — the agent fetches the body only when it needs it.
+    # The id is scoped to the bot that received it, so the transport resolves the
+    # body itself when the turn is built (spec channels "Ground a turn in the
+    # message it quotes").
     quoted_message_id: str = ""
     attachments: tuple[InboundAttachment, ...] = ()  # photos/files/voice, if any
     ephemeral_id: str = ""  # set when the message itself was ephemeral (only the

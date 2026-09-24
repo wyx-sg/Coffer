@@ -2,10 +2,13 @@
 channels "Configure when the bot answers in a group") and the interactive-card
 element limits SeaTalk documents."""
 
+import pytest
+
 from coffer.domain.channel.envelopes import ChoiceButton
 from coffer.infrastructure.channel.seatalk_parse import (
     CARD_DESCRIPTION_MAX_CHARS,
     CARD_TITLE_MAX_CHARS,
+    button_rows,
     interactive_card,
     mentions_others,
 )
@@ -103,6 +106,39 @@ def test_interactive_card_leaves_a_short_last_row_short():
     buttons = [ChoiceButton(label=f"L{i}", value=f"v{i}") for i in range(4)]
     groups = _of_type(interactive_card("body", buttons), "button_group")
     assert [len(g["button_group"]) for g in groups] == [3, 1]
+
+
+@pytest.mark.acceptance(
+    spec="channels/seatalk", scenario="a long button label gets a row of its own"
+)
+def test_interactive_card_gives_a_long_label_a_row_of_its_own():
+    # The live /agent and /model cards: "Claude Code" was cut to "Claude C…" two
+    # to a row, and "claude-fable-5-1" likewise. Short labels still share.
+    def rows(*labels: str) -> list[list[str]]:
+        card = interactive_card("body", [ChoiceButton(label=x, value=x) for x in labels])
+        return [[b["text"] for b in g["button_group"]] for g in _of_type(card, "button_group")]
+
+    assert rows("Claude Code ✓", "Codex") == [["Claude Code ✓"], ["Codex"]]
+    assert rows("opus", "sonnet", "haiku", "fable", "claude-fable-5-1") == [
+        ["opus", "sonnet"],
+        ["haiku", "fable"],
+        ["claude-fable-5-1"],
+    ]
+
+
+def test_a_wide_character_counts_two_columns():
+    # Four CJK characters are eight columns: two share a row, three do not.
+    labels = ["切换模型", "切换代理", "查看状态"]
+    assert [len(r) for r in button_rows([ChoiceButton(label=x, value=x) for x in labels])] == [
+        2,
+        1,
+    ]
+
+
+def test_labels_too_long_for_three_rows_are_spread_evenly():
+    # Six long labels would need six rows; three rows of two cut the fewest.
+    buttons = [ChoiceButton(label=f"claude-model-{i}", value=f"v{i}") for i in range(6)]
+    assert [len(r) for r in button_rows(buttons)] == [2, 2, 2]
 
 
 def test_interactive_card_emits_no_button_element_without_buttons():

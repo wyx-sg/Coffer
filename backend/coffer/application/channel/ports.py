@@ -27,6 +27,10 @@ from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope
 
+#: What a context read returns: the flattened text of each message read, and the
+#: images/files those messages carry, already downloaded to local paths.
+FetchedContext = tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]
+
 
 @dataclass(frozen=True)
 class AdapterCallbacks:
@@ -256,6 +260,14 @@ class ModelSuggestionPort(Protocol):
 
     async def suggest(self, agent_key: str) -> list[str]: ...
 
+    async def model_labels(self, agent_key: str) -> dict[str, str]:
+        """``{id: button text}`` for the ``/model`` card, in ``suggest``'s order
+        — so the card reads its choices from this one call. A card has no room
+        for the web picker's name-plus-id, and a bare id can hide the one part
+        that tells two choices apart (a 1M-context variant cut to
+        ``claude-fable-5-…``), so the card shows a name instead."""
+        ...
+
     async def efforts(self, agent_key: str, model: str | None) -> list[str]:
         """The levels ``model`` can be run at, in the agent's own order.
 
@@ -266,8 +278,8 @@ class ModelSuggestionPort(Protocol):
 
 
 class ContextFetchPort(Protocol):
-    """Best-effort thread-context reader: when a turn lands inside a thread,
-    that thread's own messages ground it.
+    """Best-effort context reader: the thread a turn lands in, and the message it
+    quotes, ground the turn.
 
     Threads are no longer a group-@mention-only affair — SeaTalk exposes a DM
     thread endpoint too (``single_chat/get_thread_by_thread_id``, app v3.62.1+),
@@ -278,13 +290,19 @@ class ContextFetchPort(Protocol):
     Bot API) satisfy this by always returning ``([], ())``."""
 
     async def fetch_thread(
-        self, chat_id: str, thread_id: str, *, limit: int = 50, chat_kind: str = "group"
-    ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
-        """Return the thread's ``(text items, downloaded attachments)``: the flattened
-        text of each thread message plus the images/files those messages carry, already
-        fetched to local paths (see "Download the media a thread's messages carry") so
-        an in-thread @mention reaches the turn with the real pictures, not dead file
-        links. Degrades to ``([], ())`` on any error."""
+        self, chat_id: str, thread_id: str, *, limit: int = 100, chat_kind: str = "group"
+    ) -> FetchedContext:
+        """Return EVERY message of the thread (all pages; ``limit`` is the page
+        size) with the images/files they carry (see "Download the media a thread's
+        messages carry"), so an in-thread @mention reaches the turn with the whole
+        conversation and the real pictures, not dead file links. Degrades to
+        ``([], ())`` on any error."""
+        ...
+
+    async def fetch_quoted(self, message_id: str) -> FetchedContext:
+        """Return the one message ``message_id`` names — the message the turn
+        quotes — with the images/files it carries. Degrades to ``([], ())`` on any
+        error, leaving the origin block's quoted id as the only trace."""
         ...
 
 

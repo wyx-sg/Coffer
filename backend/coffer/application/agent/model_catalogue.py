@@ -120,6 +120,18 @@ def _deduped(found: Iterable[AgentModel]) -> list[AgentModel]:
     return models
 
 
+#: The suffix Claude Code puts on a model id to run it with a 1M-token context.
+_ONE_M_SUFFIX = "[1m]"
+
+
+def _button_label(model: AgentModel) -> str:
+    """The short name a card button shows for ``model``."""
+    label = model.label or model.id
+    if model.id.endswith(_ONE_M_SUFFIX) and "1M" not in label:
+        label = f"{label} 1M"
+    return label
+
+
 class AgentModelCatalogueService:
     """The deduped view of whatever discovery reports for one agent type."""
 
@@ -220,6 +232,14 @@ class AgentModelCatalogueService:
         a ``/model`` card offers exactly what the web picker does. Nothing sits
         between the two: this is the whole menu a channel presents."""
         return [m.id for m in await self.offered(agent_key)]
+
+    async def model_labels(self, agent_key: str) -> dict[str, str]:
+        """``{id: button text}`` for a channel's ``/model`` card — satisfies the
+        channel ``ModelSuggestionPort``. The text is the model's name, falling
+        back to its id when the source gave none, with the 1M-context variant
+        spelled out: Claude Code's cache labels ``claude-fable-5-1[1m]`` just
+        "Fable", which beside the ``fable`` alias would read as a duplicate."""
+        return {m.id: _button_label(m) for m in await self.offered(agent_key)}
 
     # --- internals -----------------------------------------------------------
 

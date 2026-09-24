@@ -434,8 +434,13 @@ the installed CLI, the one list Coffer has of what that agent can run — in
 as owner-gated selection cards"), opening on the page holding the model currently in effect, so a freshly rendered
 card always has its tick in view. Free-text `/model <name>` still reaches a
 model the user can already name — including one the catalogue does not list —
-and the card's body says so. No surface refuses an id: a channel binds an agent
-and nothing more. With no suggestions it falls back to the text report.
+and the card's body says so. Each button shows the model's **name**, not its raw
+id, and the tap still carries the id: a card has no room for the web picker's
+name beside the id, and a truncated id can hide the one part that tells two
+choices apart. A model with no name shows its id, and a 1M-context variant says
+"1M", so `fable` and `claude-fable-5-1[1m]` read as two different choices. No
+surface refuses an id: a channel binds an agent and nothing more. With no
+suggestions it falls back to the text report.
 
 **`/effort` is the other half of that choice.** For an agent whose models take a
 reasoning level, the model id is not the whole decision, and the level is not
@@ -456,6 +461,13 @@ default, since a fresh conversation carries no overrides at all.
 - **GIVEN** a paired channel in an active conversation
 - **WHEN** the peer sends `/model <name>` and then a message
 - **THEN** the next turn runs with the chosen model in the same conversation
+
+#### Scenario: a model card button shows the model's name
+- **GIVEN** an agent whose catalogue offers `fable`, named "Fable 5.1", and
+  `claude-fable-5-1[1m]`, named "Fable"
+- **WHEN** the `/model` card is built
+- **THEN** the buttons read "Fable 5.1" and "Fable 1M"
+- **AND** tapping either carries its model id
 
 ### Requirement: Save a sent document into a collection
 A document sent to a Coffer channel MUST be ingestible into a collection through
@@ -708,12 +720,13 @@ than a dead link.
 Threads MUST be read and replied-to in place, and a group reply always lands in
 a thread — never the group main chat. A DM or group message sent in a thread
 also replies into that thread, and so does the reply to a slash command sent
-there. Reading *recent group-main* history is intentionally NOT done: the
+there. A thread is read in full: every message it holds, not a first page.
+Reading *recent group-main* history is intentionally NOT done: the
 addressed message is self-contained, and the permission to read a group's
 back-chatter is not something this product asks for. How a thread is
 identified, and whether its history can be fetched at all, is a platform fact
 each child spec states. A quoted/replied message contributes a `> sender: …`
-context prefix where the platform inlines it.
+context prefix (see "Ground a turn in the message it quotes").
 
 #### Scenario: the owner @mentions the bot inside a thread
 - **GIVEN** a paired channel and a group chat with a thread, on a transport
@@ -1282,22 +1295,32 @@ reconnect.
 - **THEN** the redelivery is dropped and the turn runs exactly once — no double
   reply or duplicate work — while a genuinely new event still drives its own turn
 
-### Requirement: Name a quoted message without fetching it
-A quoted message MUST be surfaced, not resolved. Where the platform tells the
-transport that the user replied by quoting, the envelope keeps the quoted
-message's id and the origin block (see "Open every turn with its message
-origin") names it, so an agent reading "as I said above" can tell that *above*
-refers to something specific instead of guessing from the visible text. The
-transport deliberately stops at the id: fetching the quoted body is an
-on-demand lookup the agent performs for itself through the platform's own
-tools, not transport work that must happen on every turn whether or not anyone
-needs it. The id is a handle scoped to this bot, not a durable identifier.
+### Requirement: Ground a turn in the message it quotes
+A quoted message MUST reach the turn as content, not only as a reference. When
+the user replies by quoting a message, the quoted message is folded into the
+turn as `> sender: …` lines directly above the user's own text, so "repeat this"
+or "as I said above" points at something the agent can read. The images and
+files the quoted message carries are attached like a thread message's. A
+platform that inlines the quote on the update itself has already folded it into
+the message text. A platform that delivers only an id has the transport
+resolve it with the bot's own credentials: such an id is scoped to the bot that
+received it, so no tool the agent holds could resolve it. The origin block (see
+"Open every turn with its message origin") still names the quoted message's
+id. A lookup that fails leaves the turn as it was, with the id as the only
+trace.
 
 #### Scenario: a quoted message is named in the turn's origin
 - **GIVEN** a paired channel whose inbound message quotes an earlier message
 - **WHEN** the turn is built
-- **THEN** the origin block names the quoted message's id, and the transport
-  makes no call to fetch the quoted message's content
+- **THEN** the origin block names the quoted message's id
+
+#### Scenario: a quoted message is folded into the turn
+- **GIVEN** a paired group on a transport that resolves quotes, and the owner
+  quotes an earlier message in the group main chat and @mentions the bot
+- **WHEN** the turn is built
+- **THEN** the quoted message's sender and text sit as a `> sender: …` line
+  directly above the owner's own text
+- **AND** no thread history is read, because the @mention roots a fresh thread
 
 ### Requirement: Ground a DM thread's turn in the thread
 A thread MUST ground its turn in a DM too, not only in a group. The
