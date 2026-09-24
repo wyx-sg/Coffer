@@ -39,7 +39,7 @@ def app(tmp_path, monkeypatch):  # type: ignore[no-untyped-def]
 
 
 # ---------------------------------------------------------------------------
-# T-0072 verification: chat routers are mounted
+# Chat routers are mounted
 # ---------------------------------------------------------------------------
 
 

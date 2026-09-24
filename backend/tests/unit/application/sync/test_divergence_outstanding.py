@@ -1,7 +1,7 @@
 """The curation gate reads the round that last settled the merge, not the last round.
 
 A conflict is outstanding until a round merges again (spec vault-sync "Never
-overlap a tidy pass and a round"). A round that failed on the network, or that
+overlap a curation pass and a round"). A round that failed on the network, or that
 did not run because sync was switched off, never reached the merge, so it says
 nothing about whether the conflict was resolved.
 """

@@ -102,7 +102,7 @@ section that future readers most often want — don't skip it.>
 | [`channel-adapter-framework`](channel-adapter-framework.md) | Channel Adapter Framework | Accepted |
 | [`envelope-encrypted-credential-store`](envelope-encrypted-credential-store.md) | Envelope-Encrypted Credential Store | Accepted |
 | [`vault-sync`](vault-sync.md) | Vault Sync | Accepted |
-| [`industrial-grade-harness-in-layers`](industrial-grade-harness-in-layers.md) | Industrial-Grade Harness, Built in Layers | Proposed |
+| [`industrial-grade-harness-in-layers`](industrial-grade-harness-in-layers.md) | Industrial-Grade Harness, Built in Layers | Accepted — layers A and D and the lockfile half of B shipped; the devcontainer, per-branch database and layer C (smoke) were not built |
 | [`tool-retrieval-for-overload`](tool-retrieval-for-overload.md) | Tool Retrieval for Aggregation Overload | Accepted — amended by [Built-in Agent Is Internal](builtin-agent-is-internal-capability.md) and [Budget-Driven Tool Tiering](budget-driven-tool-tiering.md) |
 | [`close-the-eval-flywheel`](close-the-eval-flywheel.md) | Close the Eval Flywheel (Loop Engineering) | Accepted |
 | [`channel-entrypoint-differentiation`](channel-entrypoint-differentiation.md) | Channel Entrypoint Differentiation Layer | Accepted |

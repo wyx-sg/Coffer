@@ -169,7 +169,7 @@ async def handle_post(
     # _drop_session waits for us to finish before disposing the session.
     _acquire_session_ref(session_id)
     try:
-        # T-061/T-062: if the envelope has no "method" but has an "id", it is a
+        # Sampling and roots: if the envelope has no "method" but has an "id", it is a
         # JSON-RPC response to a server-initiated request that coffer sent downstream.
         # Route it to the session's pending-request registry and return 200 immediately.
         if method is None and req_id is not None:

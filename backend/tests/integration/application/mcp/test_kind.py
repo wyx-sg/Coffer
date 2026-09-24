@@ -1,4 +1,4 @@
-"""TEST-015 — make_mcp_kind.on_delete evicts active supervisor sessions.
+"""make_mcp_kind.on_delete evicts active supervisor sessions.
 
 When the user deletes an MCP server resource, every session that has a
 live subprocess for that name must lose it so the next call doesn't hit a

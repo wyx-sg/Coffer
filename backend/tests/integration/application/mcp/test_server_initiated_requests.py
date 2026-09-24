@@ -1,6 +1,6 @@
 """Exercise sampling/createMessage and roots/list server-initiated pass-through.
 
-T-061 (sampling) + T-062 (roots/list).
+Sampling + roots/list.
 
 These tests exercise the session's bookkeeping layer directly — without a
 real upstream subprocess — to confirm:

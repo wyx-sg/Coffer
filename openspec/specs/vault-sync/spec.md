@@ -1166,7 +1166,7 @@ If the owner machine is off, no pass happens, which is the accepted trade for a
 background nicety. The retention worker is exempt: it prunes the audit log, MCP
 invocation records and conversations, none of which sync.
 
-#### Scenario: tidy runs only on its owner machine
+#### Scenario: curation runs only on its owner machine
 - **GIVEN** two converged machines with curation enabled and one of them named
   as the owner,
 - **WHEN** the curation interval elapses on both,
@@ -1212,13 +1212,13 @@ the database.
 - **THEN** it names that as a fault distinct from "runs on another machine",
   because the pass is running on none, and the user can take it over here.
 
-### Requirement: Never overlap a tidy pass and a round
+### Requirement: Never overlap a curation pass and a round
 A curation pass and a converge round MUST NOT overlap. Both write the vault and an
 export taken mid-rewrite is a torn snapshot, so they MUST take the same lock. A
 pass MUST additionally be skipped while a conflict or a pending confirmation is
 outstanding, so a rewrite is never piled onto an unresolved divergence.
 
-#### Scenario: a tidy pass and a converge round do not overlap
+#### Scenario: a curation pass and a converge round do not overlap
 - **GIVEN** a curation pass in progress,
 - **WHEN** a converge round starts,
 - **THEN** the round waits for the pass to finish before it serializes the
@@ -1229,14 +1229,14 @@ outstanding, so a rewrite is never piled onto an unresolved divergence.
 - **WHEN** the unattended curation pass asks whether it may run,
 - **THEN** it is told no, and once a later round converges cleanly with nothing held it is told yes again.
 
-### Requirement: Let an edit beat a tidy deletion
+### Requirement: Let an edit beat a curation deletion
 Where the owner's curation pass deleted a document another machine edited, the **edit
 MUST win**: the document survives with its edit, the deletion is dropped, and
 the round MUST NOT report a conflict. A fresh edit is something a person or an
 agent just decided; the deletion is a housekeeping judgement the next pass will
 simply make again.
 
-#### Scenario: an edit outlives a tidy deletion
+#### Scenario: an edit outlives a curation deletion
 - **GIVEN** a note the owner's curation pass merged away and deleted, and the same
   note edited on the other machine before it converged,
 - **WHEN** the two meet in a round,

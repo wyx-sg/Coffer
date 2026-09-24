@@ -101,7 +101,7 @@ class HttpUpstreamConnection:
         self._ready: asyncio.Future[Any] | None = None
         self._close_event: asyncio.Event | None = None
         self._notification_callback: NotificationCallback | None = None
-        # Server-initiated request callbacks (T-061/T-062)
+        # Server-initiated request callbacks (sampling and roots)
         self._sampling_callback: SamplingFnT | None = None
         self._list_roots_callback: ListRootsFnT | None = None
 

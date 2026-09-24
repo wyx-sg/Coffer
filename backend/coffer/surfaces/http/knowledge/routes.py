@@ -222,7 +222,7 @@ async def curate(
     # and a converge round both rewrite vault content, and an export caught
     # half-way through a rewrite is a torn snapshot git reads as a deliberate
     # change ("Never overlap curation with a sync round", spec vault-sync
-    # "Never overlap a tidy pass and a round").
+    # "Never overlap a curation pass and a round").
     with UPKEEP_RUNS.guard(KIND_KNOWLEDGE, uid):
         async with vault_write_lock():
             result = await get_curation_runner()(

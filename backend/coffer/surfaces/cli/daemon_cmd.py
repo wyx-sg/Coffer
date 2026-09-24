@@ -89,9 +89,10 @@ def _start_daemon() -> None:
     home = Path(os.environ.get("HOME", "~")).expanduser()
     daemon_json = home / ".coffer" / "daemon.json"
 
-    # P1-1: key off live_daemon() (a real status probe), NOT mere file
-    # presence. A stale daemon.json left by a crashed daemon must trigger a
-    # respawn, not a false "already running".
+    # Spec daemon "Manage the daemon from the command line": key off
+    # live_daemon() (a real status probe), NOT mere file presence. A stale
+    # daemon.json left by a crashed daemon must trigger a respawn, not a false
+    # "already running".
     if bootstrap.live_daemon() is not None:
         typer.echo("daemon already running")
         raise typer.Exit(0)
@@ -133,7 +134,7 @@ def _stop_daemon() -> bool:
 
     home = Path(os.environ.get("HOME", "~")).expanduser()
 
-    # P1-1: verify the recorded pid IS a coffer daemon before signalling it.
+    # Verify the recorded pid IS a coffer daemon before signalling it.
     # A crashed daemon's pid can be recycled onto an unrelated process; we must
     # not SIGTERM a stranger. If it isn't ours, the daemon.json is stale —
     # clean it up instead of killing whoever now holds that pid.

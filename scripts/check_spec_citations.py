@@ -23,9 +23,10 @@ or retired and the citation keeps quoting the old words. Two rules:
      that change modifies, renames away or removes.
   2. No retired id form comes back: an amendment letter after a capability
      (`spec <capability> <letter><digits>`), a numbered error code
-     (`CODE-<digits>`, `CODE-REG`) and an uppercase spec id
-     (`SPEC-<digits>`). Each was a second name for something that already had
-     one, and each drifted the way numbers do. Change folders are exempt, as
+     (`CODE-<digits>`, `CODE-REG`), an uppercase spec id (`SPEC-<digits>`), a
+     planning task id (`T-<digits>`, `TEST-<digits>`) and a review-finding id
+     (`P1-1`). Each was a second name for something that already had one,
+     and each drifted the way numbers do. Change folders are exempt, as
      they are from `check_doc_numbering.py`: a change may describe what it
      replaced.
 
@@ -62,19 +63,24 @@ RENAMED_LINE = re.compile(r"^\s*-\s*(FROM|TO):\s*`?\s*###\s+Requirement:\s*(.+?)
 #: then at most one line break followed by a comment leader.
 _BREAK = r"[ \t]*\n[ \t]*(?:#:?|//[/!]?|\*|>)?[ \t]*"
 _SEP = r"[ \t]*(?:" + _BREAK + r")?"
-#: A quoted title, in any of the quotes the tree uses. A single-quoted title
-#: starts with a capital and stops at its first apostrophe, and a quote with a
-#: letter on its outer side is an apostrophe, so `agent's` neither opens nor
-#: closes one.
+#: A quoted title, in any of the quotes the tree uses. Every title starts with
+#: a letter, so a quote followed by anything else — `"; y = "` between two
+#: string literals — opens none. A single-quoted title starts with a capital
+#: and stops at its first apostrophe, and a quote with a letter on its outer
+#: side is an apostrophe, so `agent's` neither opens nor closes one.
 _TITLE = (
-    r"(?:\\?\"(?P<dq>[^\"\\]{1,300})\\?\""
-    r"|“(?P<cq>[^”]{1,300})”"
+    r"(?:\\?\"(?P<dq>[A-Za-z][^\"\\]{0,299})\\?\""
+    r"|“(?P<cq>[A-Za-z][^”]{0,299})”"
     r"|(?<![A-Za-z])'(?P<sq>[A-Z][^'\n]{0,200})'(?![A-Za-z]))"
 )
-#: `spec <cap>[/<child>]['s][,] "<Title>"`, a line break allowed after `spec`.
+#: `spec <cap>[/<child>]['s][,|:] "<Title>"`, a line break allowed after `spec`;
+#: the capability may sit in backticks or bold (`` `cap` ``, `**cap**`). The
+#: title's quote must follow whitespace: in `"spec chat"; y = "a b"` the quote
+#: after the capability closes a string literal, it does not open a title.
 PLAIN_CITATION = re.compile(
     r"\b[Ss]pecs?(?:[ \t]+|" + _BREAK + r")"
-    r"(?P<cap>[a-z][a-z0-9-]*(?:/[a-z][a-z0-9-]*)?)(?![\w/-])(?:'s)?,?" + _SEP + _TITLE
+    r"(?P<wrap>`|\*\*|)(?P<cap>[a-z][a-z0-9-]*(?:/[a-z][a-z0-9-]*)?)(?![\w/-])(?P=wrap)"
+    r"(?:'s)?[,:]?(?=[ \t\n])" + _SEP + _TITLE
 )
 #: `[<text>](<path>/openspec/specs/<cap>/spec.md) "<Title>"`.
 LINK_CITATION = re.compile(
@@ -100,6 +106,14 @@ RETIRED_IDS: tuple[tuple[re.Pattern[str], str], ...] = (
     (
         re.compile(r"\bSPEC-\d+"),
         "specs are named, not numbered — name the capability instead",
+    ),
+    (
+        re.compile(r"\b(?:T|TEST)-\d{3,4}\b"),
+        "task ids are retired — cite the requirement's title, or drop the id",
+    ),
+    (
+        re.compile(r"\bP[0-3]-\d{1,2}\b"),
+        "review-finding ids are retired — cite the requirement's title, or drop the id",
     ),
 )
 

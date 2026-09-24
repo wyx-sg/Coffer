@@ -1,4 +1,4 @@
-// e2e/mcp/specs/mutating_upstream.spec.ts  (T-077)
+// e2e/mcp/specs/mutating_upstream.spec.ts
 //
 // Use fake_mcp_server.py's "mutating" scenario to flip the tool list
 // mid-session.  After one tools/call triggers the list_changed notification,

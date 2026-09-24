@@ -72,7 +72,7 @@ async def curation_may_run(engine_config: InternalEngineConfigService, sync: Syn
     if not (await engine_config.get()).curate_runs_on(sync.registry.machine_id):
         return False
     # And not while a round is waiting on the user — a held confirmation or
-    # an unresolved conflict (spec vault-sync "Never overlap a tidy pass and a
+    # an unresolved conflict (spec vault-sync "Never overlap a curation pass and a
     # round"). A confirmation is answered on the promise that re-deriving the
     # round yields the diff the user was shown, and a conflict is a choice
     # between two versions; a rewriter that moves documents underneath either

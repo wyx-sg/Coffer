@@ -64,7 +64,7 @@ class HistoryMixin:
         Either a confirmation held at the deletion guard, or a conflict — which
         holds nothing (the vault is untouched and the pointer has not moved), so
         only the recorded rounds say it is there. An unattended rewriter consults
-        this before it runs (spec vault-sync "Never overlap a tidy pass and a
+        this before it runs (spec vault-sync "Never overlap a curation pass and a
         round"): a rewrite piled onto an unresolved divergence changes the very
         documents the user is about to decide between.
 

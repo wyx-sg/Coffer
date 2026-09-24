@@ -1,4 +1,5 @@
-"""Integration tests for orphan_sweep module (T-051)."""
+"""Integration tests for orphan_sweep (spec daemon "Own and reap the daemon's
+long-lived children")."""
 
 from __future__ import annotations
 

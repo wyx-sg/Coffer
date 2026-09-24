@@ -10,7 +10,7 @@ Invocation handlers (tools/call, resources/read, prompts/get) live in
 composition — aggregate, plus built-ins, minus what tiering hides — lives in
 `gateway_tools_list`.
 
-Server-initiated request plumbing (T-061 sampling, T-062 roots) lives in
+Server-initiated request plumbing (sampling and roots) lives in
 `gateway_server_requests` for the same reason. The pure envelope-parsing
 helpers (launch-cwd extraction, upstream-notification method/params parsing)
 live in `gateway_parsing`. The per-agent scope filter for the
@@ -154,9 +154,9 @@ class MCPGatewaySession:
         # client caches tools/list and no list_changed can arrive from a server
         # that never connected, so the tracker retries them itself.
         self._degraded = DegradedTracker(discovery, self._send_downstream)
-        # Downstream client capabilities declared during initialize (T-061/T-062).
+        # Downstream client capabilities declared during initialize.
         self._client_capabilities: dict[str, Any] = {}
-        # Server-initiated request bookkeeping (T-061 sampling, T-062 roots).
+        # Server-initiated request bookkeeping (sampling and roots).
         self._server_request_registry = ServerRequestRegistry()
         # Pre-build SDK callbacks so we can register them on connection objects.
         callbacks = build_session_callbacks(
@@ -180,7 +180,7 @@ class MCPGatewaySession:
     ) -> dict[str, Any]:
         """Respond to the client's initialize request with coffer's server capabilities."""
         # Record the downstream client's capabilities so we can gate server-initiated
-        # requests appropriately (T-061: sampling capability check).
+        # requests appropriately (the sampling capability check).
         self._client_capabilities = params.get("capabilities", {}) or {}
         self._session_cwd = _extract_cwd(params)
         # The identity scope is evaluated against: the shim's self-reported
@@ -247,7 +247,7 @@ class MCPGatewaySession:
             return task
 
         conn.on_notification(_spawn_notification_task)
-        # T-061/T-062: register callbacks so the SDK can handle server-initiated
+        # Register callbacks so the SDK can handle server-initiated
         # sampling and roots requests from this upstream.
         conn.on_sampling_request(self._sampling_callback)
         conn.on_roots_request(self._list_roots_callback)

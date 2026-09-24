@@ -1,4 +1,4 @@
-"""TEST-018 — in-process unit tests for `coffer daemon` start/stop/status.
+"""In-process unit tests for `coffer daemon` start/stop/status.
 
 The existing test_daemon_lifecycle.py drives daemon_cmd through subprocess +
 real-process side effects, which never exercises the in-process function
@@ -102,7 +102,8 @@ def test_daemon_start_respawns_over_stale_daemon_json(
 ) -> None:
     """A stale daemon.json (file present but no daemon answering) must NOT be
     treated as 'already running': start() must spawn a fresh daemon. This is
-    the P1-1 fix — `daemon start` keys off live_daemon(), not file presence."""
+    spec daemon "Manage the daemon from the command line" — `daemon start`
+    keys off live_daemon(), not file presence."""
     home = _setup_home(tmp_path, monkeypatch)
     daemon_json = home / ".coffer" / "daemon.json"
     daemon_json.parent.mkdir(parents=True, exist_ok=True)
@@ -207,7 +208,7 @@ def test_daemon_stop_sends_sigterm_and_succeeds(
 def test_daemon_stop_does_not_sigterm_an_unverified_pid(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """P1-1: if the recorded pid is NOT a coffer daemon (PID recycled onto an
+    """If the recorded pid is NOT a coffer daemon (PID recycled onto an
     unrelated process), stop() must NOT SIGTERM it. It cleans up the stale
     daemon.json instead and reports the mismatch."""
     home = _setup_home(tmp_path, monkeypatch)

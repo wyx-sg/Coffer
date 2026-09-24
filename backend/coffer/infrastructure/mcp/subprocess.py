@@ -67,7 +67,7 @@ class StdioUpstreamConnection:
         self._exit_stack: AsyncExitStack | None = None
         self._session: ClientSession | None = None
         self._notification_callback: NotificationCallback | None = None
-        # Server-initiated request callbacks (T-061/T-062)
+        # Server-initiated request callbacks (sampling and roots)
         self._sampling_callback: SamplingFnT | None = None
         self._list_roots_callback: ListRootsFnT | None = None
         # PID-file paths written by record_spawn; cleared on close.
@@ -119,7 +119,7 @@ class StdioUpstreamConnection:
 
         self._exit_stack = AsyncExitStack()
         try:
-            # --- PID snapshot (T-051, hardened by the process-wide lock) ---
+            # --- PID snapshot (hardened by the process-wide lock) ---
             # Snapshot this daemon's children BEFORE letting the SDK spawn the
             # upstream subprocess, then diff after stdio_client opens to learn
             # the new child PID(s). This diff-snapshot approach is used because
@@ -268,7 +268,7 @@ class StdioUpstreamConnection:
                 await asyncio.wait_for(self._exit_stack.aclose(), timeout=10.0)
             self._exit_stack = None
 
-        # Belt-and-braces against leaked upstream processes (T-051). aclose()
+        # Belt-and-braces against leaked upstream processes. aclose()
         # normally tears down the upstream subprocess tree, but when a
         # long-running upstream write hangs the SDK teardown the child survives
         # and accumulates across reconnects. reap_pidfile authoritatively kills

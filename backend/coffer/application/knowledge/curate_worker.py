@@ -87,7 +87,7 @@ class CurationWorker:
         self._interval_s = interval_s
         self._read_interval = read_interval
         # The vault-write lock a converge round also takes (spec vault-sync
-        # "Never overlap a tidy pass and a round"): a pass and a round both rewrite vault
+        # "Never overlap a curation pass and a round"): a pass and a round both rewrite vault
         # content, and an export taken half-way through a rewrite is a torn
         # snapshot that git reads as a deliberate change. None on a vault with
         # no sync wired, where there is nothing to interleave with.

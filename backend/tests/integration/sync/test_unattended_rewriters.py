@@ -3,13 +3,8 @@
 The knowledge **curation** pass rewrites a collection's documents with no diff
 anyone approved. That is defensible on one machine and not on several, and the
 spec states three normative rules to make it safe (requirements
-"Run an unattended rewriter on one owner machine", "Never overlap a tidy pass
-and a round" and "Let an edit beat a tidy deletion"):
-
-The acceptance scenario titles below still read "tidy" because that is what
-`openspec/specs/vault-sync/spec.md` calls the pass; curation is what replaced it, and
-the rules and the fields are the same three. The titles are matched as strings
-by `scripts/audit_acceptance.py`, so they follow the spec rather than the code.
+"Run an unattended rewriter on one owner machine", "Never overlap a curation pass
+and a round" and "Let an edit beat a curation deletion"):
 
 1. **An unattended rewriter of synced content names one owner machine**, and is
    a no-op everywhere else — otherwise two machines fold the same material into
@@ -52,7 +47,7 @@ async def pair(tmp_path: pathlib.Path):
 
 
 @pytest.mark.acceptance(
-    spec="vault-sync", scenario="a tidy pass and a converge round do not overlap"
+    spec="vault-sync", scenario="a curation pass and a converge round do not overlap"
 )
 async def test_a_round_waits_for_whatever_else_is_rewriting_the_vault(pair) -> None:
     """The lock is the mechanism, and it is the service's, not the round's.
@@ -89,7 +84,7 @@ async def test_a_round_waits_for_whatever_else_is_rewriting_the_vault(pair) -> N
     assert "knowledge/notes/merged.md" in await a.remote_paths()
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="tidy runs only on its owner machine")
+@pytest.mark.acceptance(spec="vault-sync", scenario="curation runs only on its owner machine")
 async def test_curation_names_one_owner_machine_and_is_a_no_op_elsewhere(pair) -> None:
     """The gate must answer True on exactly one machine of a converged pair.
 
@@ -173,7 +168,7 @@ async def test_an_orphaned_owner_is_a_reportable_fault_and_can_be_taken_over(pai
     assert taken.curate_runs_on(a.machine_id) is True
 
 
-@pytest.mark.acceptance(spec="vault-sync", scenario="an edit outlives a tidy deletion")
+@pytest.mark.acceptance(spec="vault-sync", scenario="an edit outlives a curation deletion")
 async def test_an_edit_beats_a_curation_deletion_without_reporting_a_conflict(pair) -> None:
     a, b = pair
     a.write_knowledge("notes", "merged-away", "the original note\n")
@@ -211,7 +206,7 @@ class _EngineConfig:
 async def test_curation_is_skipped_while_a_conflict_or_confirmation_is_outstanding(
     pair,
 ) -> None:
-    """Spec vault-sync "Never overlap a tidy pass and a round": a pass MUST be
+    """Spec vault-sync "Never overlap a curation pass and a round": a pass MUST be
     skipped while a conflict *or* a pending confirmation is outstanding.
 
     The conflict half is the one that was missing. A conflicted round leaves no

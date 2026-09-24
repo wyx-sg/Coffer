@@ -1,4 +1,4 @@
-"""Tests for T-060: progress passthrough behavioral test.
+"""Progress passthrough behavioral test.
 
 Verifies that a long-running upstream tool that streams notifications/progress
 events completes successfully and the client observes those progress events.
