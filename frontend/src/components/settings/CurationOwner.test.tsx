@@ -20,14 +20,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 const mutate = vi.fn();
 
-vi.mock("@/lib/hooks/useMachines", () => ({ useMachines: vi.fn() }));
-vi.mock("@/lib/hooks/useSync", () => ({ useSyncStatus: vi.fn() }));
+vi.mock("@/lib/hooks/useMachines", () => ({ useMachines: vi.fn(), useThisMachineId: vi.fn() }));
 vi.mock("@/lib/hooks/useInternalEngine", () => ({
   useSetCurationOwner: () => ({ mutate, isPending: false, error: null }),
 }));
 
-const { useMachines } = await import("@/lib/hooks/useMachines");
-const { useSyncStatus } = await import("@/lib/hooks/useSync");
+const { useMachines, useThisMachineId } = await import("@/lib/hooks/useMachines");
 
 /** This machine, and the other machine in the registry. Ids and names never
  *  coincide, so an assertion about the NAME cannot be satisfied by the id. */
@@ -61,10 +59,10 @@ function stub({
     data: pending ? undefined : { machines },
     isPending: pending,
   } as unknown as ReturnType<typeof useMachines>);
-  vi.mocked(useSyncStatus).mockReturnValue({
-    data: pending ? undefined : { machine_id: selfId },
+  vi.mocked(useThisMachineId).mockReturnValue({
+    machineId: pending ? null : selfId,
     isPending: pending,
-  } as unknown as ReturnType<typeof useSyncStatus>);
+  });
 }
 
 function show(ownerId: string | null) {

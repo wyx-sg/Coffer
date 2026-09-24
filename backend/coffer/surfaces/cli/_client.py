@@ -185,6 +185,15 @@ def render_http_error(
             envelope = err.response.json().get("error")
         message = envelope.get("message") if envelope else str(err)
         code_name = envelope.get("code") if envelope else None
+        if code_name == "FEATURE_DISABLED":
+            # One line, and it says what to run (spec experimental-features
+            # "Close every surface of a switched-off feature").
+            key = ((envelope or {}).get("details") or {}).get("feature", "?")
+            typer.echo(
+                f"{key} is switched off on this machine — run: coffer daemon features enable {key}",
+                err=True,
+            )
+            return ExitCode.GENERIC
         typer.echo(message, err=True)
 
         status = err.response.status_code

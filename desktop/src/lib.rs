@@ -18,6 +18,7 @@
 //   * `spawn`     — start a daemon detached from the app
 //   * `restart`   — the pure restart policy: rate limit, stop-then-start
 //   * `daemon`    — the IPC commands and the detect-or-spawn policy
+//   * `sync_gate` — whether the sync surfaces exist (`vault_sync` feature)
 //   * `tray`      — system tray icon + close-to-tray logic
 
 mod daemon;
@@ -30,6 +31,7 @@ mod restart;
 mod sidecar;
 mod spawn;
 mod sync_alert;
+mod sync_gate;
 mod sync_presentation;
 mod sync_watch;
 mod tray;
@@ -100,10 +102,11 @@ pub fn run() {
                     }
                 }
             });
-            let sync_item = tray::build_tray(app.handle())?;
-            // The watcher renames that entry, badges the tray and the Dock, and
-            // raises one notification per transition into an attention state.
-            sync_watch::start(app.handle().clone(), sync_item);
+            let tray_menu = tray::build_tray(app.handle())?;
+            // The watcher puts the Sync entry into the menu while `vault_sync`
+            // is on, renames it, badges the tray and the Dock, and raises one
+            // notification per transition into an attention state.
+            sync_watch::start(app.handle().clone(), tray_menu);
             Ok(())
         })
         .on_window_event(|window, event| {

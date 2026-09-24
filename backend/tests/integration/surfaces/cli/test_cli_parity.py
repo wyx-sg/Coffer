@@ -47,8 +47,13 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         # "it was not running" is most often diagnosed from.
         "idle",
         "service",
+        # The experimental features (spec experimental-features "Switch a
+        # feature from the settings page or the command line"), mirrored by the
+        # card on Settings → General.
+        "features",
     },
     "daemon port": {"show", "set", "clear"},
+    "daemon features": {"list", "enable", "disable"},
     "daemon idle": {"show", "set", "never"},
     "daemon service": {"install", "uninstall", "status"},
     # `coffer open` is the one group with NO subcommands: it is a single action

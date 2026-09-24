@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-14
 **Deciders**: Yuxing Wu (project owner)
-**Related**: [`docs/principles.md`](../principles.md) (Principle I's user-owned sync remote exception); [The Desktop Shell Returns](desktop-shell-over-a-shared-frontend.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), [Vault Sync](vault-sync.md), [Knowledge Is Plain Files](knowledge-is-plain-files.md), [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md); specs [mcp-gateway](../../openspec/specs/mcp-gateway/spec.md), [channels](../../openspec/specs/channels/spec.md), [vault-sync](../../openspec/specs/vault-sync/spec.md), [web-ui](../../openspec/specs/web-ui/spec.md), [knowledge](../../openspec/specs/knowledge/spec.md), [memory](../../openspec/specs/memory/spec.md)
+**Related**: [`docs/principles.md`](../principles.md) (Principle I's user-owned sync remote exception); [The Desktop Shell Returns](desktop-shell-over-a-shared-frontend.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), [Vault Sync](vault-sync.md), [Knowledge Is Plain Files](knowledge-is-plain-files.md), [Aggregate Agent Memory](aggregate-agent-memory-never-write-it.md), [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md) (amends this ADR); specs [mcp-gateway](../../openspec/specs/mcp-gateway/spec.md), [channels](../../openspec/specs/channels/spec.md), [vault-sync](../../openspec/specs/vault-sync/spec.md), [web-ui](../../openspec/specs/web-ui/spec.md), [knowledge](../../openspec/specs/knowledge/spec.md), [memory](../../openspec/specs/memory/spec.md)
 
 ## Context
 
@@ -111,6 +111,14 @@ carries a half-removed capability that the next reader has to reconstruct.
   by the first of those principles amendments for the same reason: a flagged-off path still has to be
   maintained and tested, and a capability nobody can reach is not product
   scope, it is dead code with a switch.
+  *Amended 2026-09-24 by
+  [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md):*
+  vault sync, knowledge and memory are now experimental features, off by
+  default on a `stable` build and on in every other. That is not removal and
+  does not reopen this decision: all three stay settled product scope, stay
+  reachable from Settings → General and `coffer daemon features`, and stay
+  maintained and tested on `main`. The switch decides who sees them by
+  default, not whether they exist.
 - **Declare semantic retrieval permanently out.** Rejected: the 2026-09-14
   removal recorded a real loss — a query in the caller's own words no longer
   finds what a distinctive phrase would — and the reason it lost was the

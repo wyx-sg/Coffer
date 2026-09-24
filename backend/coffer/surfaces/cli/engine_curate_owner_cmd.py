@@ -49,13 +49,28 @@ def _machine_facts(client: Any, *, verbose: bool) -> tuple[str, list[str]]:
     on the engine's own payload, and deliberately: a settings read must not go
     near git.
     """
-    r = client.get("/sync/status")
+    # This machine from the daemon's own status: machine identity is not
+    # sync's, and the sync surface is closed while ``vault_sync`` is off.
+    r = client.get("/daemon/status")
     _cli_client.check(r, verbose=verbose)
-    this_machine = str(r.json()["machine_id"])
+    this_machine = str(r.json().get("machine_id") or "")
     r = client.get("/sync/machines")
+    if _feature_disabled(r):
+        # No registry to read while sync is off, which the rule reads as a
+        # single-machine vault — the same answer an empty registry gives.
+        return this_machine, []
     _cli_client.check(r, verbose=verbose)
     known = [str(m["machine_id"]) for m in (r.json().get("machines") or [])]
     return this_machine, known
+
+
+def _feature_disabled(r: Any) -> bool:
+    if r.status_code != 404:
+        return False
+    try:
+        return bool(r.json()["error"]["code"] == "FEATURE_DISABLED")
+    except Exception:
+        return False
 
 
 def _owner_state(owner: str | None, this_machine: str, known: list[str]) -> CurationOwner:

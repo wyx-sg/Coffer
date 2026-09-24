@@ -40,10 +40,14 @@ import {
  * page, so answering a hold there clears the banner through the same
  * invalidation rather than on the next tick.
  */
-export function useSyncStatus() {
+export function useSyncStatus(enabled = true) {
   return useQuery({
     queryKey: syncStatusKey,
     queryFn: () => syncApi.status(),
+    // False from the sidebar's attention dot while `vault_sync` is switched
+    // off: that caller is on every page, and polling a gated route there
+    // would be a 404 a minute for nothing.
+    enabled,
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });

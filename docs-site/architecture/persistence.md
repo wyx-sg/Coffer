@@ -142,7 +142,7 @@ The full set of files Coffer writes:
 | ----------------------------- | ------------------------------------------------------ |
 | `~/.coffer/coffer.db`         | SQLite database (WAL mode) — the system of record for control-plane state |
 | `~/.coffer/daemon.json`       | Runtime state: daemon PID, port and bearer token (mode `0600`). Unlinked on exit. |
-| `~/.coffer/daemon-config.json` | Configuration read before the database opens: the fixed port, the idle-shutdown window, this machine's name and cached id (mode `0600`). Written by `coffer daemon port`, `coffer daemon idle`, the Settings residency panel, `coffer sync machine rename`, and the daemon itself (the cached machine id). |
+| `~/.coffer/daemon-config.json` | Configuration read before the database opens: the fixed port, the idle-shutdown window, this machine's name and cached id, and this machine's experimental-feature switches (`features`, machine-local so they never sync) (mode `0600`). Written by `coffer daemon port`, `coffer daemon idle`, the Settings residency panel, `coffer sync machine rename`, and the daemon itself (the cached machine id, and every feature switch — `coffer daemon features` and the Settings card go through it so the switch takes effect at once). |
 | `~/.coffer/master.key`        | Credential-store master key (file-default; opt-in keychain). See [Security](/architecture/security). |
 | `~/.coffer/machine-id`        | This machine's stable identity for sync                |
 | `~/.coffer/knowledge/`        | One directory per collection of markdown files — the knowledge layer itself, one tree of documents each, plus a hidden `.inbox/` of new material waiting for curation to merge it |

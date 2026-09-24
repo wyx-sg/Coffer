@@ -249,3 +249,32 @@ async def test_help_lists_save(env: ChannelEnv) -> None:
 
     [help_text] = [text for _chat, text in adapter.sent]
     assert "/save" in help_text
+
+
+@pytest.mark.acceptance(
+    spec="experimental-features", scenario="a channel save while knowledge is off saves nothing"
+)
+async def test_a_save_while_knowledge_is_off_says_so_and_saves_nothing(
+    env: ChannelEnv, tmp_path: Any
+) -> None:
+    """Both entrances: the typed `/save <name>` and a collection card tapped
+    after the switch. Neither reaches the ingest service, and the reply names
+    the switch rather than a missing collection."""
+    from coffer.application.channel.document_save import KNOWLEDGE_OFF
+
+    _resource, adapter = await env.paired_channel(sender_id="owner-1")
+    env.collections.names = ["research"]
+    knowledge = {"on": False}
+    env.processor._commands._knowledge_enabled = lambda: knowledge["on"]
+
+    await _send_document(env, adapter, _attach(tmp_path), sender_id="owner-1")
+    await env.processor.on_message(inbound("tg", "owner", "/save research", sender_id="owner-1"))
+
+    assert env.ingest.calls == []
+    assert adapter.texts()[-1] == KNOWLEDGE_OFF
+    assert "knowledge" in KNOWLEDGE_OFF.lower() and "switched off" in KNOWLEDGE_OFF
+
+    # The pending document is kept: switched back on, the same /save saves it.
+    knowledge["on"] = True
+    await env.processor.on_message(inbound("tg", "owner", "/save research", sender_id="owner-1"))
+    assert len(env.ingest.calls) == 1

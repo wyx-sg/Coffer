@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 import coffer
 from coffer.application.audit_service import AuditService
+from coffer.application.features import FeatureService
 from coffer.application.log_reader import (
     at_least,
     matches_level,
@@ -34,6 +35,10 @@ from coffer.surfaces.http.dependencies import (
     get_actor,
     get_audit_service,
     get_resource_service_optional,
+)
+from coffer.surfaces.http.feature_dependencies import (
+    build_feature_service,
+    get_feature_service_optional,
 )
 from coffer.surfaces.http.mcp.dependencies import get_health_repo_optional
 from coffer.surfaces.http.schemas import (
@@ -92,8 +97,12 @@ async def get_status(
     # root has published either singleton.
     resource_service: ResourceService | None = Depends(get_resource_service_optional),  # noqa: B008
     health_repo: MCPServerHealthRepo | None = Depends(get_health_repo_optional),  # noqa: B008
+    features: FeatureService | None = Depends(get_feature_service_optional),  # noqa: B008
 ) -> DaemonStatusOut:
     phase = get_daemon_phase()
+    # An app assembled without create_app has published no service; the
+    # status still reports what this build and this machine would decide.
+    features = features or build_feature_service()
     upstream_summary: UpstreamSummary | None = None
     if resource_service is not None:
         try:
@@ -145,6 +154,10 @@ async def get_status(
         started_at=_STARTED_AT,
         port=_PORT,
         upstream_summary=upstream_summary,
+        channel=features.channel,
+        features=features.enabled_map(),
+        machine_id=daemon_config.read_cached_machine_id(),
+        machine_name=daemon_config.read_machine_name(),
     )
 
 

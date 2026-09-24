@@ -25,6 +25,32 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
+#: What `/save` answers while the knowledge feature is switched off (spec
+#: experimental-features "Withdraw what a switched-off feature put in front of
+#: agents"). The pending document is kept, so a `/save` after switching it on
+#: still has something to save.
+KNOWLEDGE_OFF = (
+    "⚠️ Knowledge is switched off on this machine, so nothing was saved. "
+    "Switch it on in Coffer's Settings → General, or run: "
+    "coffer daemon features enable knowledge"
+)
+
+
+async def _refuse_if_knowledge_off(
+    commands: ChannelCommands,
+    binding: ChannelBinding,
+    peer: ChannelPeer,
+    send: SafeSend,
+    *,
+    chat_kind: str,
+    thread_id: str,
+) -> bool:
+    """Answer the notice and return True when knowledge is switched off."""
+    if commands._knowledge_enabled():
+        return False
+    await send(binding, peer.chat_id, KNOWLEDGE_OFF, chat_kind=chat_kind, thread_id=thread_id)
+    return True
+
 
 async def cmd_save(
     commands: ChannelCommands,
@@ -53,6 +79,10 @@ async def cmd_save(
     # this module cannot import it back at load time.
     from coffer.application.channel.card_delivery import deliver_card
 
+    if await _refuse_if_knowledge_off(
+        commands, binding, peer, send, chat_kind=chat_kind, thread_id=thread_id
+    ):
+        return
     pending = session.pending_document
     if pending is None:
         await send(
@@ -136,7 +166,13 @@ async def apply_save_collection(
     same bytes against the same failure is never useful, so the owner is told
     to send the document again rather than the card silently offering another
     collection for a file that will fail there too.
+
+    A card tapped after knowledge was switched off saves nothing either.
     """
+    if await _refuse_if_knowledge_off(
+        commands, binding, peer, send, chat_kind=chat_kind, thread_id=thread_id
+    ):
+        return
     pending = session.pending_document
     if pending is None:
         await send(

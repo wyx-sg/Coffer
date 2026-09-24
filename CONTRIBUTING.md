@@ -26,6 +26,17 @@ make dev                           # backend (:8000) + frontend (:5173)
 5. Open a PR; title must be Conventional Commits.
 6. Wait for review + merge. Branch is squash-merged.
 
+### Work that is not ready yet
+
+There is one line of development: everything lands on `main`, and a release is a
+tagged `main`. Work that is not ready for users still lands there, behind an
+entry in the experimental-feature registry (`coffer.domain.features`), so it is
+off on a `stable` build and on in every `dev` build, including your own. Gate
+every surface it adds through that entry — never a prefix or a group name of
+its own. Once the feature is ready, remove it from the registry and delete its
+gates in the same PR. Do not keep a long-lived side branch for it (see
+[Experimental Features Instead of a Release Branch](./docs/decisions/experimental-features-instead-of-a-release-branch.md)).
+
 ## Testing
 
 Four tiers, see [`.agents/testing.md`](./.agents/testing.md):

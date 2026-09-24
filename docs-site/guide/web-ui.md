@@ -28,6 +28,9 @@ SYSTEM
   Settings
 ```
 
+Knowledge, Memory and Sync appear only while their
+[experimental feature](/guide/experimental-features) is switched on.
+
 RESOURCES carries one entry per resource kind that has a list UI — six entries for six
 such kinds. (The seventh, `agent`, is in AGENTS, because agents are the thing that *uses*
 the vault rather than living in it.)
@@ -414,7 +417,8 @@ travels — is in the [Sync guide](/guide/sync).
 ### Settings
 
 Open `/settings` for five tabs: **General** (rows per page, the external editor files open
-in, and the daemon's residency), **Coffer's model**, **Data** (retention policy, manual
+in, the daemon's residency, and the [experimental features](/guide/experimental-features)
+switched on for this machine), **Coffer's model**, **Data** (retention policy, manual
 prune), **Security** (master-key storage) and **About** (version, license, source). Sync is
 not among them — it is a top-level page of its own under SYSTEM.
 

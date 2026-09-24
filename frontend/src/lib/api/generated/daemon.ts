@@ -21,6 +21,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/daemon/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every experimental feature, its state, and what decided it
+         * @description The registry of experimental features (spec experimental-features
+         *     "Declare the experimental features in one registry") and, for each,
+         *     whether it is on and which layer decided it: a `COFFER_FEATURES` pin,
+         *     this machine's setting in `~/.coffer/daemon-config.json`, or the
+         *     build channel's default (spec experimental-features "Decide a
+         *     feature's state per machine").
+         */
+        get: operations["listDaemonFeatures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/daemon/features/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Switch one experimental feature on or off on this machine
+         * @description Takes effect at once, with no restart, and is written to
+         *     `~/.coffer/daemon-config.json` before the response (spec
+         *     experimental-features "Switch a feature from the settings page or the
+         *     command line"). A key the registry does not declare answers 404
+         *     `FEATURE_UNKNOWN`; a feature pinned by `COFFER_FEATURES` answers 409
+         *     `FEATURE_PINNED` and keeps its state.
+         */
+        put: operations["setDaemonFeature"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/daemon/residency": {
         parameters: {
             query?: never;
@@ -244,7 +294,7 @@ export interface components {
     schemas: {
         ErrorResponse: {
             error: {
-                /** @description Stable machine-readable code. `HOST_NOT_LOOPBACK` (421) and `FS_PATH_NOT_OPENABLE` (400) are this spec's own. */
+                /** @description Stable machine-readable code. `HOST_NOT_LOOPBACK` (421) and `FS_PATH_NOT_OPENABLE` (400) are this spec's own, and so are the experimental-feature codes: `FEATURE_UNKNOWN` (404), `FEATURE_PINNED` (409), and `FEATURE_DISABLED` (404) — the answer of every route of a switched-off feature, with `details.feature` naming its key. */
                 code: string;
                 message: string;
                 details?: {
@@ -278,6 +328,36 @@ export interface components {
             started_at: string;
             port: number;
             upstream_summary?: components["schemas"]["UpstreamSummary"];
+            /**
+             * @description The build's release channel — `stable` for a tagged release, `dev` for every other build (spec experimental-features "Stamp every build with a release channel").
+             * @enum {string}
+             */
+            channel: "stable" | "dev";
+            /** @description Every experimental feature, keyed by its key, and whether it is on. The web sidebar and the desktop shell read their switches here. */
+            features: {
+                [key: string]: boolean;
+            };
+            /** @description This machine's id, as `daemon-config.json` caches it once the daemon has derived it from the host at start; null only before that. Published here because machine identity is not sync's — a channel is bound to a machine whether or not `vault_sync` is on, and `/api/v1/sync` is closed while it is off. */
+            machine_id: string | null;
+            /** @description This machine's display label — the hostname unless the user set one. */
+            machine_name: string;
+        };
+        FeatureOut: {
+            key: string;
+            enabled: boolean;
+            /**
+             * @description Which layer decided the state: a `COFFER_FEATURES` pin, this machine's setting, or the channel default.
+             * @enum {string}
+             */
+            source: "pin" | "setting" | "channel";
+        };
+        FeatureListOut: {
+            /** @enum {string} */
+            channel: "stable" | "dev";
+            features: components["schemas"]["FeatureOut"][];
+        };
+        FeatureSetIn: {
+            enabled: boolean;
         };
         /** @description A count of registered MCP upstreams, when the daemon has finished wiring them up. Null while it is still starting — the probe must answer either way. */
         UpstreamSummary: {
@@ -377,6 +457,24 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
+        /** @description No such thing — `FEATURE_UNKNOWN` for a key the registry does not declare */
+        NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description Refused by the current state — `FEATURE_PINNED` for a pinned feature */
+        Conflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
     };
     parameters: never;
     requestBodies: never;
@@ -403,6 +501,57 @@ export interface operations {
                     "application/json": components["schemas"]["DaemonStatusOut"];
                 };
             };
+        };
+    };
+    listDaemonFeatures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureListOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    setDaemonFeature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeatureSetIn"];
+            };
+        };
+        responses: {
+            /** @description The feature after the switch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationError"];
         };
     };
     getDaemonResidency: {

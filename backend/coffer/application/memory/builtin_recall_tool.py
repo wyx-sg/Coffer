@@ -85,5 +85,6 @@ def register_recall_tool(registry: BuiltinToolRegistry, *, recall_service: Recal
                 "required": ["query"],
             },
             handler=recall,
+            feature="memory",
         )
     )

@@ -94,7 +94,12 @@ participant in convergence rather than a surface of its own.
 
 ### Requirement: Keep the sidebar to its eleven entries
 The sidebar's entries MUST be exactly these, in these three groups and at these
-routes — eleven today, and no twelfth:
+routes — eleven today, and no twelfth. An entry whose
+experimental feature is switched off (spec
+[experimental-features](../experimental-features/spec.md) "Close every surface of a switched-off feature")
+MUST be left out — Knowledge for `knowledge`, Memory for `memory`, Sync for
+`vault_sync` — and MUST appear on the next render after the feature is switched
+on:
 
 ```
  AGENTS
@@ -115,11 +120,17 @@ routes — eleven today, and no twelfth:
 
 #### Scenario: cold-start renders authenticated content
 - **GIVEN** the user has never opened Coffer (localStorage is empty, no daemon.json in user HOME yet)
+- **AND** every experimental feature is switched on
 - **AND** `coffer daemon start` is running (so daemon.json exists in user HOME)
 - **WHEN** they navigate to `http://localhost:5173/` in a real browser
 - **THEN** the index redirects to `/agents` and the page renders the sidebar + main content area within 2 seconds
 - **AND** the main content shows the Agents welcome view (no generic error card)
 - **AND** the sidebar lists exactly Coffer's operational surfaces — Agents, Chat; MCP servers, Skills, Knowledge, Memory, Model providers, Channels; Activity, Sync, Settings — grouped under "Agents", "Resources", and "System" headings, with no other entry
+
+#### Scenario: a switched-off feature leaves the sidebar
+- **GIVEN** `knowledge` and `vault_sync` switched off
+- **WHEN** the app shell is rendered
+- **THEN** the sidebar lists Agents, Chat; MCP servers, Skills, Memory, Model providers, Channels; Activity, Settings — with no Knowledge and no Sync entry
 
 ### Requirement: Hold one Resources entry per listed resource kind
 RESOURCES MUST hold exactly one entry per resource kind that has a list UI —
@@ -540,7 +551,8 @@ rather than resolving to a "page not found" view.
 
 ### Requirement: Organise Settings into five tabs
 Settings MUST carry exactly five tabs, in this order, grouped by what they
-manage rather than by how Coffer is built — **General** (display preferences, and when the daemon runs),
+manage rather than by how Coffer is built — **General** (display preferences, when the daemon runs, and which
+experimental features are switched on),
 **Coffer's model** (at `/settings/engine` — Coffer's own machinery: the internal
 LLM connection and model its own passes run on, the speech-to-text connection
 and model voice messages are transcribed on, and the switch and interval of each

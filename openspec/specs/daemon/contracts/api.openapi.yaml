@@ -61,6 +61,59 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/DaemonStatusOut" }
 
+  /daemon/features:
+    get:
+      tags: [daemon]
+      operationId: listDaemonFeatures
+      summary: Every experimental feature, its state, and what decided it
+      description: |
+        The registry of experimental features (spec experimental-features
+        "Declare the experimental features in one registry") and, for each,
+        whether it is on and which layer decided it: a `COFFER_FEATURES` pin,
+        this machine's setting in `~/.coffer/daemon-config.json`, or the
+        build channel's default (spec experimental-features "Decide a
+        feature's state per machine").
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FeatureListOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /daemon/features/{key}:
+    put:
+      tags: [daemon]
+      operationId: setDaemonFeature
+      summary: Switch one experimental feature on or off on this machine
+      description: |
+        Takes effect at once, with no restart, and is written to
+        `~/.coffer/daemon-config.json` before the response (spec
+        experimental-features "Switch a feature from the settings page or the
+        command line"). A key the registry does not declare answers 404
+        `FEATURE_UNKNOWN`; a feature pinned by `COFFER_FEATURES` answers 409
+        `FEATURE_PINNED` and keeps its state.
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeatureSetIn" }
+      responses:
+        "200":
+          description: The feature after the switch
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FeatureOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
   /daemon/residency:
     get:
       tags: [daemon]
@@ -321,6 +374,16 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
+    NotFound:
+      description: No such thing — `FEATURE_UNKNOWN` for a key the registry does not declare
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    Conflict:
+      description: Refused by the current state — `FEATURE_PINNED` for a pinned feature
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   schemas:
     ErrorResponse:
@@ -335,7 +398,11 @@ components:
               type: string
               description: >-
                 Stable machine-readable code. `HOST_NOT_LOOPBACK` (421) and
-                `FS_PATH_NOT_OPENABLE` (400) are this spec's own.
+                `FS_PATH_NOT_OPENABLE` (400) are this spec's own, and so are
+                the experimental-feature codes: `FEATURE_UNKNOWN` (404),
+                `FEATURE_PINNED` (409), and `FEATURE_DISABLED` (404) — the
+                answer of every route of a switched-off feature, with
+                `details.feature` naming its key.
             message: { type: string }
             details: { type: object, additionalProperties: true }
 
@@ -370,7 +437,16 @@ components:
 
     DaemonStatusOut:
       type: object
-      required: [status, version, executable, started_at, port]
+      required:
+        - status
+        - version
+        - executable
+        - started_at
+        - port
+        - channel
+        - features
+        - machine_id
+        - machine_name
       properties:
         status:
           type: string
@@ -392,6 +468,62 @@ components:
         port: { type: integer }
         upstream_summary:
           $ref: "#/components/schemas/UpstreamSummary"
+        channel:
+          type: string
+          enum: [stable, dev]
+          description: >-
+            The build's release channel — `stable` for a tagged release, `dev`
+            for every other build (spec experimental-features "Stamp every
+            build with a release channel").
+        features:
+          type: object
+          additionalProperties: { type: boolean }
+          description: >-
+            Every experimental feature, keyed by its key, and whether it is on.
+            The web sidebar and the desktop shell read their switches here.
+        machine_id:
+          type: string
+          nullable: true
+          description: >-
+            This machine's id, as `daemon-config.json` caches it once the daemon
+            has derived it from the host at start; null only before that.
+            Published here because machine identity is not sync's — a channel
+            is bound to a machine whether or not `vault_sync` is on, and
+            `/api/v1/sync` is closed while it is off.
+        machine_name:
+          type: string
+          description: >-
+            This machine's display label — the hostname unless the user set one.
+
+    FeatureOut:
+      type: object
+      required: [key, enabled, source]
+      properties:
+        key: { type: string }
+        enabled: { type: boolean }
+        source:
+          type: string
+          enum: [pin, setting, channel]
+          description: >-
+            Which layer decided the state: a `COFFER_FEATURES` pin, this
+            machine's setting, or the channel default.
+
+    FeatureListOut:
+      type: object
+      required: [channel, features]
+      properties:
+        channel:
+          type: string
+          enum: [stable, dev]
+        features:
+          type: array
+          items: { $ref: "#/components/schemas/FeatureOut" }
+
+    FeatureSetIn:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
 
     UpstreamSummary:
       type: object

@@ -17,9 +17,33 @@ import { translateApiError } from "@/lib/api/errors";
 import { syncApi } from "@/lib/api/sync";
 import { useToast } from "@/components/ui/toast";
 import { resourcesKey, scopeKey, skillsKey, syncKey, syncMachinesKey } from "@/lib/api/queryKeys";
+import { useDaemonStatus } from "@/lib/hooks/useDaemon";
+import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 
+/**
+ * The registry, or an empty one while `vault_sync` is switched off (spec
+ * experimental-features "Close every surface of a switched-off feature"): the
+ * sync routes answer 404 then, and an empty registry is exactly what a vault
+ * that never converged has — `machineOptions` still offers this machine, and
+ * `bindingState` never reads an empty registry as a fault.
+ */
 export function useMachines() {
-  return useQuery({ queryKey: syncMachinesKey, queryFn: () => syncApi.machines() });
+  const syncOn = useFeatureEnabled("vault_sync");
+  return useQuery({
+    queryKey: [...syncMachinesKey, syncOn === true],
+    queryFn: () => (syncOn ? syncApi.machines() : Promise.resolve({ machines: [] })),
+    enabled: syncOn !== undefined,
+  });
+}
+
+/**
+ * This machine's id, from the daemon status rather than the sync status: a
+ * channel is bound to a machine whether or not sync is switched on, so the
+ * identity cannot live behind the sync gate.
+ */
+export function useThisMachineId() {
+  const status = useDaemonStatus();
+  return { machineId: status.data?.machine_id ?? null, isPending: status.isPending };
 }
 
 /**

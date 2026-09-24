@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from collections.abc import Callable
 
 from coffer.application.sync.ports import SyncRemoteRepoPort
 from coffer.application.sync.service import ConvergeService
@@ -37,6 +38,10 @@ DEFAULT_START_DELAY_S = 30.0
 DEFAULT_INTERVAL_S = 15 * 60.0
 
 
+def _always_on() -> bool:
+    return True
+
+
 class ConvergeWorker:
     def __init__(
         self,
@@ -45,8 +50,13 @@ class ConvergeWorker:
         *,
         start_delay_s: float = DEFAULT_START_DELAY_S,
         default_interval_s: float = DEFAULT_INTERVAL_S,
+        is_enabled: Callable[[], bool] = _always_on,
     ) -> None:
         self._service = service
+        # Whether the vault_sync feature is on right now, read at the top of
+        # every round (spec experimental-features "Close every surface of a
+        # switched-off feature"): a round while it is off is skipped, not run.
+        self._is_enabled = is_enabled
         self._remotes = remotes
         self._start_delay = start_delay_s
         self._default_interval = default_interval_s
@@ -69,13 +79,20 @@ class ConvergeWorker:
         await self._sleep(self._start_delay)
         while not self._stop.is_set():
             interval = await self._interval()
-            try:
-                run = await self._service.run_once()
-            except Exception:  # the loop outlives any single round
-                _logger.exception("converge: round raised")
-            else:
-                self._log(run)
+            await self.tick()
             await self._sleep(interval)
+
+    async def tick(self) -> None:
+        """One scheduled round, or nothing while the feature is switched off."""
+        if not self._is_enabled():
+            _logger.debug("converge: skipped, vault_sync is switched off")
+            return
+        try:
+            run = await self._service.run_once()
+        except Exception:  # the loop outlives any single round
+            _logger.exception("converge: round raised")
+        else:
+            self._log(run)
 
     async def _interval(self) -> float:
         remote = await self._remotes.get()

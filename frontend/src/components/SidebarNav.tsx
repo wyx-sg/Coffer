@@ -19,12 +19,17 @@ import {
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSyncAttention } from "@/lib/hooks/useSyncAttention";
+import { useFeatureEnabled, type FeatureKey } from "@/lib/hooks/useFeatures";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
   to: string;
   labelKey: string;
   icon: LucideIcon;
+  /** The experimental feature the entry belongs to; while it is not switched
+   *  on the entry is left out (spec experimental-features "Close every surface
+   *  of a switched-off feature"). */
+  feature?: FeatureKey;
 }
 
 interface NavGroup {
@@ -73,8 +78,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: "/mcp-servers", labelKey: "nav.mcpServers", icon: Server },
       { to: "/skills", labelKey: "nav.skills", icon: Sparkles },
-      { to: "/knowledge", labelKey: "nav.knowledge", icon: Library },
-      { to: "/memory", labelKey: "nav.memory", icon: Brain },
+      { to: "/knowledge", labelKey: "nav.knowledge", icon: Library, feature: "knowledge" },
+      { to: "/memory", labelKey: "nav.memory", icon: Brain, feature: "memory" },
       { to: "/model-providers", labelKey: "nav.modelProviders", icon: Boxes },
       { to: "/channels", labelKey: "nav.channels", icon: Radio },
     ],
@@ -83,7 +88,7 @@ const NAV_GROUPS: NavGroup[] = [
     labelKey: "nav.group.system",
     items: [
       { to: "/activity", labelKey: "nav.activity", icon: ScrollText },
-      { to: "/sync", labelKey: "nav.sync", icon: RefreshCw },
+      { to: "/sync", labelKey: "nav.sync", icon: RefreshCw, feature: "vault_sync" },
       { to: "/settings", labelKey: "nav.settings", icon: SettingsIcon },
     ],
   },
@@ -140,6 +145,14 @@ export function SidebarNav({ collapsed }: { collapsed: boolean }) {
   // surface that says so is the page a user has no reason to open. The dot is
   // what gets them there; going there is what clears it.
   const syncNeedsAttention = useSyncAttention();
+  // An entry whose feature is off — or not known yet — is left out rather
+  // than flashed in and taken away again: on a stable build the three are off.
+  const on: Record<FeatureKey, boolean> = {
+    vault_sync: useFeatureEnabled("vault_sync") === true,
+    knowledge: useFeatureEnabled("knowledge") === true,
+    memory: useFeatureEnabled("memory") === true,
+  };
+  const shown = (item: NavItem) => item.feature === undefined || on[item.feature];
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-3 text-sm">
       {NAV_GROUPS.map((group, i) => (
@@ -151,7 +164,7 @@ export function SidebarNav({ collapsed }: { collapsed: boolean }) {
           ) : (
             <div className="nav-group-label">{t(group.labelKey)}</div>
           )}
-          {group.items.map((item) => (
+          {group.items.filter(shown).map((item) => (
             <NavRow
               key={item.to}
               item={item}

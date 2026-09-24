@@ -5,11 +5,14 @@ import { GeneralSettings } from "./GeneralSettings";
 import { DataTable, type Column } from "@/components/DataTable";
 import { acceptance } from "@/test/acceptance";
 
-// The daemon-residency card is General's second card and has its own tests
-// (and its own daemon route); stub it so these stay about the preferences
+// The daemon-residency and experimental-features cards have their own tests
+// (and their own daemon routes); stub them so these stay about the preferences
 // this page actually owns, and need no query client.
 vi.mock("./DaemonResidencySettings", () => ({
   DaemonResidencySettings: () => null,
+}));
+vi.mock("./ExperimentalFeaturesSettings", () => ({
+  ExperimentalFeaturesSettings: () => null,
 }));
 
 // The picker lists editors the daemon detected as installed; stub that out so

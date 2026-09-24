@@ -37,11 +37,16 @@ import { translateApiError } from "@/lib/api/errors";
 import type { AgentOut } from "@/lib/api/agents";
 import type { NativeMemoryStore } from "@/lib/api/agentNativeMemory";
 import { useAgentNativeMemory } from "@/lib/hooks/useAgentNativeMemory";
+import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 
 export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const native = useAgentNativeMemory(agent.uid);
+  // The first two sections are Coffer's memory layer — a pointer to its page
+  // and this agent's delivery hook — and leave with it while `memory` is
+  // switched off. The agent's own stores are the agent's, and stay.
+  const memoryOn = useFeatureEnabled("memory") === true;
 
   const columns: Column<NativeMemoryStore>[] = [
     {
@@ -74,19 +79,21 @@ export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
     <div className="space-y-3">
       {/* The "managed by Coffer" pointer, in its own box: what the agent reaches
           THROUGH the gateway lives on the Memory page, not here. */}
-      <Card className="p-4">
-        <CofferGatewayRow
-          agentUid={agent.uid}
-          title={t("agents.cofferManaged")}
-          hint={t("agents.memoryTab.accessViaGateway")}
-          buttonLabel={t("agents.memoryTab.openMemoryPage")}
-          onOpen={() => navigate("/memory")}
-          notInstalledHint={t("agents.memoryTab.notInstalled")}
-        />
-      </Card>
+      {memoryOn ? (
+        <Card className="p-4">
+          <CofferGatewayRow
+            agentUid={agent.uid}
+            title={t("agents.cofferManaged")}
+            hint={t("agents.memoryTab.accessViaGateway")}
+            buttonLabel={t("agents.memoryTab.openMemoryPage")}
+            onOpen={() => navigate("/memory")}
+            notInstalledHint={t("agents.memoryTab.notInstalled")}
+          />
+        </Card>
+      ) : null}
 
       {/* Delivery: whether this agent's own session-start hook is installed. */}
-      <AgentMemoryDelivery agentUid={agent.uid} />
+      {memoryOn ? <AgentMemoryDelivery agentUid={agent.uid} /> : null}
 
       <Card className="space-y-3 p-4">
         <div className="space-y-1">

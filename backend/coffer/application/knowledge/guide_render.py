@@ -68,6 +68,15 @@ _LEAD = (
     "coffer__diagnose), and THIS developer's own knowledge"
 )
 
+#: The lead while the knowledge feature is switched off (spec
+#: experimental-features "Withdraw what a switched-off feature put in front of
+#: agents"): the manual still describes Coffer's tools, and names no knowledge.
+_LEAD_WITHOUT_KNOWLEDGE = (
+    "Coffer, this machine's local vault — how to use it. Covers its own tools "
+    "(coffer__search_tools, which finds upstream tools your tool list does not "
+    "show; coffer__recall; coffer__diagnose)"
+)
+
 _TAIL = (
     "Read it before asking the developer something they may already have written "
     "down, before concluding a capability is unavailable, and before assuming a "
@@ -105,8 +114,14 @@ def _subject(entry: CollectionEntry) -> str:
     return f"{entry.name} ({first})"
 
 
-def render_description(catalogue: Catalogue) -> str:
-    """The frontmatter description: the one part always in a model's context."""
+def render_description(catalogue: Catalogue | None) -> str:
+    """The frontmatter description: the one part always in a model's context.
+
+    ``None`` is the knowledge feature switched off: no subjects, and a lead
+    that does not promise any knowledge.
+    """
+    if catalogue is None:
+        return f"{_LEAD_WITHOUT_KNOWLEDGE}. {_TAIL}"[:MAX_DESCRIPTION_CHARS]
     subjects = [
         _subject(entry) for entry, _ in catalogue if entry.document_count or entry.pending_count
     ]
@@ -166,13 +181,16 @@ def render_catalogue(root: str, catalogue: Catalogue) -> str:
     return "\n".join(lines).rstrip()
 
 
-def render_body(root: str, catalogue: Catalogue) -> str:
-    """The skill body: the manual, then the catalogue."""
+def render_body(root: str, catalogue: Catalogue | None) -> str:
+    """The skill body: the manual, then the catalogue — or the manual alone
+    while the knowledge feature is switched off (``None``)."""
     static = _static_body().replace(_ROOT_PLACEHOLDER, root).rstrip()
+    if catalogue is None:
+        return f"{static}\n"
     return f"{static}\n\n{render_catalogue(root, catalogue)}\n"
 
 
-def render_frontmatter(catalogue: Catalogue) -> str:
+def render_frontmatter(catalogue: Catalogue | None) -> str:
     """The `---`-delimited YAML block, with the description safely quoted.
 
     Emitted through a YAML dumper rather than an f-string, because the
@@ -197,8 +215,11 @@ def render_frontmatter(catalogue: Catalogue) -> str:
     )
 
 
-def render(root: str, catalogue: Catalogue) -> str:
-    """The complete `SKILL.md`, as every agent receives it."""
+def render(root: str, catalogue: Catalogue | None) -> str:
+    """The complete `SKILL.md`, as every agent receives it.
+
+    ``catalogue`` is ``None`` while the knowledge feature is switched off: the
+    skill is then rendered without its knowledge catalogue."""
     return f"---\n{render_frontmatter(catalogue)}---\n\n{render_body(root, catalogue)}"
 
 

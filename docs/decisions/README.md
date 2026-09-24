@@ -117,5 +117,6 @@ section that future readers most often want — don't skip it.>
 | [`per-agent-resource-scope`](per-agent-resource-scope.md) | Per-Agent Resource Scope | Accepted |
 | [`budget-driven-tool-tiering`](budget-driven-tool-tiering.md) | Budget-Driven Tool Tiering at the Gateway | Accepted |
 | [`seatalk-websocket-inbound`](seatalk-websocket-inbound.md) | SeaTalk Inbound Over WebSocket, With an Operator-Supplied SDK | Accepted |
-| [`product-scope-is-settled`](product-scope-is-settled.md) | Product Scope Is Settled | Accepted |
+| [`product-scope-is-settled`](product-scope-is-settled.md) | Product Scope Is Settled | Accepted — amended by [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md) |
 | [`coffer-ships-its-own-skill`](coffer-ships-its-own-skill.md) | Coffer Ships Its Own Manual as a Skill Resource | Accepted |
+| [`experimental-features-instead-of-a-release-branch`](experimental-features-instead-of-a-release-branch.md) | Experimental Features Instead of a Release Branch | Accepted — amends [Product Scope Is Settled](product-scope-is-settled.md): an experimental feature is off by default on `stable`, not removed |

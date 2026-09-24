@@ -423,6 +423,34 @@
       "idleHours_other": "{{count}} 小时",
       "idleNever": "永不停止"
     },
+    "features": {
+      "title": "实验功能",
+      "subtitle": "仍在设计中的功能。关闭后在这台机器上的所有入口都会隐藏，已有数据全部保留。当前构建属于 {{channel}} 渠道。",
+      "on": "开",
+      "off": "关",
+      "channel": {
+        "stable": "stable",
+        "dev": "dev"
+      },
+      "source": {
+        "pin": "由 COFFER_FEATURES 固定——请在启动守护进程的地方修改",
+        "setting": "在这台机器上设置",
+        "channel": "{{channel}} 渠道的默认值"
+      },
+      "names": {
+        "vault_sync": "同步",
+        "knowledge": "知识",
+        "memory": "记忆"
+      },
+      "descriptions": {
+        "vault_sync": "把这个 vault 与你自有的 git 远端双向同步。",
+        "knowledge": "~/.coffer/knowledge/ 下供 agent 阅读的文档集合。",
+        "memory": "从各 agent 自己的存储聚合来的记忆，以及投递它的 hook。"
+      },
+      "offTitle": "{{name}}已关闭",
+      "offBody": "{{name}}是实验功能，在这台机器上已关闭。它保存的内容都没有删除——到 设置 → 通用 中开启即可。",
+      "offCta": "打开 设置 → 通用"
+    },
     "retention": {
       "title": "数据保留",
       "keepForever": "永久保留",
@@ -684,6 +712,9 @@
     "DAEMON_NOT_READY": "Coffer 守护进程仍在启动，请稍后重试。",
     "DB_SCHEMA_TOO_NEW": "该数据库由更新版本的 Coffer 写入，请升级后再打开。",
     "ENGINE_UNAVAILABLE": "检索引擎不可用",
+    "FEATURE_DISABLED": "此功能在这台机器上已关闭——请到 设置 → 通用 中开启",
+    "FEATURE_PINNED": "此功能已被 COFFER_FEATURES 固定，无法在这里切换",
+    "FEATURE_UNKNOWN": "未知的实验功能",
     "FORBIDDEN": "无权限执行此操作。",
     "FS_PATH_NOT_BROWSABLE": "该路径无法浏览",
     "FS_PATH_NOT_OPENABLE": "该路径在这台机器上无法打开",

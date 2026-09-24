@@ -22,11 +22,17 @@ def _this_machine_id(client: Any, *, verbose: bool) -> str:
 
     The CLI cannot derive it: the id is read from the host by the daemon and
     cached beside the database, and a CLI deriving its own would be a second
-    answer to an identity question that must have exactly one.
+    answer to an identity question that must have exactly one. Read off the
+    daemon's status rather than the sync surface: a channel is bound to a
+    machine whether or not ``vault_sync`` is switched on.
     """
-    r = client.get("/sync/status")
+    r = client.get("/daemon/status")
     _cli_client.check(r, verbose=verbose)
-    return str(r.json()["machine_id"])
+    machine_id = r.json().get("machine_id")
+    if not machine_id:
+        typer.echo("the daemon has not derived this machine's id yet — try again", err=True)
+        raise typer.Exit(1)
+    return str(machine_id)
 
 
 @app.command("list")

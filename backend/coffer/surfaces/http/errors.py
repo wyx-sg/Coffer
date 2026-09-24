@@ -159,6 +159,11 @@ _STATUS: dict[str, int] = {
     # that asked should already have been showing the running one
     # (``application.upkeep_runs``).
     "UPKEEP_ALREADY_RUNNING": 409,
+    # experimental features (spec experimental-features). A switched-off
+    # feature's route is NOT FOUND, like a route this build never had.
+    "FEATURE_UNKNOWN": 404,
+    "FEATURE_PINNED": 409,
+    "FEATURE_DISABLED": 404,
 }
 
 # Map raw HTTP status codes back to envelope codes when a surface raises a
@@ -214,6 +219,11 @@ def _details_for(exc: errors.CofferError) -> dict[str, Any]:
     hint = getattr(exc, "hint", None)
     if hint:
         out["hint"] = hint
+    # The feature errors name their key, so a client (the CLI's one-line
+    # "switch it on" message, the web notice) need not parse the message.
+    feature = getattr(exc, "feature", None)
+    if feature:
+        out["feature"] = feature
     return out
 
 

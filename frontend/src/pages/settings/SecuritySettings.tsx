@@ -21,6 +21,7 @@ import {
   useCredentialSettings,
   useUpdateCredentialSettings,
 } from "@/lib/hooks/useCredentialSettings";
+import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 
 type Storage = "file" | "keychain";
 
@@ -28,6 +29,9 @@ export function SecuritySettings() {
   const { t } = useTranslation();
   const { data, isPending, error } = useCredentialSettings();
   const update = useUpdateCredentialSettings();
+  // The link points at the Sync page, which is not there while `vault_sync`
+  // is switched off.
+  const syncOn = useFeatureEnabled("vault_sync") === true;
   // The storage the user asked to move to, while the confirmation is open.
   const [target, setTarget] = useState<Storage | null>(null);
 
@@ -82,11 +86,13 @@ export function SecuritySettings() {
           />
         </div>
 
-        <p className="text-sm">
-          <Link to="/sync" className="text-primary hover:underline">
-            {t("settings.security.masterKey.syncLink")}
-          </Link>
-        </p>
+        {syncOn ? (
+          <p className="text-sm">
+            <Link to="/sync" className="text-primary hover:underline">
+              {t("settings.security.masterKey.syncLink")}
+            </Link>
+          </p>
+        ) : null}
 
         {update.isError ? (
           <p className="text-sm text-destructive" role="alert">

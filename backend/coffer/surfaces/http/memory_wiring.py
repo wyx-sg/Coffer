@@ -46,11 +46,13 @@ from typing import TYPE_CHECKING
 from coffer.application.agent.service import AgentService
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.engine_ports import ModelSelectorPort
+from coffer.application.features import FeatureService
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.memory.aggregate import AgentSource
 from coffer.application.memory.aggregate_worker import AggregateWorker
 from coffer.application.memory.builtin_recall_tool import register_recall_tool
 from coffer.application.memory.delivery import DeliveryService
+from coffer.application.memory.delivery_switch import reconcile_delivery
 from coffer.application.memory.distil import DistilResult
 from coffer.application.memory.distil_worker import WORKER_ACTOR, DistilWorker
 from coffer.application.memory.kind import make_memory_kind
@@ -59,6 +61,7 @@ from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.internal_engine_config import AGGREGATE, DISTIL
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
+from coffer.infrastructure.daemon.feature_settings import DaemonConfigWithdrawnDelivery
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
 from coffer.surfaces.http.memory.dependencies import (
@@ -105,7 +108,9 @@ class MemoryWiring:
     distil: DistilRunner
 
 
-async def run_memory_delivery_boot_heal(delivery: DeliveryService) -> None:
+async def run_memory_delivery_boot_heal(
+    delivery: DeliveryService, features: FeatureService
+) -> None:
     """Boot hook: rewrite hooks whose command Coffer no longer writes.
 
     An installed hook is a string in somebody else's settings file, and the
@@ -114,11 +119,31 @@ async def run_memory_delivery_boot_heal(delivery: DeliveryService) -> None:
     fails at every session start. Repairing it needs no user, which is why it
     happens here rather than behind a button.
 
+    It follows the ``memory`` switch as well (spec experimental-features
+    "Withdraw what a switched-off feature put in front of agents"): with memory
+    off it makes sure no agent still carries the hook, with memory on it puts
+    back what an earlier switch took out before healing. The same reconcile
+    runs on every switch (:func:`follow_memory_switch`).
+
     Best-effort, like the sweeps it sits beside: whatever it finds is logged,
     and nothing here is allowed to fail boot.
     """
+    await _reconcile_delivery(delivery, enabled=features.is_enabled("memory"))
+
+
+def follow_memory_switch(delivery: DeliveryService, features: FeatureService) -> None:
+    """Re-run the delivery reconcile whenever ``memory`` is switched."""
+
+    async def _on_switch(key: str, enabled: bool) -> None:
+        if key == "memory":
+            await _reconcile_delivery(delivery, enabled=enabled)
+
+    features.subscribe(_on_switch)
+
+
+async def _reconcile_delivery(delivery: DeliveryService, *, enabled: bool) -> None:
     try:
-        notes = await delivery.heal_drift()
+        notes = await reconcile_delivery(delivery, DaemonConfigWithdrawnDelivery(), enabled=enabled)
     except Exception:
         logger.exception("memory_delivery_boot_heal.failed")
         return
@@ -179,11 +204,17 @@ def wire_memory_kind(
 
 
 def _upkeep_enabled(
-    engine_config: InternalEngineConfigService, pass_name: str
+    engine_config: InternalEngineConfigService, pass_name: str, features: FeatureService
 ) -> Callable[[], Awaitable[bool]]:
-    """Reads the pass's switch, every pass. See ``start_aggregate_worker``."""
+    """Reads the pass's switch, every pass. See ``start_aggregate_worker``.
+
+    The ``memory`` feature comes first: while it is off the pass skips its
+    round whatever its own switch says (spec experimental-features "Close every
+    surface of a switched-off feature")."""
 
     async def _enabled() -> bool:
+        if not features.is_enabled("memory"):
+            return False
         return (await engine_config.get()).upkeep(pass_name).enabled
 
     return _enabled
@@ -202,7 +233,7 @@ def _upkeep_interval(
 
 
 def start_aggregate_worker(
-    service: MemoryService, engine_config: InternalEngineConfigService
+    service: MemoryService, engine_config: InternalEngineConfigService, features: FeatureService
 ) -> asyncio.Task[None]:
     """Start the aggregation pass — a catch-up on boot, then on a timer.
 
@@ -222,7 +253,7 @@ def start_aggregate_worker(
     """
     worker = AggregateWorker(
         aggregate=service.aggregate,
-        is_enabled=_upkeep_enabled(engine_config, AGGREGATE),
+        is_enabled=_upkeep_enabled(engine_config, AGGREGATE, features),
         read_interval=_upkeep_interval(engine_config, AGGREGATE),
     )
     return asyncio.create_task(worker.run_forever())
@@ -242,6 +273,7 @@ def start_distil_worker(
     distil: DistilRunner,
     resource_svc: ResourceService,
     engine_config: InternalEngineConfigService,
+    features: FeatureService,
 ) -> asyncio.Task[None]:
     """Start the distil sweep — on by default, because the tree it rewrites is
     disposable ("Keep the memory tree derived and local": delete it and
@@ -270,7 +302,7 @@ def start_distil_worker(
     worker = DistilWorker(
         distil=_scheduled,
         list_partitions=_list_partitions,
-        is_enabled=_upkeep_enabled(engine_config, DISTIL),
+        is_enabled=_upkeep_enabled(engine_config, DISTIL, features),
         read_interval=_upkeep_interval(engine_config, DISTIL),
     )
     return asyncio.create_task(worker.run_forever())

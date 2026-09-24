@@ -71,7 +71,7 @@ flowchart TD
 | SQLite (`~/.coffer/coffer.db`) | Persistent store                                 | Control-plane state: resource registrations, capability preferences, audit log, retention policies, and secrets as Fernet ciphertext in the `credentials` table. WAL mode, single writer.                                                                                                                             |
 | `master.key` / OS Keychain     | Master-key store                                 | The single Fernet master key. Default: a `0600` `~/.coffer/master.key` file beside the DB; OS keychain is an opt-in. Secrets are decrypted with it and materialized into the upstream env / headers at spawn time.                                                                                                    |
 | `~/.coffer/daemon.json`        | Discovery file (mode 0600)                       | PID + port + token. Runtime state: written by the daemon on startup, unlinked on exit, read by the shim, the CLI and the desktop shell to locate a running daemon. |
-| `~/.coffer/daemon-config.json` | Pre-database settings file (mode 0600)           | The Coffer configuration that cannot live in SQLite, because it is read before the database is opened and before migrations have created a table to read it from: the fixed port, the idle-shutdown window, this machine's name and its cached id. Configuration — goes *in*, and survives shutdown. Written by `coffer daemon port`, `coffer daemon idle`, the Settings residency panel, `coffer sync machine rename`, and the daemon itself (the cached machine id). |                                                                                                                                                                                                              |
+| `~/.coffer/daemon-config.json` | Pre-database settings file (mode 0600)           | The Coffer configuration that cannot live in SQLite, because it is read before the database is opened and before migrations have created a table to read it from: the fixed port, the idle-shutdown window, this machine's name and its cached id — plus this machine's experimental-feature switches (`features`), which live here so they never sync. Configuration — goes *in*, and survives shutdown. Written by `coffer daemon port`, `coffer daemon idle`, the Settings residency panel, `coffer sync machine rename`, the daemon itself (the cached machine id), and the daemon on behalf of `coffer daemon features` and the Settings experimental-features card. |                                                                                                                                                                                                              |
 
 ## Authentication model
 
@@ -84,7 +84,7 @@ Every persistent artifact lives in one directory:
 ```
 ~/.coffer/
 ├── daemon.json          # runtime state: PID + port + token (0600); unlinked on exit
-├── daemon-config.json   # configuration read BEFORE the DB opens: port, idle window, machine name + id (0600)
+├── daemon-config.json   # configuration read BEFORE the DB opens: port, idle window, machine name + id, feature switches (0600)
 ├── coffer.db            # SQLite: control-plane state (no knowledge, no index)
 ├── master.key           # Fernet master key (0600; keychain opt-in moves it out)
 ├── machine-id           # this machine's stable identity for sync

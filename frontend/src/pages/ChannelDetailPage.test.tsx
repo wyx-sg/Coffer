@@ -37,8 +37,7 @@ vi.mock("@/lib/hooks/useChannels", () => ({
 // The machine card joins the binding against the registry and this machine's
 // id. Both are stubbed: the page renders without a QueryClientProvider, and
 // the four binding states are set up directly rather than through a daemon.
-vi.mock("@/lib/hooks/useMachines", () => ({ useMachines: vi.fn() }));
-vi.mock("@/lib/hooks/useSync", () => ({ useSyncStatus: vi.fn() }));
+vi.mock("@/lib/hooks/useMachines", () => ({ useMachines: vi.fn(), useThisMachineId: vi.fn() }));
 // The header carries ScopeControl now. On a detail page it fetches its own
 // scope, so the hooks behind it are stubbed rather than served by a real client.
 // `channel` declares scope, so the control's panel offers all three states.
@@ -65,8 +64,7 @@ const {
   useRebindChannel,
   useNotifyChannel,
 } = await import("@/lib/hooks/useChannels");
-const { useMachines } = await import("@/lib/hooks/useMachines");
-const { useSyncStatus } = await import("@/lib/hooks/useSync");
+const { useMachines, useThisMachineId } = await import("@/lib/hooks/useMachines");
 const { useEnableResource, useDisableResource, useDeleteResource } =
   await import("@/lib/hooks/useResourceMutations");
 
@@ -174,9 +172,7 @@ beforeEach(() => {
   vi.mocked(useRebindChannel).mockReturnValue(
     rebind as unknown as ReturnType<typeof useRebindChannel>,
   );
-  vi.mocked(useSyncStatus).mockReturnValue({
-    data: { machine_id: HERE },
-  } as unknown as ReturnType<typeof useSyncStatus>);
+  vi.mocked(useThisMachineId).mockReturnValue({ machineId: HERE, isPending: false });
   stubMachines();
   vi.mocked(useEnableResource).mockReturnValue(
     enable as unknown as ReturnType<typeof useEnableResource>,

@@ -37,10 +37,10 @@ import {
 import { AgentSelect } from "@/components/agents/AgentSelect";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useThisMachineId } from "@/lib/hooks/useMachines";
 import { useToast } from "@/components/ui/toast";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { translateApiError } from "@/lib/api/errors";
-import { useSyncStatus } from "@/lib/hooks/useSync";
 import type { ChannelDelivery, ChannelType } from "@/lib/api/channels";
 import { useCreateChannel } from "@/lib/hooks/useChannels";
 import { EMPTY_SECRET_DRAFT, validateAddChannel } from "./addChannel";
@@ -64,8 +64,7 @@ export function AddChannelDialog({
   const navigate = useNavigate();
   // This machine's id, which the new channel is bound to. It is read here and
   // passed into the planner rather than fetched there, so planning stays pure.
-  const { data: syncStatus } = useSyncStatus();
-  const machineId = syncStatus?.machine_id ?? null;
+  const { machineId } = useThisMachineId();
   // The agents this vault has, and the one the new channel will drive. The
   // form opens on the first of them rather than on nothing: a channel bound to
   // nobody never answers, so "none" is not a state the form may produce.

@@ -242,6 +242,33 @@ class DeliveryService:
             notes.append(f"{resource.name}: delivery hook rewritten to the current command")
         return tuple(notes)
 
+    async def remove_everywhere(self, *, actor: str) -> tuple[list[str], list[str]]:
+        """Remove the hook from every agent that carries one. Returns the uids
+        it was removed from and a note per agent, removed or not.
+
+        Best-effort per agent, like ``heal_drift``: one malformed settings file
+        must not keep the hook in every other agent.
+        """
+        removed: list[str] = []
+        notes: list[str] = []
+        for resource in await self._agents.list():
+            try:
+                cfg = AgentConfig.model_validate(resource.config)
+            except Exception:
+                continue
+            if cfg.type not in _ADAPTERS:
+                continue
+            try:
+                if not (await self._status_for(resource, cfg)).installed:
+                    continue
+                await self.remove(resource.uid, actor=actor)
+            except Exception as exc:
+                notes.append(f"{resource.name}: could not remove the delivery hook ({exc!r})")
+                continue
+            removed.append(resource.uid)
+            notes.append(f"{resource.name}: delivery hook removed")
+        return removed, notes
+
     async def remove(self, agent_uid: str, *, actor: str) -> DeliveryStatus:
         """Remove Coffer's hook for one agent. A clean no-op — no write, no
         audit entry — when nothing is installed."""

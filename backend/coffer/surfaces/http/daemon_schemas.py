@@ -1,4 +1,4 @@
-"""Daemon schemas — status, residency, token rotation, log records.
+"""Daemon schemas — status, features, residency, token rotation, log records.
 
 Split out of ``schemas.py`` to keep every file under the project's size cap
 (see ``.agents/stack.md``). They travel together: everything here is part of
@@ -29,6 +29,39 @@ class DaemonStatusOut(BaseModel):
     started_at: datetime
     port: int
     upstream_summary: UpstreamSummary | None = None
+    #: The release channel this build carries (spec experimental-features
+    #: "Stamp every build with a release channel").
+    channel: Literal["stable", "dev"]
+    #: Every experimental feature, keyed by its key, and whether it is on. The
+    #: web sidebar and the desktop shell read their switches from here.
+    features: dict[str, bool]
+    #: This machine's id, as ``daemon-config.json`` caches it once the daemon
+    #: has derived it from the host at start; ``null`` only before that. Here
+    #: rather than only on the sync surface because machine identity is not
+    #: sync's: a channel is bound to a machine whether or not ``vault_sync``
+    #: is on, and ``/api/v1/sync`` is closed while it is off.
+    machine_id: str | None
+    #: This machine's display label (the hostname unless the user set one).
+    machine_name: str
+
+
+class FeatureOut(BaseModel):
+    """One experimental feature and the layer that decided its state."""
+
+    key: str
+    enabled: bool
+    #: ``pin`` — ``COFFER_FEATURES``; ``setting`` — this machine's choice in
+    #: ``daemon-config.json``; ``channel`` — the build's default.
+    source: Literal["pin", "setting", "channel"]
+
+
+class FeatureListOut(BaseModel):
+    channel: Literal["stable", "dev"]
+    features: list[FeatureOut]
+
+
+class FeatureSetIn(BaseModel):
+    enabled: bool
 
 
 class DaemonResidencyOut(BaseModel):

@@ -16,7 +16,7 @@ gets its own command exactly as the web gives it its own picker.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any, Protocol
 
 from coffer.application.channel import document_save, effort_switch, model_switch
@@ -88,6 +88,7 @@ class ChannelCommands:
         model_suggestions: ModelSuggestionPort,
         collections: CollectionCatalogPort,
         ingest: IngestPort,
+        knowledge_enabled: Callable[[], bool] = lambda: True,
     ) -> None:
         self._threads = threads
         self._conversations = conversations
@@ -96,6 +97,8 @@ class ChannelCommands:
         self._model_suggestions = model_suggestions
         self._collections = collections
         self._ingest = ingest
+        #: Whether the knowledge feature is on right now; `/save` reads it.
+        self._knowledge_enabled = knowledge_enabled
 
     async def handle(
         self,

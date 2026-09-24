@@ -296,3 +296,105 @@ def read_cached_machine_id() -> str | None:
 def write_cached_machine_id(machine_id: str) -> None:
     """Cache a derived id. Only ever called with a value the host produced."""
     _merge(machine_id=machine_id)
+
+
+# --- experimental features --------------------------------------------------
+#
+# A machine's own choice of which experimental features are on (spec
+# experimental-features "Decide a feature's state per machine"). It lives here
+# rather than in the database on purpose: the database syncs, and a switch in
+# it would switch every machine at once. Unlike the settings above, a change
+# takes effect at once — the running daemon's feature service holds the value
+# and writes it here before it answers.
+
+#: The environment variable that pins features for tests and CI,
+#: ``vault_sync=on,memory=off``. Read once, when the daemon starts.
+FEATURES_ENV = "COFFER_FEATURES"
+
+_ON = frozenset({"on", "true", "1"})
+_OFF = frozenset({"off", "false", "0"})
+
+
+def read_feature_settings() -> dict[str, bool]:
+    """The ``features`` object: every key whose value is a boolean.
+
+    Keys the registry does not know are returned too — deciding which keys
+    count is the feature service's job, and a key written by a newer build
+    must not be read as absent by an older one. A non-boolean value is warned
+    about and left out, which reads as "no setting".
+    """
+    payload = _read_raw()
+    raw = payload.get("features") if payload is not None else None
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        _logger.warning("daemon config features %r is not an object; ignoring it", raw)
+        return {}
+    out: dict[str, bool] = {}
+    for key, value in raw.items():
+        if isinstance(value, bool):
+            out[str(key)] = value
+        else:
+            _logger.warning("daemon config feature %s=%r is not a boolean; ignoring it", key, value)
+    return out
+
+
+def write_feature_setting(key: str, enabled: bool) -> None:
+    """Set one feature in the ``features`` object, keeping every other key in it."""
+    payload = _read_raw() or {}
+    current = payload.get("features")
+    features = dict(current) if isinstance(current, dict) else {}
+    features[key] = enabled
+    _merge(features=features)
+
+
+def parse_feature_pins(raw: str | None, known: tuple[str, ...]) -> dict[str, bool]:
+    """Parse ``COFFER_FEATURES`` (``key=on|off``, comma-separated).
+
+    An unknown key, or an entry that is not ``key=on|off``, is warned about and
+    skipped: a typo in a test's environment must not stop the daemon, and it
+    must not pin something the registry does not have.
+    """
+    pins: dict[str, bool] = {}
+    for entry in (raw or "").split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        key, sep, value = entry.partition("=")
+        key, value = key.strip(), value.strip().lower()
+        if not sep or value not in _ON | _OFF:
+            _logger.warning("%s entry %r is not key=on|off; ignoring it", FEATURES_ENV, entry)
+            continue
+        if key not in known:
+            _logger.warning("%s names unknown feature %r; ignoring it", FEATURES_ENV, key)
+            continue
+        pins[key] = value in _ON
+    return pins
+
+
+def read_feature_pins(known: tuple[str, ...]) -> dict[str, bool]:
+    """The pins in this process's environment."""
+    return parse_feature_pins(os.environ.get(FEATURES_ENV), known)
+
+
+def read_withdrawn_memory_delivery() -> list[str]:
+    """The agents a switched-off ``memory`` took the delivery hook out of.
+
+    Kept beside the switch that caused it, and machine-local for the same
+    reason: switching ``memory`` back on must put the hook back into exactly
+    these agents, and nowhere else (``application.memory.delivery_switch``).
+    """
+    payload = _read_raw()
+    raw = payload.get("memory_delivery_withdrawn") if payload is not None else None
+    if not isinstance(raw, list):
+        return []
+    return [str(uid) for uid in raw if isinstance(uid, str) and uid]
+
+
+def write_withdrawn_memory_delivery(uids: list[str]) -> None:
+    """Replace the withdrawn list. An empty list is not written into a config
+    that never held one."""
+    payload = _read_raw()
+    if not uids and (payload is None or "memory_delivery_withdrawn" not in payload):
+        return
+    _merge(memory_delivery_withdrawn=list(uids))

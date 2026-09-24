@@ -176,3 +176,18 @@ def test_the_parsed_description_is_what_the_cap_measures() -> None:
     quoted bytes on disk — quoting inflates the line and must not eat budget."""
     catalogue = [_collection("ops", "A " + "long " * 40 + "description.") for _ in range(40)]
     assert len(render_description(catalogue)) <= MAX_DESCRIPTION_CHARS
+
+
+def test_with_knowledge_switched_off_the_guide_carries_no_catalogue() -> None:
+    """``None`` is the knowledge feature switched off (spec
+    experimental-features): the manual stays, the catalogue and every
+    collection subject go, and the description promises no knowledge."""
+    text = render("~/.coffer/knowledge", None)
+    assert f"name: {GUIDE_SKILL_NAME}" in text
+    assert "coffer__search_tools" in text
+    assert "## What is in this developer's knowledge" not in text
+    assert "No collections have been created yet" not in text
+    description = text.split("---")[1]
+    assert "knowledge" not in description
+    assert "coffer__write" not in description
+    assert render("~/.coffer/knowledge", None) == text

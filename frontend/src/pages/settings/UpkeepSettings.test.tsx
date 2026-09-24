@@ -46,9 +46,7 @@ vi.mock("@/lib/hooks/useMachines", () => ({
     },
     isPending: false,
   }),
-}));
-vi.mock("@/lib/hooks/useSync", () => ({
-  useSyncStatus: () => ({ data: { machine_id: "machine-here" }, isPending: false }),
+  useThisMachineId: () => ({ machineId: "machine-here", isPending: false }),
 }));
 
 const hooks = await import("@/lib/hooks/useInternalEngine");

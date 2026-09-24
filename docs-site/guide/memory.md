@@ -2,6 +2,10 @@
 
 Every agent you run keeps its own memory, and none of them can see any of the others'. Claude Code accrues one Markdown file per topic per project; Codex distils its rollouts into task groups and a profile. Both do it well, and neither leaves its own directory — so you end up teaching each agent what the other already learned this morning.
 
+::: tip Experimental feature
+This is an [experimental feature](/guide/experimental-features) (`memory`): off by default in a release build, on in a build from source. Switch it on under **Settings → General → Experimental features**, or with `coffer daemon features enable memory`.
+:::
+
 **Memory** is Coffer reading those native memories, distilling them into **notes of its own** — one topic per file, filed by repository — and handing each session the **index** of that set, with the absolute path to read the bodies the same way an agent reads its own memory: as files. The whole layer answers to one rule: **Coffer aggregates memory, it does not own it.** Nothing here writes into an agent's own memory files, ever. Everything under `~/.coffer/memory/` is *derived* — delete the directory, run the two passes, and an **equivalent** set comes back — which is exactly what makes it safe to rewrite aggressively.
 
 Equivalent, not identical. The product is a distillation rather than a copy, so a rebuild covers the same subjects from the same sources in wording that may differ. The part that *is* byte-reproducible is `.raw/`, which is what a note's provenance points at.

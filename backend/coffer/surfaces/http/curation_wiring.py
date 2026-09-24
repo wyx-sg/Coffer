@@ -20,6 +20,7 @@ import logging
 from collections.abc import Callable
 
 from coffer.application.engine_ports import ModelSelectorPort
+from coffer.application.features import FeatureService
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.knowledge.curate import CurationPass
 from coffer.application.knowledge.curate_worker import CurationWorker
@@ -87,6 +88,7 @@ def start_curation_worker(
     resources: ResourceService,
     engine_config: InternalEngineConfigService,
     sync: SyncWiring,
+    features: FeatureService,
 ) -> asyncio.Task[None]:
     """Start the interval sweep.
 
@@ -114,6 +116,11 @@ def start_curation_worker(
         return [r.uid for r in await resources.list(kind=KIND_KNOWLEDGE, enabled=True)]
 
     async def is_enabled() -> bool:
+        # The knowledge feature first: while it is off the sweep skips its
+        # round (spec experimental-features "Close every surface of a
+        # switched-off feature"), and resumes on the next one once it is on.
+        if not features.is_enabled("knowledge"):
+            return False
         return await curation_may_run(engine_config, sync)
 
     async def read_interval() -> int | None:
