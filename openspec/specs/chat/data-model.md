@@ -75,7 +75,7 @@ and discriminated by `type`:
 | `text` | `text` | |
 | `tool_use` | `tool_use_id`, `tool_name`, `tool_input` | Rendered as its own card. |
 | `tool_result` | `tool_use_id`, `tool_name`, `output`, `error` | Pairs with its `tool_use` by id. |
-| `attachment` | `path`, `mime`, `filename` | A **reference**: bytes stay on disk. `path` is never emitted to the wire — the API exposes `filename` and `mime` only. |
+| `attachment` | `path`, `mime`, `filename` | A **reference**: bytes stay on disk — under `~/.coffer/channel-media` for a channel's download, `~/.coffer/chat-media` for a Chat page upload. `path` is never emitted to the wire — the API exposes `filename` and `mime` only. |
 
 ### The attachment value object
 
@@ -84,6 +84,21 @@ What an adapter is handed for a turn is not the block but an `Attachment`
 at turn time (see "Re-materialise attachments from persisted history"). Audio is
 transcribed and documents are extracted before the adapter sees them; images and
 anything else survive as attachments for the adapter to materialise natively.
+
+### Chat page uploads — files, not a table
+
+A file attached on the Chat page is stored before its message is sent, as two
+flat files under `~/.coffer/chat-media` (see "Upload a file for a web message"):
+
+| File | Content |
+| --- | --- |
+| `<id><ext>` | The bytes. `<ext>` is the uploaded name's extension when it is short and plain, so a path-native agent still sees it. |
+| `<id>.json` | `filename` (display name), `mime`, `size`, `stored` (the bytes' file name). Written after the bytes. |
+
+`id` is 32 lowercase hex characters, opaque to the client, and the only thing a
+send names (`attachment_ids`). There is no table and no link from an upload to
+a conversation: a send turns each id into an `attachment` block, and the
+30-day age sweep removes both files whether or not they were sent.
 
 ## The event union — a wire contract, not a table
 

@@ -9,7 +9,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from coffer.domain.chat.attachment import MAX_ATTACHMENTS_PER_MESSAGE
 
 # ---------------------------------------------------------------------------
 # Shared
@@ -171,9 +173,33 @@ class MessageListOut(BaseModel):
 
 
 class SendMessageRequest(BaseModel):
-    """Body for POST /conversations/{id}/messages."""
+    """Body for POST /conversations/{id}/messages.
 
-    text: str = Field(min_length=1, max_length=32768)
+    ``attachment_ids`` name files uploaded through ``POST /attachments`` (spec
+    chat "Send uploaded files with a web message"). A message carries text, at
+    least one attachment, or both — never neither.
+    """
+
+    text: str = Field(default="", max_length=32768)
+    attachment_ids: list[str] = Field(default_factory=list, max_length=MAX_ATTACHMENTS_PER_MESSAGE)
+
+    @model_validator(mode="after")
+    def _text_or_attachments(self) -> SendMessageRequest:
+        if not self.text.strip() and not self.attachment_ids:
+            raise ValueError("a message needs text or at least one attachment")
+        return self
+
+
+class ChatAttachmentOut(BaseModel):
+    """Response for POST /attachments — one stored upload.
+
+    ``id`` is what a send names; the file's local path never leaves the daemon
+    (spec chat "Upload a file for a web message")."""
+
+    id: str
+    filename: str
+    mime: str
+    size: int
 
 
 class SendMessageAck(BaseModel):

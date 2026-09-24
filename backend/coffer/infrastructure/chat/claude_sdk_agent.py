@@ -27,7 +27,12 @@ from claude_agent_sdk import (
     ClaudeSDKClient,
 )
 
-from coffer.domain.chat.attachment import Attachment
+from coffer.domain.chat.attachment import (
+    INLINE_IMAGE_MAX_BYTES,
+    Attachment,
+    base64_size,
+    inline_image_mime,
+)
 from coffer.domain.chat.events import (
     STREAM_ENDED,
     STREAM_ENDED_MESSAGE,
@@ -115,31 +120,24 @@ def default_session_factory(options: ClaudeAgentOptions) -> ClaudeSdkSession:
     return ClaudeSdkClientSession(options)
 
 
-#: Image mime types the Messages API accepts as an inline ``image`` block. An
-#: image in any other format (e.g. a HEIC/bmp/tiff/svg sent as a document) would
-#: 400 the whole turn, so it falls through to the on-disk path pointer instead.
-_INLINE_IMAGE_MIMES = frozenset({"image/jpeg", "image/png", "image/gif", "image/webp"})
-
-
 def _attachment_block(att: Attachment) -> dict[str, Any]:
-    """Materialise one attachment into a stream-json content block.
-
-    A supported image becomes a native base64 ``image`` block Claude sees directly;
-    the base64 lives only in this outbound request, never the DB. Documents are
-    text-extracted upstream ("Extract document attachments to text") and never
-    reach here, so anything else (audio, a failed extraction, an odd image
-    format, …) becomes a text pointer to the on-disk path so the agent can open
-    it with its own tools. An unreadable file degrades to a text note.
-    """
+    """Materialise one attachment into a stream-json content block: an image the
+    API takes inline (``inline_image_mime``: sniffed type, under the ceiling) as
+    a base64 ``image`` block — the base64 lives only in this request — and
+    anything else as a text pointer to its on-disk path, which the agent opens
+    with its own tools. Documents were text-extracted upstream."""
+    path = pathlib.Path(att.path)
     try:
-        data = pathlib.Path(att.path).read_bytes()
+        fits = base64_size(path.stat().st_size) <= INLINE_IMAGE_MAX_BYTES
+        data = path.read_bytes() if att.is_image and fits else b""
     except OSError:
         return {"type": "text", "text": f"[Attached file '{att.filename}' could not be read]"}
-    if att.mime in _INLINE_IMAGE_MIMES:
+    media_type = inline_image_mime(data) if data else None
+    if media_type is not None:
         encoded = base64.standard_b64encode(data).decode()
         return {
             "type": "image",
-            "source": {"type": "base64", "media_type": att.mime, "data": encoded},
+            "source": {"type": "base64", "media_type": media_type, "data": encoded},
         }
     return {
         "type": "text",

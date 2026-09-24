@@ -14,6 +14,7 @@ agent kind.
 
 from __future__ import annotations
 
+from coffer.application.chat.attachments import ChatAttachmentService
 from coffer.application.chat.ports import ModelCatalogPort
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
@@ -82,3 +83,19 @@ def get_model_catalog() -> ModelCatalogPort:
     if _model_catalog is None:
         raise RuntimeError("model catalog not initialised")
     return _model_catalog
+
+
+_attachment_service: ChatAttachmentService | None = None
+
+
+def set_attachment_service(svc: ChatAttachmentService) -> None:
+    """Called by the composition root once on startup."""
+    global _attachment_service
+    _attachment_service = svc
+
+
+def get_attachment_service() -> ChatAttachmentService:
+    """FastAPI Depends() target."""
+    if _attachment_service is None:
+        raise RuntimeError("chat attachment service not initialised")
+    return _attachment_service

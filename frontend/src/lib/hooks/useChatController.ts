@@ -18,6 +18,7 @@ import {
 } from "@/lib/hooks/useConversations";
 import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useChatTurn } from "@/lib/hooks/useChatTurn";
+import type { ChatAttachment } from "@/lib/api/chat";
 
 export function useChatController() {
   const navigate = useNavigate();
@@ -43,7 +44,11 @@ export function useChatController() {
   } | null>(null);
   // After creating from the draft, the first message is sent once the turn hook
   // re-binds to the new conversation id (see effect below).
-  const [pendingFirst, setPendingFirst] = useState<{ convId: string; text: string } | null>(null);
+  const [pendingFirst, setPendingFirst] = useState<{
+    convId: string;
+    text: string;
+    attachments: ChatAttachment[];
+  } | null>(null);
 
   const { data: conversations = [], isPending: convLoading } = useConversations();
   const { data: archivedConversations = [], isPending: archivedLoading } =
@@ -81,9 +86,9 @@ export function useChatController() {
   // wrong thread.
   useEffect(() => {
     if (pendingFirst && activeConv?.id === pendingFirst.convId) {
-      const text = pendingFirst.text;
+      const { text, attachments } = pendingFirst;
       setPendingFirst(null);
-      void turn.send(text);
+      void turn.send(text, attachments);
     }
   }, [pendingFirst, activeConv?.id, turn]);
 
@@ -107,28 +112,33 @@ export function useChatController() {
     navigate(`/chat/${id}`);
   };
 
-  const sendDraft = (text: string) => {
-    // No per-turn working directory: send an empty agent_config and let the
-    // backend default the cwd to the Coffer-managed workspace. Carry the chosen
-    // model and effort through only when set — unset inherits, respectively, the
-    // global default and the agent's own level.
-    const agent_config: Record<string, unknown> = {};
-    if (effectiveDraft.model) agent_config.model = effectiveDraft.model;
-    if (effectiveDraft.effort) agent_config.effort = effectiveDraft.effort;
-    createConv.mutate(
-      {
-        agent_key: effectiveDraft.agentKey,
-        agent_config,
-      },
-      {
-        onSuccess: (created) => {
-          setPendingFirst({ convId: created.id, text });
-          setDraftConfig(null);
-          navigate(`/chat/${created.id}`);
+  // Resolves whether the conversation was created; a failed create keeps the
+  // draft composer's chips (the error shows as `createError`).
+  const sendDraft = (text: string, attachments: ChatAttachment[] = []) =>
+    new Promise<boolean>((resolve) => {
+      // No per-turn working directory: send an empty agent_config and let the
+      // backend default the cwd to the Coffer-managed workspace. Carry the chosen
+      // model and effort through only when set — unset inherits, respectively, the
+      // global default and the agent's own level.
+      const agent_config: Record<string, unknown> = {};
+      if (effectiveDraft.model) agent_config.model = effectiveDraft.model;
+      if (effectiveDraft.effort) agent_config.effort = effectiveDraft.effort;
+      createConv.mutate(
+        {
+          agent_key: effectiveDraft.agentKey,
+          agent_config,
         },
-      },
-    );
-  };
+        {
+          onSuccess: (created) => {
+            setPendingFirst({ convId: created.id, text, attachments });
+            setDraftConfig(null);
+            navigate(`/chat/${created.id}`);
+            resolve(true);
+          },
+          onError: () => resolve(false),
+        },
+      );
+    });
 
   const confirmDelete = () => {
     if (!deletingId) return;

@@ -288,3 +288,39 @@ async def test_conversation_archive_disabled_when_days_none(tmp_path):
         arch = (await s.execute(text("SELECT archived_at FROM conversations"))).scalar_one()
     assert arch is None  # never archived
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_full_prune_runs_every_media_sweep_and_isolates_a_failing_one(tmp_path):
+    """Each media dir is its own sweep keyed by its result name; one that
+    raises is logged and skipped, and neither the table prune nor the other
+    dir's sweep is lost. A single-table prune runs no media sweep."""
+    service, _sm, engine = await _service(tmp_path)
+    calls: list[str] = []
+
+    def _broken(now: datetime) -> list[str]:
+        calls.append("broken")
+        raise OSError("disk went away")
+
+    def _two(now: datetime) -> list[str]:
+        calls.append("two")
+        return ["a", "b"]
+
+    service = RetentionService(
+        registry=service._registry,
+        repo=service._repo,
+        audit=service._audit,
+        media_sweeps={"channel_media": _broken, "chat_media": _two},
+    )
+    await service.initialize_defaults()
+
+    full = await service.prune()
+    assert full["chat_media"] == 2
+    assert "channel_media" not in full
+    assert "audit_log" in full
+    assert calls == ["broken", "two"]
+
+    single = await service.prune("audit_log")
+    assert set(single) == {"audit_log"}
+    assert calls == ["broken", "two"]
+    await engine.dispose()

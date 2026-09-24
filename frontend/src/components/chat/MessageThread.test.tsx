@@ -86,6 +86,43 @@ describe("MessageThread", () => {
     await waitFor(() => expect(screen.getByText("Hey there")).toBeInTheDocument());
   });
 
+  acceptance("chat", "an attached file is shown in the thread after a reload", async () => {
+    // A fresh mount reads the persisted rows: the attachment reference comes back
+    // as a chip naming the file and its type under the message text, with no path.
+    chatApiMock.listMessages.mockResolvedValue({
+      messages: [
+        makeMsg({
+          content: [
+            { type: "text", text: "what is in this?" },
+            { type: "attachment", filename: "report.pdf", mime: "application/pdf" },
+          ],
+        }),
+      ],
+    });
+    renderThread();
+    const chip = await screen.findByTestId("attachment-chip");
+    expect(chip).toHaveTextContent("report.pdf");
+    expect(chip).toHaveTextContent("application/pdf");
+    expect(screen.getByText("what is in this?")).toBeInTheDocument();
+  });
+
+  test("an echo of a just-sent message shows its attachments before the row lands", async () => {
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    renderThread({
+      pendingEchoes: [
+        {
+          id: "echo-9",
+          text: "",
+          attachments: [{ filename: "shot.png", mime: "image/png" }],
+          sentAt: Date.now(),
+          afterSeq: -1,
+        },
+      ],
+    });
+    const chip = await screen.findByTestId("attachment-chip");
+    expect(chip).toHaveTextContent("shot.png");
+  });
+
   test("renders assistant messages", async () => {
     chatApiMock.listMessages.mockResolvedValue({
       messages: [
@@ -207,7 +244,9 @@ describe("MessageThread", () => {
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderThread({
       isStreaming: true,
-      pendingEchoes: [{ id: "echo-1", text: "my question", sentAt: Date.now(), afterSeq: -1 }],
+      pendingEchoes: [
+        { id: "echo-1", text: "my question", attachments: [], sentAt: Date.now(), afterSeq: -1 },
+      ],
       liveMessage: { blocks: [{ type: "text", text: "replying" }], streaming: true },
     });
     await waitFor(() => expect(screen.getByText("my question")).toBeInTheDocument());
@@ -234,7 +273,9 @@ describe("MessageThread", () => {
     });
     renderThread({
       isStreaming: true,
-      pendingEchoes: [{ id: "echo-2", text: "again", sentAt: Date.now(), afterSeq: 2 }],
+      pendingEchoes: [
+        { id: "echo-2", text: "again", attachments: [], sentAt: Date.now(), afterSeq: 2 },
+      ],
       liveMessage: { blocks: [], streaming: true },
     });
     await waitFor(() => expect(screen.getByText("first answer")).toBeInTheDocument());
@@ -248,8 +289,8 @@ describe("MessageThread", () => {
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderThread({
       pendingEchoes: [
-        { id: "echo-1", text: "first send", sentAt: 1, afterSeq: -1 },
-        { id: "echo-2", text: "second send", sentAt: 2, afterSeq: -1 },
+        { id: "echo-1", text: "first send", attachments: [], sentAt: 1, afterSeq: -1 },
+        { id: "echo-2", text: "second send", attachments: [], sentAt: 2, afterSeq: -1 },
       ],
     });
     await waitFor(() => expect(screen.getByText("second send")).toBeInTheDocument());
@@ -297,7 +338,9 @@ describe("MessageThread", () => {
       ],
     });
     renderThread({
-      pendingEchoes: [{ id: "echo-1", text: "my question", sentAt: Date.now(), afterSeq: -1 }],
+      pendingEchoes: [
+        { id: "echo-1", text: "my question", attachments: [], sentAt: Date.now(), afterSeq: -1 },
+      ],
       liveMessage: { blocks: [], streaming: true },
       turnError: new Error("provider failed"),
     });

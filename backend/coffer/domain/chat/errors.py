@@ -50,3 +50,43 @@ class AgentConfigRejected(CofferError):  # noqa: N818
     def __init__(self, reason: str, message: str) -> None:
         super().__init__(message)
         self.reason = reason
+
+
+class AttachmentTooLarge(CofferError):  # noqa: N818
+    """An upload from the web composer is over the per-file ceiling; the message
+    names the limit so the refusal is actionable (spec chat "Upload a file for a
+    web message")."""
+
+    code = "ATTACHMENT_TOO_LARGE"
+
+    def __init__(self, size: int, limit: int) -> None:
+        super().__init__(
+            f"attachment is {size} bytes; the limit is {limit} bytes ({limit // (1024 * 1024)} MB)"
+        )
+        self.size = size
+        self.limit = limit
+
+
+class AttachmentTypeUnsupported(CofferError):  # noqa: N818
+    """An upload whose type no agent can use from a turn (video, archives,
+    executables, other binaries)."""
+
+    code = "ATTACHMENT_TYPE_UNSUPPORTED"
+
+    def __init__(self, filename: str, mime: str | None) -> None:
+        super().__init__(
+            f"unsupported attachment type for {filename!r} ({mime or 'unknown'}): "
+            "attach an image, a document, audio, or a text file"
+        )
+        self.filename = filename
+
+
+class AttachmentNotFound(CofferError):  # noqa: N818
+    """A message names an attachment id no upload stored — never uploaded, or
+    its file was pruned. Nothing is persisted or queued for that message."""
+
+    code = "ATTACHMENT_NOT_FOUND"
+
+    def __init__(self, attachment_id: str) -> None:
+        super().__init__(f"attachment not found: {attachment_id!r}; upload the file again")
+        self.attachment_id = attachment_id

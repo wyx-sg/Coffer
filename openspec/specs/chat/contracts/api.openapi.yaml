@@ -256,6 +256,62 @@ paths:
                 $ref: '#/components/schemas/SendMessageAck'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          description: >-
+            Neither text nor an attachment, more than ten attachments, or an
+            attachment id naming no stored upload (`ATTACHMENT_NOT_FOUND`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /api/v1/chat/attachments:
+    post:
+      summary: Upload a file for a later web message
+      operationId: uploadChatAttachment
+      description: >
+        The web composer's entrance for a file (see "Upload a file for a web
+        message"). The bytes are stored under `~/.coffer/chat-media` and the
+        response names them by an opaque id, which `POST
+        /conversations/{id}/messages` then carries in `attachment_ids`; the
+        local path never leaves the daemon. Not tied to a conversation, so a
+        draft can attach before its conversation exists. One file per call, at
+        most 20 MB; accepted types are images, audio, documents (PDF, Word,
+        PowerPoint, Excel, RTF, EPUB, CSV) and any UTF-8 text file. Stored
+        files are pruned 30 days after upload.
+      tags: [chat]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatAttachmentOut'
+        '413':
+          description: Over the 20 MB ceiling (`ATTACHMENT_TOO_LARGE`); the message names the limit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '415':
+          description: A type no agent can use from a turn (`ATTACHMENT_TYPE_UNSUPPORTED`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          $ref: '#/components/responses/BadRequest'
 
   /api/v1/chat/conversations/{id}/events:
     parameters:
@@ -501,9 +557,10 @@ components:
           type: string
           nullable: true
           description: >-
-            An `attachment` block references channel media by filename and mime
-            only; the local path is never emitted to the wire (see "Re-materialise
-            attachments from persisted history").
+            An `attachment` block references a file a channel downloaded or the
+            web composer uploaded, by filename and mime only; the local path is
+            never emitted to the wire (see "Re-materialise attachments from
+            persisted history").
         mime: { type: string, nullable: true }
 
     MessageOut:
@@ -535,9 +592,39 @@ components:
 
     SendMessageRequest:
       type: object
-      required: [text]
+      description: >-
+        A message carries text, at least one attachment, or both — never
+        neither (422). An attachment-only message is persisted with a short
+        stand-in text naming its files.
       properties:
-        text: { type: string, minLength: 1, maxLength: 32768 }
+        text: { type: string, maxLength: 32768, default: "" }
+        attachment_ids:
+          type: array
+          maxItems: 10
+          items: { type: string }
+          description: >-
+            Ids returned by `POST /api/v1/chat/attachments`, in the order the
+            files are attached. Each is persisted on the user message as an
+            attachment reference (see "Send uploaded files with a web
+            message"); an id naming no stored upload is refused with
+            `ATTACHMENT_NOT_FOUND` (422) and nothing is persisted or queued.
+
+    ChatAttachmentOut:
+      type: object
+      required: [id, filename, mime, size]
+      properties:
+        id:
+          type: string
+          description: Opaque upload id (32 hex characters) a send names.
+        filename:
+          type: string
+          description: The display name, reduced to its last path segment.
+        mime:
+          type: string
+          description: The type the file is stored and handed to the agent under.
+        size:
+          type: integer
+          description: Size in bytes.
 
     SendMessageAck:
       type: object

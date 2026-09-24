@@ -25,34 +25,9 @@ import pathlib
 from collections.abc import Sequence
 from typing import Protocol
 
-from coffer.domain.chat.attachment import Attachment
+from coffer.domain.chat.attachment import DOCUMENT_EXTENSIONS, DOCUMENT_MIMES, Attachment
 
 _logger = logging.getLogger(__name__)
-
-#: Document mime types markitdown can convert to text. Images, audio, and plain
-#: text/code are deliberately excluded — an agent reads a path to those fine, and
-#: an image belongs on the vision path.
-_DOCUMENT_MIMES = frozenset(
-    {
-        "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.ms-powerpoint",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "application/vnd.ms-excel",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/rtf",
-        "text/rtf",
-        "application/epub+zip",
-        "text/csv",
-    }
-)
-
-#: Extension fallback for when a channel hands over a generic mime (e.g.
-#: ``application/octet-stream``) but a document filename.
-_DOCUMENT_EXTENSIONS = frozenset(
-    {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx", ".rtf", ".epub", ".csv"}
-)
 
 
 def _is_document(att: Attachment) -> bool:
@@ -60,10 +35,10 @@ def _is_document(att: Attachment) -> bool:
     audio; matched by mime, else by filename extension)."""
     if att.is_image or att.mime.startswith("audio/"):
         return False
-    if att.mime in _DOCUMENT_MIMES:
+    if att.mime in DOCUMENT_MIMES:
         return True
     ext = pathlib.Path(att.filename or att.path).suffix.lower()
-    return ext in _DOCUMENT_EXTENSIONS
+    return ext in DOCUMENT_EXTENSIONS
 
 
 class DocumentExtractor(Protocol):

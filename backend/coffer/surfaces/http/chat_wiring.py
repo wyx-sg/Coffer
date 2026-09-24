@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.agent.service import AgentService
+from coffer.application.chat.attachments import ChatAttachmentService
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
@@ -34,12 +35,14 @@ from coffer.infrastructure.agent.model_discovery import (
     NativeConfigModelDiscovery,
 )
 from coffer.infrastructure.chat.codex_app_server import default_app_server_session
+from coffer.infrastructure.chat.media_store import FileChatMediaStore, default_chat_media_dir
 from coffer.infrastructure.chat.persistence import ConversationRepo, MessageRepo
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.provider.introspector import ProviderIntrospector
 from coffer.surfaces.http.agent_dependencies import set_agent_model_catalogue
 from coffer.surfaces.http.chat.dependencies import (
     set_agent_registry,
+    set_attachment_service,
     set_chat_service,
     set_model_catalog,
     set_turn_orchestrator,
@@ -272,6 +275,10 @@ def wire_chat(
     #    kind's ``ModelCatalogPort`` — the one seam that crosses a kind, so
     #    the chat surface never imports the agent kind.
     set_chat_service(chat_svc)
+    # The web composer's uploads live in ``~/.coffer/chat-media`` (spec chat
+    # "Upload a file for a web message"); the retention sweep over the same
+    # directory is bound in ``build_retention_service``.
+    set_attachment_service(ChatAttachmentService(FileChatMediaStore(default_chat_media_dir())))
     set_introspection_service(introspection_svc)
     set_turn_orchestrator(orchestrator)
     set_agent_registry(registry)

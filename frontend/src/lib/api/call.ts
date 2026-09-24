@@ -23,6 +23,8 @@ interface Options {
    * Omitted entirely when undefined, so a bare POST sends none.
    */
   body?: unknown;
+  /** Cancels the request; the returned promise then rejects with an AbortError. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -41,7 +43,10 @@ export const enc = encodeURIComponent;
  * `INTERNAL_ERROR` / `request failed: <status>` when the body is not the
  * envelope (or not JSON at all).
  */
-export async function call<T>(path: string, { method = "GET", body }: Options = {}): Promise<T> {
+export async function call<T>(
+  path: string,
+  { method = "GET", body, signal }: Options = {},
+): Promise<T> {
   const headers = authHeaders();
   const isForm = typeof FormData !== "undefined" && body instanceof FormData;
   if (body !== undefined && !isForm) headers["Content-Type"] = "application/json";
@@ -56,6 +61,7 @@ export async function call<T>(path: string, { method = "GET", body }: Options = 
   const response = await fetch(`${baseUrl}${path}`, {
     method,
     headers,
+    ...(signal ? { signal } : {}),
     ...(body === undefined ? {} : { body: isForm ? body : JSON.stringify(body) }),
   });
 

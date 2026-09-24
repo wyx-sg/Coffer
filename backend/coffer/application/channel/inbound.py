@@ -50,7 +50,7 @@ from coffer.application.channel.turn_driver import (
 from coffer.application.channel.turn_driver import (
     Session as _Session,
 )
-from coffer.application.channel.turn_media import attachment_note, conversation_title_hint
+from coffer.application.channel.turn_media import conversation_title_hint
 from coffer.domain.channel.envelopes import (
     InboundCallback,
     InboundLifecycle,
@@ -58,7 +58,7 @@ from coffer.domain.channel.envelopes import (
     InboundStop,
 )
 from coffer.domain.channel.rich_content import format_origin
-from coffer.domain.chat.attachment import Attachment
+from coffer.domain.chat.attachment import Attachment, attachment_note
 
 __all__ = ["ChannelBinding", "InboundProcessor"]
 

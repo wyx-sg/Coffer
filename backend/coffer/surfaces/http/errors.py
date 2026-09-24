@@ -106,6 +106,13 @@ _STATUS: dict[str, int] = {
     "TURN_IN_PROGRESS": 409,
     "UNKNOWN_AGENT": 400,
     "AGENT_CONFIG_REJECTED": 400,
+    # web composer uploads (spec chat "Upload a file for a web message",
+    # "Send uploaded files with a web message"). The ceiling is 413 and the
+    # refused type 415, the honest statuses; an id in a send body that names no
+    # upload is a bad body, not a missing path.
+    "ATTACHMENT_TOO_LARGE": 413,
+    "ATTACHMENT_TYPE_UNSUPPORTED": 415,
+    "ATTACHMENT_NOT_FOUND": 422,
     # channels (spec channels)
     "CHANNEL_NOT_PAIRED": 409,
     "CHANNEL_NOT_RUNNING": 409,

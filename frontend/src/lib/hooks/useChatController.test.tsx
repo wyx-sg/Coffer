@@ -61,7 +61,9 @@ describe("useChatController draft", () => {
 
     act(() => result.current.setDraftModel("opus"));
     act(() => result.current.setDraftEffort("xhigh"));
-    act(() => result.current.sendDraft("first message"));
+    act(() => {
+      void result.current.sendDraft("first message");
+    });
 
     expect(createdWith()).toEqual({ model: "opus", effort: "xhigh" });
   });
@@ -72,7 +74,9 @@ describe("useChatController draft", () => {
     // clear on a conversation that does not exist yet.
     const { result } = renderHook(() => useChatController());
 
-    act(() => result.current.sendDraft("first message"));
+    act(() => {
+      void result.current.sendDraft("first message");
+    });
 
     expect(createdWith()).toEqual({});
   });

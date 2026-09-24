@@ -8,12 +8,13 @@ describe("Composer", () => {
   test("renders textarea and send button", () => {
     render(<Composer onSend={vi.fn()} />);
     expect(screen.getByRole("textbox")).toBeInTheDocument();
-    expect(screen.getByRole("button")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /send/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /attach files/i })).toBeInTheDocument();
   });
 
   test("send button disabled when textarea is empty", () => {
     render(<Composer onSend={vi.fn()} />);
-    expect(screen.getByRole("button")).toBeDisabled();
+    expect(screen.getByRole("button", { name: /send/i })).toBeDisabled();
   });
 
   test("send button enabled once text is entered", () => {
@@ -22,7 +23,7 @@ describe("Composer", () => {
     act(() => {
       fireEvent.change(textarea, { target: { value: "Hello" } });
     });
-    expect(screen.getByRole("button")).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: /send/i })).not.toBeDisabled();
   });
 
   test("calls onSend with trimmed text and clears textarea on button click", () => {
@@ -33,9 +34,9 @@ describe("Composer", () => {
       fireEvent.change(textarea, { target: { value: "Hello world" } });
     });
     act(() => {
-      fireEvent.click(screen.getByRole("button"));
+      fireEvent.click(screen.getByRole("button", { name: /send/i }));
     });
-    expect(onSend).toHaveBeenCalledWith("Hello world");
+    expect(onSend).toHaveBeenCalledWith("Hello world", []);
     expect(textarea).toHaveValue("");
   });
 
@@ -47,7 +48,7 @@ describe("Composer", () => {
       fireEvent.change(textarea, { target: { value: "Hi there" } });
       fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
     });
-    expect(onSend).toHaveBeenCalledWith("Hi there");
+    expect(onSend).toHaveBeenCalledWith("Hi there", []);
   });
 
   test("does NOT call onSend on Enter while an IME composition is active", () => {
@@ -86,7 +87,7 @@ describe("Composer", () => {
       fireEvent.change(textarea, { target: { value: "queue me" } });
       fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
     });
-    expect(onSend).toHaveBeenCalledWith("queue me");
+    expect(onSend).toHaveBeenCalledWith("queue me", []);
   });
 
   test("shows a 'will queue' hint while streaming", () => {
@@ -106,7 +107,8 @@ describe("Composer", () => {
 
   test("Stop replaces Send in place while streaming — one button, beside the input", () => {
     render(<Composer onSend={vi.fn()} streaming onStop={vi.fn()} />);
-    expect(screen.getAllByRole("button")).toHaveLength(1);
+    // The attach button stays; Stop takes Send's slot.
+    expect(screen.getAllByRole("button")).toHaveLength(2);
     expect(screen.queryByRole("button", { name: /send/i })).not.toBeInTheDocument();
     const stop = screen.getByRole("button", { name: /stop/i });
     // Same slot as Send: a sibling of the textarea, not a row underneath it.

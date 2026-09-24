@@ -162,6 +162,7 @@ A knowledge collection or memory partition is still a `resources` row — that i
 ├── bin/                      # frozen builds: versioned binaries and public symlinks
 ├── upstream-pids/            # PIDs of spawned upstream servers, swept at startup
 ├── channel-media/            # inbound channel attachments
+├── chat-media/               # files attached on the Chat page
 ├── workspace/                # default working directory for chat turns
 ├── cache/agent/              # derived caches of agents' own data
 └── vendor/                   # operator-supplied SeaTalk SDK

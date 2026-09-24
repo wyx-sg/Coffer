@@ -30,15 +30,6 @@ _PHOTO_MAX_BYTES = 10 * 1024 * 1024  # sendPhoto caps at 10 MB — larger images
 _IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp"})
 
 
-def attachment_note(attachments: Sequence[Attachment]) -> str:
-    """A short stand-in text for a media message with no caption, so the persisted
-    user turn is not blank (the bytes reach the agent out-of-band)."""
-    names = ", ".join(a.filename for a in attachments)
-    kind = "image" if all(a.is_image for a in attachments) else "file"
-    plural = "s" if len(attachments) != 1 else ""
-    return f"(sent {len(attachments)} {kind}{plural}: {names})"
-
-
 def conversation_title_hint(text: str, attachments: Sequence[Attachment]) -> str:
     """What a conversation opened by this message should be named after (spec chat
     "Persist conversations and messages in SQLite").

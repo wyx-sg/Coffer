@@ -222,7 +222,7 @@ Retention policies decide how long rows are kept. The retention worker prunes on
 | **Auto-archive idle chats** | `conversations_archive` | 7 days | Archives conversations with no new message for this long. |
 | **Delete archived chats** | `conversations` | 30 days | Deletes archived conversations, with their messages, this long after archival. |
 
-The key is what `coffer retention set` takes; both chat policies act on the `conversations` table. A policy can be set to **Keep forever**. The same run also deletes files in `~/.coffer/channel-media` older than 30 days and aged shim and upstream logs older than 7 days.
+The key is what `coffer retention set` takes; both chat policies act on the `conversations` table. A policy can be set to **Keep forever**. The same run also deletes files in `~/.coffer/channel-media` and `~/.coffer/chat-media` older than 30 days and aged shim and upstream logs older than 7 days.
 
 ```sh
 coffer retention list

@@ -102,9 +102,9 @@ export function ChatPage() {
             isStreaming={c.turn.isStreaming}
             turnError={c.turn.error}
             onStop={() => void c.turn.interrupt()}
-            onSend={(text) => {
+            onSend={(text, attachments) => {
               c.turn.clearError();
-              void c.turn.send(text);
+              return c.turn.send(text, attachments);
             }}
             onClearTurnError={c.turn.clearError}
             pending={c.turn.pending}

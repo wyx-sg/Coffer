@@ -6,6 +6,7 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock, Message } from "@/lib/api/chat";
 import type { LiveMessage } from "@/lib/hooks/useChatTurn";
+import { AttachmentChip } from "./AttachmentChip";
 import { ToolCallCard } from "./ToolCallCard";
 import { MarkdownContent } from "./MarkdownContent";
 
@@ -68,17 +69,18 @@ function MessageBubbleImpl({ message, live }: Props) {
             {text}
           </div>
         )}
-        {attachments.map((a, i) => (
-          <div
-            key={`${a.filename ?? "file"}-${i}`}
-            className="flex w-fit max-w-[min(48rem,100%)] items-center gap-1.5 rounded-xl bg-muted px-3 py-1 text-xs text-muted-foreground"
-            title={a.mime ?? undefined}
-          >
-            <span aria-hidden="true">📎</span>
-            <span className="truncate">{a.filename ?? t("chat.attachment")}</span>
-            {a.mime && <span className="opacity-70">· {a.mime}</span>}
+        {attachments.length > 0 && (
+          <div className="flex max-w-[min(48rem,100%)] flex-wrap justify-end gap-1.5">
+            {attachments.map((a, i) => (
+              <AttachmentChip
+                key={`${a.filename ?? "file"}-${i}`}
+                name={a.filename}
+                detail={a.mime}
+                mime={a.mime}
+              />
+            ))}
           </div>
-        ))}
+        )}
       </div>
     );
   }

@@ -784,7 +784,10 @@
     "UPSTREAM_TIMEOUT": "Upstream server did not respond in time — retry, or raise its request timeout",
     "UPSTREAM_UNAVAILABLE": "Upstream server is unreachable — check its command or URL, then run Test connection",
     "KNOWLEDGE_CURATION_BOUND": "One curation pass may only rewrite a handful of documents. The rest continue on the next pass.",
-    "KNOWLEDGE_TOPIC_REFERENCES_FILE": "A curated document may not name another knowledge file — file names change when the collection is reorganised."
+    "KNOWLEDGE_TOPIC_REFERENCES_FILE": "A curated document may not name another knowledge file — file names change when the collection is reorganised.",
+    "ATTACHMENT_TOO_LARGE": "This file is over the 20 MB limit.",
+    "ATTACHMENT_TYPE_UNSUPPORTED": "This file type can't be attached. Attach an image, a document, audio, or a text file.",
+    "ATTACHMENT_NOT_FOUND": "An attached file is no longer available. Attach it again."
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
@@ -1254,7 +1257,9 @@
       "ariaLabel": "Message input",
       "send": "Send",
       "stop": "Stop",
-      "streaming": "A reply is streaming — your next message will queue."
+      "streaming": "A reply is streaming — your next message will queue.",
+      "attach": "Attach files",
+      "dropHint": "Drop files to attach"
     },
     "queue": {
       "label": "Queued:",
@@ -1303,6 +1308,13 @@
     "attachment": "Attachment",
     "errors": {
       "agentNotLoggedIn": "Claude Code isn't logged in on this machine. Run `claude` in a terminal and complete /login, then retry."
+    },
+    "attachments": {
+      "uploading": "Uploading…",
+      "remove": "Remove {{name}}",
+      "tooLarge": "Over the 20 MB limit",
+      "tooMany": "At most 10 files per message",
+      "listLabel": "Attached files"
     }
   },
   "channels": {

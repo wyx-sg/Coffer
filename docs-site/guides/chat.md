@@ -116,15 +116,35 @@ If Claude Code is not logged in, the banner says so and tells you to run `claude
 
 ## Attachments
 
-The Chat page composer sends text only, up to 32,768 characters per message. Attachments reach a conversation through a [channel](/guides/channels): a photo, file or voice message you send to the bot is saved under `~/.coffer/channel-media` and shows in the thread as an attachment chip with its filename.
+A message holds up to 32,768 characters of text and up to 10 attached files. Attach a file from the composer in any of three ways:
 
-How the agent receives an attachment depends on its kind:
+- click the paperclip beside the message box and pick one or more files;
+- drop files onto the composer;
+- paste an image, for example a screenshot, into the message box.
 
-- **Images** — Claude Code receives them inline as images it can see. Codex receives the file path.
+Each file uploads the moment you add it and shows as a chip with its name and size. **Send** stays disabled while a file is uploading, and while a failed file is still attached: its chip says why it failed, and removing it with **×** lets you send the rest. A message may carry files and no text; it is stored with a short line naming the files.
+
+| Limit | Value |
+| --- | --- |
+| Size of one file | 20 MB |
+| Files per message | 10 |
+| Accepted types | Images, audio, documents (PDF, Word, PowerPoint, Excel, RTF, EPUB, CSV) and any UTF-8 text file, such as source code, Markdown, JSON or logs |
+
+Video, archives and other binary files are refused, because neither agent can use them from a turn.
+
+An image's type is read from its bytes, not from its name or what the browser reported: a JPEG saved as `photo.png` is stored and shown as `image/jpeg`. A file that claims to be an image but is not PNG, JPEG, GIF or WEBP, such as a HEIC photo or an SVG, is kept as a plain file (`application/octet-stream`).
+
+Attachments also reach a conversation through a [channel](/guides/channels): a photo, file or voice message you send to the bot. Both kinds show in the thread as chips naming the file and its type, and read the same after a reload.
+
+How the agent receives an attachment depends on its kind, whichever way it arrived:
+
+- **Images** — Claude Code receives a PNG, JPEG, GIF or WEBP image inline, as an image it can see, when it is at most 5 MB once encoded for sending (about 3.75 MB on disk). A larger image, or one in another format, reaches Claude Code as its file path instead, so the turn still runs. Codex always receives the file path.
 - **Documents** (PDF, office formats, epub, rtf) — extracted to text and folded into the prompt, so every agent reads the content. If extraction is unavailable or fails, the agent receives the file path.
 - **Audio** — transcribed to text when you have turned on **Speech to text** under **Settings → Coffer's model**. With transcription off, nothing leaves your machine and the agent receives the audio file.
 
-The bytes stay on disk; the conversation stores only a reference, and a later turn reads the file back from there. Files in `~/.coffer/channel-media` are pruned 30 days after they were last modified.
+The bytes stay on disk; the conversation stores only a reference, and a later turn reads the file back from there. Files you attach on the Chat page are kept in `~/.coffer/chat-media`, and files a channel received in `~/.coffer/channel-media`; both are pruned 30 days after they were last modified. After that the thread still shows the chip, but the agent can no longer open the file.
+
+Retrying a failed turn resends the message text only. Attach the files again if the retry needs them.
 
 ## Manage conversations
 

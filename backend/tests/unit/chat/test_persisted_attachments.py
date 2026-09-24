@@ -16,7 +16,7 @@ import pytest
 
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.message import AttachmentBlock, Role, TextBlock
-from coffer.infrastructure.channel.media_retention import prune_media_dir
+from coffer.infrastructure.media_retention import prune_media_dir
 from coffer.surfaces.http.chat.conversation_routes import _block_out
 
 from .conftest import FakeAgentAdapter

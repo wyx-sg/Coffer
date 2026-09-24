@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -29,9 +29,11 @@ class RetentionPolicyView:
 
 _logger = logging.getLogger(__name__)
 
-# Result key for the non-table channel-media dir sweep (spec channels "Persist inbound
-# attachments as references").
-MEDIA_RESULT_KEY = "channel_media"
+# Result keys for the non-table media dir sweeps: what a channel downloaded (spec
+# channels "Persist inbound attachments as references") and what the web composer
+# uploaded (spec chat "Prune uploaded chat media on the retention cadence").
+CHANNEL_MEDIA_RESULT_KEY = "channel_media"
+CHAT_MEDIA_RESULT_KEY = "chat_media"
 
 
 class RetentionService:
@@ -41,15 +43,16 @@ class RetentionService:
         repo: RetentionRepo,
         audit: AuditService,
         *,
-        media_sweep: Callable[[datetime], Sequence[str]] | None = None,
+        media_sweeps: Mapping[str, Callable[[datetime], Sequence[str]]] | None = None,
     ) -> None:
         self._registry = registry
         self._repo = repo
         self._audit = audit
-        # Injected at composition root (infrastructure ``prune_media_dir``); the
-        # channel-media dir is not a DB table, so it rides the same cadence as a
-        # separate sweep step. ``None`` in tests that only exercise table prune.
-        self._media_sweep = media_sweep
+        # Injected at composition root (infrastructure ``prune_media_dir`` bound
+        # to each media dir), keyed by the name the prune result reports it
+        # under. A media dir is not a DB table, so each rides the same cadence
+        # as a separate sweep step. Empty in tests that only exercise table prune.
+        self._media_sweeps = dict(media_sweeps or {})
 
     async def initialize_defaults(self) -> None:
         """Seed missing retention rows from registry defaults.
@@ -125,13 +128,14 @@ class RetentionService:
                 )
             await self._repo.touch_pruned(table.name, affected)
             result[table.name] = affected
-        # The channel-media dir is not a registered table; sweep it alongside a
-        # full prune (never on a single-table request). Failures are logged and
-        # swallowed so a media-dir problem never breaks the DB prune.
-        if table_name is None and self._media_sweep is not None:
-            try:
-                deleted = self._media_sweep(clock_now)
-                result[MEDIA_RESULT_KEY] = len(deleted)
-            except Exception:
-                _logger.exception("retention.media_sweep.failed")
+        # The media dirs are not registered tables; sweep them alongside a full
+        # prune (never on a single-table request). Failures are logged and
+        # swallowed per dir so a media-dir problem never breaks the DB prune or
+        # the other dir's sweep.
+        if table_name is None:
+            for key, sweep in self._media_sweeps.items():
+                try:
+                    result[key] = len(sweep(clock_now))
+                except Exception:
+                    _logger.exception("retention.media_sweep.failed", extra={"media": key})
         return result

@@ -18,9 +18,13 @@ type Schemas = components["schemas"];
 // Types
 // ---------------------------------------------------------------------------
 
-/** `attachment` blocks carry the file's name/mime (channel media); no path (spec channels
- *  "Persist inbound attachments as references"). */
+/** `attachment` blocks carry the file's name/mime — a channel's media or a web
+ *  upload; no path (spec chat "Re-materialise attachments from persisted history"). */
 export type ContentBlock = Schemas["ContentBlockOut"];
+
+/** One file uploaded from the composer, named by the opaque id a send carries
+ *  (spec chat "Upload a file for a web message"). */
+export type ChatAttachment = Schemas["ChatAttachmentOut"];
 
 export type Message = Schemas["MessageOut"];
 
@@ -106,11 +110,21 @@ export const chatApi = {
 
   // Enqueue a user message. Fire-and-return (202): the turn runs server-side and
   // its events arrive over the GET /events subscription, not this response.
-  sendMessage: (conversationId: string, text: string) =>
+  // `attachmentIds` are uploads from `uploadAttachment`, in attach order.
+  sendMessage: (conversationId: string, text: string, attachmentIds: string[] = []) =>
     call<{ queued: boolean }>(`/chat/conversations/${conversationId}/messages`, {
       method: "POST",
-      body: { text },
+      body: attachmentIds.length > 0 ? { text, attachment_ids: attachmentIds } : { text },
     }),
+
+  // Upload one file for a later send. Not tied to a conversation, so a draft
+  // can attach before its conversation exists. `signal` cancels it (the
+  // composer does when the chip is removed).
+  uploadAttachment: (file: File, signal?: AbortSignal) => {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return call<ChatAttachment>("/chat/attachments", { method: "POST", body: form, signal });
+  },
 
   // Replace the pending-message queue (resume / drop / reorder).
   setPending: (conversationId: string, pending: string[]) =>

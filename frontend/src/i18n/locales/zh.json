@@ -784,7 +784,10 @@
     "UPSTREAM_TIMEOUT": "上游服务器响应超时——请重试，或调大它的请求超时",
     "UPSTREAM_UNAVAILABLE": "上游服务器不可达——请检查它的命令或 URL，再点「测试连接」",
     "KNOWLEDGE_CURATION_BOUND": "一轮归纳最多只改写少量文档，其余的留给下一轮。",
-    "KNOWLEDGE_TOPIC_REFERENCES_FILE": "归纳出的文档不能引用另一个知识文件的文件名——集合重整时文件名会变。"
+    "KNOWLEDGE_TOPIC_REFERENCES_FILE": "归纳出的文档不能引用另一个知识文件的文件名——集合重整时文件名会变。",
+    "ATTACHMENT_TOO_LARGE": "文件超过 20 MB 上限。",
+    "ATTACHMENT_TYPE_UNSUPPORTED": "不支持此文件类型。请添加图片、文档、音频或文本文件。",
+    "ATTACHMENT_NOT_FOUND": "某个附件已不可用，请重新添加。"
   },
   "pagination": {
     "summary": "第 {{page}} / {{pageCount}} 页 · 共 {{total}} 条",
@@ -1254,7 +1257,9 @@
       "ariaLabel": "消息输入框",
       "send": "发送",
       "stop": "停止",
-      "streaming": "回复正在生成中——你的下一条消息将进入队列。"
+      "streaming": "回复正在生成中——你的下一条消息将进入队列。",
+      "attach": "添加附件",
+      "dropHint": "松开以添加附件"
     },
     "queue": {
       "label": "队列中：",
@@ -1303,6 +1308,13 @@
     "attachment": "附件",
     "errors": {
       "agentNotLoggedIn": "本机的 Claude Code 尚未登录。在终端运行 `claude` 完成 /login 后重试。"
+    },
+    "attachments": {
+      "uploading": "上传中…",
+      "remove": "移除 {{name}}",
+      "tooLarge": "超过 20 MB 上限",
+      "tooMany": "每条消息最多 10 个文件",
+      "listLabel": "已添加的附件"
     }
   },
   "channels": {

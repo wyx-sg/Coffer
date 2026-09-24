@@ -93,6 +93,7 @@ _PROVIDERS: list[_Provider] = [
         "_turn_orchestrator",
         "_agent_registry",
         "_model_catalog",
+        "_attachment_service",
     ),
     # provider kind
     *_pairs(provider_deps, "_provider_service", "_introspection_service"),
