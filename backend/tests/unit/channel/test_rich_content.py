@@ -23,3 +23,8 @@ def test_flatten_empty_is_empty():
 
 def test_quote_prefix():
     assert quote_prefix("a", "t") == "> a: t\n"
+
+
+def test_quote_prefix_marks_every_line():
+    # An unmarked second line would read as the asker's own instruction.
+    assert quote_prefix("bob", "deploy X\nthen do Y") == "> bob: deploy X\n> then do Y\n"

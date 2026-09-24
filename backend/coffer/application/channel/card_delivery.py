@@ -294,10 +294,18 @@ def card_as_text(card: SelectionCard) -> str:
 
     Navigation is dropped — there is nothing to tap on a text message — so the
     page's own choices are what survives, under the same body that names what
-    is currently in effect.
+    is currently in effect. A choice whose button shows a name rather than the
+    value it carries (a model's "Fable 1M") also gets that value, since the value
+    is what the command takes.
     """
-    choices = [b.label for b in card.buttons if not is_page_turn(b.value)]
-    return "\n".join([card.title, card.text, *(f"• {label}" for label in choices)])
+    lines = []
+    for b in card.buttons:
+        if is_page_turn(b.value):
+            continue
+        arg = b.value.split(":", 1)[-1]
+        name = b.label.removesuffix(" ✓")
+        lines.append(f"• {b.label}" if name == arg else f"• {b.label} — {arg}")
+    return "\n".join([card.title, card.text, *lines])
 
 
 async def _current_card(
