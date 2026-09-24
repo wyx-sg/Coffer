@@ -1,4 +1,4 @@
-// e2e/mcp/specs/stdio_full_round_trip.spec.ts  (T-075)
+// e2e/mcp/specs/stdio_full_round_trip.spec.ts
 //
 // Spawn a real coffer-mcp-shim, drive JSON-RPC over its stdin, and assert
 // replies come back on stdout.  This covers the "register a stdio MCP server"

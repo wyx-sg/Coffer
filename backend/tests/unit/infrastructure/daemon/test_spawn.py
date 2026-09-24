@@ -1,6 +1,7 @@
 """Unit tests for daemon_spawn_command() — frozen-aware detect-or-spawn.
 
-TEST-019: daemon_spawn_command() returns the correct launch command in both
+Spec daemon "Spawn a detached daemon from any surface that needs one":
+daemon_spawn_command() returns the correct launch command in both
 dev/pip mode (not frozen) and PyInstaller frozen mode.
 """
 

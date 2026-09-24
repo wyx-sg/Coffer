@@ -1,6 +1,7 @@
 """Unit tests for CLI detect-or-spawn (ADR daemon-detect-or-spawn).
 
-TEST-020: client_or_exit() must auto-spawn the daemon when daemon.json is
+Spec daemon "Spawn a detached daemon from any surface that needs one":
+client_or_exit() must auto-spawn the daemon when daemon.json is
 absent, rather than printing 'start it with: coffer daemon start' and exiting.
 """
 

@@ -44,7 +44,7 @@ async def _safe_dispose(engine: object) -> None:
     """engine.dispose() may raise CancelledError from anyio cancel scopes on
     Python 3.14 when subprocess connections are still GC-ing; suppress only
     the expected leakage (CancelledError + regular Exception).  Narrowed from
-    BaseException so KeyboardInterrupt / SystemExit still propagate (TEST-004).
+    BaseException so KeyboardInterrupt / SystemExit still propagate.
     """
     import asyncio as _asyncio
 
@@ -1053,7 +1053,8 @@ async def _build_crash_harness(
 
 
 # ---------------------------------------------------------------------------
-# TEST-020 — disabled (denied) + timeout invocation rows for resources/prompts
+# spec mcp-gateway "Record invocations without content": disabled (denied) +
+# timeout invocation rows for resources/prompts
 # ---------------------------------------------------------------------------
 
 
@@ -1073,8 +1074,9 @@ async def _build_simple_harness_with_supervisor(
 ]:
     """Mirror of _build_crash_harness but uses a caller-provided supervisor.
 
-    Useful for TEST-020 where we want a supervisor whose `get_or_spawn`
-    returns a connection that ALWAYS raises a chosen exception type
+    Useful for the denied/timeout invocation-row tests, where we want a
+    supervisor whose `get_or_spawn` returns a connection that ALWAYS raises a
+    chosen exception type
     (UpstreamTimeout, RuntimeError, …) so the timeout/error branches of the
     invocation handlers can be exercised deterministically.
     """
@@ -1138,7 +1140,7 @@ async def test_handler_disabled_records_denied_invocation(
     capability_type: str,
     capability_key: str,
 ) -> None:
-    """TEST-020: tools/resources/prompts each record a `denied` invocation
+    """Tools/resources/prompts each record a `denied` invocation
     row when the requested capability is disabled in the preferences repo.
     """
     from coffer.application.mcp import gateway_handlers
@@ -1229,7 +1231,7 @@ async def test_handler_records_timeout_invocation_on_upstream_timeout(
     capability_type: str,
     capability_key: str,
 ) -> None:
-    """TEST-020: tools/resources/prompts each record a `timeout` invocation
+    """Tools/resources/prompts each record a `timeout` invocation
     row when the upstream raises UpstreamTimeout.
     """
     from coffer.application.mcp import gateway_handlers

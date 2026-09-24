@@ -41,9 +41,9 @@ def _tree_files(
 ) -> dict[pathlib.Path, pathlib.Path]:
     """rel-path -> absolute path for every regular file under ``root``.
 
-    Hidden entries count: a knowledge scope keeps its ingested originals in
-    ``.raw/`` and the revisions a tidy pass replaced in ``.history/``, and both
-    are source of truth the other machine wants. Symlinks (to files or to
+    Hidden entries count: a collection's ``.inbox/`` holds material a curation
+    pass has not merged yet, and it is source of truth the other machine's pass
+    must be able to finish. Symlinks (to files or to
     directories) and anything named ``.git`` are left out and, when ``skipped``
     is given, their root-relative POSIX paths are appended to it so the caller
     can say so once."""

@@ -1,9 +1,21 @@
 # Industrial-Grade Harness, Built in Layers
 
-**Status**: Proposed
+**Status**: Accepted — layers A and D and the lockfile half of B shipped; the rest of B and layer C were not built
 **Date**: 2026-06-13
 **Deciders**: Yuxing Wu
 **Related**: [`docs/principles.md`](../principles.md), [`.agents/testing.md`](../../.agents/testing.md), [`.agents/workflow.md`](../../.agents/workflow.md), [Channel Adapter Framework](channel-adapter-framework.md), [Vault Export and Import](vault-sync.md), specs `channels` / `vault-sync`
+
+**What shipped and what did not.** Layer A shipped: `.claude/settings.json`
+carries `permissions` (allow/deny) and `PostToolUse` / `PreToolUse` /
+`SessionStart` hooks, the hook scripts live in `.claude/hooks/`, the OpenSpec
+skills in `.claude/skills/`, and `.agents/harness.md` documents the layer.
+Layer D shipped: `evals/` (datasets and baselines, with grading inside the
+eval runners), `make eval` and `.github/workflows/evals.yml`, which gates the
+deterministic tool-search suite; the model-based routing suite runs by hand. Layer B shipped only its lockfile half —
+`backend/uv.lock` and `.python-version` are committed. There is no
+`.devcontainer/`, and the dev database is still the one `~/.coffer/coffer.db`
+rather than a path derived per branch. Layer C was not built: there is no
+`make smoke` target and no `smoke.yml` workflow.
 
 ## Context
 

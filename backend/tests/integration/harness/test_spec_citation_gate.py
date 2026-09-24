@@ -105,6 +105,11 @@ def _cite(cap: str, title: str, *, comma: str = "") -> str:
         f"({SPEC} knowledge, 'Keep one tree per collection')",
         f'[knowledge](../../{SPECS_DIR}/knowledge/spec.md) "Keep one tree per collection"',
         f'[knowledge](../{SPECS_DIR}/knowledge/spec.md),\n  "Keep one tree per collection"',
+        # The capability followed by a colon, in backticks, or in bold.
+        f'{SPEC} knowledge: "Keep one tree per collection"',
+        f'{SPEC} `knowledge` "Keep one tree per collection"',
+        f'{SPEC} **channels/telegram** "Download every Telegram media type"',
+        f'{SPEC} `knowledge`: "Keep one tree per collection"',
     ],
 )
 def test_a_citation_of_an_existing_requirement_passes(gate, tree, text) -> None:
@@ -124,6 +129,20 @@ def test_a_wrapped_title_is_compared_as_one_line(gate, tree) -> None:
     errors, _ = _check(gate, tree, text)
     assert len(errors) == 1
     assert "'Use the file path as the identity of a document'" in errors[0]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f'{SPEC} knowledge: "Keep two trees per collection"',
+        f'{SPEC} `knowledge` "Keep two trees per collection"',
+        f'{SPEC} **knowledge** "Keep two trees per collection"',
+    ],
+)
+def test_a_colon_backtick_or_bold_citation_is_checked(gate, tree, text) -> None:
+    errors, _ = _check(gate, tree, text)
+    assert len(errors) == 1
+    assert "has no requirement titled 'Keep two trees per collection'" in errors[0]
 
 
 def test_a_capability_that_does_not_exist_fails(gate, tree) -> None:
@@ -181,6 +200,11 @@ def test_a_change_folder_may_cite_its_own_delta_titles(gate, tree) -> None:
         f"{SPEC} knowledge's overview draws the boundary",
         f"{SPEC} knowledge ``## Purpose``",
         f"the {SPEC} for `key`",
+        # Two adjacent string literals: the quote closing the first is not a
+        # title opening, and what it would pair with is code, not a phrase.
+        f'x = "{SPEC} chat"; y = "a b"',
+        f'x = "a {SPEC} chat "; y = "b c"',
+        f"labels = ['{SPEC} chat', 'Run it now']",
     ],
 )
 def test_legitimate_prose_is_not_a_citation(gate, tree, text) -> None:
@@ -199,6 +223,14 @@ def test_legitimate_prose_is_not_a_citation(gate, tree, text) -> None:
         f"raises {CODE}-027 on a bad env",
         f"registered under {CODE}-REG",
         f"as SPEC{'-'}012 requires",
+        # Task and review-finding ids from retired planning documents.
+        f"hardened under T{'-'}051",
+        f"(T{'-'}0072 verification)",
+        f"flaky before TEST{'-'}001",
+        f"see T{'-'}61 and TEST{'-'}01",
+        f"# P1{'-'}1: key off the status probe",
+        f"// P0{'-'}4: show the prompt at once",
+        f"# P4{'-'}2: a later finding",
     ],
 )
 def test_each_retired_id_form_fails(gate, tree, text) -> None:
@@ -214,6 +246,9 @@ def test_each_retired_id_form_fails(gate, tree, text) -> None:
         f"{CODE}-1234 is a port, not an id",
         "SPEC_ID = 'x'",
         f"a {CODE}-REGISTRY key",
+        "T-shirt sizes, a T-junction, TEST-mode",
+        "GPT-4 and P-256 and MP3-1",
+        "T-1000 model, an A/T-123 route, N-T-123 and SHA-256",
     ],
 )
 def test_text_that_only_resembles_a_retired_id_passes(gate, tree, text) -> None:
@@ -230,3 +265,33 @@ def test_numbered_spec_rejects_every_case() -> None:
     for text in (f"{SPEC} 004", f"{SPEC}s 009", f"SPEC{'-'}012", f"{SPEC}-001"):
         assert numbering.NUMBERED_SPEC.search(text), text
     assert not numbering.NUMBERED_SPEC.search(f"{SPEC} 2026")
+
+
+# ---------------------------------------------------------------- malformed
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f'{SPEC} knowledge,"Keep one tree per collection"',
+        f'{SPEC} knowledge: "`cmd` keeps one tree"',
+        f'{SPEC} knowledge " Keep one tree per collection"',
+        f'{SPEC} knowledge "3 trees per collection"',
+    ],
+)
+def test_a_malformed_citation_of_a_real_capability_fails(gate, tree, text) -> None:
+    errors, _ = _check(gate, tree, text)
+    assert len(errors) == 1
+    assert "malformed" in errors[0]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f'x = "{SPEC} knowledge"; y = "a b"',
+        f'{SPEC} nothing-here "3 things"',
+    ],
+)
+def test_a_string_literal_or_unknown_word_is_not_malformed(gate, tree, text) -> None:
+    errors, _ = _check(gate, tree, text)
+    assert not [e for e in errors if "malformed" in e]

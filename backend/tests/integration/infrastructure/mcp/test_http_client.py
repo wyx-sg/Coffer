@@ -220,7 +220,7 @@ def _stub_5xx_server(port: int, ready: threading.Event) -> None:
 
 @pytest.mark.asyncio
 async def test_5xx_response_raises_upstream_unavailable() -> None:
-    """TEST-019: an HTTP 5xx from the upstream during initialize() surfaces
+    """An HTTP 5xx from the upstream during initialize() surfaces
     as an UpstreamUnavailable domain error (NOT a bare httpx exception).
     """
     ready = threading.Event()
@@ -245,7 +245,7 @@ async def test_5xx_response_raises_upstream_unavailable() -> None:
 
 @pytest.mark.asyncio
 async def test_initialize_timeout_raises_upstream_timeout() -> None:
-    """TEST-019: when the upstream accepts the TCP connection but never
+    """When the upstream accepts the TCP connection but never
     completes the HTTP response, the httpx timeout fires and is wrapped
     as UpstreamTimeout (OR UpstreamUnavailable depending on which leg of
     the SDK detects it first; both are acceptable domain errors).

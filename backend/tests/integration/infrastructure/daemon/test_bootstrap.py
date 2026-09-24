@@ -59,7 +59,7 @@ def test_acquire_writes_daemon_json_with_0600(
 def test_second_daemon_picks_free_port_and_clients_discover(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """TEST-009: with the lowest port in the configured range held by an
+    """With the lowest port in the configured range held by an
     unrelated socket, bootstrap.acquire() skips it and picks the next free
     one.  Each acquire() writes a daemon.json that records the chosen port,
     so a discoverer reading the file gets the right answer.

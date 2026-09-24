@@ -1,6 +1,6 @@
 """Unit tests for the daemon entry module.
 
-TEST-011 — spec daemon "Bind every endpoint to loopback only" requires the
+Spec daemon "Bind every endpoint to loopback only" requires the
 daemon to bind only to 127.0.0.1. The daemon binds the socket
 itself (via ``bind_free_socket``, which always binds ``127.0.0.1``) and hands
 uvicorn the fd, so the loopback guarantee is structural rather than a uvicorn

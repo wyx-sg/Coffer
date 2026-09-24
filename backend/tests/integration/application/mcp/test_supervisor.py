@@ -280,7 +280,7 @@ async def test_dispose_closes_all_connections(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_concurrent_get_or_spawn_yields_one_subprocess(tmp_path, monkeypatch):
-    """TEST-006: 20 concurrent get_or_spawn calls for the same server share
+    """20 concurrent get_or_spawn calls for the same server share
     one spawned upstream — proves the spawn_lock + cached-HEALTHY fast path
     coalesces racers and avoids the classic "thundering herd of subprocesses"
     failure mode.

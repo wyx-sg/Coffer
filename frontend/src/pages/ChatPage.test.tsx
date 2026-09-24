@@ -216,8 +216,9 @@ describe("ChatPage", () => {
   });
 
   acceptance("chat", "an archived conversation opens read-only", async () => {
-    // P0-3: archived rows are not in the active list — the thread must still
-    // open (by-id fetch), read-only, instead of falling through to the draft.
+    // spec chat "Open an archived conversation read-only": archived rows are
+    // not in the active list — the thread must still open (by-id fetch),
+    // read-only, instead of falling through to the draft.
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     chatApiMock.getConversation.mockResolvedValue(
       makeConv({ archived_at: "2026-02-01T00:00:00Z" }),
@@ -260,7 +261,7 @@ describe("ChatPage", () => {
   });
 
   acceptance("chat", "a stale conversation link says so", async () => {
-    // P0-3: a stale deep-link must say so explicitly — typing into the draft
+    // A stale deep-link must say so explicitly — typing into the draft
     // here would silently create a NEW conversation.
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
     chatApiMock.getConversation.mockRejectedValue(

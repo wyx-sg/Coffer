@@ -1,4 +1,4 @@
-// e2e/mcp/specs/concurrent_clients.spec.ts  (T-076)
+// e2e/mcp/specs/concurrent_clients.spec.ts
 //
 // Spawn two shim subprocesses simultaneously against the same daemon.
 // Assert that each sees ALL aggregated tools (gateway merges all servers)

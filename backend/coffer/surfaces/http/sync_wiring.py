@@ -294,7 +294,7 @@ def start_sync(
     # The routes hold module-level singletons, matching every other surface
     # in this package.
     set_sync_service(wiring.service)
-    # The tidy pass — timer and button alike — takes the round's own lock.
+    # The curation pass — timer and button alike — takes the round's own lock.
     set_vault_write_lock(wiring.service.lock)
     set_machine_registry(wiring.registry)
     return wiring

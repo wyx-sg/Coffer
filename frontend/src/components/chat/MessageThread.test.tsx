@@ -201,8 +201,9 @@ describe("MessageThread", () => {
   });
 
   acceptance("chat", "a just-sent prompt is shown before its row lands", async () => {
-    // P0-4: the prompt must be visible immediately, not only after the next
-    // messages fetch. The echo comes from the turn hook, not from the thread.
+    // spec chat "Show a just-sent prompt immediately": the prompt must be
+    // visible immediately, not only after the next messages fetch. The echo
+    // comes from the turn hook, not from the thread.
     chatApiMock.listMessages.mockResolvedValue({ messages: [] });
     renderThread({
       isStreaming: true,
@@ -257,7 +258,8 @@ describe("MessageThread", () => {
   });
 
   test("readOnly hides the composer and shows a restore call-to-action", async () => {
-    // P0-3: archived conversations open read-only; restoring re-enables chat.
+    // spec chat "Open an archived conversation read-only": archived
+    // conversations open read-only; restoring re-enables chat.
     chatApiMock.listMessages.mockResolvedValue({
       messages: [makeMsg({ content: [{ type: "text", text: "old message" }] })],
     });

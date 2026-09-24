@@ -26,7 +26,7 @@ async def dispatch_method(
     if method == "tools/list":
         return await session.list_tools()
     if method == "tools/call":
-        # T-060: pass read_timeout_seconds so the SDK resets the idle timer
+        # Pass read_timeout_seconds so the SDK resets the idle timer
         # on every notifications/progress event, preventing premature timeout
         # of long-running tools that stream progress.
         return await session.call_tool(

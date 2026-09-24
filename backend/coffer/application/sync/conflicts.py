@@ -11,10 +11,10 @@ Three layers, narrowest first, and the narrowness is the design:
    it.
 2. **Delete-versus-edit over the file trees resolves toward the edit.** One
    side removed a document the other changed. The edit is something a person or
-   an agent just decided; the deletion is a housekeeping judgement — the tidy
+   an agent just decided; the deletion is a housekeeping judgement — the curation
    pass merging a note away — that the next pass will simply make again. Losing
    the edit is unrecoverable, losing the deletion costs one more pass, so the
-   asymmetry decides it (spec vault-sync "Let an edit beat a tidy deletion").
+   asymmetry decides it (spec vault-sync "Let an edit beat a curation deletion").
 3. **An agent may attempt the rest**, when an internal model is configured. It
    works in the working tree only, never against the live vault, and it is not
    trusted: everything it touched goes through the validation gate below before

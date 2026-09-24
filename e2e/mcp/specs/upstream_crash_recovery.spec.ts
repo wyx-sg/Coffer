@@ -1,4 +1,4 @@
-// e2e/mcp/specs/upstream_crash_recovery.spec.ts  (T-078)
+// e2e/mcp/specs/upstream_crash_recovery.spec.ts
 //
 // Use fake_mcp_server.py's "crash" scenario.  The upstream exits after the
 // first tools/call.  The gateway's supervisor should detect the death and

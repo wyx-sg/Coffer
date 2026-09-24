@@ -1,4 +1,4 @@
-"""In-process coverage for _Bridge._pump_stdin and _Bridge._drain_sse (TEST-017).
+"""In-process coverage for _Bridge._pump_stdin and _Bridge._drain_sse.
 
 The shim subprocess tests in test_shim.py spawn `coffer-mcp-shim` end-to-end,
 which doesn't actually exercise the in-process functions for coverage. These

@@ -41,7 +41,7 @@ async def test_worker_runs_prune_on_start():
 async def test_worker_polls_at_interval():
     """After the initial run, the worker waits `interval_seconds` between runs.
 
-    Event-driven (TEST-001): instead of `asyncio.sleep(0.5)` + `>= 5`, we poll
+    Event-driven: instead of `asyncio.sleep(0.5)` + `>= 5`, we poll
     `svc.calls` under a hard wall-clock cap so the test does not flake on a
     loaded CI box (and finishes immediately on a fast one).
     """
@@ -61,7 +61,7 @@ async def test_worker_polls_at_interval():
 async def test_worker_survives_prune_exception():
     """A raised exception in prune() does not kill the worker.
 
-    Event-driven (TEST-001): wait until at least 2 prune calls land, capped
+    Event-driven: wait until at least 2 prune calls land, capped
     by a 5 s deadline.  Avoids the fixed `asyncio.sleep(0.3)` that flakes on
     slow CI.
     """

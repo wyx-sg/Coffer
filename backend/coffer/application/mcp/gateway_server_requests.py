@@ -1,4 +1,4 @@
-"""Server-initiated request bookkeeping for MCPGatewaySession (T-061/T-062).
+"""Server-initiated request bookkeeping for MCPGatewaySession (sampling and roots).
 
 Extracted from gateway.py to keep that module under 400 LOC.
 
@@ -194,7 +194,7 @@ def build_list_roots_callback(
 
 class SessionCallbacks(NamedTuple):
     """The pair of SDK-compatible callbacks a session registers on each
-    upstream connection (T-061 sampling + T-062 roots)."""
+    upstream connection (sampling + roots)."""
 
     sampling: Any
     list_roots: Any
