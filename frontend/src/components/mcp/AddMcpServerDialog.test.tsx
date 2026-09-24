@@ -216,4 +216,51 @@ describe("AddMcpServerDialog", () => {
     expect(transport.headers).toEqual({ REGION: "us-east" });
     expect(transport).not.toHaveProperty("env");
   });
+
+  test("routes a pasted http server's secret header to a credential ref and a plain one to headers", async () => {
+    const postMock = vi.fn().mockResolvedValue({
+      data: {
+        uid: "u-example-api",
+        kind: "mcp_server",
+        name: "api",
+        description: null,
+        config: {},
+        enabled: true,
+        created_at: "2026-05-21T00:00:00Z",
+        updated_at: "2026-05-21T00:00:00Z",
+      },
+      error: undefined,
+    });
+    getApiClientMock.mockReturnValue({
+      POST: postMock,
+    } as unknown as ReturnType<typeof getApiClient>);
+
+    render(wrap());
+    openJsonTab();
+    fireEvent.change(screen.getByLabelText("MCP server JSON"), {
+      target: {
+        value: JSON.stringify({
+          mcpServers: {
+            api: {
+              url: "https://example.com/mcp",
+              headers: { Authorization: "Bearer abc", "X-Region": "us-east" },
+            },
+          },
+        }),
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /import/i }));
+    await waitFor(() => {
+      expect(screen.getByTestId("detail-page")).toHaveTextContent("u-example-api");
+    });
+
+    const resourceCall = postMock.mock.calls.find((c) => c[0] === "/resources");
+    const transport = resourceCall?.[1].body.config.transport;
+    expect(transport.headers).toEqual({ "X-Region": "us-east" });
+    const ref = transport.credential_refs.Authorization;
+    expect(typeof ref).toBe("string");
+    const credentialCall = postMock.mock.calls.find((c) => c[0] === "/credentials");
+    expect(credentialCall?.[1].body).toEqual({ ref, value: "Bearer abc" });
+  });
 });

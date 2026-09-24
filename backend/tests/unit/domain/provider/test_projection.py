@@ -17,6 +17,7 @@ from coffer.domain.provider.projection import (
     apply_codex_provider,
     codex_model_catalog_json,
     codex_model_catalog_path,
+    is_managed_api_key_helper,
     remove_anthropic_settings,
     remove_codex_provider,
     target_for_agent,
@@ -25,7 +26,10 @@ from coffer.domain.provider.projection import (
 #: ``apply_anthropic_settings`` takes no default helper any more (only the
 #: per-connection form may be written), so tests that do not care WHICH
 #: connection it names pass this one.
-_HELPER = "coffer provider key --connection-uid 0123456789abcdef0123456789abcdef"
+_HELPER = "/opt/coffer/bin/coffer provider key --connection-uid 0123456789abcdef0123456789abcdef"
+
+#: Where the caller resolved the ``coffer`` CLI to.
+_CLI = "/Users/me/.coffer/bin/coffer"
 
 #: A connection's uid — what the projected helper resolves. Opaque and, unlike
 #: the name it replaced, unchanged by anything the user does to the connection.
@@ -38,10 +42,10 @@ def test_anthropic_sets_managed_keys_and_preserves_others() -> None:
         base_url="https://gw/anthropic",
         model="claude-opus-4-8",
         fast_model="claude-haiku-4-5",
-        api_key_helper=anthropic_api_key_helper(_CONNECTION_UID),
+        api_key_helper=anthropic_api_key_helper(_CONNECTION_UID, coffer_cli=_CLI),
     )
     d = json.loads(out)
-    assert d["apiKeyHelper"] == anthropic_api_key_helper(_CONNECTION_UID)
+    assert d["apiKeyHelper"] == anthropic_api_key_helper(_CONNECTION_UID, coffer_cli=_CLI)
     assert d["theme"] == "dark"  # unrelated key preserved
     assert d["env"]["FOO"] == "1"  # unrelated env preserved
     assert d["env"]["ANTHROPIC_BASE_URL"] == "https://gw/anthropic"
@@ -192,21 +196,52 @@ def test_per_connection_api_key_helper_is_written_and_removed() -> None:
     # resolving after the user relabels the connection, so there is no
     # re-projection to perform and no window in which the agent shells out to a
     # name that no longer exists.
-    helper = anthropic_api_key_helper(_CONNECTION_UID)
-    assert helper == f"coffer provider key --connection-uid {_CONNECTION_UID}"
+    helper = anthropic_api_key_helper(_CONNECTION_UID, coffer_cli=_CLI)
+    assert helper == f"{_CLI} provider key --connection-uid {_CONNECTION_UID}"
     out = apply_anthropic_settings(
         "", base_url="https://agnes", model=None, fast_model=None, api_key_helper=helper
     )
     assert json.loads(out)["apiKeyHelper"] == helper
-    # Removal strips ANY Coffer-managed helper by prefix, so use-builtin always
-    # reverts cleanly — including the two forms Coffer no longer writes but did
-    # write into files that are still on this disk.
+    # Removal strips ANY Coffer-managed helper, so use-builtin always reverts
+    # cleanly — including the forms Coffer no longer writes but did write into
+    # files that are still on this disk.
     assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(out))
     for superseded in (
-        '{"apiKeyHelper": "coffer provider key --wire anthropic"}',
-        '{"apiKeyHelper": "coffer provider key --connection agnes"}',
+        f"coffer provider key --connection-uid {_CONNECTION_UID}",
+        "coffer provider key --wire anthropic",
+        "coffer provider key --connection agnes",
     ):
-        assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(superseded))
+        doc = json.dumps({"apiKeyHelper": superseded})
+        assert "apiKeyHelper" not in json.loads(remove_anthropic_settings(doc))
+
+
+def test_api_key_helper_names_the_cli_by_absolute_path_and_quotes_spaces() -> None:
+    """A Dock-launched Claude Code has no login-shell ``PATH``, so the CLI is
+    named by path; Claude Code runs the line through a shell, so a space in
+    that path must not split it."""
+    helper = anthropic_api_key_helper(_CONNECTION_UID, coffer_cli="/Users/me/My Apps/coffer")
+    assert helper == f"'/Users/me/My Apps/coffer' provider key --connection-uid {_CONNECTION_UID}"
+    assert is_managed_api_key_helper(helper)
+    doc = json.dumps({"apiKeyHelper": helper, "theme": "dark"})
+    assert json.loads(remove_anthropic_settings(doc)) == {"theme": "dark"}
+
+
+@pytest.mark.parametrize(
+    "helper",
+    [
+        "my-own-helper --token",
+        "/usr/local/bin/op read op://vault/anthropic",
+        "coffer-helper provider key",  # program is not the coffer CLI
+        "/opt/coffer/bin/coffer provider list",  # not the key command
+        "coffer provider",  # too short to be ours
+        "'/unbalanced/coffer provider key",  # not a line Coffer could write
+        "",
+    ],
+)
+def test_a_user_owned_helper_is_never_claimed(helper: str) -> None:
+    assert not is_managed_api_key_helper(helper)
+    doc = json.dumps({"apiKeyHelper": helper})
+    assert json.loads(remove_anthropic_settings(doc)) == {"apiKeyHelper": helper}
 
 
 # --- supported-agent invariant -------------------------------------------------

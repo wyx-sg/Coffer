@@ -18,6 +18,7 @@ from coffer.domain.sync.backup import (
     DEFAULT_BRANCH,
     DEFAULT_INTERVAL_SECONDS,
     DEFAULT_WORKTREE,
+    MIN_INTERVAL_SECONDS,
     URL_PATTERN,
     validate_branch,
     validate_url,
@@ -176,7 +177,7 @@ class SyncRemoteIn(BaseModel):
     #: it at push time and nowhere else.
     credential_ref: str | None = None
     include_credentials: bool = False
-    interval_seconds: int = Field(default=DEFAULT_INTERVAL_SECONDS, ge=1)
+    interval_seconds: int = Field(default=DEFAULT_INTERVAL_SECONDS, ge=MIN_INTERVAL_SECONDS)
     enabled: bool = True
     worktree_path: str = Field(default=DEFAULT_WORKTREE, min_length=1)
 

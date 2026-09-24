@@ -8,7 +8,7 @@ switch and timer of every pass Coffer runs when nobody asked it to, the one
 machine allowed to run curation, the bound on one call to that model, and the
 speech-to-text model. It owns one global
 settings row, the surfaces that show and change it (`/api/v1/internal-engine-config`,
-`coffer engine …`, Settings → Engine), its convergence between machines, and the
+`coffer engine …`, Settings → Coffer's model), its convergence between machines, and the
 rule that a pass with nothing configured is a clean no-op rather than an error.
 
 Coffer does work on its own behalf: it aggregates the agents' memory, lets a
@@ -316,39 +316,6 @@ the same service as any other change and audited as `sync`.
 - **AND** the reset is recorded as audit entries whose actor is `sync`, and the
   machine then publishes no document.
 
-### Requirement: Show and change the engine in Settings → Engine
-Settings → Engine MUST show and change both halves: the connection and model the
-engine runs on, and each pass's switch and interval with its default named
-rather than left blank. Edits MUST save on their own — the switch on toggle,
-the interval on selection — with no Save button.
-
-The page is three cards, because all three configure Coffer's own machinery
-rather than anything served to an agent:
-
-- The model card picks the internal-default connection and, from that
-  connection's curated `text` models or its probed catalogue, the engine model,
-  and carries the call bound beside it, named with the default that applies
-  while the operator has chosen none; a bound outside the permitted range is
-  reported where it was typed rather than saved.
-- The speech-to-text card is the same pair for the connection flagged
-  `transcribe_default` and its own model, saying plainly that with either half
-  unset Coffer transcribes nothing and the agent receives the audio file.
-- The upkeep card is one row per pass: a switch, an interval select whose
-  default option names the real number, and — for `curate` alone — a line
-  saying it is Coffer's own model deriving documents from the user's sources,
-  and the curation owner line under that row (see "Report and change the
-  curation owner from every surface").
-
-#### Scenario: Settings → Engine shows and changes both halves
-- **GIVEN** the Settings → Engine page is rendered with an internal-default
-  connection and the three passes,
-- **WHEN** the page renders and the operator toggles one pass and picks an
-  interval,
-- **THEN** the model card shows the chosen connection and model, the upkeep card
-  shows one row per pass with the default named rather than blank, each edit
-  saves on its own without a Save button, and only the toggled pass is written
-  (TypeScript acceptance test).
-
 ### Requirement: Show, set and clear the engine model from the CLI
 A CLI MUST show, set and clear the engine model — `coffer engine model show |
 set <id> | clear` — with the same effect and the same audit entry as the HTTP
@@ -496,7 +463,7 @@ the engine settings"). A CLI MUST show, set and return-to-default the bound —
 prints the chosen bound beside the default and `timeout default` returns to the
 built-in one — and show, set and clear the speech-to-text model —
 `coffer engine transcribe-model show | set <id> | clear` — with the same
-effects, refusals and audit entries as the routes. Settings → Engine MUST show
+effects, refusals and audit entries as the routes. Settings → Coffer's model MUST show
 and change both.
 
 #### Scenario: the bound and the speech-to-text model change one value at a time
@@ -531,7 +498,7 @@ and change it, applying the four-state rule of
   `show --json` carries `curate_owner_machine_id`, `state` and
   `this_machine_id`, and an owner no machine in a non-empty registry claims is
   printed as the fault it is together with how to take the pass back.
-- Settings → Engine MUST show the owner on a line under the `curate` row, with
+- Settings → Coffer's model MUST show the owner on a line under the `curate` row, with
   an action that takes the pass over for this machine and one that clears the
   owner after a confirmation.
 
@@ -557,3 +524,36 @@ and change it, applying the four-state rule of
   the JSON carries this machine's id with state `self`, and `clear` prints the
   unowned line again,
 - **AND** the settings route reports the owner that each step left.
+
+### Requirement: Show and change the engine in Settings → Coffer's model
+Settings → Coffer's model MUST show and change both halves: the connection and model the
+engine runs on, and each pass's switch and interval with its default named
+rather than left blank. Edits MUST save on their own — the switch on toggle,
+the interval on selection — with no Save button.
+
+The page is three cards, because all three configure Coffer's own machinery
+rather than anything served to an agent:
+
+- The model card picks the internal-default connection and, from that
+  connection's curated `text` models or its probed catalogue, the engine model,
+  and carries the call bound beside it, named with the default that applies
+  while the operator has chosen none; a bound outside the permitted range is
+  reported where it was typed rather than saved.
+- The speech-to-text card is the same pair for the connection flagged
+  `transcribe_default` and its own model, saying plainly that with either half
+  unset Coffer transcribes nothing and the agent receives the audio file.
+- The upkeep card is one row per pass: a switch, an interval select whose
+  default option names the real number, and — for `curate` alone — a line
+  saying it is Coffer's own model deriving documents from the user's sources,
+  and the curation owner line under that row (see "Report and change the
+  curation owner from every surface").
+
+#### Scenario: Settings → Coffer's model shows and changes both halves
+- **GIVEN** the Settings → Coffer's model page is rendered with an internal-default
+  connection and the three passes,
+- **WHEN** the page renders and the operator toggles one pass and picks an
+  interval,
+- **THEN** the model card shows the chosen connection and model, the upkeep card
+  shows one row per pass with the default named rather than blank, each edit
+  saves on its own without a Save button, and only the toggled pass is written
+  (TypeScript acceptance test).

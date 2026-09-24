@@ -171,6 +171,7 @@ def in_proc_daemon(tmp_path, monkeypatch):
     from coffer.surfaces.cli import _client as _cli_client
 
     monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (fake_client, info))
+    monkeypatch.setattr(_cli_client, "daemon_is_running", lambda: True)
 
     yield home
 

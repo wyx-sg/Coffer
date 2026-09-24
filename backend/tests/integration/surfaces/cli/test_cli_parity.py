@@ -103,7 +103,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "agent config": {"files", "ls", "cat", "write", "edit", "rm"},
     "agent mcp": {"status", "install", "uninstall", "adopt", "entries", "remove-entry"},
     "agent plugin": {"list", "enable", "disable", "uninstall"},
-    "channel": {"register", "list", "status", "pair", "bind", "notify"},
+    "channel": {"register", "list", "status", "pair", "bind", "set", "notify"},
     # `files`, `cat` and `write` are the skill-file tree the web editor browses
     # and saves (spec skill-manager "Offer every skill operation on REST, CLI
     # and web"): GET/PUT /api/v1/skills/{uid}/files[/{path}].
@@ -183,7 +183,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     },
     "sync key": {"export", "import", "fingerprint"},
     "sync machine": {"list", "rename", "remove"},
-    "sync remote": {"show", "set", "clear"},
+    "sync remote": {"show", "set", "clear", "pause", "resume"},
     # Coffer's own operating settings (spec internal-engine "Show, set and clear the
     # engine model from the CLI", "List and change each unattended pass from the CLI"):
     # the model its passes think with, and the switch and timer of each pass
@@ -410,6 +410,7 @@ def _fake_client_returning_500(monkeypatch: pytest.MonkeyPatch) -> None:
         binary_path="/test",
     )
     monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (fake, info))
+    monkeypatch.setattr(_cli_client, "daemon_is_running", lambda: True)
 
 
 def _fake_client_returning_credential_missing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -448,6 +449,7 @@ def _fake_client_returning_credential_missing(monkeypatch: pytest.MonkeyPatch) -
         binary_path="/test",
     )
     monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (fake, info))
+    monkeypatch.setattr(_cli_client, "daemon_is_running", lambda: True)
 
 
 def test_cli_5xx_shows_actionable_message_not_traceback(monkeypatch):

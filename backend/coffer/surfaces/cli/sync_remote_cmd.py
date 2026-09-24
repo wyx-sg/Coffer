@@ -15,6 +15,7 @@ from rich.console import Console
 
 from coffer.domain.sync.backup import DEFAULT_BRANCH, DEFAULT_INTERVAL_SECONDS
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._options import ExitCode
 
 remote_app = typer.Typer(help="The one git remote this vault converges with")
 
@@ -89,11 +90,13 @@ def remote_set(
 ) -> None:
     """Configure the remote. It is probed before being accepted.
 
-    On a configured remote an option not given keeps its stored value, and
-    ``enabled`` is never changed here: re-running never unpauses. A remote set
-    for the first time takes the defaults and starts enabled. A working tree
-    at, inside or above the vault is refused by the daemon with its reason
-    (spec vault-sync "Keep the working tree outside the vault")."""
+    On a configured remote an option not given keeps its stored value, and a
+    paused remote stays paused (`coffer sync remote resume` resumes it). A
+    remote set for the first time takes the defaults and starts enabled. A
+    working tree at, inside or above the vault is refused, with the reason.
+
+    \f
+    Spec vault-sync "Keep the working tree outside the vault"."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -115,6 +118,7 @@ def remote_set(
 
 @remote_app.command("show")
 def remote_show(ctx: typer.Context) -> None:
+    """Show the configured remote and its settings."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -137,3 +141,35 @@ def remote_clear(ctx: typer.Context) -> None:
         _cli_client.check(r, verbose=verbose)
         payload = r.json()
     _console.print("[green]cleared[/green]" if payload.get("cleared") else "nothing to clear")
+
+
+def _switch(ctx: typer.Context, *, enabled: bool) -> None:
+    """Flip the stored remote's ``enabled`` and nothing else — the same
+    ``PUT /sync/remote`` the web UI's switch sends, built on what is stored
+    (spec vault-sync "Pause a configured remote without forgetting it")."""
+    verbose = _verbose(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        current = c.get("/sync/remote")
+        _cli_client.check(current, verbose=verbose)
+        payload = current.json()
+        if not payload.get("configured"):
+            typer.echo(
+                "no sync remote configured — set one with: coffer sync remote set <url>", err=True
+            )
+            raise typer.Exit(int(ExitCode.NOT_FOUND))
+        r = c.put("/sync/remote", json={**payload["remote"], "enabled": enabled})
+        _cli_client.check(r, verbose=verbose)
+        print_remote(r.json())
+
+
+@remote_app.command("pause")
+def remote_pause(ctx: typer.Context) -> None:
+    """Pause sync. The remote, its settings and the history are all kept."""
+    _switch(ctx, enabled=False)
+
+
+@remote_app.command("resume")
+def remote_resume(ctx: typer.Context) -> None:
+    """Resume a paused remote where the vault left off."""
+    _switch(ctx, enabled=True)

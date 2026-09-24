@@ -1,7 +1,8 @@
 // frontend/src/components/channel/editChannel.ts
 // Apply plumbing for EditChannelDialog: rotated secrets are written to their
 // existing credential refs FIRST (so the channel keeps working off the same
-// refs), then the resource config is PATCHed (bound agent / SeaTalk app id).
+// refs), then the resource config is PATCHed (bound agent / SeaTalk app id /
+// group gating).
 // Unlike registration there is nothing to roll back — overwriting a ref's
 // value and PATCHing a live resource are both in-place updates.
 import { getApiClient } from "@/lib/api/client";
@@ -48,6 +49,22 @@ interface ChannelEditValues {
   app_id?: string;
   /** New SeaTalk app secret; blank leaves the stored credential untouched. */
   app_secret?: string;
+  /** Answer in a group only when @mentioned / replied to. Undefined leaves the
+   *  stored value alone — the form sends it only where the platform honours it
+   *  (see honoursRequireMention). */
+  require_mention?: boolean;
+  /** Drop a group message that also @mentions another user. */
+  ignore_other_mentions?: boolean;
+}
+
+/**
+ * Whether this channel type delivers un-addressed group messages at all — the
+ * only case where require-mention changes anything. SeaTalk sends the bot a
+ * group message only when it @mentions the bot, so there the switch would gate
+ * nothing.
+ */
+export function honoursRequireMention(channelType: unknown): boolean {
+  return channelType === "telegram";
 }
 
 export interface ChannelEditInput {
@@ -65,7 +82,8 @@ export interface ChannelEditInput {
  * Plan an edit: rotate secrets into the channel's EXISTING refs (a rotation
  * never moves the ref, so the config is unchanged when only a secret changes)
  * and build the full config PATCH preserving every `*_ref` / unknown field
- * while applying the mutable changes (bound agent, SeaTalk app id).
+ * while applying the mutable changes (bound agent, SeaTalk app id, group
+ * gating).
  *
  * Pure (no network), mirroring planChannel: the config is fully assembled
  * before any side effect runs. A blank secret value writes no credential.
@@ -77,6 +95,22 @@ export function planChannelEdit(input: ChannelEditInput): ChannelEditPlan {
     ...config,
     default_agent: values.default_agent,
   };
+  // A group switch is written only when it differs from what the config
+  // already says (an absent key reads as the backend default), so an edit
+  // that only rotates a secret PATCHes back exactly the config it read.
+  if (
+    values.require_mention !== undefined &&
+    honoursRequireMention(config.channel_type) &&
+    values.require_mention !== (config.require_mention ?? true)
+  ) {
+    nextConfig.require_mention = values.require_mention;
+  }
+  if (
+    values.ignore_other_mentions !== undefined &&
+    values.ignore_other_mentions !== (config.ignore_other_mentions ?? false)
+  ) {
+    nextConfig.ignore_other_mentions = values.ignore_other_mentions;
+  }
 
   if (config.channel_type === "telegram") {
     const ref = config.bot_token_ref;

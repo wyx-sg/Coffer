@@ -1,6 +1,6 @@
 // frontend/src/pages/settings/EngineSettings.test.tsx
 //
-// Settings → Engine holds Coffer's own engine configs: the internal LLM
+// Settings → Coffer's model holds Coffer's own engine configs: the internal LLM
 // connection + model, the bound on ONE call to that model, and — in its own
 // card — the connection and model speech is transcribed with. It moved here off
 // the model-provider page, which is now purely the connection library agents
@@ -123,7 +123,7 @@ describe("EngineSettings", () => {
     };
   });
 
-  acceptance("internal-engine", "Settings → Engine shows and changes both halves", async () => {
+  acceptance("internal-engine", "Settings → Coffer's model shows and changes both halves", async () => {
     apiMock.list.mockResolvedValue({ providers: [makeProvider()] });
     renderPage();
     expect(await screen.findByText("Coffer's model")).toBeInTheDocument();

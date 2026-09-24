@@ -124,7 +124,7 @@ Secrets live only as **Fernet ciphertext** in the `credentials` table of `~/.cof
 
 - An MCP server's config maps environment variables or headers to refs in `transport.credential_refs`. Its schema rejects a static `env` or header value that looks like a secret (`Bearer …`, `ghp_…`, `github_pat_…`, `sk-…`, `xox?-…`, a JWT prefix) and tells you to move it into `credential_refs`.
 - A channel's bot token or app secret, a provider's API key, and the sync remote's push credential are refs.
-- When you switch a provider into Claude Code, Coffer writes an `apiKeyHelper` line (`coffer provider key --connection-uid <uid>`) into Claude Code's settings, never the key itself. Codex is pointed at an environment variable name, also never the key.
+- When you switch a provider into Claude Code, Coffer writes an `apiKeyHelper` line (`<absolute path to coffer> provider key --connection-uid <uid>`) into Claude Code's settings, never the key itself. Codex is pointed at an environment variable name, also never the key.
 
 Plaintext exists in memory only between decrypt and the spawn or header injection that consumes it. Registration probes every cited ref before writing the resource, so a missing secret fails with `CREDENTIAL_MISSING` and leaves nothing behind; deleting a credential that a resource still cites is refused with `409`; and deleting a resource releases any credential no remaining resource cites.
 
@@ -159,11 +159,16 @@ A copy of `coffer.db` without its master key yields no secrets. Back up `~/.coff
 
 [`infrastructure/net/ssrf_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/net/ssrf_guard.py) resolves a URL's host and refuses it if any resolved address is loopback, private (RFC 1918, `fc00::/7`), link-local, carrier-grade NAT (`100.64.0.0/10`), multicast, unspecified or reserved. A name that fails to resolve counts as blocked.
 
-It guards the one place Coffer fetches from a URL typed into a form to probe it: the provider introspector, which asks a configured provider endpoint for its model list. Protocols that are local by design (Ollama) are exempt. It is not applied to:
+The rule ([Principles → Network defaults](/architecture/principles)) is that a URL Coffer probes or fetches on your behalf from something typed into a form passes the guard, while an endpoint you configure as your own does not. Today one adapter fetches from typed input: the provider introspector ([`infrastructure/provider/introspector.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/provider/introspector.py)), behind the three probes a connection editor runs before anything is saved — `POST /api/v1/models/list-models`, `/test-connection` and `/detect-protocol`. Each checks the base URL before its first request. Two cases skip the check:
+
+- A connection whose protocol is local by design (`ollama`) is never checked, since its URL is loopback.
+- `detect-protocol` classifies a loopback host (`localhost`, `127.0.0.1`, `::1`, `0.0.0.0`, `host.docker.internal`) as `ollama` without sending any request.
+
+So a probe of a non-Ollama endpoint on a private or link-local address is refused. Saving and using a connection are not probes, and the guard is not applied to the endpoints you configure as your own:
 
 - **HTTP-transport MCP servers**, whose URL you registered — they commonly run on your own machine or network.
 - **Coffer's own model calls** and **transcription**, which go to the providers you configured.
-- **Telegram and SeaTalk**, fixed well-known hosts.
+- **Telegram and SeaTalk**, the IM platforms' own hosts, including the media URLs they hand back.
 - **Vault sync**, which is a `git` subprocess against the remote you configured.
 
 The guard resolves DNS at validation time and the HTTP client resolves again when it connects, so a host that re-points between the two can slip past. Pinning the resolved address through to the client would break TLS certificate verification; for a single-user daemon where you typed the URL yourself, that residual risk is accepted.

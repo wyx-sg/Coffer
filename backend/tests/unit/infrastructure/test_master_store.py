@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import pathlib
 
-from coffer.infrastructure.skill.master_store import MasterStore
+from coffer.infrastructure.skill.master_store import MasterStore, default_master_root
+from coffer.infrastructure.sync.paths import skills_root
 
 
 def _make_src_with_git(src: pathlib.Path) -> None:
@@ -46,3 +47,22 @@ def test_atomic_replace_omits_dot_git(tmp_path):
 
     assert (paths.folder / "SKILL.md").read_text().endswith("body\n")
     assert not (paths.folder / ".git").exists()
+
+
+def test_default_master_root_honours_coffer_skills_root(monkeypatch):
+    """``COFFER_SKILLS_ROOT`` moves the master store with the sync mirror.
+
+    Before, it moved only the tree sync mirrors, so the round published a
+    directory no skill was ever written to.
+    """
+    monkeypatch.setenv("HOME", "/home/someone")
+    monkeypatch.setenv("COFFER_SKILLS_ROOT", "/elsewhere/skills")
+    assert default_master_root() == pathlib.Path("/elsewhere/skills")
+    assert default_master_root() == skills_root()
+
+
+def test_default_master_root_falls_back_to_home(monkeypatch):
+    monkeypatch.setenv("HOME", "/home/someone")
+    monkeypatch.delenv("COFFER_SKILLS_ROOT", raising=False)
+    assert default_master_root() == pathlib.Path("/home/someone/.coffer/skills")
+    assert default_master_root() == skills_root()

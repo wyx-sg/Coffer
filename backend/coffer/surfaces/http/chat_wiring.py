@@ -45,7 +45,6 @@ from coffer.surfaces.http.chat.dependencies import (
     set_turn_orchestrator,
 )
 from coffer.surfaces.http.chat_provider_wiring import build_agent_provider_registry
-from coffer.surfaces.http.mcp.dependencies import McpSessionFactory
 from coffer.surfaces.http.provider_dependencies import (
     get_provider_service,
     set_introspection_service,
@@ -54,7 +53,7 @@ from coffer.surfaces.http.provider_dependencies import (
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-    from coffer.application.mcp.gateway import MCPGatewaySession
+    from coffer.infrastructure.chat.adapter_support import MemoryContextComposer
 
 
 _log = logging.getLogger(__name__)
@@ -142,13 +141,10 @@ class _ActiveProviderModels:
 class ChatWiring:
     """What the turn platform hands back to the lifespan.
 
-    ``gateway_session`` is the long-lived ``coffer-builtin-agent`` session that
-    backs Coffer's internal flows, disposed at shutdown; the rest is what the
-    channel kind drives turns through, and the catalogue every model picker
-    reads.
+    What the channel kind drives turns through, and the catalogue every model
+    picker reads.
     """
 
-    gateway_session: MCPGatewaySession
     chat_service: ChatService
     orchestrator: TurnOrchestrator
     registry: AgentProviderRegistry
@@ -158,16 +154,17 @@ class ChatWiring:
 
 def wire_chat(
     sm: async_sessionmaker[AsyncSession],
-    mcp_session_factory: McpSessionFactory,
     credential_store: EncryptedCredentialStore,
     agent_service: AgentService,
     resource_service: ResourceService,
+    compose_memory_context: MemoryContextComposer | None = None,
 ) -> ChatWiring:
     """Wire the agent-chat feature (spec chat) into the running app.
 
-    Must be called **after** the ``BuiltinToolRegistry`` is fully populated
-    (after knowledge, MCP, and skill wiring) so the ``coffer-builtin-agent``
-    gateway session sees all built-in tools.
+    ``compose_memory_context`` is the memory kind's closure
+    (``memory_wiring.memory_context_composer``) every provider appends to a
+    channel turn's system prompt (spec memory "Deliver to channel turns through
+    the system prompt"); ``None`` wires no memory append.
 
     Chat talks only to Coffer-managed agents (``claude_code`` / ``codex``); the
     former ``builtin`` chat persona is retired (ADR coffer-model-is-an-internal-engine).
@@ -176,12 +173,7 @@ def wire_chat(
     conv_repo = ConversationRepo(sm)
     msg_repo = MessageRepo(sm)
 
-    # 2. Long-lived in-process gateway session for the built-in agent. Built
-    #    via the shared mcp_session_factory so it reuses the fully-populated
-    #    BuiltinToolRegistry (knowledge + skill tools + MCP).
-    agent_session: MCPGatewaySession = mcp_session_factory("coffer-builtin-agent")
-
-    # 3. Credential resolver: resolve a credential ref → raw API key from the
+    # 2. Credential resolver: resolve a credential ref → raw API key from the
     #    encrypted credential store.
     def _credential_resolver(ref: str) -> str:
         value: str | None = credential_store.get(ref)
@@ -192,7 +184,7 @@ def wire_chat(
             raise CredentialMissing(ref)
         return value
 
-    # 4. The agent-provider registry — the platform seam (chat_provider_wiring:
+    # 3. The agent-provider registry — the platform seam (chat_provider_wiring:
     #    adding an agent is one more register() call there).
     async def _channel_name(channel_uid: str) -> str | None:
         """The channel's current label, for the system-prompt line naming it.
@@ -210,10 +202,11 @@ def wire_chat(
     registry = build_agent_provider_registry(
         conv_repo,
         _credential_resolver,
+        compose_memory_context=compose_memory_context,
         resolve_channel_name=_channel_name,
     )
 
-    # 5. Application services + the agent-agnostic turn orchestrator.
+    # 4. Application services + the agent-agnostic turn orchestrator.
     chat_svc = ChatService(
         conversations=conv_repo,
         messages=msg_repo,
@@ -223,7 +216,7 @@ def wire_chat(
         chat_service=chat_svc, registry=registry, idle_timeout=_turn_idle_timeout()
     )
 
-    # 6. Startup sweep: flip any lingering ``status='streaming'`` rows to
+    # 5. Startup sweep: flip any lingering ``status='streaming'`` rows to
     #    ``'failed'`` (recover from a prior daemon crash).
     loop = asyncio.get_running_loop()
 
@@ -237,12 +230,12 @@ def wire_chat(
 
     loop.create_task(_sweep())  # noqa: RUF006
 
-    # 7. Provider introspection (test-connection + list-models). The OpenAI-
+    # 6. Provider introspection (test-connection + list-models). The OpenAI-
     #    compatible client + SSRF guard live in the infrastructure adapter; the
     #    service resolves credential refs to keys server-side.
     introspection_svc = ModelIntrospectionService(ProviderIntrospector(), _credential_resolver)
 
-    # 8. The model catalogue — one list of models per managed agent, shared by
+    # 7. The model catalogue — one list of models per managed agent, shared by
     #    the web picker, the channel /model card, and the note each turn tells
     #    the agent about the model it is on. Coffer names no model itself; it
     #    asks the two parties that know.
@@ -274,7 +267,7 @@ def wire_chat(
         provider_models=_ActiveProviderModels(resources=resource_service),
     )
 
-    # 9. Register dependency providers. The catalogue is published twice on
+    # 8. Register dependency providers. The catalogue is published twice on
     #    purpose: once as the agent kind's own service, once as the chat
     #    kind's ``ModelCatalogPort`` — the one seam that crosses a kind, so
     #    the chat surface never imports the agent kind.
@@ -286,7 +279,6 @@ def wire_chat(
     set_model_catalog(model_catalogue)
 
     return ChatWiring(
-        gateway_session=agent_session,
         chat_service=chat_svc,
         orchestrator=orchestrator,
         registry=registry,

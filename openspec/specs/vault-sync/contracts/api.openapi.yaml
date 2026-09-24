@@ -827,9 +827,9 @@ components:
         interval_seconds:
           type: integer
           default: 3600
-          minimum: 1
+          minimum: 60
           description: |
-            Seconds between automatic rounds. The worker converges on this
+            Seconds between automatic rounds, at least one minute. The worker converges on this
             interval as soon as a remote is configured and `enabled`.
         enabled:
           type: boolean

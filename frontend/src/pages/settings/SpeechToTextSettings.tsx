@@ -1,6 +1,6 @@
 // frontend/src/pages/settings/SpeechToTextSettings.tsx
 //
-// Settings → Engine: the connection and model Coffer transcribes voice with
+// Settings → Coffer's model: the connection and model Coffer transcribes voice with
 // (spec internal-engine "Transcribe speech on its own connection and model",
 // spec provider-switching `transcribe_default`).
 //

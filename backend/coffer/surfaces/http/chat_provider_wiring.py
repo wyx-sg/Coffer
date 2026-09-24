@@ -85,15 +85,14 @@ def build_agent_provider_registry(
     ``None`` means the append still happens — the turn really did arrive over a
     channel — without naming it.
 
-    ``compose_memory_context`` is the memory kind's own third system-prompt
-    append (spec memory "Deliver to channel turns through the system prompt")
-    for a channel-driven turn — a plain callable
-    so this module, like ``claude_sdk_provider``, never imports anything from
-    ``application.memory`` itself. Its real closure over
-    ``MemoryService``/``OverrideRepository`` is built one level up, where
-    those services are constructed; wire it in from there once they exist.
-    ``None`` here (the default) means no memory append at all, not a header
-    with nothing under it.
+    ``compose_memory_context`` is the memory kind's own system-prompt append
+    (spec memory "Deliver to channel turns through the system prompt") for a
+    channel-driven turn — a plain callable so this module, like
+    ``claude_sdk_provider``, never imports anything from ``application.memory``
+    itself. The composition root builds the real closure over ``MemoryService``
+    (``memory_wiring.memory_context_composer``) and hands it through
+    ``wire_chat``. ``None`` means no memory append at all, not a header with
+    nothing under it.
     """
     registry = AgentProviderRegistry()
 

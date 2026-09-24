@@ -95,8 +95,10 @@ def rename(
 
     A label change and nothing else: the resource keeps its identity, so its
     reach, its credentials, its bindings and its history all follow it without
-    being rewritten. Available for every kind — while the name WAS the
-    identity, only connections could be renamed at all.
+    being rewritten. Works for every kind.
+
+    \f
+    While the name WAS the identity, only connections could be renamed at all.
     """
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()

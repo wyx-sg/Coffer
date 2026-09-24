@@ -19,7 +19,16 @@ not changed; it does not say the entries it produced are still on disk, and
 and re-syncing rebuilds the partition *with this cache deliberately left
 behind*. So a caller combines the match with the presence of what it produced,
 and the cost of this file being lost or stale is only a pass of unnecessary
-re-parsing, never a partition that silently stays empty. Dot-prefixed and
+re-parsing, never a partition that silently stays empty.
+
+**The file is versioned by the rules that turn a source into raw entries.** A
+digest says the source is unchanged, not that the rules which filed its entries
+are: when ``placement.Placer.place`` changes where an entry belongs, an
+unchanged source would otherwise keep its entries where the old rule put them
+for as long as nobody edits it. Bumping :data:`STATE_VERSION` makes a file
+written under the old rules read as empty, so the next pass re-reads every
+source once and re-files everything it produced (and removes the entries it
+used to write elsewhere). Dot-prefixed and
 derived like everything else the layer keeps outside the partition tree, and
 never addressed through the partition path helpers in ``paths.py``, so it does
 not need their traversal guard.
@@ -34,6 +43,12 @@ from coffer.infrastructure.memory import paths
 
 STATE_FILENAME = ".source_state.json"
 
+#: Bump whenever the partition an entry is filed into changes for an unchanged
+#: source. 2: a ``feedback`` entry learned in a repository files into that
+#: repository's partition rather than ``global``. The unversioned flat mapping
+#: written before this reads as version 1.
+STATE_VERSION = 2
+
 
 def _state_path() -> pathlib.Path:
     return paths.memory_root() / STATE_FILENAME
@@ -41,6 +56,10 @@ def _state_path() -> pathlib.Path:
 
 def load() -> dict[str, str]:
     """The digest recorded for each native path last pass, or ``{}``.
+
+    A file written under another :data:`STATE_VERSION` (including the
+    unversioned mapping that predates it) reads as ``{}``: every source is
+    re-read once under the current filing rules.
 
     Tolerant of a missing or corrupt file — losing this state only costs a pass
     of unnecessary re-parsing, never correctness (the whole point of "Keep the
@@ -54,9 +73,12 @@ def load() -> dict[str, str]:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    if not isinstance(data, dict):
+    if not isinstance(data, dict) or data.get("version") != STATE_VERSION:
         return {}
-    return {str(k): str(v) for k, v in data.items()}
+    digests = data.get("digests")
+    if not isinstance(digests, dict):
+        return {}
+    return {str(k): str(v) for k, v in digests.items()}
 
 
 def save(state: dict[str, str]) -> None:
@@ -64,5 +86,6 @@ def save(state: dict[str, str]) -> None:
     path = _state_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.tmp")
-    tmp.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+    payload = {"version": STATE_VERSION, "digests": state}
+    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     tmp.replace(path)

@@ -34,10 +34,17 @@ The script:
 
 1. Checks that you are on macOS arm64. Any other OS or architecture exits with an error that points to the from-source install.
 2. Downloads `coffer-cli-aarch64-apple-darwin.tar.gz` and the release's `SHA256SUMS` from GitHub Releases, then verifies the archive's checksum. If the checksum does not match, the script stops.
-3. Copies `coffer`, `coffer-daemon` and `coffer-mcp-shim` into the install directory and marks them executable.
+3. Installs `coffer`, `coffer-daemon` and `coffer-mcp-shim` into the install directory. Each binary is copied to a temporary name beside it, marked executable and renamed over the public name, so when that name is a symlink into a versioned directory (as it is once a daemon started from elsewhere, such as the desktop app, has deployed its build there), the link is replaced and the previous version's binaries stay intact for a rollback.
 4. If that directory is not already on your `PATH`, appends a line to your shell profile. The profile depends on your shell: `~/.zshrc` for zsh (or `$ZDOTDIR/.zshrc`), `~/.bash_profile` for bash on macOS, `~/.config/fish/config.fish` for fish (as `fish_add_path`), and `~/.profile` for anything else. Running the script again does not add the line twice.
 
-Open a new shell, or `source` the profile the script names, so that `coffer` is on your `PATH`.
+Open a new shell, or `source` the profile the script names, so that `coffer` is on your `PATH`. The script ends by suggesting the two commands that connect Claude Code:
+
+```sh
+coffer agent add claude_code
+coffer agent mcp install claude-code
+```
+
+See the [Quickstart](/start/quickstart) for what they do.
 
 ### Installer options
 

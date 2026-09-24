@@ -80,9 +80,9 @@ def cat(
 ) -> None:
     """Print one file of a skill's master folder.
 
-    A file past the route's read cap prints its first part and exits 1 with a
-    note on stderr, so a script never mistakes the part for the file;
-    ``--json`` exits 0 and carries ``truncated`` for the caller to judge."""
+    A file past the read cap prints its first part and exits 1 with a note on
+    stderr, so a script never mistakes the part for the file; --json exits 0
+    and carries `truncated` for the caller to judge."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:

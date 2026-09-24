@@ -5,10 +5,10 @@ it is the whole reason the 2026-07-10 mutual deletion cannot happen again::
 
     0  Repair    — working tree back to the pointer if it drifted, and
                     refuse a remote whose layout this build does not know
-    1  Serialize — export the vault into the tree, commit as L
+    1  Serialize — export into the tree, commit as L; guard P..L's deletions
     2  Merge     — fetch, three-way-merge origin into L → M
     3  Diff      — D := L..M, exactly what the remote contributed
-    4  Guard     — deletion guard, both directions; snapshot L
+    4  Guard     — apply-side deletion guard over D (+ retry set); snapshot L
     5  Apply     — D onto the vault, path by path
     6  Publish   — push M, advance the pointer
 

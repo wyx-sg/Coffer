@@ -150,6 +150,9 @@ def rm(
 ) -> None:
     """Remove a skill and tear down all its agent bindings.
 
+    A skill Coffer generates itself is refused (exit 5).
+
+    \f
     The refusal path matters as much as the success one: a skill Coffer
     generates answers DELETE with 409 RESOURCE_PROTECTED, and a bare
     ``raise_for_status()`` turned that into an httpx traceback. Routing

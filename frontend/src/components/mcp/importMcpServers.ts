@@ -19,10 +19,12 @@ interface ServerPlan {
 /**
  * Turn a parsed JSON server into a Coffer config plus the list of
  * credential writes to perform. Pure (no network) — so the config is fully
- * built before any side effect runs. Secret env vars become
+ * built before any side effect runs. Secret values become
  * `credential_refs`; non-secret values stay inline — in `env` for stdio,
- * in `headers` for http (HttpTransport has no `env` field), mirroring how
- * the secret path already routes to each transport's credential_refs.
+ * in `headers` for http (the parser has already gathered an http server's
+ * `headers` block, and any `env` block, into `srv.env`; HttpTransport has no
+ * `env` field), mirroring how the secret path routes to each transport's
+ * credential_refs.
  *
  * Each secret's ref is minted opaque (`mcp_server/<uuid4 hex>/<env key>`) and
  * NOT from the server's name, which is what `<name>.<env key>` used to do. A

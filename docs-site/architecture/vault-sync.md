@@ -110,7 +110,7 @@ sequenceDiagram
 
 **Fetch and layout check.** The fetch happens before anything compares against the remote. The remote's `manifest.json` is then read: a `schema_version` newer than this build's refuses the round with `SYNC_BUNDLE_TOO_NEW` before anything is serialized, merged, applied or pushed. Refusing matters on both sides, because an older build would not only half-apply a newer tree, it would publish into it, and every area it does not understand would leave as deletions nobody made. A manifest that is missing or unreadable is not a refusal, since no newer Coffer produces one.
 
-**Step 1, serialize.** `SyncExporter` writes the vault into the tree and `MachineRegistry.publish_self` writes this machine's descriptor in the same step, so a descriptor always sits in the same commit as the state it describes. If `git add -A` stages nothing, no commit is made and `L` is the pointer. The **publish-side guard** runs here, over `P..L`: what this round would publish as deletions.
+**Step 1, serialize.** `SyncExporter` writes the vault into the tree and `MachineRegistry.publish_self` writes this machine's descriptor in the same step, so a descriptor always sits in the same commit as the state it describes. If `git add -A` stages nothing, no commit is made and `L` is the pointer. The **publish-side guard** runs here, right after the local commit and before any merge, over `P..L`: what this round would publish as deletions. Each direction is guarded at the first step that knows its diff, so a breach in either holds the round before the vault or the remote is touched.
 
 **Step 2, merge.** `git merge --allow-unrelated-histories origin/<branch>` into `L` produces `M`. A remote with no branch yet (the first machine on a fresh repository) has nothing to merge, so `M = L`. Conflicts go to the arbiter described below; any conflict left unresolved aborts the merge, returns status `conflict`, leaves the vault untouched and does not move the pointer.
 
@@ -306,7 +306,7 @@ An owner that names a machine the registry does not hold is reported as a fault,
 
 ## The worker
 
-`ConvergeWorker` (`application/sync/worker.py`) runs one round 30 seconds after the daemon starts and then on the remote's interval, which defaults to one hour (`coffer sync remote set --interval`). With no remote configured, or with the remote paused, a round is a `disabled` no-op and the worker re-checks every 15 minutes. It checks the `vault_sync` feature at the top of every tick and skips the round while the feature is off. Quiet outcomes (`ok`, `no_change`, `awaiting_join`, a hold already reported) log at debug level; anything new that needs you logs a warning. Every recorded round also writes a `sync_run` audit event.
+`ConvergeWorker` (`application/sync/worker.py`) runs one round 30 seconds after the daemon starts and then on the remote's interval, which defaults to one hour (`coffer sync remote set --interval`) and is never shorter than 60 seconds: every surface refuses a smaller value, and a remote stored with one before the floor existed loads as 60. With no remote configured, or with the remote paused, a round is a `disabled` no-op and the worker re-checks every 15 minutes. It checks the `vault_sync` feature at the top of every tick and skips the round while the feature is off. Quiet outcomes (`ok`, `no_change`, `awaiting_join`, a hold already reported) log at debug level; anything new that needs you logs a warning. Every recorded round also writes a `sync_run` audit event.
 
 ## Trade-offs and alternatives
 

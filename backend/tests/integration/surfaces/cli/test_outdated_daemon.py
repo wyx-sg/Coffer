@@ -62,6 +62,7 @@ def _serve(monkeypatch: pytest.MonkeyPatch, answers: dict[str, Any]) -> None:
         binary_path="/test",
     )
     monkeypatch.setattr(cli_client, "client_or_exit", lambda: (_FakeDaemon(answers), info))
+    monkeypatch.setattr(cli_client, "daemon_is_running", lambda: True)
 
 
 def test_daemon_status_names_an_outdated_daemon_instead_of_failing(

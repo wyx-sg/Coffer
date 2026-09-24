@@ -360,6 +360,75 @@ def test_bind_moves_the_channel_to_another_machine_and_keeps_the_rest(
     assert resource.config["runs_on"] == _MACHINE_ID
 
 
+def test_register_writes_the_group_gating_flags(channel_daemon: _Daemon) -> None:
+    """Both gating bools are settable at registration (spec channels "Configure
+    when the bot answers in a group"); flags left out keep the defaults."""
+    r = runner.invoke(
+        app,
+        [
+            "channel",
+            "register",
+            "tg",
+            "--type",
+            "telegram",
+            "--bot-token-ref",
+            _TG_REF,
+            "--agent",
+            _AGENT_NAME,
+            "--no-require-mention",
+            "--ignore-other-mentions",
+        ],
+    )
+    assert r.exit_code == 0, r.output
+    config = channel_daemon.channel("tg").config
+    assert config["require_mention"] is False
+    assert config["ignore_other_mentions"] is True
+
+    assert _register_st().exit_code == 0
+    config = channel_daemon.channel("st").config
+    assert config["require_mention"] is True
+    assert config["ignore_other_mentions"] is False
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="the group-gating switches are edited from the command line"
+)
+def test_set_changes_only_the_gating_flags_it_is_given(channel_daemon: _Daemon) -> None:
+    assert _register_tg().exit_code == 0
+
+    r = runner.invoke(app, ["channel", "set", "tg", "--no-require-mention"])
+    assert r.exit_code == 0, r.output
+    assert r.stdout.splitlines() == ["require_mention: off"]
+    config = channel_daemon.channel("tg").config
+    assert config["require_mention"] is False
+    assert config["ignore_other_mentions"] is False
+    # An ordinary config patch: the stored refs and the bound agent survive.
+    assert config["bot_token_ref"] == _TG_REF
+    assert config["default_agent"] == channel_daemon.agent_uid
+
+    r = runner.invoke(app, ["channel", "set", "tg", "--ignore-other-mentions", "--require-mention"])
+    assert r.exit_code == 0, r.output
+    config = channel_daemon.channel("tg").config
+    assert config["require_mention"] is True
+    assert config["ignore_other_mentions"] is True
+
+    # A flag left out keeps what is stored, not the default.
+    assert runner.invoke(app, ["channel", "set", "tg", "--no-require-mention"]).exit_code == 0
+    assert channel_daemon.channel("tg").config["ignore_other_mentions"] is True
+
+
+def test_set_with_no_option_exits_2(channel_daemon: _Daemon) -> None:
+    assert _register_tg().exit_code == 0
+    r = runner.invoke(app, ["channel", "set", "tg"])
+    assert r.exit_code == 2
+    assert "nothing to change" in r.stderr
+
+
+def test_set_unknown_channel_exits_4(channel_daemon: _Daemon) -> None:
+    r = runner.invoke(app, ["channel", "set", "nope", "--require-mention"])
+    assert r.exit_code == 4
+
+
 @pytest.mark.acceptance(
     spec="channels",
     scenario="a channel may only route to the agents in its scope",

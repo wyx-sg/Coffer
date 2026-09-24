@@ -85,7 +85,11 @@ from coffer.surfaces.http.kind_wiring import wire_resource_kinds
 from coffer.surfaces.http.mcp.protocol_routes import (
     start_session_reaper,
 )
-from coffer.surfaces.http.memory_wiring import follow_memory_switch, run_memory_delivery_boot_heal
+from coffer.surfaces.http.memory_wiring import (
+    follow_memory_switch,
+    memory_context_composer,
+    run_memory_delivery_boot_heal,
+)
 from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.provider_wiring import run_provider_projection_sweep
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
@@ -216,19 +220,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         sync=sync_contributions,
     )
 
-    # Wire the chat feature (spec chat). Must come AFTER all other wiring so the
-    # coffer-builtin-agent gateway session sees the fully-populated
-    # BuiltinToolRegistry (knowledge + skill + MCP tools); the session factory
-    # and the agent service are the kinds' own results.
+    # Wire the chat feature (spec chat) after the kinds: the agent service is
+    # the agent kind's result, and a channel turn's memory append closes over
+    # the memory kind's service and the feature switch (spec memory "Deliver to
+    # channel turns through the system prompt").
     chat = wire_chat(
         sm,
-        kinds.mcp.session_factory,
         credential_store,
         kinds.agent_skill.agent_service,
         resource_svc,
+        compose_memory_context=memory_context_composer(kinds.memory.service, features),
     )
-    # The chat session's supervisor stays in session_supervisors so on_delete evicts
-    # its upstreams; shutdown disposes it first (on_dispose deregisters; idempotent).
     # Kept on app.state: an integration test asserts the registry's contents.
     app.state.mcp_session_supervisors = kinds.mcp.session_supervisors
 
@@ -329,7 +331,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
                 channel_runtime_task=channel_runtime_task,
                 reaper_task=reaper_task,
                 kinds=kinds,
-                chat=chat,
                 engine=engine,
             )
         )

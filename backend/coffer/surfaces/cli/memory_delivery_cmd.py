@@ -78,6 +78,9 @@ def delivery_install(
 ) -> None:
     """Install Coffer's session-start hook for an agent.
 
+    Renaming the agent later does not need a reinstall.
+
+    \f
     The name is resolved here; the uid is what the route takes and what ends up
     written into the agent's settings file, so relabelling the agent afterwards
     costs no reinstall.

@@ -37,6 +37,10 @@ import tomlkit
 from coffer.domain.agent.config_files import ConfigFileFormat
 from coffer.domain.agent.types import AgentType
 from coffer.domain.connection import CODEX_ENV_KEY as _CODEX_ENV_KEY
+from coffer.domain.provider.api_key_helper import (
+    anthropic_api_key_helper as anthropic_api_key_helper,
+)
+from coffer.domain.provider.api_key_helper import is_managed_api_key_helper
 from coffer.domain.provider.config import Protocol
 
 # --- Codex provider-block identity --------------------------------------------
@@ -54,7 +58,7 @@ CODEX_ENV_KEY = _CODEX_ENV_KEY
 #: ``config.toml``, and what ``model_catalog_json`` is pointed at. The name also
 #: doubles as the OWNERSHIP MARKER: de-projection drops ``model_catalog_json``
 #: iff the path it holds ends in this filename, exactly as it drops
-#: ``apiKeyHelper`` iff it starts with ``MANAGED_API_KEY_HELPER_PREFIX``. So a
+#: ``apiKeyHelper`` iff :func:`is_managed_api_key_helper` owns it. So a
 #: catalogue the user wrote themselves is never removed, while one Coffer wrote
 #: always is — including one written into a relocated config dir, since the match
 #: is on the name, not on a path this module would have to re-derive.
@@ -69,32 +73,6 @@ CODEX_MODEL_CATALOG_KEY = "model_catalog_json"
 #: harness rather than the endpoint — which is why Coffer can mirror the built-in
 #: value here instead of guessing one for a third-party endpoint.
 CODEX_CATALOG_TRUNCATION_LIMIT = 10_000
-
-#: Prefix of every Coffer-managed ``apiKeyHelper``: the uid form Coffer writes
-#: (``coffer provider key --connection-uid <uid>``) and the two older forms
-#: still found in ``settings.json`` files on disk — the name form
-#: (``--connection <name>``) and the wire form (``--wire anthropic``).
-#: De-projection removes a helper iff it starts with this, so it never clobbers a
-#: user-owned helper but always reverts ours — including one this machine wrote
-#: before the uid existed. Recognising those on the way OUT is not a
-#: compatibility shim: nothing reads them, and a file Coffer wrote is a file
-#: Coffer has to be able to clean up.
-MANAGED_API_KEY_HELPER_PREFIX = "coffer provider key"
-
-
-def anthropic_api_key_helper(connection_uid: str) -> str:
-    """The ``apiKeyHelper`` Coffer projects for Claude Code: fetch one specific
-    connection's key on demand (so the raw key is never written to disk).
-
-    Keyed by the connection's UID, not its name and not its wire. The wire could
-    not say which connection's key to fetch at all; the name could, until the
-    user renamed the connection and left the agent shelling out to something
-    that no longer resolved — which is why a rename used to have to rewrite
-    this file, and why it no longer has to
-    (ADR resource-identity-is-an-immutable-uid). A uid never changes, so the
-    line stays true for the life of the connection.
-    """
-    return f"{MANAGED_API_KEY_HELPER_PREFIX} --connection-uid {connection_uid}"
 
 
 @dataclass(frozen=True)
@@ -346,15 +324,14 @@ def apply_codex_provider(
 def remove_anthropic_settings(text: str) -> str:
     """Inverse of :func:`apply_anthropic_settings` — strip Coffer's managed keys so
     Claude Code falls back to its OWN login ("use built-in"). Removes any
-    Coffer-managed ``apiKeyHelper`` (matched by prefix, so both the per-connection
-    and legacy wire forms are reverted — never a user-owned one) and the
+    Coffer-managed ``apiKeyHelper`` (:func:`is_managed_api_key_helper`, so the
+    absolute, bare and legacy forms are all reverted — never a user-owned one) and the
     ``env.ANTHROPIC_BASE_URL`` / ``ANTHROPIC_MODEL`` / ``ANTHROPIC_SMALL_FAST_MODEL``
     vars; unrelated keys and env entries are preserved."""
     data = json.loads(text) if text.strip() else {}
     if not isinstance(data, dict):
         return "{}\n"
-    helper = data.get("apiKeyHelper")
-    if isinstance(helper, str) and helper.startswith(MANAGED_API_KEY_HELPER_PREFIX):
+    if is_managed_api_key_helper(data.get("apiKeyHelper")):
         data.pop("apiKeyHelper", None)
     env = data.get("env")
     if isinstance(env, dict):

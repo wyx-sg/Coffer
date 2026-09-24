@@ -15,7 +15,7 @@ name: desktop
 # consults `frontendDist` only when the `custom-protocol` feature is on, which
 # is the Tauri CLI's release path; a plain cargo invocation is a dev build, so
 # the macro takes the `devUrl` branch and embeds no assets. What it DOES need
-# is the four `externalBin` sidecars to resolve, which `make
+# is the three `externalBin` sidecars to resolve, which `make
 # desktop-stage-binaries` fakes.
 
 on:

@@ -206,6 +206,42 @@ def test_remote_set_on_a_paused_remote_keeps_it_paused(fleet: Fleet) -> None:
     assert "disabled" in result.output
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="pause and resume a remote from the command line"
+)
+def test_remote_pause_and_resume_flip_only_enabled(fleet: Fleet) -> None:
+    """`remote pause` switches sync off from the command line and keeps the
+    remote; a round then does nothing; `remote resume` switches it back on.
+    Neither touches any other setting."""
+    _seed_and_publish(fleet)
+    fleet.ok("sync", "remote", "set", fleet.a.remote_url, "--interval", "900")
+    before = fleet.run(fleet.a.service().get_remote())
+    assert before is not None and before.enabled is True
+
+    paused = fleet.ok("sync", "remote", "pause")
+    assert "disabled" in paused.output
+    stored = fleet.run(fleet.a.service().get_remote())
+    assert stored == dataclasses.replace(before, enabled=False)
+    fleet.a.write_knowledge("notes", "while-paused", "written while paused\n")
+    assert "disabled" in fleet.ok("sync", "now").output
+    assert "knowledge/notes/while-paused.md" not in fleet.run(fleet.a.remote_paths())
+
+    resumed = fleet.ok("sync", "remote", "resume")
+    assert "enabled" in resumed.output
+    assert fleet.run(fleet.a.service().get_remote()) == before
+
+
+def test_remote_pause_and_resume_without_a_remote_exit_4(fleet: Fleet) -> None:
+    for verb in ("pause", "resume"):
+        result = fleet.invoke("sync", "remote", verb)
+        assert result.exit_code == 4, result.output
+        assert result.stderr.strip() == (
+            "no sync remote configured — set one with: coffer sync remote set <url>"
+        )
+    shown = fleet.ok("sync", "remote", "show")
+    assert "no sync remote configured" in shown.output
+
+
 def _configured(fleet: Fleet, tmp_path: pathlib.Path) -> Any:
     """A remote carrying a non-default value in every option ``remote set``
     takes, plus a custom working tree it has no flag for."""

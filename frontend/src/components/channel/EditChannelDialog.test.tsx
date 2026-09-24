@@ -162,6 +162,29 @@ describe("EditChannelDialog", () => {
     expect(api.POST).not.toHaveBeenCalled();
   });
 
+  test("telegram: the group switches start at the stored values and PATCH what changed", async () => {
+    // spec channels "Configure when the bot answers in a group": both bools
+    // are editable from the web. An absent key reads as the backend default
+    // (mention required, other @mentions not ignored).
+    const api = installApi(mockApiClient());
+    renderDialog();
+
+    const requireMention = screen.getByRole("switch", { name: /only when @mentioned/i });
+    const ignoreOthers = screen.getByRole("switch", { name: /someone else/i });
+    expect(requireMention).toBeChecked();
+    expect(ignoreOthers).not.toBeChecked();
+
+    fireEvent.click(requireMention);
+    fireEvent.click(ignoreOthers);
+    save();
+
+    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+    const config = (api.PATCH.mock.calls[0][1] as { body: { config: Record<string, unknown> } })
+      .body.config;
+    expect(config.require_mention).toBe(false);
+    expect(config.ignore_other_mentions).toBe(true);
+  });
+
   describe("seatalk", () => {
     const seatalkChannel = {
       uid: ST_UID,
@@ -188,6 +211,27 @@ describe("EditChannelDialog", () => {
       expect(screen.queryByLabelText(/signing secret/i)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/public callback url/i)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/tunnel token/i)).not.toBeInTheDocument();
+    });
+
+    test("offers only the ignore-other-mentions switch — SeaTalk delivers only @mentions", async () => {
+      const api = installApi(mockApiClient());
+      renderDialog({
+        ...seatalkChannel,
+        config: { ...seatalkChannel.config, ignore_other_mentions: true },
+      } as unknown as typeof telegramResource);
+
+      expect(screen.queryByRole("switch", { name: /only when @mentioned/i })).toBeNull();
+      const ignoreOthers = screen.getByRole("switch", { name: /someone else/i });
+      expect(ignoreOthers).toBeChecked();
+
+      fireEvent.click(ignoreOthers);
+      save();
+
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      const config = (api.PATCH.mock.calls[0][1] as { body: { config: Record<string, unknown> } })
+        .body.config;
+      expect(config.ignore_other_mentions).toBe(false);
+      expect("require_mention" in config).toBe(false);
     });
 
     test("rotating the app secret writes its existing ref before the PATCH", async () => {

@@ -270,8 +270,8 @@ class ProviderService:
 
     async def resolve_connection_key(self, uid: str) -> str:
         """The decrypted key of ONE specific connection — what Claude Code's
-        projected ``apiKeyHelper`` (``coffer provider key --connection-uid
-        <uid>``) fetches, so the agent always reads exactly the activated
+        projected ``apiKeyHelper`` (``/abs/path/to/coffer provider key
+        --connection-uid <uid>``) fetches, so the agent always reads exactly the activated
         connection's key.
 
         By uid because that helper line is written once into a file Coffer does

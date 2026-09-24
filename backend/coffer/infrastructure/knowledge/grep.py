@@ -13,8 +13,8 @@ switch is logged once so a slow search has a visible cause.
 
 ``--no-hidden`` is passed explicitly even though it is ripgrep's default,
 because a user's ``$RIPGREP_CONFIG_PATH`` could otherwise turn ``--hidden`` on
-underneath us and start answering with the revisions in ``.history/`` (see "Hide
-dot-prefixed entries except the inbox").
+underneath us and start answering with material still waiting in a
+collection's ``.inbox/`` (see "Hide dot-prefixed entries except the inbox").
 """
 
 from __future__ import annotations

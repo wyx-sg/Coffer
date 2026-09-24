@@ -67,7 +67,7 @@ give the status each code is actually sent with.
 | `CREDENTIAL_IN_USE` | 409 | The credential cannot be deleted while a resource still references it. The message names the resources. | Detach or delete those resources first. |
 | `CREDENTIAL_LOCKED` | 503 | The OS keychain is locked or unavailable, or a keychain write could not be verified. | Unlock the keychain (log in to the desktop session) and retry. |
 | `CREDENTIAL_UNREADABLE` | 500 | A stored secret cannot be decrypted with the current master key. | Restore the matching master key, or re-enter the secret. See [Credentials](/guides/credentials). |
-| `MASTER_KEY_MISSING` | 500 | Encrypted credentials exist but the master key is in neither the key file nor the keychain. Raised while the daemon starts. | Restore `master.key` beside the database (or import it with `coffer sync key import`), or re-enter your secrets. |
+| `MASTER_KEY_MISSING` | 503 | Encrypted credentials exist but the master key is in neither the key file nor the keychain. Raised while the daemon starts. | Restore `master.key` beside the database (or import it with `coffer sync key import`), or re-enter your secrets. |
 | `MASTER_KEY_FILE_INVALID` | 422 | A master-key file to import is missing or is not a valid key. | Point the import at the exported key file. |
 
 ## MCP servers and the gateway
@@ -84,7 +84,7 @@ give the status each code is actually sent with.
 | Code | HTTP | Meaning | Typical fix |
 | --- | --- | --- | --- |
 | `AGENT_CONFIG_DIR_REGISTERED` | 409 | An agent is already registered for this config directory. | Use the existing agent, or register a different config dir. |
-| `AGENT_CONFIG_DIR_MISSING` | 500 | The agent's config directory does not exist on this machine. Raised while applying a synced agent. | Install the agent on this machine, or ignore it here. |
+| `AGENT_CONFIG_DIR_MISSING` | 409 | The agent's config directory does not exist on this machine. Raised while applying a synced agent. | Install the agent on this machine, or ignore it here. |
 | `PRIVILEGED_PATH` | 422 | The path is a system location Coffer refuses to manage. | Choose a path in your home directory. |
 | `SKILL_DIR_NOT_WRITABLE` | 422 | The agent's skills directory is missing, not a directory, or not writable. `details.reason` says which. | Create the directory or fix its permissions. |
 | `CONFIG_FILE_NOT_ALLOWED` | 404 | The config-file key is not one Coffer edits for this agent type. | Use a key from `coffer agent config ls <agent>`. |
@@ -194,7 +194,7 @@ These are raised while the daemon starts, before it serves requests. They appear
 
 | Code | Meaning | Typical fix |
 | --- | --- | --- |
-| `DB_SCHEMA_TOO_NEW` | `~/.coffer/coffer.db` was migrated by a newer or different Coffer build. | Upgrade Coffer, or restore a pre-migration backup of the database. See [Files and directories](/reference/filesystem). |
+| `DB_SCHEMA_TOO_NEW` | `~/.coffer/coffer.db` was migrated by a newer or different Coffer build. Mapped to HTTP 409 if it ever reaches a response. | Upgrade Coffer, or restore a pre-migration backup of the database. See [Files and directories](/reference/filesystem). |
 | `MASTER_KEY_MISSING` | See [Credentials](#credentials). | |
 
 ## Chat turn errors

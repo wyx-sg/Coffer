@@ -313,7 +313,7 @@ export interface components {
              * @description The daemon's lifecycle phase.
              * @enum {string}
              */
-            status: "starting" | "ready" | "draining";
+            status: "ready" | "draining";
             /** @description The build's version, read from package metadata rather than a literal, so an old daemon reused by a new install is detectable. */
             version: string;
             /** @description Which build is answering — the frozen binary's path, or the interpreter of a run-from-source daemon. A CLI or shim whose version differs from `version` names it in its skew warning (spec daemon "Warn on a version mismatch and carry on"). */

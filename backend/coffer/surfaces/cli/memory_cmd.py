@@ -104,8 +104,9 @@ def list_notes(
     """List every note in one partition.
 
     A retired note is not in this list and is not marked in it either — it has
-    left ``notes/`` and is in ``RETIRED.md``, which ``coffer memory retired``
-    prints ("Record retirements so they stick").
+    left notes/ and is in RETIRED.md, which `coffer memory retired` prints.
+    \f
+    Requirement "Record retirements so they stick".
     """
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -134,9 +135,10 @@ def show_note(
     """Show one note — Coffer's own text, and the entries behind it.
 
     The origins are printed with the absolute path of the native file each one
-    was read out of, because the body is a **paraphrase** ("Write notes in
-    Coffer's own words"): a note that
-    reads wrong has to be traceable back to the thing that actually said it.
+    was read out of, because the body is a paraphrase: a note that reads wrong
+    has to be traceable back to the thing that actually said it.
+    \f
+    Requirement "Write notes in Coffer's own words".
     """
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -252,10 +254,11 @@ def read_file(
 ) -> None:
     """Print one file out of a partition's directory.
 
-    Read-only, like the route: everything under ``~/.coffer/memory/`` is
-    derived ("Keep the memory tree derived and local"), so there is no
-    matching write for an edit to survive.
-    ``--json`` carries the absolute paths an editor or a file manager needs.
+    Read-only: everything under ~/.coffer/memory/ is derived, so there is no
+    matching write for an edit to survive. --json carries the absolute paths
+    an editor or a file manager needs.
+    \f
+    Requirement "Keep the memory tree derived and local".
     """
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -295,8 +298,10 @@ def distil(
 
     Only one pass per partition runs at a time, whoever started it: a request
     made while the unattended sweep already holds this partition is refused
-    with ``UPKEEP_ALREADY_RUNNING`` rather than queued ("Run one distil pass
-    per partition at a time").
+    rather than queued.
+    \f
+    Refused with ``UPKEEP_ALREADY_RUNNING`` ("Run one distil pass per partition
+    at a time").
     """
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -316,6 +321,9 @@ def context(
 ) -> None:
     """Print the composed session-start context to stdout.
 
+    The installed session-start hook runs this; you rarely need to. It prints
+    nothing, and exits 0, when the daemon is not running.
+    \f
     This is exactly what an installed session-start hook invokes
     (``domain.memory.delivery.hook_command``) — see the module docstring for
     why every failure here is silent rather than raised.

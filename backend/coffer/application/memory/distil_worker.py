@@ -14,13 +14,12 @@ is deliberate: aggregation is what *fills* ``.raw/``, and distilling a
 partition before this boot's aggregation has run would spend a model on the
 same entries the pass a minute later would have seen anyway.
 
-**On by default**, like aggregation and unlike knowledge's tidy. Tidy is off until the
-operator switches it on because it rewrites the human's own files with no diff to
-approve. Everything this pass writes is under ``~/.coffer/memory/``, which is derived by
-construction (see "Keep the memory tree derived and local"): delete it, run aggregation
-and distil, and an equivalent partition comes back. There is no unattended-rewrite risk
-here to gate behind consent — only a model call, which is what the switch is actually
-for.
+**On by default**, like aggregation. Everything this pass writes is under
+``~/.coffer/memory/``, which is derived by construction (see "Keep the memory tree
+derived and local"): delete it, run aggregation and distil, and an equivalent partition
+comes back. The switch exists because each pass spends a model call, and the operator
+may turn it off or re-time it in Settings; the whole pass also stands still while the
+``memory`` experimental feature is off.
 
 **One pass per partition, whoever started it (see "Run one distil pass per partition at
 a time").** The timer and the Distil button are two writers over one directory, so both

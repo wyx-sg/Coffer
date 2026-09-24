@@ -96,9 +96,9 @@ An invocation has one of four statuses:
 | Status | Meaning |
 | --- | --- |
 | `ok` | The upstream answered in time and did not flag an error. |
-| `error` | The call raised, or the tool returned a result with `isError` set. |
+| `error` | The server would not start, the call raised, or the tool returned a result with `isError` set. |
 | `timeout` | The upstream did not answer within the server's request timeout. |
-| `denied` | Coffer refused before reaching the upstream: the capability is disabled, or the server is outside that agent's reach. |
+| `denied` | Coffer refused before reaching the upstream: the server or the capability is disabled, or the server is outside that agent's reach. |
 
 ::: info Arguments and results are never stored
 The invocation log records who called what, when, for how long and with what outcome. It has no column for call arguments or return values. For a tool that reported `isError`, the stored message is Coffer's fixed text `upstream tool returned an error result (isError)`, not the upstream's own message, which may echo the arguments. To see why a tool failed, look at the server's stderr in `~/.coffer/logs/upstream/<server>.log`.
@@ -131,7 +131,7 @@ curl -si -H "X-Coffer-Token: $TOKEN" http://127.0.0.1:8000/api/v1/resources/nope
 grep 3f9c0a6e2b7d4e1f9a0c5b2d8e7f6a1c ~/.coffer/logs/daemon.log
 ```
 
-A client can also send its own `X-Coffer-Trace` header so that several calls made for one action share one id. The value is capped at 64 characters and reduced to letters, digits and `._:-`; a value that does not survive that is replaced with a fresh id.
+A client can also send its own `X-Coffer-Trace` header so that several calls made for one action share one id; the `coffer` CLI and the MCP shim do not, so each of their requests has its own id. The value is capped at 64 characters and reduced to letters, digits and `._:-`; a value that does not survive that is replaced with a fresh id.
 
 ## Control how long records are kept
 

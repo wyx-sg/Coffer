@@ -14,7 +14,7 @@
 // shared DataTable like every other list surface (ConnectionsTable): the page
 // itself owns only the header + the add dialog. Editing a connection moved to
 // its detail page. Coffer's own engine (which connection + model its memory
-// organizer runs on) lives in Settings → Engine: it configures Coffer itself
+// organizer runs on) lives in Settings → Coffer's model: it configures Coffer itself
 // rather than being a resource served to agents.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";

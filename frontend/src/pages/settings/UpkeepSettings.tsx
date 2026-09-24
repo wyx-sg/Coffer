@@ -1,6 +1,6 @@
 // frontend/src/pages/settings/UpkeepSettings.tsx
 //
-// Settings → Engine: the work Coffer does when nobody asked it to.
+// Settings → Coffer's model: the work Coffer does when nobody asked it to.
 //
 // Three passes run on a timer — aggregation reads the agents' own memory into
 // the derived tree (spec memory "Aggregate on an interval and on demand"),

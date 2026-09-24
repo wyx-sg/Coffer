@@ -50,9 +50,12 @@ def set_secret(
 ) -> None:
     """Store a secret in the encrypted credential store (via the daemon).
 
-    ``--value`` still stores, but prints a warning to stderr that the value
-    lands in shell history (spec credentials "Read a secret on the command
-    line without shell history"); the value itself is never echoed.
+    Without --value the secret is read from stdin, or prompted for. --value
+    still stores, but warns that the value lands in your shell history; the
+    value itself is never echoed.
+
+    \f
+    Spec credentials "Read a secret on the command line without shell history".
     """
     verbose = (ctx.obj or {}).get("verbose", False)
     if value is not None:
@@ -85,6 +88,11 @@ def get_secret(
 ) -> None:
     """Retrieve a secret from the encrypted credential store (via the daemon).
 
+    Without --show it only checks that the secret exists: no value leaves the
+    daemon and nothing is audited. --show prints the value, and that read is
+    recorded in the audit log.
+
+    \f
     Without ``--show`` only presence is checked (cheap ``/exists`` probe, no
     value leaves the daemon and no read is audited). ``--show`` fetches the
     value via the audited read route.

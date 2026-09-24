@@ -161,6 +161,10 @@ def curate_owner_set(
 ) -> None:
     """Name the one machine allowed to run the curation pass.
 
+    With no machine named, this machine. An id no machine claims is still
+    written, and reported as the fault it is.
+
+    \f
     Argued like ``coffer channel bind``, and for the same reason: the answer is
     almost always "the machine I am typing on", so naming none means this one.
     An id nobody claims is still written — a vault that has never converged has

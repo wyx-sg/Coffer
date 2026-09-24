@@ -18,7 +18,6 @@ import logging
 import os
 import sys
 import time
-from pathlib import Path
 from typing import Any
 
 import httpx
@@ -26,10 +25,10 @@ import httpx
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
 from coffer.infrastructure.daemon.version_skew import skew_warning
+from coffer.infrastructure.logging.files import log_dir
 from coffer.surfaces.cli._client import discover
 
 _logger = logging.getLogger("coffer.shim")
-_SHIM_LOG_DIR = Path.home() / ".coffer" / "logs"
 _DAEMON_BOOT_TIMEOUT = 10  # seconds
 
 #: MCP-reserved extension key the daemon reads the launch cwd from.
@@ -103,10 +102,15 @@ def _setup_shim_log() -> None:
     The daemon's retention worker now ages them out; this end just stops
     writing a file for a run that produces no diagnostics, by deferring the
     open until the first record.
+
+    The directory is the daemon's own ``log_dir()``, read at call time, so
+    ``COFFER_LOG_DIR`` moves shim logs with everything else and the retention
+    pass that prunes ``shim-*.log`` there finds them.
     """
     try:
-        _SHIM_LOG_DIR.mkdir(parents=True, exist_ok=True)
-        log_path = _SHIM_LOG_DIR / f"shim-{os.getpid()}-{int(time.time())}.log"
+        directory = log_dir()
+        directory.mkdir(parents=True, exist_ok=True)
+        log_path = directory / f"shim-{os.getpid()}-{int(time.time())}.log"
         handler = logging.FileHandler(log_path, delay=True)
         handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
         _logger.addHandler(handler)

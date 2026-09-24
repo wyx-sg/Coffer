@@ -186,9 +186,11 @@ class Kind:
     # shape-validated against ``config_schema``); raises ``ConfigValidationError``
     # to reject the update. Unlike ``validate_config`` it knows WHICH resource is
     # being edited — and, since it is handed the resource, what it currently says.
-    # Only `channel` supplies one today: it re-validates ``default_agent``
-    # against the live agent registry and against the channel's own scope, so
-    # an edit cannot bind the channel to an agent it may not drive. Sync or
+    # `channel` uses it to re-validate ``default_agent`` against the live agent
+    # registry and against the channel's own scope, so an edit cannot bind the
+    # channel to an agent it may not drive. `mcp_server` uses it as the only
+    # config hook there is, to evict live connections built from the old
+    # config (its kind module notes the pre-write race that leaves). Sync or
     # async; the service awaits an Awaitable.
     on_update_config: (
         Callable[
@@ -249,7 +251,7 @@ class Kind:
     # anything is torn down. It sits with the other pre-write validators rather
     # than with ``on_delete`` below deliberately — ``on_delete`` is a reaction
     # to an already-decided delete, and a kind that refuses from inside it
-    # refuses only after the caller has been told the delete is under way.
+    # refuses only after its own cleanup has already torn things down.
     #
     # Only `skill` supplies one today: a builtin skill's master folder is
     # rewritten by the next boot, so deleting it is a no-op dressed as a
@@ -287,12 +289,17 @@ class Kind:
     # register path can call it with what it already has.
     default_scope: Callable[[dict[str, Any]], Scope | None] | None = None
 
-    # --- Post-write reactions: run AFTER persistence + audit; cannot reject ---
+    # --- Post-write reactions: run AFTER persistence + audit; not validators ---
 
     # Cleanup for ``ResourceService.delete``. The one exception to "after": it
-    # runs BEFORE the row is removed so cleanup can still resolve the row — but
-    # it is a reaction to an already-decided delete, not a validator, and has
-    # no way to reject it. The hook may return ``None`` (purely synchronous) or
+    # runs BEFORE the row is removed so cleanup can still resolve the row. It is
+    # a reaction to an already-decided delete, not a validator — but it is not
+    # powerless either: ResourceService lets an exception from it propagate,
+    # which aborts the delete with the row still in place (after whatever
+    # cleanup the hook had already done). So a hook should raise only for a
+    # cleanup it genuinely could not complete; refusing a delete on policy
+    # grounds belongs in ``validate_delete`` above, which runs before anything
+    # is torn down. The hook may return ``None`` (purely synchronous) or
     # an ``Awaitable``; the kind-agnostic ResourceService awaits the result when
     # present so cleanup completes before the row is removed (a fire-and-forget
     # task would race the delete and find a ResourceNotFound on follow-up reads).
@@ -318,8 +325,10 @@ class Kind:
     # handed the row carrying the new ``enabled`` value. A kind whose
     # ``enabled`` flag has an on-disk consequence rather than a read-time one
     # wires it here — `skill` uses it so disabling a skill reclaims its
-    # delivered copies and re-enabling redelivers them. (`mcp_server` needs no
-    # hook: its gateway filters on ``enabled`` at read time.)
+    # delivered copies and re-enabling redelivers them, and `mcp_server` so
+    # disabling a server evicts every session's live connection to it (the
+    # gateway also refuses a disabled server per call; filtering on ``enabled``
+    # in the listings alone left an already-connected session calling it).
     on_enabled_changed: (
         Callable[
             [Resource],

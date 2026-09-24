@@ -161,8 +161,9 @@ Default pattern — invalidate on success, toast on error:
 
 ```ts
 return useMutation({
-  mutationFn: (vars) => xApi.update(vars),
-  onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.x.all() }),
+  mutationFn: (vars) => agentsApi.patch(vars.uid, vars.body),
+  // `agentsKey` is the prefix of `agentKey(uid)`, so this also refreshes the detail query.
+  onSuccess: () => void qc.invalidateQueries({ queryKey: agentsKey }),
   onError: (e) => toast.error(translateApiError(t, e)),
 });
 ```

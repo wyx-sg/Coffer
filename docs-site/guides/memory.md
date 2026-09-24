@@ -47,7 +47,8 @@ If an agent's memory format changes and a file can no longer be parsed, that age
 A **partition** is a folder under `~/.coffer/memory/`. There is one per repository, plus one named `global`:
 
 - An entry is filed under the repository it was learned in. The main checkout, its worktrees and another clone of the same repository all map to one partition, named after the repository's directory.
-- An entry about **you** rather than a project — your preferences and standing instructions, Codex's profile — is filed under `global`, whichever repository it came from.
+- An entry about **you** rather than a project (type `user`: your preferences, Codex's profile) is filed under `global`, whichever repository it came from.
+- Guidance on how to work (type `feedback`) is filed with the repository it was given in, because it usually binds that repository. Only feedback given outside any repository goes to `global`.
 - An entry learned in a directory that is not a repository creates no partition. The distil pass decides whether it belongs in `global` or nowhere.
 
 Partitions are created by aggregation only; you do not create them.
@@ -81,7 +82,7 @@ Two background passes keep the partitions current. Both are on by default.
 | **Read from agents** (aggregation) | Reads every enabled agent's memory files and writes new entries into `.raw/`. A source file whose content has not changed since the last pass is skipped. | At daemon start, then hourly | No |
 | **Distil memory** | For each partition, routes new entries against the index — merge into a note, open a new note, retire a note, or keep nothing — then rewrites only the notes that changed, and rewrites `MEMORY.md`. | About a minute after start, then every 6 hours | Yes, when configured |
 
-Distil is incremental: the routing request carries the new entries and the index lines, never the note bodies, and each touched note is rewritten in its own small request. Two agents' entries about the same lesson, however differently worded, end up in one note whose `origins` name both.
+The two passes run on separate timers: distil does not wait for an aggregation, and a partition with no new entries since its last distil costs no model call. Distil is incremental: the routing request carries the new entries and the index lines, never the note bodies, and each touched note is rewritten in its own small request. Two agents' entries about the same lesson, however differently worded, end up in one note whose `origins` name both.
 
 **Without an internal model.** If Coffer's model is not configured (see [Model providers](/guides/providers)), distil still runs, mechanically: each entry becomes a note of its own and `MEMORY.md` is written from their frontmatter. You get a thinner index, not an empty one, and no model is called.
 
@@ -178,7 +179,9 @@ coffer audit list --event-type memory_delivery_fired
 
 ### In channel turns
 
-Coffer does not add the memory index to the system prompt of a turn that comes from a [channel](/guides/channels) or the Chat page. The system-prompt seam for it exists, but the daemon does not wire a composer into it, so those turns carry no memory append.
+A turn that comes from a [channel](/guides/channels) runs no session-start hook, so Coffer puts the same payload — the `global` index, the index of the partition for the conversation's working directory, and where the notes are — into that turn's system prompt instead. Nothing needs installing for this. It stops on the next turn after you switch the `memory` feature off, and a turn gets no memory header at all when the index is empty.
+
+A turn you send from the [Chat](/guides/chat) page does not get this append: it gets memory the way a terminal session does, through the agent's own session-start hook when delivery is installed. No turn gets memory both ways.
 
 ### On demand: `coffer__recall`
 

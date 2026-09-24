@@ -203,8 +203,10 @@ def upload(
     """Convert a document to Markdown and add what it says to a collection.
 
     The extracted text is new material: curation merges it into the documents,
-    and neither the original nor the extracted file is kept ("Convert uploads
-    into material without keeping them").
+    and neither the original nor the extracted file is kept.
+
+    \f
+    Requirement "Convert uploads into material without keeping them".
     """
     form: dict[str, str] = {"collection": collection}
     c, _info = _cli_client.client_or_exit()
@@ -231,12 +233,14 @@ def curate(
     """Run a curation pass by hand over one collection.
 
     A pass is bounded and reports why it stopped, so the status is the answer:
-    ``ok``, ``truncated`` when the recursion limit cut the pass off (its item
-    stays pending), ``up_to_date``, ``no_model`` when no internal connection is
-    configured ("Promote material directly when no model is configured"),
-    ``too_large``, or ``failed``. A pass already in flight over the same
-    collection is refused rather than queued ("Run one pass per collection at
-    a time").
+    ok; truncated when the pass was cut off (its item stays pending);
+    up_to_date; no_model when Coffer's own model is not configured; too_large;
+    or failed. A pass already running over the same collection is refused
+    rather than queued.
+
+    \f
+    Requirements "Promote material directly when no model is configured" and
+    "Run one pass per collection at a time".
     """
     # The route takes the document in the body, not the query string: a path
     # is content, and a silently-ignored query param would look like a pass

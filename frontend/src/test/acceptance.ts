@@ -5,7 +5,7 @@ import { test } from "vitest";
 //
 // scripts/audit_acceptance.py strips JS/TS comments and then regex-detects
 // real acceptance(...) calls, cross-referencing them against
-// openspec/specs/<id>/spec.md '## Acceptance Scenarios'. See .agents/testing.md for
+// the `#### Scenario:` headings in openspec/specs/<id>/spec.md. See .agents/testing.md for
 // the full convention.
 //
 // Real usage lives in e2e/mcp/specs and frontend/**/*.test.ts(x).

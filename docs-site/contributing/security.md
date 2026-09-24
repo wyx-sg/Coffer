@@ -70,7 +70,7 @@ Only `backend/coffer/infrastructure/credentials/keyring_adapter.py` imports `key
 
 ### Outbound requests to user-supplied URLs go through the SSRF guard
 
-`coffer.infrastructure.net.ssrf_guard.check_url` resolves a URL's host and rejects loopback, private, link-local and carrier-grade NAT destinations. Model provider connections are validated with it before Coffer contacts the endpoint. When you add code that makes the daemon fetch a URL a user supplied, validate it with `check_url` first. The guard does not pin the resolved address through to the HTTP client, so a DNS-rebinding host could pass validation and then resolve elsewhere. That residual risk is accepted for a single-user, loopback-only daemon whose URLs come from its own user.
+`coffer.infrastructure.net.ssrf_guard.check_url` resolves a URL's host and rejects loopback, private, link-local and carrier-grade NAT destinations. The probes the provider editor runs before anything is saved (list models, test connection, detect protocol) validate the base URL with it. Endpoints the user configures as their own — HTTP MCP upstreams, model and transcription calls, the IM platforms, the sync remote — are exempt once Coffer is using them, because a loopback or LAN endpoint is a legitimate target there ([Principles → Network defaults](/architecture/principles)). When you add code that makes the daemon fetch a URL a user supplied, validate it with `check_url` first. The guard does not pin the resolved address through to the HTTP client, so a DNS-rebinding host could pass validation and then resolve elsewhere. That residual risk is accepted for a single-user, loopback-only daemon whose URLs come from its own user.
 
 ### User content stays on the machine
 

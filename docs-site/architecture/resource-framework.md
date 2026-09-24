@@ -96,7 +96,7 @@ Import validation during a sync round is deliberately not a `Kind` field. It is 
 
 | Kind | Hooks and flags it supplies |
 | --- | --- |
-| `mcp_server` | `supports_scope`, `validate_name` (reserves `__`, the tool namespace separator), `audit_redactor` (strips `transport.env` and `transport.headers`), `credential_ref_extractor`, `on_rename` (releases live connections held under the old name), `on_delete` |
+| `mcp_server` | `supports_scope`, `validate_name` (reserves `__`, the tool namespace separator), `audit_redactor` (strips `transport.env` and `transport.headers`), `credential_ref_extractor`, `on_update_config` (evicts live connections so the next call spawns with the new config), `on_rename` (releases live connections held under the old name), `on_delete`, `on_enabled_changed` (evicts live connections on disable) |
 | `agent` | `generic_create_allowed=False`, `on_delete`, `on_enabled_changed` |
 | `skill` | `generic_create_allowed=False`, `supports_scope`, `validate_name` (the `SKILL.md` frontmatter rule), `validate_delete` (refuses deleting the builtin `coffer-guide`), `converges_row` (withholds `coffer-guide`), `on_rename`, `on_delete`, `on_scope_changed`, `on_enabled_changed` |
 | `knowledge` | `generic_create_allowed=False`, `on_rename` (moves the collection directory), `on_delete`, `on_enabled_changed` (re-renders the catalogue) |

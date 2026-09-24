@@ -52,7 +52,11 @@ def _parse_credentials(creds: list[str]) -> dict[str, str]:
 def add(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Server name (kind-internally unique)"),
-    stdio: str | None = typer.Option(None, "--stdio", help="`command [args...]`"),
+    stdio: str | None = typer.Option(
+        None,
+        "--stdio",
+        help="Command line to launch, quoted as one string, e.g. 'npx -y my-server --flag'",
+    ),
     http: str | None = typer.Option(None, "--http", help="HTTP MCP server URL"),
     credential: list[str] = typer.Option(  # noqa: B008
         [], "--credential", help="ENV_OR_HEADER=CREDENTIAL_REF (repeatable)"
@@ -230,9 +234,12 @@ def invocations(
 ) -> None:
     """Query the invocation log — one server's calls, or every server's.
 
-    Without a server this reads the same cross-server log the Activity page
-    renders (``GET /mcp/invocations``), Coffer's own built-in calls (``coffer``)
-    and deleted servers' rows (``deleted:<name>``) included."""
+    Without a server this reads the same log the Activity page shows, including
+    Coffer's own built-in calls (server `coffer`) and the rows of deleted
+    servers (`deleted:<name>`).
+
+    \f
+    Route: ``GET /mcp/invocations``."""
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     params: dict[str, Any] = {"limit": limit}

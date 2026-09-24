@@ -37,7 +37,7 @@ _FILES = {
         "python-lockfile", "Dependencies are locked with uv", "project", "Run uv sync --frozen."
     ),
     "worktree-development.md": _cc_file(
-        "worktree-development", "Always develop in a git worktree", "feedback", "Use worktrees."
+        "worktree-development", "Always develop in a git worktree", "user", "Use worktrees."
     ),
 }
 

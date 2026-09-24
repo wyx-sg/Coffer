@@ -246,10 +246,13 @@ def restore(
 def status(ctx: typer.Context) -> None:
     """What the remote is, and how the last round went.
 
-    Exits **non-zero** when the last round needs a human — held for
+    Exits non-zero when the last round needs a human — held for
     confirmation, conflicted, or failed to push or run at all — so that a
     prompt, a cron line or a monitor can notice without reading the text. A
-    vault held on a confirmation nobody sees converges no further, and the
+    paused remote exits zero.
+
+    \f
+    A vault held on a confirmation nobody sees converges no further, and the
     first time that happened in the field it went unnoticed for four days
     (spec vault-sync "Say a vault needs a human where the user already is").
     """

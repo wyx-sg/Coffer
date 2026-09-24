@@ -132,7 +132,7 @@ is preserved, and the projection tests assert exactly this set.
 
 | Managed key path | Source |
 |---|---|
-| `apiKeyHelper` | `"coffer provider key --connection-uid <uid>"` — the connection's immutable uid, so the line survives a rename |
+| `apiKeyHelper` | `"<absolute path to coffer> provider key --connection-uid <uid>"` (shell-quoted; the bare `coffer` when no CLI is found) — the connection's immutable uid, so the line survives a rename |
 | `env.ANTHROPIC_BASE_URL` | the connection's `base_url` |
 | `env.ANTHROPIC_MODEL` | the AGENT binding's `model` (key removed when unbound) |
 | `env.ANTHROPIC_SMALL_FAST_MODEL` | the agent binding's `fast_model` (key removed when unset) |

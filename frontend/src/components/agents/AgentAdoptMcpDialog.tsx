@@ -1,10 +1,10 @@
 // frontend/src/components/agents/AgentAdoptMcpDialog.tsx
 // "Adopt into Coffer" dialog for a direct MCP entry (specs agent-registry/skill-manager workspace amendment). Shows a short
 // summary of the entry, and — when the entry carries likely-secret env/header
-// keys — one input per secret key so the user can choose the keychain
+// keys — one input per secret key so the user can choose the credential
 // reference each value is stored under (prefilled mcp/{agent}/{entry}/{KEY});
 // the secret VALUES never travel through this form, the daemon moves them
-// into the system keychain. A rename field stays hidden until the daemon
+// into its encrypted credential store. A rename field stays hidden until the daemon
 // answers 409 name-conflict with a `suggested_name`, then the resubmit
 // carries `new_name`.
 import { useEffect, useState } from "react";

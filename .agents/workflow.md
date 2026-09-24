@@ -19,7 +19,7 @@ Rules:
 - Kebab-case throughout.
 - The short name typically mirrors (or describes) the affected spec folder (`openspec/specs/mcp-gateway/` → `feature/mcp-gateway-...`).
 - Branch from up-to-date `main`: `git checkout main && git pull --ff-only && git checkout -b <prefix>/<name>`.
-- Branch deleted automatically after merge (squash merge strategy).
+- Squash merge is the convention (the repository also permits merge commits and rebase merges, and does not delete merged branches). Delete the branch as you merge — `gh pr merge --squash --delete-branch` — or right afterwards.
 
 ## Commits
 
@@ -113,8 +113,8 @@ When NOT to use:
    - **Screenshots** for UI changes.
    - **Breaking changes** explicit.
 4. CI green (every parallel job must pass before review).
-5. **Squash merge** — keeps `main` linear.
-6. Branch auto-deleted.
+5. **Squash merge** — keeps `main` linear. It is the convention, not a repository setting: merge commits and rebase merges are also enabled.
+6. Delete the branch — `gh pr merge --squash --delete-branch` does both; otherwise delete it right after the merge. The repository does not delete merged branches on its own.
 
 ### Hygiene Rules
 

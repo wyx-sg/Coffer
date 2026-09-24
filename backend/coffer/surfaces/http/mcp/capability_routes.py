@@ -19,6 +19,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Response, status
 
 from coffer.application.audit_service import AuditService
 from coffer.application.mcp.discovery import CapabilityDiscovery
+from coffer.application.mcp.invocation_outcome import is_upstream_answered
 from coffer.application.mcp.runner_detect import missing_runner
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
@@ -68,6 +69,11 @@ CapabilityType = Literal["tool", "resource", "prompt"]
 # page may trigger a cold spawn, and spawn_timeout defaults to 30 s — a 5 s
 # budget would cancel every healthy-but-slow first spawn mid-initialize.
 _CAPABILITY_LIST_TIMEOUT = 35.0
+
+# How many recent invocation rows the status route looks through for one that
+# reached the server (``denied`` rows are skipped). Bounded so a burst of
+# refused calls costs one small query, not a scan of the log.
+_STATUS_LOOKBACK = 20
 
 
 async def _capability_list(
@@ -175,12 +181,19 @@ async def get_server_status(
         return McpServerStatusOut(status=health_status, missing_runner=runner)
 
     caps = await prefs.list_for(resource.id)
-    recent = await invocations.query(resource_uid=resource.uid, limit=1)
-    last = recent[0] if recent else None
+    # Health is read from the most recent call that says something about the
+    # SERVER. A ``denied`` row never reached it (a disabled capability, an
+    # out-of-scope session), so it is skipped. An ``error`` the upstream
+    # answered — an ``isError`` tool result, a well-formed JSON-RPC error — is
+    # the tool failing over a healthy connection, which is evidence the server
+    # is up (spec mcp-gateway "Route calls to the originating upstream" ties
+    # unhealthy to a transport failure or a crash, not to a tool's answer).
+    recent = await invocations.query(resource_uid=resource.uid, limit=_STATUS_LOOKBACK)
+    last = next((inv for inv in recent if inv.status != "denied"), None)
     state: Literal["healthy", "failing", "unknown"]
-    if last is not None and last.status != "ok":
+    if last is not None and last.status != "ok" and not is_upstream_answered(last):
         state = "failing"
-    elif caps or (last is not None and last.status == "ok"):
+    elif caps or last is not None:
         state = "healthy"
     else:
         state = "unknown"

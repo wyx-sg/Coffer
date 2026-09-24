@@ -54,7 +54,6 @@ class Running:
     channel_runtime_task: asyncio.Task[None]
     reaper_task: asyncio.Task[Any]
     kinds: Any
-    chat: Any
     engine: AsyncEngine
 
 
@@ -111,9 +110,6 @@ async def shutdown(running: Running) -> None:
     await best_effort("mcp_session_reaper", running.reaper_task)
     # Drain the buffered invocation writer before tearing down sessions.
     await best_effort("invocation_repo", running.kinds.mcp.invocation_repo.stop())
-    # The built-in agent's chat gateway session first (best-effort); its
-    # on_dispose callback removes its entry from session_supervisors.
-    await best_effort("chat_gateway_session", running.chat.gateway_session.dispose())
     # Dispose MCP supervisors (best-effort). The process-wide supervisor is IN
     # this registry now — it has to be, or the kind's delete and rename hooks
     # cannot reach the upstreams it holds — so the loop covers it and the

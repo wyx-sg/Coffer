@@ -101,8 +101,10 @@ def config_edit(
     JSON/TOML is rejected and the on-disk file is left unchanged), writes it
     atomically, and keeps a `<path>.bak` of the prior version. The write carries
     the fingerprint of the content it started from, so a change made on disk in
-    the meantime is refused (exit 5) instead of overwritten (spec agent-registry
-    "Reject stale config-file writes by fingerprint").
+    the meantime is refused (exit 5) instead of overwritten.
+
+    \f
+    Spec agent-registry "Reject stale config-file writes by fingerprint".
     """
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()

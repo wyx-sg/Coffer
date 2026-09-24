@@ -16,8 +16,8 @@ this script holds the line:
      Text about something that no longer has a directory says what it *was*.
   2. No ADR filename and no spec directory carries a number.
   3. Every relative markdown link inside `docs/decisions/` resolves.
-  4. The ADR README index lists exactly the ADRs that exist, in both
-     languages, each linking its own language's file.
+  4. The ADR README index (`docs/decisions/README.md`, English only) lists
+     exactly the ADRs that exist.
   5. No `FR-<digits>` or `SC-<digits>` token survives in a tracked file. Requirements were the
      last place numbers lived, and they failed the same way: one spec carried
      two different requirements under one id for four days, and about one

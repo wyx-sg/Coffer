@@ -101,10 +101,10 @@ Every scenario in a capability spec must be covered by at least one test in any 
 ```markdown
 ## Requirements
 
-### Requirement: Register an upstream MCP server
+### Requirement: Manage MCP servers as resources
 The system MUST ...
 
-#### Scenario: register and list
+#### Scenario: register a stdio MCP server
 - **GIVEN** ...
 - **WHEN** ...
 - **THEN** ...
@@ -117,8 +117,8 @@ The marker quotes the scenario's name, so a name is unique within its spec. The 
 ```python
 import pytest
 
-@pytest.mark.acceptance(spec="mcp-gateway", scenario="register and list")
-def test_register_then_appears_in_list(...):
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="register a stdio MCP server")
+def test_register_stdio_server(...):
     ...
 ```
 

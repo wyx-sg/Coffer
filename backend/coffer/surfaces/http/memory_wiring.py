@@ -1,6 +1,6 @@
 """Wiring for the one ``memory`` kind (spec memory).
 
-Mirrors ``knowledge_wiring.py`` + ``tidy_wiring.py`` combined: one service for
+Mirrors ``knowledge_wiring.py`` + ``curation_wiring.py`` combined: one service for
 the derived tree and its two passes (``MemoryService``), the MCP locator
 (``RecallService`` / ``coffer__recall``), and the explicit-install delivery half
 (``DeliveryService``).
@@ -14,7 +14,7 @@ mechanical pass of "Distil mechanically with no internal connection": each raw
 entry becomes a note of its own and the index is still written. Which means a
 resolver forgotten here does not fail loudly; it degrades every pass to "wrote
 the index only" and says nothing, the model call having failed for want of a
-key it was never given. ``tidy_wiring.wire_tidy``
+key it was never given. ``curation_wiring.wire_curation``
 takes the resolver as a required parameter for the same reason, and this module
 follows it exactly: ``wire_memory_kind`` cannot be called without one.
 
@@ -24,9 +24,9 @@ internal connection is Coffer's own engine's job
 from the provider service for itself.
 
 The kind is wired before the MCP kind so the gateway advertises
-``coffer__recall``; the distil sweep it starts is on by default, because unlike
-knowledge's tidy it only ever rewrites a tree that can be rebuilt from the
-agents' own memories (see ``distil_worker.py``).
+``coffer__recall``; the distil sweep it starts is on by default, because it only
+ever rewrites a tree that can be rebuilt from the agents' own memories (see
+``distil_worker.py``).
 
 Nothing here can fail to build: with no internal connection configured the
 selector just resolves to ``None`` per call, and ``RecallService`` /
@@ -51,6 +51,7 @@ from coffer.application.internal_engine_config_service import InternalEngineConf
 from coffer.application.memory.aggregate import AgentSource
 from coffer.application.memory.aggregate_worker import AggregateWorker
 from coffer.application.memory.builtin_recall_tool import register_recall_tool
+from coffer.application.memory.context import MemoryPort, compose_context
 from coffer.application.memory.delivery import DeliveryService
 from coffer.application.memory.delivery_switch import (
     memory_switch_subscriber,
@@ -206,6 +207,42 @@ def wire_memory_kind(
     )
 
 
+def memory_context_composer(
+    memory: MemoryPort, features: FeatureService
+) -> Callable[[str, str], Awaitable[str | None]]:
+    """The closure a channel turn's system prompt reads memory through (spec
+    memory "Deliver to channel turns through the system prompt").
+
+    Handed to ``wire_chat`` and from there to every agent provider as its
+    ``compose_memory_context``; the providers call it only for a turn that
+    came from a channel, so a turn the developer drives from the web page gets
+    memory through its agent's own hook instead, never both.
+
+    ``None`` whenever nothing should be appended: while the ``memory`` feature
+    is switched off (read per turn, so the switch lands on the next turn — spec
+    experimental-features "Close every surface of a switched-off feature"),
+    and when the composed index is empty, because an empty memory header is
+    worse than none. A failure to read the tree is logged and also answers
+    ``None``. ``agent_key`` is accepted and ignored: every enabled
+    partition is served to every agent.
+    """
+
+    async def _compose(agent_key: str, cwd: str) -> str | None:
+        del agent_key
+        if not features.is_enabled("memory"):
+            return None
+        try:
+            composed = await compose_context(memory, cwd=cwd)
+        except Exception:
+            # Memory is an append to the turn, not a precondition of it: a
+            # tree that cannot be read costs this turn its index, not its reply.
+            logger.exception("memory.channel_context.failed")
+            return None
+        return composed.text or None
+
+    return _compose
+
+
 def _upkeep_enabled(
     engine_config: InternalEngineConfigService, pass_name: str, features: FeatureService
 ) -> Callable[[], Awaitable[bool]]:
@@ -280,8 +317,7 @@ def start_distil_worker(
 ) -> asyncio.Task[None]:
     """Start the distil sweep — on by default, because the tree it rewrites is
     disposable ("Keep the memory tree derived and local": delete it and
-    re-running reproduces it), unlike
-    knowledge's tidy. On by default is not the same as unstoppable, though: the
+    re-running reproduces it). On by default is not the same as unstoppable, though: the
     operator can switch it off and re-time it like any other pass.
     Returns the task; the lifespan cancels it at shutdown."""
 

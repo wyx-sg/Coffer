@@ -36,11 +36,13 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 
-#: Something about the person — a preference, a standing instruction. Lands in
-#: ``global`` whichever repository it was learned in ("File personal entries
+#: Something about the person — a preference, a fact about who they are. Lands
+#: in ``global`` whichever repository it was learned in ("File personal entries
 #: into global").
 TYPE_USER = "user"
-#: Guidance the developer gave about how to work. Also about the person.
+#: Guidance the developer gave about how to work. Filed by where it was learned,
+#: like a project entry: given in a repository it binds that repository, and
+#: only without one does it land in ``global``.
 TYPE_FEEDBACK = "feedback"
 #: Something about one repository: a decision, a trap, a piece of its history.
 TYPE_PROJECT = "project"
@@ -48,8 +50,11 @@ TYPE_PROJECT = "project"
 NOTE_TYPES = frozenset({TYPE_USER, TYPE_FEEDBACK, TYPE_PROJECT})
 
 #: Types that belong to the person rather than to any one repository, and so
-#: are filed in ``global`` regardless of where they were learned.
-PERSONAL_TYPES = frozenset({TYPE_USER, TYPE_FEEDBACK})
+#: are filed in ``global`` regardless of where they were learned. ``feedback``
+#: is deliberately not among them: a standing instruction given inside a
+#: repository ("run the gates before pushing here") is that repository's, and
+#: filing it globally would hand it to every other project's sessions.
+PERSONAL_TYPES = frozenset({TYPE_USER})
 
 
 @dataclass(frozen=True)

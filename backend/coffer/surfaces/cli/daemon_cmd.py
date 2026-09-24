@@ -17,6 +17,7 @@ from coffer.infrastructure.daemon.pid_lock import pid_is_coffer_daemon
 from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli import daemon_features_cmd, daemon_port_cmd, daemon_service_cmd
+from coffer.surfaces.cli._options import ExitCode
 
 app = typer.Typer(help="Daemon lifecycle")
 app.add_typer(daemon_port_cmd.app, name="port")
@@ -182,8 +183,24 @@ def status(
     ctx: typer.Context,
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """Show daemon status."""
+    """Show whether the daemon is running, and its version, channel, port and pid.
+
+    Read-only: when no daemon is running it says so and exits 3 instead of
+    starting one.
+
+    \f
+    3 is both this CLI's "daemon unreachable" code and the LSB ``status`` code
+    for "not running".
+    """
     verbose = (ctx.obj or {}).get("verbose", False)
+    # Probe first: client_or_exit() alone would spawn a daemon, and a status
+    # query must never change what it reports on.
+    if not _cli_client.daemon_is_running():
+        if output_json:
+            typer.echo(_json.dumps({"status": "stopped"}))
+        else:
+            typer.echo("status:  not running")
+        raise typer.Exit(int(ExitCode.DAEMON_UNREACHABLE))
     c, info = _cli_client.client_or_exit()
     with c:
         r = c.get("/daemon/status")

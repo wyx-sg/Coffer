@@ -15,6 +15,8 @@ import pathlib
 from datetime import UTC, datetime
 from typing import Any
 
+import pytest
+
 from coffer.application.provider.boot_reconcile import ProviderProjectionBootHeal
 from coffer.domain.provider.config import Protocol
 from coffer.domain.provider.projection import anthropic_api_key_helper, apply_anthropic_settings
@@ -110,7 +112,9 @@ def _projected_settings() -> str:
         base_url=_BASE_URL,
         model=None,
         fast_model=None,
-        api_key_helper=anthropic_api_key_helper(_CONNECTION_UID),
+        api_key_helper=anthropic_api_key_helper(
+            _CONNECTION_UID, coffer_cli="/Users/me/.coffer/bin/coffer"
+        ),
     )
 
 
@@ -144,6 +148,25 @@ async def test_a_flag_the_agent_config_denies_is_cleared(tmp_path: pathlib.Path)
 
 async def test_a_flag_the_agent_config_confirms_is_left_alone(tmp_path: pathlib.Path) -> None:
     store = _Store({_settings_path(tmp_path): _projected_settings()})
+    heal, calls = _heal(store, [_agent(tmp_path)], [_connection()])
+
+    assert await heal.heal() == []
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "helper",
+    [
+        # What Coffer wrote before the CLI was named by absolute path: still
+        # Coffer's, so a file carrying only this is still a live projection.
+        f"coffer provider key --connection-uid {_CONNECTION_UID}",
+        # The absolute form, with a path a shell needs quoted.
+        f"'/Users/me/My Apps/coffer' provider key --connection-uid {_CONNECTION_UID}",
+    ],
+    ids=["bare", "quoted-absolute"],
+)
+async def test_either_helper_form_counts_as_projected(tmp_path: pathlib.Path, helper: str) -> None:
+    store = _Store({_settings_path(tmp_path): json.dumps({"apiKeyHelper": helper})})
     heal, calls = _heal(store, [_agent(tmp_path)], [_connection()])
 
     assert await heal.heal() == []

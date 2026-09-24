@@ -11,10 +11,12 @@ Short answers to the questions people ask most before and after installing Coffe
 
 Not by Coffer's own doing, unless you configure it to. The daemon listens only on `127.0.0.1`, has no telemetry, and keeps its state under `~/.coffer`. Network traffic happens only through things you set up:
 
-- **MCP servers you register.** Coffer starts them; what they contact is up to each server.
+- **MCP servers you register.** Coffer starts a stdio server and connects to an HTTP server at the URL you gave; what they contact is up to each server.
 - **Model providers.** If you choose a provider for **Coffer's model** or **Speech to text**, Coffer sends those requests to it. Your agents talk to their own providers as they always do.
 - **Vault sync.** If you configure a remote, rounds push to and pull from that git repository. Credentials travel only as ciphertext and only if you opt in; the master key never does.
 - **Channels.** A Telegram or SeaTalk channel exchanges messages with that platform.
+
+The endpoints you configure as your own — an HTTP MCP server, a model or transcription endpoint, a sync remote — may be on your own machine or network. A URL Coffer only probes on your behalf while you fill in a form (**Test connection** and model listing in the provider editor) is refused if it resolves to a loopback, private or link-local address, unless the provider is an Ollama server.
 
 See [Security model](/architecture/security).
 
@@ -57,7 +59,7 @@ Only when you ask it to, and each change is recorded in the audit log. Installin
 
 ## Do I have to start the daemon myself?
 
-No. Any `coffer` command, an agent connecting through `coffer-mcp-shim`, and the desktop app all start the daemon if it is not running. On macOS, `coffer daemon service install` starts it at login and restarts it after a crash. See [Running the daemon](/guides/daemon).
+No. Any `coffer` command that needs the daemon, an agent connecting through `coffer-mcp-shim`, and the desktop app all start the daemon if it is not running. `coffer daemon status` is the exception: it only reports, and says `not running` instead of starting one. On macOS, `coffer daemon service install` starts it at login and restarts it after a crash. See [Running the daemon](/guides/daemon).
 
 ## Where is my data?
 
