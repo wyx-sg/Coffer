@@ -124,6 +124,15 @@ def warn_if_version_skew(info: DaemonInfo) -> None:
         print(message, file=sys.stderr)
 
 
+def daemon_is_running() -> bool:
+    """Whether a live daemon answers now — a probe that never spawns one.
+
+    For commands that report on the daemon (``coffer daemon status``), where
+    :func:`client_or_exit`'s detect-or-spawn would change the answer.
+    """
+    return live_daemon() is not None
+
+
 def client_or_exit() -> tuple[httpx.Client, DaemonInfo]:
     """Return an authenticated httpx.Client + DaemonInfo for the running daemon.
 

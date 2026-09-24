@@ -143,8 +143,8 @@ The config Coffer stores:
 A static `env` or `headers` value that looks like a secret — starting with `Bearer `, `ghp_`, `gho_`, `github_pat_`, `sk-`, `xoxb-`/`xoxa-`/`xoxp-`, or a JWT — is rejected at registration with a message telling you to move it into `credential_refs`. A `credential_refs` entry citing a ref the store does not hold is also rejected, naming the missing credential.
 :::
 
-::: info The paste dialog reads `env`, not `headers`
-The **Add MCP server** paste dialog reads each server's `env` object. For an HTTP server (`"url": …`) those entries become headers. A `headers` object in the pasted JSON is not read — register such a server with `coffer mcp add --http … --credential`, or add the headers afterwards with **Edit**.
+::: info Pasting an HTTP server with `headers`
+The **Add MCP server** paste dialog reads an HTTP server's (`"url": …`) `headers` object and reviews each value for secrets exactly as it does `env`: a value whose name or content looks like a secret (an `Authorization` header, for example) is pre-marked **Secret**, stored in the credential store and cited from `credential_refs`; the rest stay in the transport's `headers`. An `env` object on an HTTP server is sent as headers too; when both name the same key, the `headers` value wins.
 :::
 
 ## Server names
@@ -164,13 +164,15 @@ The name can be changed later (`coffer resource rename mcp_server <old> <new>`);
 | Enable or disable the whole server | **Reach** control → **Disabled** | `coffer resource disable mcp_server <name>` (and `enable`) |
 | Delete | **Delete server** | `coffer mcp remove <name>` |
 
-The **Edit** dialog shows the configuration JSON without secrets; credentials are listed below it and can be added, replaced or removed there. Removing a credential deletes its stored entry. Timeouts are per server: **Spawn** (5–120 seconds, default 30) and **Request** (5–1800 seconds, default 120).
+The **Edit** dialog shows the configuration JSON without secrets; credentials are listed below it and can be added, replaced or removed there. Removing a credential deletes its stored entry. Saving an edit closes every live connection to the server, so the next call from any agent starts it with the new configuration.
+
+Disabling a server takes effect at once, including in sessions that are already connected: its tools leave the listings, a call to one is refused as `TOOL_DISABLED` and logged as `denied`, and every running copy of the server is stopped. Enabling it again needs nothing more; the next call starts it. Timeouts are per server: **Spawn** (5–120 seconds, default 30) and **Request** (5–1800 seconds, default 120).
 
 Deleting a server removes its registration and capability preferences, keeps its audit and invocation history, and releases credential refs that nothing else cites.
 
 ### Health and a missing launcher
 
-The list's **Health** column shows **Healthy**, **Failing** or **Unknown**. Registering a server whose upstream is unreachable still succeeds; it is marked failing until it answers.
+The list's **Health** column shows **Healthy**, **Failing** or **Unknown**. Registering a server whose upstream is unreachable still succeeds; it is marked failing until it answers. Without a **Test connection** result, health follows the server's most recent call: a call that could not reach the server (it would not start, the connection died, or it timed out) reads as failing, while a tool that answered with an error does not, because the server itself is up. Refused (`denied`) calls are ignored.
 
 When a stdio server's command is not installed on this machine — for example a server imported from another machine that runs `uvx` where `uv` is missing — the status reads `missing <runner>` and the UI tells you what to install (`uvx is not installed on this machine` / `Install uvx, then refresh`). Coffer does not install software for you.
 

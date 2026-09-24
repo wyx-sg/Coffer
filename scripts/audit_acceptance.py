@@ -11,7 +11,7 @@ Convention (see .agents/testing.md "Acceptance Scenarios — Cross-Tier Markers"
     (`openspec/specs/channels/telegram/spec.md` → 'channels/telegram').
   * Scenario names are unique within a spec, because a marker names one.
   * Python tests carry `@pytest.mark.acceptance(spec="...", scenario="...")`.
-  * TS tests use `test.acceptance("spec", "scenario", ...)`.
+  * TS tests use `acceptance("spec", "scenario", ...)` (from `src/test/acceptance.ts`).
   * Rust tests carry a line comment directly above the test's attributes:
 
         // acceptance(spec = "desktop-app", scenario = "...")

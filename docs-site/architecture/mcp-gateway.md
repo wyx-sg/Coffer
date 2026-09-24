@@ -212,7 +212,7 @@ sequenceDiagram
   S->>R: POST /mcp, X-Coffer-Token, Mcp-Session-Id
   R->>G: handle_request("tools/call")
   G->>G: parse "jira" + "get_issue", resolve resource by name
-  alt scope excludes this session
+  alt server disabled or scope excludes this session
     G->>L: status=denied
     G-->>R: ToolDisabled
   else capability disabled
@@ -238,11 +238,12 @@ The pipeline is `_invoke` in `application/mcp/gateway_handlers.py`, which `resou
 
 1. **Parse.** Split the namespaced name or URI. A malformed one is refused as `ToolDisabled` ("unrecognised tool name").
 2. **Resolve.** Look up the `mcp_server` row by the server name the client sent. From here on, everything stored or compared uses identity: the uid for the log, the scope for the gate, and the surrogate id for preferences.
-3. **Scope gate.** The call is re-checked with `is_active(resource.scope, session_agent_uid)`. The list already hid the server, but a client that knows the name could still call it. A refusal is logged as `denied` and raised as `ToolDisabled`, the same error a disabled capability gets.
-4. **Capability gate.** A preference row with `enabled = false` refuses the call the same way. A missing row counts as enabled.
-5. **Connection.** `supervisor.get_or_spawn(server)` returns a live connection, starting one if needed. The session subscribes to that upstream's notifications and server-initiated requests.
-6. **Forward.** Send the call with the original name, bounded by the server's request timeout.
-7. **Record.** In a `finally` block, write one row with the elapsed time.
+3. **Enabled gate.** A server whose `enabled` flag is off is refused on every call, logged as `denied` and raised as `ToolDisabled`. The listings already hide it, but a session that listed the server before it was disabled still holds its names.
+4. **Scope gate.** The call is re-checked with `is_active(resource.scope, session_agent_uid)`. The list already hid the server, but a client that knows the name could still call it. A refusal is logged as `denied` and raised as `ToolDisabled`, the same error a disabled capability gets.
+5. **Capability gate.** A preference row with `enabled = false` refuses the call the same way. A missing row counts as enabled.
+6. **Connection.** `supervisor.get_or_spawn(server)` returns a live connection, starting one if needed. The session subscribes to that upstream's notifications and server-initiated requests. The clock is already running here, so a call that fails because the upstream would not start is recorded too.
+7. **Forward.** Send the call with the original name, bounded by the server's request timeout.
+8. **Record.** In a `finally` block, write one row with the elapsed time.
 
 ### Credential materialisation
 
@@ -268,15 +269,15 @@ stateDiagram-v2
   STARTING --> COOLDOWN: 4th attempt fails
   STARTING --> UNHEALTHY: server disabled
   COOLDOWN --> UNHEALTHY: 60 s elapsed, next call
-  HEALTHY --> UNHEALTHY: evict (transport failure, delete, rename)
+  HEALTHY --> UNHEALTHY: evict (transport failure, edit, disable, delete, rename)
   HEALTHY --> [*]: session disposed
 ```
 
 - **Retry ladder.** Up to four attempts, with waits of 1, 5 and 30 seconds between them (`_RETRY_DELAYS_SECONDS`). Only transient spawn failures are retried: `UpstreamUnavailable`, `UpstreamTimeout`, `OSError`, `ConnectionError` and `TimeoutError`. A config error, a credential error or a cancellation stops the ladder at once. Each attempt is bounded by the server's `spawn_timeout_seconds` (default 30, range 5–120).
 - **Cooldown.** After the fourth failure, the entry enters `COOLDOWN` for 60 seconds. Calls during the cooldown fail fast with `UpstreamUnavailable`. The cooldown is checked both before and after taking the per-server spawn lock, so callers queued behind one failing ladder do not each re-run it.
 - **Concurrency.** At most 4 cold starts run at once per supervisor (`COFFER_MCP_MAX_CONCURRENT_SPAWNS`). The slot is held only during build and initialize, never during a backoff sleep.
-- **Eviction.** `evict` takes no lock. It bumps a generation counter and closes the current connection. A spawn that finishes after an eviction sees the changed generation, closes its new connection and raises. Deleting or renaming a server therefore never waits on a slow ladder. The kind's `on_delete` and `on_rename` hooks evict the server from every live session's supervisor and from the process-wide supervisor that backs the management routes.
-- **Crash recovery.** A `tools/call` that fails on the transport evicts the connection, and the next call respawns the server. A transport failure is any non-`MCPError` exception, or an `MCPError` with `CONNECTION_CLOSED`. A well-formed `MCPError` means the upstream answered, so the connection is kept. A timeout does not evict either.
+- **Eviction.** `evict` takes no lock. It bumps a generation counter and closes the current connection. A spawn that finishes after an eviction sees the changed generation, closes its new connection and raises. Deleting, renaming, disabling or editing a server therefore never waits on a slow ladder. The kind's `on_delete`, `on_rename`, `on_enabled_changed` (on disable) and `on_update_config` hooks evict the server from every live session's supervisor and from the process-wide supervisor that backs the management routes. After a config edit, the next call spawns the server with the new command, URL or credential refs; re-enabling needs nothing, because the next call spawns afresh.
+- **Crash recovery.** A `tools/call` that fails on the transport evicts the connection, and the next call respawns the server. A transport failure is any non-`MCPError` exception, or an `MCPError` with `CONNECTION_CLOSED`. A well-formed `MCPError` means the upstream answered, so the connection is kept. A timeout does not evict either, and neither does a failure to obtain a connection in the first place.
 - **Teardown.** A stdio close waits up to 10 seconds for the SDK's own shutdown, which escalates SIGTERM to SIGKILL. The shim then kills every PID recorded for that connection, along with its descendants. Each spawn records a PID file under `~/.coffer/upstream-pids/`, keyed by the server's uid. At startup, the daemon sweeps any files left by a crash.
 - **Logs.** Each stdio upstream's stderr goes to its own file, `~/.coffer/logs/upstream/<name>.log`, not to `daemon.log`.
 
@@ -293,13 +294,13 @@ The session subscribes lazily to each upstream it touches:
 
 ## Invocation logging
 
-Every routed call, including a built-in one, writes one `mcp_invocations` row in the `finally` block of `_invoke`: which capability ran, for how long, with what `status` (`ok`, `error`, `timeout` or `denied`) and from which session. Arguments and results are never stored, and error text is reduced to a Coffer-authored summary, because an upstream's message can echo a secret back, for example an auth failure that quotes the key. Built-in tools are logged under the reserved uid `coffer`.
+Every routed call, including a built-in one, writes one `mcp_invocations` row in the `finally` block of `_invoke`: which capability ran, for how long, with what `status` (`ok`, `error`, `timeout` or `denied`) and from which session. Arguments and results are never stored, and error text is reduced to a Coffer-authored summary (for a well-formed JSON-RPC error from the upstream, only its numeric code: `upstream answered with a JSON-RPC error (code -32602)`), because an upstream's message can echo a secret back, for example an auth failure that quotes the key. Built-in tools are logged under the reserved uid `coffer`.
 
 The row's columns, the exact meaning of each status, the buffered writer and retention are described once, in [Observability](/architecture/observability#the-mcp-invocation-log). You read the log per server (`coffer mcp invocations <server>`) or across all servers (`coffer mcp invocations`); see [Activity and audit](/guides/activity).
 
-::: warning Status side effect
-`GET …/{uid}/status` reads the persisted health row from **Test** first. If there is no health row, it derives the status from the most recent invocation, and any status other than `ok` reads as `failing`. A tool that returns `isError` therefore marks its server as failing until the next successful call or test.
-:::
+### Server status
+
+`GET …/{uid}/status` reads the persisted health row from **Test** first. If there is no health row, it derives the status from the most recent of the last 20 invocations that reached the server; `denied` rows are skipped, because a refused call says nothing about the upstream. An `error` the upstream answered, whether an `isError` tool result or a well-formed JSON-RPC error, is the tool failing over a healthy connection and reads as `healthy`. Only a `timeout` or an `error` where the upstream did not answer (it would not start, the transport died, the process crashed) reads as `failing`. With no such row, the server is `healthy` if it has discovered capabilities and `unknown` otherwise.
 
 ## Error propagation
 
@@ -307,7 +308,7 @@ The row's columns, the exact meaning of each status, the buffered writer and ret
 
 | Raised | JSON-RPC error |
 | --- | --- |
-| `ToolDisabled` (disabled capability, out of scope, malformed name) | `-32000`, Coffer's message |
+| `ToolDisabled` (disabled server or capability, out of scope, malformed name) | `-32000`, Coffer's message |
 | Any other `CofferError` (`UpstreamUnavailable`, `UpstreamTimeout`, `CredentialMissing`, `ResourceNotFound`, …) | `-32603`, Coffer's message |
 | Anything else, including an upstream `MCPError` | `-32603`, `internal error: <ClassName>` |
 
@@ -325,8 +326,8 @@ An upstream's in-band `isError` result is not an error at this layer. It passes 
 - **No per-call human approval.** The gateway forwards every call that passes the capability and scope gates. There is no approval prompt. Curation happens ahead of time, through toggles and scope.
 
 ::: warning Behaviours worth knowing
-- Disabling a server removes it from listings and stops new spawns. A session that already holds a connection to it keeps that connection. The call path checks scope and capability preferences, not the server's `enabled` flag. Likewise, a config edit (a new command, URL or credential ref) reaches a session only after its connection is evicted or the session ends. Only delete and rename evict.
-- A spawn that fails, or a server in cooldown, fails the call with `UpstreamUnavailable`. No invocation row is written, because `get_or_spawn` runs before the logged section of `_invoke`.
+- A config edit evicts before the write is committed. A call that lands in the one-write window between the eviction and the commit respawns from the old config, and that connection stays cached until the next edit, disable, crash or session end.
+- A spawn that fails, or a server in cooldown, fails the call with `UpstreamUnavailable` and writes an `error` row, which marks the server `failing` in its status.
 :::
 
 ## Where it lives in the code

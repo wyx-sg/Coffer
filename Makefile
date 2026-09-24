@@ -44,7 +44,7 @@ help:
 	@echo ""
 	@echo "  Dev:"
 	@echo "  make dev                   run backend (:8000) + frontend (:5173) in parallel"
-	@echo "  make frontend-codegen      regenerate the frontend's OpenAPI types from the daemon"
+	@echo "  make frontend-codegen      regenerate the frontend's OpenAPI types from the OpenSpec contracts"
 	@echo "  make docs-reference        regenerate the docs site's CLI and REST API reference pages"
 	@echo "  make bundle-binaries       freeze the three CLI binaries with PyInstaller (into dist/)"
 	@echo "  make clean                 remove venv + node_modules + caches"

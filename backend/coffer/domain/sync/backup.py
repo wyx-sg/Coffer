@@ -27,6 +27,10 @@ from coffer.domain.sync.errors import BackupRemoteInvalid
 
 DEFAULT_BRANCH = "main"
 DEFAULT_INTERVAL_SECONDS = 3600
+#: The fastest automatic cadence: a round every minute. Every surface refuses
+#: less (the API with a 422, the web form before Save); see ``BackupRemote``
+#: for what happens to a smaller value already stored.
+MIN_INTERVAL_SECONDS = 60
 DEFAULT_WORKTREE = "~/.coffer/sync"
 
 #: Characters ``git check-ref-format`` forbids anywhere in a ref: ASCII
@@ -88,6 +92,12 @@ class BackupRemote:
     ``include_credentials`` is fixed here rather than per round: a remote that
     silently changed what it carried between rounds would be worse than either
     answer.
+
+    ``interval_seconds`` must be positive, and a positive value below
+    ``MIN_INTERVAL_SECONDS`` is raised to it rather than refused: the surfaces
+    refuse such a value on write, so the only place one still comes from is a
+    row stored before the floor existed, and loading that row must neither
+    crash the daemon nor run rounds faster than the floor.
     """
 
     url: str
@@ -103,12 +113,14 @@ class BackupRemote:
         branch = validate_branch(self.branch)
         if self.interval_seconds <= 0:
             raise BackupRemoteInvalid("interval must be a positive number of seconds")
+        interval = max(self.interval_seconds, MIN_INTERVAL_SECONDS)
         worktree = self.worktree_path.strip()
         if not worktree:
             raise BackupRemoteInvalid("worktree_path must not be empty")
         object.__setattr__(self, "url", url)
         object.__setattr__(self, "branch", branch)
         object.__setattr__(self, "worktree_path", worktree)
+        object.__setattr__(self, "interval_seconds", interval)
 
 
 def _related(a: PurePath, b: PurePath) -> bool:

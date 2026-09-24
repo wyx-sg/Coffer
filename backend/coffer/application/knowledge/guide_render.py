@@ -101,10 +101,11 @@ def display_root(root: pathlib.Path, *, home: pathlib.Path | None = None) -> str
     """The knowledge root as the skill should name it.
 
     ``~/.coffer/knowledge`` when the root sits in its default place, and the
-    absolute path otherwise. The tilde form is not cosmetic: it is what keeps
-    this file identical on two machines whose home directories differ, which is
-    what keeps the converging copies from overwriting each other. When the root
-    has been moved (``COFFER_KNOWLEDGE_ROOT``), ``~`` would be a lie, and an
+    absolute path otherwise. The tilde form keeps the rendered bytes free of
+    this machine's home directory, and a path an agent reads should be one a
+    person can retype; the artifact itself does not converge (see the module
+    docstring), so this is not about two copies agreeing. When the root has
+    been moved (``COFFER_KNOWLEDGE_ROOT``), ``~`` would be a lie, and an
     accurate path matters more than a stable one.
     """
     base = (home or pathlib.Path.home()) / ".coffer" / "knowledge"

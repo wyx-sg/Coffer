@@ -22,7 +22,7 @@ from starlette.testclient import TestClient
 from coffer.domain.chat.errors import AgentConfigRejected, UnknownAgent
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
-from coffer.surfaces.http.chat.dependencies import get_chat_service
+from coffer.surfaces.http.chat.dependencies import get_agent_registry, get_chat_service
 
 _TOKEN = "test-token"
 _HEADERS = {"X-Coffer-Token": _TOKEN}
@@ -143,14 +143,20 @@ async def test_create_conversation_rejects_unknown_agent_and_bad_config(app) -> 
         assert await svc.list_conversations() == []
 
 
-def test_builtin_agent_supervisor_stays_in_eviction_registry(app) -> None:  # type: ignore[no-untyped-def]
-    """The built-in agent session's supervisor must stay in the session_supervisors
-    registry: the mcp_server Kind's on_delete hook walks that registry to
-    evict the deleted server's connection from every live session. Popping
-    the built-in agent's entry at startup would leave its upstream
-    subprocesses running (stale config/credentials) after a delete.
-    Double-dispose is not a risk — the session's on_dispose callback removes
-    the entry, and SubprocessSupervisor.dispose() is idempotent."""
+@pytest.mark.acceptance(spec="memory", scenario="a channel turn carries the index without a hook")
+@pytest.mark.asyncio
+async def test_every_provider_is_wired_with_the_memory_composer(app) -> None:  # type: ignore[no-untyped-def]
+    """The composition root hands every agent provider the memory kind's
+    composer, so a channel turn's system prompt can carry the index (spec memory
+    "Deliver to channel turns through the system prompt"). The provider seam
+    itself is proven in ``test_sdk_provider.py``; this proves the real wiring
+    reaches it rather than leaving the default ``None``."""
     with TestClient(app):
-        supervisors = app.state.mcp_session_supervisors
-        assert "coffer-builtin-agent" in supervisors
+        set_active_token(_TOKEN)
+        entries = get_agent_registry().entries()
+        assert {e.provider.agent_key for e in entries} >= {"claude_code", "codex"}
+        for entry in entries:
+            composer = entry.provider._compose_memory_context  # type: ignore[attr-defined]
+            assert composer is not None, entry.provider.agent_key
+            # An isolated, empty tree delivers nothing: no header, not an empty one.
+            assert await composer(entry.provider.agent_key, "/nowhere") is None

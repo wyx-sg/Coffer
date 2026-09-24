@@ -54,8 +54,6 @@ async def test_turns_are_stopped_before_the_engine_is_disposed(
     kinds: Any = MagicMock()
     kinds.mcp.invocation_repo.stop = AsyncMock()
     kinds.mcp.session_supervisors = {}
-    chat: Any = MagicMock()
-    chat.gateway_session.dispose = AsyncMock()
     runtime: Any = MagicMock()
     runtime.dispose = AsyncMock()
     workers: Any = MagicMock()
@@ -68,7 +66,6 @@ async def test_turns_are_stopped_before_the_engine_is_disposed(
             channel_runtime_task=asyncio.ensure_future(_done()),
             reaper_task=asyncio.ensure_future(_done()),
             kinds=kinds,
-            chat=chat,
             engine=engine,
         )
     )

@@ -75,7 +75,7 @@ _CC_PROJECT_MEMORY = _cc_memory_file(
 _CC_PERSONAL_MEMORY = _cc_memory_file(
     "worktree-development",
     "Always develop in a git worktree",
-    "feedback",
+    "user",
     "Multiple parallel sessions share the repo — always work in a worktree.",
 )
 
@@ -274,7 +274,7 @@ def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> 
     global_uid = _partition_uid(client, "global")
     global_notes = client.get(f"/api/v1/memory/partitions/{global_uid}/notes").json()["notes"]
     assert [n["title"] for n in global_notes] == ["worktree-development"]
-    assert global_notes[0]["type"] == "feedback"
+    assert global_notes[0]["type"] == "user"
 
 
 def test_unknown_partition_notes_is_not_found(client) -> None:
@@ -458,7 +458,7 @@ def test_context_carries_every_note_and_the_absolute_notes_path(client, tmp_path
     }
     files.update(
         {
-            f"about-{i}.md": _cc_memory_file(f"about-{i}", f"Personal fact {i}", "feedback", "body")
+            f"about-{i}.md": _cc_memory_file(f"about-{i}", f"Personal fact {i}", "user", "body")
             for i in range(3)
         }
     )
@@ -510,7 +510,7 @@ def test_context_under_a_binding_ceiling_keeps_the_repository_and_drops_global(
     }
     files.update(
         {
-            f"about-{i}.md": _cc_memory_file(f"about-{i}", f"Personal fact {i}", "feedback", "b")
+            f"about-{i}.md": _cc_memory_file(f"about-{i}", f"Personal fact {i}", "user", "b")
             for i in range(12)
         }
     )

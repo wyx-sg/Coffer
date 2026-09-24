@@ -5,8 +5,8 @@ orchestrator, and persistence reach an agent only through them. Adding another
 agent to the platform is a new ``AgentProvider`` registered at the composition
 root — no change to the chat surface, persistence, or the wire contract.
 
-Concrete implementations live in ``coffer.infrastructure.chat`` (the built-in
-agent) and in tests (fakes).
+Concrete implementations live in ``coffer.infrastructure.chat`` (the Claude
+Code and Codex providers) and in tests (fakes).
 """
 
 from __future__ import annotations

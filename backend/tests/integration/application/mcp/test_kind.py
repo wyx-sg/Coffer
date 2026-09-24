@@ -1,4 +1,4 @@
-"""make_mcp_kind.on_delete evicts active supervisor sessions.
+"""make_mcp_kind's lifecycle hooks evict active supervisor sessions.
 
 When the user deletes an MCP server resource, every session that has a
 live subprocess for that name must lose it so the next call doesn't hit a
@@ -19,12 +19,19 @@ import pytest
 
 from coffer.application.audit_service import AuditService
 from coffer.application.credentials.resolver import CredentialResolver
+from coffer.application.mcp.discovery import CapabilityDiscovery
+from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.kind import make_mcp_kind
 from coffer.application.mcp.supervisor import SubprocessSupervisor, UpstreamHealth
 from coffer.application.resource_service import ResourceService
+from coffer.domain.errors import ToolDisabled
 from coffer.domain.resource import Resource
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.mcp.factory import build_upstream
+from coffer.infrastructure.mcp.persistence import (
+    MCPCapabilityPreferenceRepo,
+    MCPInvocationRepo,
+)
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -314,4 +321,93 @@ async def test_a_failed_eviction_aborts_the_rename(tmp_path: Path) -> None:
         assert await rsvc.find_by_name("mcp_server", "files") is None
         assert good.evicted == ["fs"], "the reachable sessions are still attempted"
     finally:
+        await engine.dispose()
+
+
+# --------------------------------------------------------------------------- #
+# A live session sees disable and config edits                                 #
+# --------------------------------------------------------------------------- #
+
+
+async def _session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
+    """A real gateway session whose supervisor is registered with the kind's
+    hooks, the way the composition root registers every live session."""
+    install_in_memory_keyring(monkeypatch)
+    supervisor_for: dict[str, object] = {}
+    rsvc, engine = await _services(tmp_path, supervisor_for)
+    sm = session_maker(engine)
+    sup = SubprocessSupervisor(
+        upstream_factory=build_upstream,
+        resource_service=rsvc,
+        credential_resolver=CredentialResolver(KeyringAdapter()),
+    )
+    supervisor_for["session-1"] = sup
+    prefs, inv = MCPCapabilityPreferenceRepo(sm), MCPInvocationRepo(sm)
+    session = MCPGatewaySession(
+        session_id="session-1",
+        resource_service=rsvc,
+        supervisor=sup,
+        discovery=CapabilityDiscovery(resource_service=rsvc, supervisor=sup, preferences=prefs),
+        preferences=prefs,
+        invocations=inv,
+    )
+    return session, rsvc, inv, sup, engine
+
+
+@pytest.mark.asyncio
+async def test_disabling_a_server_stops_a_live_session_calling_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A session that already holds a healthy connection to the server used to
+    keep calling it after the user disabled it: the supervisor hands back its
+    cached connection without reading the flag. Now the call is refused as a
+    disabled capability (recorded ``denied``), and the subprocess is gone."""
+    pre_existing = _live_fake_servers()
+    session, rsvc, inv, _sup, engine = await _session(tmp_path, monkeypatch)
+    try:
+        fs = await rsvc.register(
+            kind="mcp_server", name="fs", config=_stdio_config("read_file"), actor="test"
+        )
+        call = {"name": "fs__read_file", "arguments": {}}
+        await session.handle_request("tools/call", call)
+        assert len(_live_fake_servers() - pre_existing) == 1
+
+        await rsvc.set_enabled(fs.uid, False, actor="test")
+
+        assert _live_fake_servers() - pre_existing == set(), "disable must stop the upstream"
+        with pytest.raises(ToolDisabled):
+            await session.handle_request("tools/call", call)
+        latest = (await inv.query(resource_uid=fs.uid, limit=1))[0]
+        assert latest.status == "denied"
+        assert _live_fake_servers() - pre_existing == set(), "a refused call must not respawn"
+    finally:
+        await session.dispose()
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_editing_a_server_config_reaches_a_live_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A supervisor caches its connection and never re-reads the row, so an
+    edited command used to take effect only in sessions started afterwards.
+    The next call after the edit must run on a process spawned from the new
+    config."""
+    pre_existing = _live_fake_servers()
+    session, rsvc, _inv, _sup, engine = await _session(tmp_path, monkeypatch)
+    try:
+        fs = await rsvc.register(
+            kind="mcp_server", name="fs", config=_stdio_config("old_tool"), actor="test"
+        )
+        await session.handle_request("tools/call", {"name": "fs__old_tool", "arguments": {}})
+        (old_pid,) = _live_fake_servers() - pre_existing
+
+        await rsvc.update_config(fs.uid, _stdio_config("new_tool"), actor="test")
+        assert old_pid not in _live_fake_servers(), "the edit must release the old process"
+
+        await session.handle_request("tools/call", {"name": "fs__new_tool", "arguments": {}})
+        (new_pid,) = _live_fake_servers() - pre_existing
+        assert "new_tool" in psutil.Process(new_pid).cmdline()
+    finally:
+        await session.dispose()
         await engine.dispose()

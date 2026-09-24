@@ -109,7 +109,7 @@ See [Desktop app](/guides/desktop-app) for using it.
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
 ```
 
-It accepts only macOS on `arm64` and points everyone else at a source install. It downloads `coffer-cli-aarch64-apple-darwin.tar.gz` and `SHA256SUMS` from the latest release (or the tag in `COFFER_VERSION`), verifies the archive's checksum, copies the three binaries into `COFFER_INSTALL_DIR` (default `~/.coffer/bin`), and — unless `COFFER_NO_MODIFY_PATH=1` — appends a `PATH` line to your shell profile (`.zshrc`, `.bash_profile`, fish's `config.fish`, or `.profile`) if the directory is not already on `PATH`. A binary downloaded by `curl` is never quarantined, so this path needs no `xattr` step. See [Install](/start/install).
+It accepts only macOS on `arm64` and points everyone else at a source install. It downloads `coffer-cli-aarch64-apple-darwin.tar.gz` and `SHA256SUMS` from the latest release (or the tag in `COFFER_VERSION`), verifies the archive's checksum, installs the three binaries into `COFFER_INSTALL_DIR` (default `~/.coffer/bin`) by copying each to a temporary sibling and renaming it over the public name — a plain copy would write through the daemon's symlink into the previous version directory and destroy the build a rollback needs — and — unless `COFFER_NO_MODIFY_PATH=1` — appends a `PATH` line to your shell profile (`.zshrc`, `.bash_profile`, fish's `config.fish`, or `.profile`) if the directory is not already on `PATH`. A binary downloaded by `curl` is never quarantined, so this path needs no `xattr` step. See [Install](/start/install).
 
 ### Versioned directories and the symlink flip
 
@@ -151,7 +151,7 @@ Deployment is best-effort: a binary that cannot be copied is logged and skipped,
 Before running database migrations, the daemon also copies `coffer.db` (and its `-wal`/`-shm` files) to `coffer.db.pre-<revision>`, keeping the three most recent copies. See [Persistence](/architecture/persistence).
 
 ::: warning
-`install.sh` copies plain files into `~/.coffer/bin`. A daemon running from `~/.coffer/bin` itself skips the deploy, so an installer-only machine has no version directories until a build from another location (such as the desktop app) starts a daemon.
+`install.sh` installs plain files into `~/.coffer/bin`, each renamed over its public name, so a symlink left by an earlier deploy is replaced rather than written through and the version directories stay intact. A daemon running from `~/.coffer/bin` itself skips the deploy, so an installer-only machine has no version directories until a build from another location (such as the desktop app) starts a daemon.
 :::
 
 ## Release channels

@@ -239,7 +239,10 @@
       "errNoServers": "没找到 MCP 服务器。需要 {\"mcpServers\": {…}} 格式。",
       "errBadServer": "服务器「{{name}}」需要 \"command\"（stdio）或 \"url\"（http）。",
       "errBadEnvValue": "服务器「{{name}}」的环境变量「{{key}}」必须为字符串。",
-      "errEnvNotObject": "服务器「{{name}}」的 env 必须是字符串值的对象。"
+      "errEnvNotObject": "服务器「{{name}}」的 env 必须是字符串值的对象。",
+      "noHeaders": "无请求头",
+      "errBadHeaderValue": "服务器「{{name}}」的请求头「{{key}}」必须为字符串。",
+      "errHeadersNotObject": "服务器「{{name}}」的 headers 必须是字符串值的对象。"
     },
     "edit": {
       "title": "编辑 MCP 服务器",
@@ -347,7 +350,7 @@
       "sync_run": "执行了一轮收敛",
       "token_rotated": "已轮换访问令牌",
       "daemon_residency_updated": "守护进程常驻设置已变更",
-      "knowledge_curated": "从 {{resource}} 的原料归纳出了主题文档"
+      "knowledge_curated": "整理了 {{resource}}：把新材料并入了其中的文档"
     },
     "capType": {
       "tool": "工具",
@@ -560,7 +563,7 @@
       "deleteConfirm": "删除模型提供商「{{name}}」？其保存的凭据也会一并删除。",
       "name": "名称",
       "provider": "厂商",
-      "renameHint": "重命名会连同已保存的密钥、历史记录以及该提供商驱动的 Agent 配置一起迁移。",
+      "renameHint": "重命名只改名称——已保存的密钥、历史记录和它驱动的 Agent 都保持不变。",
       "customProvider": "自定义",
       "wireFormat": "协议",
       "baseUrl": "Base URL",
@@ -845,7 +848,7 @@
         "gatewayManagedHint": "Coffer 通过网关把它管理的 MCP 服务器提供给该 Agent；请在 MCP 服务器页面管理。",
         "adopt": "收编进 Coffer",
         "adoptTitle": "收编 MCP 服务器",
-        "adoptSecretsHint": "检测到疑似密钥，请为每个键提供钥匙串引用；密钥值只存入系统钥匙串。",
+        "adoptSecretsHint": "检测到疑似密钥，请为每个键确认一个凭据引用；Coffer 会把密钥值移入加密凭据库，接管后的服务器配置中只保留引用。",
         "adoptRename": "名称冲突，改名后重试",
         "alreadyInCoffer": "Coffer 中已有：{{name}}",
         "parseError": "配置解析失败，该文件降级只读",
@@ -1064,7 +1067,7 @@
       },
       "featureDeliver": {
         "title": "下发到你的 Agent",
-        "body": "按 Agent 启用某个技能——Coffer 会将其链接到每个 Agent 的技能目录。"
+        "body": "技能默认下发给所有 Agent，也可只下发给你选定的几个——Coffer 会把它链接到每个 Agent 的技能目录。"
       },
       "featureReach": {
         "title": "选择哪些 Agent 拿到哪个技能",
@@ -1369,14 +1372,21 @@
     },
     "edit": {
       "title": "编辑消息渠道",
-      "subtitle": "更换绑定的 Agent 或轮换密钥。密钥字段留空则保留当前值。",
+      "subtitle": "更换绑定的 Agent、轮换密钥，或设置机器人在群聊中何时回复。密钥字段留空则保留当前值。",
       "agent": "默认 Agent",
       "agentHint": "该消息渠道上的新会话将使用此 Agent。",
       "newBotToken": "新的机器人 token",
       "newAppSecret": "新的 App Secret",
       "rotateHint": "存入 Coffer 凭据库；沿用现有引用。",
       "save": "保存修改",
-      "saved": "消息渠道 {{name}} 已更新"
+      "saved": "消息渠道 {{name}} 已更新",
+      "groups": {
+        "title": "群聊中",
+        "requireMention": "仅在被 @ 时回复",
+        "requireMentionHint": "机器人在群里保持沉默，直到有人 @ 它或回复它。关闭后，它会处理你在群里发的每一条消息——这需要先在 BotFather 里关闭机器人的隐私模式。",
+        "ignoreOtherMentions": "忽略同时 @ 了其他人的消息",
+        "ignoreOtherMentionsHint": "群消息只要 @ 了其他人，即使也 @ 了机器人，机器人也不回应。"
+      }
     },
     "test": {
       "send": "发送",
@@ -1468,13 +1478,10 @@
       "other": "其他"
     },
     "attention": {
-      "title": "同步需要你处理",
-      "heldTitle": "同步正在等你答复",
       "heldBody": "有一轮已暂停，等待你确认：在你答复之前，金库既不会收敛，也不会被备份。",
       "conflictBody": "上一轮因冲突中止，在你解决冲突之前，什么都不会被应用，也不会被发布。",
       "pushFailedBody": "上一轮在本机已应用，但没能推送到远端，其他机器和你的备份都还停在旧版本。",
-      "failedBody": "上一轮失败了，这个金库已经不再收敛，也不再被备份。",
-      "open": "打开同步"
+      "failedBody": "上一轮失败了，这个金库已经不再收敛，也不再被备份。"
     },
     "conflict": {
       "title": "本轮因冲突中止",

@@ -18,7 +18,7 @@
 // it has NO fallback. Exactly one connection carries speech-to-text, every voice
 // message goes to that endpoint, and no connection carrying it means Coffer
 // transcribes nothing at all — so "which one?" is a question the library itself
-// must answer. The pill is read-only; it is still set in Settings → Engine,
+// must answer. The pill is read-only; it is still set in Settings → Coffer's model,
 // beside the engine's own connection.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";

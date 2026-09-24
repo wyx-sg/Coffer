@@ -35,6 +35,26 @@ need_cmd() {
     fi
 }
 
+# Put the three binaries from $1 into $2 without writing through any existing
+# file. After the first frozen daemon start, $2/<name> is a symlink into
+# $2/<version>/, and a plain cp would follow it and overwrite the previous
+# version's binary — the one a rollback needs. Copy to a temp sibling instead,
+# make it executable, and rename it over the name: rename replaces the link
+# itself and leaves its target alone.
+install_binaries() {
+    _src="$1"
+    _dest="$2"
+    for bin in coffer coffer-daemon coffer-mcp-shim; do
+        if [ ! -f "${_src}/${bin}" ]; then
+            err "binary '${bin}' not found in archive — the release may be malformed"
+        fi
+        _tmp_bin="${_dest}/.${bin}.install.$$"
+        cp "${_src}/${bin}" "$_tmp_bin"
+        chmod +x "$_tmp_bin"
+        mv -f "$_tmp_bin" "${_dest}/${bin}"
+    done
+}
+
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
@@ -137,13 +157,7 @@ See https://wyx-sg.github.io/Coffer/start/install for alternatives."
     tar -xzf "${tmp}/${archive_name}" -C "$tmp"
 
     # --- install -------------------------------------------------------------
-    for bin in coffer coffer-daemon coffer-mcp-shim; do
-        if [ ! -f "${tmp}/${bin}" ]; then
-            err "binary '${bin}' not found in archive — the release may be malformed"
-        fi
-        cp "${tmp}/${bin}" "${install_dir}/${bin}"
-        chmod +x "${install_dir}/${bin}"
-    done
+    install_binaries "$tmp" "$install_dir"
 
     say "installed coffer, coffer-daemon, coffer-mcp-shim to ${install_dir}"
 
@@ -206,11 +220,11 @@ See https://wyx-sg.github.io/Coffer/start/install for alternatives."
     say " Coffer installed successfully!"
     say "============================================================"
     say ""
-    say "  Coffer starts AUTOMATICALLY — you never run a daemon manually."
+    say "  Any coffer command starts the daemon on demand if it is not running."
     say ""
-    say "  Connect an MCP client:"
-    say "    claude mcp add coffer coffer-mcp-shim"
-    say "  The daemon auto-starts on first use."
+    say "  Connect Claude Code:"
+    say "    coffer agent add claude_code"
+    say "    coffer agent mcp install claude-code"
     say ""
     say "  Manage servers from the terminal:"
     say "    coffer mcp add ...   (daemon auto-starts)"

@@ -153,7 +153,7 @@ Step by step:
 Only after the lifespan returns does uvicorn call `listen()` on the socket, report `started`, and let `entry.py` release the spawn lock. A racing spawn is therefore blocked on the lock for the whole boot, never probing a socket that is bound but not yet answering. When the lock opens, that spawn's probe finds a serving daemon and it exits cleanly. Boot takes several seconds on a real vault (migrations, credential store, upstream warm-up), which is why the probe timeouts are generous.
 
 ::: info Status during boot
-`GET /api/v1/daemon/status` reports a `status` phase of `starting`, `ready` or `draining`. Because the socket starts listening only after the lifespan has finished, a client in practice sees nothing (connection refused) during boot, then `ready`, then `draining` during teardown.
+`GET /api/v1/daemon/status` reports a `status` phase of `ready` or `draining`. There is no starting phase: the socket starts listening only after the lifespan has finished, so a client sees a refused connection during boot, then `ready`, then `draining` during teardown. A client that has just spawned a daemon therefore waits a bounded time for the probe to answer instead of reading a refused connection as a failure.
 :::
 
 ## Detect-or-spawn
@@ -193,10 +193,12 @@ The surfaces differ only in their budgets and in what they do when the spawn fai
 
 | Surface | Probe | Spawn wait | On failure |
 | --- | --- | --- | --- |
-| `coffer …` (any command) | `live_daemon()` | 10 s | Kills the half-started process, prints `daemon failed to start within 10s; check ~/.coffer/logs/daemon.log`, exits 3 |
+| `coffer …` (any command except `coffer daemon status`) | `live_daemon()` | 10 s | Kills the half-started process, prints `daemon failed to start within 10s; check ~/.coffer/logs/daemon.log`, exits 3 |
 | `coffer daemon start` | `live_daemon()`, then a trial bind of the planned port | 10 s for `daemon.json` | Prints the port-conflict message before spawning, or the timeout message, and exits 1 |
 | `coffer-mcp-shim` | Polls for 1 s | 10 s | Writes `daemon did not come up within 10s` to stderr, exits 3 |
 | Desktop shell | Step 1 of its chain | 90 s (`DAEMON_READY_TIMEOUT_SECS`) | Shows the offline banner with the reason |
+
+`coffer daemon status` is the one command that never spawns: it probes with `live_daemon()` and, when nothing answers, prints `not running` (`{"status": "stopped"}` with `--json`) and exits 3, so asking about the daemon never changes the answer.
 
 `coffer daemon start` checks the port before it spawns so that a conflict comes back as an actionable message rather than a boot timeout. The check is a real bind, released immediately. It can only err toward reporting "free", for example through the gap before the daemon's own bind, and a missed conflict still resolves safely as "already running" once the spawned daemon takes the lock.
 
@@ -295,7 +297,7 @@ Uvicorn then shuts down gracefully with a 10 s bound on open connections. Withou
 3. Stop the chat turns still running, while the database is still open, so each writes its partial reply as it unwinds.
 4. Give the retention worker 2 s to finish a prune, then cancel it.
 5. Cancel the session reaper, then drain the buffered invocation writer.
-6. Dispose the built-in chat gateway session and every MCP session supervisor, which terminates their upstream subprocesses, then close the `/mcp` session state.
+6. Dispose every MCP session supervisor, including the process-wide one behind the management routes, which terminates their upstream subprocesses, then close the `/mcp` session state.
 7. Dispose the database engine and clear the active token.
 
 Each step is best effort: a failure is logged with the step's name and does not stop the steps after it. Finally `entry.py` releases `daemon.json` (only if it still names this pid) and closes the socket.

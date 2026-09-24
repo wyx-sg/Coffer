@@ -46,7 +46,6 @@ from coffer.infrastructure.mcp.persistence import (
     MCPServerHealthRepo,
 )
 from coffer.surfaces.http.mcp.dependencies import (
-    McpSessionFactory,
     set_capability_discovery,
     set_health_repo,
     set_invocation_repo,
@@ -69,14 +68,12 @@ _PROCESS_SUPERVISOR_KEY = "__process__"
 class McpWiring:
     """What the MCP kind hands back to the lifespan.
 
-    The supervisors are disposed at shutdown; the session factory builds the
-    chat platform's long-lived gateway session; the invocation repo is the
+    The supervisors are disposed at shutdown; the invocation repo is the
     batched writer the lifespan starts and drains.
     """
 
     process_supervisor: SubprocessSupervisor
     session_supervisors: dict[str, SubprocessSupervisor]
-    session_factory: McpSessionFactory
     invocation_repo: MCPInvocationRepo
 
 
@@ -172,7 +169,6 @@ def wire_mcp_kind(
     return McpWiring(
         process_supervisor=process_supervisor,
         session_supervisors=session_supervisors,
-        session_factory=mcp_session_factory,
         invocation_repo=inv_repo,
     )
 

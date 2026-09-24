@@ -92,7 +92,9 @@ The way a changed setting — a fixed port above all — actually takes effect, 
 coffer daemon status [OPTIONS]
 ```
 
-Show daemon status.
+Show whether the daemon is running, and its version, channel, port and pid.
+
+Read-only: when no daemon is running it says so and exits 3 instead of starting one.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -284,7 +286,7 @@ coffer resource rename [OPTIONS] KIND NAME NEW_NAME
 
 Rename a resource.
 
-A label change and nothing else: the resource keeps its identity, so its reach, its credentials, its bindings and its history all follow it without being rewritten. Available for every kind — while the name WAS the identity, only connections could be renamed at all.
+A label change and nothing else: the resource keeps its identity, so its reach, its credentials, its bindings and its history all follow it without being rewritten. Works for every kind.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -471,7 +473,7 @@ Register a new MCP server (stdio OR http; pick one).
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Server name (kind-internally unique) |
-| `--stdio` | option | text |  | `command [args...]` |
+| `--stdio` | option | text |  | Command line to launch, quoted as one string, e.g. 'npx -y my-server --flag' |
 | `--http` | option | text |  | HTTP MCP server URL |
 | `--credential` | option | text (repeatable) |  | ENV_OR_HEADER=CREDENTIAL_REF (repeatable) |
 | `--description` | option | text |  |  |
@@ -546,7 +548,7 @@ coffer mcp invocations [OPTIONS] [NAME]
 
 Query the invocation log — one server's calls, or every server's.
 
-Without a server this reads the same cross-server log the Activity page renders (``GET /mcp/invocations``), Coffer's own built-in calls (``coffer``) and deleted servers' rows (``deleted:<name>``) included.
+Without a server this reads the same log the Activity page shows, including Coffer's own built-in calls (server `coffer`) and the rows of deleted servers (`deleted:<name>`).
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -719,7 +721,7 @@ coffer credentials set [OPTIONS] REF
 
 Store a secret in the encrypted credential store (via the daemon).
 
-``--value`` still stores, but prints a warning to stderr that the value lands in shell history (spec credentials "Read a secret on the command line without shell history"); the value itself is never echoed.
+Without --value the secret is read from stdin, or prompted for. --value still stores, but warns that the value lands in your shell history; the value itself is never echoed.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -734,7 +736,7 @@ coffer credentials get [OPTIONS] REF
 
 Retrieve a secret from the encrypted credential store (via the daemon).
 
-Without ``--show`` only presence is checked (cheap ``/exists`` probe, no value leaves the daemon and no read is audited). ``--show`` fetches the value via the audited read route.
+Without --show it only checks that the secret exists: no value leaves the daemon and nothing is audited. --show prints the value, and that read is recorded in the audit log.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -842,7 +844,7 @@ Update an agent's fields, including the model it answers with.
 
 The model binding lives on the agent, not on the connection: an unbound agent projects no model and runs on its own default. A change here takes effect on disk the next time that agent's connection is activated (`coffer provider switch <name>`), which is what re-projects the config.
 
-``--clear-fast-model`` is how the fast slot is \*removed\* — the route distinguishes an absent field from an explicit null, and only the second one unbinds.
+--clear-fast-model unbinds the fast slot.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1003,7 +1005,7 @@ coffer agent config edit [OPTIONS] NAME KEY
 
 Edit one config file. Opens $EDITOR on its current content, or use --from-file.
 
-On save, Coffer validates the content against the file's format (malformed JSON/TOML is rejected and the on-disk file is left unchanged), writes it atomically, and keeps a `<path>.bak` of the prior version. The write carries the fingerprint of the content it started from, so a change made on disk in the meantime is refused (exit 5) instead of overwritten (spec agent-registry "Reject stale config-file writes by fingerprint").
+On save, Coffer validates the content against the file's format (malformed JSON/TOML is rejected and the on-disk file is left unchanged), writes it atomically, and keeps a `<path>.bak` of the prior version. The write carries the fingerprint of the content it started from, so a change made on disk in the meantime is refused (exit 5) instead of overwritten.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1235,20 +1237,22 @@ List registered channels.
 coffer channel register [OPTIONS] NAME
 ```
 
-Register a channel (secrets must already be in the keychain).
+Register a channel.
 
-The channel is bound to THIS machine unless ``--runs-on`` names another: a channel runs on exactly one machine, and the one the user is typing at is the only defensible guess. Binding at creation is also what keeps "unbound" rare enough to be an error state rather than a routine one.
+Its secrets are credential refs: store each secret first with `coffer credentials set`, then pass the ref here.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Channel name |
 | `--type` | option | text | required | telegram \| seatalk |
-| `--bot-token-ref` | option | text |  | Keychain ref of the Telegram bot token |
+| `--bot-token-ref` | option | text |  | Credential ref of the Telegram bot token (store it with `coffer credentials set`) |
 | `--app-id` | option | text |  | SeaTalk App ID |
-| `--app-secret-ref` | option | text |  | Keychain ref of the SeaTalk app secret |
+| `--app-secret-ref` | option | text |  | Credential ref of the SeaTalk app secret (store it with `coffer credentials set`) |
 | `--agent` | option | text | required | Name of the agent this channel drives by default (required) |
 | `--agent-config` | option | text |  | Default agent config as JSON |
 | `--runs-on` | option | text |  | machine_id of the machine that runs this channel (default: this one) |
+| `--require-mention / --no-require-mention` | option | boolean |  | In groups, answer only when @mentioned or replied to (default: on) |
+| `--ignore-other-mentions / --no-ignore-other-mentions` | option | boolean |  | In groups, drop a message that @mentions anyone else (default: off) |
 
 ### channel pair
 
@@ -1289,6 +1293,22 @@ Takes effect without a restart: the binding is config, and both daemons reconcil
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Channel name |
 | `MACHINE_ID` | argument | text |  | machine_id to bind to (default: this machine) |
+
+### channel set
+
+```sh
+coffer channel set [OPTIONS] NAME
+```
+
+Change when the bot answers in a group.
+
+Options left out keep their current value.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Channel name |
+| `--require-mention / --no-require-mention` | option | boolean |  | In groups, answer only when @mentioned or replied to (default: on) |
+| `--ignore-other-mentions / --no-ignore-other-mentions` | option | boolean |  | In groups, drop a message that @mentions anyone else (default: off) |
 
 ### channel notify
 
@@ -1335,7 +1355,7 @@ coffer skill cat [OPTIONS] NAME PATH
 
 Print one file of a skill's master folder.
 
-A file past the route's read cap prints its first part and exits 1 with a note on stderr, so a script never mistakes the part for the file; ``--json`` exits 0 and carries ``truncated`` for the caller to judge.
+A file past the read cap prints its first part and exits 1 with a note on stderr, so a script never mistakes the part for the file; --json exits 0 and carries `truncated` for the caller to judge.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1409,7 +1429,7 @@ coffer skill rm [OPTIONS] NAME
 
 Remove a skill and tear down all its agent bindings.
 
-The refusal path matters as much as the success one: a skill Coffer generates answers DELETE with 409 RESOURCE_PROTECTED, and a bare ``raise_for_status()`` turned that into an httpx traceback. Routing through ``_client.check`` gives this door the same rendered message and exit code ``coffer resource delete skill <name>`` already gives.
+A skill Coffer generates itself is refused (exit 5).
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1565,7 +1585,7 @@ coffer knowledge upload [OPTIONS] FILE
 
 Convert a document to Markdown and add what it says to a collection.
 
-The extracted text is new material: curation merges it into the documents, and neither the original nor the extracted file is kept ("Convert uploads into material without keeping them").
+The extracted text is new material: curation merges it into the documents, and neither the original nor the extracted file is kept.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1580,7 +1600,7 @@ coffer knowledge curate [OPTIONS] COLLECTION
 
 Run a curation pass by hand over one collection.
 
-A pass is bounded and reports why it stopped, so the status is the answer: ``ok``, ``truncated`` when the recursion limit cut the pass off (its item stays pending), ``up_to_date``, ``no_model`` when no internal connection is configured ("Promote material directly when no model is configured"), ``too_large``, or ``failed``. A pass already in flight over the same collection is refused rather than queued ("Run one pass per collection at a time").
+A pass is bounded and reports why it stopped, so the status is the answer: ok; truncated when the pass was cut off (its item stays pending); up_to_date; no_model when Coffer's own model is not configured; too_large; or failed. A pass already running over the same collection is refused rather than queued.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1615,7 +1635,7 @@ coffer memory notes [OPTIONS] PARTITION
 
 List every note in one partition.
 
-A retired note is not in this list and is not marked in it either — it has left ``notes/`` and is in ``RETIRED.md``, which ``coffer memory retired`` prints ("Record retirements so they stick").
+A retired note is not in this list and is not marked in it either — it has left notes/ and is in RETIRED.md, which `coffer memory retired` prints.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1630,7 +1650,7 @@ coffer memory note [OPTIONS] PARTITION SLUG
 
 Show one note — Coffer's own text, and the entries behind it.
 
-The origins are printed with the absolute path of the native file each one was read out of, because the body is a \*\*paraphrase\*\* ("Write notes in Coffer's own words"): a note that reads wrong has to be traceable back to the thing that actually said it.
+The origins are printed with the absolute path of the native file each one was read out of, because the body is a paraphrase: a note that reads wrong has to be traceable back to the thing that actually said it.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1676,7 +1696,7 @@ coffer memory read [OPTIONS] PARTITION PATH
 
 Print one file out of a partition's directory.
 
-Read-only, like the route: everything under ``~/.coffer/memory/`` is derived ("Keep the memory tree derived and local"), so there is no matching write for an edit to survive. ``--json`` carries the absolute paths an editor or a file manager needs.
+Read-only: everything under ~/.coffer/memory/ is derived, so there is no matching write for an edit to survive. --json carries the absolute paths an editor or a file manager needs.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1704,7 +1724,7 @@ coffer memory distil [OPTIONS] PARTITION
 
 Run the distil pass by hand over one partition.
 
-Only one pass per partition runs at a time, whoever started it: a request made while the unattended sweep already holds this partition is refused with ``UPKEEP_ALREADY_RUNNING`` rather than queued ("Run one distil pass per partition at a time").
+Only one pass per partition runs at a time, whoever started it: a request made while the unattended sweep already holds this partition is refused rather than queued.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1718,11 +1738,7 @@ coffer memory context [OPTIONS]
 
 Print the composed session-start context to stdout.
 
-This is exactly what an installed session-start hook invokes (``domain.memory.delivery.hook_command``) — see the module docstring for why every failure here is silent rather than raised.
-
-``--agent-uid`` says who fired, and only that: the payload is the same for every agent, and the uid travels so the daemon can record the fire against it ("Audit every delivery fire"). It is still required, because an unattributed fire is a hook nobody can tell is working.
-
-It is the \*\*one\*\* command in this group that does not take a name, because it is the one whose caller is not a person. The value arrives from a string Coffer wrote into the agent's settings file at install time and never revisits; a name there would keep pointing at a label the user is free to change, and the fire would then be attributed to nothing. There is deliberately no ``--agent`` alias to fall back to — two spellings would put the rename hazard straight back (ADR resource-identity-is-an-immutable-uid).
+The installed session-start hook runs this; you rarely need to. It prints nothing, and exits 0, when the daemon is not running.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1753,7 +1769,7 @@ coffer memory delivery-install [OPTIONS] AGENT
 
 Install Coffer's session-start hook for an agent.
 
-The name is resolved here; the uid is what the route takes and what ends up written into the agent's settings file, so relabelling the agent afterwards costs no reinstall.
+Renaming the agent later does not need a reinstall.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1785,7 +1801,7 @@ Manage provider profiles and switch the active provider
 coffer provider add [OPTIONS] NAME
 ```
 
-Create an LLM connection. For anthropic/openai/unknown supply exactly one of --secret / --credential-ref; an ollama connection needs neither. The new connection starts on the wire's own default scope; route it to specific agents (e.g. an openai gateway to claude_code) with `coffer scope set provider <name> --agents claude-code`. The model is chosen at the point of use, not on the connection (spec provider-switching "Take projected model keys from the agent's binding").
+Create an LLM connection. For anthropic/openai/unknown supply exactly one of --secret / --credential-ref; an ollama connection needs neither. The new connection starts on the wire's own default scope; route it to specific agents (e.g. an openai gateway to claude_code) with `coffer scope set provider <name> --agents claude-code`. The model is chosen at the point of use (`coffer agent edit --model`), not on the connection.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1872,8 +1888,6 @@ Switch's other half: put this wire's agent(s) back on their OWN login.
 
 Removes Coffer's projection from the native config and clears the active connection. Idempotent — a no-op when the agent already runs built-in.
 
-Only the two wires that reach an agent are listed. `ollama` and `unknown` are accepted by the route (they are `Protocol` values) but map to no agent type, so the call reports nothing undone — naming them here would offer a command that cannot do anything.
-
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `WIRE` | argument | text | required | Wire format: anthropic \| openai |
@@ -1884,7 +1898,7 @@ Only the two wires that reach an agent are listed. `ollama` and `unknown` are ac
 coffer provider internal-default [OPTIONS] NAME
 ```
 
-Make this connection Coffer's internal-engine default (≤1 globally).
+Make this connection the one Coffer's own model runs on (at most one).
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1912,7 +1926,7 @@ coffer provider key [OPTIONS]
 
 Print a provider's API key for Claude Code's apiKeyHelper.
 
-The one command in this module that does NOT take a name. Its caller is the ``apiKeyHelper`` line Coffer writes into the agent's own config file, and that line has to keep resolving to the same connection after the user relabels it — so it cites the uid (ADR resource-identity-is-an-immutable-uid). Taking a name here as well would put the rename back into the projected file, which is the exact cost this change removed.
+Coffer writes this call into the agent's own config file when it switches the agent onto a connection; you rarely run it yourself. It takes the connection's uid, not its name, so renaming the connection keeps it working.
 
 --wire is the legacy form, which resolves whichever connection is active for that wire's agent instead of naming one.
 
@@ -1965,7 +1979,7 @@ The ENDPOINT and key come from the connection flagged internal-default (``coffer
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `MODEL` | argument | text | required | Model id the internal engine should run on |
+| `MODEL` | argument | text | required | Model id Coffer's own passes should run on |
 
 ### engine model clear
 
@@ -2007,7 +2021,7 @@ coffer engine upkeep set [OPTIONS] PASS
 
 Change ONE pass's switch or interval, leaving every other pass alone.
 
-Each half is sent only when named, so a switch can be flipped without restating an interval — and an interval below the floor, or a pass Coffer does not run, is refused by the same route the page writes through.
+Each half is sent only when named, so a switch can be flipped without restating an interval. An interval below the floor, or a pass Coffer does not run, is refused, as it is on the settings page.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2025,7 +2039,7 @@ coffer engine upkeep runs [OPTIONS]
 
 Show which passes are running right now, per collection or partition.
 
-``GET /upkeep/runs``: the daemon's own table of passes in flight, oldest first. A target not listed has no pass running.
+Oldest first. A target not listed has no pass running.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2063,7 +2077,7 @@ coffer engine curate-owner set [OPTIONS] [MACHINE_ID]
 
 Name the one machine allowed to run the curation pass.
 
-Argued like ``coffer channel bind``, and for the same reason: the answer is almost always "the machine I am typing on", so naming none means this one. An id nobody claims is still written — a vault that has never converged has no registry to check it against, and that is the one install where checking would refuse the only correct answer — but the result is read back as the fault it is rather than reported as a success.
+With no machine named, this machine. An id no machine claims is still written, and reported as the fault it is.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2109,9 +2123,9 @@ Names the built-in default alongside the chosen bound, the way ``upkeep list`` n
 coffer engine timeout set [OPTIONS] SECONDS
 ```
 
-Bound every call Coffer's own engine makes.
+Bound every call Coffer's own model makes.
 
-The right number is a property of the operator's endpoint: measured against a gateway whose typical answer takes half a minute, the built-in bound leaves barely a factor of two and the passes then defer their work while reporting success. A number outside the allowed range is refused by the same route the page writes through (exit 6), not quietly rounded.
+Raise it for a slow endpoint: a pass whose calls time out defers its work while still reporting success. A number outside the allowed range is refused (exit 6), not quietly rounded.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2155,7 +2169,7 @@ coffer engine transcribe-model set [OPTIONS] MODEL
 
 Choose the model Coffer transcribes speech with.
 
-The ENDPOINT and key come from the connection flagged transcribe-default (``coffer provider transcribe-default``) — not from the internal-engine one, because a chat gateway commonly serves no transcription endpoint at all. Both halves are needed: with either missing, Coffer transcribes nothing.
+The ENDPOINT and key come from the connection flagged transcribe-default (``coffer provider transcribe-default``) — not from the one Coffer's own model runs on, because a chat gateway commonly serves no transcription endpoint at all. Both halves are needed: with either missing, Coffer transcribes nothing.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2259,7 +2273,7 @@ coffer sync status [OPTIONS]
 
 What the remote is, and how the last round went.
 
-Exits \*\*non-zero\*\* when the last round needs a human — held for confirmation, conflicted, or failed to push or run at all — so that a prompt, a cron line or a monitor can notice without reading the text. A vault held on a confirmation nobody sees converges no further, and the first time that happened in the field it went unnoticed for four days (spec vault-sync "Say a vault needs a human where the user already is").
+Exits non-zero when the last round needs a human — held for confirmation, conflicted, or failed to push or run at all — so that a prompt, a cron line or a monitor can notice without reading the text. A paused remote exits zero.
 
 ### sync history
 
@@ -2283,7 +2297,7 @@ coffer sync remote [OPTIONS] COMMAND [ARGS]...
 
 The one git remote this vault converges with
 
-Subcommands: `set`, `show`, `clear`.
+Subcommands: `set`, `show`, `clear`, `pause`, `resume`.
 
 ### sync remote set
 
@@ -2293,7 +2307,7 @@ coffer sync remote set [OPTIONS] URL
 
 Configure the remote. It is probed before being accepted.
 
-On a configured remote an option not given keeps its stored value, and ``enabled`` is never changed here: re-running never unpauses. A remote set for the first time takes the defaults and starts enabled. A working tree at, inside or above the vault is refused by the daemon with its reason (spec vault-sync "Keep the working tree outside the vault").
+On a configured remote an option not given keeps its stored value, and a paused remote stays paused (`coffer sync remote resume` resumes it). A remote set for the first time takes the defaults and starts enabled. A working tree at, inside or above the vault is refused, with the reason.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2310,6 +2324,8 @@ On a configured remote an option not given keeps its stored value, and ``enabled
 coffer sync remote show [OPTIONS]
 ```
 
+Show the configured remote and its settings.
+
 ### sync remote clear
 
 ```sh
@@ -2317,6 +2333,22 @@ coffer sync remote clear [OPTIONS]
 ```
 
 Forget the remote. The vault is left exactly as it is.
+
+### sync remote pause
+
+```sh
+coffer sync remote pause [OPTIONS]
+```
+
+Pause sync. The remote, its settings and the history are all kept.
+
+### sync remote resume
+
+```sh
+coffer sync remote resume [OPTIONS]
+```
+
+Resume a paused remote where the vault left off.
 
 ### sync machine
 

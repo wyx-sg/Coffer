@@ -1,6 +1,6 @@
 """The internal engine's model belongs to the internal engine's connection.
 
-Settings → Engine picks a connection and a model from two dropdowns, but the
+Settings → Coffer's model picks a connection and a model from two dropdowns, but the
 model is a global singleton with no link to the connection. Switching the
 connection used to leave the old connection's model standing — the user saw
 "Agnes" paired with ``deepseek-flash`` — and Coffer's own background passes

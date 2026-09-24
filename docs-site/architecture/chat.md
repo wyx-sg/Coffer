@@ -226,10 +226,10 @@ Both adapters open a fresh session per turn and resume the agent's own stored se
 The appends an agent receives on top of its own system prompt are composed in one place, `compose_system_context` in `infrastructure/chat/adapter_support.py`, shared by both providers and always in this order:
 
 1. For a channel-driven conversation, a note that the agent is on a chat channel, naming the channel.
-2. For a channel-driven conversation, a [memory](/architecture/memory) digest, when the composition root supplies a composer. The seam exists in both providers, but the daemon does not pass one in, so channel turns carry no memory append. See [Channel turns](/architecture/memory#channel-turns).
+2. For a channel-driven conversation, the [memory](/architecture/memory) index. The composition root builds the composer (`memory_wiring.memory_context_composer`) and hands it to both providers through `wire_chat`. It returns nothing while the `memory` feature is off, when the index is empty, or when the tree cannot be read. See [Channel turns](/architecture/memory#channel-turns).
 3. On every turn, a model note naming the model Coffer put the agent on, or saying the agent's own default is in use, with a few alternatives. An agent cannot see Coffer's choice and invents one when asked, so the note says it outranks the agent's own guess.
 
-A session you start yourself in a terminal gets memory through the agent's own session-start hook, when you have installed memory delivery.
+A turn from the web Chat page, like a session you start yourself in a terminal, gets memory through the agent's own session-start hook, when you have installed memory delivery. No turn gets it both ways.
 
 ## Attachments and document extraction
 

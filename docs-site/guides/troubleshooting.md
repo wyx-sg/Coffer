@@ -77,7 +77,7 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.1 (/Users/you/.coffe
 
 **Cause.** The CLI found a daemon, then lost the connection mid-request.
 
-**Fix.** Run `coffer daemon status`, which starts a fresh daemon if none is live, then read `daemon.log` for what ended the previous one.
+**Fix.** Run `coffer daemon status`. If it prints `not running`, run `coffer daemon start`, then read `daemon.log` for what ended the previous one.
 
 ## Agents and tools
 
@@ -87,7 +87,7 @@ coffer: WARNING: attached to a Coffer daemon at version 0.1.1 (/Users/you/.coffe
 
 **Fix.**
 
-1. Run `coffer daemon status`. It starts a daemon if none is running, or shows why it cannot.
+1. Run `coffer daemon status`. If it prints `not running`, run `coffer daemon start`, which starts one or shows why it cannot.
 2. Call the tool again; the shim reconnects on the next call.
 3. If the agent still fails, reconnect its MCP servers or restart the agent session, which launches a fresh shim.
 

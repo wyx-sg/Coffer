@@ -17,8 +17,10 @@ OpenAI's, and it is written/removed here (the document itself is built by the pu
 from __future__ import annotations
 
 import pathlib
+from collections.abc import Callable
 from typing import Protocol as _Protocol
 
+from coffer.application.provider.cli_path import default_coffer_cli_resolver
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
 from coffer.domain.agent.types import AgentType
@@ -54,8 +56,16 @@ class ProjectionConfigStore(_Protocol):
 class ProviderProjector:
     """Projects / de-projects a connection into agents' native config files."""
 
-    def __init__(self, config_store: ProjectionConfigStore) -> None:
+    def __init__(
+        self,
+        config_store: ProjectionConfigStore,
+        *,
+        cli_resolver: Callable[[], str] = default_coffer_cli_resolver,
+    ) -> None:
         self._config_store = config_store
+        # Where the ``coffer`` CLI is, for the ``apiKeyHelper`` line: asked at
+        # each projection, so a CLI installed after the daemon started is found.
+        self._resolve_cli = cli_resolver
 
     @staticmethod
     def agents_of_type(agents: list[Resource], agent_type: AgentType) -> list[Resource]:
@@ -131,7 +141,9 @@ class ProviderProjector:
                 base_url=cfg.base_url,
                 model=agent_cfg.model,
                 fast_model=agent_cfg.fast_model,
-                api_key_helper=anthropic_api_key_helper(connection.uid),
+                api_key_helper=anthropic_api_key_helper(
+                    connection.uid, coffer_cli=self._resolve_cli()
+                ),
             )
             self._write_if_changed(spec.path, current, new_text)
             return

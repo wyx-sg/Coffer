@@ -1,7 +1,8 @@
 """Start the daemon's background workers, in one place.
 
-Four timers that outlive a request: retention pruning, the vault converge
-round, the knowledge curation pass, and the memory distil pass. They are gathered
+Six timers that outlive a request: retention pruning, the vault converge
+round, the knowledge curation pass, the memory distil pass, the memory
+aggregate pass, and the transcript summary cache warm-up. They are gathered
 here rather than inlined in the lifespan because each needs a different slice
 of the graph, and reading which worker gets what is the only reason to look at
 this code at all.

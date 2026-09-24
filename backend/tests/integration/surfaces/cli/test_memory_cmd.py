@@ -60,7 +60,7 @@ _CC_PERSONAL_MEMORY = """---
 name: worktree-development
 description: Always develop in a git worktree
 metadata:
-  type: feedback
+  type: user
 ---
 
 Multiple parallel sessions share the repo — always work in a worktree.

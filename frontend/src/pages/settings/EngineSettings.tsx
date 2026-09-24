@@ -1,6 +1,6 @@
 // frontend/src/pages/settings/EngineSettings.tsx
 //
-// Settings → Engine: how Coffer itself thinks, and what it does when nobody
+// Settings → Coffer's model: how Coffer itself thinks, and what it does when nobody
 // asked. Three cards, configuring Coffer's own machinery rather than anything
 // served to an agent — the LLM connection and model its own passes run on plus
 // the bound on one call to it, the connection and model it transcribes speech

@@ -56,7 +56,9 @@ def _forbid_file_access(monkeypatch: pytest.MonkeyPatch, attempts: list[str]) ->
 def test_projection_transforms_touch_no_file(monkeypatch: pytest.MonkeyPatch) -> None:
     attempts: list[str] = []
     _forbid_file_access(monkeypatch, attempts)
-    helper = projection.anthropic_api_key_helper("0123456789abcdef0123456789abcdef")
+    helper = projection.anthropic_api_key_helper(
+        "0123456789abcdef0123456789abcdef", coffer_cli="/opt/coffer/bin/coffer"
+    )
 
     applied_settings = projection.apply_anthropic_settings(
         _EXISTING_SETTINGS,

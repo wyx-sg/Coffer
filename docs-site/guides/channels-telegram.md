@@ -141,7 +141,7 @@ The Bot API only reports mentions in the text of a plain message, so an @mention
 
 Telegram bots start with **privacy mode on**, which means the bot only sees messages that mention it, reply to it, or are commands. That is what the default `require_mention: true` expects, so nothing needs changing.
 
-If you set `require_mention` to `false` so the bot acts on every owner message in a group, the bot also needs to see them:
+If you turn `require_mention` off so the bot acts on every owner message in a group — **Edit** → **In group chats** → **Answer only when @mentioned**, or `coffer channel set <name> --no-require-mention` — the bot also needs to see them:
 
 1. In BotFather, send `/setprivacy`, choose the bot and select **Disable**.
 2. Remove the bot from the group and add it again. The change applies only to groups the bot joins afterwards.

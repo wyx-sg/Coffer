@@ -81,6 +81,7 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
 
     set_feature_service(build_feature_service())
     monkeypatch.setattr(cli_client, "client_or_exit", _connect)
+    monkeypatch.setattr(cli_client, "daemon_is_running", lambda: True)
     yield h
     set_active_token(None)
     feature_dependencies._feature_service = prior

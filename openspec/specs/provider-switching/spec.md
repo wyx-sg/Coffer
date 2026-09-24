@@ -132,7 +132,8 @@ ref spelling the name.
 - **THEN** the vault entry at that ref is deleted and `resource_deleted` is audited.
 
 ### Requirement: Project into Claude Code settings without clobbering them
-The system MUST project into `~/.claude/settings.json` through
+The system MUST project into the agent's `<config_dir>/settings.json` (`~/.claude/settings.json`
+for the default config directory) through
 [agent-registry](../agent-registry/spec.md)'s config-write machinery — the atomic write with its
 rotated `.bak` ([agent-registry](../agent-registry/spec.md) "Write config files atomically with a backup and an audit entry") and the fingerprint that refuses a write onto content that
 changed underneath it ([agent-registry](../agent-registry/spec.md) "Reject stale config-file writes by fingerprint") — merging only the managed keys and preserving
@@ -143,8 +144,12 @@ de-projection safe are in [data-model.md](data-model.md).
 
 The raw key MUST NOT be written to `settings.json`, `config.toml` or any other native config file;
 `ANTHROPIC_API_KEY` MUST NOT be written. Claude Code instead gets
-`apiKeyHelper = "coffer provider key --connection-uid <uid>"`, which it invokes to fetch the key
-(and re-invokes periodically). De-projection drops `apiKeyHelper` only when it is Coffer's own.
+`apiKeyHelper = "<absolute path to the coffer CLI> provider key --connection-uid <uid>"`, which it
+invokes to fetch the key (and re-invokes periodically). The path is absolute because Claude Code
+runs the helper with its own `PATH`, which need not contain the directory the CLI is installed in.
+De-projection drops `apiKeyHelper` only when it is Coffer's own — a helper line running the coffer
+CLI by absolute path, or the bare `coffer provider key` form written by earlier builds — and leaves
+a helper the user wrote alone.
 
 Every projection write — this one, the Codex one (see "Project into Codex config without clobbering
 it"), and their de-projections — MUST surface a fingerprint refusal as 409 `CONFIG_FILE_STALE` and
@@ -273,7 +278,7 @@ routed to Claude Code. Coffer translates nothing between protocols.
 #### Scenario: route an openai-compatible connection to Claude Code with its scope
 - **GIVEN** a Claude Code agent is registered and an `openai`-wire connection is created and then scoped to `["claude_code"]`,
 - **WHEN** the user activates that connection,
-- **THEN** it projects into Claude Code's `settings.json` (the anthropic shape) with `apiKeyHelper = "coffer provider key --connection-uid <uid>"`, `GET /providers/{uid}/key` returns exactly that connection's key, and the reported agent set follows the scope.
+- **THEN** it projects into Claude Code's `settings.json` (the anthropic shape) with `apiKeyHelper = "<absolute path to the coffer CLI> provider key --connection-uid <uid>"`, `GET /providers/{uid}/key` returns exactly that connection's key, and the reported agent set follows the scope.
 
 ### Requirement: Audit every provider switch
 The system MUST emit an audit event with value `"provider_switched"` and details

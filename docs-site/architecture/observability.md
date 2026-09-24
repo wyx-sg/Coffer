@@ -74,7 +74,7 @@ The desktop shell writes its own few records (which daemon binary it chose, a fa
 | `~/.coffer/logs/shim-<pid>-<epoch>.log` | one per `coffer-mcp-shim` process, created only when the shim logs something | pruned after 7 days |
 | `~/.coffer/eval-capture.jsonl` | eval capture, only when opted in | never pruned |
 
-Upstream MCP servers get their own files because they are far chattier than Coffer; with their stderr in `daemon.log`, rotation would push Coffer's own records out within weeks. `COFFER_LOG_DIR` moves the log directory for the daemon; see [Configuration](/reference/configuration) and [Files and directories](/reference/filesystem).
+Upstream MCP servers get their own files because they are far chattier than Coffer; with their stderr in `daemon.log`, rotation would push Coffer's own records out within weeks. `COFFER_LOG_DIR` moves the whole log directory — daemon, upstream and shim logs alike; see [Configuration](/reference/configuration) and [Files and directories](/reference/filesystem).
 
 ### The tolerant reader
 
@@ -97,6 +97,8 @@ Every HTTP request gets a trace id before anything else runs. `surfaces/http/tra
 2. binds it to a context variable that the log formatter reads for every record the request produces;
 3. adds `X-Coffer-Trace` to the response (error responses already carry the same value);
 4. clears the context variable when the request ends, so a background task that outlives it does not log a stale id.
+
+Coffer's own CLI and MCP shim send no `X-Coffer-Trace`, so each of their requests gets a fresh id. The header is there for a client that wants several calls to read as one story in the log.
 
 The trace middleware is outermost in the stack — outside the loopback host guard and CORS — so even a request refused with `421 HOST_NOT_LOOPBACK` carries a trace id that matches the log record explaining the refusal. See [Security model](/architecture/security) for the host guard.
 
@@ -180,9 +182,9 @@ Every call the gateway proxies — a tool call, a resource read, a prompt get �
 What `status` means:
 
 - `ok` — the upstream answered and the result was not an error.
-- `error` — either the request raised (a transport failure, or a JSON-RPC error from the upstream), or the upstream returned a well-formed tool result with `isError: true`. In the second case the row stores the fixed marker `upstream tool returned an error result (isError)`, because the error text is upstream-controlled and may echo arguments or secrets. A builtin tool that raises is also `error`, with the exception's class name or Coffer's own message, truncated to 200 characters.
+- `error` — the upstream would not start (a failed spawn, or a server in cooldown), the request raised (a transport failure, or a JSON-RPC error from the upstream), or the upstream returned a well-formed tool result with `isError: true`. When the upstream answered, the row stores a fixed marker rather than its text: `upstream tool returned an error result (isError)` for an `isError` result, `upstream answered with a JSON-RPC error (code <n>)` for a JSON-RPC error. The error text is upstream-controlled and may echo arguments or secrets. The markers are also how the server status route tells a failing tool (the server is up) from a failing server. A builtin tool that raises is also `error`, with the exception's class name or Coffer's own message, truncated to 200 characters.
 - `timeout` — the upstream did not answer within its timeout.
-- `denied` — the call was refused before reaching the upstream: the server is out of [reach](/architecture/resource-framework#reach) for the calling agent, or the user disabled that tool. Duration is `0`.
+- `denied` — the call was refused before reaching the upstream: the server is disabled, the server is out of [reach](/architecture/resource-framework#reach) for the calling agent, or the user disabled that tool. Duration is `0`.
 
 Resource reads and prompt gets have no in-band error flag, so for them only a raised error counts as `error`.
 

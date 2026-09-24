@@ -18,8 +18,9 @@ is the integration tier's, in
 
 Three decisions are pinned here, and each is a named past failure:
 
-* an entry **about the person** files into ``global`` whichever repository it
-  came from (see "File personal entries into global");
+* a ``user`` entry (**about the person**) files into ``global`` whichever
+  repository it came from, while a ``feedback`` entry files by where it was
+  learned like any other (see "File personal entries into global");
 * a directory inside **no repository** creates no partition of its own (see
   "Create no partition for a non-repository directory") — six of sixteen
   partitions on the maintainer's live vault were dated scratch folders that the
@@ -31,6 +32,8 @@ Three decisions are pinned here, and each is a named past failure:
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import pathlib
 
 import pytest
@@ -40,7 +43,7 @@ from coffer.application.memory.service import KIND_MEMORY
 from coffer.domain.memory.errors import UnreadableMemory
 from coffer.domain.memory.note import TYPE_FEEDBACK, TYPE_PROJECT, TYPE_USER, Note, Origin
 from coffer.infrastructure.memory import paths, source_state, store
-from coffer.infrastructure.memory.raw_store import list_raw_entries
+from coffer.infrastructure.memory.raw_store import list_raw_entries, write_raw_entry
 from tests.unit.memory.conftest import (
     FakeAudit,
     FakeReader,
@@ -101,9 +104,8 @@ async def test_an_entry_learned_in_a_repository_lands_in_that_repositorys_partit
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("personal", [TYPE_USER, TYPE_FEEDBACK])
 async def test_an_entry_about_the_person_lands_in_global_whichever_repository_it_came_from(
-    tmp_path: pathlib.Path, personal: str
+    tmp_path: pathlib.Path,
 ) -> None:
     root = _repository(tmp_path, "coffer")
     resources = FakeResources()
@@ -113,7 +115,11 @@ async def test_an_entry_about_the_person_lands_in_global_whichever_repository_it
         "/cx",
         "/cx/memories/MEMORY.md",
         "d1",
-        (raw_entry("Reply in Chinese", "Prefers Chinese.", type=personal, project_root=str(root)),),
+        (
+            raw_entry(
+                "Reply in Chinese", "Prefers Chinese.", type=TYPE_USER, project_root=str(root)
+            ),
+        ),
     )
 
     result = await _aggregate(resources, {"codex": reader})
@@ -121,6 +127,90 @@ async def test_an_entry_about_the_person_lands_in_global_whichever_repository_it
     assert result.partitions == ("global",)
     assert [e.entry.title for e in list_raw_entries("global")] == ["Reply in Chinese"]
     assert store.list_partitions() == ("global",)
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(spec="memory", scenario="a feedback entry stays with its project")
+async def test_feedback_files_by_its_project_root_while_user_files_into_global(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A standing instruction given inside a repository binds that repository:
+    only ``user`` entries are filed globally whatever their project root says,
+    and a ``feedback`` entry reaches ``global`` only when it carries no root."""
+    root = _repository(tmp_path, "coffer")
+    resources = FakeResources()
+    resources.add_agent("claude-code", "claude_code", "/cc")
+    reader = FakeReader(agent_type="claude_code")
+    reader.set_source(
+        "/cc",
+        "/cc/projects/coffer/memory/f.md",
+        "d1",
+        (
+            raw_entry(
+                "Run the gates",
+                "Run make verify.",
+                anchor="one",
+                type=TYPE_FEEDBACK,
+                project_root=str(root),
+            ),
+            raw_entry(
+                "Prefers Chinese",
+                "Replies in Chinese.",
+                anchor="two",
+                type=TYPE_USER,
+                project_root=str(root),
+            ),
+            raw_entry(
+                "Keep replies short",
+                "Answer briefly.",
+                anchor="three",
+                type=TYPE_FEEDBACK,
+                project_root="",
+            ),
+        ),
+    )
+
+    result = await _aggregate(resources, {"claude_code": reader})
+
+    assert sorted(result.partitions) == ["coffer", "global"]
+    assert [e.entry.title for e in list_raw_entries("coffer")] == ["Run the gates"]
+    assert sorted(e.entry.title for e in list_raw_entries("global")) == [
+        "Keep replies short",
+        "Prefers Chinese",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_cache_written_under_older_filing_rules_refiles_an_unchanged_source(
+    tmp_path: pathlib.Path,
+) -> None:
+    """``STATE_VERSION`` is what moves entries an old rule filed elsewhere: a
+    digest cache from before the rule changed (the unversioned flat mapping)
+    must not let an unchanged source keep its entries where they were."""
+    root = _repository(tmp_path, "coffer")
+    resources = FakeResources()
+    resources.add_agent("claude-code", "claude_code", "/cc")
+    reader = FakeReader(agent_type="claude_code")
+    entry = raw_entry(
+        "Run the gates", "Run make verify.", type=TYPE_FEEDBACK, project_root=str(root)
+    )
+    reader.set_source("/cc", "/cc/projects/coffer/memory/f.md", "d1", (entry,))
+    await _aggregate(resources, {"claude_code": reader})
+    # Recreate what the previous rule left on disk: the entry under global's
+    # .raw/ and a flat, unversioned digest cache that matches the source.
+    (stored,) = list_raw_entries("coffer")
+    store.delete_partition("coffer")
+    write_raw_entry(dataclasses.replace(stored, partition="global"))
+    (paths.memory_root() / source_state.STATE_FILENAME).write_text(
+        json.dumps({"/cc/projects/coffer/memory/f.md": "d1"}), encoding="utf-8"
+    )
+
+    second = await _aggregate(resources, {"claude_code": reader})
+
+    assert (second.sources_read, second.sources_skipped) == (1, 0)
+    assert [e.entry.title for e in list_raw_entries("coffer")] == ["Run the gates"]
+    assert list_raw_entries("global") == ()
+    assert source_state.load() == {"/cc/projects/coffer/memory/f.md": "d1"}
 
 
 @pytest.mark.asyncio

@@ -89,7 +89,7 @@ Send the bot a message. The first message opens a conversation on the channel's 
 
 Messages you send while a turn is running wait in the conversation's queue and run in order — the same queue the Chat page shows. The channel accepts up to 10 waiting messages; past that it tells you the channel is busy and drops the message.
 
-Each turn tells the agent it is on a chat channel: keep replies concise, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat.
+Each turn tells the agent it is on a chat channel: keep replies concise, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. While the `memory` feature is on, the turn's system prompt also carries the [memory](/guides/memory#in-channel-turns) index, since a channel turn runs no session-start hook.
 
 ## Commands
 
@@ -176,11 +176,29 @@ Add the bot to a group to use it there.
 - Only the owner can drive it. An addressed message from anyone else gets a short "not authorized" reply and starts no turn.
 - In the group's main chat, the answer goes into a thread rooted at your message, never into the main chat. Inside a thread, the bot replies in that thread.
 - Each thread is its own conversation with its own agent, history and queue, so threads run concurrently.
-- A group answer is a reply to the message that asked, and on SeaTalk it @mentions you.
+- A group answer is attached to the message that asked: on Telegram it is sent as a reply to that message; on SeaTalk the thread rooted at that message is the attachment, and the answer @mentions you.
 - When you quote a message, the quoted sender and text are folded into the turn as `> sender: …` lines above your text.
 - A forwarded chat record is flattened into a `[Forwarded chat record]` block.
 
-Two channel settings tune when the bot answers in a group: `require_mention` (on by default) and `ignore_other_mentions` (off by default; when on, a message that also @mentions a person is ignored). Neither has a control in the web UI or the CLI; set them in the channel's configuration through `PATCH /api/v1/resources/{uid}`. They change when the bot answers, never who may drive it.
+Two channel settings tune when the bot answers in a group. They change when the bot answers, never who may drive it.
+
+| Setting | Default | Effect |
+| --- | --- | --- |
+| `require_mention` | on | The bot stays quiet in a group until someone @mentions it or replies to it. Turned off, it acts on every group message the owner sends. Telegram only: SeaTalk delivers a group message to a bot only when it @mentions the bot. |
+| `ignore_other_mentions` | off | A group message that also @mentions another person is left alone, even when it mentions the bot too. |
+
+**Web UI:** on the channel's page choose **Edit**, and use the switches under **In group chats**: **Answer only when @mentioned** (Telegram channels only) and **Ignore messages that @mention someone else**. Then **Save changes**.
+
+**CLI:** pass the switches to `coffer channel register`, or change them later with `coffer channel set`. An option you leave out keeps its current value.
+
+```sh
+coffer channel set my-telegram --no-require-mention --ignore-other-mentions
+```
+
+```text
+require_mention: off
+ignore_other_mentions: on
+```
 
 If the bot is removed from a group, that group's sessions stop. If a SeaTalk group becomes an external group, the bot posts one warning in it.
 
@@ -232,7 +250,7 @@ The **Channels** page lists every channel with **Name**, **Type**, **Default age
 - **Pairing** — generate a code.
 - **SeaTalk connection** — for SeaTalk, the websocket connection state and its last error.
 - **Test delivery** — send a one-off message to the owner.
-- **Edit** — change the default agent, the SeaTalk App ID, or rotate a secret. A blank secret field keeps the current value; a new one is written under the reference the channel already uses, so rotating a secret changes neither pairing nor binding.
+- **Edit** — change the default agent, the SeaTalk App ID, the group switches under **In group chats**, or rotate a secret. A blank secret field keeps the current value; a new one is written under the reference the channel already uses, so rotating a secret changes neither pairing nor binding.
 
 From the CLI:
 

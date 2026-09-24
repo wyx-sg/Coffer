@@ -196,7 +196,7 @@ async def test_two_repositories_and_a_preference_make_exactly_three_partitions(
         {
             "api-fact.md": _cc_file("api-fact", "about the api", "project", "API body"),
             "likes-short-replies.md": _cc_file(
-                "likes-short-replies", "the user prefers short replies", "feedback", "Be brief."
+                "likes-short-replies", "the user prefers short replies", "user", "Be brief."
             ),
         },
     )
@@ -261,7 +261,7 @@ async def test_the_registry_holds_two_readers_and_a_full_run_writes_only_the_fou
         repository,
         {
             "lockfile.md": _cc_file("lockfile", "locked with uv", "project", "uv sync"),
-            "brief.md": _cc_file("brief", "be brief", "feedback", "Short replies."),
+            "brief.md": _cc_file("brief", "be brief", "user", "Short replies."),
         },
     )
     codex_dir = codex_config(

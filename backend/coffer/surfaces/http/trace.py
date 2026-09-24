@@ -20,11 +20,12 @@ id reached the response header and never the log file it was meant to be
 grepped in. ``infrastructure.logging.setup`` now runs that same processor over
 every stdlib record, which is what puts a ``trace_id`` on every line.
 
-A client may supply its own ``X-Coffer-Trace`` request header — the CLI and the
-MCP shim both make several calls on one user action, and a shared id makes them
-one story in the log. Anything a client sends is untrusted, so it is length-capped
-and reduced to the characters an id may hold before it reaches a log line or a
-response header; a value that survives none of that is replaced by a fresh one.
+A client may supply its own ``X-Coffer-Trace`` request header, so that several
+calls made for one user action read as one story in the log; a request that
+carries none gets an id the daemon mints. Anything a client sends is
+untrusted, so it is length-capped and reduced to the characters an id may hold
+before it reaches a log line or a response header; a value that survives none
+of that is replaced by a fresh one.
 
 Raw ASGI, deliberately not ``BaseHTTPMiddleware``, for the reason
 :mod:`coffer.surfaces.http.host_guard` gives: the buffering that base class does

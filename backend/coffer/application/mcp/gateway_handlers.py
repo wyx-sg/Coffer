@@ -17,6 +17,10 @@ from typing import TYPE_CHECKING, Any, Literal
 import mcp.types as mcp_types
 from mcp import MCPError
 
+from coffer.application.mcp.invocation_outcome import (
+    INBAND_TOOL_ERROR,
+    answered_rpc_error,
+)
 from coffer.application.mcp.ports import (
     MCPCapabilityPreferenceRepoPort,
     MCPInvocationRepoPort,
@@ -185,6 +189,35 @@ async def _invoke(
     # addressed.
     resource = await resources.get_by_name("mcp_server", server_name)
 
+    async def _record(
+        status: Literal["ok", "error", "timeout", "denied"],
+        error_message: str | None = None,
+        duration_ms: int = 0,
+    ) -> None:
+        await record_invocation(
+            invocations,
+            session_id=session_id,
+            clock=clock,
+            resource_uid=resource.uid,
+            capability_type=spec.capability_type,
+            capability_key=original,
+            duration_ms=duration_ms,
+            status=status,
+            error_message=error_message,
+        )
+
+    # A disabled server is refused here, per call, and not only hidden from the
+    # listings (gateway_scope): a session that listed the server before it was
+    # disabled still holds its namespaced names, and nothing else on this path
+    # would stop it — the supervisor hands back a cached healthy connection
+    # without reading the flag. Same shape as a disabled capability: a
+    # ``denied`` row and ToolDisabled (spec mcp-gateway "Toggle individual
+    # capabilities"), since to the caller the whole server's capabilities are
+    # now disabled ones.
+    if not resource.enabled:
+        await _record("denied")
+        raise ToolDisabled(f"{server_name!r} is disabled")
+
     # Activation scope (see "Gate server exposure by scope per session"): tools/list
     # already hides a server this session's scope excludes
     # (gateway._enabled_mcp_servers), but that is only a listing-side filter — nothing
@@ -196,17 +229,7 @@ async def _invoke(
     # one, so there is nothing to translate and no label that can go stale under a
     # rename.
     if not is_active(resource.scope, session_agent_uid):
-        await record_invocation(
-            invocations,
-            session_id=session_id,
-            clock=clock,
-            resource_uid=resource.uid,
-            capability_type=spec.capability_type,
-            capability_key=original,
-            duration_ms=0,
-            status="denied",
-            error_message=None,
-        )
+        await _record("denied")
         # Same "indistinguishable from a disabled capability" shape "Gate server
         # exposure by scope per session" specifies for a hidden server: ToolDisabled,
         # not UpstreamUnavailable (that stays reserved for an upstream that genuinely
@@ -216,26 +239,23 @@ async def _invoke(
     try:
         await check_capability_enabled(prefs, resource.id, spec.capability_type, original)
     except ToolDisabled:
-        await record_invocation(
-            invocations,
-            session_id=session_id,
-            clock=clock,
-            resource_uid=resource.uid,
-            capability_type=spec.capability_type,
-            capability_key=original,
-            duration_ms=0,
-            status="denied",
-            error_message=None,
-        )
+        await _record("denied")
         raise
 
-    conn = await supervisor.get_or_spawn(server_name)
-    await ensure_subscribed(server_name)
-
+    # The clock starts BEFORE the upstream is obtained, and obtaining it sits
+    # inside the recorded block: a call that fails because the upstream would
+    # not start (cooldown, an exhausted spawn ladder) is still a call, and spec
+    # mcp-gateway "Record invocations without content" wants an entry for every
+    # one — and "Route calls to the originating upstream" wants that failure
+    # visible in the log.
     started = clock()
     status: Literal["ok", "error", "timeout", "denied"] = "ok"
     error_msg: str | None = None
+    requested = False
     try:
+        conn = await supervisor.get_or_spawn(server_name)
+        await ensure_subscribed(server_name)
+        requested = True
         result = await conn.request(spec.method, spec.build_request(original, params))
         coerced = spec.coerce(result)
         # An in-band tool error (CallToolResult.isError) does not raise — the
@@ -243,10 +263,12 @@ async def _invoke(
         # status so the invocation log distinguishes success from failure. The
         # error text is upstream-controlled (may echo secrets), so persist only
         # a fixed Coffer-authored marker, never the result content (spec
-        # mcp-gateway "Record invocations without content").
+        # mcp-gateway "Record invocations without content"). The marker is also
+        # how the status route tells "the tool failed" from "the server is down"
+        # (invocation_outcome).
         if spec.detects_inband_error and isinstance(coerced, dict) and coerced.get("isError"):
             status = "error"
-            error_msg = "upstream tool returned an error result (isError)"
+            error_msg = INBAND_TOOL_ERROR
         return coerced
     except UpstreamTimeout as e:
         status = "timeout"
@@ -254,32 +276,27 @@ async def _invoke(
         raise
     except Exception as e:
         status = "error"
-        error_msg = _safe_error_summary(e)
         # Only self-heal on a transport/process failure. A well-formed MCPError
         # means the tool ran and returned an error result over a healthy
         # connection — evicting it would needlessly kill+respawn a good server.
-        if _is_transport_failure(e):
-            # Evict the broken connection so the next call triggers a respawn.
-            await supervisor.evict(server_name)
-            # Discard the subscription so _ensure_subscribed re-registers the
-            # callback on the fresh connection spawned by the next call.
-            if on_evict is not None:
-                with contextlib.suppress(Exception):
-                    on_evict(server_name)
+        # And only once a request was actually sent: a failure to OBTAIN the
+        # connection has no connection to evict.
+        if isinstance(e, MCPError) and not _is_transport_failure(e):
+            error_msg = answered_rpc_error(e.code)
+        else:
+            error_msg = _safe_error_summary(e)
+            if requested:
+                # Evict the broken connection so the next call triggers a respawn.
+                await supervisor.evict(server_name)
+                # Discard the subscription so _ensure_subscribed re-registers the
+                # callback on the fresh connection spawned by the next call.
+                if on_evict is not None:
+                    with contextlib.suppress(Exception):
+                        on_evict(server_name)
         raise
     finally:
         duration_ms = int((clock() - started).total_seconds() * 1000)
-        await record_invocation(
-            invocations,
-            session_id=session_id,
-            clock=clock,
-            resource_uid=resource.uid,
-            capability_type=spec.capability_type,
-            capability_key=original,
-            duration_ms=duration_ms,
-            status=status,
-            error_message=error_msg,
-        )
+        await _record(status, error_msg, duration_ms)
 
 
 async def handle_tools_call(params: dict[str, Any], **kw: Any) -> Any:

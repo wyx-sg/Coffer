@@ -141,6 +141,9 @@ def edit(
     effect on disk the next time that agent's connection is activated
     (`coffer provider switch <name>`), which is what re-projects the config.
 
+    --clear-fast-model unbinds the fast slot.
+
+    \f
     ``--clear-fast-model`` is how the fast slot is *removed* — the route
     distinguishes an absent field from an explicit null, and only the second
     one unbinds.

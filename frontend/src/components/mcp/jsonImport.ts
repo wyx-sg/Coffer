@@ -3,7 +3,7 @@
 // Parser for pasted MCP server JSON — the standard Claude Desktop /
 // Cursor `{"mcpServers": {...}}` shape. Pure (no React, no network).
 
-/** Env var names whose value Coffer treats as a secret by default. */
+/** Env var / header names whose value Coffer treats as a secret by default. */
 const SECRET_NAME_RE = /token|secret|pass|pwd|key|cred|auth/i;
 
 /**
@@ -28,6 +28,12 @@ export interface ParsedServer {
   command: string;
   args: string[];
   url: string;
+  /**
+   * The key/value pairs the review step shows with a Secret toggle. For stdio
+   * these are the `env` block. For http they are what the server is sent as
+   * headers: the `headers` block, plus any `env` block (HTTP has no env, so
+   * those values travel as headers too); a `headers` entry wins a key clash.
+   */
   env: ParsedEnvVar[];
 }
 
@@ -47,18 +53,40 @@ function isObject(v: unknown): v is Record<string, unknown> {
  */
 type EnvParseResult =
   | { ok: true; env: ParsedEnvVar[] }
-  | { ok: false; errorKey: "errEnvNotObject" }
-  | { ok: false; errorKey: "errBadEnvValue"; badKey: string };
+  | { ok: false; errorKey: string; badKey?: string };
 
-function parseEnv(raw: unknown): EnvParseResult {
+/** The error keys for one pasted block — `env` and `headers` reject the same
+ *  shapes, each under its own message. */
+const BLOCK_ERRORS = {
+  env: { notObject: "errEnvNotObject", badValue: "errBadEnvValue" },
+  headers: { notObject: "errHeadersNotObject", badValue: "errBadHeaderValue" },
+} as const;
+
+function parseEnv(raw: unknown, block: keyof typeof BLOCK_ERRORS = "env"): EnvParseResult {
+  const errors = BLOCK_ERRORS[block];
   if (raw === undefined) return { ok: true, env: [] };
-  if (!isObject(raw)) return { ok: false, errorKey: "errEnvNotObject" };
+  if (!isObject(raw)) return { ok: false, errorKey: errors.notObject };
   const env: ParsedEnvVar[] = [];
   for (const [key, value] of Object.entries(raw)) {
-    if (typeof value !== "string") return { ok: false, errorKey: "errBadEnvValue", badKey: key };
+    if (typeof value !== "string") return { ok: false, errorKey: errors.badValue, badKey: key };
     env.push({ key, value, isSecret: SECRET_NAME_RE.test(key) || SECRET_VALUE_RE.test(value) });
   }
   return { ok: true, env };
+}
+
+/** `env` entries overlaid by `headers` entries of the same key. */
+function mergeByKey(base: ParsedEnvVar[], over: ParsedEnvVar[]): ParsedEnvVar[] {
+  const keys = new Set(over.map((e) => e.key));
+  return [...base.filter((e) => !keys.has(e.key)), ...over];
+}
+
+function blockError(
+  name: string,
+  result: { errorKey: string; badKey?: string },
+): { error: true; errorKey: string; errorParams: Record<string, string> } {
+  const errorParams: Record<string, string> = { name };
+  if (result.badKey !== undefined) errorParams.key = result.badKey;
+  return { error: true, errorKey: result.errorKey, errorParams };
 }
 
 function parseServer(
@@ -67,14 +95,7 @@ function parseServer(
 ): ParsedServer | { error: true; errorKey?: string; errorParams?: Record<string, string> } {
   if (!isObject(cfg)) return { error: true };
   const envResult = parseEnv(cfg.env);
-  if (!envResult.ok) {
-    return {
-      error: true,
-      errorKey: envResult.errorKey,
-      errorParams:
-        envResult.errorKey === "errBadEnvValue" ? { name, key: envResult.badKey } : { name },
-    };
-  }
+  if (!envResult.ok) return blockError(name, envResult);
   const env = envResult.env;
   if (typeof cfg.command === "string" && cfg.command.trim() !== "") {
     return {
@@ -87,7 +108,12 @@ function parseServer(
     };
   }
   if (typeof cfg.url === "string" && cfg.url.trim() !== "") {
-    return { name, transportType: "http", command: "", args: [], url: cfg.url, env };
+    // The standard block for an HTTP server carries `headers`; they go
+    // through the same secret review as env does.
+    const headersResult = parseEnv(cfg.headers, "headers");
+    if (!headersResult.ok) return blockError(name, headersResult);
+    const headers = mergeByKey(env, headersResult.env);
+    return { name, transportType: "http", command: "", args: [], url: cfg.url, env: headers };
   }
   return { error: true };
 }

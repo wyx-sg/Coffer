@@ -13,7 +13,7 @@ Everything else in Coffer is a client of the daemon: the `coffer` CLI, the `coff
 
 You rarely need to start it by hand. Any surface that needs a daemon and finds none starts one itself, detached from the caller:
 
-- any `coffer` command that talks to the daemon (including `coffer daemon status`),
+- any `coffer` command that talks to the daemon (except `coffer daemon status`, which only looks),
 - an agent connecting to Coffer through `coffer-mcp-shim`,
 - the desktop app on launch.
 
@@ -23,7 +23,7 @@ Exactly one daemon runs per vault. If two surfaces race to start one, a lock on 
 
 ```sh
 coffer daemon start      # spawn it in the background, if none is running
-coffer daemon status     # ask the running daemon how it is
+coffer daemon status     # ask the running daemon how it is; never starts one
 coffer daemon stop       # SIGTERM, then wait for it to exit
 coffer daemon restart    # stop (if running), then start
 ```
@@ -38,7 +38,9 @@ port:    8000
 pid:     41822
 ```
 
-`status` is `starting` while the daemon is still wiring itself up, `ready` once it serves, and `draining` while it shuts down. `channel` is the build's release channel, which decides which [experimental features](/guides/experimental-features) are on by default. Add `--json` for scripts.
+`status` is `ready` while the daemon serves and `draining` while it shuts down. There is no earlier phase to see: the daemon opens its port only once it has finished starting. `channel` is the build's release channel, which decides which [experimental features](/guides/experimental-features) are on by default. Add `--json` for scripts.
+
+With no daemon running, `coffer daemon status` prints `status:  not running` (`{"status": "stopped"}` under `--json`) and exits 3. It does not start a daemon, so its answer never changes what it reports on; use `coffer daemon start` for that.
 
 A few behaviours worth knowing:
 

@@ -38,14 +38,12 @@ from coffer.infrastructure.chat.transcribe import Transcriber
 #: rather than the application catalogue service itself, so infrastructure keeps
 #: no dependency on an application type it would only read one list from.
 
-#: Compose this turn's memory-context append (spec memory "Deliver to channel
-#: turns through the system prompt"): given the calling agent's key and its cwd,
-#: returns the composed text, or ``None`` when there is nothing to deliver (no
-#: composer wired at all, or the composer itself has nothing to say). A narrow
-#: callable — never ``application.memory.context.compose_context`` imported here
-#: directly — so this layer never reaches into the memory kind itself; the
-#: composition root builds the real closure over
-#: ``MemoryService``/``OverrideRepository``.
+#: The memory-context append a channel turn carries (spec memory "Deliver to
+#: channel turns through the system prompt") arrives as a
+#: ``MemoryContextComposer`` — a narrow callable, never
+#: ``application.memory.context.compose_context`` imported here, so this layer
+#: never reaches into the memory kind itself. The composition root builds the
+#: real closure over ``MemoryService`` (``memory_wiring.memory_context_composer``).
 
 #: Builds the transcriber for one turn, or ``None`` to leave audio untouched.
 #: Resolved per turn so designating (or clearing) the internal connection takes

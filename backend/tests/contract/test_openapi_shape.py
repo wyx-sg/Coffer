@@ -63,7 +63,6 @@ def test_openapi_dump_references_daemon_status_schema() -> None:
     status_prop = daemon_status["properties"]["status"]
     assert status_prop["type"] == "string"
     assert status_prop.get("enum") == [
-        "starting",
         "ready",
         "draining",
     ], f"DaemonStatusOut.status enum mismatch in runtime schema: {status_prop}"

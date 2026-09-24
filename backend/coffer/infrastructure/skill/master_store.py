@@ -45,7 +45,17 @@ def _ensure_safe_name(name: str) -> None:
 
 
 def default_master_root() -> pathlib.Path:
-    """`$HOME/.coffer/skills/` — Coffer's canonical store root."""
+    """`$HOME/.coffer/skills/` — Coffer's canonical store root.
+
+    ``$COFFER_SKILLS_ROOT`` overrides it, exactly as it overrides the tree the
+    sync round mirrors (``infrastructure.sync.paths.skills_root``): the two
+    name the same directory, and an override that moved only one would have
+    sync mirroring a store no skill is written to. The read is repeated here
+    rather than imported because this package may not depend on ``sync``.
+    """
+    override = os.environ.get("COFFER_SKILLS_ROOT")
+    if override:
+        return pathlib.Path(override).expanduser()
     home = pathlib.Path(os.environ.get("HOME", os.path.expanduser("~")))
     return home / ".coffer" / "skills"
 

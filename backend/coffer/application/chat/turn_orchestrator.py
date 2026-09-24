@@ -13,8 +13,10 @@ published to a per-conversation bus; any number of clients ``subscribe`` (the we
 ``GET .../events`` stream). The one entry point for a message — from the web
 ``POST`` and from a channel alike — is ``enqueue_message``: it starts the turn
 when idle or appends to the conversation's **pending queue** when a turn is
-running (the composer never locks, the bot never says "busy" for the tenth
-message). When a turn ends the queue auto-advances FIFO, unless an interrupt
+running (the composer never locks). The orchestrator itself never refuses a
+message; the channel turn driver bounds its own queue
+(``channel.turn_driver.QUEUE_MAX``) and tells the sender when a message
+overflows it (spec channels). When a turn ends the queue auto-advances FIFO, unless an interrupt
 paused it. The pending list is broadcast as a ``QueueChanged`` event so every
 subscriber — the web tabs and the channel alike — renders the same chips.
 

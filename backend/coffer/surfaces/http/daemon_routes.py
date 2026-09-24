@@ -56,9 +56,11 @@ router = APIRouter(prefix="/api/v1/daemon", tags=["daemon"])
 # Daemon lifecycle phase — written by app.py's lifespan, read by /status.
 # Lives here (the reader) so app.py stays under the 400-line guideline and
 # daemon_routes no longer needs a circular import of app at request time.
-_DaemonPhase = Literal["starting", "ready", "draining"]
+# uvicorn serves only after the lifespan's startup half returns, so no request
+# can observe the daemon before it is ready: there is no "starting" phase.
+_DaemonPhase = Literal["ready", "draining"]
 
-_DAEMON_PHASE: _DaemonPhase = "starting"
+_DAEMON_PHASE: _DaemonPhase = "ready"
 
 
 def get_daemon_phase() -> _DaemonPhase:

@@ -17,12 +17,12 @@ launchd is the fix macOS already has. This module writes one user agent:
   plain ``KeepAlive: true`` would fight each of those, restarting it a second
   later. Every client can start a daemon, so nothing is lost by letting a
   deliberate exit stand.
-* ``EnvironmentVariables.PATH`` — captured from the shell that ran the
-  install. A launchd agent otherwise inherits a minimal ``PATH``, and the
-  daemon spawns ``npx`` / ``uvx`` MCP upstreams that then resolve to nothing.
-  This is the same problem the desktop shell solves by probing the login shell
-  (``desktop/src/env_path.rs``); here the install is already running in the
-  user's own environment, so the honest source is that environment.
+* ``EnvironmentVariables.PATH`` — read from the user's login shell at install
+  time (:func:`login_shell_path`). A launchd agent otherwise inherits a minimal
+  ``PATH``, and the daemon spawns ``npx`` / ``uvx`` MCP upstreams that then
+  resolve to nothing. The install usually runs inside a daemon whose own
+  ``PATH`` is already the truncated one, so it asks the login shell the same
+  way the desktop shell does (``desktop/src/env_path.rs``).
 
 Installing is opt-in and reversible, and the agent execs the deploy's own
 ``~/.coffer/bin/coffer-daemon`` symlink rather than the versioned path behind

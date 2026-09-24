@@ -84,7 +84,7 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 | `logs/shim-<pid>-<epoch>.log` | One file per MCP shim process, created only when the shim has something to log. Pruned after 7 days. | shim | No | Yes. |
 | `logs/upstream/<server>.log`, `.log.1` | Standard error of each stdio upstream MCP server. Rolled aside at 2 MB; the `.1` copy is pruned after 7 days. | daemon | No | Yes. |
 
-`COFFER_LOG_DIR` moves the daemon and upstream logs; shim logs always go to `~/.coffer/logs`. See [Observability](/architecture/observability).
+`COFFER_LOG_DIR` moves the daemon, upstream and shim logs together. See [Observability](/architecture/observability).
 
 ### Knowledge, memory and skills
 
@@ -95,9 +95,10 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 | `knowledge.pre-<revision>.bak/` | A copy of the knowledge tree taken before a migration that restructured it. | daemon | No | Yes, once you have checked the migrated tree. |
 | `memory/<partition>/` | Derived memory for `global` or one repository: `MEMORY.md` (index), `notes/` (Coffer's notes), `RETIRED.md` (what was retired and why). | daemon (distil pass) | **No** (derived and local) | Yes: aggregation and distil rebuild it. Retirement decisions in `RETIRED.md` are lost. |
 | `memory/<partition>/.raw/` | What aggregation read out of the agents' own memory, verbatim. | daemon (aggregate pass) | No | Yes: the next aggregation rereads the agents. |
+| `memory/.source_state.json` | The digest of each native memory file at the last aggregation (`digests`), and the `version` of the filing rules it was written under. A file from another version reads as empty, so every source is re-read once. | daemon (aggregate pass) | No | Yes: the next pass re-reads every source. |
 | `skills/<name>/` | The master copy of a managed skill: `SKILL.md`, its other files, and `.coffer.meta.json` (Coffer's metadata). Agents receive a symlink to this folder. | daemon | Yes, except `skills/coffer-guide/`, which each machine renders for itself | **No.** Deleting a folder breaks the symlinks delivered to agents. |
 
-See [Knowledge](/guides/knowledge), [Memory](/guides/memory) and [Skills](/guides/skills).
+`COFFER_KNOWLEDGE_ROOT`, `COFFER_MEMORY_ROOT` and `COFFER_SKILLS_ROOT` move these three trees; `COFFER_SKILLS_ROOT` moves the skill store and the tree vault sync mirrors together (see [Configuration](/reference/configuration#storage-locations)). See [Knowledge](/guides/knowledge), [Memory](/guides/memory) and [Skills](/guides/skills).
 
 ### Sync
 
@@ -142,7 +143,7 @@ The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by 
 | File | What Coffer writes | When |
 | --- | --- | --- |
 | `~/.claude.json` (inside the config dir for a non-default one) | `mcpServers.coffer`: `{"command": "~/.coffer/bin/coffer-mcp-shim", "args": ["--agent-uid", "<uid>"]}` with the absolute shim path. | Installing Coffer's MCP entry. See [Connect a client](/guides/connect-a-client). |
-| `settings.json` | `apiKeyHelper` set to `coffer provider key --connection-uid <uid>` and `env.ANTHROPIC_BASE_URL`, `env.ANTHROPIC_MODEL`, `env.ANTHROPIC_SMALL_FAST_MODEL`. The API key itself is never written. | Switching the agent to a model provider. See [Model providers](/guides/providers). |
+| `settings.json` | `apiKeyHelper` set to `<absolute path to coffer> provider key --connection-uid <uid>` (for example `/Users/you/.coffer/bin/coffer …`; the bare `coffer` only when no CLI can be found) and `env.ANTHROPIC_BASE_URL`, `env.ANTHROPIC_MODEL`, `env.ANTHROPIC_SMALL_FAST_MODEL`. The API key itself is never written. | Switching the agent to a model provider. See [Model providers](/guides/providers). |
 | `settings.json` | A `hooks.SessionStart` entry, matcher `startup\|resume\|clear\|compact`, whose command begins `: coffer-memory;` and runs `coffer memory context --agent-uid <uid> --cwd "$PWD"`. | Installing memory delivery. See [Memory](/guides/memory). |
 | `skills/<name>` | A symlink to `~/.coffer/skills/<name>` (a copy where symlinks are unavailable). | Delivering a skill to the agent. See [Skills](/guides/skills). |
 
@@ -156,7 +157,7 @@ The config directory is `~/.claude` for Claude Code and `~/.codex` for Codex by 
 | `hooks.json` | A `hooks.UserPromptSubmit` entry whose command begins `: coffer-memory;`, guarded to fire once per session, with a 10-second timeout. | Installing memory delivery. |
 | `skills/<name>` | A symlink to `~/.coffer/skills/<name>`. | Delivering a skill to the agent. |
 
-Coffer recognises its own entries by the `coffer` server key, the `: coffer-memory` marker and the `coffer provider key` helper prefix, and removes only those. Every other entry — your own MCP servers, other tools' hooks, your `env` — is left as it was. Coffer reads the agents' native memory files but never writes them.
+Coffer recognises its own entries by the `coffer` server key, the `: coffer-memory` marker and an `apiKeyHelper` that runs the `coffer` CLI (bare or by any path) with `provider key`, and removes only those. Every other entry — your own MCP servers, other tools' hooks, your `env` — is left as it was. Coffer reads the agents' native memory files but never writes them.
 
 ::: tip Cleaning up an agent
 Before removing Coffer, uninstall the MCP entry, memory delivery and provider projection from each agent's page (or the matching `coffer agent` and `coffer provider` commands), then delete `~/.coffer`. Deleting `~/.coffer` first leaves the agents pointing at a shim that no longer exists.

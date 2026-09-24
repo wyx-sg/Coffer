@@ -1,4 +1,4 @@
-// Settings → Engine → Automatic upkeep: the passes Coffer runs on its own.
+// Settings → Coffer's model → Automatic upkeep: the passes Coffer runs on its own.
 //
 // The point of the card is that they are visible and stoppable, so these
 // assert exactly that — each pass is named with what it WRITES, the switch and

@@ -69,17 +69,46 @@ def list_cmd(
     _console.print(table)
 
 
+# Group gating (spec channels "Configure when the bot answers in a group"):
+# tri-state, so an option left out keeps the stored value (or, at register,
+# the config's own default) instead of overwriting it.
+_REQUIRE_MENTION = typer.Option(
+    None,
+    "--require-mention/--no-require-mention",
+    help="In groups, answer only when @mentioned or replied to (default: on)",
+)
+_IGNORE_OTHER_MENTIONS = typer.Option(
+    None,
+    "--ignore-other-mentions/--no-ignore-other-mentions",
+    help="In groups, drop a message that @mentions anyone else (default: off)",
+)
+
+
+def _gating(require_mention: bool | None, ignore_other_mentions: bool | None) -> dict[str, bool]:
+    """The group-gating config keys the user actually passed."""
+    out: dict[str, bool] = {}
+    if require_mention is not None:
+        out["require_mention"] = require_mention
+    if ignore_other_mentions is not None:
+        out["ignore_other_mentions"] = ignore_other_mentions
+    return out
+
+
 @app.command("register")
 def register(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Channel name"),
     channel_type: str = typer.Option(..., "--type", help="telegram | seatalk"),
     bot_token_ref: str | None = typer.Option(
-        None, "--bot-token-ref", help="Keychain ref of the Telegram bot token"
+        None,
+        "--bot-token-ref",
+        help="Credential ref of the Telegram bot token (store it with `coffer credentials set`)",
     ),
     app_id: str | None = typer.Option(None, "--app-id", help="SeaTalk App ID"),
     app_secret_ref: str | None = typer.Option(
-        None, "--app-secret-ref", help="Keychain ref of the SeaTalk app secret"
+        None,
+        "--app-secret-ref",
+        help="Credential ref of the SeaTalk app secret (store it with `coffer credentials set`)",
     ),
     default_agent: str = typer.Option(
         ...,
@@ -94,9 +123,15 @@ def register(
         "--runs-on",
         help="machine_id of the machine that runs this channel (default: this one)",
     ),
+    require_mention: bool | None = _REQUIRE_MENTION,
+    ignore_other_mentions: bool | None = _IGNORE_OTHER_MENTIONS,
 ) -> None:
-    """Register a channel (secrets must already be in the keychain).
+    """Register a channel.
 
+    Its secrets are credential refs: store each secret first with
+    `coffer credentials set`, then pass the ref here.
+
+    \f
     The channel is bound to THIS machine unless ``--runs-on`` names another:
     a channel runs on exactly one machine, and the one the user is typing at is
     the only defensible guess. Binding at creation is also what keeps "unbound"
@@ -110,6 +145,7 @@ def register(
     # and the old ``claude_code`` default was a fiction — there was never an
     # agent behind it, so a channel created with it simply routed nowhere.
     config: dict[str, Any] = {"channel_type": channel_type}
+    config.update(_gating(require_mention, ignore_other_mentions))
     if agent_config is not None:
         try:
             config["default_agent_config"] = _json.loads(agent_config)
@@ -259,6 +295,34 @@ def bind(
         r = c.patch(f"/resources/{uid}", json={"config": config})
         _cli_client.check(r, verbose=verbose)
     typer.echo(f"channel {name} runs on {config['runs_on']}")
+
+
+@app.command("set")
+def set_cmd(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Channel name"),
+    require_mention: bool | None = _REQUIRE_MENTION,
+    ignore_other_mentions: bool | None = _IGNORE_OTHER_MENTIONS,
+) -> None:
+    """Change when the bot answers in a group.
+
+    Options left out keep their current value.
+    """
+    verbose = (ctx.obj or {}).get("verbose", False)
+    changes = _gating(require_mention, ignore_other_mentions)
+    if not changes:
+        typer.echo("nothing to change — pass at least one option", err=True)
+        raise typer.Exit(int(ExitCode.INVALID_USAGE))
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        uid = resolve_uid(c, "channel", name, verbose=verbose)
+        r = c.get(f"/resources/{uid}")
+        _cli_client.check(r, verbose=verbose)
+        config = {**(r.json().get("config") or {}), **changes}
+        r = c.patch(f"/resources/{uid}", json={"config": config})
+        _cli_client.check(r, verbose=verbose)
+    for key, value in changes.items():
+        typer.echo(f"{key}: {'on' if value else 'off'}")
 
 
 @app.command("notify")

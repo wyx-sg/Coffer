@@ -17,7 +17,7 @@
 // the chat provider key `claude_code`), so the values below are opaque too.
 import { describe, expect, test } from "vitest";
 
-import { planChannelEdit } from "./editChannel";
+import { honoursRequireMention, planChannelEdit } from "./editChannel";
 
 /** The two channels every case below edits: a uid to address, a name to read. */
 const TG = { uid: "u-3d9a1f77", name: "tg" };
@@ -126,5 +126,48 @@ describe("planChannelEdit", () => {
 
     expect(plan.secrets).toEqual([]);
     expect(plan.config.default_agent).toBe(AGENT_B);
+  });
+
+  describe("group gating", () => {
+    const tgConfig = { channel_type: "telegram", bot_token_ref: "channel/tg/bot-token" };
+
+    test("telegram: flipping both switches writes both keys", () => {
+      const plan = planChannelEdit({
+        ...TG,
+        config: tgConfig,
+        values: { default_agent: AGENT_A, require_mention: false, ignore_other_mentions: true },
+      });
+
+      expect(plan.config.require_mention).toBe(false);
+      expect(plan.config.ignore_other_mentions).toBe(true);
+    });
+
+    test("a switch left at the stored value (or the default) writes nothing", () => {
+      const plan = planChannelEdit({
+        ...TG,
+        config: { ...tgConfig, ignore_other_mentions: true },
+        values: { default_agent: AGENT_A, require_mention: true, ignore_other_mentions: true },
+      });
+
+      expect(plan.config).toEqual({
+        ...tgConfig,
+        ignore_other_mentions: true,
+        default_agent: AGENT_A,
+      });
+      expect("require_mention" in plan.config).toBe(false);
+    });
+
+    test("seatalk: require_mention is never written — SeaTalk only delivers @mentions", () => {
+      expect(honoursRequireMention("seatalk")).toBe(false);
+      expect(honoursRequireMention("telegram")).toBe(true);
+      const plan = planChannelEdit({
+        ...ST,
+        config: { channel_type: "seatalk", app_id: "a", app_secret_ref: "channel/st/app-secret" },
+        values: { default_agent: AGENT_A, require_mention: false, ignore_other_mentions: true },
+      });
+
+      expect("require_mention" in plan.config).toBe(false);
+      expect(plan.config.ignore_other_mentions).toBe(true);
+    });
   });
 });

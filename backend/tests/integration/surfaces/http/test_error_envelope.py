@@ -326,6 +326,10 @@ def _err_app():
         (lambda e: e.UpstreamTimeout("slow"), 504, "UPSTREAM_TIMEOUT"),
         (lambda e: e.ToolDisabled("off"), 403, "TOOL_DISABLED"),
         (lambda e: e.InvalidPrefix("bad__prefix"), 400, "INVALID_PREFIX"),
+        # These three once had no status entry and fell through to 500.
+        (lambda e: e.MasterKeyMissing("/v/master.key"), 503, "MASTER_KEY_MISSING"),
+        (lambda e: e.AgentConfigDirMissing("/no/such/dir"), 409, "AGENT_CONFIG_DIR_MISSING"),
+        (lambda e: e.DatabaseSchemaTooNew("abc123", "/v/coffer.db"), 409, "DB_SCHEMA_TOO_NEW"),
     ],
     ids=[
         "ResourceNotFound",
@@ -338,6 +342,9 @@ def _err_app():
         "UpstreamTimeout",
         "ToolDisabled",
         "InvalidPrefix",
+        "MasterKeyMissing",
+        "AgentConfigDirMissing",
+        "DatabaseSchemaTooNew",
     ],
 )
 def test_each_coffer_error_maps_to_status_and_code(exc_factory, expected_status, expected_code):
@@ -361,6 +368,31 @@ def test_each_coffer_error_maps_to_status_and_code(exc_factory, expected_status,
     assert "X-Coffer-Trace" in r.headers
     # The message echoes the domain exception's str(), not a generic placeholder.
     assert r.json()["error"]["message"] == str(exc)
+
+
+def test_every_domain_error_code_has_a_status():
+    """No CofferError subclass falls through to the 500 default by omission.
+
+    A code missing from the table answers 500, which tells a browser and the
+    CLI's exit-code mapping that Coffer broke. A code that means a genuine
+    fault still gets an explicit 500 entry, so absence is always a mistake.
+    """
+    from coffer.domain import errors as domain_errors
+    from coffer.surfaces.http.errors import _STATUS
+
+    def _subclasses(cls):
+        for sub in cls.__subclasses__():
+            yield sub
+            yield from _subclasses(sub)
+
+    # Only the product's own errors: test suites define throwaway subclasses
+    # (a fake gate refusal, say) that are never meant to reach a response.
+    codes = {
+        c.code for c in _subclasses(domain_errors.CofferError) if c.__module__.startswith("coffer.")
+    }
+    assert "MASTER_KEY_MISSING" in codes
+    missing = sorted(c for c in codes if c not in _STATUS)
+    assert missing == [], missing
 
 
 def test_base_coffer_error_falls_back_to_500():

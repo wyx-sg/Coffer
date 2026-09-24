@@ -1099,6 +1099,75 @@ async def test_get_server_status_failing_branch(
         await engine.dispose()
 
 
+@pytest.mark.parametrize(
+    ("rows", "expected"),
+    [
+        # A tool's own in-band failure over a healthy connection.
+        ([("error", "INBAND")], "healthy"),
+        # A well-formed JSON-RPC error the upstream answered with.
+        ([("error", "RPC")], "healthy"),
+        # A refused call never reached the server: the row before it decides.
+        ([("error", "upstream died"), ("denied", None)], "failing"),
+        ([("ok", None), ("denied", None)], "healthy"),
+        # A transport failure after an answered error is still a failure.
+        ([("error", "INBAND"), ("error", "UpstreamUnavailable: 'fs' is in cooldown")], "failing"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_get_server_status_ignores_answered_errors_and_denials(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    rows: list[tuple[str, str | None]],
+    expected: str,
+) -> None:
+    """Only a failure to reach the server makes it ``failing``: a tool that
+    answered with an error (``isError`` or a JSON-RPC error) proves the server
+    is up, and a ``denied`` row never reached it (spec mcp-gateway "Route calls
+    to the originating upstream" ties unhealthy to transport failure). Rows are
+    seeded oldest-first."""
+    from datetime import UTC, datetime, timedelta
+
+    from coffer.application.mcp.invocation_outcome import (
+        INBAND_TOOL_ERROR,
+        answered_rpc_error,
+    )
+    from coffer.domain.mcp.capability import MCPInvocation
+    from coffer.infrastructure.mcp.persistence import MCPInvocationRepo
+    from coffer.infrastructure.persistence.engine import session_maker
+
+    markers = {"INBAND": INBAND_TOOL_ERROR, "RPC": answered_rpc_error(-32602)}
+    _with_in_memory(monkeypatch)
+    app, engine, _rsvc, _prefs, supervisor, uid = await _build_app(tmp_path)
+    inv_repo = MCPInvocationRepo(session_maker(engine))  # type: ignore[arg-type]
+    base = datetime.now(tz=UTC)
+    for i, (row_status, msg) in enumerate(rows):
+        await inv_repo.insert(
+            MCPInvocation(
+                id=None,
+                timestamp=base + timedelta(seconds=i),
+                resource_uid=uid,
+                capability_type="tool",
+                capability_key="read_file",
+                duration_ms=10,
+                status=row_status,  # type: ignore[arg-type]
+                error_message=markers.get(msg, msg) if msg else None,
+                session_id="test-session",
+            )
+        )
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            headers={"X-Coffer-Token": "test-token"},
+        ) as client:
+            r = await client.get(f"/api/v1/resources/mcp_server/{uid}/status")
+            assert r.status_code == 200, r.text
+            assert r.json()["status"] == expected, r.json()
+    finally:
+        await supervisor.dispose()
+        await engine.dispose()
+
+
 # ---------------------------------------------------------------------------
 # T20 — /test endpoint for an HTTP-transport server
 # ---------------------------------------------------------------------------

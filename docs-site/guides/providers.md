@@ -99,7 +99,7 @@ Coffer merges only its own keys into the agent's file and leaves everything else
 
 ```json
 {
-  "apiKeyHelper": "coffer provider key --connection-uid 59ecb631d06a501c936fa5affdace553",
+  "apiKeyHelper": "/Users/you/.coffer/bin/coffer provider key --connection-uid 59ecb631d06a501c936fa5affdace553",
   "env": {
     "ANTHROPIC_BASE_URL": "https://api.deepseek.com",
     "ANTHROPIC_MODEL": "sonnet",
@@ -110,8 +110,10 @@ Coffer merges only its own keys into the agent's file and leaves everything else
 
 The key is never written. Claude Code runs the `apiKeyHelper` command to fetch it, and `coffer provider key --connection-uid <uid>` prints the decrypted key for exactly that provider. The helper cites the provider's uid, so renaming the provider does not break it. `ANTHROPIC_API_KEY` is never written, because it would override the helper. When the provider is disabled or no longer reaches any agent, the helper prints nothing and exits with code 4, so Claude Code does not keep a stale key.
 
-::: warning `coffer` must be on Claude Code's PATH
-`apiKeyHelper` runs the bare `coffer` command. The installer puts `~/.coffer/bin` on your shell's `PATH`; if Claude Code runs somewhere that `PATH` is not set, the helper fails and requests go out without a key.
+The helper names the `coffer` CLI by absolute path (shell-quoted if the path holds a space), because Claude Code started from the Dock or Finder does not get your login shell's `PATH`. For an install under `~/.coffer/bin` the path is the stable `~/.coffer/bin/coffer`, not the versioned directory behind it, so an upgrade does not break it. The path is resolved at each switch.
+
+::: warning When no CLI is found
+If the daemon cannot find the `coffer` CLI when it writes the projection, it writes the bare `coffer provider key …` instead, which works only where `coffer` is on the `PATH` Claude Code runs with. Switch again after installing the CLI to get the absolute form.
 :::
 
 ### Codex — `<config_dir>/config.toml`
@@ -202,7 +204,7 @@ At most one provider is the internal-engine default, and at most one carries spe
 | --- | --- | --- |
 | Switch fails with `CONFIG_FILE_STALE` | The agent's config changed between Coffer's read and write | Run the switch again. |
 | Switch fails with `PROVIDER_INTERNAL_ONLY` | You tried to switch an agent onto an `ollama` provider | Use it as the internal-engine default instead. |
-| Claude Code sends requests without a key | `coffer` is not on the `PATH` Claude Code runs with, or the provider was disabled | Check `coffer provider key --connection-uid <uid>` in the same environment. |
+| Claude Code sends requests without a key | The provider was disabled or reaches no agent, or the helper runs a bare `coffer` that is not on the `PATH` Claude Code runs with | Run the `apiKeyHelper` command from `settings.json` yourself; switch again to rewrite it with the CLI's absolute path. |
 | Codex run from your shell fails to authenticate | `COFFER_PROVIDER_KEY` is not exported there | Export it as shown above. |
 | The agent page shows the built-in login after a restart | The boot self-check found the agent's config no longer carries the projection | Switch again if you still want the provider. |
 | A `wire_api` other than `responses` is refused | Codex refuses to load any other value | Leave it at `responses`. |

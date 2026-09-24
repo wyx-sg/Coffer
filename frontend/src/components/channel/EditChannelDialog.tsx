@@ -2,7 +2,8 @@
 // Modal "Edit channel" dialog. Updates a channel's mutable config: rotate the
 // platform secret(s) — the new value is written to the SAME credential ref the
 // channel already points at, so a rotation never re-pairs or re-registers —
-// and re-bind the default agent (SeaTalk also exposes its app id). The bound
+// re-bind the default agent (SeaTalk also exposes its app id), and set when
+// the bot answers in a group (EditChannelGroupFields). The bound
 // agent's models all stay available; the model is switched in chat with
 // /model. Apply plumbing (secrets-first write, then config PATCH) lives in
 // editChannel.ts.
@@ -22,11 +23,18 @@ import { AgentSelect } from "@/components/agents/AgentSelect";
 import { useUpdateChannel } from "@/lib/hooks/useChannels";
 import type { ResourceOut } from "@/lib/api/resources";
 import { EditChannelSecretFields, type ChannelEditDraft } from "./EditChannelSecretFields";
-import { planChannelEdit } from "./editChannel";
+import { EditChannelGroupFields, type ChannelGroupDraft } from "./EditChannelGroupFields";
+import { honoursRequireMention, planChannelEdit } from "./editChannel";
 
 function strField(config: Record<string, unknown>, key: string): string {
   const v = config[key];
   return typeof v === "string" ? v : "";
+}
+
+/** A stored bool, or the backend's default when the key is absent. */
+function boolField(config: Record<string, unknown>, key: string, fallback: boolean): boolean {
+  const v = config[key];
+  return typeof v === "boolean" ? v : fallback;
 }
 
 export function EditChannelDialog({
@@ -58,10 +66,19 @@ export function EditChannelDialog({
   const [secrets, setSecrets] = useState<ChannelEditDraft>(storedSecrets);
   const patchSecrets = (patch: Partial<ChannelEditDraft>) =>
     setSecrets((s) => ({ ...s, ...patch }));
+  // Group gating; the fallbacks are the backend defaults (mention required,
+  // other @mentions not ignored).
+  const storedGroup = (): ChannelGroupDraft => ({
+    requireMention: boolField(config, "require_mention", true),
+    ignoreOtherMentions: boolField(config, "ignore_other_mentions", false),
+  });
+  const [group, setGroup] = useState<ChannelGroupDraft>(storedGroup);
+  const patchGroup = (patch: Partial<ChannelGroupDraft>) => setGroup((g) => ({ ...g, ...patch }));
 
   const reset = () => {
     setDefaultAgent(strField(config, "default_agent"));
     setSecrets(storedSecrets());
+    setGroup(storedGroup());
   };
 
   const seatalk = channelType === "seatalk";
@@ -76,6 +93,8 @@ export function EditChannelDialog({
         app_id: seatalk ? secrets.appId : undefined,
         bot_token: secrets.botToken,
         app_secret: secrets.appSecret,
+        require_mention: honoursRequireMention(channelType) ? group.requireMention : undefined,
+        ignore_other_mentions: group.ignoreOtherMentions,
       },
     });
     update.mutate(plan, {
@@ -127,6 +146,8 @@ export function EditChannelDialog({
             draft={secrets}
             onChange={patchSecrets}
           />
+
+          <EditChannelGroupFields channelType={channelType} draft={group} onChange={patchGroup} />
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

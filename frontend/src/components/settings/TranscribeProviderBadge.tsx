@@ -3,7 +3,7 @@
 // the list row and the detail header — the twin of ActiveProviderBadge.
 //
 // It is read-only here, and set where every other fact about Coffer's own
-// engine is set (Settings → Engine). It earns a place on the connection library
+// engine is set (Settings → Coffer's model). It earns a place on the connection library
 // all the same, because this flag has no fallback: exactly one connection
 // carries transcription and every voice message goes to that endpoint, so
 // "which one?" is a question the library must be able to answer without a trip

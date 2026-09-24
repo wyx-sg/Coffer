@@ -735,7 +735,7 @@ async def test_setup_shim_log_creates_handler(
 
     from coffer.surfaces.shim import bootstrap as shim_main
 
-    monkeypatch.setattr(shim_main, "_SHIM_LOG_DIR", tmp_path / "logs")
+    monkeypatch.setenv("COFFER_LOG_DIR", str(tmp_path / "logs"))
     # Reset handlers between runs so the assertion is meaningful.
     shim_main._logger.handlers.clear()
     shim_main._setup_shim_log()
@@ -746,6 +746,34 @@ async def test_setup_shim_log_creates_handler(
 
     shim_main._logger.info("something worth keeping")
     assert list((tmp_path / "logs").glob("shim-*.log")), "expected a file once a record is logged"
+    shim_main._logger.handlers.clear()
+
+
+@pytest.mark.asyncio
+async def test_setup_shim_log_follows_coffer_log_dir(
+    tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Shim logs land under ``COFFER_LOG_DIR``, not a hard-coded ``~/.coffer/logs``.
+
+    Retention prunes ``shim-*.log`` under ``log_dir()``; a shim writing
+    anywhere else would be relocated by nothing and pruned by nothing.
+    """
+    from coffer.surfaces.shim import bootstrap as shim_main
+
+    home = tmp_path / "home"
+    relocated = tmp_path / "elsewhere"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("COFFER_LOG_DIR", str(relocated))
+    shim_main._logger.handlers.clear()
+    try:
+        shim_main._setup_shim_log()
+        shim_main._logger.info("record")
+    finally:
+        for h in shim_main._logger.handlers:
+            h.close()
+        shim_main._logger.handlers.clear()
+    assert len(list(relocated.glob("shim-*.log"))) == 1
+    assert not (home / ".coffer" / "logs").exists()
 
 
 @pytest.mark.asyncio
@@ -760,7 +788,7 @@ async def test_setup_shim_log_swallows_oserror(monkeypatch: pytest.MonkeyPatch) 
         def __truediv__(self, _other: Any) -> _BadPath:
             return self
 
-    monkeypatch.setattr(shim_main, "_SHIM_LOG_DIR", _BadPath())
+    monkeypatch.setattr(shim_main, "log_dir", lambda: _BadPath())
     # Should NOT raise.
     shim_main._setup_shim_log()
 

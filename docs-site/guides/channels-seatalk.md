@@ -142,6 +142,8 @@ Where the answer goes:
 
 Each thread is its own conversation, so you can run Claude Code in one thread and Codex in another. A group answer opens by @mentioning you, so SeaTalk notifies you.
 
+To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** under **Edit** → **In group chats**, or run `coffer channel set my-seatalk --ignore-other-mentions`. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
+
 The bot never reads recent messages from a group's main chat. SeaTalk does not grant that permission to a self-built app, and the message you address to the bot is meant to carry what it needs.
 
 ### Quoted messages

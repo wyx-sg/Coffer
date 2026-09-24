@@ -252,7 +252,7 @@ describe("ModelProvidersPage", () => {
   });
 
   test("holds only the connection library — no engine or embedding card", async () => {
-    // Coffer's own engine + embedding config moved to Settings → Engine: they
+    // Coffer's own engine + embedding config moved to Settings → Coffer's model: they
     // configure Coffer itself, not a resource served to agents.
     apiMock.list.mockResolvedValue({ providers: [makeProvider({ name: "acme" })] });
     renderPage();

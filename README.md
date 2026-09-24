@@ -69,9 +69,9 @@ Prefer to stay in the terminal, or working on a machine with no GUI:
 curl -fsSL --proto '=https' --tlsv1.2 https://wyx-sg.github.io/Coffer/install.sh | sh
 ```
 
-Installs `coffer` (management CLI), `coffer-daemon`, `coffer-mcp-shim` and the runtime helper
-binaries to `~/.coffer/bin`, and puts that directory on your `PATH`. **The daemon auto-starts on
-first use — no manual start step.** Environment overrides: `COFFER_INSTALL_DIR`,
+Installs three binaries — `coffer` (management CLI), `coffer-daemon` and `coffer-mcp-shim` — to
+`~/.coffer/bin`, and puts that directory on your `PATH`. **Any `coffer` command, or an MCP client
+launching the shim, starts the daemon on demand.** Environment overrides: `COFFER_INSTALL_DIR`,
 `COFFER_VERSION`, `COFFER_NO_MODIFY_PATH`. Then `coffer open` opens the UI in your browser.
 A binary installed this way is not quarantined, so there is no Gatekeeper step on this path.
 
@@ -172,19 +172,24 @@ Use `coffer-mcp-shim` as the stdio MCP server command. The shim auto-discovers (
 ### Claude Code
 
 ```bash
-claude mcp add coffer coffer-mcp-shim
+coffer agent add claude_code
+coffer agent mcp install claude-code
 ```
+
+This writes the shim entry into Claude Code's own config, with the agent's identity on it.
 
 ### Codex
 
-`~/.codex/config.toml`:
-
-```toml
-[mcp_servers.coffer]
-command = "coffer-mcp-shim"
+```bash
+coffer agent add codex
+coffer agent mcp install codex
 ```
 
-Restart the client after editing its config. Tools appear namespaced as `<server-name>__<tool-name>` (e.g. `filesystem__read_file`).
+### Any other MCP client
+
+Point the client at `coffer-mcp-shim` as a stdio server. A session without an agent identity sees only the servers that reach every agent.
+
+Restart the client after changing its config. Tools appear namespaced as `<server-name>__<tool-name>` (e.g. `filesystem__read_file`).
 
 ---
 

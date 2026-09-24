@@ -239,7 +239,10 @@
       "errNoServers": "Couldn't find an MCP server. Expected the {\"mcpServers\": {…}} format.",
       "errBadServer": "Server \"{{name}}\" needs a \"command\" (stdio) or a \"url\" (http).",
       "errBadEnvValue": "Server \"{{name}}\" env variable \"{{key}}\" must be a string.",
-      "errEnvNotObject": "Server \"{{name}}\" env must be an object of string values."
+      "errEnvNotObject": "Server \"{{name}}\" env must be an object of string values.",
+      "noHeaders": "No headers",
+      "errBadHeaderValue": "Server \"{{name}}\" header \"{{key}}\" must be a string.",
+      "errHeadersNotObject": "Server \"{{name}}\" headers must be an object of string values."
     },
     "edit": {
       "title": "Edit MCP server",
@@ -347,7 +350,7 @@
       "sync_run": "Ran a converge round",
       "token_rotated": "Access token rotated",
       "daemon_residency_updated": "Daemon residency changed",
-      "knowledge_curated": "Derived the {{resource}} documents from its sources"
+      "knowledge_curated": "Curated {{resource}}: merged new material into its documents"
     },
     "capType": {
       "tool": "tool",
@@ -560,7 +563,7 @@
       "deleteConfirm": "Delete model provider \"{{name}}\"? Its stored credential is removed too.",
       "name": "Name",
       "provider": "Vendor",
-      "renameHint": "Renaming moves the stored key, the history and any agent this provider drives with it.",
+      "renameHint": "Renaming changes only the label — the stored key, the history and the agents this connection drives stay as they are.",
       "customProvider": "Custom",
       "wireFormat": "Protocol",
       "baseUrl": "Base URL",
@@ -845,7 +848,7 @@
         "gatewayManagedHint": "Coffer serves its MCP servers to this agent through the gateway. Manage them on the MCP servers page.",
         "adopt": "Adopt into Coffer",
         "adoptTitle": "Adopt MCP server",
-        "adoptSecretsHint": "Likely secrets detected — provide a keychain reference for each key; secret values are stored only in the system keychain.",
+        "adoptSecretsHint": "Likely secrets detected — confirm a credential reference for each key; Coffer moves the values into its encrypted credential store and keeps only the reference in the adopted server's config.",
         "adoptRename": "Name conflict — rename and retry",
         "alreadyInCoffer": "Already in Coffer as {{name}}",
         "parseError": "Failed to parse config — this file is read-only",
@@ -1064,7 +1067,7 @@
       },
       "featureDeliver": {
         "title": "Delivered to your agents",
-        "body": "Enable a skill per agent — Coffer links it into each agent's skills directory."
+        "body": "A skill reaches every agent by default, or only the agents you pick — Coffer links it into each one's skills directory."
       },
       "featureReach": {
         "title": "Choose which agents get each skill",
@@ -1369,14 +1372,21 @@
     },
     "edit": {
       "title": "Edit channel",
-      "subtitle": "Change the bound agent or rotate a secret. Leave a secret field blank to keep the current value.",
+      "subtitle": "Change the bound agent, rotate a secret, or set when the bot answers in a group. Leave a secret field blank to keep the current value.",
       "agent": "Default agent",
       "agentHint": "New conversations on this channel start on this agent.",
       "newBotToken": "New bot token",
       "newAppSecret": "New app secret",
       "rotateHint": "Stored in Coffer's credential store; the existing reference is reused.",
       "save": "Save changes",
-      "saved": "Channel {{name}} updated"
+      "saved": "Channel {{name}} updated",
+      "groups": {
+        "title": "In group chats",
+        "requireMention": "Answer only when @mentioned",
+        "requireMentionHint": "The bot stays quiet in a group until someone @mentions it or replies to it. Turned off, it acts on every group message you send — which needs the bot's privacy mode off in BotFather.",
+        "ignoreOtherMentions": "Ignore messages that @mention someone else",
+        "ignoreOtherMentionsHint": "A group message that also @mentions another person is left alone, even when it mentions the bot too."
+      }
     },
     "test": {
       "send": "Send",
@@ -1468,13 +1478,10 @@
       "other": "Other"
     },
     "attention": {
-      "title": "Sync needs you",
-      "heldTitle": "Sync is waiting for your answer",
       "heldBody": "A round was held for your confirmation: nothing is converging and nothing is being backed up until you answer it.",
       "conflictBody": "The last round stopped on a conflict, so nothing is being applied or published until you resolve it.",
       "pushFailedBody": "The last round applied here but could not reach the remote, so the other machines and your backup are behind.",
-      "failedBody": "The last round failed, so this vault is no longer converging or being backed up.",
-      "open": "Open Sync"
+      "failedBody": "The last round failed, so this vault is no longer converging or being backed up."
     },
     "conflict": {
       "title": "A conflict stopped this round",

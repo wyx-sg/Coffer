@@ -74,7 +74,7 @@ A partition gets a readable slug, never an opaque id. The slug comes from the re
 
 Three routes lead to `global`:
 
-- An entry whose type is `user` or `feedback` goes to `global` whichever repository it was learned in. These types describe the person and their standing instructions, not a project.
+- An entry whose type is `user` goes to `global` whichever repository it was learned in. It describes the person, not a project. A `feedback` entry has no route of its own: learned in a repository, it files into that repository's partition, because a standing instruction given there ("run the gates before pushing here") binds that repository, and filing it globally would hand it to every other project's sessions.
 - An entry with no working directory, or whose working directory is your home directory, goes to `global`.
 - An entry learned in a directory that is inside no repository goes to `global`'s `.raw/`. No partition is created for that directory. The distil pass then judges the entry on its merits and either keeps it in `global` or keeps nothing.
 
@@ -140,7 +140,7 @@ flowchart TD
 
 ### Skipping unchanged sources
 
-`.source_state.json` is a flat `{native_path: sha256}` map at the memory root, written atomically after every pass. A source is skipped only when **both** of these hold:
+`.source_state.json` holds a `{native_path: sha256}` map under `digests`, with a `version` beside it, at the memory root, written atomically after every pass. A source is skipped only when **both** of these hold:
 
 1. Its digest matches the recorded one.
 2. The raw entries it produced are still on disk.
@@ -148,6 +148,8 @@ flowchart TD
 The second condition is what makes the tree truly derived. If you delete a partition's directories and leave the digest file behind, the next pass sees the entries are missing, re-reads the sources, and rebuilds everything. A digest match alone never suppresses a rebuild. The price of this rule is small: a source that legitimately yields no entries is re-parsed on every pass.
 
 If the digest file is lost or corrupt, the next pass re-parses everything. Correctness is not affected.
+
+The `version` is the version of the filing rules (`STATE_VERSION` in `infrastructure/memory/source_state.py`). A digest says a source is unchanged, not that the rule that placed its entries is, so a build that changes where an entry belongs bumps the version. A file written under another version reads as empty: the next pass re-reads every source once, files its entries under the current rules, and removes the ones it wrote elsewhere before.
 
 ### Stable raw entries
 
@@ -157,7 +159,7 @@ Aggregation never compares two agents' entries. Two agents describing one lesson
 
 ## The distil pass
 
-The distil pass turns a partition's new raw entries into notes and rewrites `MEMORY.md`. The pass runs on the [internal engine](/guides/providers) connection when one is configured. It is incremental: no single model request ever carries all of a partition's note bodies.
+The distil pass turns a partition's new raw entries into notes and rewrites `MEMORY.md`. It runs on its own interval as an upkeep pass of the internal engine, not after each aggregation, and sweeps every partition that holds raw entries it has not yet distilled; a partition with nothing new costs no model call. The pass runs on the [internal engine](/guides/providers) connection when one is configured. It is incremental: no single model request ever carries all of a partition's note bodies.
 
 An entry counts as new when its id appears neither in any note's provenance (`origins`) nor in any `RETIRED.md` record.
 
@@ -266,7 +268,9 @@ The same reconcile follows the `memory` feature switch (`application/memory/deli
 
 ### Channel turns
 
-The turn platform has a seam for a third system-prompt append on channel-driven turns: `compose_memory` in `infrastructure/chat/adapter_support.py`. It is meant for turns that arrive from Telegram or SeaTalk, which run no session-start hook. In the current build the composition root (`surfaces/http/chat_wiring.py`) does not pass a composer into that seam, so channel turns carry no memory append.
+A turn that arrives from Telegram or SeaTalk runs no session-start hook, so the memory payload travels in its system prompt instead. `memory_context_composer` in `surfaces/http/memory_wiring.py` closes over `MemoryService` and the feature switch; `wire_chat` hands it to both agent providers, and `compose_system_context` in `infrastructure/chat/adapter_support.py` calls it only for a channel-driven turn, with the conversation's working directory. It runs the same `compose_context` the hook uses, so a channel turn gets the same index and notes path a terminal session would.
+
+The composer answers nothing, and the turn carries no memory header, while the `memory` feature is off (read per turn), when the composed index is empty, or when the tree cannot be read (logged; memory is an append to the turn, not a precondition of it). A turn from the web Chat page gets no append: it receives memory through the agent's own hook, so no turn gets it twice.
 
 ## Recall
 
@@ -308,6 +312,7 @@ Both are on by default. They read the agents' files and write only the derived t
 | Repository identity, partition slugs | [`domain/memory/repository.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/repository.py), [`domain/memory/partition.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/partition.py) |
 | Hook marker and install transform | [`domain/memory/delivery.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/memory/delivery.py) |
 | Aggregation pass and worker | [`application/memory/aggregate.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/aggregate.py), [`aggregate_worker.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/aggregate_worker.py) |
+| Which partition an entry files into | [`application/memory/placement.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/placement.py) |
 | Distil pass (routing, plan, write, apply) and worker | [`application/memory/distil.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/distil.py) and its `distil_*.py` siblings |
 | Index rendering | [`application/memory/index.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/index.py) |
 | Context composition | [`application/memory/context.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/memory/context.py) |
@@ -318,7 +323,7 @@ Both are on by default. They read the agents' files and write only the derived t
 | Hook adapters per agent | [`infrastructure/memory/delivery/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory/delivery) |
 | Paths, raw store, note store, digest cache | [`infrastructure/memory/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/memory) |
 | Transcript `cwd` lookup shared with the agent kind | [`infrastructure/agent_files/claude_code_transcripts.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/agent_files/claude_code_transcripts.py) |
-| Wiring, workers, boot heal | [`surfaces/http/memory_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/memory_wiring.py) |
+| Wiring, workers, boot heal, the channel-turn composer | [`surfaces/http/memory_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/memory_wiring.py) |
 | REST routes | [`surfaces/http/memory/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/surfaces/http/memory) |
 | CLI | [`surfaces/cli/memory_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/memory_cmd.py) |
 

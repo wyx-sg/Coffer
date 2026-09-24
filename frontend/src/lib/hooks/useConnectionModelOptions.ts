@@ -1,6 +1,6 @@
 // frontend/src/lib/hooks/useConnectionModelOptions.ts
 // The model ids one connection offers for ONE modality — the list behind every
-// "which model?" dropdown in Settings → Engine.
+// "which model?" dropdown in Settings → Coffer's model.
 //
 // Two sources, in this order: a connection's CURATED set when it has one — that
 // IS its catalogue, and an embedding entry is no more a chat model here than in

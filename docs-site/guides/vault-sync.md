@@ -49,7 +49,7 @@ Three rules shape everything below:
    | Option | Default | Meaning |
    | --- | --- | --- |
    | `--branch` | `main` | The branch every machine converges on. |
-   | `--interval` | `3600` | Seconds between automatic rounds. |
+   | `--interval` | `3600` | Seconds between automatic rounds, at least `60`. A smaller value is refused here, by the API and by the web form. |
    | `--with-credentials` / `--without-credentials` | without | Carry credential ciphertext. The master key is never carried under any setting. |
    | `--credential-ref` | none | Name of the push credential in the credential store. `''` removes it. |
    | `--worktree` | `~/.coffer/sync` | Absolute path of the git working tree. It must not be at, inside or above a vault directory (`knowledge`, `skills`, `memory`), or at or above `~/.coffer`. |
@@ -153,7 +153,7 @@ coffer sync status       # the remote, this machine, and the last round in full
 coffer sync history      # one line per round, newest first (--limit, default 20)
 ```
 
-`coffer sync status` exits non-zero when the last round needs you: held for confirmation, stopped on a conflict, failed to push or to run, or waiting to join. A cron line or a shell prompt can check that without parsing the text.
+`coffer sync status` exits non-zero when the last round needs you: held for confirmation, stopped on a conflict, failed to push or to run, or waiting to join. A cron line or a shell prompt can check that without parsing the text. A paused remote exits zero.
 
 On the web, the **Sync** page opens on **Runs**: every round this machine has run, with what it applied here, what it published and the commit. Consecutive rounds that changed nothing fold into one row. When a round needs you, the **Sync** entry in the sidebar is marked; visiting the page clears the mark, and it returns only if the situation changes. The desktop app raises a notification and marks its icon as well.
 
@@ -237,7 +237,7 @@ A machine's id is derived from the host (`IOPlatformUUID` on macOS, `/etc/machin
 
 ## Pause or stop syncing
 
-- **Pause:** switch off **Converge automatically** on **Setup**. Every round then reports `disabled`, records nothing, pushes nothing and raises no notice. The remote, the pointer and the history are kept, and switching it back on resumes where the vault left off. `coffer sync remote set` never unpauses a paused remote.
+- **Pause:** switch off **Converge automatically** on **Setup**, or run `coffer sync remote pause`. Every round then reports `disabled`, records nothing, pushes nothing and raises no notice. The remote, its settings, the pointer and the history are kept, and switching it back on (or `coffer sync remote resume`) resumes where the vault left off. `coffer sync remote set` never unpauses a paused remote.
 - **Forget the remote:** `coffer sync remote clear`. The vault is left exactly as it is.
 - **Switch the feature off:** `coffer daemon features disable vault_sync` closes every sync surface on this machine and keeps everything it holds.
 

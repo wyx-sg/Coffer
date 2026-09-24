@@ -1,6 +1,6 @@
 """``coffer engine …`` — Coffer's own operating settings, from a terminal.
 
-The same settings the Settings → Engine page shows: WHICH MODEL Coffer thinks
+The same settings the Settings → Coffer's model page shows: WHICH MODEL Coffer thinks
 with (``engine model``), WHAT IT DOES while nobody is looking (``engine
 upkeep``, and ``engine upkeep runs`` for what is running right now), WHICH
 MACHINE does the one unattended thing that may only happen once (``engine
@@ -96,7 +96,7 @@ def model_show(
 @model_app.command("set")
 def model_set(
     ctx: typer.Context,
-    model: str = typer.Argument(..., help="Model id the internal engine should run on"),
+    model: str = typer.Argument(..., help="Model id Coffer's own passes should run on"),
 ) -> None:
     """Choose the model Coffer's own passes run on.
 
@@ -159,8 +159,11 @@ def upkeep_set(
     """Change ONE pass's switch or interval, leaving every other pass alone.
 
     Each half is sent only when named, so a switch can be flipped without
-    restating an interval — and an interval below the floor, or a pass Coffer
-    does not run, is refused by the same route the page writes through.
+    restating an interval. An interval below the floor, or a pass Coffer does
+    not run, is refused, as it is on the settings page.
+
+    \f
+    Refused by the same route the page writes through.
     """
     if on and off:
         typer.echo("pick at most one of --on / --off", err=True)
@@ -195,8 +198,10 @@ def upkeep_runs(
 ) -> None:
     """Show which passes are running right now, per collection or partition.
 
-    ``GET /upkeep/runs``: the daemon's own table of passes in flight, oldest
-    first. A target not listed has no pass running."""
+    Oldest first. A target not listed has no pass running.
+
+    \f
+    ``GET /upkeep/runs``: the daemon's own table of passes in flight."""
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get("/upkeep/runs")
@@ -251,13 +256,17 @@ def timeout_set(
     ctx: typer.Context,
     seconds: int = typer.Argument(..., help="Seconds one model call may take"),
 ) -> None:
-    """Bound every call Coffer's own engine makes.
+    """Bound every call Coffer's own model makes.
 
+    Raise it for a slow endpoint: a pass whose calls time out defers its work
+    while still reporting success. A number outside the allowed range is
+    refused (exit 6), not quietly rounded.
+
+    \f
     The right number is a property of the operator's endpoint: measured against
     a gateway whose typical answer takes half a minute, the built-in bound
-    leaves barely a factor of two and the passes then defer their work while
-    reporting success. A number outside the allowed range is refused by the
-    same route the page writes through (exit 6), not quietly rounded.
+    leaves barely a factor of two. Refused by the same route the page writes
+    through.
     """
     data = _put(ctx, f"{_CONFIG}/timeout", {"seconds": seconds})
     typer.echo(f"model timeout: {data['model_timeout_s']}s")
@@ -294,10 +303,10 @@ def transcribe_model_set(
     """Choose the model Coffer transcribes speech with.
 
     The ENDPOINT and key come from the connection flagged transcribe-default
-    (``coffer provider transcribe-default``) — not from the internal-engine
-    one, because a chat gateway commonly serves no transcription endpoint at
-    all. Both halves are needed: with either missing, Coffer transcribes
-    nothing.
+    (``coffer provider transcribe-default``) — not from the one Coffer's own
+    model runs on, because a chat gateway commonly serves no transcription
+    endpoint at all. Both halves are needed: with either missing, Coffer
+    transcribes nothing.
     """
     data = _put(ctx, f"{_CONFIG}/transcribe-model", {"model": model})
     typer.echo(f"transcription model: {data['transcribe_model']}")

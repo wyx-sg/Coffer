@@ -27,7 +27,7 @@ function jsonSyntaxError(text: string): string | null {
 
 /**
  * The "Paste JSON" tab: paste MCP server JSON, then a review step where
- * each env var is shown with a Secret toggle (pre-set by heuristic) — so
+ * each env var (an http server's headers) is shown with a Secret toggle (pre-set by heuristic) — so
  * the user confirms what goes to the encrypted credential store before importing.
  */
 export function JsonImportPanel({ onImport, importing }: Props) {
@@ -124,7 +124,9 @@ export function JsonImportPanel({ onImport, importing }: Props) {
                 ))}
               </div>
             ) : (
-              <div className="mt-2 text-xs text-muted-foreground">{t("mcp.import.noEnv")}</div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                {t(srv.transportType === "http" ? "mcp.import.noHeaders" : "mcp.import.noEnv")}
+              </div>
             )}
           </div>
         ))}

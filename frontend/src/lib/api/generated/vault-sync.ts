@@ -533,7 +533,7 @@ export interface components {
              */
             include_credentials: boolean;
             /**
-             * @description Seconds between automatic rounds. The worker converges on this
+             * @description Seconds between automatic rounds, at least one minute. The worker converges on this
              *     interval as soon as a remote is configured and `enabled`.
              * @default 3600
              */

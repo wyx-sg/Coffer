@@ -9,6 +9,7 @@ import pytest
 from coffer.domain.sync.backup import (
     DEFAULT_BRANCH,
     DEFAULT_INTERVAL_SECONDS,
+    MIN_INTERVAL_SECONDS,
     BackupRemote,
     redact,
     validate_branch,
@@ -41,6 +42,20 @@ def test_invalid_configuration_is_refused(kwargs: dict[str, object], needle: str
     with pytest.raises(BackupRemoteInvalid) as excinfo:
         BackupRemote(**kwargs)  # type: ignore[arg-type]
     assert needle in str(excinfo.value).lower()
+
+
+def test_the_interval_floor_is_one_minute() -> None:
+    remote = BackupRemote(url="https://example.invalid/v.git", interval_seconds=60)
+    assert MIN_INTERVAL_SECONDS == 60
+    assert remote.interval_seconds == 60
+
+
+@pytest.mark.parametrize("stored", [1, 30, 59])
+def test_a_stored_interval_below_the_floor_loads_raised_to_it(stored: int) -> None:
+    """A row saved before the floor existed must still load — the daemon reads
+    it at startup — and must not run rounds faster than the floor."""
+    remote = BackupRemote(url="https://example.invalid/v.git", interval_seconds=stored)
+    assert remote.interval_seconds == MIN_INTERVAL_SECONDS
 
 
 def test_url_and_branch_are_stripped() -> None:

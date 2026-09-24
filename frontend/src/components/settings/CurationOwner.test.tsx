@@ -1,6 +1,6 @@
 // frontend/src/components/settings/CurationOwner.test.tsx
 //
-// The machine that runs curation, on Settings → Engine → Automatic upkeep.
+// The machine that runs curation, on Settings → Coffer's model → Automatic upkeep.
 //
 // Four states, and the whole point of the row is that they read differently:
 // "another machine has it" is fine and "a machine nobody claims has it" means

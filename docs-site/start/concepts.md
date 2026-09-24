@@ -113,7 +113,7 @@ Guide: [Knowledge](/guides/knowledge). Architecture: [Knowledge](/architecture/k
 
 ## Memory partitions
 
-Coffer **aggregates** each registered agent's own native memory, read-only. It never writes to an agent's memory files. It distils what it reads into notes of its own, filed into **partitions**: one per repository plus `global`. Each partition lives at `~/.coffer/memory/<partition>/` with a `MEMORY.md` index and a `notes/` directory. Everything there is derived and can be rebuilt. If you install a delivery hook for an agent, Coffer hands that agent the index at session start.
+Coffer **aggregates** each registered agent's own native memory, read-only. It never writes to an agent's memory files. It distils what it reads into notes of its own, filed into **partitions**: one per repository plus `global`. Each partition lives at `~/.coffer/memory/<partition>/` with a `MEMORY.md` index and a `notes/` directory. Everything there is derived and can be rebuilt. If you install a delivery hook for an agent, Coffer hands that agent the index at session start. A turn that arrives from a channel carries the index in its system prompt instead.
 
 Guide: [Memory](/guides/memory). Architecture: [Memory](/architecture/memory).
 

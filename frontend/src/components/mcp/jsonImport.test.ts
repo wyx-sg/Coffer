@@ -1,5 +1,6 @@
 // frontend/src/components/mcp/jsonImport.test.ts
 import { describe, expect, test } from "vitest";
+import { acceptance } from "@/test/acceptance";
 import { parseMcpJson } from "./jsonImport";
 
 describe("parseMcpJson", () => {
@@ -116,5 +117,62 @@ describe("parseMcpJson", () => {
     if (r.ok) return;
     expect(r.errorKey).toBe("errBadEnvValue");
     expect(r.errorParams?.key).toBe("PORT");
+  });
+
+  acceptance("web-ui", "a pasted HTTP server's headers are reviewed for secrets", () => {
+    const r = parseMcpJson(
+      JSON.stringify({
+        mcpServers: {
+          api: {
+            url: "https://example.com/mcp",
+            headers: { Authorization: "Bearer abc", "X-Region": "us-east" },
+          },
+        },
+      }),
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.servers[0].env).toEqual([
+      { key: "Authorization", value: "Bearer abc", isSecret: true },
+      { key: "X-Region", value: "us-east", isSecret: false },
+    ]);
+  });
+
+  test("an http server's env still travels as headers; a headers entry wins a clash", () => {
+    const r = parseMcpJson(
+      JSON.stringify({
+        mcpServers: {
+          api: {
+            url: "https://example.com/mcp",
+            env: { REGION: "eu", TIER: "free" },
+            headers: { REGION: "us" },
+          },
+        },
+      }),
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.servers[0].env.map((e) => [e.key, e.value])).toEqual([
+      ["TIER", "free"],
+      ["REGION", "us"],
+    ]);
+  });
+
+  test("rejects a non-object headers block and a non-string header value", () => {
+    const notObject = parseMcpJson(
+      JSON.stringify({ mcpServers: { api: { url: "https://x/mcp", headers: "Auth: x" } } }),
+    );
+    expect(notObject.ok).toBe(false);
+    if (notObject.ok) return;
+    expect(notObject.errorKey).toBe("errHeadersNotObject");
+    expect(notObject.errorParams).toEqual({ name: "api" });
+
+    const badValue = parseMcpJson(
+      JSON.stringify({ mcpServers: { api: { url: "https://x/mcp", headers: { "X-N": 1 } } } }),
+    );
+    expect(badValue.ok).toBe(false);
+    if (badValue.ok) return;
+    expect(badValue.errorKey).toBe("errBadHeaderValue");
+    expect(badValue.errorParams).toEqual({ name: "api", key: "X-N" });
   });
 });

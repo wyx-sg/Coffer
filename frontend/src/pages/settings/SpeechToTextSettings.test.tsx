@@ -1,4 +1,4 @@
-// Settings → Engine → Speech to text: the connection and model Coffer
+// Settings → Coffer's model → Speech to text: the connection and model Coffer
 // transcribes voice with.
 //
 // The card's whole job is to make an OFF state legible. Transcription has two

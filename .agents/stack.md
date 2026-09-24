@@ -120,9 +120,12 @@ Returns](../docs/decisions/desktop-shell-over-a-shared-frontend.md)).
 - Pure decision functions — the resolution chain, the rate limit, `daemon.json`
   parsing, the `$PATH` merge — are split from their I/O so `cargo test` covers
   them without a Tauri runtime or a socket.
-- `cargo test` is **not** part of `make verify` and no CI leg carries a Rust
-  toolchain. Run it with `make desktop-test`; build the app with `make desktop`
-  (which runs PyInstaller for the four bundled binaries first, so it is slow).
+- `cargo test` is **not** part of `make verify`: the desktop crate has its own
+  CI job (`.github/workflows/desktop.yml`, on PRs that touch `desktop/`), which
+  runs `make desktop-lint` and `make desktop-test`. Run the same locally; build
+  the app with `make desktop` (which runs PyInstaller for the three bundled
+  binaries — `coffer`, `coffer-daemon` and `coffer-mcp-shim` — first, so it is
+  slow).
 
 ## E2E — TypeScript / Playwright
 

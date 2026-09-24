@@ -63,15 +63,17 @@ def _validate_mcp_name(name: str) -> None:
 
 
 def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
-    """Construct the `mcp_server` Kind with its delete/rename + name-validation hooks.
+    """Construct the `mcp_server` Kind with its lifecycle + name-validation hooks.
 
     `supervisor_for` is a process-local registry of session-id -> supervisor.
-    Both lifecycle hooks walk it and evict the matching server from every live
+    Every lifecycle hook walks it and evicts the matching server from every live
     session: ``on_delete`` because the registration is going away, ``on_rename``
-    because the key those connections are held under is. Only the sessions in
-    this registry are reachable — a supervisor the composition root builds and
-    does not register (the process-wide one behind the management routes) is
-    invisible to both hooks.
+    because the key those connections are held under is, ``on_enabled_changed``
+    because a disabled server's subprocess should not outlive the switch, and
+    ``on_update_config`` because a cached connection was built from the old
+    config. Only the sessions in this registry are reachable — a supervisor the
+    composition root builds and does not register (the process-wide one behind
+    the management routes) is invisible to every hook.
     """
 
     async def on_delete(resource: Resource) -> None:
@@ -86,9 +88,44 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
         # supervisor's entries, the discovery caches, the notification
         # subscriptions — is keyed on the label the client used. The identity is
         # ``resource.uid``; the label is how a live connection is found.
+        await _evict_everywhere(resource.name)
+
+    async def _evict_everywhere(name: str) -> None:
+        # Every live session's connection for ``name``, each supervisor's
+        # failure suppressed so one broken session cannot keep the rest holding
+        # a connection they should have dropped.
         for supervisor in list(supervisor_for.values()):
             with contextlib.suppress(Exception):
-                await supervisor.evict(resource.name)
+                await supervisor.evict(name)
+
+    async def on_enabled_changed(resource: Resource) -> None:
+        """Drop every live connection to a server that was just disabled.
+
+        The gateway refuses a disabled server per call (``gateway_handlers``),
+        so this is not what stops the calls — it is what stops the subprocess.
+        Without it a session that had spawned the server keeps it running until
+        the session ends, for a registration the user switched off. Re-enabling
+        needs nothing: the next call spawns afresh.
+        """
+        if not resource.enabled:
+            await _evict_everywhere(resource.name)
+
+    async def on_update_config(before: Resource, _proposed: dict[str, Any]) -> None:
+        """Drop every live connection so the next call spawns with the new config.
+
+        A supervisor caches a healthy connection and never re-reads the row, so
+        without this an edited command, URL or environment only took effect in
+        sessions started after the edit.
+
+        This is the only config hook the ``Kind`` record offers, and it runs
+        BEFORE the write. That leaves a narrow race: a call landing between this
+        eviction and the commit respawns from the row as it still stands, and
+        that connection — built from the old config — stays cached until the
+        next eviction. Accepted rather than closed with a post-write hook, as
+        the window is one database write wide and the next edit, disable,
+        crash or session end clears it.
+        """
+        await _evict_everywhere(before.name)
 
     async def on_rename(resource: Resource, _new_name: str) -> None:
         """Release every live connection held under the name being left behind.
@@ -151,6 +188,8 @@ def make_mcp_kind(supervisor_for: dict[str, SubprocessSupervisor]) -> Kind:
         config_schema=MCPServerConfig,
         on_delete=on_delete,
         on_rename=on_rename,
+        on_enabled_changed=on_enabled_changed,
+        on_update_config=on_update_config,
         validate_name=_validate_mcp_name,
         audit_redactor=_mcp_audit_redactor,
         credential_ref_extractor=_mcp_credential_ref_extractor,

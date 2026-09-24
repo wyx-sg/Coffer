@@ -24,6 +24,11 @@ _STATUS: dict[str, int] = {
     "RESOURCE_NOT_FOUND": 404,
     "RESOURCE_ALREADY_EXISTS": 409,
     "AGENT_CONFIG_DIR_REGISTERED": 409,
+    # The agent's config dir is absent on this machine — a state of the
+    # machine, not a malformed request.
+    "AGENT_CONFIG_DIR_MISSING": 409,
+    # The database was migrated by a newer build than this one.
+    "DB_SCHEMA_TOO_NEW": 409,
     "GENERIC_CREATE_NOT_ALLOWED": 409,
     "UNKNOWN_KIND": 400,
     "CONFIG_INVALID": 422,
@@ -31,6 +36,10 @@ _STATUS: dict[str, int] = {
     "CREDENTIAL_MISSING": 400,
     "CREDENTIAL_IN_USE": 409,
     "CREDENTIAL_LOCKED": 503,
+    # Ciphertext exists but no key opens it (spec credentials "Refuse to start
+    # when the master key is missing"). Same class as CREDENTIAL_LOCKED: the
+    # store is unusable until the key comes back, not a bad request.
+    "MASTER_KEY_MISSING": 503,
     "CREDENTIAL_UNREADABLE": 500,
     "UPSTREAM_UNAVAILABLE": 503,
     "UPSTREAM_TIMEOUT": 504,
@@ -209,16 +218,11 @@ def _status_for(exc: errors.CofferError) -> int:
 
 
 def _details_for(exc: errors.CofferError) -> dict[str, Any]:
-    """Surface the machine-readable `reason`/`hint` of an error, if any."""
+    """Surface the machine-readable `reason`/`feature` of an error, if any."""
     out: dict[str, Any] = {}
     reason = getattr(exc, "reason", None)
     if reason:
         out["reason"] = reason
-    # SyncRemoteUnreachable carries a hint code (auth/not_found/network) the
-    # UI translates into configuration guidance.
-    hint = getattr(exc, "hint", None)
-    if hint:
-        out["hint"] = hint
     # The feature errors name their key, so a client (the CLI's one-line
     # "switch it on" message, the web notice) need not parse the message.
     feature = getattr(exc, "feature", None)

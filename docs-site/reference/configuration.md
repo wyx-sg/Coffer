@@ -63,14 +63,10 @@ These move a tree away from `~/.coffer`. They exist mainly so tests never touch 
 | `COFFER_DB_URL` | `sqlite+aiosqlite:///~/.coffer/coffer.db` | SQLAlchemy URL of the database. The credential master key file (`master.key`) lives beside the database file. | [`surfaces/http/app.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app.py) |
 | `COFFER_KNOWLEDGE_ROOT` | `~/.coffer/knowledge` | Root of the knowledge collections. | [`infrastructure/knowledge/paths.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/knowledge/paths.py) |
 | `COFFER_MEMORY_ROOT` | `~/.coffer/memory` | Root of the derived memory tree. | [`infrastructure/memory/paths.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/memory/paths.py) |
-| `COFFER_SKILLS_ROOT` | `~/.coffer/skills` | Skill tree that vault sync mirrors. The skill store itself always uses `$HOME/.coffer/skills` (see the note below). | [`infrastructure/sync/paths.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/sync/paths.py) |
+| `COFFER_SKILLS_ROOT` | `~/.coffer/skills` | Root of the skill master store, and the tree vault sync mirrors. | [`infrastructure/skill/master_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/skill/master_store.py), [`infrastructure/sync/paths.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/sync/paths.py) |
 | `COFFER_AGENT_STATE_ROOT` | `~/.coffer/cache/agent` | Where the agent layer keeps derived state such as the transcript summary cache. | [`infrastructure/agent/paths.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/agent/paths.py) |
-| `COFFER_LOG_DIR` | `~/.coffer/logs` | Directory for `daemon.log`, upstream server logs and the login service's output. MCP shim logs always go to `~/.coffer/logs`. | [`infrastructure/logging/files.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/files.py) |
+| `COFFER_LOG_DIR` | `~/.coffer/logs` | Directory for `daemon.log`, upstream server logs, MCP shim logs and the login service's output. | [`infrastructure/logging/files.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/files.py) |
 | `HOME` | the user's home | Every `~/.coffer` path is resolved against `$HOME`, so an alternate `HOME` gives a fully separate vault. | many modules |
-
-::: info `COFFER_SKILLS_ROOT` is honoured only by sync
-The skill master store resolves its root from `$HOME` alone ([`infrastructure/skill/master_store.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/skill/master_store.py)). Setting `COFFER_SKILLS_ROOT` without changing `HOME` makes vault sync mirror a different directory from the one Skills manages. Change `HOME` instead if you need an isolated skill store.
-:::
 
 ### Installer
 
@@ -199,11 +195,20 @@ The internal engine settings are one record, and all of them are *synced*.
 | **Time limit per call** | `60` s | How long one call to Coffer's own model may take. | `coffer engine timeout show`, `set`, `default` |
 | **Transcription provider** / **Transcription model** | off | The connection and model voice messages are transcribed with before an agent sees them. While either is unset, Coffer transcribes nothing. | `coffer engine transcribe-model show`, `set`, `clear` |
 | **Automatic upkeep** — aggregate | on, every 1 h | Reads the agents' own memory files into the derived memory tree. | `coffer engine upkeep set aggregate --on/--off --interval <s>` |
-| **Automatic upkeep** — distil | on, every 6 h | Rewrites the memory digest with Coffer's model. | `coffer engine upkeep set distil …` |
+| **Automatic upkeep** — distil | on, every 6 h | On its own interval, not after each aggregation: turns each partition's new raw entries into notes with Coffer's model and rewrites its `MEMORY.md`. A partition with nothing new costs no call. | `coffer engine upkeep set distil …` |
 | **Automatic upkeep** — curate | on, every 60 s | Folds new material from each knowledge collection's inbox into its documents. | `coffer engine upkeep set curate …` |
 | Curation owner (**Runs on:**) | every machine | The one machine allowed to run curation in a synced vault. | `coffer engine curate-owner show`, `set`, `clear` |
 
 Upkeep intervals have a floor of 60 seconds; `--default-interval` returns a pass to its default. `coffer engine upkeep list` shows the current values and `coffer engine upkeep runs` shows passes in flight.
+
+### Sync remote
+
+The sync remote is one record in the database, set on the **Sync** page (**Setup**) or with `coffer sync remote set`. See [Vault sync](/guides/vault-sync).
+
+| Setting | Default | Effect | CLI |
+| --- | --- | --- | --- |
+| **Interval (seconds)** | `3600` | Seconds between automatic rounds. At least `60`: a smaller value is refused, and one stored before the floor existed loads as `60`. | `coffer sync remote set --interval <s>` |
+| **Converge automatically** | on | Off pauses the remote: every round reports `disabled`, and the remote and its history are kept. | `coffer sync remote pause`, `resume` |
 
 ### Settings → Data
 

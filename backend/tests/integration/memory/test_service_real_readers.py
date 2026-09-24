@@ -181,9 +181,12 @@ async def test_what_is_about_the_person_lands_in_global_whichever_agent_said_it(
     await vault["service"].aggregate()
 
     titles = {e.entry.title for e in list_raw_entries("global")}
-    assert "feedback-worktree-development" in titles  # Claude Code's `feedback`
     assert "User Profile" in titles  # Codex's profile
     assert "Always ask before merging a pull request" in titles
+    # Claude Code's `feedback`, learned in this repository, is the
+    # repository's own standing instruction, not the person's.
+    assert "feedback-worktree-development" not in titles
+    assert "feedback-worktree-development" in {e.entry.title for e in list_raw_entries("coffer")}
 
 
 @pytest.mark.asyncio

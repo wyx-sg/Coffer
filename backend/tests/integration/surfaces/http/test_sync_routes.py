@@ -144,6 +144,29 @@ async def test_put_remote_that_cannot_be_reached_is_rejected_at_the_front_door(
     assert (await client.get("/api/v1/sync/remote")).json()["configured"] is False
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="an interval under a minute is refused")
+@pytest.mark.parametrize("interval", [0, 1, 59])
+async def test_put_remote_refuses_an_interval_under_a_minute(client, fleet, interval) -> None:
+    """One round a minute is the floor on every surface: the web form, the
+    contract and here, before anything is stored."""
+    a, _b = fleet
+    body = {"url": a.remote_url, "interval_seconds": interval}
+    r = await client.put("/api/v1/sync/remote", json=body)
+
+    assert r.status_code == 422, r.text
+    assert (await client.get("/api/v1/sync/remote")).json()["configured"] is False
+
+
+async def test_put_remote_accepts_an_interval_of_one_minute(client, fleet) -> None:
+    a, _b = fleet
+    body = {"url": a.remote_url, "interval_seconds": 60}
+    r = await client.put("/api/v1/sync/remote", json=body)
+
+    assert r.status_code == 200, r.text
+    stored = (await client.get("/api/v1/sync/remote")).json()
+    assert stored["remote"]["interval_seconds"] == 60
+
+
 @pytest.mark.parametrize(
     "body",
     [

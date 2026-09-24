@@ -437,7 +437,7 @@ components:
       properties:
         status:
           type: string
-          enum: [starting, ready, draining]
+          enum: [ready, draining]
           description: The daemon's lifecycle phase.
         version:
           type: string

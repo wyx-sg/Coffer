@@ -1,5 +1,5 @@
 // pages/settings/InternalEngineSettings.tsx — the internal-engine selection
-// (spec internal-engine "Show and change the engine in Settings → Engine").
+// (spec internal-engine "Show and change the engine in Settings → Coffer's model").
 // Coffer's own LLM engine — the knowledge curation pass, and whatever else
 // Coffer runs itself — uses whichever connection is picked here (endpoint +
 // key) with the model chosen here. Both live apart from the chat
@@ -16,7 +16,7 @@
 // layer converging at a fraction of its rate with nothing looking broken.
 //
 // It is Coffer's own configuration, not a resource served to agents, so it sits
-// under Settings → Engine and reads the connection list itself rather than
+// under Settings → Coffer's model and reads the connection list itself rather than
 // taking it from a resource page above.
 //
 // Edits auto-save, like every other settings surface here (no Save button).

@@ -15,8 +15,17 @@ import tomllib
 import pytest
 from starlette.testclient import TestClient
 
+from coffer.domain.provider.projection import is_managed_api_key_helper
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+
+
+def _assert_helper_for(helper: str, uid: str) -> None:
+    """The projected helper runs the ``coffer`` CLI (named by absolute path when
+    this machine has one) to fetch exactly this connection's key."""
+    assert is_managed_api_key_helper(helper), helper
+    assert helper.endswith(f" provider key --connection-uid {uid}"), helper
+
 
 TOKEN = "test-token-011"
 
@@ -261,7 +270,7 @@ def test_activate_writes_claude_settings(tmp_path, monkeypatch):
         # activated connection's key — and goes on reading it after the user
         # relabels the connection, which is why this file no longer has to be
         # rewritten on a rename.
-        assert data["apiKeyHelper"] == f"coffer provider key --connection-uid {uid}"
+        _assert_helper_for(data["apiKeyHelper"], uid)
         assert data["env"]["ANTHROPIC_BASE_URL"] == "https://gw/anthropic"
         # The agent is unbound (no per-agent model) → no model env is written, so
         # Claude Code runs on its OWN default model (spec provider-switching
@@ -417,7 +426,7 @@ def test_switch_preserves_keys_and_backs_up(tmp_path, monkeypatch):
         c.post(f"/api/v1/providers/{uid}/activate")
         data = json.loads((cfg / "settings.json").read_text())
         assert data["theme"] == "dark"  # unrelated key preserved
-        assert data["apiKeyHelper"] == f"coffer provider key --connection-uid {uid}"
+        _assert_helper_for(data["apiKeyHelper"], uid)
         assert (cfg / "settings.json.bak").exists()  # prior version backed up
 
 
@@ -494,7 +503,7 @@ def test_openai_connection_scoped_to_claude_code(tmp_path, monkeypatch):
         assert act.status_code == 200, act.text
         assert act.json()["projected"] == ["cc"]
         data = json.loads((cfg / "settings.json").read_text())
-        assert data["apiKeyHelper"] == f"coffer provider key --connection-uid {uid}"
+        _assert_helper_for(data["apiKeyHelper"], uid)
         assert data["env"]["ANTHROPIC_BASE_URL"] == "https://agnes/v1"
 
         # The projected helper fetches exactly agnes's key, by uid.
@@ -924,7 +933,7 @@ def test_rename_keeps_the_uid_credential_and_projection(tmp_path, monkeypatch):
         # left for it to do, which is why the kind stopped needing one.
         data = json.loads((cfg / "settings.json").read_text())
         assert data["apiKeyHelper"] == helper_before
-        assert data["apiKeyHelper"] == f"coffer provider key --connection-uid {uid}"
+        _assert_helper_for(data["apiKeyHelper"], uid)
 
         # The trail follows the resource — asking by uid returns the whole
         # history, including the events from before the rename.
