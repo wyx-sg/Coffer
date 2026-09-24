@@ -1,8 +1,9 @@
 // frontend/src/lib/hooks/useModelIntrospection.ts
 //
 // Provider introspection (specs channels and knowledge): list a provider's models + test a
-// connection, so the model forms offer a fetched dropdown (with manual
-// fallback) and a Test button — DevPilot-style. Requests go through the shared
+// connection, so the model forms offer a fetched fixed list (no free-text
+// entry, spec provider-switching "Choose a model from a fixed list") and a
+// Test button — DevPilot-style. Requests go through the shared
 // `call` (.agents/frontend.md §4).
 import { useMutation, useQuery } from "@tanstack/react-query";
 
@@ -37,7 +38,7 @@ export interface EndpointModelsOut {
   message: string;
 }
 
-/** List a provider's models. Empty list + message → user types manually. */
+/** List a provider's models. Empty list + message → the surface shows why. */
 export function useListProviderModels() {
   return useMutation({
     mutationFn: (p: ProviderProbe) =>

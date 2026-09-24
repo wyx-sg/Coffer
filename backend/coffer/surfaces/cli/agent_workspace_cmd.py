@@ -1,4 +1,7 @@
-"""coffer agent workspace subcommands (spec agent-registry/005 amendment).
+"""coffer agent workspace subcommands.
+
+Part of spec agent-registry "Expose every agent operation through REST, CLI and
+the Agents page".
 
 MCP entries, plugins, and directory config-file children. Kept out of
 ``agent_cmd.py`` to respect the 400-line backend file cap;

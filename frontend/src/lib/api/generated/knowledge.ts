@@ -242,7 +242,10 @@ export interface paths {
          *     a document a person edited is never reverted (see "Let newer statements
          *     win and a person's edit stand").
          *
-         *     `status` is `ok` when a pass ran; `no_model` when no internal connection
+         *     `status` is `ok` when a pass ran; `truncated` when the recursion limit
+         *     cut the pass off before it completed — it carries the same counters as
+         *     `ok`, the writes that landed stay, and the item is left pending (see
+         *     "Bound a pass to eight writes"); `no_model` when no internal connection
          *     is configured, in which case every inbox item was promoted to a document
          *     as it stood and `promoted` lists them; `up_to_date` when nothing is
          *     pending; `too_large` when the item does not fit the model's context
@@ -485,19 +488,23 @@ export interface components {
          *       "documents_before": 22,
          *       "documents_after": 23,
          *       "limit": 0,
-         *       "promoted": []
+         *       "promoted": [],
+         *       "gave_up": false
          *     }
          */
         CurationOut: {
             /**
-             * @description `no_model` when no internal connection is configured — every inbox
+             * @description `truncated` when the recursion limit cut the pass off: the same
+             *     counters as `ok`, but the item is left pending, not settled —
+             *     unless `gave_up` is true.
+             *     `no_model` when no internal connection is configured — every inbox
              *     item was promoted to a document as it stood, never an error.
              *     `up_to_date` when nothing is pending. `too_large` when the item
              *     does not fit, `limit` naming the ceiling. `failed` leaves the item
              *     as it was so it is curated later rather than lost.
              * @enum {string}
              */
-            status: "ok" | "no_model" | "up_to_date" | "too_large" | "failed";
+            status: "ok" | "truncated" | "no_model" | "up_to_date" | "too_large" | "failed";
             /** @description The collection's NAME, not its uid — this is what a surface renders. */
             collection: string;
             /**
@@ -527,11 +534,18 @@ export interface components {
             /** @description The item-size ceiling, present only with `status` `too_large`. */
             limit: number;
             /**
-             * @description The documents the inbox was promoted into as it stood, present only
+             * @description The documents the inbox was promoted into as it stood: every item
              *     with `status` `no_model` (see "Promote material directly when no
-             *     model is configured").
+             *     model is configured"), or the one item a pass gave up on (`gave_up`).
              */
             promoted: string[];
+            /**
+             * @description With `status` `truncated`: the item's third consecutive cut-off, so
+             *     the pass settled it rather than leaving it owed — material promoted
+             *     as it stood (named in `promoted`), an edited document stamped (see
+             *     "Bound a pass to eight writes").
+             */
+            gave_up: boolean;
         };
         /**
          * @description What an upload became. Note `converter` is reported here and written

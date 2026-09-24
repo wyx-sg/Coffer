@@ -49,9 +49,8 @@ class AgentPatch(BaseModel):
     # (`enabled` + `scope`), never here.
     config_dir: str | None = None
     description: str | None = None
-    # Slice 6: opt-in native write-side memory disable. Toggling drives the
-    # on-disk transform (Claude settings.json / Codex config.toml) in lockstep.
-    # spec provider-switching amendment 2026-06-22b (E3): per-agent model binding. Explicit null
+    # spec provider-switching "Take projected model keys from the agent's binding":
+    # per-agent model binding. Explicit null
     # on `fast_model` clears the fast slot (distinguished via model_fields_set).
     model: str | None = None
     fast_model: str | None = None
@@ -72,8 +71,7 @@ class AgentOut(BaseModel):
     # override or the type's standard location (~/.claude, ~/.codex).
     config_dir: str
     description: str | None
-    # Slice 6: whether the agent's native write-side memory is disabled.
-    # spec provider-switching amendment 2026-06-22b (E3): per-agent model
+    # spec provider-switching "Take projected model keys from the agent's binding": per-agent model
     # binding. ``None`` = unbound, and unbound means unbound — the connection
     # carries no singular model to fall back to, so projection writes no model
     # for this agent at all.
@@ -196,7 +194,7 @@ async def update_agent(
             description=body.description if "description" in sent else r.description,
         )
     if "model" in sent or "fast_model" in sent or "wire_api" in sent:
-        # Per-agent model binding (E3). An explicit null fast_model clears the
+        # Per-agent model binding. An explicit null fast_model clears the
         # fast slot; the caller re-activates the connection to re-project.
         r = await svc.set_model_binding(
             uid=uid,

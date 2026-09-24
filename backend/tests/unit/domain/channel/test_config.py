@@ -47,6 +47,16 @@ def test_public_base_url_rejects_path():
         parse_channel_config({**SEATALK_CONFIG, "public_base_url": "https://x.example.com/seatalk"})
 
 
+def test_public_base_url_path_error_names_the_uid_keyed_callback_path():
+    """The listener path is ``/seatalk/<channel uid>`` (``callback_ops.callback_path``),
+    never the name — the error must not send the owner looking for a name-keyed URL."""
+    with pytest.raises(ValidationError) as excinfo:
+        parse_channel_config({**SEATALK_CONFIG, "public_base_url": "https://x.example.com/seatalk"})
+    message = str(excinfo.value)
+    assert "Coffer appends /seatalk/<channel uid> itself" in message
+    assert "<name>" not in message
+
+
 def test_tunnel_token_ref_defaults_none_and_accepts_a_ref():
     assert parse_channel_config(SEATALK_CONFIG).tunnel_token_ref is None
     cfg = parse_channel_config({**SEATALK_CONFIG, "tunnel_token_ref": "channel/st/tunnel-token"})

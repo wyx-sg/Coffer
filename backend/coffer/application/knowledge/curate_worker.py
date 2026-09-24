@@ -27,6 +27,7 @@ from coffer.application.knowledge.curate import pending_items
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.upkeep_runs import UPKEEP_RUNS, UpkeepRunRegistry
 from coffer.application.upkeep_schedule import IntervalReader, wait_for_next_pass
+from coffer.domain.knowledge.entry import Pending
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,9 @@ class CurationWorker:
         # worker actually has with a person pressing Curate.
         self._runs = runs
         self._max_passes = max_passes_per_sweep
+        # Items whose last pass the recursion limit cut off, keyed by collection
+        # uid. They go behind the rest of the inbox next sweep (see ``_drain``).
+        self._cut_off: set[tuple[str, Pending]] = set()
 
     async def run_forever(self) -> None:
         await asyncio.sleep(self._start_delay_s)
@@ -177,9 +181,19 @@ class CurationWorker:
             # already settled is a wasted model call that rewrites documents
             # for nothing.
             pending = await asyncio.to_thread(pending_items, collection)
+            # An item cut off last time goes behind the rest (a stable sort keeps
+            # each group oldest first): otherwise it is first in line every sweep
+            # and, with few passes a sweep, the rest of the inbox waits until the
+            # pass gives up on it (``curate_settle``).
+            self._cut_off = {k for k in self._cut_off if k[0] != uid or k[1] in pending}
+            pending = tuple(sorted(pending, key=lambda p: (uid, p) in self._cut_off))
             for item in pending[: self._max_passes]:
                 outcome = await self._curate(self._service, uid, item=item, actor="system")
                 status = str(outcome.get("status", ""))
+                if status == "truncated" and not outcome.get("gave_up"):
+                    self._cut_off.add((uid, item))
+                else:
+                    self._cut_off.discard((uid, item))
                 if status in {"no_model", "failed"}:
                     # No model is an installation-wide fact — and the pass has
                     # already promoted the inbox as it stands — and a failed
@@ -190,3 +204,7 @@ class CurationWorker:
                         extra={"collection": collection, "status": status},
                     )
                     return
+                # ``truncated`` (the recursion limit cut the pass off) leaves
+                # its item pending but does NOT stop the sweep: stopping on it
+                # would starve the rest. The loop walks a snapshot, so it is
+                # not retried until the next sweep.

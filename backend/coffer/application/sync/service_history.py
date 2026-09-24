@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from coffer.domain.sync.convergence import RunRecord
+from coffer.domain.sync.convergence import ConvergeStatus, RunRecord
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from coffer.application.sync.ports import ConvergenceStatePort, SyncRemoteRepoPort
@@ -24,6 +24,12 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 #: back through — generous enough to cover weeks of rounds, small enough to stay
 #: one query.
 DEFAULT_RUN_LIMIT = 500
+
+#: Rounds that converged: each settles whether a conflict is still outstanding.
+#: A push that failed merged and applied all the same. A guard hold does not
+#: count — it is read from ``pending()`` while it stands, and a hold rejected
+#: or raised before the merge proves nothing about an earlier conflict.
+_MERGED = frozenset({ConvergeStatus.OK, ConvergeStatus.NO_CHANGE, ConvergeStatus.PUSH_FAILED})
 
 
 class HistoryMixin:
@@ -51,3 +57,26 @@ class HistoryMixin:
         rather than failing.
         """
         return await self._remotes.list_runs(limit)
+
+    async def divergence_outstanding(self) -> bool:
+        """Whether a round left something the user has not yet answered.
+
+        Either a confirmation held at the deletion guard, or a conflict — which
+        holds nothing (the vault is untouched and the pointer has not moved), so
+        only the recorded rounds say it is there. An unattended rewriter consults
+        this before it runs (spec vault-sync "Never overlap a tidy pass and a
+        round"): a rewrite piled onto an unresolved divergence changes the very
+        documents the user is about to decide between.
+
+        The conflict is read off the newest round that reached the merge, not
+        the newest round: one that failed before it (the network), did not run
+        (sync switched off) or stopped to ask about a join or a guard hold says
+        nothing about whether the conflict was resolved, and only a round that
+        converges again clears it ("once a later round converges cleanly").
+        """
+        if await self._state.pending() is not None:
+            return True
+        for record in await self._remotes.list_runs(DEFAULT_RUN_LIMIT):
+            if record.run.status in _MERGED or record.run.status is ConvergeStatus.CONFLICT:
+                return record.run.status is ConvergeStatus.CONFLICT
+        return False

@@ -604,6 +604,36 @@ def test_status_of_a_websocket_channel_prints_its_error_verbatim(
     assert "ws error: another connection took over" in r.output
 
 
+def test_status_says_an_unbound_channel_runs_nowhere(channel_daemon: _Daemon) -> None:
+    """Spec channels "Bind each channel to the one machine that runs it": unbound
+    must be reported as itself, never looking like the normal state of a channel
+    that another machine runs."""
+    assert _register_tg().exit_code == 0
+    resource = channel_daemon.channel("tg")
+    config = {k: v for k, v in resource.config.items() if k != "runs_on"}
+    channel_daemon.run(channel_daemon.resources.update_config(resource.uid, config, "test"))
+
+    r = runner.invoke(app, ["channel", "status", "tg"])
+    assert r.exit_code == 0, r.output
+    assert "runs on:  unbound (runs nowhere)" in r.output
+    assert "another machine" not in r.output
+
+
+def test_status_names_the_foreign_machine_a_bound_channel_runs_on(
+    channel_daemon: _Daemon,
+) -> None:
+    assert _register_tg().exit_code == 0
+    assert runner.invoke(app, ["channel", "bind", "tg", "ffffffffffffffff"]).exit_code == 0
+
+    r = runner.invoke(app, ["channel", "status", "tg"])
+    assert r.exit_code == 0, r.output
+    assert "runs on:  ffffffffffffffff (another machine)" in r.output
+
+    assert runner.invoke(app, ["channel", "bind", "tg"]).exit_code == 0
+    r = runner.invoke(app, ["channel", "status", "tg"])
+    assert f"runs on:  {_MACHINE_ID} (this machine)" in r.output
+
+
 def test_status_unknown_channel_exits_4(channel_daemon: _Daemon) -> None:
     r = runner.invoke(app, ["channel", "status", "ghost"])
     assert r.exit_code == 4

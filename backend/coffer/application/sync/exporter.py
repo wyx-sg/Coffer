@@ -4,8 +4,8 @@ Step 1 of a converge round. What comes out is exactly what this vault publishes
 — but it is written **differentially**, never by clearing and rewriting: the
 bundle is the git working tree that gets three-way-merged, so a wholesale
 rewrite would tell the merge that every document this vault never absorbed had
-been deliberately deleted. That rule is normative (spec vault-sync "Why deletion
-is safe") and it lives in :mod:`coffer.infrastructure.sync.tree_mirror`; what
+been deliberately deleted. That rule is normative (spec vault-sync "Export
+differentially") and it lives in :mod:`coffer.infrastructure.sync.tree_mirror`; what
 this module owes it is an honest and *complete* account of what this vault
 publishes, area by area, on every export. Complete means every resource of
 every kind that converges: what is held back is a resource's reach, a

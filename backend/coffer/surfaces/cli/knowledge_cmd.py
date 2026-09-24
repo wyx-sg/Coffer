@@ -231,7 +231,8 @@ def curate(
     """Run a curation pass by hand over one collection.
 
     A pass is bounded and reports why it stopped, so the status is the answer:
-    ``ok``, ``up_to_date``, ``no_model`` when no internal connection is
+    ``ok``, ``truncated`` when the recursion limit cut the pass off (its item
+    stays pending), ``up_to_date``, ``no_model`` when no internal connection is
     configured ("Promote material directly when no model is configured"),
     ``too_large``, or ``failed``. A pass already in flight over the same
     collection is refused rather than queued ("Run one pass per collection at

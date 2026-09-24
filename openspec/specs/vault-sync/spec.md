@@ -1215,6 +1215,11 @@ outstanding, so a rewrite is never piled onto an unresolved divergence.
 - **THEN** the round waits for the pass to finish before it serializes the
   vault, so the exported tree is never a half-rewritten corpus.
 
+#### Scenario: a curation pass is skipped while a round is unresolved
+- **GIVEN** a machine whose last round stopped on a conflict, or that holds a pending confirmation,
+- **WHEN** the unattended curation pass asks whether it may run,
+- **THEN** it is told no, and once a later round converges cleanly with nothing held it is told yes again.
+
 ### Requirement: Let an edit beat a tidy deletion
 Where the owner's curation pass deleted a document another machine edited, the **edit
 MUST win**: the document survives with its edit, the deletion is dropped, and

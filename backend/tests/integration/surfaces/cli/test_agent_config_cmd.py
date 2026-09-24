@@ -371,3 +371,56 @@ def test_mcp_install_status_uninstall(agent_config_cli):
     assert "removed Coffer MCP from agent cc" in r.output
     r = _runner.invoke(cli_app, ["agent", "mcp", "status", "cc", "--json"])
     assert json.loads(r.output)["installed"] is False
+
+
+def test_config_cat_json_prints_the_full_response(agent_config_cli):
+    """spec agent-registry "Offer JSON output on every CLI read": ``cat --json``
+    prints the whole read — content plus the fingerprint a later write needs."""
+    tmp_path, _shim = agent_config_cli
+    settings = tmp_path / ".claude" / "settings.json"
+    settings.write_text('{"x": 1}', encoding="utf-8")
+    r = _runner.invoke(cli_app, ["agent", "config", "cat", "cc", "settings", "--json"])
+    assert r.exit_code == 0, r.output
+    data = json.loads(r.output)
+    assert data["key"] == "settings"
+    assert data["content"] == '{"x": 1}'
+    assert data["exists"] is True
+    assert data["path"] == str(settings)
+    assert data["format"] == "json"
+    assert isinstance(data["fingerprint"], str) and data["fingerprint"]
+
+
+def test_config_key_help_names_real_keys(agent_config_cli):
+    for cmd in ("cat", "edit"):
+        r = _runner.invoke(cli_app, ["agent", "config", cmd, "--help"])
+        assert r.exit_code == 0, r.output
+        # Rich wraps help inside a box; flatten borders and line breaks first.
+        flat = " ".join(r.output.replace("│", " ").split())
+        assert "settings, config, instructions" in flat
+        assert "memory" not in flat
+
+
+def test_config_edit_refuses_when_the_file_changed_since_its_read(agent_config_cli, monkeypatch):
+    """spec agent-registry "Reject stale config-file writes by fingerprint": the
+    edit carries the fingerprint of the content it opened, so a change made on
+    disk while the editor was open is a conflict, not a silent overwrite."""
+    import coffer.surfaces.cli.agent_config_cmd as agent_config_cmd
+
+    tmp_path, _shim = agent_config_cli
+    settings = tmp_path / ".claude" / "settings.json"
+    settings.write_text('{"theme": "light"}', encoding="utf-8")
+
+    def _edit_while_agent_rewrites(text, extension=None):
+        # The agent's own process rewrites the file while $EDITOR is open.
+        settings.write_text('{"theme": "agent"}', encoding="utf-8")
+        return '{"theme": "dark"}'
+
+    monkeypatch.setattr(agent_config_cmd.click, "edit", _edit_while_agent_rewrites)
+
+    r = _runner.invoke(cli_app, ["agent", "config", "edit", "cc", "settings"])
+    assert r.exit_code == 5, r.output
+    assert "changed on disk since last read" in (r.output + (r.stderr or ""))
+    assert "saved" not in r.output
+    # The other process's content survives; no Coffer write, so no .bak.
+    assert settings.read_text(encoding="utf-8") == '{"theme": "agent"}'
+    assert not (tmp_path / ".claude" / "settings.json.bak").exists()

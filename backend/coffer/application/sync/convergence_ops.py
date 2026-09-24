@@ -317,7 +317,7 @@ async def outstanding_holds(
     """Step 5a. The retry set, as a diff the round can apply.
 
     A path this vault failed to absorb is *pending*, not failed once and
-    forgotten (spec vault-sync ``## The pointer advances only on absorption``):
+    forgotten (spec vault-sync "Advance the pointer only on absorption"):
     it is re-attempted next round and leaves the set on success. The incoming
     diff alone cannot do that — a held path is unchanged in every later diff,
     precisely because the failure was local — so the set is walked directly.

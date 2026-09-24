@@ -17,6 +17,7 @@ nothing here is about a message arriving.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -67,6 +68,14 @@ class ChannelPeerRepoPort(Protocol):
         ...
 
     async def upsert(self, peer: ChannelPeer) -> None: ...
+
+    async def upsert_replacing(self, peer: ChannelPeer, unpair: Sequence[str]) -> None:
+        """``upsert(peer)`` and un-pair each chat in ``unpair``, as ONE write.
+
+        A change of owner must never be half-applied: saving the new owner and
+        dropping the previous one's chats either both happen or neither does,
+        so a failure between them cannot leave the channel with no owner."""
+        ...
 
     async def delete_by_chat(self, resource_id: int, chat_id: str) -> None:
         """Drop one chat's pairing, leaving the channel's other chats alone.

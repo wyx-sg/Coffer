@@ -1,4 +1,4 @@
-"""One converge round (spec vault-sync ``## The converge round``).
+"""One converge round (spec vault-sync "Run the seven round steps in order").
 
 The order of the seven steps is the most important thing in this module, and
 it is the whole reason the 2026-07-10 mutual deletion cannot happen again::
@@ -41,6 +41,7 @@ import logging
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 
+from coffer.application.sync.appliers import locked_refs
 from coffer.application.sync.conflicts import ConflictArbiter
 from coffer.application.sync.convergence_backwards import BackwardsMixin
 from coffer.application.sync.convergence_ops import (
@@ -62,6 +63,7 @@ from coffer.application.sync.convergence_preview import PreviewMixin
 from coffer.application.sync.joining import JoinResolver
 from coffer.application.sync.ports import (
     ConvergenceStatePort,
+    CredentialSyncPort,
     GitMirrorPort,
     PostImportHook,
     VaultApplyPort,
@@ -100,6 +102,7 @@ class ConvergeRound(BackwardsMixin, PreviewMixin):
         serialize: Callable[[], Awaitable[ExportSummary]],
         guard: DeletionGuard,
         branch: str,
+        credentials: CredentialSyncPort,
         post_import: Sequence[PostImportHook] = (),
     ) -> None:
         self._mirror = mirror
@@ -111,6 +114,7 @@ class ConvergeRound(BackwardsMixin, PreviewMixin):
         self._guard = guard
         self._branch = branch
         self._post_import = list(post_import)
+        self._credentials = credentials
 
     async def run(
         self,
@@ -226,6 +230,10 @@ class ConvergeRound(BackwardsMixin, PreviewMixin):
         failures = await self.apply(applied, not_applicable=not_applicable)
         failures.extend(await self.apply(retried, not_applicable=not_applicable))
         failures.extend(await reconcile(self._post_import, applied))
+        # Ciphertext travels whatever the keys; a ref this machine now holds
+        # but cannot open is named, never left to fail at first use (spec
+        # vault-sync "Report refs without a key as locked"); never fatal.
+        locked = await locked_refs(self._credentials)
 
         # --- 6 publish ------------------------------------------------------
         status = ConvergeStatus.OK if (published or applied) else ConvergeStatus.NO_CHANGE
@@ -249,16 +257,8 @@ class ConvergeRound(BackwardsMixin, PreviewMixin):
             agent_resolved=tuple(resolved),
             failures=tuple(failures),
             not_applicable=tuple(not_applicable),
+            locked_refs=locked,
         )
-
-    async def _reachable(self, commit: str) -> bool:
-        if commit == self._mirror.EMPTY_TREE:
-            # A new machine's base: not a commit, but a pointer all the same.
-            return True
-        try:
-            return bool(await self._mirror.resolve_revision(commit))
-        except CofferError:
-            return False
 
     async def _waived_direction(
         self, confirmed: PendingConfirmation | None

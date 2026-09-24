@@ -3,7 +3,8 @@
 Value-level validation only (types, well-formedness). No I/O. A connection is a
 credentialed endpoint: ``{protocol, base_url, credential_ref}``. The MODEL it
 runs is NOT stored here — it is chosen at the point of use (per-agent binding,
-the internal-engine selector, the chat surface), per spec provider-switching amendment E1/E3.
+the internal-engine selector, the chat surface), per spec provider-switching
+"Take projected model keys from the agent's binding".
 ``models`` does not change that: it is the OFFERED set — which of the endpoint's
 models the user intends to use — and narrows the menu every point-of-use picker
 shows. Empty (the default) means no restriction: everything the endpoint serves.
@@ -200,8 +201,11 @@ class ProviderConfig(BaseModel):
         """The curated ids, in the user's order, optionally of ONE modality.
 
         The narrowing seam: a chat picker asks for ``TEXT`` and can never be
-        handed an embedding or image id, while the empty list keeps meaning "no
-        restriction" for the caller to interpret.
+        handed an embedding or image id. An empty answer is ambiguous on its
+        own — nothing curated at all ("no restriction") or nothing of THIS
+        modality — so a caller that must tell them apart checks ``models``
+        itself (spec provider-switching "Offer only text models to chat
+        pickers").
         """
         return [m.id for m in self.models if modality is None or m.modality is modality]
 
@@ -210,7 +214,8 @@ class ProviderConfig(BaseModel):
 class ResolvedConnection:
     """A connection paired with the model to run on it.
 
-    The model lives apart from the connection (spec provider-switching E3), so the two travel
+    The model lives apart from the connection (spec provider-switching
+    "Take projected model keys from the agent's binding"), so the two travel
     together when Coffer's internal engine builds a chat model: the connection
     supplies the endpoint + protocol + credential, the ``model`` is resolved
     separately (the internal-engine selector, the per-agent binding, …).

@@ -53,7 +53,7 @@ _BACKOFF_MAX_SECONDS = 30.0
 _KICK_BACKOFF_SECONDS = 60.0
 _JOIN_TIMEOUT_SECONDS = 5.0
 
-# ``(channel_name, envelope) -> None`` — ChannelService.ingest_event in
+# ``(channel_uid, envelope) -> None`` — ChannelService.ingest_event in
 # production, which does the unknown-channel and adapter-down checks and hands
 # the envelope to the same adapter seam the webhook route uses.
 IngestFn = Callable[[str, dict[str, Any]], Awaitable[None]]

@@ -5,12 +5,20 @@ key needed, so neither direction of a round touches plaintext. Locked-ref
 detection *does* use the key: a ref is locked when no key is present on this
 machine, or when the stored ciphertext cannot be decrypted with it (it was
 encrypted under a different key whose owner hasn't bootstrapped here yet).
+
+A round asks for the locked refs every time it runs, so the key is read through a
+:class:`ResolvedMasterKey`, which resolves it once: ``master_key.py`` promises at
+most one keychain prompt per daemon start, and a key that lives in the keychain
+would otherwise be read — and prompted for — every round. A key that could not be
+read at all (a locked keychain) says nothing about which refs are locked, so none
+are reported, rather than every one.
 """
 
 from __future__ import annotations
 
 import pathlib
 import sqlite3
+import threading
 from contextlib import closing
 from datetime import UTC, datetime
 
@@ -19,10 +27,39 @@ from cryptography.fernet import Fernet, InvalidToken
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
 
 
+class ResolvedMasterKey:
+    """The master key, read from where it lives once and kept.
+
+    Implements ``application.sync.ports.MasterKeyPort``. The first answer is
+    kept whatever it was — a key or ``None`` — so a locked keychain is asked
+    once, not every round; a key installed through it replaces the answer.
+    """
+
+    def __init__(self, manager: MasterKeyManager) -> None:
+        self._manager = manager
+        self._lock = threading.Lock()
+        self._resolved = False
+        self._key: bytes | None = None
+
+    def export_key(self) -> bytes | None:
+        with self._lock:
+            if not self._resolved:
+                self._key = self._manager.export_key()
+                self._resolved = True
+            return self._key
+
+    def install_key(self, key: bytes) -> None:
+        self._manager.install_key(key)
+        with self._lock:
+            self._key, self._resolved = key.strip(), True
+
+
 class CredentialSyncAdapter:
     """Implements ``application.sync.ports.CredentialSyncPort``."""
 
-    def __init__(self, db_path: pathlib.Path, master_key: MasterKeyManager) -> None:
+    def __init__(self, db_path: pathlib.Path, master_key: ResolvedMasterKey) -> None:
+        # The same ResolvedMasterKey the key import goes through, so a key
+        # imported mid-run is the one the next locked-ref check uses.
         self._db_path = db_path
         self._master_key = master_key
 
@@ -70,8 +107,10 @@ class CredentialSyncAdapter:
             return []
         key = self._master_key.export_key()
         if key is None:
-            # No master key on this machine yet — everything is locked.
-            return refs
+            # The key could not be read — in practice a locked keychain, since
+            # the daemon creates a key at start when it holds no ciphertext.
+            # Which refs it would open is unknown, and "unknown" is not "all".
+            return []
         fernet = Fernet(key)
         locked: list[str] = []
         for ref in refs:

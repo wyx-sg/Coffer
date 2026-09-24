@@ -239,7 +239,8 @@ types and add the shapes that describe an answer no domain type does:
 and `SubmissionOut` (`status` `pending` | `written`, `collection`, `title`, and
 `path` when written); `CurationRequest` (an optional `document`) and
 `CurationOut` (`status`, `collection`, `item`, `model`, `written`, `retired`,
-`refused`, `documents_before`, `documents_after`, `limit`, `promoted`); and
+`refused`, `documents_before`, `documents_after`, `limit`, `promoted`,
+`gave_up`); and
 `IngestedDocumentOut` (`path` or null, `title`, `description`, `converter`,
 `pending`). There is no write-a-document model: a person edits a document in
 their own editor, and every other entrance submits material. The mirroring is

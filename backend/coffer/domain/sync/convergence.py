@@ -1,4 +1,5 @@
-"""What one converge round reports (spec vault-sync ``## The converge round``).
+"""What one converge round reports (spec vault-sync "Run the seven round
+steps in order").
 
 Pure value objects. A round does not raise for anything the user can be told
 about — it returns a :class:`ConvergeRun` carrying the status — so the worker's

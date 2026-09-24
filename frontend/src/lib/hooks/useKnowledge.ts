@@ -26,6 +26,7 @@ import {
   knowledgeTreeKey,
   upkeepRunsKey,
 } from "@/lib/api/queryKeys";
+import { curateToastKey } from "@/lib/hooks/curateToast";
 
 // re-exported for tests that still import the root key from here; import
 // from queryKeys directly in new code
@@ -93,9 +94,7 @@ export function useCurateCollection(collectionUid: string) {
       void qc.invalidateQueries({ queryKey: knowledgeKey });
       // `count` only means something to `no_model`, which reports how much of
       // the inbox it promoted to documents as it stood.
-      toast.success(
-        t(`knowledge.detail.curateStatus.${result.status}`, { count: result.promoted.length }),
-      );
+      toast.success(t(curateToastKey(result), { count: result.promoted.length }));
     },
     onError: (error) => {
       if (error instanceof ApiError && error.code === "UPKEEP_ALREADY_RUNNING") return;

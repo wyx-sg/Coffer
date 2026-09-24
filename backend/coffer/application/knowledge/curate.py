@@ -22,10 +22,11 @@ Four things shape this module:
 * **The catalogue is always in the prompt.** Candidate selection is literal and
   therefore crude; the catalogue is what lets a model conclude that none of the
   five is the right home and open a new document instead.
-* **The item is settled last.** Material is deleted from the inbox, and an
-  edited document stamped, only after the loop returns. A pass that raises
-  leaves both as they were, so a later sweep retries rather than losing what
-  one half-ran over (see "Settle an item only after its pass completes").
+* **The item is settled last.** Material leaves the inbox, and an edited document
+  is stamped, only after the loop completes. A pass that raises, or that the recursion
+  limit cut off, leaves both as they were, so a later sweep retries rather than losing
+  what one half-ran over (see "Settle an item only after its pass completes") — until
+  the same item has been cut off three times running, when ``curate_settle`` gives up.
 * **langgraph stays out.** The loop is reached only through the injected
   :class:`AgenticCurationPort` (import contract 9a), so this module — and the
   whole ``application.knowledge`` package — never imports langchain.
@@ -42,6 +43,14 @@ from typing import TYPE_CHECKING, Any, Protocol
 from coffer.application.engine_ports import ModelSelectorPort
 from coffer.application.engine_timeout import TimeoutReader, resolve_timeout
 from coffer.application.knowledge import candidates
+from coffer.application.knowledge.curate_settle import (
+    MAX_CONSECUTIVE_TRUNCATIONS,
+    TruncationLedger,
+    give_up,
+    pending_items,
+    promote_all,
+    settle,
+)
 from coffer.application.knowledge.curate_tools import (
     MAX_WRITES_PER_PASS,
     Counters,
@@ -52,7 +61,7 @@ from coffer.application.knowledge.curate_tools import (
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.knowledge.entry import Pending
-from coffer.domain.knowledge.errors import KnowledgeFileNotFound, UnsafeKnowledgePath
+from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 from coffer.infrastructure.knowledge import catalogue, fs, paths
 
 if TYPE_CHECKING:
@@ -102,19 +111,9 @@ CURATION_SYSTEM = (
 )
 
 
-def pending_items(collection: str) -> tuple[Pending, ...]:
-    """What a sweep owes one collection: material first, then edits.
-
-    New material first, because until it is merged it is knowledge no agent
-    can read; an edited document is already readable as it stands.
-    """
-    return tuple(Pending(material=name) for name in fs.inbox_items(collection)) + tuple(
-        Pending(document=relpath) for relpath in fs.edited_documents(collection)
-    )
-
-
 class AgenticCurationPort(Protocol):
-    """The agentic loop, seen as a knowledge-local protocol."""
+    """The agentic loop, seen as a knowledge-local protocol. A result carrying
+    ``truncated: True`` means the recursion limit cut the loop off."""
 
     async def run(
         self,
@@ -163,11 +162,6 @@ def _brief(
     return "\n".join(lines)
 
 
-def _promote_all(collection: str) -> list[str]:
-    """Every inbox item made a document as it stands — the no-model path."""
-    return [fs.promote(collection, name).path for name in fs.inbox_items(collection)]
-
-
 async def run_curation(
     service: KnowledgeService,
     collection_uid: str,
@@ -179,6 +173,7 @@ async def run_curation(
     credential_resolver: Callable[[str], str],
     recursion_limit: int = DEFAULT_CURATION_RECURSION_LIMIT,
     read_timeout: TimeoutReader | None = None,
+    truncations: TruncationLedger | None = None,
 ) -> dict[str, Any]:
     """Fold one pending item into the documents of one collection.
 
@@ -191,8 +186,12 @@ async def run_curation(
     inbox item is promoted to a document as it stands, so material never waits on a
     connection nobody configured (see "Promote material directly when no model is
     configured") — ``up_to_date`` when nothing is pending, ``too_large`` for an item
-    past :data:`MAX_SOURCE_CHARS`, ``failed`` when the loop raised, and ``ok``
-    otherwise. Only ``ok`` settles the item.
+    past :data:`MAX_SOURCE_CHARS`, ``failed`` when the loop raised, ``truncated``
+    when the recursion limit cut it off (reported with the same counters as
+    ``ok`` — see "Bound a pass to eight writes"), and ``ok`` otherwise. Only
+    ``ok`` settles the item — except that, given a ``truncations`` ledger, the
+    :data:`MAX_CONSECUTIVE_TRUNCATIONS`-th cut-off in a row of one item gives up on
+    it: ``gave_up`` is true and ``promoted`` names what the material became.
 
     Every outcome carries ``collection`` as the collection's NAME, because the
     dict is what a surface renders and a person reads a pass's report by the
@@ -205,7 +204,7 @@ async def run_curation(
 
     model = await models.get_default()
     if model is None:
-        promoted = await asyncio.to_thread(_promote_all, collection)
+        promoted = await asyncio.to_thread(promote_all, collection)
         return {"status": "no_model", "collection": collection, "promoted": promoted}
 
     if item is None:
@@ -216,9 +215,8 @@ async def run_curation(
 
     edited = item.document is not None
     if item.document is not None:
-        # A caller-named document must be one of THIS collection's: the pass's
-        # tools are fenced to it, and the stamp written at the end must land on
-        # a document the pass could actually have carried through.
+        # A caller-named document must be THIS collection's: the tools are
+        # fenced to it, and the final stamp must land where the pass could reach.
         paths.require_document(item.document)
         if paths.collection_of(item.document) != collection:
             raise UnsafeKnowledgePath(item.document, f"not a document of {collection!r}")
@@ -249,12 +247,11 @@ async def run_curation(
         shown=[*chosen, *([item.document] if item.document is not None else [])],
     )
     try:
-        await agent.run(
+        run = await agent.run(
             model=model,
             tools=tools,
-            # The rules go in the system turn and the material in the human
-            # turn: the first is identical on every pass and is what a provider
-            # caches, the second is tens of kilobytes that differ every time.
+            # Rules in the system turn (identical every pass, what a provider
+            # caches); the tens-of-kilobytes brief in the human turn.
             system_prompt=CURATION_SYSTEM,
             user_prompt=_brief(
                 collection,
@@ -265,18 +262,15 @@ async def run_curation(
             ),
             credential_resolver=credential_resolver,
             recursion_limit=recursion_limit,
-            # Per TURN, not per pass. A curation pass is a conversation of up
-            # to ``recursion_limit`` turns and is one ``await`` from here, so a
-            # bound wrapped around this call could only stop the whole pass or
-            # nothing — and before this it stopped neither, which left a wedged
-            # endpoint holding the pass until the daemon restarted.
+            # Per TURN, not per pass: a bound wrapped around this one ``await``
+            # could only stop the whole pass, and a wedged endpoint held it
+            # until the daemon restarted.
             timeout=await resolve_timeout(read_timeout),
         )
     except asyncio.CancelledError:
         raise
     except Exception:
-        # The item stays as it was on purpose: a half-run pass must be retried
-        # by the next sweep, not treated as having absorbed the material.
+        # The item stays as it was: a half-run pass is retried by the next sweep.
         logger.warning(
             "knowledge.curate.loop_failed",
             extra={"collection": collection, "item": label},
@@ -284,9 +278,18 @@ async def run_curation(
         )
         return {"status": "failed", "collection": collection, "item": label}
 
-    await asyncio.to_thread(_settle, collection, item)
+    # Cut off by the recursion limit: what it wrote stays and the item stays
+    # owed, until it has been cut off every time (see ``curate_settle``).
+    truncated = bool(run.get("truncated"))
+    strikes = truncations.record(collection_uid, label) if truncations and truncated else 0
+    gave_up = strikes >= MAX_CONSECUTIVE_TRUNCATIONS
+    promoted = await asyncio.to_thread(give_up, collection, item) if gave_up else []
+    if not truncated:
+        await asyncio.to_thread(settle, collection, item)
+    if truncations is not None and (gave_up or not truncated):
+        truncations.clear(collection_uid, label)
     result = {
-        "status": "ok",
+        "status": "truncated" if truncated else "ok",
         "collection": collection,
         "item": label,
         "model": model.model,
@@ -296,10 +299,11 @@ async def run_curation(
         "written": counters.written,
         "retired": counters.retired,
         "refused": counters.refused,
+        "gave_up": gave_up,
+        "promoted": promoted,
     }
-    # One event per pass, unconditionally: with no review step, the audit log
-    # is the only place a person sees that something rewrote the corpus —
-    # including a pass that decided to change nothing.
+    # One event per pass that ran, cut off or not: with no review step, the
+    # audit log is the only place a person sees something rewrote the corpus.
     with contextlib.suppress(Exception):
         await service._audit.record(
             AuditEventType.KNOWLEDGE_CURATED.value,
@@ -314,21 +318,12 @@ async def run_curation(
                     "documents_after",
                     "written",
                     "retired",
+                    "status",
+                    "gave_up",
                 )
             },
         )
     return result
-
-
-def _settle(collection: str, item: Pending) -> None:
-    """Mark the item absorbed: material leaves the inbox, a document is
-    stamped — unless the pass retired it, in which case there is nothing left
-    to stamp."""
-    if item.material is not None:
-        fs.discard_material(collection, item.material)
-        return
-    with contextlib.suppress(KnowledgeFileNotFound):
-        fs.mark_curated(item.document or "")
 
 
 class CurationPass:
@@ -354,11 +349,12 @@ class CurationPass:
         self._models = models
         self._credential_resolver = credential_resolver
         self._recursion_limit = recursion_limit
-        # Re-rendering every agent's skill is how a new document becomes reachable at
-        # all (see "Deliver the guide as the shared-master link"): until the catalogue
-        # is rewritten, the agent has no path to it. So it hangs off the pass rather
-        # than off a timer — the corpus changing is exactly the event that matters.
+        # Re-rendering every agent's skill is how a new document becomes reachable
+        # (see "Deliver the guide as the shared-master link"), so it hangs off the
+        # pass rather than a timer — the corpus changing is the event that matters.
         self._on_corpus_changed = on_corpus_changed
+        # Shared by the page's button and the sweep, which both call this pass.
+        self._truncations = TruncationLedger()
 
     async def __call__(
         self,
@@ -378,8 +374,11 @@ class CurationPass:
             credential_resolver=self._credential_resolver,
             recursion_limit=self._recursion_limit,
             read_timeout=self._read_timeout,
+            truncations=self._truncations,
         )
-        changed = outcome.get("status") == "ok" or bool(outcome.get("promoted"))
+        # A cut-off pass changed the corpus only if it managed a write.
+        wrote = outcome.get("written") or outcome.get("retired") or outcome.get("promoted")
+        changed = outcome.get("status") == "ok" or bool(wrote)
         if self._on_corpus_changed is not None and changed:
             with contextlib.suppress(Exception):
                 await self._on_corpus_changed()

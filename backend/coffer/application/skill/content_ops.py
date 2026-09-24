@@ -13,7 +13,9 @@ import pathlib
 from typing import TYPE_CHECKING
 
 from coffer.application.skill import file_ops
+from coffer.application.skill.builtin_seed import is_builtin
 from coffer.domain.audit import AuditEventType
+from coffer.domain.errors import ResourceProtected
 from coffer.domain.workspace_errors import SkillFileStale
 
 if TYPE_CHECKING:
@@ -44,11 +46,23 @@ async def write_skill_file(
     write the programmatic (REST/CLI) clients relied on before the check
     existed.
 
+    A builtin skill's files are refused outright (``ResourceProtected`` →
+    409): its master folder is rewritten from the running build at every
+    start, so the edit would be lost silently — spec skill-manager
+    "Regenerate Coffer's builtin skill from the build" says the surfaces must
+    say so. Refusing here covers REST and CLI, not only the web viewer.
+
     Raises the same errors as :func:`file_ops.write_skill_file` (plus
-    ``ResourceNotFound`` if the skill isn't registered, and ``SkillFileStale``
-    on a fingerprint mismatch).
+    ``ResourceNotFound`` if the skill isn't registered, ``ResourceProtected``
+    for a builtin skill, and ``SkillFileStale`` on a fingerprint mismatch).
     """
     skill = await service.get_skill(uid)  # 404 if the skill isn't registered.
+    if is_builtin(skill.config):
+        raise ResourceProtected(
+            f"skill {skill.name}",
+            "its files are rewritten from the running build at every start, so "
+            "an edit would not last; the correction belongs in Coffer's build",
+        )
     # The master folder is named after the skill's CURRENT label; the uid is
     # how the caller said which skill it meant. Reading the name off the row
     # we just resolved is what keeps a rename from stranding an editor.

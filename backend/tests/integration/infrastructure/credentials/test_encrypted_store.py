@@ -58,6 +58,16 @@ def test_delete_is_idempotent(store: EncryptedCredentialStore) -> None:
     assert store.get("ref") is None
 
 
+def test_remove_reports_whether_a_row_was_removed(store: EncryptedCredentialStore) -> None:
+    store.set("ref", "v")
+    store.set("other", "w")
+    assert store.remove("ref") is True
+    assert store.get("ref") is None
+    assert store.remove("ref") is False
+    assert store.get("other") == "w"
+    assert store.count() == 1
+
+
 def test_count(store: EncryptedCredentialStore) -> None:
     assert store.count() == 0
     store.set("a", "1")

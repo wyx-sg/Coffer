@@ -1,7 +1,8 @@
 // frontend/src/pages/SkillDetailPage.tsx
 // Per-skill detail page (mirrors AgentDetailPage): the shared PageHeader with
 // a back link, reach + Delete as actions, and two tabs — Overview and Files (a
-// read-only tree + content viewer of the skill's master folder). The open tab
+// tree + content viewer of the skill's master folder, read-only for a builtin
+// skill since Coffer rewrites it at every start). The open tab
 // lives in the URL (`?tab=`), so a reload lands on the same tab.
 import { useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
@@ -106,7 +107,7 @@ export function SkillDetailPage() {
         </TabsContent>
 
         <TabsContent value="files" className="pt-6">
-          <SkillFileTree uid={skill.uid} />
+          <SkillFileTree uid={skill.uid} builtin={skill.builtin} />
         </TabsContent>
       </Tabs>
 

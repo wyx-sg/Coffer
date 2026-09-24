@@ -60,7 +60,7 @@ class ModelDiscoveryPort(Protocol):
 
     Async because the implementations do real I/O — scanning a CLI binary,
     driving a JSON-RPC subprocess — and a model picker must not block the
-    daemon's event loop while they do (CODE-034).
+    daemon's event loop while they do.
 
     ``config_dir`` is ``None`` when no agent of this type is registered with
     Coffer; sources that need it return nothing, sources that interrogate the
@@ -81,14 +81,16 @@ class ActiveProviderModelsPort(Protocol):
     agent type — the provider kind narrowed to the one question this service
     asks of it, so the agent side never imports it.
 
-    Three answers, and the difference between the last two is the whole point:
+    Two answers, and the difference between them is the whole point:
 
-      * ``None`` — no active connection is compatible with this agent type. The
-        agent runs on its own login and its own catalogue is the truth.
-      * ``[]`` — a connection is active but curates nothing ("no restriction"):
-        Coffer knows which endpoint the turns go to, not what it serves.
-      * ``[ids]`` — exactly the ids ticked on that connection's detail page, in
-        that order.
+      * ``None`` — no restriction: no active connection is compatible with
+        this agent type (the agent runs on its own login and its own catalogue
+        is the truth), or one is active but curates nothing — Coffer knows
+        which endpoint the turns go to, not what it serves.
+      * ``[ids]`` — exactly the ``text`` ids ticked on that connection's detail
+        page, in that order. EMPTY when the connection curates something but
+        nothing ``text``: its chat pickers then offer nothing (spec
+        provider-switching "Offer only text models to chat pickers").
 
     Best-effort by contract, like ``ModelDiscoveryPort``: an unparseable row is
     an ordinary state of the world, and a read-only picker lookup must not fail
@@ -159,10 +161,11 @@ class AgentModelCatalogueService:
         the user's order, and the agent's catalogue is not consulted. The
         catalogue describes the account the agent logs into itself, and an
         active connection means the turns do not go there — mixing the two could
-        only offer ids the endpoint rejects. A connection that curates nothing
+        only offer ids the endpoint rejects — so one that curates only non-text
+        models offers nothing. A connection that curates nothing at all
         falls through: Coffer knows where the turns go, not what that endpoint
         serves, and it will not ask over the network from a read that happens on
-        every card render and every turn (CODE-034). The user closes that gap by
+        every card render and every turn. The user closes that gap by
         curating the connection's model set.
 
         Otherwise: the agent's whole catalogue. Nothing narrows it — the
@@ -170,7 +173,7 @@ class AgentModelCatalogueService:
         routes to the agent gets to say otherwise.
         """
         endpoint_models = await self._connection_models(agent_key)
-        if endpoint_models:
+        if endpoint_models is not None:
             # No label: the id is the user's own text, and the only thing that
             # could describe it is the endpoint, which this must not ask.
             #
@@ -220,17 +223,18 @@ class AgentModelCatalogueService:
 
     # --- internals -----------------------------------------------------------
 
-    async def _connection_models(self, agent_key: str) -> list[str]:
-        """The active compatible connection's curated ids, or ``[]`` when there
-        is no such connection (or it restricts nothing). Belt-and-braces around
-        the port's never-raise contract."""
+    async def _connection_models(self, agent_key: str) -> list[str] | None:
+        """The active compatible connection's curated ``text`` ids, or ``None``
+        when there is no such connection (or it restricts nothing). Belt-and-
+        braces around the port's never-raise contract."""
         if self._provider_models is None:
-            return []
+            return None
         try:
-            return list(await self._provider_models.curated_models(agent_key) or [])
+            models = await self._provider_models.curated_models(agent_key)
         except Exception:
             _log.debug("agent.provider_models.failed", exc_info=True)
-            return []
+            return None
+        return None if models is None else list(models)
 
     async def _agent(self, agent_key: str) -> Resource | None:
         """The first ENABLED agent resource of this type, or ``None``.

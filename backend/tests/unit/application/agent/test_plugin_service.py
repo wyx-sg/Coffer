@@ -628,6 +628,41 @@ async def test_uninstall_claude_via_cli_calls_runner(store, audit_svc):
     assert entries[0].details == {"plugin": "plugin-a@npm", "cache_removed": True, "via": "cli"}
 
 
+async def test_uninstall_claude_unknown_plugin_404(store, audit_svc):
+    """An id Claude never installed is a 404, like the toggle path — the CLI is
+    never asked to uninstall it (it would fail and surface as a 422)."""
+    store._files[_CLAUDE_INSTALLED] = _INSTALLED_JSON
+    store._files[_CLAUDE_MARKETPLACES] = _MARKETPLACES_JSON
+    runner = FakeCliRunner(available=True, fail=PluginUninstallFailed("ghost@npm", "not found"))
+    svc = _make_svc(store, audit_svc, cli_runner=runner)
+
+    with pytest.raises(PluginNotFound):
+        await svc.uninstall(_CC_UID, "never-installed@npm", actor="cli")
+
+    assert runner.calls == []
+    assert store._writes == []
+    entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_UNINSTALLED.value)
+    assert entries == []
+
+
+async def test_uninstall_claude_unparseable_inventory_lets_the_cli_decide(store, audit_svc):
+    """When Claude's inventory cannot be parsed the listing is empty — that is
+    "unknown", not "not installed". The pre-check steps aside and the CLI
+    (which reads its own files) decides, instead of a false 404."""
+    store._files[_CLAUDE_INSTALLED] = "{ not json"
+    runner = FakeCliRunner(available=True)
+    svc = _make_svc(store, audit_svc, cli_runner=runner)
+
+    await svc.uninstall(_CC_UID, "plugin-a@npm", actor="cli")
+
+    assert runner.calls == ["plugin-a@npm"]
+    assert store._writes == []
+    entries = await audit_svc.query(event_type=AuditEventType.AGENT_PLUGIN_UNINSTALLED.value)
+    assert [e.details for e in entries] == [
+        {"plugin": "plugin-a@npm", "cache_removed": True, "via": "cli"}
+    ]
+
+
 async def test_uninstall_claude_without_cli_runner_rejected(store, audit_svc):
     # No runner wired → uninstall is unavailable (the listing hides the button).
     svc = _make_svc(store, audit_svc)
@@ -647,6 +682,8 @@ async def test_uninstall_claude_cli_unavailable_rejected(store, audit_svc):
 
 
 async def test_uninstall_claude_cli_failure_propagates(store, audit_svc):
+    # plugin-a is installed, so the id check passes and the CLI itself fails.
+    store._files[_CLAUDE_INSTALLED] = _INSTALLED_JSON
     runner = FakeCliRunner(available=True, fail=PluginUninstallFailed("plugin-a@npm", "boom"))
     svc = _make_svc(store, audit_svc, cli_runner=runner)
     with pytest.raises(PluginUninstallFailed):

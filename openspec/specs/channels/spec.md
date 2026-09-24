@@ -126,6 +126,13 @@ pairing again rebinds the channel to the new sender.
 - **WHEN** a sender submits a wrong guess repeatedly or the code has expired
 - **THEN** pairing fails, the sender gets no reply, and the code is invalidated
 
+#### Scenario: pairing from another account replaces the owner
+- **GIVEN** a channel paired to one sender, who has also addressed the bot in a group
+- **WHEN** a new code is issued and a different sender messages the bot with it
+- **THEN** the previous sender's direct and group pairings are removed, and their direct messages get no response
+- **AND** a notification that names no chat goes to the new sender's direct chat
+- **AND** in a group, an @mention from the new sender is answered while one from the previous sender is refused
+
 ### Requirement: Route the owner's messages into a turn-platform conversation
 Inbound text from the paired peer MUST route to the peer's active conversation,
 creating one on first use via the turn platform's standard

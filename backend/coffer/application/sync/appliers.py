@@ -21,6 +21,7 @@ the rest.
 from __future__ import annotations
 
 import asyncio
+import logging
 import pathlib
 from collections.abc import Collection, Sequence
 
@@ -29,6 +30,8 @@ from coffer.application.sync.ports import CredentialSyncPort, SyncedStatePort
 from coffer.domain.sync.errors import SyncSerializationError
 from coffer.domain.sync.fernet_time import is_fresher
 from coffer.domain.sync.portability import expand_home
+
+_logger = logging.getLogger(__name__)
 
 
 class TreeApplier:
@@ -186,3 +189,19 @@ class CredentialApplier:
 
     def _ref(self, path: str) -> str:
         return path[len(self.prefix) :].removesuffix(".enc")
+
+
+async def locked_refs(credentials: CredentialSyncPort) -> tuple[str, ...]:
+    """The refs this machine holds ciphertext for but cannot open, or none.
+
+    Asked after a round's apply, so it must not be able to take the round down:
+    the vault has already changed, and a failure escaping here (a busy database)
+    would leave that change with no recorded run. It is a report, so a failure
+    reports nothing and says so in the log (spec vault-sync "Report refs without
+    a key as locked").
+    """
+    try:
+        return tuple(await asyncio.to_thread(credentials.locked_refs))
+    except Exception:
+        _logger.warning("sync.locked_refs_failed", exc_info=True)
+        return ()

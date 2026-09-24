@@ -67,8 +67,9 @@ def _agent_resource(config_dir: pathlib.Path, *, agent_type: str = "claude_code"
 class _FakeActiveConnection:
     """The provider kind narrowed to the one question the catalogue asks it.
 
-    ``None`` = no active connection reaches this agent; ``[]`` = one is active
-    but curates nothing; a list = exactly the ids ticked on its detail page.
+    ``None`` = no restriction (no active connection reaches this agent, or one
+    does but curates nothing); a list = exactly the ``text`` ids ticked on its
+    detail page — ``[]`` when it curates only non-text models.
     """
 
     def __init__(self, curated: list[str] | None) -> None:
@@ -315,24 +316,29 @@ def test_an_id_the_agent_also_knows_keeps_its_reasoning_levels(tmp_path: pathlib
     spec="provider-switching",
     scenario="every surface offers the same models",
 )
-def test_a_connection_that_curates_nothing_falls_back_to_the_agents_catalogue(
+def test_a_connection_with_no_text_model_offers_nothing_not_the_agents_catalogue(
     tmp_path: pathlib.Path,
 ) -> None:
-    """``[]`` means "no restriction": Coffer knows where the turns go, not what
-    that endpoint serves, and this read must not ask over the network."""
+    """``[]`` is a connection that curates something but nothing ``text``: the
+    turns go to that endpoint, so the agent's own ids are still absent and the
+    picker offers no chat model at all (spec provider-switching "Offer only
+    text models to chat pickers"). "No restriction" is ``None`` — the test
+    below."""
     agents = _claude_agent_with_own_model(tmp_path)
 
     set_active_token(_TOKEN)
     with TestClient(_build_app(agents, curated=[])) as client:
         resp = client.get("/api/v1/agent-providers/claude_code/models", headers=_HEADERS)
 
-    assert [m["id"] for m in resp.json()["models"]] == ["claude-fable-5-1[1m]"]
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["models"] == []
 
 
 def test_with_no_active_connection_the_agents_own_catalogue_is_the_list(
     tmp_path: pathlib.Path,
 ) -> None:
-    """The built-in-login case, unchanged."""
+    """The built-in-login case — and a connection that curates nothing, which
+    the port reports the same way ("no restriction")."""
     agents = _claude_agent_with_own_model(tmp_path)
 
     set_active_token(_TOKEN)

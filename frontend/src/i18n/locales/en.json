@@ -987,7 +987,7 @@
     "degradedBadge": "Copied",
     "degradedTooltip": "Symlinks aren't available on this filesystem, so Coffer delivered a copy to at least one agent. Those agents won't see edits to the master skill until it is delivered again.",
     "builtinBadge": "Built-in",
-    "builtinTooltip": "Coffer generates this skill itself and rewrites it at every start, so it can't be edited or deleted here. You can still disable it or narrow which agents it reaches.",
+    "builtinTooltip": "Coffer generates this skill itself and rewrites it at every start, so an edit would not survive: its files are read-only here and it can't be deleted. You can still disable it or narrow which agents it reaches.",
     "builtinDeleteHint": "Coffer manages this skill and rewrites it at every start, so it can't be deleted. Disable it, or narrow its reach, instead.",
     "title": "Skills",
     "subtitle": "AgentSkills-standard folders Coffer manages and delivers to your registered agents.",
@@ -1074,6 +1074,8 @@
         "no_model": "No internal model is configured, so nothing was merged — pending material became documents as it was ({{count}}).",
         "up_to_date": "Nothing is waiting to be merged.",
         "too_large": "That item is too large for one pass to take in.",
+        "truncated": "The curation pass hit its step limit before finishing. What it wrote is kept, and the item will be tried again.",
+        "truncatedGaveUp": "The curation pass hit its step limit for the third time in a row, so Coffer kept the item as it stands and will not run it again.",
         "failed": "The curation pass didn't finish. Nothing was lost — it will be tried again."
       },
       "curatedAt": "Last curated {{when}}",

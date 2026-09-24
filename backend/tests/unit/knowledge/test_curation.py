@@ -217,6 +217,64 @@ async def test_a_loop_that_raises_leaves_the_material_owed(knowledge_root) -> No
     assert fs.inbox_items("shopee") == (name,)
 
 
+class _CutOffLoop(_Loop):
+    """A loop the recursion limit stopped after its scripted tool calls — the
+    shape ``run_agentic_reorg`` returns when it catches ``GraphRecursionError``."""
+
+    async def run(self, **kwargs: Any) -> dict[str, Any]:  # type: ignore[override]
+        await super().run(**kwargs)
+        return {"truncated": True}
+
+
+@pytest.mark.acceptance(
+    spec="knowledge",
+    scenario="a pass cut off by the recursion limit reports it and leaves its item owed",
+)
+@pytest.mark.anyio
+async def test_a_pass_cut_off_by_the_recursion_limit_reports_it_and_leaves_the_material(
+    knowledge_root,
+) -> None:  # type: ignore[no-untyped-def]
+    # Spec knowledge "Bound a pass to eight writes" (MUST report reaching the
+    # recursion limit) and "Settle an item only after its pass completes".
+    name = _material()
+    loop = _CutOffLoop(
+        [("write_document", {"title": "Session", "description": "d", "body": "half of it"})]
+    )
+    outcome = await _run(loop, item=Pending(material=name))
+
+    assert outcome["status"] == "truncated"
+    assert outcome["collection"] == "shopee"
+    assert outcome["item"] == f"shopee/{paths.INBOX_DIR_NAME}/{name}"
+    assert outcome["model"] == "fake-model"
+    assert (outcome["written"], outcome["retired"], outcome["refused"]) == (1, 0, 0)
+    assert outcome["documents_before"] == 0
+    assert outcome["documents_after"] == 1
+    # The write that landed stays, but the item is still owed: the next sweep
+    # hands it back rather than treating the material as absorbed.
+    assert _documents() == ["shopee/session.md"]
+    assert fs.inbox_items("shopee") == (name,)
+    assert pending_items("shopee") == (Pending(material=name),)
+
+
+@pytest.mark.anyio
+async def test_a_cut_off_pass_over_an_edited_document_leaves_it_unstamped(
+    knowledge_root,
+) -> None:  # type: ignore[no-untyped-def]
+    relpath = _document("Login state", body="the old wording")
+    target = paths.resolve(relpath)
+    target.write_text(target.read_text().replace("the old wording", "the new wording"))
+    later = time.time() + 5
+    os.utime(target, (later, later))
+    stamped_before = fs.read_file(relpath).curated_at
+
+    outcome = await _run(_CutOffLoop([]))
+
+    assert outcome["status"] == "truncated"
+    assert outcome["item"] == relpath
+    assert fs.read_file(relpath).curated_at == stamped_before
+    assert pending_items("shopee") == (Pending(document=relpath),)
+
+
 # ----- what the pass does with its item ------------------------------------
 
 
@@ -600,3 +658,127 @@ async def test_a_named_document_must_belong_to_the_collection(knowledge_root) ->
     with pytest.raises(UnsafeKnowledgePath):
         await _run(_Loop([]), item=Pending(document="shopee/README.md"))
     assert fs.read_file(elsewhere).curated_at == ""
+
+
+@pytest.mark.anyio
+async def test_a_cut_off_pass_that_wrote_documents_still_rerenders_the_catalogue(
+    knowledge_root,
+) -> None:  # type: ignore[no-untyped-def]
+    from coffer.application.knowledge.curate import CurationPass
+
+    name = _material()
+    rerendered: list[bool] = []
+
+    async def on_changed() -> None:
+        rerendered.append(True)
+
+    pass_ = CurationPass(
+        agent=_CutOffLoop(
+            [("write_document", {"title": "Session", "description": "d", "body": "b"})]
+        ),
+        models=_Model(),
+        credential_resolver=lambda ref: "key",
+        on_corpus_changed=on_changed,
+    )
+    outcome = await pass_(_service(), _SHOPEE_UID, item=Pending(material=name))
+
+    assert outcome["status"] == "truncated"
+    # The write that landed is a new document an agent must be told about.
+    assert rerendered == [True]
+
+
+# ----- an item the recursion limit cuts off every time ---------------------
+
+
+def _cut_off_pass(loop: _Loop) -> Any:
+    from coffer.application.knowledge.curate import CurationPass
+
+    return CurationPass(agent=loop, models=_Model(), credential_resolver=lambda ref: "key")
+
+
+@pytest.mark.acceptance(
+    spec="knowledge",
+    scenario="a pass cut off by the recursion limit reports it and leaves its item owed",
+)
+@pytest.mark.anyio
+async def test_material_cut_off_three_times_running_is_promoted_and_reported(
+    knowledge_root,
+) -> None:  # type: ignore[no-untyped-def]
+    # A pass over an item too big for the recursion limit is cut off the same
+    # way every time. Re-offered forever it would burn a model pass every sweep;
+    # after three consecutive cut-offs the item is settled — material promoted
+    # as it stands, so nothing it held is lost — and the report says so.
+    from coffer.application.knowledge.curate_settle import MAX_CONSECUTIVE_TRUNCATIONS
+
+    assert MAX_CONSECUTIVE_TRUNCATIONS == 3
+    name = _material(title="Huge", body="every fact in the huge upload")
+    pass_ = _cut_off_pass(
+        _CutOffLoop([("write_document", {"title": "Part", "description": "d", "body": "half"})])
+    )
+
+    first = await pass_(_service(), _SHOPEE_UID)
+    second = await pass_(_service(), _SHOPEE_UID)
+    assert [first["status"], second["status"]] == ["truncated", "truncated"]
+    assert [first["gave_up"], second["gave_up"]] == [False, False]
+    assert fs.inbox_items("shopee") == (name,)
+
+    third = await pass_(_service(), _SHOPEE_UID)
+    assert third["status"] == "truncated"
+    assert third["gave_up"] is True
+    assert third["promoted"] == ["shopee/huge.md"]
+    assert fs.inbox_items("shopee") == ()
+    promoted = fs.read_file("shopee/huge.md")
+    assert promoted.body.strip() == "every fact in the huge upload"
+    assert promoted.curated_at != ""
+    # Settled: nothing is offered again.
+    assert pending_items("shopee") == ()
+    assert (await pass_(_service(), _SHOPEE_UID))["status"] == "up_to_date"
+
+
+@pytest.mark.anyio
+async def test_an_edited_document_cut_off_three_times_running_is_stamped(
+    knowledge_root,
+) -> None:  # type: ignore[no-untyped-def]
+    relpath = _document("Login state", body="the old wording")
+    target = paths.resolve(relpath)
+    target.write_text(target.read_text().replace("the old wording", "the new wording"))
+    later = time.time() + 5
+    os.utime(target, (later, later))
+    pass_ = _cut_off_pass(_CutOffLoop([]))
+
+    outcomes = [await pass_(_service(), _SHOPEE_UID) for _ in range(3)]
+
+    assert [o["gave_up"] for o in outcomes] == [False, False, True]
+    assert outcomes[2]["promoted"] == []
+    assert fs.read_file(relpath).body.strip() == "the new wording"
+    assert pending_items("shopee") == ()
+
+
+@pytest.mark.anyio
+async def test_a_completed_pass_resets_the_cut_off_count(knowledge_root) -> None:  # type: ignore[no-untyped-def]
+    # Consecutive: two cut-offs, then a pass over the same document that
+    # completes, then two more cut-offs are not a third strike.
+    relpath = _document("Login state", body="v1")
+    target = paths.resolve(relpath)
+
+    def edit(old: str, new: str, offset: float) -> None:
+        target.write_text(target.read_text().replace(old, new))
+        os.utime(target, (time.time() + offset, time.time() + offset))
+
+    class _Scripted(_Loop):
+        def __init__(self, truncs: list[bool]) -> None:
+            super().__init__([])
+            self._truncs = truncs
+
+        async def run(self, **kwargs: Any) -> dict[str, Any]:  # type: ignore[override]
+            await super().run(**kwargs)
+            return {"truncated": self._truncs.pop(0)}
+
+    pass_ = _cut_off_pass(_Scripted([True, True, False, True, True]))
+    edit("v1", "v2", 5)
+    statuses = [(await pass_(_service(), _SHOPEE_UID))["status"] for _ in range(3)]
+    assert statuses == ["truncated", "truncated", "ok"]
+    edit("v2", "v3", 10)
+    later = [await pass_(_service(), _SHOPEE_UID) for _ in range(2)]
+    assert [o["gave_up"] for o in later] == [False, False]
+    assert pending_items("shopee") == (Pending(document=relpath),)

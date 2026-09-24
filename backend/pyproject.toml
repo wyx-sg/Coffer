@@ -168,7 +168,7 @@ type = "forbidden"
 source_modules = ["coffer.infrastructure"]
 forbidden_modules = ["coffer.surfaces"]
 
-# Contract 2b (CODE-005): application code depends only on ports it defines
+# Contract 2b: application code depends only on ports it defines
 # (Protocols in application/*); it must not import infrastructure directly.
 # Concrete infrastructure adapters are wired at composition root.
 #

@@ -89,12 +89,20 @@ class FakeCodexAppServer:
         thread_id: str = "thread-1",
         turn_id: str = "turn-1",
         frames: list[_Frame] | None = None,
+        fail_methods: set[str] | None = None,
+        die_on_methods: set[str] | None = None,
     ) -> None:
         self.client_to_server = _FakePipe()  # adapter -> peer
         self.server_to_client = _FakePipe()  # peer -> adapter
         self._thread_id = thread_id
         self._turn_id = turn_id
         self._frames = frames or []
+        # Requests answered with a JSON-RPC error instead of a result (e.g. a
+        # ``thread/resume`` naming a thread this app-server has forgotten).
+        self._fail_methods = fail_methods or set()
+        # Requests on which the peer process "dies": its stdout closes with no
+        # reply, the transport failure a crashed app-server produces.
+        self._die_on_methods = die_on_methods or set()
         # Observed client requests, for assertions.
         self.requests: list[tuple[str, dict[str, Any]]] = []
         self._task: asyncio.Task[None] | None = None
@@ -149,6 +157,18 @@ class FakeCodexAppServer:
         self, method: str, req_id: int, params: dict[str, Any]
     ) -> None:
         self.requests.append((method, params))
+        if method in self._die_on_methods:
+            self.server_to_client.close()
+            return
+        if method in self._fail_methods:
+            await self._send(
+                {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "error": {"code": -32600, "message": f"{method} failed: no such thread"},
+                }
+            )
+            return
         if method == "initialize":
             result: dict[str, Any] = {
                 "userAgent": "codex/0.125.0 fake",
@@ -405,6 +425,135 @@ async def test_resume_uses_thread_resume_with_thread_id():
     assert "thread/start" not in methods
     resume_params = next(p for m, p in server.requests if m == "thread/resume")
     assert resume_params["threadId"] == "thread-existing"
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="a resume id the agent has forgotten retries once as a fresh session",
+)
+async def test_forgotten_resume_id_retries_once_as_a_fresh_thread():
+    saved: list[str] = []
+
+    async def on_session(sid: str) -> None:
+        saved.append(sid)
+
+    server = FakeCodexAppServer(frames=_basic_frames(), fail_methods={"thread/resume"})
+    factory = _Factory(server)
+    adapter = _adapter(factory, on_session=on_session, resume="poisoned-thread-id")
+    events = await asyncio.wait_for(_collect(adapter, _user_turn("hi")), timeout=5)
+
+    # Resume tried first with the stored id, then exactly one fresh thread.
+    methods = [m for m, _ in server.requests]
+    assert methods[:4] == ["initialize", "thread/resume", "thread/start", "turn/start"]
+    resume_params = next(p for m, p in server.requests if m == "thread/resume")
+    assert resume_params["threadId"] == "poisoned-thread-id"
+    start_params = next(p for m, p in server.requests if m == "thread/start")
+    assert "threadId" not in start_params
+    # The turn ran on the fresh thread and recovered.
+    turn_params = next(p for m, p in server.requests if m == "turn/start")
+    assert turn_params["threadId"] == "thread-1"
+    assert [e.text for e in events if isinstance(e, TextDelta)] == ["Hello"]
+    assert not any(isinstance(e, TurnError) for e in events)
+    assert isinstance(events[-1], TurnDone)
+    # The fresh thread id replaces the forgotten one.
+    assert saved == ["thread-1"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="chat",
+    scenario="a resume id the agent has forgotten retries once as a fresh session",
+)
+async def test_fresh_thread_failing_after_a_forgotten_resume_is_a_turn_error():
+    saved: list[str] = []
+
+    async def on_session(sid: str) -> None:
+        saved.append(sid)
+
+    server = FakeCodexAppServer(
+        frames=_basic_frames(), fail_methods={"thread/resume", "thread/start"}
+    )
+    adapter = _adapter(_Factory(server), on_session=on_session, resume="poisoned-thread-id")
+    events = await asyncio.wait_for(_collect(adapter, _user_turn("hi")), timeout=5)
+
+    # One retry only, then the second failure is the turn's error.
+    methods = [m for m, _ in server.requests]
+    assert methods == ["initialize", "thread/resume", "thread/start"]
+    errs = [e for e in events if isinstance(e, TurnError)]
+    assert len(errs) == 1
+    assert errs[0].code == "codex_connect_error"
+    assert "thread/start failed" in errs[0].message
+    assert events[-1] is errs[0]
+    assert saved == []
+
+
+@pytest.mark.asyncio
+async def test_resume_lost_to_process_death_is_a_turn_error_not_a_fresh_thread():
+    """Only a JSON-RPC error response means "unknown thread". The app-server
+    dying mid-resume is a transport failure: the stored thread may be fine, so
+    a fresh thread must not replace it (its context would be lost silently).
+    """
+    saved: list[str] = []
+
+    async def on_session(sid: str) -> None:
+        saved.append(sid)
+
+    server = FakeCodexAppServer(frames=_basic_frames(), die_on_methods={"thread/resume"})
+    adapter = _adapter(_Factory(server), on_session=on_session, resume="good-thread-id")
+    events = await asyncio.wait_for(_collect(adapter, _user_turn("hi")), timeout=5)
+
+    assert [m for m, _ in server.requests] == ["initialize", "thread/resume"]
+    errs = [e for e in events if isinstance(e, TurnError)]
+    assert len(errs) == 1
+    assert errs[0].code == "codex_connect_error"
+    assert "stream ended" in errs[0].message
+    assert events[-1] is errs[0]
+    assert saved == []  # the stored session id is left as it was
+
+
+class _TimeoutOnResumeRpc(CodexRpcClient):
+    """An RPC client whose ``thread/resume`` times out instead of answering."""
+
+    async def request(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        if method == "thread/resume":
+            raise TimeoutError("thread/resume timed out")
+        return await super().request(method, params)
+
+
+@pytest.mark.asyncio
+async def test_resume_timeout_is_a_turn_error_not_a_fresh_thread():
+    saved: list[str] = []
+
+    async def on_session(sid: str) -> None:
+        saved.append(sid)
+
+    server = FakeCodexAppServer(frames=_basic_frames())
+    server.make_rpc = lambda: _TimeoutOnResumeRpc(  # type: ignore[method-assign]
+        server.server_to_client, server.client_to_server
+    )
+    adapter = _adapter(_Factory(server), on_session=on_session, resume="good-thread-id")
+    events = await asyncio.wait_for(_collect(adapter, _user_turn("hi")), timeout=5)
+
+    assert "thread/start" not in [m for m, _ in server.requests]
+    errs = [e for e in events if isinstance(e, TurnError)]
+    assert len(errs) == 1
+    assert errs[0].code == "codex_connect_error"
+    assert "timed out" in errs[0].message
+    assert saved == []
+
+
+@pytest.mark.asyncio
+async def test_thread_start_failure_without_resume_is_a_turn_error_not_a_retry():
+    server = FakeCodexAppServer(frames=_basic_frames(), fail_methods={"thread/start"})
+    adapter = _adapter(_Factory(server), resume=None)
+    events = await asyncio.wait_for(_collect(adapter, _user_turn("hi")), timeout=5)
+
+    # No resume to drop → no retry; a single TurnError, not an unhandled raise.
+    assert [m for m, _ in server.requests] == ["initialize", "thread/start"]
+    errs = [e for e in events if isinstance(e, TurnError)]
+    assert len(errs) == 1
+    assert errs[0].code == "codex_connect_error"
 
 
 @pytest.mark.asyncio

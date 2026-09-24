@@ -74,7 +74,7 @@ from coffer.infrastructure.persistence.repos import (
 )
 from coffer.infrastructure.persistence.sync_remote_repo import SqlAlchemySyncRemoteRepo
 from coffer.infrastructure.sync.bundle import Bundle
-from coffer.infrastructure.sync.credentials import CredentialSyncAdapter
+from coffer.infrastructure.sync.credentials import CredentialSyncAdapter, ResolvedMasterKey
 from coffer.infrastructure.sync.git_mirror import GitMirror
 from coffer.infrastructure.sync.paths import non_converging_tree_paths
 
@@ -463,7 +463,10 @@ class VaultMachine:
             audit=self.audit,
             credentials=self.credential_store,
         )
-        self.credentials = CredentialSyncAdapter(self.db_path, self.master_key)
+        # One resolved key shared by the adapter and the service, as the wiring
+        # does, so a key imported through the service is what the adapter reads.
+        self.resolved_key = ResolvedMasterKey(self.master_key)
+        self.credentials = CredentialSyncAdapter(self.db_path, self.resolved_key)
 
         self.bundle = Bundle(
             self.worktree,
@@ -516,6 +519,7 @@ class VaultMachine:
             serialize=self._serialize,
             guard=self._guard,
             branch=BRANCH,
+            credentials=self.credentials,
             post_import=[self.hook],
         )
 
@@ -559,7 +563,7 @@ class VaultMachine:
             set_machine_name=self._rename,
             credentials=CredentialResolver(self.credential_store),
             credential_store=self.credentials,
-            master_key=self.master_key,
+            master_key=self.resolved_key,
             audit=self.audit,
             lock=lock,
             protected_roots=[self.knowledge_root, self.skills_root] if guard_worktree else (),

@@ -272,7 +272,7 @@ class ConvergeService(RemoteMixin, MachinesMixin, HistoryMixin):
         """Rebuild this machine from the remote, discarding local-only documents.
 
         Offered where the publish-side guard holds a round (spec vault-sync
-        ``### Joining a remote``): a vault that lost its files has no other
+        "Tell a new machine from a returning one"): a vault that lost its files has no other
         honest answer, since confirming would publish the loss and rejecting
         would refuse the same round forever. Destructive on purpose, and never
         reached without the user asking for it by name.

@@ -26,6 +26,7 @@ from coffer.domain.errors import (
     AgentConfigDirRegistered,
     ConfigValidationError,
     PrivilegedPath,
+    ResourceNotFound,
     SkillDirNotWritable,
 )
 from coffer.domain.resource import Resource
@@ -84,24 +85,33 @@ def _strip_macos_private(s: str) -> str:
     return s
 
 
-def assert_skill_dir_usable(path: pathlib.Path) -> None:
-    """Raise SkillDirNotWritable / PrivilegedPath if the path can't host skills.
+def assert_not_privileged(path: pathlib.Path) -> None:
+    """Raise PrivilegedPath if ``path`` lies in a privileged system location.
 
-    Allowed: existing directory, writable by current user, not in a privileged
-    system location.
+    Creates nothing, so callers run it before creating anything under the path.
+    On macOS some system roots are accessed via /private/<root>, so we strip
+    that prefix and test both the unresolved-but-expanded path and the fully
+    resolved path against the prefix set using component-boundary matching (so
+    "/var" rejects "/var/run/x" but not "/var-tmp/x").
     """
     resolved = path.expanduser().resolve()
-    # Privileged-path defence. On macOS some system roots are accessed via
-    # /private/<root>, so we strip that prefix and test both the unresolved-
-    # but-expanded path and the fully-resolved path against the prefix set
-    # using component-boundary matching (so "/var" rejects "/var/run/x" but
-    # not "/var-tmp/x").
     unresolved = str(path.expanduser())
     s = str(resolved)
     prefixes = _PRIVILEGED_PREFIXES_WIN if sys.platform == "win32" else _PRIVILEGED_PREFIXES_POSIX
     candidates = (s, unresolved, _strip_macos_private(s), _strip_macos_private(unresolved))
     if any(_is_privileged(c, prefixes) for c in candidates):
         raise PrivilegedPath(s)
+
+
+def assert_skill_dir_usable(path: pathlib.Path) -> None:
+    """Raise SkillDirNotWritable / PrivilegedPath if the path can't host skills.
+
+    Allowed: existing directory, writable by current user, not in a privileged
+    system location.
+    """
+    assert_not_privileged(path)
+    resolved = path.expanduser().resolve()
+    s = str(resolved)
     # Existence + writability. "Validate the config directory at registration" requires
     # the skill_dir itself to be an existing, writable directory — we do NOT silently
     # accept a missing path even if its parent is writable, because skill loading would
@@ -166,18 +176,10 @@ class AgentService:
         # Skills are delivered to <config_dir>/skills. Auto-create the skills/
         # leaf under an EXISTING config dir, then assert it's usable. We refuse
         # to create a missing config dir (a typo'd path must fail, not be
-        # silently materialised).
+        # silently materialised). The one-agent-per-dir check runs first so a
+        # rejected registration touches nothing on disk.
+        await self._assert_config_dir_free(cfg, exclude_uid=None)
         self._ensure_skill_dir(cfg.resolved_config_dir(), cfg.resolved_skill_dir())
-
-        # Dedup by the resolved config dir — one agent per config directory.
-        new_config_dir = str(cfg.resolved_config_dir())
-        for existing in await self._rs.list(kind="agent"):
-            try:
-                existing_cfg = AgentConfig.model_validate(existing.config)
-            except Exception:
-                continue
-            if str(existing_cfg.resolved_config_dir()) == new_config_dir:
-                raise AgentConfigDirRegistered(new_config_dir, existing.name)
 
         registered = await self._rs.register(
             kind="agent",
@@ -185,7 +187,7 @@ class AgentService:
             config=cfg.model_dump(mode="json"),
             description=description,
             actor=actor,
-            allow_lifecycle_kind=True,  # CODE-REG: config dir detected/validated above
+            allow_lifecycle_kind=True,  # creation seam: config dir detected/validated above
         )
         # Deliver everything this agent is granted right now (spec skill-manager
         # "Deliver a skill only where it is enabled and in scope"): every enabled skill
@@ -204,16 +206,35 @@ class AgentService:
         ``/Usrs/me/.claude``) into being, which would silently deliver skills to
         a directory the agent never reads. The Coffer-owned skill subpath under
         it (``skills``) IS auto-created, including intermediate components.
-        ``mkdir`` failures are swallowed — ``assert_skill_dir_usable`` surfaces
-        the precise reason (privileged / not-writable / not-a-directory).
+        A privileged skill dir is refused before the ``mkdir``, so a rejection
+        leaves nothing behind. ``mkdir`` failures are swallowed —
+        ``assert_skill_dir_usable`` surfaces the precise reason (not-writable /
+        not-a-directory).
         """
         if not config_dir.is_dir():
             raise SkillDirNotWritable(str(config_dir), "directory_missing")
+        # Refuse a privileged location BEFORE creating anything in it (spec
+        # agent-registry "Validate the config directory at registration").
+        assert_not_privileged(skill_dir)
         with contextlib.suppress(OSError):
             # parents=True creates nested subpaths but never the config_dir
             # itself — that's guarded above.
             skill_dir.mkdir(parents=True, exist_ok=True)
         assert_skill_dir_usable(skill_dir)
+
+    async def _assert_config_dir_free(self, cfg: AgentConfig, *, exclude_uid: str | None) -> None:
+        """One agent per resolved config dir (spec agent-registry "Allow one agent
+        per name and per config directory") — on register and on every move."""
+        wanted = str(cfg.resolved_config_dir())
+        for existing in await self._rs.list(kind="agent"):
+            if existing.uid == exclude_uid:
+                continue
+            try:
+                existing_cfg = AgentConfig.model_validate(existing.config)
+            except Exception:
+                continue
+            if str(existing_cfg.resolved_config_dir()) == wanted:
+                raise AgentConfigDirRegistered(wanted, existing.name)
 
     async def list(self) -> list[Resource]:
         return await self._rs.list(kind="agent")
@@ -223,9 +244,13 @@ class AgentService:
 
         Every caller inside the daemon holds a uid — the surfaces resolve the
         name a human typed once, at the edge, through
-        ``ResourceService.get_by_name``. Raises ``ResourceNotFound`` (→ 404).
+        ``ResourceService.get_by_name``. Raises ``ResourceNotFound`` (→ 404),
+        also for a uid another kind minted: a skill's uid is not an agent.
         """
-        return await self._rs.get(uid)
+        resource = await self._rs.get(uid)
+        if resource.kind != "agent":
+            raise ResourceNotFound(uid)
+        return resource
 
     async def update_config_dir(
         self,
@@ -253,13 +278,14 @@ class AgentService:
         # fail because the existing dir has become non-writable since register.
         dir_changed = new_cfg.resolved_config_dir() != cfg.resolved_config_dir()
         if dir_changed:
+            await self._assert_config_dir_free(new_cfg, exclude_uid=uid)
             self._ensure_skill_dir(new_cfg.resolved_config_dir(), new_cfg.resolved_skill_dir())
         updated = await self._rs.update_config(
             uid,
             new_config=new_cfg.model_dump(mode="json"),
             actor=actor,
             description=description,
-            allow_lifecycle_kind=True,  # CODE-REG: config dir validated above
+            allow_lifecycle_kind=True,  # creation seam: config dir validated above
         )
         # Re-deliver skills to the new location (remove old links, recreate at
         # <new_config_dir>/skills). Runs AFTER the row is updated so the hook
@@ -279,12 +305,12 @@ class AgentService:
         wire_api: str | None = None,
         actor: str = "api",
     ) -> Resource:
-        """Persist this agent's per-agent model binding (spec provider-switching amendment
-        2026-06-22b E3). ``None`` fields are left unchanged; ``clear_fast_model``
-        explicitly removes the fast slot. The new model takes effect on disk the
-        next time the agent's connection is (re-)activated — the caller re-runs
-        ``activate`` to re-project, mirroring how the connection-model PATCH
-        worked before."""
+        """Persist this agent's per-agent model binding (spec provider-switching
+        "Take projected model keys from the agent's binding"). ``None`` fields are
+        left unchanged; ``clear_fast_model`` explicitly removes the fast slot. The
+        new model takes effect on disk the next time the agent's connection is
+        (re-)activated — the caller re-runs ``activate`` to re-project, mirroring
+        how the connection-model PATCH worked before."""
         existing = await self.get(uid)
         cfg = AgentConfig.model_validate(existing.config)
         overrides: dict[str, object] = {}
@@ -306,11 +332,13 @@ class AgentService:
             uid,
             new_config=new_cfg.model_dump(mode="json"),
             actor=actor,
-            allow_lifecycle_kind=True,  # CODE-REG: value-level binding change only
+            allow_lifecycle_kind=True,  # creation seam: value-level binding change only
         )
 
     async def remove(self, *, uid: str, actor: str = "api") -> None:
         # A removal is never permanent: detection is discovery-only, so the
         # next scan re-surfaces this agent as a candidate. We simply delete
         # the resource row (the generic ResourceService audits the deletion).
+        # Through ``get`` first, so a non-agent uid is a 404, never a deletion.
+        await self.get(uid)
         await self._rs.delete(uid, actor=actor)
