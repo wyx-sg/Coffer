@@ -261,3 +261,62 @@ async def test_curation_is_skipped_while_a_conflict_or_confirmation_is_outstandi
         )
     )
     assert await curation_may_run(config, wiring) is False
+
+
+class _OwnedElsewhere:
+    """Curation on, owned by a machine that is not this one."""
+
+    async def get(self):
+        from coffer.domain.internal_engine_config import GlobalInternalEngineConfig
+
+        return GlobalInternalEngineConfig(
+            model="m",
+            updated_at=datetime.now(tz=UTC),
+            auto_curate_enabled=True,
+            curate_owner_machine_id="another-machine",
+        )
+
+
+class _CurationOff:
+    async def get(self):
+        from coffer.domain.internal_engine_config import GlobalInternalEngineConfig
+
+        return GlobalInternalEngineConfig(
+            model="m", updated_at=datetime.now(tz=UTC), auto_curate_enabled=False
+        )
+
+
+@pytest.mark.acceptance(
+    spec="experimental-features",
+    scenario="curation does not wait on sync while vault sync is off",
+)
+async def test_curation_does_not_wait_on_sync_while_vault_sync_is_off(pair) -> None:
+    """Spec experimental-features: while ``vault_sync`` is off the vault is a
+    single-machine one. An owner elsewhere and an unresolved round are both
+    sync state the user cannot reach with sync closed, so neither may stall
+    curation; the pass's own switch still decides."""
+    from coffer.surfaces.http.curation_wiring import curation_may_run
+    from coffer.surfaces.http.sync_wiring import SyncWiring
+
+    a, b = pair
+    a.write_knowledge("notes", "shared", "original\n")
+    await settle(a, b)
+    await b.remote_config()
+    service = b.service()
+    wiring = SyncWiring(service=service, registry=b.registry, state=cast(Any, b.state))
+
+    owned = cast(Any, _OwnedElsewhere())
+    assert await curation_may_run(owned, wiring) is False
+    assert await curation_may_run(owned, wiring, sync_on=False) is True
+
+    a.write_knowledge("notes", "shared", "A's version\n")
+    b.write_knowledge("notes", "shared", "B's version\n")
+    await a.converge()
+    b.resolver.enabled = False
+    run = await service.run_once()
+    assert run.status is ConvergeStatus.CONFLICT
+    config = cast(Any, _EngineConfig())
+    assert await curation_may_run(config, wiring) is False
+    assert await curation_may_run(config, wiring, sync_on=False) is True
+
+    assert await curation_may_run(cast(Any, _CurationOff()), wiring, sync_on=False) is False

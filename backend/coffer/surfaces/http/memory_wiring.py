@@ -52,7 +52,10 @@ from coffer.application.memory.aggregate import AgentSource
 from coffer.application.memory.aggregate_worker import AggregateWorker
 from coffer.application.memory.builtin_recall_tool import register_recall_tool
 from coffer.application.memory.delivery import DeliveryService
-from coffer.application.memory.delivery_switch import reconcile_delivery
+from coffer.application.memory.delivery_switch import (
+    memory_switch_subscriber,
+    reconcile_delivery,
+)
 from coffer.application.memory.distil import DistilResult
 from coffer.application.memory.distil_worker import WORKER_ACTOR, DistilWorker
 from coffer.application.memory.kind import make_memory_kind
@@ -132,13 +135,13 @@ async def run_memory_delivery_boot_heal(
 
 
 def follow_memory_switch(delivery: DeliveryService, features: FeatureService) -> None:
-    """Re-run the delivery reconcile whenever ``memory`` is switched."""
+    """Re-run the delivery reconcile whenever ``memory`` is switched, to the
+    state ``memory`` is in when it runs."""
 
-    async def _on_switch(key: str, enabled: bool) -> None:
-        if key == "memory":
-            await _reconcile_delivery(delivery, enabled=enabled)
+    async def _reconcile(enabled: bool) -> None:
+        await _reconcile_delivery(delivery, enabled=enabled)
 
-    features.subscribe(_on_switch)
+    features.subscribe(memory_switch_subscriber(features, _reconcile))
 
 
 async def _reconcile_delivery(delivery: DeliveryService, *, enabled: bool) -> None:

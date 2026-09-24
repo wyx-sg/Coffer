@@ -15,7 +15,9 @@ model reaches for it. So the handshake's job is narrower now: say what Coffer
 is, name its tools so they are recognisable when they appear in a tool list,
 and point at the skill for everything else.
 
-"Name its tools" means all four of them, unconditionally. The escape hatch
+"Name its tools" means every one the session's tool list carries — all four
+while every experimental feature is on, never one a switched-off feature took
+out of the list. The escape hatch
 ``coffer__search_tools`` used to be named only in the tiering paragraph, so a
 session with nothing hidden was never told the hatch existed — and a later
 session, whose tool list had in fact been trimmed, had no earlier mention to
@@ -28,6 +30,7 @@ keeps the handshake to session bookkeeping and stays under its LOC ceiling.
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from typing import Any
 
 MAX_INSTRUCTIONS_CHARS = 800
@@ -54,21 +57,45 @@ NAMED_TOOLS: frozenset[str] = frozenset(
     }
 )
 
-# Every built-in tool is NAMED here, including the escape hatch: the name is
-# what makes a tool recognisable in a tool list, and that is true in every
-# session. What is conditional is the *claim* that something is hidden right
-# now — that lives in ``_TIERED`` and is only ever true when it is.
-_BASE = (
+#: Each built-in tool's name as the handshake gives it, with its gloss, in the
+#: order the text names them. A tool is named only while it is in the tool list
+#: — ``coffer__write`` leaves with the ``knowledge`` feature, ``coffer__recall``
+#: with ``memory`` (spec experimental-features "Close every surface of a
+#: switched-off feature") — and a text naming a tool the gateway then answers
+#: as unknown is the one thing this text must never do.
+_TOOL_GLOSSES: tuple[tuple[str, str], ...] = (
+    ("write", "file a durable fact about this environment"),
+    ("recall", "locate Coffer's distilled notes"),
+    ("diagnose", "Coffer's own logs"),
+    (
+        "search_tools",
+        "describe an upstream tool you want in plain language; whatever comes "
+        "back is callable by name",
+    ),
+)
+
+_INTRO = (
     "Coffer is this machine's local vault: it aggregates the user's MCP servers "
     "behind one endpoint, holds what this developer has written down, and adds "
-    "its own tools — coffer__write (file a durable fact about this environment), "
-    "coffer__recall (locate Coffer's distilled notes), coffer__diagnose (Coffer's "
-    "own logs), coffer__search_tools (describe an upstream tool you want in plain "
-    "language; whatever comes back is callable by name). Its knowledge is markdown "
-    "you read with your own file tools. The coffer-guide skill is the manual: load "
-    "it for the catalogue of what is there, with paths, before asking the "
-    "developer something they may already have written down."
+    "its own tools — "
 )
+
+_PLAIN_INTRO = (
+    "Coffer is this machine's local vault: it aggregates the user's MCP servers "
+    "behind one endpoint and adds its own tools — "
+)
+
+#: The knowledge sentences are said only while the knowledge layer is there
+#: (its tool ``coffer__write`` is listed): the skill then carries a catalogue
+#: with paths.
+_KNOWLEDGE_OUTRO = (
+    ". Its knowledge is markdown you read with your own file tools. The "
+    "coffer-guide skill is the manual: load it for the catalogue of what is "
+    "there, with paths, before asking the developer something they may already "
+    "have written down."
+)
+
+_PLAIN_OUTRO = ". The coffer-guide skill is the manual: load it before relying on these tools."
 
 _TIERED = (
     " Your tool list is a budgeted slice: {n} further upstream tools are not "
@@ -76,8 +103,26 @@ _TIERED = (
 )
 
 
-def build_instructions(*, hidden_count: int) -> str:
+def _base(tools: Collection[str]) -> str:
+    """The unconditional part, naming exactly ``tools`` (bare names)."""
+    named = ", ".join(f"coffer__{name} ({gloss})" for name, gloss in _TOOL_GLOSSES if name in tools)
+    if "write" in tools:
+        return f"{_INTRO}{named}{_KNOWLEDGE_OUTRO}"
+    return f"{_PLAIN_INTRO}{named}{_PLAIN_OUTRO}"
+
+
+#: The text with every built-in listed — what a session with every feature on
+#: is told.
+_BASE = _base(NAMED_TOOLS)
+
+
+def build_instructions(*, hidden_count: int, tools: Collection[str] | None = None) -> str:
     """Build the per-session instructions text.
+
+    ``tools`` is the bare names of the built-ins the session's tool list
+    carries right now (``coffer__search_tools`` is always among them, being
+    the gateway's own); ``None`` means all of them. The text names only those,
+    so a tool whose experimental feature is switched off is never advertised.
 
     ``hidden_count`` is the number of upstream tools the last ``tools/list``
     left unlisted. At 0 nothing is hidden, so the tiering paragraph is omitted
@@ -91,19 +136,21 @@ def build_instructions(*, hidden_count: int) -> str:
     fit and a contract test asserts that it does, at both a 0 and an
     implausibly large ``hidden_count``.
     """
-    text = _BASE
+    text = _BASE if tools is None else _base({*tools, "search_tools"})
     if hidden_count > 0:
         text += _TIERED.format(n=hidden_count)
     return text[:MAX_INSTRUCTIONS_CHARS]
 
 
-def build_initialize_result(*, hidden_count: int) -> dict[str, Any]:
-    """The ``initialize`` response body."""
+def build_initialize_result(
+    *, hidden_count: int, tools: Collection[str] | None = None
+) -> dict[str, Any]:
+    """The ``initialize`` response body. ``tools`` as for :func:`build_instructions`."""
     return {
         "protocolVersion": PROTOCOL_VERSION,
         "capabilities": SERVER_CAPABILITIES,
         "serverInfo": {"name": "coffer", "version": "0.1.0"},
-        "instructions": build_instructions(hidden_count=hidden_count),
+        "instructions": build_instructions(hidden_count=hidden_count, tools=tools),
     }
 
 

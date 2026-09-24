@@ -17,13 +17,13 @@ resource-identity-is-an-immutable-uid). The only name a caller supplies is
 ``path``, inside an already-identified partition, which is a filesystem path
 and nothing else.
 
-Four route modules, one router. They are split by *subject*, not by size:
+Four route modules, mounted in order. They are split by *subject*, not by size:
 ``partition_routes`` owns the list and the two passes that rewrite the tree,
 ``note_routes`` and ``file_routes`` are the two read families over one
 partition, and ``delivery_routes`` is the only one whose subject is an agent
 rather than a partition. Each declares the same prefix, tags and token
-dependency — as ``surfaces/http/mcp/``'s modules do — and the aggregate below
-carries none of its own, so no path moves by being mounted here.
+dependency — as ``surfaces/http/mcp/``'s modules do — so each one's prefix
+alone tells ``routing`` which experimental feature gates it.
 """
 
 from fastapi import APIRouter
@@ -33,10 +33,11 @@ from coffer.surfaces.http.memory.file_routes import router as _file_router
 from coffer.surfaces.http.memory.note_routes import router as _note_router
 from coffer.surfaces.http.memory.partition_routes import router as _partition_router
 
-router = APIRouter()
-router.include_router(_partition_router)
-router.include_router(_note_router)
-router.include_router(_file_router)
-router.include_router(_delivery_router)
+routers: tuple[APIRouter, ...] = (
+    _partition_router,
+    _note_router,
+    _file_router,
+    _delivery_router,
+)
 
-__all__ = ["router"]
+__all__ = ["routers"]

@@ -30,43 +30,36 @@ FeatureSource = Literal["pin", "setting", "channel"]
 
 @dataclass(frozen=True)
 class ExperimentalFeature:
-    """One registered feature, and the surfaces it closes while it is off.
+    """One registered feature, and what of the daemon it owns.
 
-    The surface lists are what the gates key on, so a gate never spells a
-    prefix or a group name of its own.
+    The HTTP gates key on these, so no gate spells a prefix or a kind of its
+    own: ``surfaces.http.routing`` puts a router behind the feature whose
+    prefix its paths sit under, and the kind-agnostic resource routes refuse a
+    resource whose kind a switched-off feature owns. The CLI needs no entry
+    here — its commands reach the daemon over those routes and print the
+    ``FEATURE_DISABLED`` answer — and neither does the web UI, which reads each
+    feature's state off the daemon status.
     """
 
     key: str
-    #: REST path prefixes whose routers answer 404 ``FEATURE_DISABLED`` while off.
+    #: REST path prefixes whose routes answer 404 ``FEATURE_DISABLED`` while off.
     route_prefixes: tuple[str, ...]
-    #: Top-level ``coffer`` CLI groups the feature owns.
-    cli_groups: tuple[str, ...]
-    #: Web UI routes (sidebar entries and pages) the feature owns.
-    web_routes: tuple[str, ...]
+    #: Resource kinds the feature owns: while it is off, the kind-agnostic
+    #: resource routes answer 404 ``FEATURE_DISABLED`` for them and leave their
+    #: rows out of a list.
+    kinds: tuple[str, ...] = ()
 
 
 EXPERIMENTAL_FEATURES: tuple[ExperimentalFeature, ...] = (
+    ExperimentalFeature(key="vault_sync", route_prefixes=("/api/v1/sync",)),
     ExperimentalFeature(
-        key="vault_sync",
-        route_prefixes=("/api/v1/sync",),
-        cli_groups=("sync",),
-        web_routes=("/sync",),
+        key="knowledge", route_prefixes=("/api/v1/knowledge",), kinds=("knowledge",)
     ),
-    ExperimentalFeature(
-        key="knowledge",
-        route_prefixes=("/api/v1/knowledge",),
-        cli_groups=("knowledge",),
-        web_routes=("/knowledge",),
-    ),
-    ExperimentalFeature(
-        key="memory",
-        route_prefixes=("/api/v1/memory",),
-        cli_groups=("memory",),
-        web_routes=("/memory",),
-    ),
+    ExperimentalFeature(key="memory", route_prefixes=("/api/v1/memory",), kinds=("memory",)),
 )
 
 _BY_KEY: dict[str, ExperimentalFeature] = {f.key: f for f in EXPERIMENTAL_FEATURES}
+_BY_KIND: dict[str, str] = {kind: f.key for f in EXPERIMENTAL_FEATURES for kind in f.kinds}
 
 
 def feature_keys() -> tuple[str, ...]:
@@ -84,6 +77,21 @@ def get_feature(key: str) -> ExperimentalFeature:
         return _BY_KEY[key]
     except KeyError:
         raise FeatureUnknown(key) from None
+
+
+def feature_for_kind(kind: str) -> str | None:
+    """The feature that owns resource kind ``kind``, or ``None`` for a kind
+    that is always there."""
+    return _BY_KIND.get(kind)
+
+
+def feature_for_path(path: str) -> str | None:
+    """The feature whose route prefixes ``path`` sits under, or ``None``."""
+    for feature in EXPERIMENTAL_FEATURES:
+        for prefix in feature.route_prefixes:
+            if path == prefix or path.startswith(prefix + "/"):
+                return feature.key
+    return None
 
 
 def channel_default(channel: Channel) -> bool:

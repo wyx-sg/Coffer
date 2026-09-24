@@ -66,6 +66,11 @@ paths:
             resource: it is how a surface that started from what a human typed
             — the CLI — turns that into the uid every other route takes.
           schema: { type: string }
+      description: |
+        Rows of a kind whose experimental feature is switched off on this
+        machine (`knowledge`, `memory`) are left out; naming such a kind in
+        `kind` answers 404 `FEATURE_DISABLED` (spec experimental-features
+        "Close every surface of a switched-off feature").
       responses:
         "200":
           description: OK
@@ -73,6 +78,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ResourceListOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
     post:
       tags: [resources]
       operationId: registerResource
@@ -82,7 +88,8 @@ paths:
         route is accepted here. A kind owning a creation invariant beyond
         config validation — a skill's master folder, an agent's on-disk
         detection — is registered through its own surface instead, which is
-        the only place that invariant can be held.
+        the only place that invariant can be held. A kind whose experimental
+        feature is switched off answers 404 `FEATURE_DISABLED`.
       requestBody:
         required: true
         content:
@@ -96,6 +103,7 @@ paths:
               schema: { $ref: "#/components/schemas/ResourceOut" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
 
@@ -387,6 +395,9 @@ paths:
         `POST /knowledge/collections/{uid}/curate`); each refuses a second
         concurrent pass over the same target with `UPKEEP_ALREADY_RUNNING`.
         Whether a pass runs on a timer at all is spec internal-engine's.
+
+        A pass over a kind whose experimental feature is switched off is left
+        out of the list.
       responses:
         "200":
           description: OK
@@ -414,7 +425,10 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }
     NotFound:
-      description: Resource not found
+      description: >-
+        Resource not found (`RESOURCE_NOT_FOUND`), or its kind belongs to an
+        experimental feature switched off on this machine (`FEATURE_DISABLED`,
+        with `details.feature` naming the key).
       content:
         application/json:
           schema: { $ref: "#/components/schemas/ErrorResponse" }

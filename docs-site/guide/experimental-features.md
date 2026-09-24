@@ -57,11 +57,11 @@ While a feature is off, Coffer behaves as if it were not there:
 
 - its entry leaves the sidebar, and opening one of its pages directly shows a notice linking to Settings → General;
 - its commands (`coffer sync`, `coffer knowledge`, `coffer memory`) print one line telling you to run `coffer daemon features enable <key>`, and exit 1;
-- its REST routes answer 404 with the code `FEATURE_DISABLED`;
-- its MCP tools leave the tool list your agents see;
+- its REST routes answer 404 with the code `FEATURE_DISABLED`, and so do the generic `coffer resource` commands and `/api/v1/resources` routes for its collections or partitions, which leave them out of a list;
+- its MCP tools leave the tool list your agents see, and Coffer stops naming them to agents — in the MCP handshake and in the `coffer-guide` skill;
 - its background passes skip their rounds; with sync off the tray has no Sync item.
 
-Switching `memory` off also takes Coffer's memory hook out of every agent it manages, and switching it on puts the hook back. Switching `knowledge` off drops the knowledge catalogue from the `coffer-guide` skill your agents load.
+Switching `memory` off also takes Coffer's memory hook out of every agent it manages, and switching it on puts the hook back. Switching `knowledge` off drops the knowledge catalogue from the `coffer-guide` skill your agents load. With sync off, curation runs as on a single machine: it no longer waits for a curation owner machine or an unresolved sync round.
 
 **Switching off deletes nothing.** Collections, notes, memory files, the sync remote and its history all stay exactly where they are, and switching the feature back on picks up where it stopped. Database migrations run whatever the switches say, so switching a feature on never needs an upgrade step.
 

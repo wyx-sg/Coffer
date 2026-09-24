@@ -19,6 +19,7 @@ switch withdrew and then rewrites stale commands, as the heal always did.
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Protocol
 
 from coffer.application.memory.delivery import DeliveryService
@@ -36,6 +37,33 @@ class WithdrawnDeliveryPort(Protocol):
     def read(self) -> list[str]: ...
 
     def write(self, uids: list[str]) -> None: ...
+
+
+class FeatureStatePort(Protocol):
+    """Reads a feature's state as it is now (``FeatureService`` is one)."""
+
+    def is_enabled(self, key: str) -> bool: ...
+
+
+#: Called with the feature key and the value the switch set it to.
+MemorySwitchSubscriber = Callable[[str, bool], Awaitable[None]]
+
+
+def memory_switch_subscriber(
+    features: FeatureStatePort, reconcile: Callable[[bool], Awaitable[None]]
+) -> MemorySwitchSubscriber:
+    """A feature subscriber that reconciles the hook whenever ``memory`` switches.
+
+    It reconciles to the state ``memory`` is in when it runs, not to the value
+    the switch passed: a subscriber that runs late — after a second switch has
+    already landed — then converges on what is true now instead of undoing it.
+    """
+
+    async def _on_switch(key: str, _enabled: bool) -> None:
+        if key == "memory":
+            await reconcile(features.is_enabled("memory"))
+
+    return _on_switch
 
 
 async def reconcile_delivery(
@@ -85,4 +113,10 @@ async def _restore(delivery: DeliveryService, withdrawn: WithdrawnDeliveryPort) 
     return tuple(notes)
 
 
-__all__ = ["FEATURE_ACTOR", "WithdrawnDeliveryPort", "reconcile_delivery"]
+__all__ = [
+    "FEATURE_ACTOR",
+    "FeatureStatePort",
+    "WithdrawnDeliveryPort",
+    "memory_switch_subscriber",
+    "reconcile_delivery",
+]

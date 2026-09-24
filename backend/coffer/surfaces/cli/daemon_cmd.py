@@ -200,7 +200,9 @@ def status(
         return
     typer.echo(f"status:  {data['status']}")
     typer.echo(f"version: {data['version']}")
-    typer.echo(f"channel: {data['channel']}")
+    # A daemon older than this CLI reports no channel; say so rather than fail.
+    channel = data.get("channel") or f"unknown — {_cli_client.OUTDATED_DAEMON}"
+    typer.echo(f"channel: {channel}")
     typer.echo(f"port:    {info.port}")
     typer.echo(f"pid:     {info.pid}")
 

@@ -62,14 +62,21 @@ class BuiltinGuide:
             return await self._seed.seed(name=self._name, text=text)
 
 
-def follow_knowledge_switch(guide: BuiltinGuide, features: FeatureService) -> None:
-    """Re-render the guide whenever ``knowledge`` is switched, so its catalogue
-    leaves and comes back with the feature (spec experimental-features
-    "Withdraw what a switched-off feature put in front of agents"). The
-    renderer reads the switch itself; this only says when to ask it."""
+#: The features whose switch changes what the guide documents: ``knowledge``
+#: carries the catalogue and ``coffer__write``, ``memory`` carries
+#: ``coffer__recall``.
+GUIDE_FEATURES = frozenset({"knowledge", "memory"})
+
+
+def follow_guide_features(guide: BuiltinGuide, features: FeatureService) -> None:
+    """Re-render the guide whenever ``knowledge`` or ``memory`` is switched, so
+    what it documents leaves and comes back with the feature (spec
+    experimental-features "Withdraw what a switched-off feature put in front of
+    agents"). The renderer reads the switches itself; this only says when to
+    ask it."""
 
     async def _on_switch(key: str, _enabled: bool) -> None:
-        if key == "knowledge" and await guide.refresh():
+        if key in GUIDE_FEATURES and await guide.refresh():
             _log.info("skill.builtin_guide.updated")
 
     features.subscribe(_on_switch)

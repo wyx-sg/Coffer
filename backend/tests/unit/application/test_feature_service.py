@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from coffer.application.features import FeatureService, FeatureState
+from coffer.application.memory.delivery_switch import memory_switch_subscriber
 from coffer.domain.features import FeaturePinned, FeatureUnknown
 
 
@@ -156,3 +159,50 @@ async def test_a_failing_subscriber_does_not_stop_the_others() -> None:
 
 def test_the_channel_is_reported() -> None:
     assert FeatureService(channel="stable", settings=_FakeSettings()).channel == "stable"
+
+
+class _Hooks:
+    """Stands in for every agent's delivery hook: the reconcile yields to the
+    loop part-way through, the way a real one waits on files, so two runs left
+    to overlap would interleave."""
+
+    def __init__(self) -> None:
+        self.installed = True
+        self.running = 0
+        self.overlapped = False
+
+    async def reconcile(self, enabled: bool) -> None:
+        self.running += 1
+        self.overlapped |= self.running > 1
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        self.installed = enabled
+        self.running -= 1
+
+
+@pytest.mark.parametrize("order", [(False, True), (True, False), (False, True, False)])
+async def test_concurrent_memory_switches_leave_the_hooks_matching_the_final_state(
+    order: tuple[bool, ...],
+) -> None:
+    svc = FeatureService(channel="dev", settings=_FakeSettings())
+    hooks = _Hooks()
+    svc.subscribe(memory_switch_subscriber(svc, hooks.reconcile))
+
+    await asyncio.gather(*(svc.set("memory", enabled) for enabled in order))
+
+    assert hooks.installed is svc.is_enabled("memory")
+    assert not hooks.overlapped, "two switches ran their subscribers side by side"
+
+
+async def test_the_memory_subscriber_reconciles_to_the_state_now_not_the_one_passed() -> None:
+    """A subscriber that runs late converges on what is true when it runs."""
+    svc = FeatureService(channel="dev", settings=_FakeSettings({"memory": True}))
+    seen: list[bool] = []
+
+    async def _reconcile(enabled: bool) -> None:
+        seen.append(enabled)
+
+    subscriber = memory_switch_subscriber(svc, _reconcile)
+    await subscriber("memory", False)  # stale: memory is on
+    await subscriber("knowledge", False)  # not memory's switch
+    assert seen == [True]

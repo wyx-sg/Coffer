@@ -16,6 +16,7 @@ reaches the surfaces that react to it without a restart.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 from collections.abc import Awaitable, Callable, Mapping
@@ -72,6 +73,11 @@ class FeatureService:
         self._pins = {k: v for k, v in (pins or {}).items() if k in known}
         self._settings = {k: v for k, v in settings.read().items() if k in known}
         self._subscribers: list[FeatureSubscriber] = []
+        # One switch at a time, from its write to the last subscriber's
+        # answer: two switches of ``memory`` interleaved would run the hook's
+        # withdraw and restore against each other, and the agents would end up
+        # carrying whichever finished last rather than what the switch says.
+        self._switching = asyncio.Lock()
 
     @property
     def channel(self) -> Channel:
@@ -104,17 +110,20 @@ class FeatureService:
 
         Refuses a pinned feature with ``FeaturePinned``. The setting is written
         first; the held state changes only once it is kept, and subscribers
-        hear only a change of the resolved state.
+        hear only a change of the resolved state. Switches are serialized, each
+        one through its subscribers, so a subscriber never runs beside another
+        switch's; a subscriber must therefore never switch a feature itself.
         """
-        before = self.state(key)
-        if before.source == "pin":
-            raise FeaturePinned(key)
-        self._settings_port.write(key, enabled)
-        self._settings[key] = enabled
-        after = self.state(key)
-        if after.enabled != before.enabled:
-            await self._notify(key, after.enabled)
-        return after
+        async with self._switching:
+            before = self.state(key)
+            if before.source == "pin":
+                raise FeaturePinned(key)
+            self._settings_port.write(key, enabled)
+            self._settings[key] = enabled
+            after = self.state(key)
+            if after.enabled != before.enabled:
+                await self._notify(key, after.enabled)
+            return after
 
     async def _notify(self, key: str, enabled: bool) -> None:
         # One subscriber's failure must not keep the others from hearing: the

@@ -353,9 +353,10 @@ spec experimental-features).
   and the desktop shell stamp nothing — they read `channel` from
   `GET /api/v1/daemon/status`.
 - **Registry.** `domain/features.py` declares the experimental features —
-  `vault_sync`, `knowledge`, `memory` — and, per key, the REST prefixes, CLI
-  groups and web routes it owns, so no gate spells a prefix of its own. A
-  capability outside the registry is always on.
+  `vault_sync`, `knowledge`, `memory` — and, per key, the REST prefixes and
+  resource kinds it owns, so no gate spells a prefix or a kind of its own
+  (`surfaces/http/routing.py` gates a router by its prefix). A capability
+  outside the registry is always on.
 - **State.** `application/features.py`'s `FeatureService` resolves each key per
   read: a `COFFER_FEATURES` pin (`vault_sync=on,memory=off`, read once at
   start; a write to a pinned key answers 409 `FEATURE_PINNED`), then the
@@ -364,13 +365,18 @@ spec experimental-features).
   then the channel default — off on `stable`, on on `dev`. The setting is
   machine-local on purpose: the database syncs, and a switch kept there would
   switch every machine at once. `set` writes the file before it changes the
-  held value and then notifies subscribers.
+  held value and then notifies subscribers,
+  one switch at a time.
 - **Gates run at request time, not at wiring time**, so a switch takes effect
   without a restart. Routes stay registered (the OpenAPI document and the
   generated client never change with a switch); `surfaces/http/feature_dependencies.py`
   gives each gated router a dependency that answers 404 `FEATURE_DISABLED`
-  naming the key. Builtin MCP tools of a switched-off feature leave
-  `tools/list` and answer a call as an unknown tool; the upkeep workers skip
+  naming the key, and the kind-agnostic `/api/v1/resources` routes refuse a
+  switched-off feature's kinds the same way and leave them out of a list.
+  Builtin MCP tools of a switched-off feature leave `tools/list` and answer a
+  call as an unknown tool, and neither the handshake instructions nor the
+  `coffer-guide` skill name them; with `vault_sync` off curation treats the
+  vault as single-machine; the upkeep workers skip
   their round; the CLI's shared error path turns `FEATURE_DISABLED` into one
   line naming `coffer daemon features enable <key>`; the web UI and the tray
   filter on the `features` list the status carries.

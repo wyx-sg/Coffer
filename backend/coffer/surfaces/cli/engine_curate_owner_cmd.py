@@ -53,7 +53,7 @@ def _machine_facts(client: Any, *, verbose: bool) -> tuple[str, list[str]]:
     # sync's, and the sync surface is closed while ``vault_sync`` is off.
     r = client.get("/daemon/status")
     _cli_client.check(r, verbose=verbose)
-    this_machine = str(r.json().get("machine_id") or "")
+    this_machine = _cli_client.status_machine_id(r.json()) or ""
     r = client.get("/sync/machines")
     if _feature_disabled(r):
         # No registry to read while sync is off, which the rule reads as a

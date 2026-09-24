@@ -11,6 +11,8 @@ from coffer.domain.features import (
     FeaturePinned,
     FeatureUnknown,
     channel_default,
+    feature_for_kind,
+    feature_for_path,
     feature_keys,
     get_feature,
     is_registered,
@@ -21,11 +23,30 @@ def test_the_registry_holds_exactly_the_three_features_in_order() -> None:
     assert feature_keys() == ("vault_sync", "knowledge", "memory")
 
 
-def test_each_feature_names_its_own_route_prefix_cli_group_and_page() -> None:
+def test_each_feature_names_its_own_route_prefix_and_kinds() -> None:
     by_key = {f.key: f for f in EXPERIMENTAL_FEATURES}
     assert by_key["vault_sync"].route_prefixes == ("/api/v1/sync",)
-    assert by_key["knowledge"].cli_groups == ("knowledge",)
-    assert by_key["memory"].web_routes == ("/memory",)
+    assert by_key["knowledge"].route_prefixes == ("/api/v1/knowledge",)
+    assert by_key["memory"].route_prefixes == ("/api/v1/memory",)
+    assert by_key["vault_sync"].kinds == ()
+    assert by_key["knowledge"].kinds == ("knowledge",)
+    assert by_key["memory"].kinds == ("memory",)
+
+
+def test_a_kind_maps_to_the_feature_that_owns_it() -> None:
+    assert feature_for_kind("knowledge") == "knowledge"
+    assert feature_for_kind("memory") == "memory"
+    assert feature_for_kind("skill") is None
+    assert feature_for_kind("mcp_server") is None
+
+
+def test_a_path_maps_to_the_feature_whose_prefix_it_sits_under() -> None:
+    assert feature_for_path("/api/v1/sync/status") == "vault_sync"
+    assert feature_for_path("/api/v1/knowledge") == "knowledge"
+    assert feature_for_path("/api/v1/memory/partitions/{uid}") == "memory"
+    # A prefix is a path segment, not a string prefix.
+    assert feature_for_path("/api/v1/synchronise") is None
+    assert feature_for_path("/api/v1/agents/{uid}/native-memory") is None
 
 
 def test_an_unregistered_key_is_refused() -> None:

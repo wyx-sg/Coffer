@@ -26,13 +26,19 @@ import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
  * sync routes answer 404 then, and an empty registry is exactly what a vault
  * that never converged has — `machineOptions` still offers this machine, and
  * `bindingState` never reads an empty registry as a fault.
+ *
+ * It waits for the daemon status to say whether sync is on, but not forever:
+ * once the status read has failed (the daemon is offline) the answer is
+ * unknown, and the registry reads as empty rather than leaving every consumer
+ * on its loading state.
  */
 export function useMachines() {
   const syncOn = useFeatureEnabled("vault_sync");
+  const statusFailed = useDaemonStatus().isError && syncOn === undefined;
   return useQuery({
     queryKey: [...syncMachinesKey, syncOn === true],
     queryFn: () => (syncOn ? syncApi.machines() : Promise.resolve({ machines: [] })),
-    enabled: syncOn !== undefined,
+    enabled: syncOn !== undefined || statusFailed,
   });
 }
 

@@ -4,18 +4,22 @@ Extracted from ``app.py`` so the composition root stays within the 400-line
 guideline: every sub-router import + ``include_router`` call lives here, grouped
 by spec, and ``app.py`` calls :func:`include_all_routers` once.
 
-The routers of an experimental feature are included behind its gate
-(``require_feature``), so every route under them answers 404
-``FEATURE_DISABLED`` while the feature is off, and serves again the moment it is
-switched on (spec experimental-features "Close every surface of a switched-off
-feature"). The gate goes on at include time rather than on each router: a
-router split into sub-routers (memory's four) cannot forget one.
+A router whose paths sit under an experimental feature's route prefixes (the
+registry in ``coffer.domain.features``) is included behind that feature's gate
+(``require_feature``), so every route under it answers 404 ``FEATURE_DISABLED``
+while the feature is off, and serves again the moment it is switched on (spec
+experimental-features "Close every surface of a switched-off feature"). The
+gate is chosen from the router's own prefix at include time rather than
+written beside it, so a new router under a feature's prefix is gated without
+being told; ``test_every_route_under_a_features_prefixes_is_gated`` holds the
+registry's prefixes against every route the app serves.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, FastAPI
 
+from coffer.domain.features import feature_for_path
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.agent_config_routes import router as agent_config_router
 from coffer.surfaces.http.agent_native_memory_routes import (
@@ -45,7 +49,7 @@ from coffer.surfaces.http.mcp.invocation_routes import (
 from coffer.surfaces.http.mcp.invocation_routes import router as mcp_invocation_router
 from coffer.surfaces.http.mcp.protocol_routes import router as mcp_protocol_router
 from coffer.surfaces.http.mcp.server_test_routes import router as mcp_server_test_router
-from coffer.surfaces.http.memory import router as memory_router
+from coffer.surfaces.http.memory import routers as memory_routers
 from coffer.surfaces.http.model_routes import router as model_router
 from coffer.surfaces.http.provider_routes import router as provider_router
 from coffer.surfaces.http.resource_routes import router as resource_router
@@ -59,7 +63,7 @@ from coffer.surfaces.http.upkeep_routes import router as upkeep_router
 
 def include_all_routers(app: FastAPI) -> None:
     """Mount every sub-router, grouped by spec (kind-agnostic core first)."""
-    entries: tuple[APIRouter | tuple[APIRouter, str], ...] = (
+    routers: tuple[APIRouter, ...] = (
         daemon_routes.router,
         feature_router,  # spec experimental-features
         resource_router,
@@ -68,7 +72,7 @@ def include_all_routers(app: FastAPI) -> None:
         upkeep_router,  # what this daemon is rewriting right now (cross-kind)
         credential_router,
         settings_router,
-        (sync_router, "vault_sync"),  # spec vault-sync
+        sync_router,  # spec vault-sync (experimental: vault_sync)
         internal_engine_router,  # spec internal-engine
         # agent + skill (specs agent-registry/skill-manager)
         agent_router,
@@ -86,8 +90,8 @@ def include_all_routers(app: FastAPI) -> None:
         mcp_server_test_router,
         mcp_invocation_router,
         mcp_invocation_aggregate_router,
-        (knowledge_router, "knowledge"),  # the one knowledge kind
-        (memory_router, "memory"),  # the one memory kind
+        knowledge_router,  # the one knowledge kind (experimental: knowledge)
+        *memory_routers,  # the one memory kind (experimental: memory)
         # the turn platform's own surfaces (spec chat; spec channels's agents run on it)
         agent_provider_router,
         model_router,
@@ -96,14 +100,21 @@ def include_all_routers(app: FastAPI) -> None:
         channel_router,  # spec channels
         provider_router,  # spec provider-switching
     )
-    for entry in entries:
-        _include(app, entry)
+    for router in routers:
+        _include(app, router)
 
 
-def _include(app: FastAPI, entry: APIRouter | tuple[APIRouter, str]) -> None:
+def _feature_of(router: APIRouter) -> str | None:
+    """The experimental feature whose route prefixes ``router``'s prefix sits
+    under, or ``None``. Every router of a feature declares the feature's prefix
+    as its own, so the prefix alone decides."""
+    return feature_for_path(router.prefix) if router.prefix else None
+
+
+def _include(app: FastAPI, router: APIRouter) -> None:
     """Mount one router, behind its experimental feature's gate if it has one."""
-    if isinstance(entry, tuple):
-        router, feature = entry
-        app.include_router(router, dependencies=[Depends(require_feature(feature))])
+    feature = _feature_of(router)
+    if feature is None:
+        app.include_router(router)
     else:
-        app.include_router(entry)
+        app.include_router(router, dependencies=[Depends(require_feature(feature))])

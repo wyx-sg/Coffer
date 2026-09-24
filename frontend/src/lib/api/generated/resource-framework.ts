@@ -11,7 +11,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List resources */
+        /**
+         * List resources
+         * @description Rows of a kind whose experimental feature is switched off on this
+         *     machine (`knowledge`, `memory`) are left out; naming such a kind in
+         *     `kind` answers 404 `FEATURE_DISABLED` (spec experimental-features
+         *     "Close every surface of a switched-off feature").
+         */
         get: operations["listResources"];
         put?: never;
         /**
@@ -20,7 +26,8 @@ export interface paths {
          *     route is accepted here. A kind owning a creation invariant beyond
          *     config validation — a skill's master folder, an agent's on-disk
          *     detection — is registered through its own surface instead, which is
-         *     the only place that invariant can be held.
+         *     the only place that invariant can be held. A kind whose experimental
+         *     feature is switched off answers 404 `FEATURE_DISABLED`.
          */
         post: operations["registerResource"];
         delete?: never;
@@ -224,6 +231,9 @@ export interface paths {
          *     `POST /knowledge/collections/{uid}/curate`); each refuses a second
          *     concurrent pass over the same target with `UPKEEP_ALREADY_RUNNING`.
          *     Whether a pass runs on a timer at all is spec internal-engine's.
+         *
+         *     A pass over a kind whose experimental feature is switched off is left
+         *     out of the list.
          */
         get: operations["listUpkeepRuns"];
         put?: never;
@@ -398,7 +408,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description Resource not found */
+        /** @description Resource not found (`RESOURCE_NOT_FOUND`), or its kind belongs to an experimental feature switched off on this machine (`FEATURE_DISABLED`, with `details.feature` naming the key). */
         NotFound: {
             headers: {
                 [name: string]: unknown;
@@ -456,6 +466,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     registerResource: {
@@ -482,6 +493,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["UnprocessableEntity"];
         };

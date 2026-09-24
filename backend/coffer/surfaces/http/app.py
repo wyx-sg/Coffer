@@ -77,7 +77,7 @@ from coffer.surfaces.http.dependencies import (
 )
 from coffer.surfaces.http.engine_config_composition import build_config_services
 from coffer.surfaces.http.feature_dependencies import build_feature_service, set_feature_service
-from coffer.surfaces.http.guide_wiring import follow_knowledge_switch, run_builtin_guide_refresh
+from coffer.surfaces.http.guide_wiring import follow_guide_features, run_builtin_guide_refresh
 from coffer.surfaces.http.kind_wiring import wire_resource_kinds
 from coffer.surfaces.http.mcp.protocol_routes import (
     start_session_reaper,
@@ -254,7 +254,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # match it (spec experimental-features).
     await run_memory_delivery_boot_heal(kinds.memory.delivery_service, features)
     follow_memory_switch(kinds.memory.delivery_service, features)
-    follow_knowledge_switch(kinds.guide, features)
+    follow_guide_features(kinds.guide, features)
     # Coffer's own skill, re-rendered from this build and whatever the corpus
     # holds right now, and seeded into the master store as an ordinary skill
     # resource. Done every boot rather than only on change: it is cheap when

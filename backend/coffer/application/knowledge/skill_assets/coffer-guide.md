@@ -8,14 +8,18 @@ what it will not.
 
 ## Coffer's own tools
 
-Four, all prefixed `coffer__`. Everything else you can see through Coffer
+<TOOL_COUNT>, all prefixed `coffer__`. Everything else you can see through Coffer
 belongs to an upstream server and is named `<server>__<tool>`.
 
 | Tool | Reach for it when |
 | --- | --- |
 | `coffer__search_tools` | You need a capability and nothing in your tool list offers it. |
+<!-- when:knowledge -->
 | `coffer__write` | You learned something durable about this environment. |
+<!-- end:knowledge -->
+<!-- when:memory -->
 | `coffer__recall` | You want a note from a project other than this one. |
+<!-- end:memory -->
 | `coffer__diagnose` | Coffer itself is misbehaving and you want its side of the story. |
 
 If you cannot see these at all, Coffer's MCP server is not installed for the
@@ -44,6 +48,7 @@ loading or registering step between the search result and the call.
 Coffer's own `coffer__` tools are always listed and never consume that budget,
 so this only ever concerns upstream tools.
 
+<!-- when:knowledge -->
 ## Knowledge is a directory of files, and you read it yourself
 
 The developer's knowledge lives under `<KNOWLEDGE_ROOT>/<collection>/`: one
@@ -74,6 +79,8 @@ To correct or extend a document you have read, you may also edit the file
 itself with your own tools, as the developer does in their editor. Coffer's
 model notices the edit and carries it into the rest of the collection.
 
+<!-- end:knowledge -->
+<!-- when:memory -->
 ## Coffer reads your memory. It never writes it.
 
 Coffer reads the native memory of every registered agent — your own memory
@@ -81,16 +88,19 @@ files, in your own format — and modifies nothing there: not a file, not a
 format, not your memory setting. What it reads it distils into its own notes
 under `~/.coffer/memory/`, which are derived and are Coffer's to own.
 
+<!-- when:knowledge -->
 The practical consequence: **you cannot ask Coffer to write a memory for you.**
 `coffer__write` files knowledge, which is a different store with a different
 purpose. If you want something in your own memory, write it there yourself, the
 way you normally would.
 
+<!-- end:knowledge -->
 `coffer__recall` locates Coffer's notes. It answers with each note's path, title
 and one-line description, never the body — read the file yourself when you want
 that. Its matching is literal and case-insensitive, so hand it a distinctive
 word or phrase rather than a question.
 
+<!-- end:memory -->
 ## Nothing here waits on a human
 
 Every tool Coffer exposes runs immediately. There is no approval prompt, no
@@ -103,6 +113,7 @@ reason in it. Read the reason and adjust. Do not retry the identical call hoping
 it clears, and do not tell the developer you are waiting on an approval: there
 is nothing to approve.
 
+<!-- when:knowledge -->
 ## What not to put in
 
 - **No secrets.** No keys, tokens, passwords or credentials — not in knowledge,
@@ -114,6 +125,7 @@ is nothing to approve.
 - Address knowledge files by collection and relative path. A path that climbs
   out of the knowledge root is refused.
 
+<!-- end:knowledge -->
 ## This file
 
 Coffer wrote it and Coffer rewrites it — at every daemon start, and whenever the

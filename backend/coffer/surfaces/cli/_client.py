@@ -28,6 +28,26 @@ from coffer.surfaces.cli._options import ExitCode
 _DAEMON_BOOT_TIMEOUT: float = 10.0
 
 
+#: What the CLI says when the running daemon's answer lacks a field this CLI
+#: reads: the daemon is older than the CLI talking to it.
+OUTDATED_DAEMON = "the running daemon predates this CLI; restart it: coffer daemon restart"
+
+
+def status_machine_id(status: dict[str, object]) -> str | None:
+    """This machine's id off a ``/daemon/status`` body, ``None`` while the
+    daemon has not derived it yet.
+
+    A body without the key at all comes from a daemon that predates the field:
+    that is said, and the command exits 1, rather than being read as "not
+    derived yet — try again", which no amount of trying would change.
+    """
+    if "machine_id" not in status:
+        typer.echo(OUTDATED_DAEMON, err=True)
+        raise typer.Exit(1)
+    machine_id = status["machine_id"]
+    return str(machine_id) if machine_id else None
+
+
 class DaemonNotRunning(SystemExit):
     """Exit code 3 — daemon not reachable."""
 

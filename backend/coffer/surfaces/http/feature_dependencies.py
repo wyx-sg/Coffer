@@ -13,7 +13,7 @@ from collections.abc import Callable
 
 from coffer import build_channel
 from coffer.application.features import FeatureService
-from coffer.domain.features import FeatureDisabled, feature_keys, get_feature
+from coffer.domain.features import FeatureDisabled, feature_for_kind, feature_keys, get_feature
 from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon.feature_settings import DaemonConfigFeatureSettings
 
@@ -65,3 +65,31 @@ def require_feature(key: str) -> Callable[[], None]:
             raise FeatureDisabled(key)
 
     return _gate
+
+
+def kind_enabled(kind: str) -> bool:
+    """Whether resources of ``kind`` are reachable right now: ``False`` only
+    while the experimental feature that owns the kind is switched off.
+
+    An app assembled without ``create_app`` has no feature service; there
+    every kind is reachable, as it was before the gates.
+    """
+    feature = feature_for_kind(kind)
+    if feature is None or _feature_service is None:
+        return True
+    return _feature_service.is_enabled(feature)
+
+
+def require_kind_enabled(kind: str) -> None:
+    """Raise ``FEATURE_DISABLED`` (404) for a kind a switched-off feature owns.
+
+    The kind-agnostic resource routes call this with the kind a request
+    addresses — by ``kind=`` or through a uid's row — so a switched-off
+    feature's resources cannot be read, changed or deleted around its own
+    closed routes (spec experimental-features "Close every surface of a
+    switched-off feature").
+    """
+    if not kind_enabled(kind):
+        feature = feature_for_kind(kind)
+        assert feature is not None
+        raise FeatureDisabled(feature)

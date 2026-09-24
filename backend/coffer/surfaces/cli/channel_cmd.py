@@ -28,7 +28,7 @@ def _this_machine_id(client: Any, *, verbose: bool) -> str:
     """
     r = client.get("/daemon/status")
     _cli_client.check(r, verbose=verbose)
-    machine_id = r.json().get("machine_id")
+    machine_id = _cli_client.status_machine_id(r.json())
     if not machine_id:
         typer.echo("the daemon has not derived this machine's id yet — try again", err=True)
         raise typer.Exit(1)

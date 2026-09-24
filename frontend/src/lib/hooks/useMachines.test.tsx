@@ -15,8 +15,13 @@ const machinesApi = vi.fn();
 vi.mock("@/lib/api/sync", () => ({ syncApi: { machines: () => machinesApi() } }));
 
 let status: { machine_id: string | null; features: Record<string, boolean> } | undefined;
+let statusFailed = false;
 vi.mock("@/lib/hooks/useDaemon", () => ({
-  useDaemonStatus: () => ({ data: status, isPending: status === undefined }),
+  useDaemonStatus: () => ({
+    data: status,
+    isPending: status === undefined && !statusFailed,
+    isError: statusFailed,
+  }),
 }));
 
 function wrapper({ children }: PropsWithChildren) {
@@ -40,6 +45,20 @@ describe("useMachines", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data?.machines).toEqual([]);
     expect(machinesApi).not.toHaveBeenCalled();
+  });
+
+  test("answers an empty registry, not a loading one, once the status read has failed", async () => {
+    machinesApi.mockClear();
+    status = undefined;
+    statusFailed = true;
+    try {
+      const { result } = renderHook(() => useMachines(), { wrapper });
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data?.machines).toEqual([]);
+      expect(machinesApi).not.toHaveBeenCalled();
+    } finally {
+      statusFailed = false;
+    }
   });
 
   test("takes this machine's id from the daemon status", () => {

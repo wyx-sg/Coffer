@@ -191,3 +191,38 @@ def test_with_knowledge_switched_off_the_guide_carries_no_catalogue() -> None:
     assert "knowledge" not in description
     assert "coffer__write" not in description
     assert render("~/.coffer/knowledge", None) == text
+
+
+def test_with_knowledge_switched_off_the_manual_documents_no_knowledge_tool_or_root() -> None:
+    """The whole guide, not only its description: ``coffer__write`` and the
+    knowledge root leave with the feature, and the tool count follows."""
+    text = render("~/.coffer/knowledge", None)
+    assert "coffer__write" not in text
+    assert "~/.coffer/knowledge" not in text
+    assert "coffer__recall" in text
+    assert "Three, all prefixed" in text
+    assert "<!--" not in text
+
+
+def test_with_memory_switched_off_the_guide_documents_no_recall() -> None:
+    catalogue = [_collection("ops", "Runbooks.")]
+    text = render("~/.coffer/knowledge", catalogue, memory=False)
+    assert "coffer__recall" not in text
+    assert "## Coffer reads your memory" not in text
+    assert "coffer__write" in text
+    assert "### ops" in text
+    assert "Three, all prefixed" in text
+
+    both_off = render("~/.coffer/knowledge", None, memory=False)
+    assert "coffer__recall" not in both_off
+    assert "coffer__write" not in both_off
+    assert "Two, all prefixed" in both_off
+    assert "<!--" not in both_off
+
+
+def test_with_every_feature_on_no_span_marker_reaches_an_agent() -> None:
+    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")])
+    assert "<!--" not in text
+    assert "<TOOL_COUNT>" not in text
+    assert "Four, all prefixed" in text
+    assert render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory=True) == text
