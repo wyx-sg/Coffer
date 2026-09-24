@@ -153,3 +153,28 @@ def test_instructions_only_name_tools_that_exist() -> None:
     assert named_in_text == NAMED_TOOLS, (
         f"NAMED_TOOLS lists tools the text does not name: {NAMED_TOOLS - named_in_text}"
     )
+
+
+def test_instructions_name_only_the_tools_the_list_carries() -> None:
+    """A tool a switched-off feature took out of the list is not advertised
+    (spec experimental-features "Withdraw what a switched-off feature put in
+    front of agents"), and neither is the knowledge layer without its tool."""
+    without_memory = build_instructions(hidden_count=0, tools=["write", "diagnose"])
+    assert "coffer__recall" not in without_memory
+    assert "coffer__write" in without_memory
+    assert "coffer__search_tools" in without_memory
+
+    neither = build_instructions(hidden_count=0, tools=["diagnose"])
+    assert "coffer__write" not in neither
+    assert "coffer__recall" not in neither
+    assert "knowledge" not in neither
+    assert "coffer__diagnose" in neither
+    assert "coffer__search_tools" in neither
+    assert len(build_instructions(hidden_count=999_999, tools=[])) <= MAX_INSTRUCTIONS_CHARS
+
+
+def test_every_tool_listed_reads_as_the_full_text() -> None:
+    from coffer.application.mcp.gateway_instructions import _BASE, NAMED_TOOLS
+
+    assert build_instructions(hidden_count=0, tools=NAMED_TOOLS) == _BASE
+    assert build_instructions(hidden_count=0) == _BASE

@@ -9,22 +9,30 @@
 //! The poll is deliberately slow. A converge round runs on an interval measured
 //! in tens of minutes, and a hold, a conflict or a failed push persists until a
 //! person acts, so there is nothing a tighter loop could learn sooner. It also
-//! never runs before the daemon is up: `read_daemon_info` + `daemon_responds_ok`
-//! are the same two checks `resolve.rs` gates its take-over on, and a tick that
-//! cannot reach a daemon leaves every surface exactly as it found it rather than
-//! clearing a real alert because the daemon happened to be restarting.
+//! never runs before the daemon is up: every tick first reads `daemon.json` and
+//! asks the daemon's own unauthenticated status — the probe `resolve.rs` gates
+//! its take-over on — and a tick that cannot reach a daemon leaves every surface
+//! exactly as it found it rather than clearing a real alert because the daemon
+//! happened to be restarting.
+//!
+//! That status also carries the `vault_sync` experimental feature, which
+//! switches live. The tick that reads it is therefore short, and only the sync
+//! poll behind it keeps the slow interval: while the feature is off the Sync
+//! entry is out of the tray and nothing is polled or marked; the first tick
+//! after it comes on puts the entry back and polls at once (`sync_gate.rs`).
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tauri::image::Image;
-use tauri::menu::MenuItem;
+use tauri::menu::{Menu, MenuItem};
 use tauri::{AppHandle, Manager, Wry};
 use tauri_plugin_notification::NotificationExt;
 
-use crate::discovery::{daemon_responds_ok, read_daemon_info};
-use crate::sync_alert::{next_action, parse_sync_status, AlertAction, SyncSnapshot};
+use crate::discovery::read_daemon_info;
+use crate::sync_alert::{next_action, parse_sync_status, AlertAction};
+use crate::sync_gate::{parse_vault_sync, plan_tick, MenuChange};
 use crate::sync_presentation::{badge_rgba, notification_body, tray_label, NOTIFICATION_TITLE};
-use crate::tray::{base_tray_icon, TRAY_ID};
+use crate::tray::{base_tray_icon, TrayMenu, SYNC_MENU_POSITION, TRAY_ID};
 
 /// The tray entry this module owns: a permanent route to the `/sync` page whose
 /// label becomes the alert when a round needs a human. It is the click target
@@ -37,10 +45,13 @@ pub const SYNC_MENU_ITEM_ID: &str = "sync_status";
 /// nothing at all — is not shown a reassurance it has not earned.
 pub const SYNC_MENU_IDLE_LABEL: &str = "Sync status";
 
-/// Long enough for the launch handshake's detect-or-spawn to have resolved, so
-/// the first tick does not race the daemon the app is still starting.
-const FIRST_POLL_DELAY: Duration = Duration::from_secs(30);
-/// Ten minutes. The alert's condition changes at most once a converge interval and
+/// A short pause before the first tick, so it does not race the launch
+/// handshake's detect-or-spawn. A tick that finds no daemon simply tries again.
+const FIRST_TICK_DELAY: Duration = Duration::from_secs(5);
+/// How often the daemon's status — and so the `vault_sync` flag — is read. The
+/// feature switches without a restart, and this is how long the tray may lag it.
+const FEATURE_TICK: Duration = Duration::from_secs(15);
+/// How often the sync status is polled while the feature is on. Ten minutes. The alert's condition changes at most once a converge interval and
 /// then waits for a person; polling harder buys nothing and costs a wakeup.
 const POLL_INTERVAL: Duration = Duration::from_secs(600);
 
@@ -50,25 +61,81 @@ const DOCK_BADGE: &str = "!";
 
 /// Start watching. Runs forever on its own thread; every effect it performs is
 /// dispatched to the main thread by Tauri's own menu/tray/window wrappers.
-pub fn start(app: AppHandle, item: MenuItem<Wry>) {
+pub fn start(app: AppHandle, tray: TrayMenu) {
     std::thread::spawn(move || {
+        let TrayMenu { menu, sync: item } = tray;
         // The status the last raised notification was about. `None` means no
         // mark is showing — see `sync_alert::next_action` for the whole rule.
         let mut notified: Option<String> = None;
-        std::thread::sleep(FIRST_POLL_DELAY);
+        // Whether the Sync entry is in the menu; `tray.rs` builds it out.
+        let mut item_shown = false;
+        // When the sync status was last asked, since the feature last came on.
+        let mut last_sync_poll: Option<Instant> = None;
+        std::thread::sleep(FIRST_TICK_DELAY);
         loop {
-            if let Some(snapshot) = poll_once() {
-                let action = next_action(notified.as_deref(), &snapshot);
-                match &action {
-                    AlertAction::Raise(status) => notified = Some(status.clone()),
-                    AlertAction::Clear => notified = None,
-                    AlertAction::Nothing => {}
+            if let Some((port, token, vault_sync)) = read_feature() {
+                let plan = plan_tick(
+                    vault_sync,
+                    item_shown,
+                    notified.is_some(),
+                    last_sync_poll.map(|at| at.elapsed()),
+                    POLL_INTERVAL,
+                );
+                if plan.clear_marks {
+                    notified = None;
+                    apply(&app, &item, &AlertAction::Clear);
                 }
-                apply(&app, &item, &action);
+                if !vault_sync {
+                    last_sync_poll = None;
+                }
+                match plan.menu {
+                    MenuChange::Show => item_shown = show_item(&menu, &item, true),
+                    MenuChange::Hide => item_shown = show_item(&menu, &item, false),
+                    MenuChange::Keep => {}
+                }
+                if plan.poll_sync {
+                    last_sync_poll = Some(Instant::now());
+                    let snapshot = fetch_json(port, &token, "/api/v1/sync/status")
+                        .and_then(|body| parse_sync_status(&body));
+                    if let Some(snapshot) = snapshot {
+                        let action = next_action(notified.as_deref(), &snapshot);
+                        match &action {
+                            AlertAction::Raise(status) => notified = Some(status.clone()),
+                            AlertAction::Clear => notified = None,
+                            AlertAction::Nothing => {}
+                        }
+                        apply(&app, &item, &action);
+                    }
+                }
             }
-            std::thread::sleep(POLL_INTERVAL);
+            std::thread::sleep(FEATURE_TICK);
         }
     });
+}
+
+/// Put the Sync entry into the menu, or take it out. Returns whether it is in
+/// the menu afterwards; a failed change is logged and leaves the old answer, so
+/// the next tick tries again.
+fn show_item(menu: &Menu<Wry>, item: &MenuItem<Wry>, show: bool) -> bool {
+    let result = if show {
+        menu.insert(item, SYNC_MENU_POSITION)
+    } else {
+        menu.remove(item)
+    };
+    match result {
+        Ok(()) => {
+            log::info!(
+                "sync.feature vault_sync={} tray sync item {}",
+                if show { "on" } else { "off" },
+                if show { "shown" } else { "removed" }
+            );
+            show
+        }
+        Err(e) => {
+            log::warn!("sync.feature tray sync item change failed: {e}");
+            !show
+        }
+    }
 }
 
 /// Bring the window up on the sync page. Wired to the tray entry.
@@ -92,21 +159,20 @@ const NAVIGATE_TO_SYNC_JS: &str = "(function(){var s=window.history.state||{idx:
      window.history.pushState(s,'','/sync');\
      window.dispatchEvent(new PopStateEvent('popstate',{state:s}));})()";
 
-/// One tick: is a daemon up, and what does it say. `None` for "could not ask",
-/// which is never an answer about the vault.
-fn poll_once() -> Option<SyncSnapshot> {
+/// One tick's first question: is a daemon up, and is `vault_sync` on. `None`
+/// for "could not ask", which is never an answer about the feature or the vault.
+fn read_feature() -> Option<(u16, String, bool)> {
     let (port, token) = read_daemon_info()?;
-    if !daemon_responds_ok(port) {
-        return None;
-    }
-    let body = fetch_sync_status(port, &token)?;
-    parse_sync_status(&body)
+    let body = fetch_json(port, &token, "/api/v1/daemon/status")?;
+    let vault_sync = parse_vault_sync(&body)?;
+    Some((port, token, vault_sync))
 }
 
-/// `GET /api/v1/sync/status`, token-gated like every route but the daemon's own
-/// status probe. Raw HTTP/1.1 over `TcpStream`, for the reason `discovery.rs`
-/// gives: an HTTP-client dependency is not worth one loopback request.
-fn fetch_sync_status(port: u16, token: &str) -> Option<String> {
+/// `GET <path>` with the daemon's token — required by every route but the
+/// daemon's own status probe, and harmless there. Raw HTTP/1.1 over
+/// `TcpStream`, for the reason `discovery.rs` gives: an HTTP-client dependency
+/// is not worth a loopback request.
+fn fetch_json(port: u16, token: &str, path: &str) -> Option<String> {
     use std::io::{Read, Write};
     use std::net::{Ipv4Addr, SocketAddrV4, TcpStream};
 
@@ -117,7 +183,7 @@ fn fetch_sync_status(port: u16, token: &str) -> Option<String> {
         .ok()?;
     stream.set_read_timeout(Some(Duration::from_secs(5))).ok()?;
     let req = format!(
-        "GET /api/v1/sync/status HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\
+        "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\
          X-Coffer-Token: {token}\r\nAccept: application/json\r\n\
          Connection: close\r\n\r\n"
     );
@@ -298,6 +364,14 @@ mod tests {
     fn the_poll_is_slower_than_the_launch_and_far_slower_than_the_condition() {
         // The alert's condition is at most hourly and then waits for a person.
         assert!(POLL_INTERVAL >= Duration::from_secs(300));
-        assert!(FIRST_POLL_DELAY < POLL_INTERVAL);
+        assert!(FIRST_TICK_DELAY < POLL_INTERVAL);
+    }
+
+    #[test]
+    fn the_feature_tick_follows_a_switch_far_faster_than_the_sync_poll() {
+        // The feature switches live; the tray should follow within a minute,
+        // while the sync poll behind it keeps its slow interval.
+        assert!(FEATURE_TICK <= Duration::from_secs(60));
+        assert!(FEATURE_TICK < POLL_INTERVAL);
     }
 }

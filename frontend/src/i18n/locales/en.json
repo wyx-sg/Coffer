@@ -423,6 +423,34 @@
       "idleHours_other": "{{count}} hours",
       "idleNever": "Never"
     },
+    "features": {
+      "title": "Experimental features",
+      "subtitle": "Features still being designed. Switching one off hides it everywhere on this machine and keeps everything it holds. This build is on the {{channel}} channel.",
+      "on": "On",
+      "off": "Off",
+      "channel": {
+        "stable": "stable",
+        "dev": "dev"
+      },
+      "source": {
+        "pin": "Pinned by COFFER_FEATURES — change it where the daemon is started",
+        "setting": "Set on this machine",
+        "channel": "Default for the {{channel}} channel"
+      },
+      "names": {
+        "vault_sync": "Sync",
+        "knowledge": "Knowledge",
+        "memory": "Memory"
+      },
+      "descriptions": {
+        "vault_sync": "Converge this vault with a git remote you own.",
+        "knowledge": "Collections of documents under ~/.coffer/knowledge/ that agents read.",
+        "memory": "Memory aggregated from the agents' own stores, and the hook that delivers it."
+      },
+      "offTitle": "{{name}} is switched off",
+      "offBody": "{{name}} is an experimental feature and is switched off on this machine. Nothing it holds was removed — switch it on in Settings → General.",
+      "offCta": "Open Settings → General"
+    },
     "retention": {
       "title": "Data retention",
       "keepForever": "Keep forever",
@@ -684,6 +712,9 @@
     "DAEMON_NOT_READY": "Coffer daemon is still starting up. Try again in a moment.",
     "DB_SCHEMA_TOO_NEW": "This database was written by a newer version of Coffer. Upgrade to open it.",
     "ENGINE_UNAVAILABLE": "The retrieval engine is unavailable",
+    "FEATURE_DISABLED": "This feature is switched off on this machine — switch it on in Settings → General",
+    "FEATURE_PINNED": "This feature is pinned by COFFER_FEATURES and cannot be switched here",
+    "FEATURE_UNKNOWN": "Unknown experimental feature",
     "FORBIDDEN": "This action is not permitted.",
     "FS_PATH_NOT_BROWSABLE": "That path can't be browsed",
     "FS_PATH_NOT_OPENABLE": "That path cannot be opened on this machine",

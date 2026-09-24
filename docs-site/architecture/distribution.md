@@ -164,6 +164,8 @@ The CI release workflow (`.github/workflows/release.yml`) runs on every `v*` tag
 
 macOS x64 (Intel) and Windows are not built: GitHub's Intel macOS runner pool is being deprecated and reliably starves the `macos-13` job (it sits "waiting for a runner" indefinitely), and PyInstaller cannot cross-compile x86_64 binaries from the arm64 runner.
 
+Before PyInstaller runs, the workflow stamps the build's release channel with `scripts/stamp_channel.py stable`, rewriting the one line of `coffer/build_channel.py` that says `dev` in the repository. Only a tagged release is therefore `stable`, with its [experimental features](/guide/experimental-features) off by default; every other build — a source install, `make desktop` — is `dev`.
+
 Before upload, the archive runs a post-build smoke test (`scripts/smoke_test_bundle.sh`): the script boots the bundled `coffer-daemon` to `status: ready` and has the bundled `coffer-mcp-shim` exchange a JSON-RPC `initialize` message with it over loopback. A non-zero exit from the smoke test fails the release. The script uses a backgrounded watchdog rather than GNU `timeout`, so it runs cleanly on macOS.
 
 ## macOS Gatekeeper

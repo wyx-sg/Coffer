@@ -22,6 +22,7 @@ import { useMatch } from "react-router-dom";
 
 import type { ConvergeRound, RoundStatus, SyncStatus } from "@/lib/api/sync";
 import { useSyncStatus } from "@/lib/hooks/useSync";
+import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 
 const SEEN_KEY = "coffer.sync.attentionSeen";
 
@@ -111,7 +112,11 @@ function writeSeen(marker: string): void {
  */
 export function useSyncAttention(): boolean {
   const onSyncPage = useMatch("/sync") !== null;
-  const { data, isError } = useSyncStatus();
+  // Switching `vault_sync` off stops every sync attention mark (spec
+  // experimental-features "Withdraw what a switched-off feature put in front
+  // of agents") — and asks nothing, so a switched-off feature is not polled.
+  const syncOn = useFeatureEnabled("vault_sync") === true;
+  const { data, isError } = useSyncStatus(syncOn);
   const marker = syncStatusMarker(data);
 
   useEffect(() => {
@@ -121,7 +126,7 @@ export function useSyncAttention(): boolean {
   // A daemon that cannot answer is not a sync problem, and the offline banner
   // already says so; stale cached data must not outlive it into a second
   // claim on the same screen.
-  if (isError || !marker) return false;
+  if (!syncOn || isError || !marker) return false;
   // While the page is open the user is looking at it — no dot over their own
   // reading, and no flicker between the render and the effect above.
   if (onSyncPage) return false;

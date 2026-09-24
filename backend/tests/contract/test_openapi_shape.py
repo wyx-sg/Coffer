@@ -55,6 +55,10 @@ def test_openapi_dump_references_daemon_status_schema() -> None:
         "executable",
         "started_at",
         "port",
+        "channel",
+        "features",
+        "machine_id",
+        "machine_name",
     }
     status_prop = daemon_status["properties"]["status"]
     assert status_prop["type"] == "string"

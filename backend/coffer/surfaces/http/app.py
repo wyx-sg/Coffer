@@ -76,12 +76,13 @@ from coffer.surfaces.http.dependencies import (
     set_retention_service,
 )
 from coffer.surfaces.http.engine_config_composition import build_config_services
-from coffer.surfaces.http.guide_wiring import run_builtin_guide_refresh
+from coffer.surfaces.http.feature_dependencies import build_feature_service, set_feature_service
+from coffer.surfaces.http.guide_wiring import follow_guide_features, run_builtin_guide_refresh
 from coffer.surfaces.http.kind_wiring import wire_resource_kinds
 from coffer.surfaces.http.mcp.protocol_routes import (
     start_session_reaper,
 )
-from coffer.surfaces.http.memory_wiring import run_memory_delivery_boot_heal
+from coffer.surfaces.http.memory_wiring import follow_memory_switch, run_memory_delivery_boot_heal
 from coffer.surfaces.http.migrations_runner import run_migrations
 from coffer.surfaces.http.provider_wiring import run_provider_projection_sweep
 from coffer.surfaces.http.removed_agent_notice import report_removed_agent_leftovers
@@ -179,7 +180,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Build the shared built-in tool registry; each kind contributes its tools.
     # Created before kind wiring so skill + knowledge can register into it.
-    builtin_tools = BuiltinToolRegistry()
+    # A tool owned by a switched-off experimental feature is neither listed
+    # nor found (spec experimental-features).
+    features = app.state.feature_service
+    builtin_tools = BuiltinToolRegistry(feature_enabled=features.is_enabled)
 
     # Coffer's own history, read by the agent debugging Coffer: the audit log
     # and the daemon log both lost their human reader, so the reader is the
@@ -246,7 +250,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # provider_wiring / agent_skill_wiring for what each corrects).
     await run_provider_projection_sweep(kinds.provider.boot_heal)
     await run_skill_drift_boot_heal(kinds.agent_skill.boot_heal)
-    await run_memory_delivery_boot_heal(kinds.memory.delivery_service)
+    # Both follow their feature's switch from here on, and at boot already
+    # match it (spec experimental-features).
+    await run_memory_delivery_boot_heal(kinds.memory.delivery_service, features)
+    follow_memory_switch(kinds.memory.delivery_service, features)
+    follow_guide_features(kinds.guide, features)
     # Coffer's own skill, re-rendered from this build and whatever the corpus
     # holds right now, and seeded into the master store as an ordinary skill
     # resource. Done every boot rather than only on change: it is cheap when
@@ -283,6 +291,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         credential_store=credential_store,
         master_key=credentials.master_key,
         sync_contributions=sync_contributions,
+        features=features,
     )
     # Published for the same reason ``app.state.kinds`` is: a test that asserts
     # the lifespan actually started a worker needs a seam to reach it through,
@@ -345,6 +354,11 @@ def create_app(kinds: dict[str, Kind] | None = None) -> FastAPI:
     # Same eager registration for the channel kind (the lifespan's
     # wire_channel_kind overwrites it with the runtime-evicting on_delete).
     app.state.kinds.setdefault("channel", make_channel_kind())
+    # Built here, not in the lifespan: /daemon/status reports the features and
+    # must answer before the lifespan has run (spec experimental-features).
+    # The lifespan hands ``app.state.feature_service`` to what gates on it.
+    app.state.feature_service = build_feature_service()
+    set_feature_service(app.state.feature_service)
     # CORS, then the loopback host guard, then the trace id — the ordering and
     # why each position is load-bearing live in ``middleware``.
     middleware.install(app)

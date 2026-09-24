@@ -18,6 +18,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
+from coffer.application.features import FeatureService
 from coffer.application.skill.builtin_seed import BuiltinSkillSeed
 
 _log = logging.getLogger(__name__)
@@ -59,6 +60,26 @@ class BuiltinGuide:
                 _log.warning("skill.builtin_guide.render_failed", exc_info=True)
                 return False
             return await self._seed.seed(name=self._name, text=text)
+
+
+#: The features whose switch changes what the guide documents: ``knowledge``
+#: carries the catalogue and ``coffer__write``, ``memory`` carries
+#: ``coffer__recall``.
+GUIDE_FEATURES = frozenset({"knowledge", "memory"})
+
+
+def follow_guide_features(guide: BuiltinGuide, features: FeatureService) -> None:
+    """Re-render the guide whenever ``knowledge`` or ``memory`` is switched, so
+    what it documents leaves and comes back with the feature (spec
+    experimental-features "Withdraw what a switched-off feature put in front of
+    agents"). The renderer reads the switches itself; this only says when to
+    ask it."""
+
+    async def _on_switch(key: str, _enabled: bool) -> None:
+        if key in GUIDE_FEATURES and await guide.refresh():
+            _log.info("skill.builtin_guide.updated")
+
+    features.subscribe(_on_switch)
 
 
 async def run_builtin_guide_refresh(guide: BuiltinGuide) -> None:

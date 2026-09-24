@@ -95,6 +95,15 @@ jobs:
           npm run codegen
           npm run build
 
+      # Only a tagged release is `stable`: every other build keeps the
+      # repository's `dev` and has every experimental feature on (spec
+      # experimental-features "Stamp every build with a release channel").
+      # Before the binaries, because PyInstaller freezes the module as it is.
+      - name: stamp the stable channel
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: python3 scripts/stamp_channel.py stable
+
       - name: bundle sidecar binaries
         shell: bash
         run: bash scripts/build_binaries.sh

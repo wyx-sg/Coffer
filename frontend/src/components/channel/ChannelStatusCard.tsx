@@ -13,8 +13,7 @@ import { Activity } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ChannelStatus } from "@/lib/api/channels";
-import { useMachines } from "@/lib/hooks/useMachines";
-import { useSyncStatus } from "@/lib/hooks/useSync";
+import { useMachines, useThisMachineId } from "@/lib/hooks/useMachines";
 import { formatDateTime } from "@/lib/utils";
 import { bindingState } from "./channelBinding";
 import { ChannelMachineSelect } from "./ChannelMachineSelect";
@@ -36,13 +35,13 @@ export function ChannelStatusCard({
 }) {
   const { t } = useTranslation();
   const { data: machineList } = useMachines();
-  const { data: syncStatus } = useSyncStatus();
+  const { machineId: selfId } = useThisMachineId();
 
   // The status is authoritative for the binding; the config is the fallback
   // that lets the row render before the first status lands.
   const runsOn = status?.runs_on ?? (config.runs_on as string | undefined) ?? null;
   const binding = bindingState(runsOn, {
-    selfId: syncStatus?.machine_id ?? null,
+    selfId,
     known: (machineList?.machines ?? []).map((m) => m.machine_id),
     runsHere: status?.runs_here,
   });

@@ -2,6 +2,10 @@
 
 **Knowledge** is Coffer's one store of everything your agents should know — what you or an agent wrote down, and the documents you uploaded. It is a directory of Markdown files under `~/.coffer/knowledge/`, and those files are the whole of it. There is no index: no vector store, no full-text tables, nothing in `coffer.db` to keep in step with the disk. A file you edited in your own editor, a file an agent just wrote, and a file `git` pulled in all look the same to Coffer, because there is nothing in between.
 
+::: tip Experimental feature
+This is an [experimental feature](/guide/experimental-features) (`knowledge`): off by default in a release build, on in a build from source. Switch it on under **Settings → General → Experimental features**, or with `coffer daemon features enable knowledge`.
+:::
+
 What the layer adds on top of the directory is **curation**. Knowledge is written by you and your agents together: a document can be edited by either of you, and anything new — an upload, a note an agent files, a message you save from your phone — arrives as **material** that Coffer's own model merges into the documents already there. Every upload adds the knowledge in it to the collection; it does not add another file to wade through.
 
 ## Collections

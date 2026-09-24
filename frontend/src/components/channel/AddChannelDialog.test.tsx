@@ -27,9 +27,9 @@ import { acceptance } from "@/test/acceptance";
 import { mockApiClient, type ApiClientMock } from "@/test/mockApiClient";
 
 vi.mock("@/lib/api/client", () => ({ getApiClient: vi.fn() }));
-// The dialog binds the new channel to this machine, so it reads the sync
-// status. Stubbed rather than served, since nothing else here needs a daemon.
-vi.mock("@/lib/hooks/useSync", () => ({ useSyncStatus: vi.fn() }));
+// The dialog binds the new channel to this machine, so it reads the daemon's
+// machine id. Stubbed rather than served, since nothing else here needs a daemon.
+vi.mock("@/lib/hooks/useMachines", () => ({ useThisMachineId: vi.fn() }));
 // The agent picker (AgentSelect) reads the registered agents. Stubbed for the
 // same reason: `agentsApi.list` goes out through `call`, not the api client
 // mocked above, and what this suite is about is what the form SENDS.
@@ -42,8 +42,8 @@ vi.mock("react-router-dom", async (orig) => ({
 
 const { getApiClient } = await import("@/lib/api/client");
 const getApiClientMock = vi.mocked(getApiClient);
-const { useSyncStatus } = await import("@/lib/hooks/useSync");
-const useSyncStatusMock = vi.mocked(useSyncStatus);
+const { useThisMachineId } = await import("@/lib/hooks/useMachines");
+const useThisMachineIdMock = vi.mocked(useThisMachineId);
 const { useAgents } = await import("@/lib/hooks/useAgents");
 const useAgentsMock = vi.mocked(useAgents);
 
@@ -59,9 +59,7 @@ const CODEX = { uid: "u-f04a927e", name: "codex" };
 const NEW_UID = "u-2e7b5aa1";
 
 function stubMachineId(machineId: string | null) {
-  useSyncStatusMock.mockReturnValue({
-    data: machineId === null ? undefined : { machine_id: machineId },
-  } as unknown as ReturnType<typeof useSyncStatus>);
+  useThisMachineIdMock.mockReturnValue({ machineId, isPending: false });
 }
 
 function stubAgents(agents: { uid: string; name: string }[]) {

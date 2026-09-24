@@ -16,6 +16,10 @@ The list is the whole answer: a target NOT named here has no pass running. A
 caller asking about one partition or one collection filters the list; it never
 needs a lookup route, and it gets the rest of the picture for free.
 
+A pass over a kind whose experimental feature is switched off is left out,
+like that kind's rows on ``/api/v1/resources`` (spec experimental-features
+"Close every surface of a switched-off feature").
+
 Read-only. A pass is started by the kind's own route (``POST
 /api/v1/memory/partitions/{uid}/distil``, ``POST
 /api/v1/knowledge/collections/{uid}/curate``), each of which refuses a second
@@ -31,6 +35,7 @@ from pydantic import BaseModel, Field
 
 from coffer.application.upkeep_runs import UPKEEP_RUNS
 from coffer.surfaces.http.auth import require_token
+from coffer.surfaces.http.feature_dependencies import kind_enabled
 
 router = APIRouter(
     prefix="/api/v1/upkeep",
@@ -59,5 +64,6 @@ async def list_runs() -> UpkeepRunListOut:
         runs=[
             UpkeepRunOut(kind=run.kind, name=run.name, started_at=run.started_at)
             for run in UPKEEP_RUNS.list_running()
+            if kind_enabled(run.kind)
         ]
     )

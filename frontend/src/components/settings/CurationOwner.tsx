@@ -38,8 +38,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSetCurationOwner } from "@/lib/hooks/useInternalEngine";
-import { useMachines } from "@/lib/hooks/useMachines";
-import { useSyncStatus } from "@/lib/hooks/useSync";
+import { useMachines, useThisMachineId } from "@/lib/hooks/useMachines";
 import { bindingState, machineOptionFor } from "@/lib/machineBinding";
 import { cn } from "@/lib/utils";
 
@@ -52,7 +51,7 @@ interface Props {
 export function CurationOwner({ ownerId }: Props) {
   const { t } = useTranslation();
   const machineQuery = useMachines();
-  const syncQuery = useSyncStatus();
+  const self = useThisMachineId();
   const setOwner = useSetCurationOwner();
   const [confirmClear, setConfirmClear] = useState(false);
 
@@ -60,12 +59,12 @@ export function CurationOwner({ ownerId }: Props) {
   // `known` is empty and every owner id in the world looks like a machine
   // nobody claims — this row would accuse a perfectly healthy vault of the one
   // fault it exists to report, every time the page opens.
-  if (machineQuery.isPending || syncQuery.isPending) {
+  if (machineQuery.isPending || self.isPending) {
     return <Skeleton className="mt-2 h-16 w-full" />;
   }
 
   const machines = machineQuery.data?.machines ?? [];
-  const selfId = syncQuery.data?.machine_id ?? null;
+  const selfId = self.machineId;
   const state = bindingState(ownerId, {
     selfId,
     known: machines.map((m) => m.machine_id),

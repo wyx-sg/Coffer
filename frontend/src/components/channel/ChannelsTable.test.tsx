@@ -41,8 +41,7 @@ vi.mock("@/lib/hooks/useChannels", () => ({
 }));
 // The "Runs on" cell joins the binding against the machine registry and this
 // machine's id; both are stubbed so the four states can be set up directly.
-vi.mock("@/lib/hooks/useMachines", () => ({ useMachines: vi.fn() }));
-vi.mock("@/lib/hooks/useSync", () => ({ useSyncStatus: vi.fn() }));
+vi.mock("@/lib/hooks/useMachines", () => ({ useMachines: vi.fn(), useThisMachineId: vi.fn() }));
 
 // The state column is now ScopeControl, so every row reaches the scope /
 // agents / enable hooks. `scope` rides the list payload, so useResourceScope
@@ -63,8 +62,7 @@ vi.mock("@/lib/hooks/useResourceMutations", () => ({
 }));
 
 const { useChannelStatus, useRebindChannel } = await import("@/lib/hooks/useChannels");
-const { useMachines } = await import("@/lib/hooks/useMachines");
-const { useSyncStatus } = await import("@/lib/hooks/useSync");
+const { useMachines, useThisMachineId } = await import("@/lib/hooks/useMachines");
 const { useAgents } = await import("@/lib/hooks/useAgents");
 const useChannelStatusMock = vi.mocked(useChannelStatus);
 
@@ -165,9 +163,7 @@ describe("ChannelsTable", () => {
     vi.mocked(useRebindChannel).mockReturnValue(
       rebind as unknown as ReturnType<typeof useRebindChannel>,
     );
-    vi.mocked(useSyncStatus).mockReturnValue({
-      data: { machine_id: HERE },
-    } as unknown as ReturnType<typeof useSyncStatus>);
+    vi.mocked(useThisMachineId).mockReturnValue({ machineId: HERE, isPending: false });
     stubMachines(REGISTRY);
     vi.mocked(useAgents).mockReturnValue({
       data: [CLAUDE, CODEX],

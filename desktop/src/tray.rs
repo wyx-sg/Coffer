@@ -29,15 +29,30 @@ pub fn base_tray_icon(app: &AppHandle) -> Image<'static> {
         })
 }
 
-/// Build the tray. Returns the sync entry, which `lib.rs` hands to the watcher
-/// — the watcher renames it as the vault's state changes (spec vault-sync "Say
-/// a vault needs a human where the user already is"), so the two have to be introduced somewhere
-/// and the composition root is the honest place.
-pub fn build_tray(app: &AppHandle) -> tauri::Result<MenuItem<Wry>> {
+/// Where the Sync entry sits in the menu when it is shown: right after "Open
+/// Coffer".
+pub const SYNC_MENU_POSITION: usize = 1;
+
+/// The tray's menu and its Sync entry, which `lib.rs` hands to the watcher.
+pub struct TrayMenu {
+    pub menu: Menu<Wry>,
+    pub sync: MenuItem<Wry>,
+}
+
+/// Build the tray. Returns the menu and the sync entry, which `lib.rs` hands to
+/// the watcher — the watcher renames the entry as the vault's state changes
+/// (spec vault-sync "Say a vault needs a human where the user already is"), and
+/// puts it into or takes it out of the menu as the `vault_sync` experimental
+/// feature switches (spec experimental-features "Withdraw what a switched-off
+/// feature put in front of agents"), so the two have to be introduced somewhere and the
+/// composition root is the honest place.
+pub fn build_tray(app: &AppHandle) -> tauri::Result<TrayMenu> {
     let open = MenuItem::with_id(app, "open", "Open Coffer", true, None::<&str>)?;
-    // Always present, always a route to the `/sync` page. Its label is where a
-    // held, conflicted or unpushed vault says so in the one place a user who
-    // has closed the window still looks.
+    // A route to the `/sync` page. Its label is where a held, conflicted or
+    // unpushed vault says so in the one place a user who has closed the window
+    // still looks. It starts OUT of the menu: the watcher inserts it at
+    // `SYNC_MENU_POSITION` once the daemon reports `vault_sync` on, so a build
+    // whose feature is off never shows it, not even for the first tick.
     let sync = MenuItem::with_id(
         app,
         SYNC_MENU_ITEM_ID,
@@ -51,7 +66,7 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<MenuItem<Wry>> {
     let restart = MenuItem::with_id(app, "restart_daemon", "Restart daemon", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Coffer", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&open, &sync, &restart, &sep, &quit])?;
+    let menu = Menu::with_items(app, &[&open, &restart, &sep, &quit])?;
 
     let icon = base_tray_icon(app);
 
@@ -99,7 +114,7 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<MenuItem<Wry>> {
             _ => {}
         })
         .build(app)?;
-    Ok(sync)
+    Ok(TrayMenu { menu, sync })
 }
 
 /// Return `true` when the close event should actually exit the application.

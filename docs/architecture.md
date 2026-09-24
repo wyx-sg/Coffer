@@ -189,11 +189,13 @@ Layer-first, with kind-specific subdirectories inside each layer. See
 
 ```
 backend/coffer/
+├── build_channel.py              # CHANNEL = "dev"; the release workflow stamps "stable"
 ├── domain/                       # kind-agnostic entities + kind protocol; imports nothing
 │   ├── resource.py               # Resource (uid + mutable name), Kind, name validation
 │   ├── scope.py                  # is_active(scope, agent) — the one reach predicate
 │   ├── audit.py                  # audit event names + entry
 │   ├── errors.py                 # app-wide error base + codes
+│   ├── features.py               # experimental-feature registry + the surfaces each key owns
 │   ├── mcp/                      # MCP-specific value objects, tool search + tiering
 │   ├── agent/                    # agent-specific value objects (config, facets, model catalogue)
 │   ├── skill/                    # skill-specific value objects
@@ -209,6 +211,7 @@ backend/coffer/
 │   ├── retention_service.py      # + retention_registry.py, retention_worker.py
 │   ├── builtin_tools.py          # BuiltinTool + BuiltinToolRegistry
 │   ├── diagnostics.py            # coffer__diagnose
+│   ├── features.py               # FeatureService: pin → setting → channel default, change subscribers
 │   ├── credentials/              # shared CredentialResolver (refs → secrets)
 │   ├── mcp/                      # gateway, supervisor, discovery, search_tools + make_mcp_kind
 │   ├── agent/                    # agent services + make_agent_kind
@@ -224,7 +227,7 @@ backend/coffer/
 ├── infrastructure/
 │   ├── persistence/              # SQLAlchemy + Alembic (central metadata)
 │   ├── credentials/              # encrypted credential store + master key — only place importing `keyring`
-│   ├── daemon/                   # pid_lock, port allocation, child processes, version skew
+│   ├── daemon/                   # pid_lock, port allocation, child processes, version skew, daemon-config.json (incl. feature_settings.py)
 │   ├── mcp/                      # subprocess, http upstream client
 │   ├── net/                      # SSRF guard for outbound HTTP
 │   ├── logging/                  # structlog setup, log files, eval capture
@@ -239,12 +242,12 @@ backend/coffer/
 │   ├── provider/                 # provider introspector
 │   └── sync/                     # git mirror, tree mirror, bundle, machine id
 └── surfaces/
-    ├── http/                     # FastAPI app, composition root, per-kind routers + `*_wiring.py`
+    ├── http/                     # FastAPI app, composition root, per-kind routers + `*_wiring.py`, feature_routes.py + feature_dependencies.py (the request gate)
     │   ├── chat/                 # conversation + turn routes
     │   ├── knowledge/            # knowledge routes
     │   ├── mcp/                  # MCP protocol endpoint, capability + invocation routes
     │   └── memory/               # memory routes
-    ├── cli/                      # Typer app + per-kind subcommand groups
+    ├── cli/                      # Typer app + per-kind subcommand groups (daemon_features_cmd.py: `coffer daemon features`)
     ├── shim/                     # coffer-mcp-shim entry
     └── callback/                 # channel callback listener (separate process)
 ```
@@ -333,7 +336,58 @@ The shim and the listener discover the daemon through `~/.coffer/daemon.json`
 (PID + port + token, mode `0600`) — runtime state, written at start and unlinked at exit.
 Its counterpart `~/.coffer/daemon-config.json` holds the settings the daemon
 must read *before* it binds, and therefore before any database exists: today,
-the optional fixed port, the idle window, the machine name and the cached machine id. See [Detect-or-Spawn](decisions/daemon-detect-or-spawn.md).
+the optional fixed port, the idle window, the machine name, the cached machine id and the
+experimental-feature switches (`features`, see [Release channel and experimental features](#release-channel-and-experimental-features)). See [Detect-or-Spawn](decisions/daemon-detect-or-spawn.md).
+
+## Release channel and experimental features
+
+`main` carries every capability; a feature that is not ready ships switched off
+instead of living on a second branch
+([Experimental Features Instead of a Release Branch](decisions/experimental-features-instead-of-a-release-branch.md),
+spec experimental-features).
+
+- **Channel.** `coffer/build_channel.py` holds `CHANNEL = "dev"` in the
+  repository. The release workflow runs `scripts/stamp_channel.py stable`
+  before PyInstaller, so only a tagged release is `stable`; a source run,
+  `make desktop` and the owner's own frozen build are all `dev`. The frontend
+  and the desktop shell stamp nothing — they read `channel` from
+  `GET /api/v1/daemon/status`.
+- **Registry.** `domain/features.py` declares the experimental features —
+  `vault_sync`, `knowledge`, `memory` — and, per key, the REST prefixes and
+  resource kinds it owns, so no gate spells a prefix or a kind of its own
+  (`surfaces/http/routing.py` gates a router by its prefix). A capability
+  outside the registry is always on.
+- **State.** `application/features.py`'s `FeatureService` resolves each key per
+  read: a `COFFER_FEATURES` pin (`vault_sync=on,memory=off`, read once at
+  start; a write to a pinned key answers 409 `FEATURE_PINNED`), then the
+  machine's own setting in the `features` object of
+  `~/.coffer/daemon-config.json` (`infrastructure/daemon/feature_settings.py`),
+  then the channel default — off on `stable`, on on `dev`. The setting is
+  machine-local on purpose: the database syncs, and a switch kept there would
+  switch every machine at once. `set` writes the file before it changes the
+  held value and then notifies subscribers,
+  one switch at a time.
+- **Gates run at request time, not at wiring time**, so a switch takes effect
+  without a restart. Routes stay registered (the OpenAPI document and the
+  generated client never change with a switch); `surfaces/http/feature_dependencies.py`
+  gives each gated router a dependency that answers 404 `FEATURE_DISABLED`
+  naming the key, and the kind-agnostic `/api/v1/resources` routes refuse a
+  switched-off feature's kinds the same way and leave them out of a list.
+  Builtin MCP tools of a switched-off feature leave `tools/list` and answer a
+  call as an unknown tool, and neither the handshake instructions nor the
+  `coffer-guide` skill name them; with `vault_sync` off curation treats the
+  vault as single-machine; the upkeep workers skip
+  their round; the CLI's shared error path turns `FEATURE_DISABLED` into one
+  line naming `coffer daemon features enable <key>`; the web UI and the tray
+  filter on the `features` list the status carries.
+- **Switching surfaces.** `GET /api/v1/daemon/features`,
+  `PUT /api/v1/daemon/features/{key}` (`surfaces/http/feature_routes.py`),
+  `coffer daemon features list|enable|disable`, and the Experimental features
+  card under Settings → General.
+- **Off keeps data.** Kinds stay registered and migrations always run; a
+  switched-off feature's resources, files, remote configuration and history
+  are untouched, and switching it back on resumes where it stopped. A feature
+  leaves the registry once it is ready, and its gates are deleted with it.
 
 ## Persistence
 

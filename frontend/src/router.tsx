@@ -1,7 +1,9 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
 import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom";
 import { Layout } from "./components/Layout";
+import { FeatureGate } from "./components/FeatureGate";
 import { PageFallback } from "./components/PageFallback";
+import type { FeatureKey } from "./lib/hooks/useFeatures";
 import { AgentsPage } from "./pages/AgentsPage";
 import { ChannelsPage } from "./pages/ChannelsPage";
 import { SkillsPage } from "./pages/SkillsPage";
@@ -27,6 +29,12 @@ function lazyPage<K extends string>(
       <Page />
     </Suspense>
   );
+}
+
+/** A page that belongs to an experimental feature: while the feature is off
+ *  the route renders a notice linking to Settings → General instead. */
+function gated(feature: FeatureKey, page: JSX.Element): JSX.Element {
+  return <FeatureGate feature={feature}>{page}</FeatureGate>;
 }
 
 // Exported as data, not only as a built router: a test that has to prove a
@@ -85,18 +93,39 @@ export const routes: RouteObject[] = [
       },
       {
         path: "knowledge",
-        element: lazyPage(() => import("./pages/KnowledgePage"), "KnowledgePage"),
+        element: gated(
+          "knowledge",
+          lazyPage(() => import("./pages/KnowledgePage"), "KnowledgePage"),
+        ),
       },
       {
         path: "knowledge/:uid",
-        element: lazyPage(() => import("./pages/KnowledgeDetailPage"), "KnowledgeDetailPage"),
+        element: gated(
+          "knowledge",
+          lazyPage(() => import("./pages/KnowledgeDetailPage"), "KnowledgeDetailPage"),
+        ),
       },
-      { path: "memory", element: lazyPage(() => import("./pages/MemoryPage"), "MemoryPage") },
+      {
+        path: "memory",
+        element: gated(
+          "memory",
+          lazyPage(() => import("./pages/MemoryPage"), "MemoryPage"),
+        ),
+      },
       {
         path: "memory/:uid",
-        element: lazyPage(() => import("./pages/MemoryDetailPage"), "MemoryDetailPage"),
+        element: gated(
+          "memory",
+          lazyPage(() => import("./pages/MemoryDetailPage"), "MemoryDetailPage"),
+        ),
       },
-      { path: "sync", element: lazyPage(() => import("./pages/sync/SyncPage"), "SyncPage") },
+      {
+        path: "sync",
+        element: gated(
+          "vault_sync",
+          lazyPage(() => import("./pages/sync/SyncPage"), "SyncPage"),
+        ),
+      },
       { path: "model-providers", element: <ModelProvidersPage /> },
       {
         path: "model-providers/:uid",

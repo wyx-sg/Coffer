@@ -52,6 +52,12 @@ vi.mock("@/lib/hooks/useMemory", () => ({
   useRemoveDelivery: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 
+// Sections A and B are Coffer's memory layer and leave while `memory` is off.
+const memoryOn = vi.fn((): boolean | undefined => true);
+vi.mock("@/lib/hooks/useFeatures", () => ({
+  useFeatureEnabled: () => memoryOn(),
+}));
+
 const nativeHooks = await import("@/lib/hooks/useAgentNativeMemory");
 const agentHooks = await import("@/lib/hooks/useAgents");
 
@@ -104,7 +110,10 @@ function stubMcp(installed: boolean) {
   } as unknown as ReturnType<typeof agentHooks.useAgentMcpStatus>);
 }
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  memoryOn.mockReturnValue(true);
+});
 
 describe("AgentMemoryTab", () => {
   test("with Coffer MCP installed, shows the access-via-gateway note", () => {
@@ -147,6 +156,17 @@ describe("AgentMemoryTab", () => {
     const delivery = within(screen.getByTestId("memory-delivery-claude"));
     expect(delivery.getByText(/installed/i)).toBeInTheDocument();
     expect(delivery.queryByText(/last fired/i)).toBeNull();
+  });
+
+  test("with memory switched off, only the agent's own stores remain", () => {
+    memoryOn.mockReturnValue(false);
+    stubMcp(true);
+    stubNative();
+    render(<AgentMemoryTab agent={AGENT} />, { wrapper: wrap });
+
+    expect(screen.queryByRole("button", { name: /open the memory page/i })).toBeNull();
+    expect(screen.queryByTestId("memory-delivery-claude")).toBeNull();
+    expect(screen.getByText("Coffer")).toBeInTheDocument();
   });
 
   test("renders the agent's native per-project memory stores as a table", () => {

@@ -104,12 +104,20 @@ def wire_knowledge_kind(
     )
     set_ingest_service(ingest_service)
 
+    features = app.state.feature_service
+
     async def _render_guide() -> str:
         # One rendering for the whole machine: the catalogue carries no
         # per-agent slice, so there is one text and every agent gets it.
+        # While the knowledge feature is off the skill carries no catalogue
+        # and documents no knowledge tool, and while memory is off it does not
+        # document coffer__recall (spec experimental-features); nothing either
+        # holds moves.
+        on = features.is_enabled("knowledge")
         return guide_render.render(
             guide_render.display_root(paths.knowledge_root()),
-            await service.catalogue(),
+            await service.catalogue() if on else None,
+            memory=features.is_enabled("memory"),
         )
 
     register_knowledge_builtin_tools(builtin_tools, knowledge_service=service)

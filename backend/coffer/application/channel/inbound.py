@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 
 from coffer.application.audit_service import AuditService
@@ -81,6 +81,7 @@ class InboundProcessor:
         model_suggestions: ModelSuggestionPort,
         collections: CollectionCatalogPort,
         ingest: IngestPort,
+        knowledge_enabled: Callable[[], bool] = lambda: True,
     ) -> None:
         self._peers = peers
         self._threads = threads
@@ -100,6 +101,7 @@ class InboundProcessor:
             model_suggestions=model_suggestions,
             collections=collections,
             ingest=ingest,
+            knowledge_enabled=knowledge_enabled,
         )
         self._turn_driver = TurnDriver(
             peers=peers,

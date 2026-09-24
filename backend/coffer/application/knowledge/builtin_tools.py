@@ -170,5 +170,6 @@ def register_knowledge_builtin_tools(
                 "required": ["collection", "title", "description"],
             },
             handler=write,
+            feature="knowledge",
         )
     )

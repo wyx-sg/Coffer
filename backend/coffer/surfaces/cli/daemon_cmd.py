@@ -1,6 +1,6 @@
-"""`coffer daemon` subcommand group: start / stop / restart / status, and the
+"""`coffer daemon` subcommand group: start / stop / restart / status, the
 three settings that decide where it listens, how long it stays, and whether the
-system starts it at all."""
+system starts it at all, and the experimental features it serves."""
 
 from __future__ import annotations
 
@@ -16,12 +16,18 @@ from coffer.infrastructure.daemon import bootstrap, port_alloc
 from coffer.infrastructure.daemon.pid_lock import pid_is_coffer_daemon
 from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli import daemon_idle_cmd, daemon_port_cmd, daemon_service_cmd
+from coffer.surfaces.cli import (
+    daemon_features_cmd,
+    daemon_idle_cmd,
+    daemon_port_cmd,
+    daemon_service_cmd,
+)
 
 app = typer.Typer(help="Daemon lifecycle")
 app.add_typer(daemon_port_cmd.app, name="port")
 app.add_typer(daemon_idle_cmd.app, name="idle")
 app.add_typer(daemon_service_cmd.app, name="service")
+app.add_typer(daemon_features_cmd.app, name="features")
 
 
 def _wait_for_daemon_json(path: Path, timeout: float = 10.0) -> bool:
@@ -194,6 +200,9 @@ def status(
         return
     typer.echo(f"status:  {data['status']}")
     typer.echo(f"version: {data['version']}")
+    # A daemon older than this CLI reports no channel; say so rather than fail.
+    channel = data.get("channel") or f"unknown — {_cli_client.OUTDATED_DAEMON}"
+    typer.echo(f"channel: {channel}")
     typer.echo(f"port:    {info.port}")
     typer.echo(f"pid:     {info.pid}")
 

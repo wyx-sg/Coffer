@@ -111,6 +111,7 @@ def wire_channel_kind(
     # the life of the daemon — so it is resolved once here rather than on every
     # reconcile tick and every status read.
     machine_id = resolve_identity().machine_id
+    features = app.state.feature_service
 
     async def local_machine_id() -> str:
         return machine_id
@@ -138,6 +139,9 @@ def wire_channel_kind(
         # (import-linter contract 5f).
         collections=knowledge.service,
         ingest=knowledge.ingest_service,
+        # While knowledge is switched off `/save` answers that and saves
+        # nothing (spec experimental-features).
+        knowledge_enabled=lambda: features.is_enabled("knowledge"),
     )
 
     # ``materialize_async`` is the resolver's own off-the-loop path;

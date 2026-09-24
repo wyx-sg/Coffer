@@ -1,4 +1,11 @@
-"""/api/v1/resources/* — kind-agnostic Resource CRUD."""
+"""/api/v1/resources/* — kind-agnostic Resource CRUD.
+
+A resource whose kind belongs to a switched-off experimental feature is out of
+reach here as well as on its own routes (spec experimental-features "Close
+every surface of a switched-off feature"): a route that names it — by
+``kind``, or by a uid whose row is of that kind — answers 404
+``FEATURE_DISABLED``, and a list leaves its rows out. Nothing is deleted.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +15,7 @@ from coffer.application.resource_service import ResourceService
 from coffer.domain.resource import Resource
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_resource_service
+from coffer.surfaces.http.feature_dependencies import kind_enabled, require_kind_enabled
 from coffer.surfaces.http.schemas import (
     ResourceCreate,
     ResourceListOut,
@@ -42,6 +50,13 @@ def _to_out(r: Resource) -> ResourceOut:
 _actor = get_actor
 
 
+async def _reachable(svc: ResourceService, uid: str) -> Resource:
+    """The row ``uid`` names, refused while its kind's feature is off."""
+    r = await svc.get(uid)
+    require_kind_enabled(r.kind)
+    return r
+
+
 @router.get("", response_model=ResourceListOut)
 async def list_resources(
     kind: str | None = Query(default=None),
@@ -55,7 +70,9 @@ async def list_resources(
     ),
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> ResourceListOut:
-    rs = await svc.list(kind=kind)
+    if kind is not None:
+        require_kind_enabled(kind)
+    rs = [r for r in await svc.list(kind=kind) if kind_enabled(r.kind)]
     if name is not None:
         rs = [r for r in rs if r.name == name]
     return ResourceListOut(resources=[_to_out(r) for r in rs])
@@ -71,6 +88,7 @@ async def register_resource(
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> ResourceOut:
+    require_kind_enabled(body.kind)
     r = await svc.register(
         kind=body.kind,
         name=body.name,
@@ -86,7 +104,7 @@ async def get_resource(
     uid: str,
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> ResourceOut:
-    return _to_out(await svc.get(uid))
+    return _to_out(await _reachable(svc, uid))
 
 
 @router.patch("/{uid}", response_model=ResourceOut)
@@ -124,7 +142,7 @@ async def update_resource(
     # hook and it records a `resource_updated` with identical before and after.
     # A rename refused because a credential this resource mentions has since
     # been deleted is a refusal about something the caller did not touch.
-    r = await svc.get(uid)
+    r = await _reachable(svc, uid)
     if edits_config or edits_description:
         r = await svc.update_config(
             uid,
@@ -146,6 +164,7 @@ async def delete_resource(
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> Response:
+    await _reachable(svc, uid)
     await svc.delete(uid, actor=actor)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -156,6 +175,7 @@ async def enable_resource(
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> ResourceOut:
+    await _reachable(svc, uid)
     return _to_out(await svc.set_enabled(uid, enabled=True, actor=actor))
 
 
@@ -165,6 +185,7 @@ async def disable_resource(
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> ResourceOut:
+    await _reachable(svc, uid)
     return _to_out(await svc.set_enabled(uid, enabled=False, actor=actor))
 
 
@@ -173,7 +194,7 @@ async def get_resource_scope(
     uid: str,
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> ResourceScopeOut:
-    r = await svc.get(uid)
+    r = await _reachable(svc, uid)
     return ResourceScopeOut(scope=ScopeOut.of(r.scope), supports_scope=svc.supports_scope(r.kind))
 
 
@@ -187,5 +208,6 @@ async def update_resource_scope(
     # Deliberately NOT gated on allow_lifecycle_kind — scope is a
     # framework-level concern orthogonal to a kind's creation invariants
     # (ResourceService.update_scope, ADR: per-agent-resource-scope).
+    await _reachable(svc, uid)
     scope = body.scope.to_domain() if body.scope is not None else None
     return _to_out(await svc.update_scope(uid, scope, actor=actor))

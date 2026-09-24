@@ -20,6 +20,7 @@ import logging
 from collections.abc import Callable
 
 from coffer.application.engine_ports import ModelSelectorPort
+from coffer.application.features import FeatureService
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.knowledge.curate import CurationPass
 from coffer.application.knowledge.curate_worker import CurationWorker
@@ -59,7 +60,9 @@ def wire_curation(
     return curation
 
 
-async def curation_may_run(engine_config: InternalEngineConfigService, sync: SyncWiring) -> bool:
+async def curation_may_run(
+    engine_config: InternalEngineConfigService, sync: SyncWiring, *, sync_on: bool = True
+) -> bool:
     """On, and on the machine that owns the pass.
 
     Once a vault spans machines an unattended rewriter must run on exactly
@@ -68,8 +71,17 @@ async def curation_may_run(engine_config: InternalEngineConfigService, sync: Syn
     documents, git merges both additions cleanly, and the vault silently holds
     the knowledge twice. No owner set means a single-machine vault, where
     "here" is the only answer there is.
+
+    ``sync_on`` is the ``vault_sync`` feature. While it is off the vault is a
+    single-machine one whatever sync left behind: no round runs, so there is no
+    other machine to fold the same material and no round to overlap, and an
+    owner or a held round the user cannot reach while sync is closed must not
+    stall curation silently. Only the pass's own switch is read then.
     """
-    if not (await engine_config.get()).curate_runs_on(sync.registry.machine_id):
+    config = await engine_config.get()
+    if not sync_on:
+        return config.upkeep(CURATE).enabled
+    if not config.curate_runs_on(sync.registry.machine_id):
         return False
     # And not while a round is waiting on the user — a held confirmation or
     # an unresolved conflict (spec vault-sync "Never overlap a curation pass and a
@@ -87,6 +99,7 @@ def start_curation_worker(
     resources: ResourceService,
     engine_config: InternalEngineConfigService,
     sync: SyncWiring,
+    features: FeatureService,
 ) -> asyncio.Task[None]:
     """Start the interval sweep.
 
@@ -114,7 +127,14 @@ def start_curation_worker(
         return [r.uid for r in await resources.list(kind=KIND_KNOWLEDGE, enabled=True)]
 
     async def is_enabled() -> bool:
-        return await curation_may_run(engine_config, sync)
+        # The knowledge feature first: while it is off the sweep skips its
+        # round (spec experimental-features "Close every surface of a
+        # switched-off feature"), and resumes on the next one once it is on.
+        if not features.is_enabled("knowledge"):
+            return False
+        return await curation_may_run(
+            engine_config, sync, sync_on=features.is_enabled("vault_sync")
+        )
 
     async def read_interval() -> int | None:
         """The operator's interval for this pass, re-read while the wait runs

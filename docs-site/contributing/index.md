@@ -36,6 +36,10 @@ Every contribution follows the same six steps:
 
 PR titles and commit subjects must follow the [Conventional Commits](https://www.conventionalcommits.org/) specification: `type(scope): description`. The pre-commit hook enforces this. `AGENTS.md` carries the full rules, branch naming, and merge policy.
 
+### Work that is not ready yet
+
+Everything lands on `main`, and a release is a tagged `main` — there is no second branch. Work that is not ready for users still lands on `main`, behind an entry in the experimental-feature registry (`coffer.domain.features`): off on a `stable` release, on in every `dev` build. Every surface the work adds is gated through that entry. Once it is ready, it leaves the registry and its gates are deleted in the same PR. See [Experimental features](/guide/experimental-features).
+
 ### OpenSpec
 
 Coffer writes its specs with [OpenSpec](https://github.com/Fission-AI/OpenSpec). Every user-visible change starts as an OpenSpec change (`/opsx:propose`) — a proposal, an optional design, a task list and the spec deltas — written **before** implementation begins, and archived into the specs (`/opsx:archive`) in the same PR. Capabilities are named, never numbered; a CI gate rejects a numbered reference. The spec is the contract; the implementation must satisfy it. `.agents/openspec.md` carries the full workflow.

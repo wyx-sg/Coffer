@@ -26,6 +26,7 @@ const guide = [
       { text: 'Sync', link: '/guide/sync' },
       { text: 'Credentials', link: '/guide/credentials' },
       { text: 'Activity', link: '/guide/activity' },
+      { text: 'Experimental features', link: '/guide/experimental-features' },
     ],
   },
   {

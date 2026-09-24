@@ -2,6 +2,10 @@
 
 Work the same project from a laptop and a desktop and both machines produce vault state — knowledge notes, skills, MCP registrations, agent configuration, credentials. **Sync** keeps them the same vault by converging each of them with a git repository **you own**. A background worker commits what this vault holds, lets git three-way-merge it against what the remote holds, and applies the result back — deletions included.
 
+::: tip Experimental feature
+This is an [experimental feature](/guide/experimental-features) (`vault_sync`): off by default in a release build, on in a build from source. Switch it on under **Settings → General → Experimental features**, or with `coffer daemon features enable vault_sync`.
+:::
+
 The remote is a **rendezvous, not a system of record**. Every machine's vault stays complete and authoritative, so you can delete the repository and rebuild it from any single machine without losing anything. The encryption master key is never written into it.
 
 ## Point the first machine at a repository

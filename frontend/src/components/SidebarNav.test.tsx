@@ -20,13 +20,27 @@ import { routes } from "@/router";
 // The Sync entry carries an attention dot, which asks the daemon for the
 // vault's last round. Stub it; the dot's own rules live in
 // `lib/hooks/useSyncAttention`.
-const syncStatus = vi.fn(() => ({ data: undefined, isError: false }));
+const syncStatus = vi.fn((enabled?: boolean) => {
+  void enabled;
+  return { data: undefined, isError: false };
+});
 vi.mock("@/lib/hooks/useSync", () => ({
-  useSyncStatus: () => syncStatus(),
+  useSyncStatus: (enabled?: boolean) => syncStatus(enabled),
+}));
+
+// Which experimental features the daemon reports on. Every one of them is on
+// unless a test says otherwise — the eleven-entry assertions below are about a
+// build with nothing switched off.
+const ALL_ON = { vault_sync: true, knowledge: true, memory: true };
+const features = vi.fn((): Record<string, boolean | undefined> => ALL_ON);
+vi.mock("@/lib/hooks/useFeatures", () => ({
+  useFeatureEnabled: (key: string) => features()[key],
 }));
 
 afterEach(() => {
+  syncStatus.mockReset();
   syncStatus.mockReturnValue({ data: undefined, isError: false });
+  features.mockReturnValue(ALL_ON);
   localStorage.clear();
 });
 
@@ -200,5 +214,46 @@ describe("the Sync attention dot", () => {
     syncStatus.mockReturnValue({ data: { remote: ON, last_run: HELD }, isError: false } as never);
     const { findByTestId } = renderNav("/", true);
     expect(await findByTestId("nav-dot-sync")).toBeInTheDocument();
+  });
+});
+
+// --- experimental features (spec experimental-features "Close every surface
+// of a switched-off feature") ---
+
+describe("a switched-off experimental feature", () => {
+  acceptance("web-ui", "a switched-off feature leaves the sidebar", () => {
+    features.mockReturnValue({ vault_sync: false, knowledge: false, memory: true });
+    renderNav();
+
+    expect(group("Agents").map(([name]) => name)).toEqual(["Agents", "Chat"]);
+    expect(group("Resources").map(([name]) => name)).toEqual([
+      "MCP servers",
+      "Skills",
+      "Memory",
+      "Model providers",
+      "Channels",
+    ]);
+    expect(group("System").map(([name]) => name)).toEqual(["Activity", "Settings"]);
+  });
+
+  test("an entry whose feature is not known yet is left out rather than flashed in", () => {
+    features.mockReturnValue({});
+    renderNav();
+
+    const hrefs = Array.from(document.querySelectorAll("nav a")).map((a) => a.getAttribute("href"));
+    expect(hrefs).not.toContain("/knowledge");
+    expect(hrefs).not.toContain("/memory");
+    expect(hrefs).not.toContain("/sync");
+    expect(hrefs).toHaveLength(8);
+  });
+
+  test("switched-off sync neither polls nor raises the attention dot", () => {
+    features.mockReturnValue({ ...ALL_ON, vault_sync: false });
+    syncStatus.mockReturnValue({ data: { remote: ON, last_run: HELD }, isError: false } as never);
+    const { queryByTestId } = renderNav();
+
+    expect(queryByTestId("nav-dot-sync")).toBeNull();
+    expect(syncStatus).toHaveBeenCalled();
+    for (const [enabled] of syncStatus.mock.calls) expect(enabled).toBe(false);
   });
 });

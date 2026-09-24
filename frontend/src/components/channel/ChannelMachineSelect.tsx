@@ -25,8 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useRebindChannel } from "@/lib/hooks/useChannels";
-import { useMachines } from "@/lib/hooks/useMachines";
-import { useSyncStatus } from "@/lib/hooks/useSync";
+import { useMachines, useThisMachineId } from "@/lib/hooks/useMachines";
 import { machineOptions, type MachineOption } from "@/lib/machineBinding";
 import { toneClass } from "@/lib/statusColors";
 import { cn } from "@/lib/utils";
@@ -59,11 +58,10 @@ export function ChannelMachineSelect({
 }: Props) {
   const { t } = useTranslation();
   const { data: machineList } = useMachines();
-  const { data: syncStatus } = useSyncStatus();
+  const { machineId: selfId } = useThisMachineId();
   const rebind = useRebindChannel(uid, name);
 
   const machines = machineList?.machines ?? [];
-  const selfId = syncStatus?.machine_id ?? null;
   const options = machineOptions(machines, selfId, runsOn);
   const state = bindingState(runsOn, {
     selfId,

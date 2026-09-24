@@ -79,7 +79,7 @@ class _StubAdapter:
         return SentMessage(message_id="m1")
 
 
-#: The id the stubbed ``/sync/status`` answers with, so the CLI binds a freshly
+#: The id the stubbed ``/daemon/status`` answers with, so the CLI binds a freshly
 #: registered channel to "this machine" the way it does against a real daemon.
 _MACHINE_ID = "0123456789abcdef"
 
@@ -215,8 +215,8 @@ def channel_daemon(tmp_path, monkeypatch):
     # machine it is, because a CLI deriving its own id would be a second answer
     # to a question that must have exactly one. The real daemon always serves
     # this; the stub serves the one field they read.
-    @fapp.get("/api/v1/sync/status")
-    def _sync_status() -> dict[str, Any]:
+    @fapp.get("/api/v1/daemon/status")
+    def _daemon_status() -> dict[str, Any]:
         return {"machine_id": _MACHINE_ID}
 
     fapp.dependency_overrides[get_resource_service] = lambda: resources
