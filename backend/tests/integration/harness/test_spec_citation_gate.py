@@ -227,8 +227,10 @@ def test_legitimate_prose_is_not_a_citation(gate, tree, text) -> None:
         f"hardened under T{'-'}051",
         f"(T{'-'}0072 verification)",
         f"flaky before TEST{'-'}001",
+        f"see T{'-'}61 and TEST{'-'}01",
         f"# P1{'-'}1: key off the status probe",
         f"// P0{'-'}4: show the prompt at once",
+        f"# P4{'-'}2: a later finding",
     ],
 )
 def test_each_retired_id_form_fails(gate, tree, text) -> None:
@@ -246,6 +248,7 @@ def test_each_retired_id_form_fails(gate, tree, text) -> None:
         f"a {CODE}-REGISTRY key",
         "T-shirt sizes, a T-junction, TEST-mode",
         "GPT-4 and P-256 and MP3-1",
+        "T-1000 model, an A/T-123 route, N-T-123 and SHA-256",
     ],
 )
 def test_text_that_only_resembles_a_retired_id_passes(gate, tree, text) -> None:
@@ -262,3 +265,33 @@ def test_numbered_spec_rejects_every_case() -> None:
     for text in (f"{SPEC} 004", f"{SPEC}s 009", f"SPEC{'-'}012", f"{SPEC}-001"):
         assert numbering.NUMBERED_SPEC.search(text), text
     assert not numbering.NUMBERED_SPEC.search(f"{SPEC} 2026")
+
+
+# ---------------------------------------------------------------- malformed
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f'{SPEC} knowledge,"Keep one tree per collection"',
+        f'{SPEC} knowledge: "`cmd` keeps one tree"',
+        f'{SPEC} knowledge " Keep one tree per collection"',
+        f'{SPEC} knowledge "3 trees per collection"',
+    ],
+)
+def test_a_malformed_citation_of_a_real_capability_fails(gate, tree, text) -> None:
+    errors, _ = _check(gate, tree, text)
+    assert len(errors) == 1
+    assert "malformed" in errors[0]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f'x = "{SPEC} knowledge"; y = "a b"',
+        f'{SPEC} nothing-here "3 things"',
+    ],
+)
+def test_a_string_literal_or_unknown_word_is_not_malformed(gate, tree, text) -> None:
+    errors, _ = _check(gate, tree, text)
+    assert not [e for e in errors if "malformed" in e]

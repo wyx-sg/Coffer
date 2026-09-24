@@ -9,8 +9,9 @@
 carries `permissions` (allow/deny) and `PostToolUse` / `PreToolUse` /
 `SessionStart` hooks, the hook scripts live in `.claude/hooks/`, the OpenSpec
 skills in `.claude/skills/`, and `.agents/harness.md` documents the layer.
-Layer D shipped: `evals/` (datasets, baselines, graders), `make eval` and
-`.github/workflows/evals.yml`. Layer B shipped only its lockfile half —
+Layer D shipped: `evals/` (datasets and baselines, with grading inside the
+eval runners), `make eval` and `.github/workflows/evals.yml`, which gates the
+deterministic tool-search suite; the model-based routing suite runs by hand. Layer B shipped only its lockfile half —
 `backend/uv.lock` and `.python-version` are committed. There is no
 `.devcontainer/`, and the dev database is still the one `~/.coffer/coffer.db`
 rather than a path derived per branch. Layer C was not built: there is no

@@ -87,6 +87,16 @@ LINK_CITATION = re.compile(
     r"\[[^\]\n]*\]\((?:[^)\s]*/)?openspec/specs/(?P<cap>[a-z0-9/-]+?)/spec\.md"
     r"(?:#[^)\s]*)?\)(?:'s)?,?" + _SEP + _TITLE
 )
+#: A citation of a real capability whose title the recogniser above would skip:
+#: a quote straight after a comma or colon (`spec knowledge,"Title"`), or a
+#: title opening with a space, a backtick or a digit. Reported, never skipped,
+#: so a title that someday starts with one of those cannot go unchecked. A
+#: quote directly after the capability (`"spec chat"; y`) closes a string
+#: literal and is not matched.
+MALFORMED_CITATION = re.compile(
+    r"\b[Ss]pecs?[ \t]+(?P<wrap>`|\*\*|)(?P<cap>[a-z][a-z0-9-]*(?:/[a-z][a-z0-9-]*)?)"
+    r"(?P=wrap)(?:'s)?(?:[,:]\"|[,:]?[ \t]+\"(?=[ \t`0-9]))"
+)
 #: Words that read as `spec <word> "..."` in prose without naming a capability.
 NOT_A_CAPABILITY = frozenset(
     {"scenario", "scenarios", "requirement", "requirements", "title", "says", "text"}
@@ -108,11 +118,11 @@ RETIRED_IDS: tuple[tuple[re.Pattern[str], str], ...] = (
         "specs are named, not numbered — name the capability instead",
     ),
     (
-        re.compile(r"\b(?:T|TEST)-\d{3,4}\b"),
+        re.compile(r"(?<![\w/-])(?:T|TEST)-(?:\d{2,3}|0\d{3})\b"),
         "task ids are retired — cite the requirement's title, or drop the id",
     ),
     (
-        re.compile(r"\bP[0-3]-\d{1,2}\b"),
+        re.compile(r"(?<![\w/-])P\d-\d{1,2}\b"),
         "review-finding ids are retired — cite the requirement's title, or drop the id",
     ),
 )
@@ -251,6 +261,14 @@ def check_file(rel: str, text: str, titles: Titles) -> tuple[list[str], list[str
             )
             continue
         errors.append(f"{where}: spec {cite.capability} has no requirement titled {cite.title!r}")
+    for bad in MALFORMED_CITATION.finditer(text):
+        cap = bad.group("cap")
+        if cap in titles.live or cap in titles.pending:
+            at = text.count("\n", 0, bad.start()) + 1
+            errors.append(
+                f"{rel}:{at}: citation of spec {cap} is malformed — put a space before "
+                f"the quoted title and start the title with a letter"
+            )
     if change is None:
         for lineno, line in enumerate(text.splitlines(), 1):
             for pattern, why in RETIRED_IDS:
