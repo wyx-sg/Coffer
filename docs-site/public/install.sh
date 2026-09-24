@@ -12,7 +12,7 @@
 #
 # Supported platforms: macOS (Apple Silicon) only.
 #
-# Full install guide: https://wyx-sg.github.io/Coffer/guide/install
+# Full install guide: https://wyx-sg.github.io/Coffer/start/install
 
 set -eu
 
@@ -65,7 +65,7 @@ main() {
                     err "unsupported macOS architecture: x86_64 (Intel)
 Intel macOS builds are not published (GitHub's Intel runner pool is being
 retired). Only Apple Silicon (arm64) is published.
-See https://wyx-sg.github.io/Coffer/guide/install for alternatives."
+See https://wyx-sg.github.io/Coffer/start/install for alternatives."
                     ;;
                 *)       err "unsupported macOS architecture: $_arch" ;;
             esac
@@ -78,12 +78,12 @@ Install from source instead (Python 3.12+):
   git clone https://github.com/wyx-sg/Coffer.git && cd Coffer
   python3.12 -m venv .venv && . .venv/bin/activate
   pip install -e ./backend
-See https://wyx-sg.github.io/Coffer/guide/install for the from-source guide."
+See https://wyx-sg.github.io/Coffer/start/install for the from-source guide."
             ;;
         *)
             err "unsupported OS: $_os
 Coffer publishes macOS (Apple Silicon) builds only.
-See https://wyx-sg.github.io/Coffer/guide/install for alternatives."
+See https://wyx-sg.github.io/Coffer/start/install for alternatives."
             ;;
     esac
 
@@ -216,7 +216,7 @@ See https://wyx-sg.github.io/Coffer/guide/install for alternatives."
     say "    coffer mcp add ...   (daemon auto-starts)"
     say "    coffer mcp list"
     say ""
-    say "  Full guide: https://wyx-sg.github.io/Coffer/guide/install"
+    say "  Full guide: https://wyx-sg.github.io/Coffer/start/install"
     say ""
 }
 

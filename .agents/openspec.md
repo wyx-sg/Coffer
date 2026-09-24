@@ -43,7 +43,7 @@ its path under `openspec/specs/`, so a child's is `<parent>/<child>`; that id
 is what acceptance markers name. Plans, research and usage prose are not
 long-lived capability files: a change's plan is its `design.md`, background
 worth keeping becomes an ADR under `docs/decisions/`, and user-facing usage
-belongs in `docs-site/guide/`.
+belongs in `docs-site/guides/`.
 
 A child exists to hold what varies by type. What every sibling shares — the
 wire contract, the entities, the common requirements — stays in the parent, so

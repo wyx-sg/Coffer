@@ -1,68 +1,134 @@
 import { defineConfig } from 'vitepress'
 import { withMermaid } from 'vitepress-plugin-mermaid'
 
+const repo = 'https://github.com/wyx-sg/Coffer'
+
 // ---- sidebar sections ----
-const guide = [
+const start = [
   {
-    text: 'Guide',
+    text: 'Getting started',
     items: [
-      { text: 'Introduction', link: '/guide/introduction' },
-      { text: 'Download & install', link: '/guide/install' },
-      { text: 'Getting Started', link: '/guide/getting-started' },
-      { text: 'Concepts', link: '/guide/concepts' },
+      { text: 'What is Coffer?', link: '/start/' },
+      { text: 'Why Coffer', link: '/start/why-coffer' },
+      { text: 'Install', link: '/start/install' },
+      { text: 'Quickstart', link: '/start/quickstart' },
+      { text: 'Core concepts', link: '/start/concepts' },
+    ],
+  },
+]
+
+const guides = [
+  {
+    text: 'Agents and tools',
+    items: [
+      { text: 'Agents', link: '/guides/agents' },
+      { text: 'Connect a client', link: '/guides/connect-a-client' },
+      { text: 'MCP servers', link: '/guides/mcp-servers' },
+      { text: 'Model providers', link: '/guides/providers' },
+      { text: 'Credentials', link: '/guides/credentials' },
     ],
   },
   {
-    text: 'Using the vault',
+    text: 'What agents share',
     items: [
-      { text: 'Register an MCP server', link: '/guide/register-server' },
-      { text: 'Connect a client', link: '/guide/connect-client' },
-      { text: 'Agents', link: '/guide/agents' },
-      { text: 'Model providers', link: '/guide/providers' },
-      { text: 'Skills', link: '/guide/skills' },
-      { text: 'Knowledge', link: '/guide/knowledge' },
-      { text: 'Memory', link: '/guide/memory' },
-      { text: 'Channels', link: '/guide/channels' },
-      { text: 'Sync', link: '/guide/sync' },
-      { text: 'Credentials', link: '/guide/credentials' },
-      { text: 'Activity', link: '/guide/activity' },
-      { text: 'Experimental features', link: '/guide/experimental-features' },
+      { text: 'Skills', link: '/guides/skills' },
+      { text: 'Knowledge', link: '/guides/knowledge' },
+      { text: 'Memory', link: '/guides/memory' },
+    ],
+  },
+  {
+    text: 'Talking to agents',
+    items: [
+      { text: 'Chat', link: '/guides/chat' },
+      { text: 'Channels', link: '/guides/channels' },
+      { text: 'Telegram', link: '/guides/channels-telegram' },
+      { text: 'SeaTalk', link: '/guides/channels-seatalk' },
     ],
   },
   {
     text: 'Apps',
-    items: [{ text: 'Web UI', link: '/guide/web-ui' }],
-  },
-]
-
-const arch = [
-  {
-    text: 'Architecture',
     items: [
-      { text: 'Principles', link: '/architecture/principles' },
-      { text: 'System overview', link: '/architecture/overview' },
-      { text: 'Daemon & processes', link: '/architecture/processes' },
-      { text: 'Resource framework', link: '/architecture/resource-framework' },
-      { text: 'Layering & boundaries', link: '/architecture/layering' },
-      { text: 'Surfaces', link: '/architecture/surfaces' },
-      { text: 'Request lifecycle', link: '/architecture/request-lifecycle' },
-      { text: 'Persistence', link: '/architecture/persistence' },
-      { text: 'Vault sync', link: '/architecture/sync' },
-      { text: 'Security', link: '/architecture/security' },
-      { text: 'Audit & accountability', link: '/architecture/audit' },
-      { text: 'Observability', link: '/architecture/observability' },
-      { text: 'Distribution', link: '/architecture/distribution' },
-      { text: 'Experimental features', link: '/architecture/experimental-features' },
+      { text: 'Web UI', link: '/guides/web-ui' },
+      { text: 'Desktop app', link: '/guides/desktop-app' },
+    ],
+  },
+  {
+    text: 'Operating Coffer',
+    items: [
+      { text: 'Running the daemon', link: '/guides/daemon' },
+      { text: 'Vault sync', link: '/guides/vault-sync' },
+      { text: 'Activity and audit', link: '/guides/activity' },
+      { text: 'Experimental features', link: '/guides/experimental-features' },
+      { text: 'Troubleshooting', link: '/guides/troubleshooting' },
+      { text: 'FAQ', link: '/guides/faq' },
     ],
   },
 ]
 
-const contrib = [
+const architecture = [
+  {
+    text: 'Foundations',
+    items: [
+      { text: 'Overview', link: '/architecture/' },
+      { text: 'Principles', link: '/architecture/principles' },
+      { text: 'Design philosophy', link: '/architecture/design-principles' },
+      { text: 'Resource framework', link: '/architecture/resource-framework' },
+      { text: 'Layering and code layout', link: '/architecture/layering' },
+    ],
+  },
+  {
+    text: 'Runtime',
+    items: [
+      { text: 'Daemon and processes', link: '/architecture/daemon' },
+      { text: 'MCP gateway', link: '/architecture/mcp-gateway' },
+      { text: 'Chat and turns', link: '/architecture/chat' },
+      { text: 'Persistence', link: '/architecture/persistence' },
+    ],
+  },
+  {
+    text: 'Subsystems',
+    items: [
+      { text: 'Knowledge', link: '/architecture/knowledge' },
+      { text: 'Memory', link: '/architecture/memory' },
+      { text: 'Vault sync', link: '/architecture/vault-sync' },
+    ],
+  },
+  {
+    text: 'Cross-cutting',
+    items: [
+      { text: 'Security model', link: '/architecture/security' },
+      { text: 'Observability', link: '/architecture/observability' },
+      { text: 'Distribution and releases', link: '/architecture/distribution' },
+      { text: 'Decision records', link: '/architecture/decisions' },
+    ],
+  },
+]
+
+const reference = [
+  {
+    text: 'Reference',
+    items: [
+      { text: 'CLI', link: '/reference/cli' },
+      { text: 'MCP tools', link: '/reference/mcp-tools' },
+      { text: 'REST API', link: '/reference/rest-api' },
+      { text: 'Configuration', link: '/reference/configuration' },
+      { text: 'Files and directories', link: '/reference/filesystem' },
+      { text: 'Error codes', link: '/reference/error-codes' },
+      { text: 'Glossary', link: '/reference/glossary' },
+    ],
+  },
+]
+
+const contributing = [
   {
     text: 'Contributing',
     items: [
-      { text: 'Contributing', link: '/contributing/' },
-      { text: 'Security', link: '/contributing/security' },
+      { text: 'Overview', link: '/contributing/' },
+      { text: 'Development setup', link: '/contributing/development' },
+      { text: 'Spec-driven workflow', link: '/contributing/spec-workflow' },
+      { text: 'Testing', link: '/contributing/testing' },
+      { text: 'Frontend', link: '/contributing/frontend' },
+      { text: 'Security policy', link: '/contributing/security' },
     ],
   },
 ]
@@ -70,25 +136,50 @@ const contrib = [
 export default withMermaid(
   defineConfig({
     title: 'Coffer',
-    description: 'Local-first AI agent vault — one secure, shared interface for every AI agent on your machine: MCP tools, skills, knowledge, chat, channels, and vault sync.',
+    description:
+      'Coffer is a local-first vault for AI coding agents: one place on your machine for the MCP servers, skills, knowledge, memory and model providers every agent shares.',
     base: '/Coffer/',
     cleanUrls: true,
     lastUpdated: true,
-    appearance: false, // light-only: no dark mode
-    ignoreDeadLinks: true,
     lang: 'en',
+    head: [['meta', { name: 'theme-color', content: '#c96442' }]],
+    markdown: {
+      theme: { light: 'github-light', dark: 'github-dark' },
+    },
+    mermaid: {},
     themeConfig: {
       search: { provider: 'local' },
-      socialLinks: [{ icon: 'github', link: 'https://github.com/wyx-sg/Coffer' }],
+      outline: { level: [2, 3] },
+      socialLinks: [{ icon: 'github', link: repo }],
+      editLink: {
+        pattern: `${repo}/edit/main/docs-site/:path`,
+        text: 'Edit this page on GitHub',
+      },
+      footer: {
+        message: 'Released under the MIT License.',
+        copyright: 'Coffer contributors',
+      },
       nav: [
-        { text: 'Guide', link: '/guide/introduction' },
-        { text: 'Architecture', link: '/architecture/overview' },
-        { text: 'Contributing', link: '/contributing/' },
+        { text: 'Get started', link: '/start/', activeMatch: '^/start/' },
+        { text: 'Guides', link: '/guides/agents', activeMatch: '^/guides/' },
+        { text: 'Architecture', link: '/architecture/', activeMatch: '^/architecture/' },
+        { text: 'Reference', link: '/reference/cli', activeMatch: '^/reference/' },
+        { text: 'Contributing', link: '/contributing/', activeMatch: '^/contributing/' },
+        {
+          text: 'Links',
+          items: [
+            { text: 'Releases', link: `${repo}/releases` },
+            { text: 'Specifications', link: `${repo}/tree/main/openspec/specs` },
+            { text: 'Decision records', link: `${repo}/tree/main/docs/decisions` },
+          ],
+        },
       ],
       sidebar: {
-        '/guide/': guide,
-        '/architecture/': arch,
-        '/contributing/': contrib,
+        '/start/': start,
+        '/guides/': guides,
+        '/architecture/': architecture,
+        '/reference/': reference,
+        '/contributing/': contributing,
       },
     },
   }),

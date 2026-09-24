@@ -12,7 +12,7 @@ spec resource-framework "Audit every lifecycle change",
 spec resource-framework "Prune each registered log table on its own retention period",
 spec mcp-gateway "Record invocations without content",
 spec vault-sync "Keep machine-local state out of the repository",
-architecture [audit](../../docs-site/architecture/audit.md),
+architecture [observability](../../docs-site/architecture/observability.md),
 research note [activity and audit](../research/activity-and-audit.md),
 PRs #14, #328, #406
 

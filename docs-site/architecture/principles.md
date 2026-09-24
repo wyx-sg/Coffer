@@ -1,7 +1,12 @@
-# Design Principles
+---
+title: Principles
+description: The binding project principles, technology constraints, quality gates and governance of Coffer.
+---
+
+# Principles
 
 ::: tip This page is normative
-This page is the single source of Coffer's project principles. It holds **scaffolding-level** invariants only: tech stack, workflow, licensing posture, and architectural style. Product behavior — the resource model, the gate on who may drive an agent, the surface roster, what gets persisted where — is defined per capability in `openspec/specs/`. The clauses under [The three principles](#the-three-principles), [Technology & architectural constraints](#technology-architectural-constraints), [Quality gates](#quality-gates) and [Governance](#governance) are binding; the surrounding sections explain them.
+This page is the single source of Coffer's project principles. It holds **scaffolding-level** invariants only: tech stack, workflow, licensing posture, and architectural style. Product behavior — the resource model, the gate on who may drive an agent, the surface roster, what gets persisted where — is defined per capability in `openspec/specs/`. The clauses under [The three principles](#the-three-principles), [Technology & architectural constraints](#technology-architectural-constraints), [Quality gates](#quality-gates) and [Governance](#governance) are binding; the surrounding sections explain them. The reasoning behind each design choice is laid out in [Design philosophy](/architecture/design-principles).
 :::
 
 > Coffer is a local-first AI agent vault: a developer's accumulated AI assets
@@ -42,7 +47,7 @@ Every vault asset — registered server configs, credential references, audit lo
 
 A hosted endpoint Coffer itself operates remains outside this exception.
 
-Convergence is **bidirectional**: Coffer applies what the remote brought in as well as pushing what this machine changed. It is authorised only under the safety rules the sync spec carries — git's own three-way merge is the arbiter, what gets applied is a **diff against the last state this vault provably held** rather than a wholesale overwrite, and a round that would delete more than its configured share stops and asks. A mechanism that writes the vault outside those rules is not covered by this exception. How the converge round meets these rules is described in [Vault sync](/architecture/sync).
+Convergence is **bidirectional**: Coffer applies what the remote brought in as well as pushing what this machine changed. It is authorised only under the safety rules the sync spec carries — git's own three-way merge is the arbiter, what gets applied is a **diff against the last state this vault provably held** rather than a wholesale overwrite, and a round that would delete more than its configured share stops and asks. A mechanism that writes the vault outside those rules is not covered by this exception. How the converge round meets these rules is described in [Vault sync](/architecture/vault-sync).
 
 ### II. Spec-as-Truth (OpenSpec)
 
@@ -59,10 +64,10 @@ This prevents the hidden cost of "we'll open-source it later" — retrofitting l
 ## Technology & architectural constraints
 
 - **Languages.** Python 3.12+ for backend, CLI, and any MCP shim; TypeScript 5.x for frontend. No other primary languages without an amendment.
-- **Architecture.** Layered: `surfaces → application → domain`; `infrastructure` adapts to ports defined in `application` and is wired only at the composition root. `domain/` may not import `infrastructure/`, `surfaces/`, or external SDKs. `application/` may not import `surfaces/`. Cross-cutting modules are extracted only after the second feature needs them. (Exception: the Resource framework — see [Resource framework](/architecture/resource-framework#why-kind-agnostic-upfront-adr-resource-framework-upfront).) The layers, their enforcement and the code layout are described in [Layering & boundaries](/architecture/layering).
+- **Architecture.** Layered: `surfaces → application → domain`; `infrastructure` adapts to ports defined in `application` and is wired only at the composition root. `domain/` may not import `infrastructure/`, `surfaces/`, or external SDKs. `application/` may not import `surfaces/`. Cross-cutting modules are extracted only after the second feature needs them. (Exception: the Resource framework — see [Resource framework](/architecture/resource-framework#design-decisions).) The layers, their enforcement and the code layout are described in [Layering and code layout](/architecture/layering).
 - **Persistence.** SQLite is the system of record for control-plane state. Bulk user content — knowledge collections, memory partitions — is stored as files on the local file system, and those files are the only copy: nothing indexes, chunks or embeds them. See [Persistence](/architecture/persistence).
 - **Credentials.** Secrets live **only** as Fernet ciphertext in the `credentials` table; plaintext exists in memory solely between decrypt and the spawn/header-injection that consumes it. The Fernet master key is managed exclusively by `coffer.infrastructure.credentials` — a `0600` file beside the DB by default, the OS keychain via `keyring` when opted in. `keyring` import stays confined to that module. All other code uses credential refs. No secret plaintext reaches the database, logs, audit, or any structured event. Credential material leaves the machine only as Fernet ciphertext and only when the user asks for it explicitly; the master key is never written into anything the vault publishes, and reaches another machine only through the explicit out-of-band transfer (`/sync/key/export` and `/sync/key/import`, which move key material and nothing else). See [Security](/architecture/security).
-- **Network defaults.** Loopback-only. Outbound HTTP goes through a SSRF-guarded client (`coffer.infrastructure.net.ssrf_guard`, which rejects loopback, private and link-local destinations). Where the code does not yet meet this — the guard currently has one caller — is recorded in [Security → Outbound HTTP](/architecture/security#outbound-http-one-guarded-path-and-the-rest).
+- **Network defaults.** Loopback-only. Outbound HTTP goes through a SSRF-guarded client (`coffer.infrastructure.net.ssrf_guard`, which rejects loopback, private and link-local destinations). Where the code does not yet meet this — the guard currently has one caller — is recorded in [Security → Outbound HTTP](/architecture/security#outbound-requests).
 
 ## Quality gates
 
