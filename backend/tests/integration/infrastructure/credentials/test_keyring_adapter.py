@@ -38,16 +38,40 @@ def test_delete(monkeypatch):
     assert adapter.get("token") is None
 
 
+class _ReadRaisesKeyringLocked:
+    """A keychain that exists but is locked: reads raise ``KeyringLocked``.
+
+    Duck-typed, not a ``KeyringBackend`` subclass, so it never registers as a
+    candidate backend for tests that let keyring pick one."""
+
+    def get_password(self, service: str, username: str) -> str | None:
+        from keyring.errors import KeyringLocked
+
+        raise KeyringLocked("the keychain is locked")
+
+
 def test_get_raises_keyring_locked(monkeypatch):
-    """When the underlying keyring is locked (fail backend), the adapter raises CredentialLocked."""
+    """A locked keychain may hold the value: the adapter raises CredentialLocked
+    rather than answer "absent"."""
     from coffer.domain.errors import CredentialLocked
+    from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
+
+    monkeypatch.setattr(keyring.core, "_keyring_backend", _ReadRaisesKeyringLocked())
+
+    adapter = KeyringAdapter()
+    with pytest.raises(CredentialLocked, match="keychain is locked"):
+        adapter.get("anything")
+
+
+def test_get_with_no_keychain_backend_returns_none(monkeypatch):
+    """A host with no keychain backend at all (keyring's fail backend) holds
+    nothing there, so a read answers None — the one case that is truly absent
+    rather than unreadable."""
     from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 
     monkeypatch.setattr(keyring.core, "_keyring_backend", FailBackend())
 
-    adapter = KeyringAdapter()
-    with pytest.raises(CredentialLocked):
-        adapter.get("anything")
+    assert KeyringAdapter().get("anything") is None
 
 
 class _SetRaisesKeyringLocked(keyring.backend.KeyringBackend):

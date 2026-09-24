@@ -150,9 +150,12 @@ increments and the finished assistant message, so the adapter MUST subtract
 what it already emitted and send the reply exactly once.
 
 A turn MUST run against the config directory of the agent that answers for its
-type — the first enabled agent of that type, the same one whose models the
-pickers offer ([agent-registry](../agent-registry/spec.md) "Read the model
-catalogue back from the installed agent"). Coffer delivers skills, installs its
+type — the first enabled agent of that type in name order (the order the
+agent registry lists agents in), the same one whose models the pickers offer
+([agent-registry](../agent-registry/spec.md) "Serve each agent type's model
+catalogue"). Two agents of one type can be registered when their config
+directories differ; which of them answers is then decided by their names alone,
+so renaming one can change it, and a disabled agent never answers. Coffer delivers skills, installs its
 MCP entry and edits config files in that directory, so a turn that read any
 other one would not see them. When that agent's `config_dir` is not its type's
 standard location, the spawned process's environment MUST carry the variable the
@@ -174,6 +177,12 @@ own, so the process behaves as when the user runs the CLI themselves.
 - **WHEN** a turn runs on each
 - **THEN** the Claude Code process is started with `CLAUDE_CONFIG_DIR` set to the agent's `config_dir`, and the Codex app-server with `CODEX_HOME` set to its `config_dir`, the rest of the daemon's environment (and a projected provider key) intact
 - **AND** a turn on an agent whose `config_dir` is its type's standard location starts its process with the environment untouched
+
+#### Scenario: two agents of one type — the one first by name answers
+- **GIVEN** two enabled `claude_code` agents with different config directories, `zeta-work` registered before `alpha-home`
+- **WHEN** a turn's environment is resolved for the `claude_code` type
+- **THEN** it runs against `alpha-home`'s config directory, whichever was registered first
+- **AND** after `zeta-work` is renamed to `aardvark-work` the next turn runs against its config directory instead
 
 ### Requirement: End every adapter stream with a terminal event
 The adapter seam is a contract in both directions. An adapter MUST yield a

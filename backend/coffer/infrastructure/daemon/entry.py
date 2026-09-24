@@ -19,13 +19,15 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import os
 import signal
 import socket
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, MutableMapping
 
 import uvicorn
 
+from coffer.domain.agent.descriptor import AGENT_DESCRIPTORS
 from coffer.infrastructure.daemon import activity, bootstrap
 from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon.port_alloc import PortInUse
@@ -88,6 +90,32 @@ def _raise_fd_soft_limit() -> None:
             _logger.info("raised RLIMIT_NOFILE soft limit %s -> %s", soft, target)
     except (ValueError, OSError) as exc:  # pragma: no cover - platform dependent
         _logger.warning("could not raise RLIMIT_NOFILE soft limit: %r", exc)
+
+
+def scrub_agent_home_env(environ: MutableMapping[str, str]) -> list[str]:
+    """Remove every agent-home variable (``CLAUDE_CONFIG_DIR``, ``CODEX_HOME``)
+    the daemon inherited, and log once which ones went.
+
+    A daemon started from a shell that exports one of them would pass it to
+    every agent process it spawns — so an agent registered on the default
+    directory would run against the exported one while Coffer delivers skills,
+    the MCP entry and config into the default. Agents get the variable only
+    through their own registered config directory (``AgentConfig.runtime_env``),
+    per spec daemon "Clear inherited agent-home variables at start". The names
+    come from the agent descriptors, so a new agent type's variable is covered
+    without touching this list.
+    """
+    names = sorted({d.home_env_var for d in AGENT_DESCRIPTORS.values() if d.home_env_var})
+    removed = [name for name in names if environ.pop(name, None) is not None]
+    if removed:
+        # WARNING, not INFO: this runs before the app configures logging, and
+        # only WARNING and above reach stderr (the daemon log) at that point.
+        _logger.warning(
+            "cleared inherited agent-home variables %s; agents get them only "
+            "from their registered config directory",
+            ", ".join(removed),
+        )
+    return removed
 
 
 def _install_signal_handlers() -> None:
@@ -236,6 +264,8 @@ def _run_server(sock: socket.socket, on_started: Callable[[], None]) -> None:
 
 
 def main() -> None:
+    # First, before anything can spawn an agent process that inherits them.
+    scrub_agent_home_env(os.environ)
     _raise_fd_soft_limit()
     _install_signal_handlers()
     # Detect-or-spawn: probe + bind happen under one flock (acquire_or_existing). If a

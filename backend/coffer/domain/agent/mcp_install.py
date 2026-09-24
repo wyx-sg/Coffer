@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import MutableMapping
+from itertools import pairwise
 from typing import Any
 
 import tomlkit
@@ -190,3 +191,28 @@ def installed_command(
     if fmt is ConfigFileFormat.JSON:
         return _coffer_command(_json_container(_parse_json(text), ck)[COFFER_SERVER_KEY])
     return _coffer_command(_parse_toml(text)[ck][COFFER_SERVER_KEY])
+
+
+def installed_agent_uid(
+    fmt: ConfigFileFormat, text: str, *, container_key: str | None = None
+) -> str | None:
+    """The uid the installed coffer entry speaks for (its ``--agent-uid``
+    argument), or ``None`` when there is no entry or it carries no uid (one an
+    older Coffer wrote, or a hand-edit). Raises ``ConfigFileFormatInvalid``
+    for text that does not parse, like the other readers here."""
+    ck = container_key or default_container_key(fmt)
+    if not is_installed(fmt, text, container_key=ck):
+        return None
+    if fmt is ConfigFileFormat.JSON:
+        entry = _json_container(_parse_json(text), ck)[COFFER_SERVER_KEY]
+    else:
+        entry = _parse_toml(text)[ck][COFFER_SERVER_KEY]
+    if not isinstance(entry, MutableMapping):
+        return None
+    args = entry.get("args")
+    if not isinstance(args, (list, tuple)):
+        return None
+    for flag, value in pairwise(args):
+        if flag == "--agent-uid" and isinstance(value, str) and value:
+            return value
+    return None

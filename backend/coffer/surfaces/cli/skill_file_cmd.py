@@ -22,7 +22,13 @@ from typing import Any
 import typer
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli._resolve import resolve_uid
+
+
+def _stdin_is_tty() -> bool:
+    """Whether stdin is a terminal. A seam for the tests."""
+    return sys.stdin.isatty()
 
 
 def _verbose(ctx: typer.Context) -> bool:
@@ -72,7 +78,11 @@ def cat(
         False, "--json", help="The whole read: content, fingerprint, size, binary, truncated"
     ),
 ) -> None:
-    """Print one file of a skill's master folder."""
+    """Print one file of a skill's master folder.
+
+    A file past the route's read cap prints its first part and exits 1 with a
+    note on stderr, so a script never mistakes the part for the file;
+    ``--json`` exits 0 and carries ``truncated`` for the caller to judge."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -88,7 +98,13 @@ def cat(
         return
     typer.echo(data["content"], nl=False)
     if data["truncated"]:
-        typer.echo(f"\n[truncated: the file is {data['size']} bytes]", err=True)
+        typer.echo(
+            f"\n[truncated: the file is {data['size']} bytes; only the first "
+            f"{len(data['content'].encode('utf-8'))} were printed — "
+            "read it from the master folder (`skill files`)]",
+            err=True,
+        )
+        raise typer.Exit(int(ExitCode.GENERIC))
 
 
 def write(
@@ -104,13 +120,29 @@ def write(
         help="The fingerprint of the read your edit started from (`skill cat --json`); "
         "default: a fresh read taken just before the write",
     ),
+    allow_empty: bool = typer.Option(
+        False, "--allow-empty", help="Accept empty content and empty the file"
+    ),
 ) -> None:
     """Overwrite an existing text file in a skill's master folder.
 
     The write is conditional: it carries a fingerprint, and a file changed on
     disk since then is refused (exit 5) and left as it is. Coffer's own builtin
-    skill is refused (exit 5) because it is rewritten from the build."""
+    skill is refused (exit 5) because it is rewritten from the build.
+
+    Content comes from ``--from-file`` or piped stdin. With stdin a terminal
+    and no ``--from-file`` the command refuses up front (exit 2) rather than
+    wait silently for EOF; empty content — stdin already at EOF, as under
+    cron, CI or an agent's shell — is refused (exit 2) unless
+    ``--allow-empty`` says emptying the file is meant."""
     verbose = _verbose(ctx)
+    if from_file is None and _stdin_is_tty():
+        typer.echo(
+            "no content to write: stdin is a terminal — pipe the new content in "
+            "(`skill write NAME PATH < file`) or pass --from-file PATH",
+            err=True,
+        )
+        raise typer.Exit(int(ExitCode.INVALID_USAGE))
     if from_file is not None:
         try:
             content = pathlib.Path(from_file).read_text(encoding="utf-8")
@@ -119,6 +151,14 @@ def write(
             raise typer.Exit(1) from e
     else:
         content = sys.stdin.read()
+    if not content and not allow_empty:
+        source = from_file if from_file is not None else "stdin"
+        typer.echo(
+            f"no content to write: {source} is empty; nothing was saved — "
+            "pass --allow-empty to empty the file",
+            err=True,
+        )
+        raise typer.Exit(int(ExitCode.INVALID_USAGE))
     c, _info = _cli_client.client_or_exit()
     with c:
         uid = resolve_uid(c, "skill", name, verbose=verbose)

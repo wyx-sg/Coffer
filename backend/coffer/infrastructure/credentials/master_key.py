@@ -55,10 +55,21 @@ class MasterKeyManager:
 
         Returns None when no key exists and ``allow_create`` is False — the
         caller decides whether that is fatal (it is, when ciphertext exists).
+
+        A keychain that cannot be read right now (``CredentialLocked``) is
+        never taken as "no key" when creating is allowed: the key may sit in
+        it (opted in through :meth:`relocate`), and a file key created now
+        would shadow it on every later start, file-first. So the lock is
+        re-raised and nothing is written (spec credentials "Resolve the master
+        key file-first and create it only for an empty store"). Without
+        ``allow_create`` a locked keychain still reads as None — the caller
+        then refuses on its own terms.
         """
         try:
             key = self.lookup()
         except CredentialLocked:
+            if allow_create:
+                raise
             key = None
         if key is not None or not allow_create:
             return key

@@ -767,3 +767,134 @@ def test_skill_file_commands_on_an_unknown_skill_exit_4(skill_cli_daemon):
         r = _runner.invoke(cli_app, argv, input="x")
         assert r.exit_code == 4, (argv, r.output)
         assert "no skill named 'ghost'" in r.output
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="an empty or interactive `skill write` saves nothing"
+)
+def test_skill_write_with_empty_stdin_is_refused_and_leaves_the_file(skill_cli_daemon):
+    """stdin at EOF (cron, CI, an agent's shell, ``</dev/null``) reads as "" —
+    that is never taken as the new content unless ``--allow-empty`` says so."""
+    master = _import_with_nested_file(skill_cli_daemon, "wr-empty")
+
+    r = _runner.invoke(cli_app, ["skill", "write", "wr-empty", "refs/notes.txt"], input="")
+
+    assert r.exit_code == 2, r.output
+    assert "no content" in r.output
+    assert "--allow-empty" in r.output
+    assert "saved:" not in r.output
+    assert (master / "refs" / "notes.txt").read_text(encoding="utf-8") == "first\n"
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="an empty or interactive `skill write` saves nothing"
+)
+def test_skill_write_of_an_empty_file_is_refused_too(skill_cli_daemon):
+    master = _import_with_nested_file(skill_cli_daemon, "wr-empty-f")
+    empty = skill_cli_daemon / "empty.txt"
+    empty.write_text("", encoding="utf-8")
+
+    r = _runner.invoke(
+        cli_app, ["skill", "write", "wr-empty-f", "refs/notes.txt", "--from-file", str(empty)]
+    )
+
+    assert r.exit_code == 2, r.output
+    assert (master / "refs" / "notes.txt").read_text(encoding="utf-8") == "first\n"
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="an empty or interactive `skill write` saves nothing"
+)
+def test_skill_write_allow_empty_empties_the_file(skill_cli_daemon):
+    master = _import_with_nested_file(skill_cli_daemon, "wr-empty-ok")
+
+    r = _runner.invoke(
+        cli_app,
+        ["skill", "write", "wr-empty-ok", "refs/notes.txt", "--allow-empty"],
+        input="",
+    )
+
+    assert r.exit_code == 0, r.output
+    assert "saved: refs/notes.txt" in r.output
+    assert (master / "refs" / "notes.txt").read_text(encoding="utf-8") == ""
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="an empty or interactive `skill write` saves nothing"
+)
+def test_skill_write_from_a_terminal_without_from_file_is_a_usage_error(
+    skill_cli_daemon, monkeypatch
+):
+    """With stdin a terminal, reading it would sit silently until EOF; the
+    command refuses up front instead, before it reads anything."""
+    import coffer.surfaces.cli.skill_file_cmd as skill_file_cmd
+
+    master = _import_with_nested_file(skill_cli_daemon, "wr-tty")
+    monkeypatch.setattr(skill_file_cmd, "_stdin_is_tty", lambda: True)
+
+    r = _runner.invoke(
+        cli_app, ["skill", "write", "wr-tty", "refs/notes.txt"], input="never read\n"
+    )
+
+    assert r.exit_code == 2, r.output
+    assert "--from-file" in r.output
+    assert "terminal" in r.output
+    assert (master / "refs" / "notes.txt").read_text(encoding="utf-8") == "first\n"
+
+
+def test_skill_write_from_a_terminal_with_from_file_still_writes(skill_cli_daemon, monkeypatch):
+    import coffer.surfaces.cli.skill_file_cmd as skill_file_cmd
+
+    master = _import_with_nested_file(skill_cli_daemon, "wr-tty-f")
+    monkeypatch.setattr(skill_file_cmd, "_stdin_is_tty", lambda: True)
+    new = skill_cli_daemon / "tty-new.txt"
+    new.write_text("typed elsewhere\n", encoding="utf-8")
+
+    r = _runner.invoke(
+        cli_app, ["skill", "write", "wr-tty-f", "refs/notes.txt", "--from-file", str(new)]
+    )
+
+    assert r.exit_code == 0, r.output
+    assert (master / "refs" / "notes.txt").read_text(encoding="utf-8") == "typed elsewhere\n"
+
+
+def _import_with_big_file(home: pathlib.Path, name: str) -> tuple[pathlib.Path, int]:
+    """Import a skill whose ``refs/big.txt`` is past the route's read cap."""
+    src = _write_skill_folder(home / f"src-{name}", name=name)
+    (src / "refs").mkdir()
+    size = 300 * 1024
+    (src / "refs" / "big.txt").write_text("a" * size, encoding="utf-8")
+    r = _runner.invoke(cli_app, ["skill", "import", str(src)])
+    assert r.exit_code == 0, r.output
+    show = _runner.invoke(cli_app, ["skill", "show", name, "--json"])
+    return pathlib.Path(json.loads(_extract_json(show.output))["master_path"]), size
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="a truncated `skill cat` does not pass for the whole file"
+)
+def test_skill_cat_of_a_truncated_file_exits_1_and_says_so(skill_cli_daemon):
+    """A partial print is not a successful read: a script piping ``cat`` into a
+    file would otherwise keep the first 256 KiB and carry on."""
+    _import_with_big_file(skill_cli_daemon, "cat-big")
+
+    r = _runner.invoke(cli_app, ["skill", "cat", "cat-big", "refs/big.txt"])
+
+    assert r.exit_code == 1, r.output[-300:]
+    assert f"truncated: the file is {300 * 1024} bytes" in r.output
+    assert "a" * 1000 in r.output
+
+
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="a truncated `skill cat` does not pass for the whole file"
+)
+def test_skill_cat_json_of_a_truncated_file_exits_0_with_the_flag(skill_cli_daemon):
+    _import_with_big_file(skill_cli_daemon, "cat-big-j")
+
+    r = _runner.invoke(cli_app, ["skill", "cat", "cat-big-j", "refs/big.txt", "--json"])
+
+    assert r.exit_code == 0, r.output[-300:]
+    data = json.loads(_extract_json(r.output))
+    assert data["truncated"] is True
+    assert data["size"] == 300 * 1024
+    assert len(data["content"]) == 256 * 1024

@@ -49,7 +49,7 @@ coffer credentials storage --set file        # move it back to a 0600 file
 - **keychain** (opt-in) — the OS keychain. Defends against offline exfiltration of `~/.coffer/`, at the cost of at most one prompt per daemon start. Switching relocates only the key; no secret is re-encrypted. The old copy is removed last (a keychain write is read back first), so an interrupted move still leaves a working key.
 
 ::: warning Back up the master key with your database
-`coffer.db` now holds only ciphertext. Restoring it requires the matching master key, so back up `~/.coffer/master.key` (or your keychain entry) alongside the database. If ciphertext exists but no key resolves, the daemon refuses to start rather than run half-blind.
+`coffer.db` now holds only ciphertext. Restoring it requires the matching master key, so back up `~/.coffer/master.key` (or your keychain entry) alongside the database. If ciphertext exists but no key resolves, the daemon refuses to start rather than run half-blind. Likewise, if there is no key file and the keychain is locked when the daemon starts, it refuses to start with `CREDENTIAL_LOCKED` instead of creating a new key: the key may be in the keychain, and a new file key would hide it from then on. Unlock the keychain and start Coffer again.
 :::
 
 In the app, the storage backend is a toggle under **Settings → Security**. Individual secrets are set as you register the models, channels, and MCP servers that reference them.
@@ -60,7 +60,7 @@ In the app, the storage backend is a toggle under **Settings → Security**. Ind
 | --- | --- | --- |
 | Daemon refuses to start with `MASTER_KEY_MISSING` | Ciphertext exists but no key resolves; the message names the path | Restore the key file (or unlock the keychain). Coffer never writes a new key over existing ciphertext. |
 | `CREDENTIAL_UNREADABLE` | The secret is stored, but the installed key does not open it | The wrong key is installed. Restore the right one, or re-enter that secret. |
-| `CREDENTIAL_LOCKED` | The OS keychain is locked or refused access | Unlock it (macOS: log in to the desktop session; Linux: unlock GNOME Keyring / KWallet). |
+| `CREDENTIAL_LOCKED` | The OS keychain is locked or refused access (at daemon start: no key file, and the keychain that may hold the key cannot be read) | Unlock it (macOS: log in to the desktop session; Linux: unlock GNOME Keyring / KWallet). |
 | `CREDENTIAL_IN_USE` on delete | A registered resource still cites the reference | Detach or delete the resources the message names, then delete again. |
 | `list` shows a reference as `no` | The vault arrived without that secret | `coffer credentials set <ref>` for each one. |
 

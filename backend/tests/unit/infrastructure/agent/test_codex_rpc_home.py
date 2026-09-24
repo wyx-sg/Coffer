@@ -83,3 +83,23 @@ async def test_two_config_dirs_are_not_answered_from_one_cache(home: pathlib.Pat
     await discovery.discover(agent_key="codex", config_dir=custom)
 
     assert len(envs) == 2
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry/codex", scenario="ask model/list of the agent's own Codex home"
+)
+async def test_one_directory_spelled_three_ways_is_probed_once(home: pathlib.Path) -> None:
+    """``None``, ``~/.codex`` and a non-normalised spelling of it all name the
+    default Codex home: one cached answer serves them, instead of three spawns."""
+    (home / ".codex").mkdir()
+    (home / "sub").mkdir()
+    peer = FakeCodexPeer([{"data": [_model("gpt-x")], "nextCursor": None}])
+    make, envs = _recording_factory(peer)
+    discovery = CodexRpcModelDiscovery(make)
+
+    first = await discovery.discover(agent_key="codex", config_dir=None)
+    second = await discovery.discover(agent_key="codex", config_dir=home / ".codex")
+    third = await discovery.discover(agent_key="codex", config_dir=home / "sub" / ".." / ".codex")
+
+    assert len(envs) == 1
+    assert [m.id for m in first] == [m.id for m in second] == [m.id for m in third] == ["gpt-x"]

@@ -17,6 +17,7 @@ from coffer.application.agent.auto_detect import AutoDetectService
 from coffer.application.agent.config_file_service import AgentConfigFileService
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.mcp_entry_service import AgentMcpEntryService
+from coffer.application.agent.mcp_home_migration import ClaudeHomeMcpEntryMigration
 from coffer.application.agent.mcp_service import AgentMcpService
 from coffer.application.agent.native_memory_service import AgentNativeMemoryService
 from coffer.application.agent.plugin_service import AgentPluginService
@@ -85,6 +86,9 @@ class AgentSkillWiring:
     #: second one would fill a second cache and leave the listing's as cold as
     #: it found it.
     transcript_reader: FileTranscriptReader
+    #: Moves a custom-dir Claude Code agent's MCP entry out of
+    #: ``~/.claude.json`` into its own file (see ``mcp_home_migration``).
+    mcp_home_migration: ClaudeHomeMcpEntryMigration
 
 
 class _BootHeal(Protocol):
@@ -295,7 +299,25 @@ def wire_agent_and_skill_kinds(
         boot_heal=SkillDriftBootHeal(skill_service=skill_svc),
         builtin_seed=BuiltinSkillSeed(skill_service=skill_svc),
         transcript_reader=transcript_reader,
+        mcp_home_migration=ClaudeHomeMcpEntryMigration(
+            agent_service=agent_svc, audit=audit, store=config_file_store
+        ),
     )
+
+
+async def run_claude_mcp_home_migration(heal: _BootHeal) -> None:
+    """Boot hook: move an MCP entry an older Coffer put in ``~/.claude.json``
+    for a custom-dir Claude Code agent into that agent's own ``.claude.json``
+    (spec agent-registry/claude-code
+    "Install Coffer's MCP entry into Claude Code's .claude.json").
+    Idempotent; best-effort like the other boot heals."""
+    try:
+        notes = await heal.heal()
+    except Exception:
+        _log.exception("claude_mcp_home_migration.failed")
+        return
+    for note in notes:
+        _log.warning("claude_mcp_home_migration %s", note)
 
 
 async def run_skill_drift_boot_heal(heal: _BootHeal) -> None:

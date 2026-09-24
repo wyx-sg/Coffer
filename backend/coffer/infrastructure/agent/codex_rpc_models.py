@@ -101,7 +101,7 @@ class CodexRpcModelDiscovery:
     ) -> list[AgentModel]:
         if agent_key != _AGENT_KEY:
             return []
-        cache_key = str(config_dir) if config_dir is not None else ""
+        cache_key = self._cache_key(config_dir)
         cached = self._cache.get(cache_key)
         if cached is not None and self._clock() < cached[0]:
             return list(cached[1])
@@ -140,6 +140,16 @@ class CodexRpcModelDiscovery:
             # cancelled mid-handshake.
             with contextlib.suppress(Exception):
                 await session.close()
+
+    @staticmethod
+    def _cache_key(config_dir: pathlib.Path | None) -> str:
+        """One key per Codex home: the resolved path, and ``""`` for the
+        default ``~/.codex`` however it is spelled (``None``, the literal
+        path, or one through ``..``/a symlink) — the same directory is the
+        same login, so it is probed once, not once per spelling."""
+        if config_dir is None or not home_env(AgentType.CODEX, config_dir):
+            return ""
+        return str(config_dir.expanduser().resolve())
 
     @staticmethod
     def _env(config_dir: pathlib.Path | None) -> dict[str, str] | None:

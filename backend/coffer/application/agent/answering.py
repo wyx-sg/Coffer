@@ -23,8 +23,14 @@ class AgentLister(Protocol):
 
 
 async def answering_agent_config(agents: AgentLister, agent_key: str) -> AgentConfig | None:
-    """The config of the first ENABLED agent resource of this type, or ``None``.
+    """The config of the first ENABLED agent resource of this type in NAME
+    order, or ``None``.
 
+    Name order is the registry's own: ``agents.list()`` returns agents ordered
+    by ``(kind, name)``, so with two agents of one type registered (different
+    config dirs) the one whose name sorts first answers, and renaming either
+    can change which one does (spec chat "Ship Claude Code and Codex subprocess
+    providers", spec agent-registry "Serve each agent type's model catalogue").
     One resource answers for the type, so what is read for a type is always one
     agent's answer rather than a blend of several. Disabled agents are skipped:
     the user has told Coffer to leave them alone. A row Coffer can no longer

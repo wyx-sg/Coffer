@@ -14,7 +14,7 @@ from __future__ import annotations
 import contextlib
 
 import keyring  # Credentials-invariant gatekeeper — the only import of keyring in the codebase
-from keyring.errors import KeyringError, KeyringLocked
+from keyring.errors import KeyringError, KeyringLocked, NoKeyringError
 
 from coffer.domain.errors import CredentialLocked
 
@@ -25,8 +25,17 @@ class KeyringAdapter:
     """Thin wrapper over `keyring` exposing only get / set / delete."""
 
     def get(self, ref: str) -> str | None:
+        """The stored value, or None when there is none.
+
+        A host with no keychain backend at all (``NoKeyringError``) holds
+        nothing, so that is None too; a keychain that exists but cannot be
+        read right now raises ``CredentialLocked`` — the caller must not read
+        it as "absent" (``MasterKeyManager.resolve`` refuses to create a key
+        over it)."""
         try:
             return keyring.get_password(_SERVICE, ref)
+        except NoKeyringError:
+            return None
         except KeyringLocked as e:
             raise CredentialLocked(f"keychain is locked: {e}") from e
         except KeyringError as e:
