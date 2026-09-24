@@ -15,23 +15,21 @@ from typing import Any
 
 import httpx
 
-from coffer.application.channel.ports import AdapterCallbacks
+from coffer.application.channel.ports import AdapterCallbacks, FetchedContext
 from coffer.domain.channel.dedup import SeenIds
 from coffer.domain.channel.envelopes import (
     ChannelCapabilities,
     ChoiceButton,
     EphemeralTarget,
-    InboundAttachment,
     InboundCallback,
     InboundLifecycle,
     InboundMessage,
     SentMessage,
 )
 from coffer.domain.channel.errors import ChannelSendFailed
-from coffer.domain.channel.rich_content import ForwardedItem
 from coffer.infrastructure.channel.live_text import SeaTalkLiveText
 from coffer.infrastructure.channel.seatalk_cards import update_interactive_card
-from coffer.infrastructure.channel.seatalk_history import fetch_thread_context
+from coffer.infrastructure.channel.seatalk_history import THREAD_PAGE_MAX, SeaTalkContextReader
 from coffer.infrastructure.channel.seatalk_media import (
     default_media_dir,
     media_attachments,
@@ -77,6 +75,9 @@ class SeaTalkAdapter:
         # One chat_kind-routed send seam for every outbound payload — text
         # chunks, cards, media (``send_outbound_media`` takes it as a callable).
         self._send = self._transport.send
+        self._context = SeaTalkContextReader(
+            self._get, self._client, self._media_dir, self._transport.ensure_token, channel_name
+        )
 
     @property
     def capabilities(self) -> ChannelCapabilities:
@@ -150,11 +151,8 @@ class SeaTalkAdapter:
                     # SeaTalk DMs are 1:1, so the sender is the employee_code.
                     sender_id=str(event.get("employee_code", "")),
                     thread_id=str(message.get("thread_id", "")),
-                    # Hand the turn the id and stop: the quoted BODY comes from
-                    # GET /messaging/v2/get_message_by_message_id, an agent-invoked
-                    # lookup (SeaTalk's MCP server exposes it under that name), not
-                    # transport work. The docs warn one message carries DIFFERENT
-                    # message_ids per app — only this bot can resolve this one.
+                    # Only this bot can resolve it (ids differ per app); the turn
+                    # fetches the body through ``fetch_quoted``.
                     quoted_message_id=str(message.get("quoted_message_id") or ""),
                     attachments=await media_attachments(
                         self._client, self._media_dir, self._transport.ensure_token, message
@@ -370,26 +368,19 @@ class SeaTalkAdapter:
     # -- context fetch (ContextFetchPort) -------------------------------------
 
     async def fetch_thread(
-        self, chat_id: str, thread_id: str, *, limit: int = 50, chat_kind: str = "group"
-    ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
-        """The thread's own messages, when the message landed inside a thread.
+        self,
+        chat_id: str,
+        thread_id: str,
+        *,
+        limit: int = THREAD_PAGE_MAX,
+        chat_kind: str = "group",
+    ) -> FetchedContext:
+        """Every page of the thread; ``chat_kind`` picks the group or DM endpoint."""
+        return await self._context.thread(chat_id, thread_id, limit=limit, chat_kind=chat_kind)
 
-        Threads are no longer group-only (SeaTalk app v3.62.1+ has them in DMs),
-        so ``chat_kind`` picks the read endpoint — the group @mention is just the
-        common case. Delegates to ``seatalk_history`` so this file stays inside
-        the size cap; see there for the degrade-to-empty contract.
-        """
-        return await fetch_thread_context(
-            self._get,
-            self._client,
-            self._media_dir,
-            self._transport.ensure_token,
-            chat_id,
-            thread_id,
-            limit=limit,
-            channel=self._name,
-            chat_kind=chat_kind,
-        )
+    async def fetch_quoted(self, message_id: str) -> FetchedContext:
+        """The quoted message — resolvable only with this bot's own token."""
+        return await self._context.quoted(message_id)
 
     # -- transport -------------------------------------------------------------
 

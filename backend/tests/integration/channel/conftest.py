@@ -154,6 +154,7 @@ def inbound(
     ephemeral_id: str = "",
     sender_mention_id: str = "",
     attachments: Sequence[InboundAttachment] = (),
+    quoted_message_id: str = "",
 ) -> InboundMessage:
     return InboundMessage(
         channel=channel,
@@ -171,6 +172,7 @@ def inbound(
         addressed=addressed,
         mentions_others=mentions_others,
         attachments=tuple(attachments),
+        quoted_message_id=quoted_message_id,
     )
 
 
@@ -350,6 +352,11 @@ class FakeChannelAdapter:
         # with ``fetch_thread_calls`` — a DM thread reads a different endpoint
         # from a group one, so the kind the core passed is worth asserting.
         self.fetch_thread_kinds: list[str] = []
+        # Scriptable ``fetch_quoted`` result ("Ground a turn in the message it
+        # quotes") and the ids the core asked it to resolve.
+        self.quoted_items: list[ForwardedItem] = []
+        self.quoted_attachments: tuple[InboundAttachment, ...] = ()
+        self.fetch_quoted_calls: list[str] = []
         # "Grow a reply in place on one live surface": every live-text handle the
         # core opened this session, and the
         # switch that makes the transport refuse to open one.
@@ -471,6 +478,12 @@ class FakeChannelAdapter:
         self.fetch_thread_kinds.append(chat_kind)
         return list(self.thread_items), self.thread_attachments
 
+    async def fetch_quoted(
+        self, message_id: str
+    ) -> tuple[list[ForwardedItem], tuple[InboundAttachment, ...]]:
+        self.fetch_quoted_calls.append(message_id)
+        return list(self.quoted_items), self.quoted_attachments
+
     async def tap(
         self, value: str, *, channel: str, chat_id: str = "owner", sender_id: str = ""
     ) -> None:
@@ -548,6 +561,10 @@ class FakeModelSuggestions:
 
     async def suggest(self, agent_key: str) -> list[str]:
         return list(self._by_agent.get(agent_key, []))
+
+    async def model_labels(self, agent_key: str) -> dict[str, str]:
+        # Unlabelled, so a button shows its bare id as before.
+        return {m: m for m in self._by_agent.get(agent_key, [])}
 
     async def efforts(self, agent_key: str, model: str | None) -> list[str]:
         return list(self._efforts.get((agent_key, model), []))

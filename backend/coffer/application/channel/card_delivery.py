@@ -340,5 +340,5 @@ async def _current_card(
         # model's menu rather than the one the old model had.
         levels = await commands._model_suggestions.efforts(agent_key, cfg.model)
         return effort_card(current=cfg.effort, levels=levels, page=page) if levels else None
-    picks = await commands._model_suggestions.suggest(agent_key)
-    return model_card(current=cfg.model, picks=picks, page=page)
+    labels = await commands._model_suggestions.model_labels(agent_key)
+    return model_card(current=cfg.model, picks=list(labels), labels=labels, page=page)

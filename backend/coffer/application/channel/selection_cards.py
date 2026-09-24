@@ -22,7 +22,7 @@ the wire.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from coffer.domain.channel.envelopes import ChoiceButton
@@ -48,8 +48,9 @@ PAGE_PREFIX = "page"
 #: bare ``button`` elements, OR up to 3 ``button_group`` elements of 1-3 buttons
 #: each — which is why the SeaTalk adapter emits rows rather than bare buttons,
 #: and why six buttons are legal where six bare ones would not be. Six is
-#: therefore a choice, not a guess: two of the three allowed rows, leaving the
-#: third as headroom, and enough for Prev/Next plus four choices. It is also
+#: therefore a choice, not a guess: it fits the three allowed rows even when
+#: long labels force two to a row, and it is enough for Prev/Next plus four
+#: choices. It is also
 #: what Coffer already shipped (the ``MAX_MODEL_PICKS`` bound this pagination
 #: replaces), so pagination adds no new risk of a refused card — it only makes
 #: the rest of the list reachable. Telegram has no comparable ceiling, so the
@@ -209,7 +210,11 @@ def agent_card(
 
 
 def model_card(
-    *, current: str | None, picks: Sequence[str], page: int | None = None
+    *,
+    current: str | None,
+    picks: Sequence[str],
+    labels: Mapping[str, str] | None = None,
+    page: int | None = None,
 ) -> SelectionCard:
     """Pick the model the agent's CLI runs next turn.
 
@@ -220,11 +225,15 @@ def model_card(
     browsable: a long catalogue becomes pages rather than a truncated handful.
     The ``/model <name>`` hint stays — it is still the fastest way to a model
     you can already name, and the only way to one the catalogue does not list.
+
+    ``labels`` maps an id to the name its button shows; an id it does not name
+    shows itself. The tap still carries the id.
     """
+    names = labels or {}
     shown = current or "(CLI default)"
     options = [
         ChoiceButton(
-            label=_tick(name, name == current),
+            label=_tick(names.get(name) or name, name == current),
             value=f"model:{name}",
             selected=name == current,
         )

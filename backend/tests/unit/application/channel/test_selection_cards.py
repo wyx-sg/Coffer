@@ -62,6 +62,13 @@ class TestShortListsAreNotPaged:
 
         assert _values(card) == ["model:sonnet", "model:opus"]
 
+    def test_a_button_shows_the_model_name_and_carries_the_id(self):
+        labels = {"fable": "Fable 5.1", "claude-fable-5-1[1m]": "Fable 1M"}
+        card = model_card(current="fable", picks=list(labels), labels=labels)
+
+        assert [b.label for b in card.buttons] == ["Fable 5.1 ✓", "Fable 1M"]
+        assert _values(card) == ["model:fable", "model:claude-fable-5-1[1m]"]
+
     def test_the_current_model_is_not_duplicated(self):
         card = model_card(current="sonnet", picks=["sonnet", "opus", "haiku"])
 

@@ -83,9 +83,9 @@ def test_no_sender_at_all_omits_the_line():
 @pytest.mark.acceptance(spec="channels", scenario="a quoted message is named in the turn's origin")
 def test_quoted_message_id_is_surfaced_after_the_thread_line():
     """A quote is a platform-side link the message text never spells out: without
-    this line "接着上面那条说" refers to nothing the agent can see. The id is what a
-    platform tool call takes to fetch the quoted body — Coffer does not resolve
-    it here."""
+    this line "接着上面那条说" refers to nothing the agent can see. The body is folded
+    into the turn separately; the id stays here as the trace of a lookup that
+    failed."""
     out = format_origin(
         _msg(chat_kind="group", chat_title="Test", thread_id="t7", quoted_message_id="mq-9"),
         platform="seatalk",

@@ -192,7 +192,12 @@ top-level `thread_id` is silently ignored and the reply lands in the group main
 chat; inside `message` it threads the reply, rooting a new thread at that id if
 none exists. A thread is read with
 `GET /messaging/v2/group_chat/get_thread_by_thread_id`, whose list key is
-`thread_messages`.
+`thread_messages`. It pages oldest-first: `page_size` is at most 100 (101 is
+refused with code 102) and each page but the last carries a `next_cursor`,
+passed back as `cursor`. A quoted message is read with
+`GET /messaging/v2/get_message_by_message_id?message_id=…`, which answers with
+one message in the same shape as a thread message; the id is per app, so only
+the bot that received it can resolve it.
 
 **Cards.** An interactive card is `tag: "interactive_message"` with
 `button_type: "callback"` buttons carrying a custom `value`; a tap comes back as

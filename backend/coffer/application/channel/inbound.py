@@ -19,7 +19,6 @@ import contextlib
 import logging
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import cast
 
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.commands import HELP_TEXT, ChannelCommands
@@ -33,7 +32,6 @@ from coffer.application.channel.pairing import PairingManager, claim_pairing
 from coffer.application.channel.ports import (
     AgentCatalogPort,
     ChannelBinding,
-    ContextFetchPort,
     ModelSuggestionPort,
 )
 from coffer.application.channel.save_ports import CollectionCatalogPort, IngestPort
@@ -42,6 +40,7 @@ from coffer.application.channel.store_ports import (
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
 )
+from coffer.application.channel.turn_context import fold_turn_context
 from coffer.application.channel.turn_driver import (
     ConversationPort,
     QueuedInbound,
@@ -58,7 +57,7 @@ from coffer.domain.channel.envelopes import (
     InboundMessage,
     InboundStop,
 )
-from coffer.domain.channel.rich_content import flatten_context, format_origin
+from coffer.domain.channel.rich_content import format_origin
 from coffer.domain.chat.attachment import Attachment
 
 __all__ = ["ChannelBinding", "InboundProcessor"]
@@ -252,35 +251,10 @@ class InboundProcessor:
         # OWN text/attachments, before any thread history is folded in (a
         # command never fetches thread context).
         is_command = text.startswith("/") and not attachments
-        if (
-            not is_command
-            and msg.thread_id
-            and msg.thread_id != msg.platform_message_id
-            and binding.adapter.capabilities.supports_history_fetch
-        ):
-            # Ground the turn in the thread's own conversation — in a DM just as much as
-            # in a group: a thread is a thread, and SeaTalk exposes a DM thread endpoint
-            # too (app v3.62.1+), so ``chat_kind`` only picks which one the adapter
-            # calls. What stays group-only is what is NOT fetched: reading all
-            # group-MAIN chatter is undesirable and that permission is not granted
-            # anyway, so only the thread a message actually landed in is ever read. A
-            # message that roots a fresh thread at itself (thread_id == this message's
-            # id) holds nothing else yet — skip the fetch rather than echo it back into
-            # its own context. Platforms with no history-fetch API (Telegram) never
-            # reach here at all. The thread's own images/files download alongside its
-            # text (see "Download the media a thread's messages carry") so a picture in
-            # the thread reaches the vision agent, not a dead file link.
-            fetcher = cast(ContextFetchPort, binding.adapter)
-            items, thread_atts = await fetcher.fetch_thread(
-                msg.chat_id, msg.thread_id, chat_kind=msg.chat_kind
-            )
-            ctx = flatten_context(items, title="Thread messages")
-            if ctx:
-                text = f"{ctx}\n\n{text}" if text else ctx
-            if thread_atts:
-                attachments = attachments + tuple(
-                    Attachment(path=a.path, mime=a.mime, filename=a.filename) for a in thread_atts
-                )
+        if not is_command:
+            # The thread it landed in and the message it quotes ground the turn
+            # (see "Ground a turn in the message it quotes").
+            text, attachments = await fold_turn_context(binding, msg, text, attachments)
         if not text and not attachments:
             # An empty envelope with nothing downloadable (a sticker, a location,
             # a media type the transport does not extract) — and no thread

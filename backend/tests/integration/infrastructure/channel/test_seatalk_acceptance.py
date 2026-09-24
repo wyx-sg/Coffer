@@ -297,7 +297,7 @@ async def test_a_quoting_dm_and_group_message_keep_the_quoted_id(
 
     assert [m.quoted_message_id for m in recorder.messages] == ["pm-1", "gm-1"]
     # Normalizing made no call to the platform at all — the quoted body is
-    # never fetched by the transport.
+    # resolved later, when the turn is built (``fetch_quoted``).
     assert paths == []
 
 
