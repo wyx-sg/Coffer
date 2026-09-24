@@ -1,6 +1,6 @@
 """`coffer daemon features` — list and switch the experimental features.
 
-Unlike ``coffer daemon port`` and ``idle``, this goes through the daemon: a
+Unlike ``coffer daemon port``, this goes through the daemon: a
 switch takes effect at once, and only the running daemon can make it do so
 (spec experimental-features "Switch a feature from the settings page or the
 command line"). The daemon writes ``daemon-config.json`` before it answers.

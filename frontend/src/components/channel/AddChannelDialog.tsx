@@ -41,7 +41,7 @@ import { useThisMachineId } from "@/lib/hooks/useMachines";
 import { useToast } from "@/components/ui/toast";
 import { useAgents } from "@/lib/hooks/useAgents";
 import { translateApiError } from "@/lib/api/errors";
-import type { ChannelDelivery, ChannelType } from "@/lib/api/channels";
+import type { ChannelType } from "@/lib/api/channels";
 import { useCreateChannel } from "@/lib/hooks/useChannels";
 import { EMPTY_SECRET_DRAFT, validateAddChannel } from "./addChannel";
 import {
@@ -50,7 +50,7 @@ import {
   type ChannelSecretDraft,
 } from "./AddChannelSecretFields";
 import { FieldError, RequiredLabel } from "./RequiredLabel";
-import { DEFAULT_DELIVERY, planChannel, type ChannelPlan } from "./schema";
+import { planChannel, type ChannelPlan } from "./schema";
 
 export function AddChannelDialog({
   open,
@@ -72,7 +72,6 @@ export function AddChannelDialog({
   const [agentUid, setAgentUid] = useState("");
   const defaultAgentUid = agentUid || (agents?.[0]?.uid ?? "");
   const [channelType, setChannelType] = useState<ChannelType>("telegram");
-  const [delivery, setDelivery] = useState<ChannelDelivery>(DEFAULT_DELIVERY);
   const [name, setName] = useState("");
   const [secrets, setSecrets] = useState<ChannelSecretDraft>(EMPTY_SECRET_DRAFT);
   const patchSecrets = (patch: Partial<ChannelSecretDraft>) =>
@@ -80,23 +79,9 @@ export function AddChannelDialog({
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<ChannelFieldErrors>({});
 
-  /**
-   * Switching transport drops what the other method owns — the config may not
-   * carry both, and a value the form no longer shows must not be submitted.
-   */
-  const changeDelivery = (next: ChannelDelivery) => {
-    setDelivery(next);
-    setFormError(null);
-    setFieldErrors({});
-    if (next === "websocket") {
-      patchSecrets({ signingSecret: "", publicBaseUrl: "", tunnelToken: "" });
-    }
-  };
-
   const reset = () => {
     setAgentUid("");
     setChannelType("telegram");
-    setDelivery(DEFAULT_DELIVERY);
     setName("");
     setSecrets(EMPTY_SECRET_DRAFT);
     setFormError(null);
@@ -122,7 +107,7 @@ export function AddChannelDialog({
   const submit = () => {
     setFormError(null);
     setFieldErrors({});
-    const parsed = validateAddChannel({ channelType, delivery, name, secrets }, t);
+    const parsed = validateAddChannel({ channelType, name, secrets }, t);
     if (!parsed.ok) {
       setFieldErrors(parsed.fieldErrors);
       return;
@@ -209,8 +194,6 @@ export function AddChannelDialog({
           </div>
           <AddChannelSecretFields
             channelType={channelType}
-            delivery={delivery}
-            onDeliveryChange={changeDelivery}
             draft={secrets}
             errors={fieldErrors}
             onChange={patchSecrets}

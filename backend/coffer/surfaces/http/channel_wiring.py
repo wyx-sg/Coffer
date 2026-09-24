@@ -1,8 +1,8 @@
 """Channel-kind composition (spec channels) — called from the app lifespan.
 
 Wires the kind, the peer repo, the inbound processor (against the chat
-platform's service handles), the adapter factory, the callback-listener
-controller, the SeaTalk WebSocket controller, and the reconciling runtime. Runs
+platform's service handles), the adapter factory, the SeaTalk WebSocket
+controller, and the reconciling runtime. Runs
 AFTER ``wire_chat`` and ``wire_knowledge_kind``, whose results it takes as
 parameters.
 
@@ -19,7 +19,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import httpx
 from fastapi import FastAPI
 
 from coffer.application.audit_service import AuditService
@@ -33,7 +32,6 @@ from coffer.application.channel.sync_state import ChannelPeerSyncState
 from coffer.application.credentials.resolver import CredentialResolver
 from coffer.domain.channel.config import parse_channel_config
 from coffer.domain.resource import Resource
-from coffer.infrastructure.channel.listener_spawn import CallbackListenerController
 from coffer.infrastructure.channel.persistence import (
     ChannelPeerRepo,
     ChannelThreadConversationRepo,
@@ -41,12 +39,8 @@ from coffer.infrastructure.channel.persistence import (
 from coffer.infrastructure.channel.seatalk import SeaTalkAdapter
 from coffer.infrastructure.channel.seatalk_ws_controller import SeaTalkWebSocketController
 from coffer.infrastructure.channel.telegram import TelegramAdapter
-from coffer.infrastructure.channel.tunnel_spawn import TunnelController
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
-from coffer.infrastructure.daemon import activity
 from coffer.infrastructure.sync.identity import resolve_identity
-from coffer.surfaces.http import daemon_routes
-from coffer.surfaces.http.auth import get_active_token
 from coffer.surfaces.http.channel_routes import get_channel_service, set_channel_service
 from coffer.surfaces.http.chat_wiring import ChatWiring
 from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring
@@ -57,39 +51,12 @@ if TYPE_CHECKING:
 
 from coffer.application.resource_service import ResourceService
 
-#: The name the channel listener holds the daemon's idle clock open under.
-_CHANNEL_HOLD = "channel-listener"
-
-
-def _hold_for_channel_listener(listener_running: bool) -> None:
-    """Translate "a listener is up" into the daemon's idle-clock vocabulary.
-
-    The composition root's job, in two lines: the runtime knows whether it has
-    a listener and nothing about daemons, the clock knows about holds and
-    nothing about channels, and this says which is which.
-    """
-    if listener_running:
-        activity.hold(_CHANNEL_HOLD)
-    else:
-        activity.release(_CHANNEL_HOLD)
-
-
-def _daemon_info() -> tuple[str, str]:
-    """Resolved at call time BY DESIGN: the token and port are published by the
-    lifespan after this kind is wired (daemon.json is read later), and the
-    listener only asks on its first tick."""
-    token = get_active_token()
-    if token is None:
-        raise RuntimeError("daemon token not published yet")
-    return f"http://127.0.0.1:{daemon_routes.get_port()}", token
-
 
 async def _ingest_websocket_event(channel_uid: str, envelope: dict[str, Any]) -> None:
-    """Hand a websocket-delivered event to the same ingest the webhook route uses.
+    """Hand a websocket-delivered event to the channel's one ingest entry point.
 
-    The controller supervises its sockets by channel uid — the same key the
-    callback path and the listener's secret map use — so what arrives here is
-    an identity, not a label, and it goes straight through.
+    The controller supervises its sockets by channel uid, so what arrives here
+    is an identity, not a label, and it goes straight through.
 
     Resolved at call time BY DESIGN: ``ChannelService`` is built at the end of
     ``wire_channel_kind``, after the runtime this feeds, and the self-reference
@@ -156,28 +123,18 @@ def wire_channel_kind(
         secret = (await materialize({"secret": parsed.app_secret_ref}))["secret"]
         return SeaTalkAdapter(name, parsed.app_id, secret)
 
-    listener = CallbackListenerController(daemon_info=_daemon_info)
     runtime = ChannelRuntime(
         resources=resource_svc,
         adapter_factory=adapter_factory,
         processor=processor,
         pairing=pairing,
-        listener=listener,
-        tunnel=TunnelController(),
-        # spec channels/seatalk "Carry no ingress fields on websocket delivery":
-        # websocket-delivery channels converge the same way, and their
-        # inbound events land on the same seam the webhook route uses —
-        # ``ChannelService.ingest_event``, which does not exist yet at this point
-        # in the wiring, so it is resolved at call time exactly as the daemon's
-        # URL and token are in ``_daemon_info``.
+        # spec channels/seatalk "Receive every event over one outbound websocket
+        # connection": every SeaTalk event lands on the channel's one ingest
+        # seam — ``ChannelService.ingest_event``, which does not exist yet at
+        # this point in the wiring, so it is resolved at call time.
         websockets=SeaTalkWebSocketController(ingest=_ingest_websocket_event),
         materialize=materialize,
         machine_id=local_machine_id,
-        # A live listener keeps the daemon from standing down as idle
-        # (spec daemon "Stand down after an idle window"): it exists to be
-        # reachable, so the hours it
-        # spends waiting for a message are exactly what it is for.
-        service_hold=_hold_for_channel_listener,
     )
 
     async def on_delete(channel: Resource) -> None:
@@ -213,10 +170,6 @@ def wire_channel_kind(
         pairing=pairing,
         runtime=runtime,
         audit=audit,
-        # The callback self-test resolves the signing secret and probes the
-        # public URL over the network.
-        materialize=materialize,
-        http_client=httpx.AsyncClient(),
     )
     set_channel_service(service)
     # Pairing identity is a synced state area again. It was removed when

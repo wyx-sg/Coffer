@@ -1,7 +1,6 @@
 """One spawn path, one PID record, one termination ladder for daemon children.
 
-The daemon keeps several long-lived children alive on the user's behalf — a
-``cloudflared`` tunnel per channel, the callback listener, a ``codex
+The daemon keeps long-lived children alive on the user's behalf — a ``codex
 app-server`` per Codex chat. Each of them used to spawn, record and tear down
 its child on its own, and the copies drifted: the Codex session spawned without
 recording its PID at all, so a daemon crash left ``codex app-server`` running
@@ -33,7 +32,7 @@ _logger = logging.getLogger(__name__)
 
 async def _create_subprocess(argv: Sequence[str], **kwargs: Any) -> asyncio.subprocess.Process:
     """The one call that touches the OS. Tests that must not run a real binary
-    (the cloudflared tunnel) monkeypatch this function and nothing else, so the
+    monkeypatch this function and nothing else, so the
     recording and termination logic above it stays under test."""
     return await asyncio.create_subprocess_exec(*argv, **kwargs)
 

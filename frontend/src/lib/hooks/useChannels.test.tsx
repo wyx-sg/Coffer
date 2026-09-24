@@ -98,7 +98,7 @@ describe("useChannels hooks", () => {
       running: true,
       pending_pairing: false,
       peer: null,
-      callback: null,
+      inbound: null,
       runs_on: "machine-here",
       runs_here: true,
     };

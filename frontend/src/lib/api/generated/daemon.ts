@@ -78,18 +78,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Whether the daemon starts at login, and when it stands down */
+        /** Whether the daemon starts at login */
         get: operations["getDaemonResidency"];
         /**
-         * Install or remove the login service, and set the idle window
-         * @description Two settings, one request, because they are one question with two
-         *     halves: what starts the daemon (spec daemon "Run as a login service")
-         *     and what ends it ("Stand down after an idle window"). The login service
-         *     takes effect immediately — launchd is a different process. The idle
-         *     window takes effect at the next daemon start, because this one read it
-         *     when it booted.
+         * Install or remove the login service
+         * @description What starts the daemon (spec daemon "Run as a login service"). Nothing
+         *     ends it on its own: the daemon never stands down for being idle, so
+         *     there is no idle window to set. The change takes effect immediately —
+         *     launchd is a different process.
          *
-         *     This pair has a REST surface where the port deliberately does not ("Bind
+         *     This setting has a REST surface where the port deliberately does not ("Bind
          *     a fixed, settable port"): a port is changed when the daemon cannot
          *     start, so a route it would have to serve is useless exactly then, while
          *     residency is a settings question asked of a daemon that is working.
@@ -306,13 +304,9 @@ export interface components {
             /** @description False where there is no launchd to install into. The control renders as unavailable rather than as off, which is a different claim. */
             login_service_supported: boolean;
             login_service_installed: boolean;
-            /** @description Hours of disuse before standing down; null means never. */
-            idle_shutdown_hours?: number | null;
         };
         DaemonResidencyIn: {
             login_service_installed: boolean;
-            /** @description Required, because null already means "never stand down" here. A caller that omitted it would turn the idle shutdown off without saying so. */
-            idle_shutdown_hours: number | null;
         };
         DaemonStatusOut: {
             /**

@@ -46,7 +46,7 @@ Any change that shortens the open-source readiness checklist — introducing a c
 
 These hold unconditionally; they are not configuration options:
 
-**Loopback-only.** The daemon's HTTP server binds to `127.0.0.1` and will not accept connections from any other interface. Public-reachable surfaces, if ever introduced, run as a separate process and are limited to signed callback paths.
+**Loopback-only.** The daemon's HTTP server binds to `127.0.0.1` and will not accept connections from any other interface.
 
 **Secret plaintext never reaches the database.** Secrets are stored only as Fernet ciphertext in the `credentials` table (envelope encryption); the SQLite database holds credential references — opaque identifiers — and ciphertext, never plaintext. Plaintext exists in memory only between decrypt and the spawn/header injection that consumes it. The Fernet master key is managed exclusively by `infrastructure/credentials/` (a `0600` file beside the DB by default, the OS keychain opt-in), the only place permitted to import `keyring`. No other code module may import `keyring` directly.
 

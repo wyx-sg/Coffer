@@ -81,7 +81,10 @@ def test_missing_sdk_raises_an_actionable_error(tmp_path: Path) -> None:
     assert _PACKAGE in message
     assert str(tmp_path / "vendor") in message
     assert "https://open.seatalk.io/docs/WebSocket-Event-Callback" in message
-    assert "webhook" in message  # and the way to run without it at all
+    # There is no other inbound transport to fall back on, so the message must
+    # not point at one; it says what still works instead.
+    assert "webhook" not in message
+    assert "outbound sends are unaffected" in message
 
 
 def test_vendor_dir_is_added_to_sys_path_only_once(tmp_path: Path) -> None:

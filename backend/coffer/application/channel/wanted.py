@@ -1,7 +1,7 @@
 """Which channels this machine runs — the three gates, and only the gates.
 
 ``ChannelRuntime`` owns lifecycle: start an adapter, stop it, keep the
-listener, the tunnel and the websocket in step. This module owns the question
+websocket connection in step. This module owns the question
 it asks first, every tick — *which channels are mine to run?* — and the answer
 has three parts, each a different kind of fact:
 

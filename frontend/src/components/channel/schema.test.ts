@@ -63,64 +63,25 @@ describe("planChannel", () => {
     expect(plan.config.bot_token_ref).not.toContain("/tg/");
   });
 
-  test("seatalk: both secrets go to the store by ref, the app id stays in the config", () => {
+  test("seatalk: the app secret goes to the store by ref, the app id stays in the config", () => {
     const parsed = addChannelFormSchema.parse({
       channel_type: "seatalk",
       name: "st",
-      app_id: "app-1",
-      app_secret: "s1",
-      signing_secret: "s2",
-    });
-    const plan = planChannel(parsed, HERE, AGENT_UID);
-
-    expect(plan.config).toEqual({
-      channel_type: "seatalk",
-      delivery: "webhook",
-      app_id: "app-1",
-      app_secret_ref: refFor("app-secret"),
-      signing_secret_ref: refFor("signing-secret"),
-      default_agent: AGENT_UID,
-      runs_on: HERE,
-    });
-    expect(plan.secrets).toEqual([
-      { ref: plan.config.app_secret_ref, value: "s1" },
-      { ref: plan.config.signing_secret_ref, value: "s2" },
-    ]);
-    // Two secrets, two DIFFERENT addresses — one per secret, as provider mints
-    // them; a shared uuid would make a rotation of one look like the other.
-    expect(plan.config.app_secret_ref).not.toBe(plan.config.signing_secret_ref);
-  });
-
-  test("seatalk: delivery defaults to webhook when the form omits it", () => {
-    const parsed = addChannelFormSchema.parse({
-      channel_type: "seatalk",
-      name: "st",
-      app_id: "app-1",
-      app_secret: "s1",
-      signing_secret: "s2",
-    });
-    expect(parsed.channel_type === "seatalk" && parsed.delivery).toBe("webhook");
-  });
-
-  test("seatalk websocket: no signing secret, no public URL, no tunnel ref", () => {
-    const parsed = addChannelFormSchema.parse({
-      channel_type: "seatalk",
-      name: "st",
-      delivery: "websocket",
       app_id: "app-1",
       app_secret: "s1",
     });
     const plan = planChannel(parsed, HERE, AGENT_UID);
 
+    // App id and app secret are the whole of SeaTalk's config: the channel
+    // dials out over a websocket, so there is no signature, public URL or
+    // tunnel to carry.
     expect(plan.config).toEqual({
       channel_type: "seatalk",
-      delivery: "websocket",
       app_id: "app-1",
       app_secret_ref: refFor("app-secret"),
       default_agent: AGENT_UID,
       runs_on: HERE,
     });
-    // Only the app secret is written — nothing lands at the signing-secret ref.
     expect(plan.secrets).toEqual([{ ref: plan.config.app_secret_ref, value: "s1" }]);
   });
 
@@ -135,7 +96,7 @@ describe("planChannel", () => {
   });
 });
 
-describe("addChannelFormSchema (the backend's cross-field rule, mirrored)", () => {
+describe("addChannelFormSchema", () => {
   const seatalk = {
     channel_type: "seatalk" as const,
     name: "st",
@@ -143,25 +104,13 @@ describe("addChannelFormSchema (the backend's cross-field rule, mirrored)", () =
     app_secret: "s1",
   };
 
-  test("webhook delivery requires a signing secret", () => {
-    const parsed = addChannelFormSchema.safeParse({ ...seatalk, delivery: "webhook" });
-    expect(parsed.success).toBe(false);
-    expect(parsed.error?.issues.map((i) => i.path.join("."))).toContain("signing_secret");
+  test("seatalk accepts app id + app secret alone", () => {
+    expect(addChannelFormSchema.safeParse(seatalk).success).toBe(true);
   });
 
-  test("websocket delivery accepts app id + app secret alone", () => {
-    expect(addChannelFormSchema.safeParse({ ...seatalk, delivery: "websocket" }).success).toBe(
-      true,
-    );
-  });
-
-  test("websocket delivery forbids every webhook-only field", () => {
-    for (const field of ["signing_secret", "public_base_url", "tunnel_token"]) {
-      const parsed = addChannelFormSchema.safeParse({
-        ...seatalk,
-        delivery: "websocket",
-        [field]: "x",
-      });
+  test("seatalk requires both the app id and the app secret", () => {
+    for (const field of ["app_id", "app_secret"]) {
+      const parsed = addChannelFormSchema.safeParse({ ...seatalk, [field]: "" });
       expect(parsed.success, field).toBe(false);
       expect(parsed.error?.issues.map((i) => i.path.join("."))).toContain(field);
     }

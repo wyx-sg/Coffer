@@ -5,6 +5,12 @@
 **Deciders**: Yuxing Wu
 **Spec**: [channels](../../openspec/specs/channels/spec.md)
 
+> **Amended (2026-09-24).** SeaTalk inbound is websocket-only
+> ([SeaTalk Inbound Over WebSocket](seatalk-websocket-inbound.md)). Decision 5's
+> callback listener, its signature check and the tunnel in front of it are
+> deleted, and Coffer has no public-reachable surface. Adapters, pairing, the
+> reconciler and the turn seam are unchanged.
+
 ## Context
 
 Coffer needs messaging channels (Telegram, SeaTalk, more later) through which
@@ -53,6 +59,10 @@ Two platform constraints shape the design:
    forwards valid events to the daemon over loopback with the daemon token.
    The user points a tunnel (cloudflared/ngrok) at the port; Coffer never
    exposes the daemon itself.
+
+   _Amended (2026-09-24):_ withdrawn. SeaTalk events arrive over one outbound
+   websocket connection per channel, supervised inside the daemon, and nothing
+   Coffer runs for a SeaTalk channel is reachable from the network.
 6. **Owner binding is pairing-code-only**: an 8-character single-use code
    (unambiguous alphabet, 1-hour TTL, bounded guesses, memory-only) issued
    from the UI/CLI and sent to the bot from the owner's account. Everyone
@@ -86,9 +96,9 @@ Two platform constraints shape the design:
   this.
 - The reconciler owns all runtime state transitions; REST/CLI/UI never
   start or stop adapters directly, which keeps status truthful.
-- The listener's spawn pattern (env-injected secrets, pidfile, orphan sweep)
+- ~~The listener's spawn pattern (env-injected secrets, pidfile, orphan sweep)
   reuses the MCP-subprocess conventions, including frozen-build sibling
-  binary resolution.
+  binary resolution.~~ — **Withdrawn (2026-09-24)** with the listener.
 
 ## Implementation notes
 
@@ -103,10 +113,9 @@ decision, and the research the decisions above rest on.
   capability. Each transport buffers its own cadence (Telegram ~1.5 s between
   edits, SeaTalk ~100 ms) and the core adds no throttle of its own (spec
   [channels](../../openspec/specs/channels/spec.md), "Grow a reply in place on
-  one live surface"). Decision 5's "only by public webhook" and decision 7's
-  "no platform SDKs" hold for webhook delivery and for every outbound call; a
-  SeaTalk channel can instead receive over a websocket through an
-  operator-supplied SDK ([SeaTalk Inbound Over
+  one live surface"). Decision 5 is withdrawn, and decision 7's "no platform
+  SDKs" holds for every outbound call: a SeaTalk channel receives over a
+  websocket through an operator-supplied SDK ([SeaTalk Inbound Over
   WebSocket](seatalk-websocket-inbound.md)).
 - **The turn seam is `TurnOrchestrator.enqueue_message`**, not `start_turn`: a
   channel message joins the conversation's pending queue exactly as a web
@@ -120,11 +129,9 @@ decision, and the research the decisions above rest on.
   (`application/channel/wanted.py`, every ~2 s). The gate is also the one place
   a channel's agent uids (its `scope` and `default_agent`) become the turn
   platform's agent keys; nothing below the live binding compares a uid.
-- **Everything the outside world can see is keyed by channel uid, not name**:
-  the SeaTalk callback path `/seatalk/<channel uid>` (composed once in
-  `callback_ops.callback_path`), the listener's signing-secret map, the managed
-  tunnels and the SeaTalk websockets. The owner pastes the path into a portal
-  by hand, so a rename must not move it.
+- **Runtime state is keyed by channel uid, not name** — the running adapters
+  and the SeaTalk websocket connections — so a rename moves nothing that is
+  live.
 - **Conversation identity is `(channel, chat, thread)`**, one level finer than
   the per-peer key both prior arts use: a group's threads are independent
   conversations, and a per-chat key made two of them collide on one turn lock.

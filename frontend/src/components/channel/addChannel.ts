@@ -12,7 +12,7 @@
 // dialog is what sequences them.
 import { addChannelFormSchema, type AddChannelFormValues } from "./schema";
 import type { ChannelFieldErrors, ChannelSecretDraft } from "./AddChannelSecretFields";
-import type { ChannelDelivery, ChannelType } from "@/lib/api/channels";
+import type { ChannelType } from "@/lib/api/channels";
 
 /** Schema path (wire field name) → the input it is rendered under. */
 const FIELD_OF_PATH: Record<string, keyof ChannelFieldErrors> = {
@@ -20,9 +20,6 @@ const FIELD_OF_PATH: Record<string, keyof ChannelFieldErrors> = {
   bot_token: "botToken",
   app_id: "appId",
   app_secret: "appSecret",
-  signing_secret: "signingSecret",
-  public_base_url: "publicBaseUrl",
-  tunnel_token: "tunnelToken",
 };
 
 /** A blank credential draft — what the form opens on and resets to. */
@@ -30,15 +27,11 @@ export const EMPTY_SECRET_DRAFT: ChannelSecretDraft = {
   botToken: "",
   appId: "",
   appSecret: "",
-  signingSecret: "",
-  publicBaseUrl: "",
-  tunnelToken: "",
 };
 
 /** Everything the add form holds that the schema has an opinion about. */
 export interface AddChannelDraft {
   channelType: ChannelType;
-  delivery: ChannelDelivery;
   name: string;
   secrets: ChannelSecretDraft;
 }
@@ -63,19 +56,15 @@ export function validateAddChannel(
   draft: AddChannelDraft,
   translate: (key: string) => string,
 ): AddChannelValidation {
-  const { channelType, delivery, name, secrets } = draft;
+  const { channelType, name, secrets } = draft;
   const parsed = addChannelFormSchema.safeParse(
     channelType === "telegram"
       ? { channel_type: "telegram", name, bot_token: secrets.botToken }
       : {
           channel_type: "seatalk",
           name,
-          delivery,
           app_id: secrets.appId,
           app_secret: secrets.appSecret,
-          signing_secret: secrets.signingSecret,
-          public_base_url: secrets.publicBaseUrl,
-          tunnel_token: secrets.tunnelToken,
         },
   );
   if (parsed.success) return { ok: true, values: parsed.data };

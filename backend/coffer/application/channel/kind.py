@@ -10,7 +10,7 @@ from coffer.domain.errors import ConfigValidationError
 from coffer.domain.resource import Kind, Resource
 from coffer.domain.scope import Scope, is_active
 
-_REF_FIELDS = ("bot_token_ref", "app_secret_ref", "signing_secret_ref", "tunnel_token_ref")
+_REF_FIELDS = ("bot_token_ref", "app_secret_ref")
 
 #: What the composition root injects to turn agent uids back into something a
 #: person can read: every registered agent resource's ``uid`` mapped to its
@@ -90,7 +90,7 @@ def _validate_default_agent(
     An empty scope is deliberately NOT a rejection: it is the vault-wide
     meaning of dormant — this channel is off — and "off" must not also mean
     "frozen". A channel the owner switched off still has to accept a corrected
-    bot token or tunnel token, so an edit to a dormant channel passes through
+    bot token or app secret ref, so an edit to a dormant channel passes through
     untouched and the row simply stays dormant.
 
     A channel with NO default agent is likewise not a rejection: it is bound to
@@ -260,8 +260,8 @@ def make_channel_kind(
     """Construct the `channel` Kind.
 
     ``on_delete`` is injected by the composition root: it evicts the channel
-    from the runtime (stopping its adapter and, when it was the last SeaTalk
-    channel, the callback listener) before the row — and, via FK cascade, the
+    from the runtime (stopping its adapter and, for SeaTalk, closing its
+    websocket connection) before the row — and, via FK cascade, the
     peer binding — is removed. Channel config holds only credential refs, so
     no audit redaction is needed.
 

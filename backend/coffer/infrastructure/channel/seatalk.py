@@ -1,9 +1,9 @@
-"""SeaTalk transport: callback events in (via the listener), Open APIs out.
+"""SeaTalk transport: events in (down the websocket connection), Open APIs out.
 
-No SDK: ``seatalk_transport`` owns the token cache and the Open API request
-shapes; this module normalizes inbound events, which arrive through the
-daemon's events-ingest route (the callback listener forwards them) — it owns
-no poll loop.
+No SDK here: ``seatalk_transport`` owns the token cache and the Open API request
+shapes; this module normalizes inbound events, which the websocket supervisor
+(``seatalk_ws``) hands to ``ChannelService.ingest_event`` — it owns no poll
+loop.
 """
 
 from __future__ import annotations
@@ -113,20 +113,19 @@ class SeaTalkAdapter:
         self._callbacks = None
         await self._client.aclose()
 
-    # -- inbound (fed by the events-ingest route) ----------------------------
+    # -- inbound (fed by the websocket connection) ---------------------------
 
     async def handle_event(self, envelope: dict[str, Any]) -> None:
-        """Normalize one verified SeaTalk event envelope and hand it to the core."""
+        """Normalize one SeaTalk event envelope and hand it to the core."""
         if self._callbacks is None:
             return
         event_type = str(envelope.get("event_type", ""))
         event = envelope.get("event")
         if not isinstance(event, dict):
             return
-        # "Process each inbound event once": SeaTalk retries a slow callback and a network hiccup
-        # can double-deliver — drop an event whose id (or message id) we already processed so a
-        # redelivery never drives the same turn twice. The verification handshake never reaches
-        # here (the listener answers it).
+        # "Process each inbound event once": SeaTalk redelivers an event it thinks was missed and
+        # a reconnect can double-deliver — drop an event whose id (or message id) we already
+        # processed so a redelivery never drives the same turn twice.
         key = dedup_key(envelope, event)
         if key and not self._seen.add(key):
             return

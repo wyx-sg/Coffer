@@ -4,8 +4,8 @@
 // McpServerDetailPage), a live status card (adapter, paired peer), the machine
 // card (which machine runs this channel's adapter), the pairing-code
 // generator, a test-delivery card wired to the notify capability, and — for
-// SeaTalk — the callback endpoint to point a tunnel at. Status auto-refreshes
-// while the page is open.
+// SeaTalk — the inbound card: the state of the websocket connection Coffer
+// holds to the platform. Status auto-refreshes while the page is open.
 //
 // The header's reach control and the machine card look adjacent and are not:
 // reach is which AGENTS this channel may drive, the machine card is which
@@ -23,11 +23,11 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScopeControl } from "@/components/ScopeControl";
-import { ChannelCallbackCard } from "@/components/channel/ChannelCallbackCard";
 import {
   ChannelPairingCard,
   ChannelTestMessageCard,
 } from "@/components/channel/ChannelDetailCards";
+import { ChannelInboundCard } from "@/components/channel/ChannelInboundCard";
 import { ChannelStatusCard } from "@/components/channel/ChannelStatusCard";
 import { EditChannelDialog } from "@/components/channel/EditChannelDialog";
 import { translateApiError } from "@/lib/api/errors";
@@ -142,7 +142,7 @@ export function ChannelDetailPage() {
         />
       </div>
 
-      {status?.callback ? <ChannelCallbackCard uid={uid} callback={status.callback} /> : null}
+      {status?.inbound ? <ChannelInboundCard inbound={status.inbound} /> : null}
 
       <ChannelTestMessageCard
         hasPeer={status?.peer != null}

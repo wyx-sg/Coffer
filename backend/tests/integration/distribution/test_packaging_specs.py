@@ -119,7 +119,6 @@ def _collect_hidden_string_literals(tree: ast.AST) -> set[str]:
     [
         ("coffer-daemon.spec", "coffer/infrastructure/daemon/entry.py"),
         ("coffer-mcp-shim.spec", "coffer/surfaces/shim/main.py"),
-        ("coffer-callback.spec", "coffer/surfaces/callback/__main__.py"),
     ],
 )
 def test_pyinstaller_spec_present_and_valid(spec_name: str, expected_target_module: str) -> None:
@@ -353,7 +352,7 @@ def test_release_workflow_packages_the_cli_archive() -> None:
     """The CLI download tier: coffer-cli-<triple>.tar.gz.
 
     Every binary the daemon resolves at runtime must be inside it. The daemon
-    deploys `coffer-mcp-shim` and `coffer-callback` out of its
+    deploys `coffer` and `coffer-mcp-shim` out of its
     own directory (spec daemon "Deploy frozen sibling binaries and back up the vault
     before migrating") and finds `coffer-daemon` as a sibling
     (ADR daemon-detect-or-spawn), so an archive missing any of them ships a build whose helper
@@ -366,9 +365,55 @@ def test_release_workflow_packages_the_cli_archive() -> None:
     for binary in (
         "coffer-daemon",
         "coffer-mcp-shim",
-        "coffer-callback",
     ):
         assert binary in text, f"CLI archive must include {binary}"
+
+
+#: What both tiers carry, and nothing else (spec daemon "Release the macOS
+#: arm64 terminal archive", spec desktop-app "Ship the desktop tier as a macOS
+#: arm64 dmg").
+_SHIPPED_BINARIES = ["coffer", "coffer-daemon", "coffer-mcp-shim"]
+
+
+@pytest.mark.acceptance(
+    spec="daemon",
+    scenario="release tag produces the CLI archive and SHA256SUMS",
+)
+def test_the_cli_archive_holds_exactly_three_binaries() -> None:
+    """The archive's binary list is exactly the three, and the build script
+    freezes exactly the three specs — no fourth helper rides along."""
+    import yaml
+
+    workflow = yaml.safe_load(_release_yml_text())
+    steps = workflow["jobs"]["bundle"]["steps"]
+    package = next(st for st in steps if st.get("name") == "package CLI archive")
+    match = re.search(r"binaries=\(\s*(.*?)\)", package["run"], re.DOTALL)
+    assert match, "package CLI archive must declare a binaries=( ... ) list"
+    assert match.group(1).split() == _SHIPPED_BINARIES
+
+    script = (_REPO / "scripts" / "build_binaries.sh").read_text()
+    built = re.findall(r"^\s*--distpath .* (\S+)\.spec \)$", script, re.MULTILINE)
+    assert sorted(built) == sorted(_SHIPPED_BINARIES)
+    assert sorted(p.stem for p in (_REPO / "backend").glob("*.spec")) == sorted(_SHIPPED_BINARIES)
+
+
+@pytest.mark.acceptance(spec="desktop-app", scenario="a release tag produces the desktop tier")
+def test_the_desktop_tier_embeds_exactly_three_binaries() -> None:
+    """The `.dmg` embeds the same three binaries, and no other one: the
+    shell's ``externalBin`` and the release's staging loop both name exactly
+    those."""
+    import json
+
+    conf = json.loads((_REPO / "desktop" / "tauri.conf.json").read_text())
+    assert conf["bundle"]["externalBin"] == [f"binaries/{b}" for b in _SHIPPED_BINARIES]
+    loops = [
+        ln.strip()
+        for ln in _release_yml_text().splitlines()
+        if ln.strip().startswith("for b in ") and "binaries[@]" not in ln
+    ]
+    assert loops, "release.yml must stage the binaries in a for loop"
+    for loop in loops:
+        assert loop == f"for b in {' '.join(_SHIPPED_BINARIES)}; do"
 
 
 @pytest.mark.acceptance(
@@ -612,7 +657,7 @@ def test_release_workflow_publishes_the_desktop_tier() -> None:
 def test_desktop_tier_reuses_the_already_frozen_binaries() -> None:
     """The desktop leg must copy out of `dist/`, not freeze a second time.
 
-    PyInstaller over four binaries is the expensive half of the release and the
+    PyInstaller over three binaries is the expensive half of the release and the
     CLI leg has already done it. A second run would roughly double the job's
     wall clock for artifacts that are byte-identical, and — worse — could ship
     an app whose binaries were built from a different invocation than the

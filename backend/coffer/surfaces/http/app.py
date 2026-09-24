@@ -307,9 +307,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # can read the collected set is what makes that visible.
     app.state.sync_contributions = sync_contributions
 
-    # Channel adapter reconciler (spec channels). Started after the daemon token is
-    # published so the callback listener can be spawned with valid loopback
-    # credentials on its first tick.
+    # Channel adapter reconciler (spec channels): Telegram polling and the
+    # SeaTalk websocket connections converge from its first tick.
     channel_runtime_task = asyncio.create_task(channel_runtime.run())
 
     # Reap /mcp sessions that have been idle past the threshold. Without this

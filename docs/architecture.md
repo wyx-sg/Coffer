@@ -200,7 +200,7 @@ backend/coffer/
 │   ├── agent/                    # agent-specific value objects (config, facets, model catalogue)
 │   ├── skill/                    # skill-specific value objects
 │   ├── knowledge/                # catalogue + file value objects, errors
-│   ├── channel/                  # channel config, envelopes, seatalk signing
+│   ├── channel/                  # channel config, envelopes
 │   ├── chat/                     # conversation, message, attachment, turn events
 │   ├── memory/                   # fact, partition, budget, delivery, reader protocol
 │   ├── provider/                 # provider config, modality, projection rules
@@ -236,7 +236,7 @@ backend/coffer/
 │   ├── agent_files/              # kind-agnostic readers of an agent's own on-disk files (transcripts) shared by agent + memory
 │   ├── skill/                    # master store, sync engine
 │   ├── knowledge/                # paths, file tree, frontmatter, ripgrep + Python fallback
-│   ├── channel/                  # telegram/seatalk transports (incl. the SeaTalk websocket connector and its operator-supplied SDK loader), cloudflared supervision, peer repo, render
+│   ├── channel/                  # telegram/seatalk transports (incl. the SeaTalk websocket connector and its operator-supplied SDK loader), peer repo, render
 │   ├── chat/                     # Claude SDK / Codex adapters, persistence, document extraction
 │   ├── memory/                   # native-memory readers, store, delivery state
 │   ├── provider/                 # provider introspector
@@ -248,8 +248,7 @@ backend/coffer/
     │   ├── mcp/                  # MCP protocol endpoint, capability + invocation routes
     │   └── memory/               # memory routes
     ├── cli/                      # Typer app + per-kind subcommand groups (daemon_features_cmd.py: `coffer daemon features`)
-    ├── shim/                     # coffer-mcp-shim entry
-    └── callback/                 # channel callback listener (separate process)
+    └── shim/                     # coffer-mcp-shim entry
 ```
 
 Composition root (`surfaces/http/app.py`, `surfaces/cli/main.py`) explicitly
@@ -298,9 +297,7 @@ credential supplier, not a code path.
 | MCP protocol                   | daemon                 | `/mcp` HTTP/SSE endpoint speaking MCP JSON-RPC (token-authenticated). Each client session gets its own set of upstream subprocesses, and upstream names are presented as `<server>__<name>` / `coffer://<server>/<uri>` ([Session Subprocess Model](decisions/session-subprocess-model.md)). |
 | CLI (`coffer …`)               | short-lived child      | Calls daemon over loopback HTTP. Every command compares the daemon's reported `version` with its own build and prints a one-line warning on stderr on skew, naming the daemon's `executable` — detection, never refusal (spec daemon "Warn on a version mismatch and carry on", [Detect-or-Spawn](decisions/daemon-detect-or-spawn.md)). |
 | Stdio shim (`coffer-mcp-shim`) | per MCP-client session | `stdin/stdout ↔ daemon HTTP/SSE` forwarder; detect-or-spawn daemon, with the same version-skew warning on its status probe. |
-| Callback listener              | daemon-spawned child   | Signed channel webhooks only (`POST /seatalk/{channel}`); loopback port behind a tunnel. Runs only for SeaTalk channels on **webhook** delivery (spec channels/seatalk "Carry no ingress fields on websocket delivery"). |
-| Managed tunnel (`cloudflared`) | daemon-spawned child   | One per webhook SeaTalk channel that records a Cloudflare connector token; terminates that channel's public callback URL so the owner need not run a tunnel by hand. |
-| SeaTalk websocket connection   | thread inside daemon   | One outbound connection per SeaTalk channel on **websocket** delivery — no listening socket, no tunnel, nothing exposed; events land on the same ingest seam the listener forwards to (spec channels/seatalk "Choose exactly one inbound delivery per channel" / "Carry no ingress fields on websocket delivery"). |
+| SeaTalk websocket connection   | thread inside daemon   | SeaTalk's only inbound transport: one outbound connection per SeaTalk channel — no listening socket, no public URL, nothing exposed; events land on the channel's one ingest seam (spec channels/seatalk "Receive every event over one outbound websocket connection" / "Report the websocket connection as the channel's inbound state"). |
 
 ## Processes
 
@@ -309,34 +306,29 @@ credential supplier, not a code path.
   daemon that cannot bind it refuses to start and names the holder (the
   `COFFER_PORT_RANGE_*` scan is a test-harness override only). On macOS
   `coffer daemon service install` makes it a launchd login service that restarts
-  it only after an unsuccessful exit, and it stands down cleanly after an idle
-  window (twelve hours by default, `coffer daemon idle`). Owns all state; single SQLite writer. `GET /api/v1/daemon/status`
+  it only after an unsuccessful exit. It never stands down on its own: once
+  started it serves until it is stopped or superseded by another daemon.
+  Owns all state; single SQLite writer. `GET /api/v1/daemon/status`
   reports its `version` and `executable`, and a frozen build deploys its sibling
   binaries into `~/.coffer/bin/<version>/` at start, flipping the public
-  `~/.coffer/bin/<name>` symlinks onto that directory atomically and keeping the
-  previous version's directory for a rollback (spec daemon "Deploy frozen sibling binaries and back up the vault before migrating",
+  `~/.coffer/bin/<name>` symlinks onto that directory atomically, keeping the
+  previous version's directory for a rollback and removing the link of any
+  binary the build no longer ships (spec daemon "Deploy frozen sibling binaries and back up the vault before migrating",
   [PyInstaller Distribution](decisions/distribution-pyinstaller.md)).
 - **Stdio shim** — short-lived; lifecycle bound to one MCP client process.
-- **Callback listener** — daemon-spawned child serving only signed channel
-  callback paths on `127.0.0.1:<callback-port>`; runs while any SeaTalk
-  channel on **webhook** delivery is enabled (spec channels, [Channel Adapter Framework](decisions/channel-adapter-framework.md)).
-- **`cloudflared`** — daemon-spawned child, one per webhook SeaTalk channel that
-  records a connector token; the token reaches it through a `0600` temp file, never
-  argv, and the spawn is recorded in the upstream-pids directory so the startup
-  orphan sweep reaps it after a crash.
-- **No process for websocket delivery.** A SeaTalk channel on websocket delivery
-  is supervised *inside* the daemon — a worker thread holding one outbound
-  connection, reconciled like a tunnel is, backing off on failure and on being
-  kicked by another registration of the same app. It needs no separate process
-  because it exposes nothing: the principles' separate-process rule guards
-  publicly reachable surfaces, and this one is a socket only this machine opened
+- **No process for SeaTalk inbound.** A SeaTalk channel is supervised *inside*
+  the daemon — a worker thread holding one outbound websocket connection,
+  reconciled with the channel runtime, backing off on failure and on being
+  kicked by another registration of the same app. It exposes nothing: it is a
+  socket only this machine opened, so the daemon's loopback socket stays the only
+  one the vault listens on
   ([SeaTalk Inbound Over WebSocket](decisions/seatalk-websocket-inbound.md)).
 
-The shim and the listener discover the daemon through `~/.coffer/daemon.json`
+The CLI and the shim discover the daemon through `~/.coffer/daemon.json`
 (PID + port + token, mode `0600`) — runtime state, written at start and unlinked at exit.
 Its counterpart `~/.coffer/daemon-config.json` holds the settings the daemon
 must read *before* it binds, and therefore before any database exists: today,
-the optional fixed port, the idle window, the machine name, the cached machine id and the
+the optional fixed port, the machine name, the cached machine id and the
 experimental-feature switches (`features`, see [Release channel and experimental features](#release-channel-and-experimental-features)). See [Detect-or-Spawn](decisions/daemon-detect-or-spawn.md).
 
 ## Release channel and experimental features

@@ -77,7 +77,7 @@ The full set of audited event types (defined as `AuditEventType` in `domain/audi
 | Event                         | Trigger                                       |
 | ----------------------------- | --------------------------------------------- |
 | `token_rotated`               | After `POST /api/v1/daemon/rotate-token`      |
-| `daemon_residency_updated`    | After `PUT /api/v1/daemon/residency` changes the login service or idle-shutdown window |
+| `daemon_residency_updated`    | After `PUT /api/v1/daemon/residency` installs or removes the login service |
 | `retention_updated`           | When a retention policy is changed            |
 | `internal_engine_model_set`   | When the internal engine's model is chosen    |
 

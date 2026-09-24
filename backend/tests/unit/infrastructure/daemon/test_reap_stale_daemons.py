@@ -90,8 +90,7 @@ def test_select_excludes_different_executables() -> None:
 def test_select_spares_a_daemon_serving_another_vault() -> None:
     """The regression: a smoke test / live test daemon under a throwaway HOME
     runs the same binary but owns none of our state. Killing it took down the
-    maintainer's real daemon, its daemon.json, its callback child and its
-    tunnel."""
+    maintainer's real daemon, its daemon.json and the children it held."""
     candidates = [
         (200, "coffer-daemon", OURS),  # same vault → reap
         (201, "coffer-daemon", THEIRS),  # another vault → keep

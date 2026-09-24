@@ -634,30 +634,6 @@ class FakeIngestService:
         return FakeIngestedDocument(path=path, title=filename)
 
 
-class StubListenerController:
-    """Recording ``ListenerControllerPort`` (no real child process)."""
-
-    def __init__(self) -> None:
-        self._running = False
-        self.ensure_running_calls: list[dict[str, str]] = []
-        self.ensure_stopped_calls = 0
-
-    @property
-    def port(self) -> int:
-        return 8466
-
-    def running(self) -> bool:
-        return self._running
-
-    async def ensure_running(self, signing_secrets: dict[str, str]) -> None:
-        self._running = True
-        self.ensure_running_calls.append(dict(signing_secrets))
-
-    async def ensure_stopped(self) -> None:
-        self._running = False
-        self.ensure_stopped_calls += 1
-
-
 class StubWebSocketController:
     """Recording ``WebSocketControllerPort`` (no SDK, no socket, no thread).
 
@@ -761,7 +737,6 @@ class ChannelEnv:
     processor: InboundProcessor
     runtime: ChannelRuntime
     service: ChannelService
-    listener: StubListenerController
     websockets: StubWebSocketController
     #: The same factory ``runtime`` was built with, kept so a test can stand up
     #: a SECOND runtime over these identical parts — which is what the machine
@@ -995,14 +970,12 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         # production wiring does.
         return resolver.materialize(refs)
 
-    listener = StubListenerController()
     websockets = StubWebSocketController()
     runtime = ChannelRuntime(
         resources=resources,
         adapter_factory=adapter_factory,
         processor=processor,
         pairing=pairing,
-        listener=listener,
         websockets=websockets,
         materialize=materialize,
         interval_seconds=0.05,
@@ -1051,7 +1024,6 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
         processor=processor,
         runtime=runtime,
         service=service,
-        listener=listener,
         websockets=websockets,
         created_adapters=created_adapters,
     )

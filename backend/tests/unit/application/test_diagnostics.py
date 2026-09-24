@@ -162,17 +162,15 @@ async def test_a_traceback_is_returned_with_the_record_that_raised(tmp_path) -> 
 @pytest.mark.asyncio
 async def test_every_writers_format_reaches_the_agent_parsed(tmp_path) -> None:
     """``daemon.log`` interleaves Coffer's structlog with the stdlib formatter
-    and the cloudflared child's zerolog. An agent must get the level and the
-    logger from all of them, not a wall of unparsed text."""
+    and an upstream MCP server's dashed lines. An agent must get the level and
+    the logger from all of them, not a wall of unparsed text."""
     repo = _FakeAuditRepo([])
-    # zerolog prints whole seconds and a bare `Z`; keep it inside the window.
-    stamp = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     tool = _tool(
         repo,
         _log(
             tmp_path,
             [
-                f"{stamp} ERR failed to serve incoming request",
+                "ERROR - mcp_atlassian.utils.toolsets - failed to serve incoming request",
                 "WARNI [coffer.infrastructure.chat.codex_app_server] \x1b[31mERROR\x1b[0m cache",
             ],
         ),
@@ -180,11 +178,11 @@ async def test_every_writers_format_reaches_the_agent_parsed(tmp_path) -> None:
 
     out = await tool.handler({})
 
-    codex, tunnel = out["log"]
+    codex, upstream = out["log"]
     assert codex["level"] == "warning"
     assert codex["logger"] == "coffer.infrastructure.chat.codex_app_server"
     assert codex["event"] == "ERROR cache"  # the colour escapes are gone
-    assert (tunnel["level"], tunnel["timestamp"]) == ("error", stamp)
+    assert (upstream["level"], upstream["logger"]) == ("error", "mcp_atlassian.utils.toolsets")
 
 
 @pytest.mark.asyncio

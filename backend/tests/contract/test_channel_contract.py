@@ -44,7 +44,6 @@ def spec_doc() -> dict[str, Any]:
         ("/api/v1/channels/{uid}/pairing-code", "post"),
         ("/api/v1/channels/{uid}/status", "get"),
         ("/api/v1/channels/{uid}/notify", "post"),
-        ("/api/v1/channels/{uid}/events", "post"),
     ],
 )
 def test_channel_path_and_method_exists(
@@ -95,12 +94,11 @@ def test_every_yaml_path_is_implemented(
     "schema_name,required_fields",
     [
         ("PairingCodeOut", {"code", "expires_at"}),
-        ("ChannelStatusOut", {"name", "channel_type", "enabled", "running", "peer", "callback"}),
+        ("ChannelStatusOut", {"name", "channel_type", "enabled", "running", "peer", "inbound"}),
         ("ChannelPeerOut", {"chat_id", "display_name", "paired_at", "active_conversation_id"}),
-        ("CallbackInfoOut", {"port", "path", "listener_running"}),
+        ("InboundInfoOut", {"websocket_state", "websocket_error"}),
         ("NotifyIn", {"text"}),
         ("NotifyOut", {"sent"}),
-        ("EventAcceptedOut", {"accepted"}),
     ],
 )
 def test_channel_schema_required_fields(

@@ -36,7 +36,7 @@ router leaves `/status` open, and log contents are not status). Normalising the
 daemon log onto one field set is the daemon's work, not this page's: Coffer's
 own records are one JSON object per line ([daemon](../daemon/spec.md) "Write one bounded daemon log in one format"), while the other
 processes sharing `daemon.log` — uvicorn, rich output from an upstream MCP
-server, the zerolog of a cloudflared child, a tail written before the daemon's
+server, a tail written before the daemon's
 own format was fixed — are normalised onto the same fields on the daemon's side
 of the wire, escape sequences stripped, a traceback riding with the record that
 raised it, and a line no format fits kept whole rather than dropped. The page
@@ -472,7 +472,7 @@ capability, duration and outcome; a log record's level, logger and message.
 - **AND** a change reads as a plain-language line, not a raw event code
 
 #### Scenario: the daemon tab reads every writer in the log
-- **GIVEN** `daemon.log` holds lines from several writers at once — Coffer's own JSON, the format the daemon itself wrote before [daemon](../daemon/spec.md) "Write one bounded daemon log in one format" was met, uvicorn, rich, and the cloudflared child's zerolog — with a colour-escaped line among them and a traceback written under the record that raised it
+- **GIVEN** `daemon.log` holds lines from several writers at once — Coffer's own JSON, the format the daemon itself wrote before [daemon](../daemon/spec.md) "Write one bounded daemon log in one format" was met, uvicorn and rich — with a colour-escaped line among them and a traceback written under the record that raised it
 - **WHEN** the user opens the Daemon tab
 - **THEN** each row carries the time, level and logger its own line stated, and nothing carries a time or a level it never stated
 - **AND** no message renders a terminal escape sequence as text
@@ -657,23 +657,19 @@ next render, with no full page reload, and the choice MUST persist in
 - **AND** the preference persists across reloads (localStorage `coffer.language`)
 
 ### Requirement: Let the user choose when the daemon runs
-The General tab MUST carry a card for when Coffer's daemon runs, with two
-controls: a **Start at login** switch and a **Stand down after** choice of idle
-window that offers a set of hour values and **Never** as its own option, never
-as a number. It MUST read and write both through
-[daemon](../daemon/spec.md) "Change residency from the settings page or the command line",
-and every change MUST send both halves in one request. A clicked control MUST
-move to the clicked value at once and then settle on what the daemon reports:
-the controls are disabled until the daemon has first answered, a successful
-write shows the values the daemon answers with, a window set from the command
-line that the list does not offer is still shown, the switch is shown
-unavailable rather than off on a host with no login service, and a failed write
-MUST put the controls back to what the daemon last reported and show the error
-beside them.
+The General tab MUST carry a card for when Coffer's daemon runs, with one control: a **Start at
+login** switch. It MUST read and write it through
+[daemon](../daemon/spec.md) "Change residency from the settings page or the command line".
+A clicked switch MUST move to the clicked value at once and then settle on what the daemon reports:
+the switch is disabled until the daemon has first answered, a successful write shows the value the
+daemon answers with, the switch is shown unavailable rather than off on a host with no login
+service, and a failed write MUST put the switch back to what the daemon last reported and show the
+error beside it. The card MUST NOT offer an idle window or a stand-down choice, because the daemon
+never stands down on its own.
 
 #### Scenario: the general tab sets when the daemon runs
-- **GIVEN** the daemon reports a login service that is supported and not installed, and an idle window of 12 hours
-- **WHEN** the user turns on Start at login, and then picks Never as the idle window
-- **THEN** each change sends one request carrying both halves — first `login_service_installed: true` with `idle_shutdown_hours: 12`, then `login_service_installed: true` with `idle_shutdown_hours: null`
-- **AND** the idle window offers 1, 4, 12, 24 and 72 hours and Never
-- **AND** when the second request fails, the idle window goes back to 12 hours and the error is shown beside it
+- **GIVEN** the daemon reports a login service that is supported and not installed
+- **WHEN** the user turns on Start at login
+- **THEN** one request is sent carrying `login_service_installed: true` and no idle window
+- **AND** the card offers no idle-window or stand-down control
+- **AND** when the request fails, the switch goes back to off and the error is shown beside it

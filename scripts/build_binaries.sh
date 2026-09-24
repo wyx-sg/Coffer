@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build every Coffer binary (coffer, coffer-daemon, coffer-mcp-shim,
-# coffer-callback) with PyInstaller into dist/. The release workflow packages
+# Build every Coffer binary (coffer, coffer-daemon, coffer-mcp-shim) with
+# PyInstaller into dist/. The release workflow packages
 # all of dist/ into coffer-cli-<triple>.tar.gz; the daemon deploys the
 # helper binaries sitting next to it into ~/.coffer/bin/ at startup.
 #
@@ -79,9 +79,6 @@ echo ">>> Building coffer-mcp-shim for $TRIPLE"
 echo ">>> Building coffer (management CLI) for $TRIPLE"
 ( cd "$REPO_ROOT/backend" && "${PYINSTALLER[@]}" --clean --noconfirm \
     --distpath "$DIST_DIR" --workpath "$BUILD_DIR" coffer.spec )
-echo ">>> Building coffer-callback for $TRIPLE"
-( cd "$REPO_ROOT/backend" && "${PYINSTALLER[@]}" --clean --noconfirm \
-    --distpath "$DIST_DIR" --workpath "$BUILD_DIR" coffer-callback.spec )
 
 # Pick the right binary extension. Keep this set in sync with the Windows
 # patterns in the triple-detection case statement above.
@@ -92,8 +89,7 @@ fi
 
 chmod +x "$DIST_DIR/coffer${EXT}" \
          "$DIST_DIR/coffer-daemon${EXT}" \
-         "$DIST_DIR/coffer-mcp-shim${EXT}" \
-         "$DIST_DIR/coffer-callback${EXT}"
+         "$DIST_DIR/coffer-mcp-shim${EXT}"
 echo ""
 echo ">>> Built (target triple: $TRIPLE):"
 ls -la "$DIST_DIR"

@@ -81,14 +81,6 @@ def register(
     app_secret_ref: str | None = typer.Option(
         None, "--app-secret-ref", help="Keychain ref of the SeaTalk app secret"
     ),
-    signing_secret_ref: str | None = typer.Option(
-        None, "--signing-secret-ref", help="Keychain ref of the SeaTalk signing secret"
-    ),
-    delivery: str = typer.Option(
-        "webhook",
-        "--delivery",
-        help="SeaTalk event delivery: webhook (public callback URL) | websocket (no public URL)",
-    ),
     default_agent: str = typer.Option(
         ...,
         "--agent",
@@ -130,30 +122,16 @@ def register(
             raise typer.Exit(int(ExitCode.INVALID_INPUT))
         config["bot_token_ref"] = bot_token_ref
     elif channel_type == "seatalk":
-        if delivery not in {"webhook", "websocket"}:
-            typer.echo("--delivery must be webhook or websocket", err=True)
-            raise typer.Exit(int(ExitCode.INVALID_INPUT))
+        # spec channels/seatalk "Configure a SeaTalk channel by app id and
+        # secret reference": the websocket register handshake authenticates
+        # from these two alone, so they are the whole SeaTalk configuration.
         required = [("--app-id", app_id), ("--app-secret-ref", app_secret_ref)]
-        if delivery == "webhook":
-            # Only webhook delivery has anything signed to verify (spec
-            # channels/seatalk "Require a signing secret on webhook delivery").
-            required.append(("--signing-secret-ref", signing_secret_ref))
-        elif signing_secret_ref is not None:
-            typer.echo(
-                "--signing-secret-ref does not apply to websocket delivery "
-                "(nothing is signed on that transport)",
-                err=True,
-            )
-            raise typer.Exit(int(ExitCode.INVALID_INPUT))
         missing = [flag for flag, value in required if value is None]
         if missing:
             typer.echo(f"missing for seatalk channels: {', '.join(missing)}", err=True)
             raise typer.Exit(int(ExitCode.INVALID_INPUT))
         config["app_id"] = app_id
         config["app_secret_ref"] = app_secret_ref
-        config["delivery"] = delivery
-        if delivery == "webhook":
-            config["signing_secret_ref"] = signing_secret_ref
     else:
         typer.echo("--type must be telegram or seatalk", err=True)
         raise typer.Exit(int(ExitCode.INVALID_INPUT))
@@ -199,7 +177,7 @@ def status(
     name: str = typer.Argument(..., help="Channel name"),
     output_json: bool = typer.Option(False, "--json", help="JSON output"),
 ) -> None:
-    """Show runtime, pairing, and callback status."""
+    """Show runtime, pairing, and inbound status."""
     verbose = (ctx.obj or {}).get("verbose", False)
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -227,9 +205,9 @@ def status(
         typer.echo(f"conv:     {peer.get('active_conversation_id') or '-'}")
     else:
         typer.echo("peer:     not paired")
-    callback = body.get("callback")
-    if callback:
-        _echo_inbound(callback)
+    inbound = body.get("inbound")
+    if inbound:
+        _echo_inbound(inbound)
     for diagnostic in body.get("diagnostics") or []:
         # spec channels/telegram "Report privacy mode that defeats the group
         # configuration": a setting that reads correctly here and does nothing in
@@ -237,41 +215,20 @@ def status(
         typer.echo(f"warning:  {diagnostic['message']}")
 
 
-def _echo_inbound(callback: dict[str, object]) -> None:
-    """The inbound-transport lines of ``coffer channel status``.
+def _echo_inbound(inbound: dict[str, object]) -> None:
+    """The inbound lines of ``coffer channel status`` for a SeaTalk channel.
 
-    Spec channels/seatalk "Keep status truthful per transport".
-
-    A SeaTalk channel receives events one of two ways, and each way's facts are
-    the OTHER way's absent values. That requirement has the absent ones read as
-    absent — this used to print ``callback: 127.0.0.1:0 (listener down)`` for a
-    perfectly healthy websocket channel, because ``port=0`` /
-    ``listener_running=False`` are what the service deliberately reports when
-    there is no listener to have. A zero rendered as an address is worse than
-    saying nothing: it sends the owner looking for ingress that is not part of
-    the design.
+    Spec channels/seatalk "Report the websocket connection as the channel's
+    inbound state": the connection state and its last error, and nothing about
+    a listener, port, path, URL or tunnel — none exists.
     """
-    if callback.get("delivery") == "websocket":
-        state = callback.get("websocket_state") or "not running"
-        typer.echo(f"inbound:  websocket ({state})")
-        error = callback.get("websocket_error")
-        if error:
-            # Verbatim: the two failures that matter (no SDK installed, another
-            # process holding the connection) are only actionable if read.
-            typer.echo(f"ws error: {error}")
-        return
-
-    typer.echo(
-        f"inbound:  webhook 127.0.0.1:{callback['port']}{callback['path']} "
-        f"(listener {'up' if callback['listener_running'] else 'down'})"
-    )
-    if callback.get("tunnel_managed"):
-        typer.echo(f"tunnel:   managed ({'up' if callback.get('tunnel_running') else 'down'})")
-    else:
-        # Not a fault: the owner may front the callback themselves.
-        typer.echo("tunnel:   not managed by Coffer")
-    if callback.get("public_callback_url"):
-        typer.echo(f"register: {callback['public_callback_url']}")
+    state = inbound.get("websocket_state") or "not connected yet"
+    typer.echo(f"inbound:  websocket ({state})")
+    error = inbound.get("websocket_error")
+    if error:
+        # Verbatim: the two failures that matter (no SDK installed, another
+        # process holding the connection) are only actionable if read.
+        typer.echo(f"ws error: {error}")
 
 
 @app.command("bind")

@@ -28,7 +28,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Runtime, pairing, and callback status of a channel */
+        /** Runtime, pairing, and inbound status of a channel */
         get: operations["getChannelStatus"];
         put?: never;
         post?: never;
@@ -49,48 +49,6 @@ export interface paths {
         put?: never;
         /** Push a text message to the channel's paired peer */
         post: operations["notifyChannel"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/channels/{uid}/callback-test": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Probe a SeaTalk channel's public callback path end to end
-         * @description Sends the platform's own verification handshake at the channel's configured public URL and reports whether the echo came back — so the whole webhook chain (public URL → tunnel → loopback listener → signature → handshake) is confirmed from one button instead of by watching for a real event. It does NOT confirm the stored signing secret matches SeaTalk's, since both sides of the probe sign with the same stored secret; only a real event shows that.
-         *
-         *     A failure is reported as `ok: false` with a `detail` the owner can act on, never as an HTTP error: the probe ran, and what it found is the answer. A Telegram channel, and a SeaTalk channel on **websocket** delivery, are refused the same way — a websocket channel has no public URL to probe at all, and its `websocket_state` is the health answer there (spec channels/seatalk "Keep status truthful per transport").
-         */
-        post: operations["testChannelCallback"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/channels/{uid}/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Ingest a verified SeaTalk callback event (listener-internal)
-         * @description Called by the callback listener over loopback after signature verification. Requires the daemon token like every other route; the body is the raw SeaTalk event envelope.
-         */
-        post: operations["ingestChannelEvent"];
         delete?: never;
         options?: never;
         head?: never;
@@ -125,8 +83,8 @@ export interface components {
             /** @description Whether an unexpired pairing code is outstanding */
             pending_pairing: boolean;
             peer: components["schemas"]["ChannelPeerOut"] | null;
-            /** @description Present for seatalk channels only */
-            callback: components["schemas"]["CallbackInfoOut"] | null;
+            /** @description A SeaTalk channel's websocket connection. Null for a telegram channel, whose inbound is the adapter's own polling and is reported by `running`. */
+            inbound: components["schemas"]["InboundInfoOut"] | null;
             /** @description Contradictions between the channel's configuration and what the platform actually permits. Empty is the healthy case. */
             diagnostics?: components["schemas"]["ChannelDiagnosticOut"][];
             /** @description The machine_id of the one machine whose daemon runs this channel's adapter. Null means unbound, which runs nowhere. */
@@ -147,29 +105,15 @@ export interface components {
             paired_at: string;
             active_conversation_id: string | null;
         };
-        /** @description How a SeaTalk channel receives events. Covers both delivery methods; on websocket delivery the webhook-only fields report their absent/false values (there is no port, path, public URL, listener or tunnel on that path) and websocket_state carries the health answer. */
-        CallbackInfoOut: {
-            port: number;
-            /** @description The path to append to the tunnel URL */
-            path: string;
-            listener_running: boolean;
+        /** @description How a SeaTalk channel's inbound is doing: the state of the one outbound websocket connection it receives every event on (spec channels/seatalk "Report the websocket connection as the channel's inbound state"). There is no listener, port, path, public URL or tunnel to report. */
+        InboundInfoOut: {
             /**
-             * @description Which inbound transport this channel uses. webhook = SeaTalk POSTs to a public callback URL; websocket = the bot holds one outbound connection and needs no public URL.
-             * @enum {string}
-             */
-            delivery: "webhook" | "websocket";
-            public_base_url?: string | null;
-            public_callback_url?: string | null;
-            /** @description Coffer supervises a cloudflared child for this channel */
-            tunnel_managed?: boolean;
-            tunnel_running?: boolean;
-            /**
-             * @description State of the held WebSocket connection; null on webhook delivery and on a websocket channel with no connection yet.
+             * @description State of the held WebSocket connection; null before the first connection attempt.
              * @enum {string|null}
              */
-            websocket_state?: "connecting" | "connected" | "kicked" | "sdk_missing" | "error" | null;
+            websocket_state: "connecting" | "connected" | "kicked" | "sdk_missing" | "error" | null;
             /** @description The last connection error, verbatim, so the owner can act on it */
-            websocket_error?: string | null;
+            websocket_error: string | null;
         };
         NotifyIn: {
             text: string;
@@ -181,23 +125,6 @@ export interface components {
         };
         NotifyOut: {
             sent: boolean;
-        };
-        CallbackTestOut: {
-            ok: boolean;
-            /** @description What the probe found, in words the owner can act on — on a pass, a one-line confirmation of the path that was verified. */
-            detail: string;
-        };
-        SeaTalkEventIn: {
-            event_id?: string;
-            event_type: string;
-            timestamp?: number;
-            app_id?: string;
-            event: {
-                [key: string]: unknown;
-            };
-        };
-        EventAcceptedOut: {
-            accepted: boolean;
         };
         ErrorEnvelope: {
             error: {
@@ -221,7 +148,7 @@ export interface components {
         };
     };
     parameters: {
-        /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the callback listener and the tunnel supervisor hold this value across restarts — a path built from a label stops resolving the moment the label changes. */
+        /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the websocket supervisor keys its connection on this value — a path built from a label stops resolving the moment the label changes. */
         ChannelUid: string;
     };
     requestBodies: never;
@@ -235,7 +162,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the callback listener and the tunnel supervisor hold this value across restarts — a path built from a label stops resolving the moment the label changes. */
+                /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the websocket supervisor keys its connection on this value — a path built from a label stops resolving the moment the label changes. */
                 uid: components["parameters"]["ChannelUid"];
             };
             cookie?: never;
@@ -259,7 +186,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the callback listener and the tunnel supervisor hold this value across restarts — a path built from a label stops resolving the moment the label changes. */
+                /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the websocket supervisor keys its connection on this value — a path built from a label stops resolving the moment the label changes. */
                 uid: components["parameters"]["ChannelUid"];
             };
             cookie?: never;
@@ -283,7 +210,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the callback listener and the tunnel supervisor hold this value across restarts — a path built from a label stops resolving the moment the label changes. */
+                /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the websocket supervisor keys its connection on this value — a path built from a label stops resolving the moment the label changes. */
                 uid: components["parameters"]["ChannelUid"];
             };
             cookie?: never;
@@ -315,67 +242,6 @@ export interface operations {
             };
             /** @description CHANNEL_SEND_FAILED — the IM platform refused or failed the send */
             502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
-    testChannelCallback: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the callback listener and the tunnel supervisor hold this value across restarts — a path built from a label stops resolving the moment the label changes. */
-                uid: components["parameters"]["ChannelUid"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The probe ran; `ok` says what it found */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CallbackTestOut"];
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
-    };
-    ingestChannelEvent: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The channel resource's immutable uid, as `ResourceOut.uid` reports it. Not the channel's name: a name is a label its owner may edit, and the callback listener and the tunnel supervisor hold this value across restarts — a path built from a label stops resolving the moment the label changes. */
-                uid: components["parameters"]["ChannelUid"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SeaTalkEventIn"];
-            };
-        };
-        responses: {
-            /** @description Accepted for processing */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EventAcceptedOut"];
-                };
-            };
-            404: components["responses"]["NotFound"];
-            /** @description The channel's adapter is not running (channel disabled) */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -89,6 +89,11 @@ browser at that origin.
   thing a tunnel is ever pointed at — is a different app on a different port and
   is unaffected; it authenticates inbound traffic by per-channel signature and
   forwards to the daemon over loopback.
+
+  **Amended 2026-09-24:** the `coffer-callback` process is deleted with SeaTalk
+  webhook delivery ([SeaTalk Inbound Over WebSocket](./seatalk-websocket-inbound.md)).
+  The daemon's loopback socket is the only one Coffer listens on, so the `Host`
+  check covers every surface there is, with no second process carved out.
 - **A browser that is not served by the daemon has no token.** That is the Vite
   dev server, which already injects the same global from `daemon.json`.
 

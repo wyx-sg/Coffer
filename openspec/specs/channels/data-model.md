@@ -22,12 +22,8 @@ ChannelConfig (discriminator: channel_type)
 │   └── bot_token_ref: str            # credential-store ref, probed at register
 └── SeaTalkChannelConfig
     ├── channel_type: "seatalk"
-    ├── delivery: "webhook" | "websocket" = "webhook"  # inbound transport (spec channels/seatalk)
-    ├── app_id: str                     # required on both
-    ├── app_secret_ref: str             # credential-store ref; required on both
-    ├── signing_secret_ref: str | None  # webhook: required — websocket: forbidden
-    ├── public_base_url: str | None     # webhook only: tunnel public base URL (https://host)
-    └── tunnel_token_ref: str | None    # webhook only: cloudflared token ref (managed tunnel)
+    ├── app_id: str                     # authenticates the websocket register handshake
+    └── app_secret_ref: str             # credential-store ref, probed at register
 ```
 
 Validation rules:
@@ -98,36 +94,17 @@ Validation rules:
   machine never starts has no answer to give; without the exemption a converged
   channel whose owner machine has an agent this one lacks would be refused at
   the registry door every round.
-- `delivery` decides which of the SeaTalk fields are legal, and one
-  `model_validator(mode="after")` holds the whole rule so the allowed and the
-  forbidden combination can never drift apart (spec channels/seatalk, the delivery
-  requirements):
-
-  | field                | `delivery: "webhook"`               | `delivery: "websocket"` |
-  | -------------------- | ----------------------------------- | ----------------------- |
-  | `app_id`             | required                            | required                |
-  | `app_secret_ref`     | required                            | required                |
-  | `signing_secret_ref` | **required**                        | **forbidden**           |
-  | `public_base_url`    | optional                            | **forbidden**           |
-  | `tunnel_token_ref`   | optional (managed tunnel when set)  | **forbidden**           |
-
-  The forbidden half is what makes the config readable: a websocket channel has
-  no request body to sign, no public URL to describe, and no tunnel to supervise,
-  so a stored value for any of the three would claim a runtime arrangement that
-  does not exist. Each message names the field and the delivery method it
-  conflicts with, in the style of the other cross-field validators, because the
-  user reaches this error by switching an existing channel's transport — the one
-  moment they are holding both sets of fields at once.
-- **No migration accompanies `delivery`.** Every channel stored before the field
-  existed is a webhook channel — that was the only transport — and the field's
-  default is `webhook`, so an absent value already means exactly what those rows
-  already are. Nothing is reinterpreted, no value changes meaning, and there is
-  no row whose behaviour depends on being rewritten; a migration here would write
-  `webhook` on top of rows that already behave as `webhook`. (Contrast migration
-  `0068` above, which had to *remove* keys the model no longer accepts: a new
-  field with a default that matches the stored reality is the opposite case.)
-  This is also why no load-time shim appears anywhere — there is no old shape to
-  translate.
+- A SeaTalk channel has **one inbound transport**, the outbound websocket
+  connection (spec channels/seatalk "Receive every event over one outbound
+  websocket connection"), so its configuration carries no transport field and no
+  ingress field. The webhook-era keys — `delivery`, `signing_secret_ref`,
+  `public_base_url`, `tunnel_token_ref` — were removed from every stored row by
+  migration `0103` (below), in one direction for the data and with no load-time
+  shim (house rule). The credential values the two removed refs cited are left
+  in the credential store: a migration that deletes secrets could not be undone
+  by its downgrade, and `coffer credentials delete <ref>` removes them on
+  purpose. A document still carrying those keys — from a machine running an
+  older build — is read like any other unknown key and ignored.
 - Channel turns run in the Coffer-managed default workspace `~/.coffer/workspace`
   (created on first use).
 
@@ -215,10 +192,13 @@ that already holds the table; reversible by dropping it.
 | `20260915_0081_channel_scope_names_agent_resources.py` | rewrites each channel's stored scope from agent **keys** into agent **resource names** — an intermediate step, superseded by 0096 |
 | `20260918_0096_cross_references_point_at_uids.py` | rewrites each channel's stored scope from agent resource names into agent **uids**, and its `default_agent` from an agent key into an agent uid (it also renames `conversations.channel_name` to `channel_uid`) |
 | `20260918_0099_credential_refs_stop_naming_their_resource.py` | rewrites every `*_ref` field of a channel config (`bot_token_ref`, `app_secret_ref`, `signing_secret_ref`, `tunnel_token_ref`) from `channel/<name>/<secret>` to an address that does not spell the channel's name, moving the credential row with it |
+| `20260924_0103_seatalk_channels_drop_webhook_fields.py` | removes `delivery`, `signing_secret_ref`, `public_base_url` and `tunnel_token_ref` from every SeaTalk channel config, leaving the credential values the refs cited in the store; the downgrade writes `delivery: "websocket"` back, the value every rewritten channel now behaves as and the only one the older model accepts without a signing secret |
 
-All seven rewrite channel config data in one direction only, with no load-time
-shim (house rule); 0096 also renames a `conversations` column, and that schema
-half reverses on downgrade while the data half does not.
+All eight rewrite channel config data with no load-time shim (house rule), and
+all but 0103 in one direction only; 0096 also renames a `conversations` column,
+and that schema half reverses on downgrade while the data half does not. 0103's
+downgrade does not restore the removed keys either — it writes only the
+`delivery` value an older build needs to accept the row.
 
 ## In-memory state (never persisted)
 

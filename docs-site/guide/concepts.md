@@ -53,7 +53,7 @@ The port is **fixed**, not scanned: with nothing configured the daemon binds exa
 
 Because the daemon is the single writer, all registered clients see a consistent, up-to-date view of your servers. It is discovered by other processes through `~/.coffer/daemon.json` (PID + port + token, mode `0600`).
 
-Any client will start one if none is running — `coffer daemon start`, the desktop app, an agent's MCP shim — but the one worth setting up is `coffer daemon service install`, which makes it a login service so it is already up before the first agent call of the day, and restarts it if it crashes. It stands down again after twelve hours with nothing using it (`coffer daemon idle set <hours>`, or `never`).
+Any client will start one if none is running — `coffer daemon start`, the desktop app, an agent's MCP shim — but the one worth setting up is `coffer daemon service install`, which makes it a login service so it is already up before the first agent call of the day, and restarts it if it crashes. Once started it runs until it is stopped — it never shuts itself down for want of use.
 
 ## Shim
 

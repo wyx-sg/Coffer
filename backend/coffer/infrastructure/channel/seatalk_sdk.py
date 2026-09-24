@@ -15,13 +15,13 @@ is the whole of that contract:
   ``$COFFER_KNOWLEDGE_ROOT``.)
 * ``load_sdk()`` — prepend that directory to ``sys.path`` *only when it exists*,
   then import the package. The import is attempted lazily, never at daemon
-  import time, so a daemon with no SDK starts exactly as it always did and every
-  webhook channel is untouched.
+  import time, so a daemon with no SDK starts exactly as it always did.
 * When the package cannot be imported, ``SeaTalkSdkMissingError`` says where we
   looked and where to get it. A websocket channel then reports ``sdk_missing``
   and keeps retrying; nothing crashes. An installation without the SDK — which
-  is what an outside user of this project gets — is fully functional on webhook
-  delivery.
+  is what an outside user of this project gets — has no SeaTalk inbound: its
+  SeaTalk channels report ``sdk_missing`` and still send (spec channels/seatalk
+  "Load the websocket client library from an operator-supplied directory").
 """
 
 from __future__ import annotations
@@ -76,6 +76,6 @@ def load_sdk() -> ModuleType:
             f"public PyPI and carries no public licence. Download it from SeaTalk's Open "
             f"Platform and unpack the {_PACKAGE} package into {entry} (or point "
             f"$COFFER_SEATALK_SDK_DIR at wherever you keep it), then the channel connects on "
-            f"its own. See {_DOCS_URL}. Switch this channel to webhook delivery to run "
-            f"without the SDK."
+            f"its own. See {_DOCS_URL}. Until then the channel receives nothing; its "
+            f"outbound sends are unaffected."
         ) from e

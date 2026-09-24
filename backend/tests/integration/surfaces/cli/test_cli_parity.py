@@ -41,11 +41,9 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "status",
         "rotate-token",
         "port",
-        # What starts the daemon and what ends it (spec daemon "Run as a login service",
-        # "Stand down after an idle window").
-        # Both are reachable with no daemon running, which is the state
-        # "it was not running" is most often diagnosed from.
-        "idle",
+        # What starts the daemon (spec daemon "Run as a login service"). It is
+        # reachable with no daemon running, which is the state "it was not
+        # running" is most often diagnosed from.
         "service",
         # The experimental features (spec experimental-features "Switch a
         # feature from the settings page or the command line"), mirrored by the
@@ -54,7 +52,6 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     },
     "daemon port": {"show", "set", "clear"},
     "daemon features": {"list", "enable", "disable"},
-    "daemon idle": {"show", "set", "never"},
     "daemon service": {"install", "uninstall", "status"},
     # `coffer open` is the one group with NO subcommands: it is a single action
     # (open the UI at the running daemon's origin), expressed as an

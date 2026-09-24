@@ -1,10 +1,8 @@
-"""The three inbound-supervision reconcilers ``ChannelRuntime`` drives.
+"""The inbound-supervision reconciler ``ChannelRuntime`` drives.
 
-A channel's inbound side may need a child or a connection that is not the
-adapter itself: one callback listener for the whole daemon (webhook delivery),
-one cloudflared tunnel per channel that has a connector token, and one SeaTalk
-WebSocket per channel on websocket delivery. All three follow the same
-discipline, which is why they live together:
+A SeaTalk channel's inbound side is one websocket connection that is not the
+adapter itself (spec channels/seatalk "Receive every event over one outbound
+websocket connection"). Its reconciler follows this discipline:
 
 1. derive the wanted set from the enabled channels,
 2. stop whatever is no longer wanted, even in an otherwise steady state,
@@ -13,9 +11,9 @@ discipline, which is why they live together:
    answering with authorization prompts,
 4. latch a failure for 30 seconds instead of retrying hot.
 
-``Latch`` is that memory, and each reconciler is a plain function over it.
-``ChannelRuntime`` keeps thin methods that hold the guards tied to its own state
-(no controller wired, shutting down) and owns the latches.
+``Latch`` is that memory, and the reconciler is a plain function over it.
+``ChannelRuntime`` keeps a thin method that holds the guards tied to its own
+state (no controller wired, shutting down) and owns the latch.
 """
 
 from __future__ import annotations
@@ -26,11 +24,7 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
-from coffer.application.channel.supervision_ports import (
-    ListenerControllerPort,
-    TunnelControllerPort,
-    WebSocketControllerPort,
-)
+from coffer.application.channel.supervision_ports import WebSocketControllerPort
 from coffer.domain.resource import Resource
 
 _logger = logging.getLogger(__name__)
@@ -48,25 +42,11 @@ Desired = dict[str, Resource]
 MaterializeFn = Callable[[dict[str, str]], Awaitable[dict[str, str]]]
 
 
-#: What the three reconcilers below key their controllers by: the channel's
-#: **uid**, never its name. Two of the three have a seam the outside world can
-#: see — the callback listener answers a public URL whose last segment is this
-#: key, and the SeaTalk WebSocket holds a register handshake per key — and a
-#: label the owner may rename is the wrong thing on either. The third (the
-#: cloudflared tunnel) follows for one reason: all three read the same desired
-#: set, and one of them keyed differently is a reader away from being keyed
-#: wrongly. The channel's NAME still goes in the log lines, because that is what
-#: the owner calls it.
-
-
-def delivery_of(config: dict[str, object]) -> str:
-    """A SeaTalk channel's event-delivery method, defaulting to webhook.
-
-    The absent key means webhook — which is what every channel configured before
-    the field existed is — so this reads a raw config dict the way the domain
-    model would, without paying for validation on every tick.
-    """
-    return str(config.get("delivery") or "webhook")
+#: What the reconciler below keys its controller by: the channel's **uid**,
+#: never its name. The SeaTalk WebSocket holds a register handshake per key,
+#: and a label the owner may rename is the wrong thing to hold across it. The
+#: channel's NAME still goes in the log lines, because that is what the owner
+#: calls it.
 
 
 @dataclass
@@ -100,119 +80,31 @@ class Latch[T]:
         self.refs = None
 
 
-async def reconcile_listener(
-    listener: ListenerControllerPort,
-    materialize: MaterializeFn | None,
-    desired: Desired,
-    latch: Latch[dict[str, str]],
-) -> None:
-    """Run the callback listener exactly while a webhook channel wants it."""
-    refs: dict[str, str] = {}
-    if materialize is not None:
-        for resource in desired.values():
-            config = resource.config
-            # spec channels/seatalk "Carry no ingress fields on websocket delivery":
-            # only WEBHOOK delivery needs the listener. A deployment whose only SeaTalk
-            # channel is websocket must leave it stopped — not needing an inbound HTTP
-            # surface is the whole point of that transport, and a listener nothing posts
-            # to is a port open for nothing.
-            if config.get("channel_type") == "seatalk" and delivery_of(config) == "webhook":
-                refs[resource.uid] = str(config.get("signing_secret_ref", ""))
-    if refs == latch.refs and (not refs or listener.running()):
-        return
-    if latch.cooling(wanted=bool(refs)):
-        return
-    secrets: dict[str, str] = {}
-    for uid, ref in refs.items():
-        assert materialize is not None  # refs is empty otherwise
-        try:
-            secrets[uid] = (await materialize({"secret": ref}))["secret"]
-        except Exception:
-            latch.failed()
-            _logger.exception("channel.listener.secret_failed", extra={"channel_uid": uid})
-            return
-    try:
-        if secrets:
-            await listener.ensure_running(secrets)
-        else:
-            await listener.ensure_stopped()
-    except Exception:
-        latch.failed()
-        _logger.exception("channel.listener.reconcile_failed")
-        return
-    latch.converged(refs)
-
-
-async def reconcile_tunnels(
-    tunnel: TunnelControllerPort,
-    materialize: MaterializeFn | None,
-    desired: Desired,
-    latch: Latch[dict[str, str]],
-) -> None:
-    """Keep one cloudflared child per channel that records a connector token."""
-    refs: dict[str, str] = {}
-    if materialize is not None:
-        for resource in desired.values():
-            config = resource.config
-            if config.get("channel_type") == "seatalk":
-                ref = str(config.get("tunnel_token_ref") or "")
-                if ref:
-                    refs[resource.uid] = ref
-    # Always stop tunnels for channels no longer managed (disabled, deleted, or
-    # token-ref cleared), even when the rest is a steady state.
-    for uid in tunnel.active() - set(refs):
-        with contextlib.suppress(Exception):
-            await tunnel.ensure_stopped(uid)
-    if refs == latch.refs and all(tunnel.running(n) for n in refs):
-        return
-    if latch.cooling(wanted=bool(refs)):
-        return
-    tokens: dict[str, str] = {}
-    for uid, ref in refs.items():
-        assert materialize is not None  # refs is empty otherwise
-        try:
-            tokens[uid] = (await materialize({"token": ref}))["token"]
-        except Exception:
-            latch.failed()
-            _logger.exception("channel.tunnel.secret_failed", extra={"channel_uid": uid})
-            return
-    try:
-        for uid, token in tokens.items():
-            await tunnel.ensure_running(uid, token)
-    except Exception:
-        # cloudflared missing / spawn failure — retry on the 30s ladder.
-        latch.failed()
-        _logger.exception("channel.tunnel.reconcile_failed")
-        return
-    latch.converged(refs)
-
-
 async def reconcile_websockets(
     websockets: WebSocketControllerPort,
     materialize: MaterializeFn | None,
     desired: Desired,
     latch: Latch[dict[str, tuple[str, str]]],
 ) -> None:
-    """Hold one SeaTalk WebSocket per websocket-delivery channel (spec channels/seatalk
-    "Carry no ingress fields on websocket delivery").
+    """Hold one SeaTalk WebSocket per enabled SeaTalk channel (spec channels/seatalk
+    "Receive every event over one outbound websocket connection").
 
-    The tunnel reconciler's shape with the app's own credentials in place of a
-    connector token: the register handshake authenticates with ``app_id`` and the
-    materialized app secret, which is exactly why this transport needs no signing
-    secret and no public URL.
+    The register handshake authenticates with ``app_id`` and the materialized
+    app secret, which is exactly why this transport needs no signing secret and
+    no public URL.
     """
     refs: dict[str, tuple[str, str]] = {}
     if materialize is not None:
         for resource in desired.values():
             config = resource.config
-            if config.get("channel_type") != "seatalk" or delivery_of(config) != "websocket":
+            if config.get("channel_type") != "seatalk":
                 continue
             app_id = str(config.get("app_id") or "")
             secret_ref = str(config.get("app_secret_ref") or "")
             if app_id and secret_ref:
                 refs[resource.uid] = (app_id, secret_ref)
-    # Always drop connections for channels no longer wanted (disabled, deleted,
-    # or switched back to webhook), even in a steady state.
+    # Always drop connections for channels no longer wanted (disabled or
+    # deleted), even in a steady state.
     for uid in websockets.active() - set(refs):
         with contextlib.suppress(Exception):
             await websockets.ensure_stopped(uid)

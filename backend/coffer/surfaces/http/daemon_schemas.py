@@ -65,32 +65,21 @@ class FeatureSetIn(BaseModel):
 
 
 class DaemonResidencyOut(BaseModel):
-    """Whether the daemon outlives the things that use it, and for how long.
+    """Whether the system starts the daemon at login.
 
-    Two settings, one panel, because they are one question with two halves:
-    what starts the daemon, and what ends it. Answering only the first gives a
-    process that never leaves; only the second, a ceiling on something nothing
-    starts.
+    Residency is the login service alone: the daemon never stands down on its
+    own, so there is no idle window to report (spec daemon "Change residency
+    from the settings page or the command line").
     """
 
     #: False where there is no launchd to install into — the toggle renders
     #: as unavailable rather than as off, which is a different claim.
     login_service_supported: bool
     login_service_installed: bool
-    #: Hours of disuse before the daemon stands down; ``null`` means never.
-    idle_shutdown_hours: float | None = None
 
 
 class DaemonResidencyIn(BaseModel):
     login_service_installed: bool
-    #: Required, with no default, because ``None`` already means something
-    #: here: "never stand down". A caller that meant to flip only the login
-    #: service and left this out would turn the idle shutdown off without
-    #: saying so, and nothing downstream could tell that apart from an
-    #: explicit null.
-    idle_shutdown_hours: float | None = Field(
-        description="Hours of disuse before standing down; null to never stand down",
-    )
 
 
 class TokenRotationOut(BaseModel):
@@ -101,11 +90,11 @@ class DaemonLogRecordOut(BaseModel):
     """One record of ``daemon.log``, parsed where possible.
 
     ``daemon.log`` interleaves several writers — Coffer's own JSON (one object
-    per line, every field on it), uvicorn, rich, and the cloudflared child's
-    zerolog — so ``record`` carries whatever that line stated, normalised onto
-    ``timestamp`` / ``level`` / ``logger`` / ``event``, plus ``continuation``
-    for the lines (a traceback, a wrapped message) that belong to this record
-    rather than to one of their own. A line no writer's format fits is kept whole as
+    per line, every field on it), uvicorn and rich — so ``record`` carries
+    whatever that line stated, normalised onto ``timestamp`` / ``level`` /
+    ``logger`` / ``event``, plus ``continuation`` for the lines (a traceback, a
+    wrapped message) that belong to this record rather than to one of their
+    own. A line no writer's format fits is kept whole as
     ``{"raw": <line>}``. The three lifted fields are what a timeline renders
     without knowing any of that; they are absent on a raw line, which is why
     they are nullable.

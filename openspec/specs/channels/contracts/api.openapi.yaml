@@ -5,11 +5,10 @@ info:
   description: >
     REST surface for messaging channels (spec channels). Channel CRUD rides the
     generic /resources endpoints (spec resource-framework); this contract adds the
-    channel-specific operations: pairing, status, notify, the webhook
-    callback probe, and the SeaTalk
-    event ingest the callback listener forwards to. The callback listener's
-    own public path (POST /seatalk/{channel_uid}) is served by a separate process
-    and is not part of the daemon's API surface.
+    channel-specific operations: pairing, status and notify. Inbound traffic
+    never arrives over this API: Telegram is polled and SeaTalk is pushed down an
+    outbound websocket connection the daemon holds, so no route here is called
+    by an IM platform.
 
     The conversation, message, pending-queue and SSE routes a channel turn runs
     on belong to the turn platform and are contracted in spec chat; the agent
@@ -42,7 +41,7 @@ paths:
 
   /api/v1/channels/{uid}/status:
     get:
-      summary: Runtime, pairing, and callback status of a channel
+      summary: Runtime, pairing, and inbound status of a channel
       operationId: getChannelStatus
       tags: [channels]
       parameters:
@@ -96,72 +95,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
-  /api/v1/channels/{uid}/callback-test:
-    post:
-      summary: Probe a SeaTalk channel's public callback path end to end
-      description: >
-        Sends the platform's own verification handshake at the channel's
-        configured public URL and reports whether the echo came back — so the
-        whole webhook chain (public URL → tunnel → loopback listener →
-        signature → handshake) is confirmed from one button instead of by
-        watching for a real event. It does NOT confirm the stored signing
-        secret matches SeaTalk's, since both sides of the probe sign with the
-        same stored secret; only a real event shows that.
-
-
-        A failure is reported as `ok: false` with a `detail` the owner can act
-        on, never as an HTTP error: the probe ran, and what it found is the
-        answer. A Telegram channel, and a SeaTalk channel on **websocket**
-        delivery, are refused the same way — a websocket channel has no public
-        URL to probe at all, and its `websocket_state` is the health answer
-        there (spec channels/seatalk "Keep status truthful per transport").
-      operationId: testChannelCallback
-      tags: [channels]
-      parameters:
-        - $ref: '#/components/parameters/ChannelUid'
-      responses:
-        '200':
-          description: The probe ran; `ok` says what it found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CallbackTestOut'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /api/v1/channels/{uid}/events:
-    post:
-      summary: Ingest a verified SeaTalk callback event (listener-internal)
-      description: >
-        Called by the callback listener over loopback after signature
-        verification. Requires the daemon token like every other route;
-        the body is the raw SeaTalk event envelope.
-      operationId: ingestChannelEvent
-      tags: [channels]
-      parameters:
-        - $ref: '#/components/parameters/ChannelUid'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SeaTalkEventIn'
-      responses:
-        '200':
-          description: Accepted for processing
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EventAcceptedOut'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          description: The channel's adapter is not running (channel disabled)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorEnvelope'
-
 components:
   securitySchemes:
     bearerAuth:
@@ -177,9 +110,8 @@ components:
       description: >-
         The channel resource's immutable uid, as `ResourceOut.uid` reports it.
         Not the channel's name: a name is a label its owner may edit, and the
-        callback listener and the tunnel supervisor hold this value across
-        restarts — a path built from a label stops resolving the moment the
-        label changes.
+        websocket supervisor keys its connection on this value — a path built
+        from a label stops resolving the moment the label changes.
 
   responses:
     NotFound:
@@ -209,7 +141,7 @@ components:
 
     ChannelStatusOut:
       type: object
-      required: [uid, name, channel_type, enabled, running, pending_pairing, peer, callback]
+      required: [uid, name, channel_type, enabled, running, pending_pairing, peer, inbound]
       properties:
         uid:
           type: string
@@ -237,11 +169,14 @@ components:
           nullable: true
           allOf:
             - $ref: '#/components/schemas/ChannelPeerOut'
-        callback:
+        inbound:
           nullable: true
           allOf:
-            - $ref: '#/components/schemas/CallbackInfoOut'
-          description: Present for seatalk channels only
+            - $ref: '#/components/schemas/InboundInfoOut'
+          description: >-
+            A SeaTalk channel's websocket connection. Null for a telegram
+            channel, whose inbound is the adapter's own polling and is reported
+            by `running`.
         diagnostics:
           type: array
           description: >-
@@ -287,44 +222,22 @@ components:
           type: string
           nullable: true
 
-    CallbackInfoOut:
+    InboundInfoOut:
       type: object
       description: >-
-        How a SeaTalk channel receives events. Covers both delivery methods; on
-        websocket delivery the webhook-only fields report their absent/false
-        values (there is no port, path, public URL, listener or tunnel on that
-        path) and websocket_state carries the health answer.
-      required: [port, path, listener_running, delivery]
+        How a SeaTalk channel's inbound is doing: the state of the one outbound
+        websocket connection it receives every event on (spec channels/seatalk
+        "Report the websocket connection as the channel's inbound state"). There
+        is no listener, port, path, public URL or tunnel to report.
+      required: [websocket_state, websocket_error]
       properties:
-        port: { type: integer }
-        path:
-          type: string
-          description: The path to append to the tunnel URL
-        listener_running: { type: boolean }
-        delivery:
-          type: string
-          enum: [webhook, websocket]
-          description: >-
-            Which inbound transport this channel uses. webhook = SeaTalk POSTs to
-            a public callback URL; websocket = the bot holds one outbound
-            connection and needs no public URL.
-        public_base_url:
-          type: string
-          nullable: true
-        public_callback_url:
-          type: string
-          nullable: true
-        tunnel_managed:
-          type: boolean
-          description: Coffer supervises a cloudflared child for this channel
-        tunnel_running: { type: boolean }
         websocket_state:
           type: string
           nullable: true
           enum: [connecting, connected, kicked, sdk_missing, error]
           description: >-
-            State of the held WebSocket connection; null on webhook delivery and
-            on a websocket channel with no connection yet.
+            State of the held WebSocket connection; null before the first
+            connection attempt.
         websocket_error:
           type: string
           nullable: true
@@ -352,35 +265,6 @@ components:
       required: [sent]
       properties:
         sent: { type: boolean }
-
-    CallbackTestOut:
-      type: object
-      required: [ok, detail]
-      properties:
-        ok: { type: boolean }
-        detail:
-          type: string
-          description: >
-            What the probe found, in words the owner can act on — on a pass, a
-            one-line confirmation of the path that was verified.
-
-    SeaTalkEventIn:
-      type: object
-      required: [event_type, event]
-      properties:
-        event_id: { type: string }
-        event_type: { type: string }
-        timestamp: { type: integer }
-        app_id: { type: string }
-        event:
-          type: object
-          additionalProperties: true
-
-    EventAcceptedOut:
-      type: object
-      required: [accepted]
-      properties:
-        accepted: { type: boolean }
 
     ErrorEnvelope:
       type: object

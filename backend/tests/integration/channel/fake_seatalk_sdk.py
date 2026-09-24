@@ -15,7 +15,7 @@ contract Coffer codes against, written from the real package's source:
   a handler that blocked or raised would fail a test here exactly as it would
   strand an ack in production.
 * ``Event(app_id, callback_id, data, rid, sid)`` where ``data`` is the raw event
-  dict — byte-identical in shape to the webhook JSON body.
+  dict — the platform's event envelope.
 * The error classes: ``SopConnError`` and the specific ones, including
   ``KickError(message, envelope)`` and ``WebSocketClosedError(code, reason)``.
 

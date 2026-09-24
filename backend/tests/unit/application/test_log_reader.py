@@ -3,8 +3,8 @@
 Every fixture line here is a real shape taken from a live ``~/.coffer/logs/
 daemon.log``: Coffer's own structlog JSON, the stdlib formatter the daemon
 inherits once alembic configures logging, uvicorn's default, rich's panel
-output from an upstream MCP server, and the zerolog the cloudflared child the
-daemon respawns writes into the very same file. The parser used to understand
+output from an upstream MCP server — all written into the very same file. The
+parser used to understand
 only the first of those, so the Activity page's time / level / logger columns
 were empty for almost every row.
 """
@@ -58,24 +58,6 @@ def test_an_info_line_keeps_its_padding_out_of_the_logger() -> None:
     assert record["level"] == "info"
     assert record["logger"] == "alembic.runtime.migration"
     assert record["event"] == "Running upgrade 0073 -> 0074, name the machine"
-
-
-def test_the_cloudflared_child_writes_zerolog_into_the_same_file() -> None:
-    record = parse_log_line(
-        "2026-09-14T06:29:20Z INF precheck complete hard_fail=false suggested_protocol=quic"
-    )
-    assert record["timestamp"] == "2026-09-14T06:29:20Z"
-    assert record["level"] == "info"
-    assert record["event"] == "precheck complete hard_fail=false suggested_protocol=quic"
-
-
-def test_zerolog_speaks_three_letter_levels() -> None:
-    assert parse_log_line("2026-09-14T05:05:23Z ERR failed to serve incoming request")["level"] == (
-        "error"
-    )
-    assert parse_log_line("2026-09-14T05:05:23Z WRN Serve tunnel error connIndex=1")["level"] == (
-        "warning"
-    )
 
 
 def test_uvicorns_own_format_is_a_level_and_a_message() -> None:
@@ -157,18 +139,18 @@ _TRACEBACK = [
     "    raw = await self._llm.complete(",
     "          ^^^^^^^^^^^^^^^^^^^^^^^^^",
     "openai.RateLimitError: Error code: 429 - rate limit reached",
-    "2026-09-14T06:29:20Z INF Registered tunnel connection connIndex=1",
+    "INFO:     Application startup complete.",
 ]
 
 
 def test_a_traceback_belongs_to_the_record_that_raised_it() -> None:
     records = parse_log_lines(_TRACEBACK)
-    assert len(records) == 2  # the ERROR (with its traceback) and the tunnel line
-    failed, tunnel = records
+    assert len(records) == 2  # the ERROR (with its traceback) and the uvicorn line
+    failed, uvicorn = records
     assert failed["event"] == "consolidate.store.failed store=project-61Z8Q9"
     assert failed["continuation"] == _TRACEBACK[1:6]
-    assert tunnel["event"] == "Registered tunnel connection connIndex=1"
-    assert "continuation" not in tunnel
+    assert uvicorn["event"] == "Application startup complete."
+    assert "continuation" not in uvicorn
 
 
 def test_the_exception_line_closes_the_traceback() -> None:
@@ -213,9 +195,9 @@ def test_blank_lines_are_not_records() -> None:
 
 def test_errors_only_now_judges_every_writer_by_its_own_level() -> None:
     """Before, every non-JSON line counted as an error, which meant the filter
-    kept the whole file. A zerolog INF line is an info line."""
-    assert not matches_level(parse_log_line("2026-09-14T06:29:20Z INF Starting tunnel"), True)
-    assert matches_level(parse_log_line("2026-09-14T05:05:23Z ERR Connection terminated"), True)
+    kept the whole file. A uvicorn INFO line is an info line."""
+    assert not matches_level(parse_log_line("INFO:     Started server process [42]"), True)
+    assert matches_level(parse_log_line("ERROR:    Exception in ASGI application"), True)
     assert matches_level(parse_log_line("CRITI [coffer.daemon] out of disk"), True)
 
 
@@ -225,4 +207,11 @@ def test_a_line_with_no_readable_level_survives_errors_only() -> None:
 
 
 def test_nothing_is_filtered_when_errors_only_is_off() -> None:
-    assert matches_level(parse_log_line("2026-09-14T06:29:20Z INF Starting tunnel"), False)
+    assert matches_level(parse_log_line("INFO:     Started server process [42]"), False)
+
+
+def test_a_three_letter_level_token_is_not_a_level() -> None:
+    """No writer left in the file spells its level in three letters, so a line
+    shaped like one is kept whole rather than guessed at."""
+    line = "2026-09-14T06:29:20Z INF precheck complete"
+    assert parse_log_line(line) == {"raw": line}

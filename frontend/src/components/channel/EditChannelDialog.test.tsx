@@ -162,134 +162,57 @@ describe("EditChannelDialog", () => {
     expect(api.POST).not.toHaveBeenCalled();
   });
 
-  test("seatalk: rotating the signing secret writes its existing ref before the PATCH", async () => {
-    const api = installApi(mockApiClient());
-    renderDialog({
+  describe("seatalk", () => {
+    const seatalkChannel = {
       uid: ST_UID,
       kind: "channel",
       name: "st",
       enabled: true,
       config: {
         channel_type: "seatalk",
-        app_id: "app-1",
-        app_secret_ref: "channel/st/app-secret",
-        signing_secret_ref: "channel/st/signing-secret",
-        default_agent: CLAUDE.uid,
-      },
-    } as unknown as typeof telegramResource);
-
-    fireEvent.change(screen.getByLabelText(/new signing secret/i), {
-      target: { value: "sig-new" },
-    });
-    save();
-
-    await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
-    expect(api.POST).toHaveBeenCalledWith("/credentials", {
-      body: { ref: "channel/st/signing-secret", value: "sig-new" },
-    });
-    await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
-    const patchBody = (api.PATCH.mock.calls[0][1] as { body: { config: Record<string, unknown> } })
-      .body.config;
-    expect(patchBody.app_secret_ref).toBe("channel/st/app-secret");
-    expect(patchBody.signing_secret_ref).toBe("channel/st/signing-secret");
-  });
-
-  describe("seatalk delivery method", () => {
-    const webhookChannel = {
-      uid: ST_UID,
-      kind: "channel",
-      name: "st",
-      enabled: true,
-      config: {
-        channel_type: "seatalk",
-        app_id: "app-1",
-        app_secret_ref: "channel/st/app-secret",
-        signing_secret_ref: "channel/st/signing-secret",
-        tunnel_token_ref: "channel/st/tunnel-token",
-        public_base_url: "https://x.trycloudflare.com",
-        default_agent: CLAUDE.uid,
-      },
-    } as unknown as typeof telegramResource;
-
-    const websocketChannel = {
-      uid: ST_UID,
-      kind: "channel",
-      name: "st",
-      enabled: true,
-      config: {
-        channel_type: "seatalk",
-        delivery: "websocket",
         app_id: "app-1",
         app_secret_ref: "channel/st/app-secret",
         default_agent: CLAUDE.uid,
       },
     } as unknown as typeof telegramResource;
 
-    function patchedConfig(api: ApiClientMock): Record<string, unknown> {
-      return (api.PATCH.mock.calls[0][1] as { body: { config: Record<string, unknown> } }).body
-        .config;
-    }
-
-    test("opens on the stored method — a websocket channel shows no webhook field", () => {
+    test("offers the app id and an app secret rotation, and nothing a webhook needed", () => {
       installApi(mockApiClient());
-      renderDialog(websocketChannel);
+      renderDialog(seatalkChannel);
 
-      expect(screen.getByRole("button", { name: /^websocket$/i })).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      );
-      expect(screen.queryByLabelText(/new signing secret/i)).not.toBeInTheDocument();
+      expect(screen.getByLabelText(/app id/i)).toHaveValue("app-1");
+      expect(screen.getByLabelText(/new app secret/i)).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: /^webhook$|^websocket$/i }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/signing secret/i)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/public callback url/i)).not.toBeInTheDocument();
       expect(screen.queryByLabelText(/tunnel token/i)).not.toBeInTheDocument();
-      // The app secret stays — the register handshake needs it.
-      expect(screen.getByLabelText(/new app secret/i)).toBeInTheDocument();
     });
 
-    test("switching to websocket clears and drops every webhook field", async () => {
+    test("rotating the app secret writes its existing ref before the PATCH", async () => {
       const api = installApi(mockApiClient());
-      renderDialog(webhookChannel);
+      renderDialog(seatalkChannel);
 
-      fireEvent.change(screen.getByLabelText(/new signing secret/i), { target: { value: "sig" } });
-      fireEvent.click(screen.getByRole("button", { name: /^websocket$/i }));
-      save();
-
-      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
-      const config = patchedConfig(api);
-      expect(config.delivery).toBe("websocket");
-      expect(config).not.toHaveProperty("signing_secret_ref");
-      expect(config).not.toHaveProperty("public_base_url");
-      expect(config).not.toHaveProperty("tunnel_token_ref");
-      // The typed-then-hidden signing secret was cleared, so nothing is written.
-      expect(api.POST).not.toHaveBeenCalled();
-    });
-
-    test("switching back to webhook asks for the signing secret before submitting", async () => {
-      const api = installApi(mockApiClient());
-      renderDialog(websocketChannel);
-
-      fireEvent.click(screen.getByRole("button", { name: /^webhook$/i }));
-      save();
-
-      expect(await screen.findByRole("alert")).toHaveTextContent(/signing secret/i);
-      expect(api.PATCH).not.toHaveBeenCalled();
-      expect(api.POST).not.toHaveBeenCalled();
-
-      fireEvent.change(screen.getByLabelText(/new signing secret/i), { target: { value: "sig" } });
-      save();
-
-      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
-      // The websocket channel dropped its signing-secret ref, so this mints a
-      // fresh one — opaque, and naming neither the channel nor its uid. The
-      // config has to cite the same address the secret was written to.
-      expect(api.POST).toHaveBeenCalledWith("/credentials", {
-        body: {
-          ref: expect.stringMatching(/^channel\/[0-9a-f]{32}\/signing-secret$/),
-          value: "sig",
-        },
+      fireEvent.change(screen.getByLabelText(/new app secret/i), {
+        target: { value: "secret-new" },
       });
-      const minted = (api.POST.mock.calls[0][1] as { body: { ref: string } }).body.ref;
-      expect(patchedConfig(api).signing_secret_ref).toBe(minted);
-      expect(patchedConfig(api).delivery).toBe("webhook");
+      save();
+
+      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(1));
+      expect(api.POST).toHaveBeenCalledWith("/credentials", {
+        body: { ref: "channel/st/app-secret", value: "secret-new" },
+      });
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      const patchBody = (
+        api.PATCH.mock.calls[0][1] as { body: { config: Record<string, unknown> } }
+      ).body.config;
+      expect(patchBody).toEqual({
+        channel_type: "seatalk",
+        app_id: "app-1",
+        app_secret_ref: "channel/st/app-secret",
+        default_agent: CLAUDE.uid,
+      });
     });
   });
 });

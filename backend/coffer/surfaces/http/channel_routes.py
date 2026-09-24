@@ -1,7 +1,9 @@
-"""Channel routes (spec channels): pairing, status, notify, event ingest.
+"""Channel routes (spec channels): pairing, status, notify.
 
 Channel CRUD rides the generic /resources endpoints; these are the
-channel-specific operations from contracts/api.openapi.yaml.
+channel-specific operations from contracts/api.openapi.yaml. No route here is
+called by an IM platform: Telegram is polled and SeaTalk pushes down an
+outbound websocket connection the daemon holds.
 """
 
 from __future__ import annotations
@@ -51,33 +53,16 @@ class ChannelPeerOut(BaseModel):
     active_conversation_id: str | None
 
 
-class CallbackInfoOut(BaseModel):
-    """How a SeaTalk channel receives events.
+class InboundInfoOut(BaseModel):
+    """A SeaTalk channel's websocket connection — the one road its events take.
 
-    Spec channels/seatalk "Keep status truthful per transport".
-
-    Covers both delivery methods. On ``websocket`` the webhook-only fields report
-    their absent/false values — there is no port, path, public URL, listener or
-    tunnel on that path — and ``websocket_state`` carries the health answer.
+    Spec channels/seatalk "Report the websocket connection as the channel's
+    inbound state". There is no listener, port, path, public URL or tunnel to
+    report, so the connection state is the whole health answer.
     """
 
-    port: int
-    path: str
-    listener_running: bool
-    delivery: Literal["webhook", "websocket"] = "webhook"
-    public_base_url: str | None = None
-    public_callback_url: str | None = None
-    tunnel_managed: bool = False
-    tunnel_running: bool = False
-    websocket_state: Literal["connecting", "connected", "kicked", "sdk_missing", "error"] | None = (
-        None
-    )
-    websocket_error: str | None = None
-
-
-class CallbackTestOut(BaseModel):
-    ok: bool
-    detail: str
+    websocket_state: Literal["connecting", "connected", "kicked", "sdk_missing", "error"] | None
+    websocket_error: str | None
 
 
 class ChannelDiagnosticOut(BaseModel):
@@ -86,8 +71,7 @@ class ChannelDiagnosticOut(BaseModel):
 
 
 class ChannelStatusOut(BaseModel):
-    #: The channel's identity — what every route addresses and what the public
-    #: callback path is keyed by.
+    #: The channel's identity — what every route addresses.
     uid: str
     #: A mutable label. It is what the page, the CLI and every error message
     #: about this channel show, because a uid in front of a person is a dead end.
@@ -97,7 +81,9 @@ class ChannelStatusOut(BaseModel):
     running: bool
     pending_pairing: bool
     peer: ChannelPeerOut | None
-    callback: CallbackInfoOut | None
+    #: A SeaTalk channel's websocket connection; null for telegram, whose
+    #: inbound is the adapter's own polling and is reported by ``running``.
+    inbound: InboundInfoOut | None
     diagnostics: list[ChannelDiagnosticOut] = []
     # The machine whose daemon runs this channel's adapter (spec channels
     # "Bind each channel to the one machine that runs it"), and whether that machine is the one
@@ -122,10 +108,6 @@ class NotifyOut(BaseModel):
     sent: bool
 
 
-class EventAcceptedOut(BaseModel):
-    accepted: bool
-
-
 @router.post("/{uid}/pairing-code", response_model=PairingCodeOut)
 async def issue_pairing_code(uid: str, actor: str = Depends(get_actor)) -> PairingCodeOut:
     code, expires_at, pair_url = await get_channel_service().issue_pairing_code(uid, actor=actor)
@@ -145,20 +127,12 @@ async def channel_status(uid: str) -> ChannelStatusOut:
         if status.peer is not None
         else None
     )
-    callback = (
-        CallbackInfoOut(
-            port=status.callback.port,
-            path=status.callback.path,
-            listener_running=status.callback.listener_running,
-            public_base_url=status.callback.public_base_url,
-            public_callback_url=status.callback.public_callback_url,
-            tunnel_managed=status.callback.tunnel_managed,
-            tunnel_running=status.callback.tunnel_running,
-            delivery=status.callback.delivery,  # type: ignore[arg-type]
-            websocket_state=status.callback.websocket_state,  # type: ignore[arg-type]
-            websocket_error=status.callback.websocket_error,
+    inbound = (
+        InboundInfoOut(
+            websocket_state=status.inbound.websocket_state,  # type: ignore[arg-type]
+            websocket_error=status.inbound.websocket_error,
         )
-        if status.callback is not None
+        if status.inbound is not None
         else None
     )
     return ChannelStatusOut(
@@ -169,7 +143,7 @@ async def channel_status(uid: str) -> ChannelStatusOut:
         running=status.running,
         pending_pairing=status.pending_pairing,
         peer=peer,
-        callback=callback,
+        inbound=inbound,
         diagnostics=[
             ChannelDiagnosticOut(code=d.code, message=d.message) for d in status.diagnostics
         ],
@@ -182,21 +156,3 @@ async def channel_status(uid: str) -> ChannelStatusOut:
 async def notify_channel(uid: str, body: NotifyIn, actor: str = Depends(get_actor)) -> NotifyOut:
     await get_channel_service().notify(uid, body.text, actor=actor, chat_id=body.chat_id)
     return NotifyOut(sent=True)
-
-
-@router.post("/{uid}/callback-test", response_model=CallbackTestOut)
-async def test_channel_callback(uid: str) -> CallbackTestOut:
-    """Probe a SeaTalk channel's public callback URL end to end."""
-    result = await get_channel_service().test_callback(uid)
-    return CallbackTestOut(ok=result.ok, detail=result.detail)
-
-
-@router.post("/{uid}/events", response_model=EventAcceptedOut)
-async def ingest_channel_event(uid: str, envelope: dict[str, Any]) -> EventAcceptedOut:
-    """Verified SeaTalk events forwarded by the callback listener.
-
-    The listener addresses this by uid because the public callback path it
-    serves is itself keyed by uid — that URL is registered by hand on SeaTalk's
-    platform, so it is the last place a mutable label belongs."""
-    await get_channel_service().ingest_event(uid, envelope)
-    return EventAcceptedOut(accepted=True)

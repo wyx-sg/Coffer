@@ -27,6 +27,7 @@ from coffer.application.binary_deploy import (
     deploy_frozen_sidecars,
     needs_deploy,
     prune_versions,
+    retire_unshipped_links,
     versioned_target,
 )
 
@@ -275,3 +276,67 @@ def test_a_binary_missing_from_the_bundle_is_skipped_not_raised(
     _frozen_at(monkeypatch, bundle, home)
 
     assert deploy_frozen_sidecars(version="1.0.0") == ["coffer-daemon"]
+
+
+# --------------------------------------------------------------------------- #
+# retiring a binary the build no longer ships                                  #
+# --------------------------------------------------------------------------- #
+
+
+def test_the_build_ships_three_binaries() -> None:
+    assert DEPLOYED_BINARIES == ("coffer", "coffer-daemon", "coffer-mcp-shim")
+
+
+@pytest.mark.acceptance(
+    spec="daemon",
+    scenario="a deploy removes the link of a binary the build no longer ships",
+)
+def test_a_deploy_removes_the_link_of_a_binary_the_build_no_longer_ships(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    home = tmp_path / "home"
+    bin_dir = home / ".coffer" / "bin"
+    # An earlier build deployed four binaries, coffer-callback among them.
+    for name in (*DEPLOYED_BINARIES, "coffer-callback"):
+        _deployed(bin_dir, name, "1.0.0", b"old " + name.encode())
+    # A regular file under a name the build does not ship is not ours.
+    _write(bin_dir / "my-own-tool", b"mine")
+    bundle = tmp_path / "bundle"
+    for name in DEPLOYED_BINARIES:
+        _write(bundle / name, b"new " + name.encode())
+    _frozen_at(monkeypatch, bundle, home)
+
+    deploy_frozen_sidecars(version="2.0.0")
+
+    assert not (bin_dir / "coffer-callback").exists()
+    assert not (bin_dir / "coffer-callback").is_symlink()
+    for name in DEPLOYED_BINARIES:
+        assert os.readlink(bin_dir / name) == f"2.0.0/{name}"
+    assert (bin_dir / "my-own-tool").read_bytes() == b"mine"
+
+
+def test_retire_leaves_links_it_cannot_prove_are_its_own(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    _deployed(bin_dir, "coffer-callback", "1.0.0", b"cb")
+    elsewhere = _write(tmp_path / "opt" / "tool", b"t")
+    os.symlink(elsewhere, bin_dir / "tool")
+    # A link into a directory that is not a version directory (no sentinel).
+    _write(bin_dir / "plain" / "thing", b"x")
+    os.symlink("plain/thing", bin_dir / "thing")
+
+    assert retire_unshipped_links(bin_dir) == ["coffer-callback"]
+    assert (bin_dir / "tool").is_symlink()
+    assert (bin_dir / "thing").is_symlink()
+
+
+def test_retire_removes_a_dangling_link_into_a_pruned_version(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    os.symlink("0.9.0/coffer-callback", bin_dir / "coffer-callback")
+
+    assert retire_unshipped_links(bin_dir) == ["coffer-callback"]
+    assert not (bin_dir / "coffer-callback").is_symlink()
+
+
+def test_retire_on_a_missing_bin_dir_is_a_no_op(tmp_path: Path) -> None:
+    assert retire_unshipped_links(tmp_path / "absent") == []

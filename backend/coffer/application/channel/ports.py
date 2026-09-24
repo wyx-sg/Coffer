@@ -308,7 +308,7 @@ class ContextFetchPort(Protocol):
 
 @runtime_checkable
 class EventIngestAdapter(Protocol):
-    """An adapter that receives platform events pushed from outside the
-    daemon (the callback listener) instead of polling for them."""
+    """An adapter that receives platform events pushed to it (SeaTalk, down
+    the websocket connection the daemon holds) instead of polling for them."""
 
     async def handle_event(self, envelope: dict[str, Any]) -> None: ...

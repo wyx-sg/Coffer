@@ -118,7 +118,7 @@ paths:
     get:
       tags: [daemon]
       operationId: getDaemonResidency
-      summary: Whether the daemon starts at login, and when it stands down
+      summary: Whether the daemon starts at login
       responses:
         "200":
           description: OK
@@ -129,16 +129,14 @@ paths:
     put:
       tags: [daemon]
       operationId: setDaemonResidency
-      summary: Install or remove the login service, and set the idle window
+      summary: Install or remove the login service
       description: |
-        Two settings, one request, because they are one question with two
-        halves: what starts the daemon (spec daemon "Run as a login service")
-        and what ends it ("Stand down after an idle window"). The login service
-        takes effect immediately — launchd is a different process. The idle
-        window takes effect at the next daemon start, because this one read it
-        when it booted.
+        What starts the daemon (spec daemon "Run as a login service"). Nothing
+        ends it on its own: the daemon never stands down for being idle, so
+        there is no idle window to set. The change takes effect immediately —
+        launchd is a different process.
 
-        This pair has a REST surface where the port deliberately does not ("Bind
+        This setting has a REST surface where the port deliberately does not ("Bind
         a fixed, settable port"): a port is changed when the daemon cannot
         start, so a route it would have to serve is useless exactly then, while
         residency is a settings question asked of a daemon that is working.
@@ -417,23 +415,12 @@ components:
             renders as unavailable rather than as off, which is a different
             claim.
         login_service_installed: { type: boolean }
-        idle_shutdown_hours:
-          type: number
-          nullable: true
-          description: Hours of disuse before standing down; null means never.
 
     DaemonResidencyIn:
       type: object
-      required: [login_service_installed, idle_shutdown_hours]
+      required: [login_service_installed]
       properties:
         login_service_installed: { type: boolean }
-        idle_shutdown_hours:
-          type: number
-          nullable: true
-          description: >-
-            Required, because null already means "never stand down" here. A
-            caller that omitted it would turn the idle shutdown off without
-            saying so.
 
     DaemonStatusOut:
       type: object

@@ -1,7 +1,7 @@
 # Distribution — PyInstaller-Bundled Daemon, Shim, and CLI
 
 **Status**: Accepted
-**Date**: 2026-05-20 (revised 2026-09-09; see Revision history)
+**Date**: 2026-05-20 (revised 2026-09-24; see Revision history)
 **Deciders**: Yuxing Wu
 **Related**: [`docs/principles.md`](../principles.md) (Languages), [daemon](../../openspec/specs/daemon/spec.md) "Release the macOS arm64 terminal archive", [Detect-or-Spawn](daemon-detect-or-spawn.md)
 
@@ -74,19 +74,20 @@ Concrete choices:
   builds no UI of its own.
 - **The daemon deploys its sibling binaries on a frozen start**
   ([daemon](../../openspec/specs/daemon/spec.md) "Deploy frozen sibling binaries and back up the vault before migrating"). When `coffer-daemon` detects it is running from a
-  frozen build, it idempotently copies the four frozen binaries — `coffer`,
-  `coffer-daemon`, `coffer-mcp-shim` and `coffer-callback` — into
+  frozen build, it idempotently copies the three frozen binaries — `coffer`,
+  `coffer-daemon` and `coffer-mcp-shim` — into
   `~/.coffer/bin/<version>/`, and flips the
   public `~/.coffer/bin/<name>` symlinks onto that directory atomically,
   using an atomic temp-copy-then-rename and a 2-signal staleness check
   (byte size, version sentinel — not mtime). Nothing is overwritten in
   place: the previous version's directory stays for a rollback (the two
-  newest are kept). This makes MCP clients able to resolve the
+  newest are kept), and removes the public link of any binary the build no
+  longer ships. This makes MCP clients able to resolve the
   `command: coffer-mcp-shim` config, and it keeps a `coffer-daemon`
   sibling next to the shim so the frozen shim's detect-or-spawn
   ([Detect-or-Spawn](daemon-detect-or-spawn.md)) finds a daemon to start
-  after a reboot. The daemon is the natural owner because it is the
-  process that spawns `coffer-callback` at runtime.
+  after a reboot. The daemon is the natural owner because it is the one
+  process every frozen install starts, whichever tier it came from.
   `~/.coffer/bin/` co-locates with the daemon's `~/.coffer/daemon.json`
   from [Detect-or-Spawn](daemon-detect-or-spawn.md), which simplifies the
   user mental model ("everything Coffer lives under `~/.coffer/`"). A
@@ -147,8 +148,8 @@ Concrete choices:
 
 - Per `v*` tag the CI release job produces exactly one archive —
   `coffer-cli-<triple>.tar.gz` for macOS arm64, containing `coffer`,
-  `coffer-daemon`, `coffer-mcp-shim` and the runtime helper binaries
-  (`coffer-callback`) — plus one aggregated `SHA256SUMS`
+  `coffer-daemon` and `coffer-mcp-shim` and no other binary — plus one
+  aggregated `SHA256SUMS`
   file covering every published artifact ([daemon](../../openspec/specs/daemon/spec.md) "Release the macOS arm64 terminal archive" / "Publish one aggregated checksum file").
 - Before every release, the bundle runs a post-build smoke test
   ([`scripts/smoke_test_bundle.sh`](../../scripts/smoke_test_bundle.sh))
@@ -293,6 +294,15 @@ Rejected at the time; reversed on 2026-09-12 (see Revision history).
   directory is kept (two newest survive), and mtime is no longer a
   staleness signal. Rollback is pointing the links back by hand; the paths
   every caller uses are unchanged.
+- **2026-09-24** — **Three binaries.** SeaTalk inbound became websocket-only
+  ([SeaTalk Inbound Over WebSocket](seatalk-websocket-inbound.md)), so the
+  `coffer-callback` listener is deleted and both tiers carry `coffer`,
+  `coffer-daemon` and `coffer-mcp-shim` only. A deploy now also removes every
+  public `~/.coffer/bin/<name>` symlink into a version directory under a name
+  the build does not ship, which retires the `coffer-callback` link on existing
+  installs; anything at such a path that is not one of Coffer's symlinks is
+  left alone. The rule is generic, so the next binary a release drops needs no
+  special case.
 
 ## Open questions
 

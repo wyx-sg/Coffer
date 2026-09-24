@@ -128,14 +128,14 @@ async def test_a_level_floor_keeps_everything_at_or_above_it(monkeypatch, tmp_pa
 
 @pytest.mark.asyncio
 async def test_a_level_floor_reads_an_upstreams_own_spelling(monkeypatch, tmp_path) -> None:
-    # cloudflared writes zerolog's three-letter levels into the same file; the
-    # floor has to mean the same thing for them as for structlog's own words.
+    # An upstream MCP server writes its own formatter's words into the same
+    # file; the floor has to mean the same thing for them as for structlog's.
     _write_log(
         monkeypatch,
         tmp_path,
         [
-            "2026-09-14T06:29:20Z INF Registered tunnel connection",
-            "2026-09-14T06:29:21Z WRN Retrying connection",
+            "INFO - mcp_atlassian.utils.toolsets - Registered toolsets",
+            "WARNING - mcp_atlassian.utils.toolsets - Retrying connection",
         ],
     )
     async with _client() as c:
@@ -156,15 +156,15 @@ async def test_no_level_floor_filters_nothing(monkeypatch, tmp_path) -> None:
 @pytest.mark.asyncio
 @pytest.mark.acceptance(spec="web-ui", scenario="the daemon tab reads every writer in the log")
 async def test_errors_only_reads_every_writers_own_level(monkeypatch, tmp_path) -> None:
-    """The log is not all structlog. An `INF` line from the cloudflared child
-    is an info line — before, every non-JSON line counted as an error and the
-    filter kept the entire file."""
+    """The log is not all structlog. An `INFO -` line from an upstream is an
+    info line — before, every non-JSON line counted as an error and the filter
+    kept the entire file."""
     _write_log(
         monkeypatch,
         tmp_path,
         [
-            "2026-09-14T06:29:13Z INF Starting tunnel tunnelID=8b625f11",
-            "2026-09-14T05:05:23Z ERR failed to serve incoming request",
+            "INFO - mcp_atlassian.utils.toolsets - Starting toolsets",
+            "ERROR - mcp_atlassian.server - failed to serve incoming request",
             "INFO  [alembic.runtime.migration] Context impl SQLiteImpl.",
             "ERROR:    ASGI callable returned without completing response.",
         ],
@@ -188,7 +188,7 @@ async def test_every_format_in_the_file_fills_the_three_columns(monkeypatch, tmp
         monkeypatch,
         tmp_path,
         [
-            "2026-09-14T06:29:20Z INF precheck complete hard_fail=false",
+            "[09/10/26 17:53:12] INFO     Starting MCP server 'Atlassian MCP'",
             "WARNI [coffer.application.knowledge.skill_delivery] knowledge.skill_delivery.failed",
             "ERROR:    ASGI callable returned without completing response.",
             "WARNING - mcp_atlassian.utils.toolsets - TOOLSETS is not set",
@@ -204,13 +204,10 @@ async def test_every_format_in_the_file_fills_the_three_columns(monkeypatch, tmp
         "coffer.application.knowledge.skill_delivery",
         None,
     ]
-    # Only the zerolog line stated a time; nothing invents one for the others.
-    assert [rec["timestamp"] for rec in records] == [
-        None,
-        None,
-        None,
-        "2026-09-14T06:29:20Z",
-    ]
+    # Only the rich line stated a time; nothing invents one for the others.
+    stamps = [rec["timestamp"] for rec in records]
+    assert stamps[:3] == [None, None, None]
+    assert stamps[3] is not None and stamps[3].endswith("Z")
 
 
 @pytest.mark.asyncio
@@ -329,3 +326,19 @@ async def test_limit_is_bounded(monkeypatch, tmp_path) -> None:
     async with _client() as c:
         assert len((await c.get("/api/v1/daemon/logs", params={"limit": 3})).json()["records"]) == 3
         assert (await c.get("/api/v1/daemon/logs", params={"limit": 9999})).status_code == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.acceptance(spec="web-ui", scenario="the daemon tab reads every writer in the log")
+async def test_no_writer_left_in_the_file_speaks_three_letter_levels(monkeypatch, tmp_path) -> None:
+    """No child the daemon runs writes zerolog any more, so a line shaped like
+    one states no level the reader should believe: it is kept whole, with no
+    time and no level it never stated."""
+    line = "2026-09-14T06:29:20Z INF Registered connection"
+    _write_log(monkeypatch, tmp_path, [line])
+    async with _client() as c:
+        r = await c.get("/api/v1/daemon/logs")
+    [record] = r.json()["records"]
+    assert record["timestamp"] is None
+    assert record["level"] is None
+    assert record["event"] == line or record["record"].get("raw") == line
