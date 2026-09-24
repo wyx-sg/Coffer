@@ -21,6 +21,7 @@ Coffer's principles designate SQLite as the system of record for control-plane s
 The practical consequences of the SQLite choice shape every detail of the persistence layer:
 
 - **Single writer** — SQLite's write concurrency is bounded; having one writer (the daemon) eliminates all write conflicts by design. The daemon serialises every mutation; surfaces that need to write (CLI commands, HTTP handlers) go through the daemon over loopback HTTP.
+- **Connection pragmas** — every connection opens with `journal_mode = WAL`, `foreign_keys = ON`, `synchronous = NORMAL` and `busy_timeout = 5000` (plus cache and temp-store tuning), applied in `infrastructure/persistence/engine.py`.
 - **WAL mode** — Write-Ahead Logging allows readers (e.g., a CLI `list` command calling the REST API) to proceed concurrently with the writer without blocking on a lock. In practice this means `coffer mcp list` never hangs waiting for an ongoing migration.
 - **Zero-infra copy** — because all Coffer state lives under `~/.coffer/`, moving or duplicating a vault needs no tooling: `cp -r ~/.coffer/ <dest>` with the daemon stopped is a complete byte-copy. Keeping two of your own machines in step is a separate mechanism — bidirectional convergence with a git remote you own — and it is off until you configure one. Coffer ships no backup command of its own; keep `master.key` out of anything copied off-machine.
 
@@ -54,7 +55,7 @@ Schema evolution is managed by Alembic, configured in `backend/alembic.ini` with
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`, `mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
 
-Later revisions add the skill, chat, channel, credentials and sync tables (plus index and data-fix revisions), and several are pure subtractions. `20260912_0066_knowledge_is_plain_files.py` drops every table the knowledge layer ever had, replacing none of them; `0078` drops `memory_overrides` when the per-fact decisions it backed were removed from the surface; and `0055`, `0069` and `0077` each purge the rows of a retired audit event type, on the argument that an event nothing can label costs more in `coffer__diagnose` than the record is worth. On first daemon startup, `alembic upgrade head` runs before the HTTP server accepts connections. Because Alembic migrations are bundled as data files inside the PyInstaller daemon binary, end-user installs also get correct schema creation on first launch — no separate migration step.
+Later revisions add the skill, chat, channel, credentials and sync tables (plus index and data-fix revisions), and several are pure subtractions. `20260912_0066_knowledge_is_plain_files.py` drops every table the knowledge layer ever had, replacing none of them; `0078` drops `memory_overrides` when the per-fact decisions it backed were removed from the surface; and `0055`, `0069` and `0077` each purge the rows of a retired audit event type, on the argument that an event nothing can label costs more in `coffer__diagnose` than the record is worth. Migrations run on every daemon startup (`alembic upgrade head`), before the HTTP server accepts connections; if the database's current revision is unknown to the running build (created by a newer or divergent version), startup fails fast with `DB_SCHEMA_TOO_NEW` instead of an opaque Alembic error. Because Alembic migrations are bundled as data files inside the PyInstaller daemon binary, end-user installs also get correct schema creation on first launch — no separate migration step.
 
 ::: tip The database is copied before it is migrated
 Before `alembic upgrade head` changes an on-disk `coffer.db`, the daemon copies it — with any `-wal` / `-shm` companions — to `coffer.db.pre-<revision>`, keeping the three newest copies. An already-current schema is not copied, and neither is an in-memory database. See [Distribution](/architecture/distribution#binary-deployment-at-frozen-start).
@@ -87,7 +88,7 @@ The tables that exist after applying all revisions, grouped by domain:
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `credentials`      | Envelope-encrypted secret store: each secret is Fernet-encrypted under a master key before it reaches SQLite. Plaintext never lands on disk. See [Security](/architecture/security) and Envelope-Encrypted Credentials. |
 
-**Knowledge:** no tables. A knowledge collection is a row in the kind-agnostic `resources` table like every other Resource, and its content is the markdown files under `~/.coffer/knowledge/<collection>/`. Nothing about those files is mirrored into SQLite — not their titles, not their text, not a digest of them.
+**Knowledge:** no tables. A knowledge collection is a row in the kind-agnostic `resources` table like every other Resource, and its content is the markdown files under `~/.coffer/knowledge/<collection>/`. Nothing about those files is mirrored into SQLite — not their titles, not their text, not a digest of them. The eleven tables the indexed layer used — `documents`, `chunks`, the six `documents_fts*` tables, `embedding_config` and the two scope side tables — were dropped by migration `0066`, and nothing has replaced them.
 
 **Chat:**
 
@@ -155,7 +156,7 @@ The full set of files Coffer writes:
 | `~/.coffer/cache/agent/`      | Derived, rebuildable agent data (transcript summaries) |
 | `~/.coffer/state/`            | One-shot markers for things shown to the user exactly once |
 | `~/.coffer/logs/`             | Structured JSON log files from `structlog`             |
-| `~/.coffer/bin/`              | The four deployed binaries: one directory per version, with the public names as symlinks into the current one |
+| `~/.coffer/bin/`              | The three deployed binaries (`coffer`, `coffer-daemon`, `coffer-mcp-shim`): one directory per version, with the public names as symlinks into the current one |
 | `~/.coffer/upstream-pids/`    | Per-upstream subprocess PID files for session tracking |
 
 Keeping everything under one parent directory makes backup simple, migration unambiguous, and clean-uninstall complete. The daemon's detect-or-spawn protocol (Detect-or-Spawn) also benefits: every process that needs to find the daemon reads `~/.coffer/daemon.json` — there is no registry, no environment variable, and no platform-specific service directory to probe.

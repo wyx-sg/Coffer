@@ -109,6 +109,7 @@ This single-directory layout means a complete backup of your Coffer state is one
 The pages that follow each explore one slice of the system in depth:
 
 | Page                                                   | Topic                                                                     |
+| [Principles](/architecture/principles)                 | The normative project principles, constraints, quality gates, governance  |
 | ------------------------------------------------------ | ------------------------------------------------------------------------- |
 | [Daemon & processes](/architecture/processes)          | Process model, detect-or-spawn, upstream subprocess lifecycle             |
 | [Resource framework](/architecture/resource-framework) | The kind-agnostic abstraction that unifies identity, lifecycle, and audit |
@@ -116,7 +117,9 @@ The pages that follow each explore one slice of the system in depth:
 | [Surfaces](/architecture/surfaces)                     | REST API, MCP endpoint, CLI, stdio shim, Web UI                           |
 | [Request lifecycle](/architecture/request-lifecycle)   | End-to-end trace of a tool call from client to upstream                   |
 | [Persistence](/architecture/persistence)               | SQLite schema, WAL, Alembic, JSON field handling                          |
+| [Vault sync](/architecture/sync)                       | The converge round, its safety rules, and what travels                    |
 | [Security](/architecture/security)                     | Token auth, encrypted credential store, outbound paths, loopback enforcement |
 | [Audit & accountability](/architecture/audit)          | The audit log, the invocation log, and what earns a row in either        |
 | [Observability](/architecture/observability)           | Structured logging, trace IDs, audit log, retention                       |
 | [Distribution](/architecture/distribution)             | Package layout, install, platform support                                 |
+| [Experimental features](/architecture/experimental-features) | Release channel, the feature registry, request-time gates            |

@@ -3,154 +3,166 @@
 **Status**: Accepted
 **Date**: 2026-06-12
 **Deciders**: Yuxing Wu
-**Related**: [`docs/principles.md`](../principles.md) (Credentials invariant — amended by this decision), spec `mcp-gateway` (data-model: `credentials` table, audit events), [PyInstaller Distribution](distribution-pyinstaller.md) (unsigned macOS distribution)
+**Related**: [principles](../../docs-site/architecture/principles.md) (Credentials), [Credential References](credential-references.md), [Credentials Across Machines](credentials-across-machines.md), [Distribution — PyInstaller](distribution-pyinstaller.md) (unsigned macOS distribution), spec credentials, research note [credentials and secrets](../research/credentials-secrets.md)
 
 ## Context
 
-Coffer originally stored every registered secret directly in the OS keychain
-(macOS Keychain, Windows Credential Manager, Linux Secret Service), with the
-daemon as the sole keychain owner and `keyring` confined to one adapter.
+Every secret a resource cites ([Credential References](credential-references.md))
+has to be stored somewhere on the machine. Coffer first stored each one
+directly in the OS keychain (macOS Keychain, Windows Credential Manager, Linux
+Secret Service), with the daemon as the sole keychain owner.
 
-On macOS this broke down in daily use. The keychain pins each entry's access
-control list to the **cdhash** of the binary that created it. Coffer's daemon
-is distributed **unsigned** ([PyInstaller Distribution](distribution-pyinstaller.md)
-defers Apple notarisation, which needs a paid Apple Developer account). Every
-rebuild of the daemon produces a new cdhash, so macOS treats the new binary as
-a different application and **re-prompts for keychain access — once per secret,
-on every rebuild**. For a developer iterating on Coffer, or even just receiving
-an updated release, this is a wall of modal password prompts.
+On macOS this broke down in daily use. The keychain pins each item's access
+control list to the **cdhash** of the binary that created it, and Coffer's
+daemon is distributed **unsigned**
+([Distribution — PyInstaller](distribution-pyinstaller.md) defers Apple
+notarisation, which needs a paid Apple Developer account). Every rebuild — a
+developer iterating, or a user receiving an update — produces a new cdhash,
+and macOS re-prompts for keychain access **once per secret, on every
+rebuild**. The only real fix for the prompt is a stable signing identity, i.e.
+a paid Apple Team ID, which a free, self-distributed tool will not gate its
+credential UX on.
 
-The only real fix for the prompt itself is a **stable code-signing identity**: a
-paid Apple Team ID signature would keep the cdhash-pinned ACL valid across
-rebuilds. That is a dead end for a free, open-source, self-distributed tool — we
-are not going to gate the credential UX on a paid Apple account.
+The store therefore has to work with zero prompts under an unsigned binary,
+never write plaintext anywhere, and still offer keychain-grade hardening to
+users who want it.
 
-So the keychain, as the primary secret store, is the wrong default. We need a
-secret store that works with zero prompts under an unsigned binary, while still
-offering keychain-grade hardening to users who want it.
+## Options Considered
+
+### Option A — Fernet ciphertext in SQLite, one master key in a `0600` file by default, keychain opt-in (chosen)
+
+Secrets live only as Fernet ciphertext in a `credentials` table in
+`~/.coffer/coffer.db` (ref, ciphertext, created and updated times — nothing
+else). One Fernet master key opens them, kept in **exactly one** of two
+places: `~/.coffer/master.key` (`0600`, the default, zero prompts) or the OS
+keychain (service `coffer`, opt-in) (spec credentials "Keep the master key in exactly one place").
+
+- **File-first resolution; create only for an empty store.** The key file is
+  read before the keychain. A new key is generated only while the
+  `credentials` table is empty, and never while the keychain cannot be read —
+  a fresh file key would shadow a keychain key forever
+  (spec credentials "Resolve the master key file-first and create it only for an empty store").
+  Ciphertext with no usable key is a fatal `MASTER_KEY_MISSING` naming the
+  expected path; a locked keychain at start is `CREDENTIAL_LOCKED`. Coffer
+  refuses to start rather than silently lose access.
+- **Relocate the key, never re-encrypt the data.** Moving between file and
+  keychain writes and verifies the destination, then removes the source last,
+  so an interruption resolves back to a working key
+  (spec credentials "Verify the destination before relocating the master key").
+  The ciphertext column is untouched. Exposed as
+  `GET`/`PUT /api/v1/settings/credentials`,
+  `coffer credentials storage [--set file|keychain]` and the Settings →
+  Security card, audited as `master_key_relocated`.
+- **One owner of key material.** `MasterKeyManager`
+  (`infrastructure/credentials/master_key.py`) is the only code that reads or
+  writes the key, and `keyring_adapter.py` the only module that imports
+  `keyring`. The CLI goes through the daemon for everything, so each machine
+  has one reader of the key.
+- **Blocking store, async facade.** `EncryptedCredentialStore` opens a
+  short-lived stdlib `sqlite3` connection per call, because MCP spawn and
+  register-time probing are synchronous; loop callers use the `aget`/`aset`/…
+  facade under `asyncio.to_thread`, since a synchronous call on the loop would
+  deadlock against the aiosqlite connection holding the write lock
+  (spec credentials "Keep blocking store calls off the event loop").
+- **Audited lifecycle.** `credential_set`, `credential_read`,
+  `credential_deleted`, `credential_migrated` and `master_key_relocated`, each
+  carrying the ref and never the value.
+- **One-time legacy migration.** At startup, keychain secrets from the earlier
+  design that registered resources still cite are encrypted into the store
+  (`run_legacy_keychain_migration`); a locked keychain skips and retries on the
+  next start (spec credentials "Migrate legacy keychain secrets once at startup").
+
+Pros: zero keychain prompts by default under an unsigned, frequently rebuilt
+binary; at most one prompt per daemon start in keychain mode, for the single
+master key; switching storage is crash-safe with no bulk-rewrite window.
+
+Cons: in the default mode the key sits beside the data, so a reader of
+`~/.coffer/` (or a copy of it) can decrypt everything. Keychain mode is the
+defence against offline exfiltration of that directory; this is stated plainly
+so nobody over-trusts the default. `coffer.db` is now useless without its key, so a backup must
+include both.
+
+It wins because it is the only design that removes the prompts without a
+signing dependency while keeping a real hardening path.
+
+### Option B — Stay on per-secret keychain storage and add code signing
+
+Keep one keychain item per secret and sign the daemon so the ACL survives
+rebuilds.
+
+Pros: OS-grade protection for every secret; no key file on disk.
+
+Cons: needs a paid Apple Team ID; self-signed identities do not keep the
+cdhash-pinned ACL valid.
+
+Lost: the prompt wall is the out-of-box experience until a paid account
+exists, and the project will not depend on one.
+
+### Option C — Keychain as default, file as opt-in
+
+Same envelope design with the defaults reversed.
+
+Pros: the stronger mode by default.
+
+Cons: the re-prompt wall stays the first-run experience on the most common
+developer platform.
+
+Lost: the mode that works under an unsigned binary must be the default;
+hardening is the opt-in.
+
+### Option D — Derive the key from a user passphrase
+
+Store no key at all; derive it from a passphrase at each daemon start.
+
+Pros: nothing on disk decrypts the store.
+
+Cons: a prompt on every daemon start — including launchd restarts with nobody
+at the keyboard — and a forgotten passphrase loses every secret.
+
+Lost: it reintroduces the prompt the change exists to remove; the keychain
+opt-in already serves users who want the key off disk.
+
+### Option E — Re-encrypt every row when switching storage mode
+
+Rotate to a new key whenever the key moves between file and keychain.
+
+Pros: a moved key is also a fresh key.
+
+Cons: a bulk rewrite with a half-migrated failure mode and far more code, for
+no security gain — the data key is the same secret wherever it lives.
+
+Lost: relocating only the key is small and crash-safe.
 
 ## Decision
 
-**Move to envelope encryption: store secrets as Fernet ciphertext in SQLite, and
-keep a single Fernet master key in a `0600` file beside the database by default
-(OS keychain opt-in).**
-
-- **Ciphertext at rest.** Secrets live only as Fernet ciphertext in a
-  `credentials` table in `~/.coffer/coffer.db`. Plaintext exists in memory
-  solely between decrypt and the spawn/header injection that consumes it —
-  never in logs, audit, or structured events (the pre-existing invariant is
-  unchanged).
-- **Master key, two locations, exactly one active.** The Fernet master key
-  lives in **either** `~/.coffer/master.key` (a `0600` file — the **default**,
-  zero keychain prompts) **or** the OS keychain (service `coffer`, ref
-  `master-key` — opt-in via Settings → Security or
-  `coffer credentials storage --set keychain`; macOS may prompt at most once
-  per daemon start).
-- **File-first, crash-safe resolution.** The daemon resolves the key file
-  before the keychain. Relocation moves **only the master key** and deletes the
-  old copy **last**, so an interrupted relocation always resolves back to a
-  working state. We **relocate the key, never re-encrypt the data**: the
-  ciphertext column is untouched when storage mode changes — far less code, no
-  bulk re-encryption window, and nothing to corrupt mid-switch.
-- **Fail-closed startup.** A new master key is generated **only when the
-  `credentials` table is empty**. Ciphertext present with no resolvable key is
-  a fatal, actionable startup error (`MasterKeyMissing`) — Coffer refuses to
-  start rather than silently lose access to existing secrets.
-- **One-time legacy migration.** On startup the daemon runs a best-effort
-  migration: legacy keychain secrets whose refs are cited by registered
-  resources are encrypted into the store, audited per ref as
-  `credential_migrated`. A locked keychain skips and retries next startup.
-- **Surface and audit changes.** `/api/v1/keychain` → `/api/v1/credentials`
-  (POST, GET/{ref}, GET/{ref}/exists, DELETE/{ref}); new
-  `GET/PUT /api/v1/settings/credentials` toggles `master_key_storage`
-  (`"file"` | `"keychain"`, PUT relocates and audits `master_key_relocated`).
-  CLI `coffer keychain …` → `coffer credentials …` plus
-  `coffer credentials storage [--set file|keychain]`. Audit events
-  `credential_set` / `_read` / `_deleted` / `_migrated` and
-  `master_key_relocated` (legacy `keychain_*` stay renderable). `keyring`
-  remains confined to `coffer.infrastructure.credentials` (importlinter
-  Contract 4 unchanged), now serving only the master key and the legacy
-  migration. The daemon remains the sole owner of secret material; CLI and web
-  go through the HTTP API.
-
-This required amending the Credentials invariant in the project principles
-(now `docs/principles.md`): from "only the credential module accesses the OS keychain; no plaintext
-in the DB" to "secrets only as Fernet ciphertext in the `credentials` table;
-master key managed solely by `coffer.infrastructure.credentials`, file default /
-keychain opt-in".
+Secrets are stored only as Fernet ciphertext in the `credentials` table; one
+master key, file by default and keychain on opt-in, lives in exactly one place
+and is managed solely by `coffer.infrastructure.credentials`. The key is
+created only for an empty store, never regenerated over existing ciphertext,
+and relocated rather than rotated. The daemon is the only process that holds
+it.
 
 ## Consequences
 
-**Positive**
-
-- **Zero keychain prompts by default**, even under an unsigned, frequently
-  rebuilt daemon — the original problem is gone.
-- **At most one prompt per daemon start** in keychain mode, and only for the
-  single master key — not one per secret.
-- **Honest, improvable threat model.** Default mode keeps the master key beside
-  the database, i.e. the same `~/.coffer/` boundary that already excluded a
-  reader of that directory — no regression. Keychain mode is a real upgrade: it
-  defends against offline exfiltration of `~/.coffer/` contents.
-- **Crash-safe storage switching** with no re-encryption window.
-
-**Negative / new obligations**
-
-- **Backup caveat.** `coffer.db` now holds ciphertext; restoring it requires the
-  matching `master.key` (or keychain entry). Users must back up the master key
-  alongside the database, and docs must say so.
-- **Principles amendment** (the Credentials invariant) and a one-time legacy migration path to
-  carry, both shipped with this change.
-- **Default mode does not defend against a reader of `~/.coffer/`** — the key
-  sits beside the data. This is the same boundary as before, stated plainly so
-  no one over-trusts the default.
-
-## Alternatives Considered
-
-**Stay on per-secret keychain storage and add code signing.** Rejected. The only
-fix for the cdhash re-prompt is a stable signing identity, which needs a paid
-Apple Team ID. We will not gate the credential UX on a paid Apple account for a
-free self-distributed tool. Envelope encryption removes the prompts without any
-signing dependency.
-
-**Re-encrypt all ciphertext when switching storage mode.** Rejected. Relocating
-only the master key (the file ↔ keychain move) is a tiny, crash-safe operation;
-re-encrypting every row would add a bulk-rewrite window with a half-migrated
-failure mode and far more code, for no security gain — the data key is the same
-either way.
-
-**Derive the key from a user passphrase (no stored key).** Rejected for the
-default. It would re-introduce a prompt (the passphrase) on every daemon start,
-defeating the zero-prompt goal, and a forgotten passphrase is unrecoverable. The
-keychain opt-in already covers users who want the key off the disk.
-
-**Keep the keychain as default, file as opt-in.** Rejected. That keeps the
-re-prompt wall as the out-of-box experience on the most common developer
-platform. The mode that works painlessly under an unsigned binary must be the
-default; hardening is the opt-in.
-
-## Implementation notes
-
-- **The store is synchronous on purpose.** `EncryptedCredentialStore` opens a
-  short-lived stdlib `sqlite3` connection per call, because MCP spawn and
-  register-time probing are synchronous and have no event loop. Loop callers go
-  through the `aget`/`aexists`/`aset`/`adelete` facade, which runs each call
-  under `asyncio.to_thread`; a sync call made on the loop would deadlock against
-  the aiosqlite connection holding the write lock. An async-only store was
-  rejected because it would force every sync caller to create a loop.
-- **One key manager, one `keyring` importer.** `MasterKeyManager` is the only
-  code that reads or writes key material, and `keyring_adapter.py` the only
-  module that imports `keyring`; the importlinter contract "keyring confined to
-  infrastructure" enforces it. The CLI goes through the daemon for everything,
-  so each machine has a single reader of the key.
-- **Startup order is a correctness property.** `init_credential_store` counts
-  the `credentials` rows *before* resolving the key, so a key is created only
-  for an empty store. A key that fails to construct a Fernet is reported as
-  `MASTER_KEY_MISSING` naming the path, never silently regenerated.
-- **Deletion is refused from the citing side.** `find_credential_citations`
-  walks registered resource configs through each kind's extractor. No foreign
-  key can do this: the reference lives inside another kind's JSON config.
-- **Rollback lives at the writing surface.** A secret written just before a
-  registration that then fails is deleted by the surface that wrote it (the MCP
-  import and edit dialogs, the channel register flow), because only that caller
-  knows whether the registration succeeded. It is best-effort and logs rather
-  than raising a second error over the first.
+- The principles' Credentials clause states this as a product invariant:
+  ciphertext only, one key manager, file or keychain, `keyring` confined.
+- `keyring` confinement is enforced twice: the import-linter contract
+  "keyring confined to infrastructure" (`backend/pyproject.toml`) forbids
+  `coffer.surfaces` and `coffer.application` from importing it (the domain
+  purity contract covers `coffer.domain`), and the acceptance test
+  `test_only_the_keyring_adapter_imports_keyring`
+  (`tests/unit/infrastructure/credentials/test_key_location_and_boundaries.py`)
+  pins `keyring_adapter.py` as the only importer in the whole tree
+  (spec credentials "Confine key management to the credentials package"). A
+  further contract, "CLI does not access the keychain directly", keeps
+  `coffer.surfaces.cli` away from `coffer.infrastructure.credentials`.
+- Carrying the key to another machine is a separate, out-of-band act —
+  `coffer sync key export|import` — owned by
+  [Credentials Across Machines](credentials-across-machines.md); an import
+  never overwrites a different key without first keeping a
+  `master.key.bak-*` copy.
+- The master key can be moved but not rotated; a user who needs a new key
+  re-enters their secrets.
+- Rollback of a secret written for a failed registration lives at the writing
+  surface, which alone knows whether the registration succeeded
+  ([Credential References](credential-references.md)).

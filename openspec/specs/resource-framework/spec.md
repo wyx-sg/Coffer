@@ -43,7 +43,7 @@ this spec seeds, reads, configures and prunes both. Its route family is
 its packages are `domain/{resource,scope,audit,retention}.py`, the kind-agnostic
 services beside them in `application/`, and their surfaces; an import-linter contract
 fences the core off from every kind; and it has ADRs of its own
-([Everything Is a Resource Kind](../../../docs/decisions/everything-is-a-resource-kind.md),
+([Sidebar Grouped by Role](../../../docs/decisions/sidebar-grouped-by-role.md),
 [Resource Framework Upfront](../../../docs/decisions/resource-framework-upfront.md),
 [Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md),
 [Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)). It is one

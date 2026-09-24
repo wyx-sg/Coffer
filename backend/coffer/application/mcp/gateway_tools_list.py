@@ -3,7 +3,7 @@
 Three steps, and each can be wrong on its own, which is why they are named
 here rather than inlined in the session: the upstreams are aggregated, Coffer's
 own built-ins are appended, and tiering hides the tail of a list too long to be
-useful (ADR budget-driven-tool-tiering).
+useful (ADR tool-overload-tier-the-list-search-the-rest).
 
 Extracted from ``gateway`` to keep the session class within its file-size
 budget, alongside ``gateway_aggregate_lists`` (the fan-out), ``gateway_tiering``

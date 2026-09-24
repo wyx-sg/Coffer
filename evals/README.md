@@ -4,7 +4,7 @@ The deterministic test suite proves the *plumbing* works. This harness measures
 the **non-deterministic AI behaviour** that ordinary tests can't pin: how good
 Coffer's tool search is, and whether a model picks the right tool. It is the
 regression net for prompt/model/catalogue changes
-([Harness in Layers](../docs/decisions/industrial-grade-harness-in-layers.md), Layer D).
+([Eval Capture and Regression Gate](../docs/decisions/eval-capture-and-regression-gate.md)).
 
 Designed to be **local and low-cost**: the tool-search suite needs no model at
 all, and the routing suite talks to a **pluggable** model — a local LLM (Ollama)
@@ -56,7 +56,7 @@ deterministic gate.
 
 **Tool search** (`tool_search_eval.py`) — measures the `coffer__search_tools`
 ranker that lifts aggregation tool-overload (spec mcp-gateway /
-[Tool Retrieval](../docs/decisions/tool-retrieval-for-overload.md)). It runs the
+[Tool Overload](../docs/decisions/tool-overload-tier-the-list-search-the-rest.md)). It runs the
 `datasets/tool_search.jsonl` intent queries through the same pure BM25-lite
 ranker the gateway uses and scores **recall@k** and **MRR** over an
 upstream-shaped catalogue (`datasets/tool_search_catalog.jsonl` — `<server>__<tool>`
@@ -88,7 +88,7 @@ A small local model gets some cases wrong — an honest score; point
 ## Capturing real usage (the flywheel)
 
 Hand-authored cases are a floor, not the goal. The eval **flywheel**
-([Eval Flywheel](../docs/decisions/close-the-eval-flywheel.md)) grows the
+([Eval Capture and Regression Gate](../docs/decisions/eval-capture-and-regression-gate.md)) grows the
 dataset from how Coffer is actually used. Capture is **opt-in and off by
 default** — set `COFFER_EVAL_CAPTURE` for the daemon (or any process that serves
 the gateway) and it records the eval-relevant *shape* of real interactions:

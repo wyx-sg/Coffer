@@ -62,7 +62,7 @@ list-changed notifications) between clients and upstream MCP servers.
   resources/prompts set (HTTP 200), not an error.
 - **Built-in tool retrieval.** `coffer__search_tools` MUST always be advertised in `tools/list` alongside
   Coffer's other `coffer__` built-ins
-  ([Tool Retrieval](../../../docs/decisions/tool-retrieval-for-overload.md)). Its contract is
+  ([Tool Overload](../../../docs/decisions/tool-overload-tier-the-list-search-the-rest.md)). Its contract is
   `coffer__search_tools(query: string [required], top_k?: int = 5, max 20) -> { tools: [{ name, description,
   inputSchema, score }], total_searched: N }`. It ranks the **live** aggregated upstream catalogue against the
   query and returns the top-k **real** upstream tool schemas, which the agent then calls directly; it is a
@@ -73,7 +73,7 @@ list-changed notifications) between clients and upstream MCP servers.
   would call directly, with routing unchanged; and the invocation MUST be recorded in the invocation log like
   any other gateway call.
 - **Budgeted listing ("tool tiering").** `tools/list` MUST advertise a budgeted slice of the catalogue rather
-  than all of it ([Budget-Driven Tool Tiering](../../../docs/decisions/budget-driven-tool-tiering.md)).
+  than all of it ([Tool Overload](../../../docs/decisions/tool-overload-tier-the-list-search-the-rest.md)).
   Coffer's own `coffer__*` tools are always listed and do not consume the budget. Upstream tools are listed in
   full while they fit the budget (default 50, `COFFER_TOOL_TIERING_BUDGET`); beyond it the gateway lists the
   most-invoked ones over a trailing window (default 90 days, `COFFER_TOOL_TIERING_WINDOW_DAYS`), reserving one

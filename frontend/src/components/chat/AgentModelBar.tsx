@@ -2,7 +2,7 @@
 // Top bar in the message thread: which Coffer-managed agent the conversation is
 // bound to (Claude Code / Codex), plus a per-conversation model picker. The
 // picker sets agent_config.model — the agent's own model, passed through to its
-// CLI (the builtin-agent-is-internal-capability and provider-switching
+// CLI (the coffer-model-is-an-internal-engine and provider-switching
 // ADRs), mirroring the channel `/model` command. An empty
 // value inherits the active provider profile's projected default. Beside it,
 // for the agents whose models take one, the reasoning effort that model runs

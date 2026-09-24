@@ -1,5 +1,5 @@
 """The ``initialize`` handshake carries Coffer's MCP ``instructions``
-(ADR budget-driven-tool-tiering).
+(ADR tool-overload-tier-the-list-search-the-rest).
 
 This is the only channel a server has into the client's system prompt. Without
 it no agent is ever told what Coffer is or that ``coffer__search_tools`` reaches

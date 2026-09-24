@@ -1,20 +1,38 @@
-# Aggregate the agents' memory; never write it
+# Aggregate the Agents' Memory; Never Write It
 
 **Status**: Accepted
 **Date**: 2026-09-17
 **Deciders**: Yuxing Wu
-**Rewrites**: *Memory via MCP, not native projection* (2026-06-18) — this ADR replaces it, keeping its prohibition and replacing its answer. See [Revision history](#revision-history).
-**Related**: spec [memory](../../openspec/specs/memory/spec.md), spec [knowledge](../../openspec/specs/knowledge/spec.md), [Knowledge Is Plain Files](knowledge-is-plain-files.md), [One Shared Knowledge Store](agent-native-shared-memory.md), [`docs/research/memory-systems-landscape.md`](../research/memory-systems-landscape.md)
+**Related**: spec memory; spec knowledge; [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md); [Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale](agent-hook-installation.md); [Experimental Features Instead of a Release Branch](experimental-features-instead-of-a-release-branch.md); [Sync Withholds Derived Output](sync-withholds-derived-output.md); research note [agent memory](../research/agent-memory.md)
 
 ## Context
 
-Coffer has tried three times to be the place a developer's agent memory lives, and each attempt was removed:
+A developer running Claude Code and Codex over the same work has two memories
+that learn separately. Claude Code writes one titled Markdown file per topic
+under its config directory, indexed by `MEMORY.md`; Codex keeps three tiers —
+raw capture, distilled task groups, and a `memory_summary.md` that states search
+terms per entry. A lesson one agent learns, the other never sees. Coffer's
+memory layer exists to let both benefit from both.
 
-1. **Native projection** (removed 2026-06-18): Coffer owned the store and symlinked or rendered it into each agent's own memory location, disabling the agent's native memory so no second copy could diverge. Removed as intrusive and illegible — and because no comparable system in the field writes into another agent's memory files.
-2. **Transcript distillation** (removed 2026-09-09): Coffer read session transcripts and distilled them into a journal lane. Removed along with the lane.
-3. **Session-context injection** (removed 2026-09-10): the replacement for projection's one real benefit — ambient loading — shipped as a per-agent SessionStart hook, and was removed for a reason worth stating plainly: **it had never once been installed on the maintainer's machine**, so in two months the path never ran.
+The load-bearing question is **who owns the memory**. Coffer has tried to be
+the place agent memory lives four times:
 
-The fourth attempt — aggregation, decided here on 2026-09-12 — shipped, installed and ran. It is the first one that did. It is also the first whose failure could be *measured*, and on 2026-09-17 it was, against the maintainer's live vault. Four numbers decided this rewrite:
+1. **Native projection.** Coffer owned the store and symlinked or rendered it
+   into each agent's memory location, switching the agent's native memory off
+   so no second copy could diverge. Removed 2026-06-18.
+2. **Coffer-held store behind MCP tools.** Coffer kept its own per-fact store
+   that agents wrote to and read from through `coffer__` tools, with ambient
+   loading deferred to a hook.
+3. **Transcript distillation.** Coffer read session transcripts and distilled
+   them into a journal lane. Removed 2026-09-09.
+4. **Session-context injection.** A per-agent SessionStart hook replacing
+   projection's one real benefit, ambient loading. Removed 2026-09-10 — it had
+   never once been installed on the maintainer's machine, so in two months the
+   path never ran.
+
+Aggregation — reading the agents' own memories — shipped 2026-09-12, installed
+and ran. It was the first attempt whose failure could be measured, and on
+2026-09-17 it was, against the maintainer's live vault:
 
 | Measurement | Value |
 | --- | --- |
@@ -24,76 +42,179 @@ The fourth attempt — aggregation, decided here on 2026-09-12 — shipped, inst
 | `coffer__recall` calls, lifetime / in the preceding three weeks | **5 / 0** |
 | Facts delivered at session start, of 189 visible | **8**, all from `global`, none about the open project |
 
-Each number names a distinct mistake, and they compound.
-
-**Storing the sources' words verbatim was the first.** Claude Code writes one titled file per topic; Codex writes untitled prose bullets inside task groups. Carrying both verbatim meant Codex's bullets arrived with no title, so one was synthesised by truncating the first clause — producing 284 facts whose title, description and body were the same sentence three times over, against the 16 entries Codex had already distilled the same material into. Coffer was reading past its source's finished work to copy its raw material.
-
-**Matching those words literally was the second.** Two agents describing one lesson share no phrasing, so the cross-agent merge — the single thing this layer exists to do — matched **nothing, ever**. 378 facts, zero merges.
-
-**Budgeting the delivery was the third.** A ~600-token ceiling spent on `global` first meant 8 lines arrived, every one of them a generic preference, and the 65 well-titled notes about the repository the session was actually open in never appeared at all.
-
-**Pointing at a tool for the rest was the fourth.** Every session's opening line said "179 more — call `coffer__recall`". In three weeks no agent called it once.
-
-Meanwhile the two hosts, on the same machine, had both solved retrieval — and neither built a search engine to do it:
+Meanwhile the two agents had each solved retrieval over their own memory, and
+neither built a search engine to do it:
 
 | | Claude Code | Codex |
 | --- | --- | --- |
-| Storage | one Markdown file per **topic**, rewritten as it learns more | three tiers: raw capture → distilled task groups → a summary |
+| Storage | one Markdown file per **topic**, rewritten as it learns more | raw capture → distilled task groups → a summary |
 | Index | `MEMORY.md`, one line per topic, conclusion written into the line | `memory_summary.md`, grouped by project, **search terms stated per entry** |
 | Loaded per session | the **whole** index — 94 entries, ~9k tokens | profile + summary, ~4k tokens |
 | Reaching a body | an ordinary file read | an ordinary file read |
 | Search tool | none | none |
 
-The prohibition from 2026-06-18 is not in question. Nothing here writes an agent's memory files.
+## Options Considered
+
+### Option A — Read the agents' memory, distil it into Coffer's own notes, deliver the whole index (chosen)
+
+Coffer reads each enabled agent's native memory read-only, keeps what it read
+verbatim in a hidden `.raw/`, and has its internal model distil it into notes of
+its own — one topic per file, partitioned by repository plus `global` — merging
+across agents by meaning. Each session opens with the whole index of its
+repository's partition and the absolute path of the notes directory.
+
+- **Pros.** The agents keep the canonical copy, so nothing Coffer does can
+  corrupt a tool's memory. Distilling starts from the agents' finished work
+  (Codex's 16 entries, not its 284 raw bullets). A merge by meaning can match
+  two agents' differently-worded accounts of one lesson, which string comparison
+  never did. Delivery is the mechanism both agents already use for their own
+  memory: an index in front of the model and bodies read as files.
+- **Cons.** A model call on every changed partition. Two readers coupled to two
+  undocumented private formats. A session's opening costs an index instead of
+  eight lines. A rebuild gives back equivalent notes, not identical wording.
+- **Why it wins.** It is the only option that keeps the prohibition below and
+  still reaches the session with something the session uses.
+
+### Option B — Native projection (Coffer owns the store and writes into each agent)
+
+- **Pros.** Ambient loading: each agent reads the facts natively at session
+  start with no hook.
+- **Cons.** Writing and disabling another tool's configuration is intrusive and
+  illegible; a developer finds their agent's memory switched off. Every agent
+  needs a hand-maintained adapter tracking a format that moves upstream.
+  Round-tripping a proprietary, evolving memory format losslessly in both
+  directions is unsolved and inherently lossy. No comparable system writes into
+  another agent's memory files.
+- **Why it lost.** Built and removed; its reasons are now the prohibition.
+
+### Option C — A Coffer-held store agents write through MCP tools
+
+- **Pros.** One canonical store, agent-agnostic tools, no native files touched.
+- **Cons.** The agents already write their own memory, well, and would keep
+  doing so; a second store is a second place a fact might live. Retrieval
+  depends on an agent choosing to call a tool — the recall figures above show
+  it does not.
+- **Why it lost.** It competes with the agents' own memory instead of
+  harvesting it.
+
+### Option D — Transcript distillation
+
+- **Pros.** Captures what the agents never wrote down.
+- **Cons.** Both agents already distil their own sessions into memory, better
+  than Coffer's pass did; reading transcripts is reading past that finished
+  work, and far more data.
+- **Why it lost.** Removed 2026-09-09; this layer reads no transcripts or
+  rollouts.
+
+### Option E — Verbatim aggregation, literal merge, budgeted digest (the 2026-09-12 design)
+
+Store every source entry in its own words, merge entries across agents by
+literal comparison, and deliver a ~600-token three-layer digest spent on
+`global` first, with `coffer__recall` for the rest.
+
+- **Pros.** Cheapest; no model in the loop; byte-reproducible.
+- **Cons.** All four measured failures: Codex's untitled bullets became 284
+  facts whose title, description and body were the same sentence; two agents
+  describing one lesson share no phrasing, so literal merge matched nothing in
+  378 facts; the budget delivered 8 generic lines and none about the open
+  repository; and the "call `coffer__recall` for the rest" line was never acted
+  on.
+- **Why it lost.** Replaced by this design on 2026-09-17. Raising the ceiling
+  alone would have been a larger bad index.
+
+### Option F — Keep verbatim facts and make retrieval smarter
+
+Multi-term, fuzzy or embedding search behind `coffer__recall`.
+
+- **Pros.** Recovers queries phrased in the caller's own words.
+- **Cons.** The tool was called five times in its life: the problem was never
+  that queries missed, it was that no query was made.
+- **Why it lost.** Both agents reached the same conclusion independently and
+  ship no search tool over their own memory. `coffer__recall` survives only as
+  a locator for partitions the session was not opened in, answering with paths.
+
+### Option G — Write the distilled notes back into each agent's native memory
+
+- **Pros.** Delivery would need no hook.
+- **Cons.** It is native projection (Option B) under a new name, with the same
+  reversibility and legibility problems.
+- **Why it lost.** The prohibition.
 
 ## Decision
 
-**Coffer reads the agents' native memories read-only, distils them into notes of its own — one topic per file, filed by repository — and hands each session the whole index of that set plus the path to read the bodies as files.** Five moves.
+**Coffer never writes an agent's native memory. It reads each enabled agent's
+memory read-only, distils it into notes of its own — one topic per file, filed
+by repository — and hands each session the whole index of that set plus the
+path to read the bodies as files.**
 
-1. **Read, never write.** Coffer reads the native memory of each registered, enabled agent from a path derived from its own `config_dir`, and modifies nothing there — not a file, not a format, not the agent's memory setting. It does not read transcripts or rollouts either: both agents already distil their own, better than Coffer's removed distillation did, so this layer starts from their output. Where a source states its own search terms, as Codex's summary does per task group, those travel with the entry instead of being discarded.
-
-2. **Two layers on disk, with one writer each.** `.raw/` holds what was read, verbatim, and only aggregation writes it. `notes/` holds **Coffer's own writing**, and only the distil pass writes it. That separation is what lets a bad distillation be re-run without re-reading the agents, and it is where the 2026-09-12 design's verbatim rule survives — as the input layer, not as the product.
-
-3. **The product is a distillation, not a copy.** A note is one topic, in Coffer's words, accumulated across passes and across agents: a later entry on a covered topic rewrites that note rather than adding a second beside it, and two agents' differently-worded accounts become one note naming both. Matching is done by the internal connection on meaning, because literal matching demonstrably matches nothing. The pass is incremental — new entries plus the existing *index*, never the existing bodies — and may do exactly four things per entry: merge, open, retire, or keep nothing. With no internal connection configured each entry becomes a note of its own and the index is written mechanically: thinner, not absent.
-
-4. **A retirement is written down, because that is what makes it stick.** `RETIRED.md` records what was retired, why, and what replaced it, and is part of the next pass's input. In a store whose sources live outside it, an unrecorded deletion is undone by the next pass — so the retirement file is not a bin, it is the mechanism.
-
-5. **Delivery is the index, and the bodies are files.** A session opens with what is known about the developer, **the whole index** of the current repository's partition — the conclusion written into each line, so most lines need no follow-up — and the absolute path of the directory holding the bodies. It names no tool for reaching one: every consumer is a process on this machine with filesystem access, including a channel-driven turn, which drives a local Claude Code or Codex rather than answering from the daemon. A ceiling still exists, sized for an index rather than for a handful of lines, and when it binds it prefers the open repository over `global` and names the directory holding what it dropped. `coffer__recall` survives with a narrower job: locating notes in a partition the session was *not* opened in, answering with paths rather than bodies. Installation stays an explicit act, marker-scoped and removable, and **every fire is an audit event**, because the 2026-09-10 failure was invisible for two months.
+1. **Read, never write.** Coffer reads the native memory of each registered,
+   enabled agent from a path derived from its own `config_dir`, and modifies
+   nothing there — not a file, not a format, not the agent's memory setting. It
+   reads no transcripts or rollouts. Where a source states its own search terms,
+   as Codex's summary does, those travel with the entry.
+2. **Two layers on disk, one writer each.** `.raw/` holds what was read,
+   verbatim, written only by aggregation. `notes/` holds Coffer's own writing,
+   written only by the distil pass. A bad distillation is re-run without
+   re-reading the agents.
+3. **The product is a distillation, not a copy.** A note is one topic, in
+   Coffer's words, accumulated across passes and agents. Matching is by meaning,
+   done by the internal model. The pass is incremental — new entries plus the
+   existing index, never the existing bodies — and may merge, open, retire or
+   keep nothing per entry. With no internal model configured each entry becomes
+   a note of its own and the index is written mechanically.
+4. **A retirement is written down.** `RETIRED.md` records what was retired, why
+   and what replaced it, and is input to the next pass. In a store whose sources
+   live outside it, an unrecorded deletion is undone by the next pass.
+5. **Delivery is the index, and the bodies are files.** A session opens with
+   `global`'s index, the whole index of the current repository's partition —
+   the conclusion written into each line — and the absolute path of the notes
+   directory. It names no tool for reaching a body. A ceiling exists, sized for
+   an index; when it binds it prefers the open repository over `global` and
+   names the directory holding what it dropped. Partitions are identified by
+   repository, which collapses worktrees and second clones and excludes scratch
+   directories.
+6. **Two delivery paths.** A session the developer drives themselves receives
+   it through a hook in the agent's own settings, installed only on request and
+   repaired when stale — see
+   [Agent Hook Installation](agent-hook-installation.md). A channel-driven turn
+   receives the same payload through the system-prompt append the turn platform
+   already composes, with no hook.
+7. **Behind the `memory` experimental feature.** Off by default on the stable
+   channel. While it is off, aggregation and distil skip their rounds,
+   `coffer__recall` is absent, the `coffer-guide` skill does not document it,
+   and every delivery hook is withdrawn.
 
 ## Consequences
 
-### Positive
-
-- The cross-agent merge can finally happen: it is a judgement about meaning, made by a model, instead of a string comparison that never matched.
-- Coffer stops reading past its sources' finished work. Codex distilled 284 bullets into 16 entries; Coffer now starts where that ended rather than re-importing the raw material.
-- The delivered payload is an index the agent has been *shown*, not a pointer to a store it has to be curious about. The measured failure of "8 lines and a tool name" is not repeated by making the ceiling bigger; it is repeated by nobody, because there is nothing left to go and fetch.
-- A note is an ordinary Markdown file at a path. The retrieval mechanism is the one both hosts already use for their own memory, so there is nothing new for an agent to learn and nothing to keep level with the disk.
-- Partitioning by repository rather than by path collapses worktrees and second clones into one store, and stops a dated scratch directory from becoming a permanent partition.
-
-### Negative
-
-- **"Delete and rebuild" weakens from identical to equivalent.** The product is a distillation, so a rebuild gives back the same subjects from the same sources, not the same wording. Accepted: `.raw/` is still byte-reproducible, and it is what the notes' provenance points at.
-- **The distil pass is the layer's cost.** It calls a model on every changed partition, where the old organise pass was optional polish. The mechanical path ([memory](../../openspec/specs/memory/spec.md) "Distil mechanically with no internal connection") keeps an installation without a connection working, but visibly worse — which is the honest trade, not a hidden one.
-- Two readers remain coupled to two undocumented private formats. A format change breaks a reader; it must break loudly and locally ([memory](../../openspec/specs/memory/spec.md) "Fail a broken reader loudly and in isolation").
-- `enabled` governs what Coffer serves, not what a process on this machine can open (memory carries no per-agent reach since 2026-09-18; [memory](../../openspec/specs/memory/spec.md) "Serve every enabled partition to every agent"). Handing an agent a path is handing it the file; the layer says so rather than implying a boundary it does not have.
-- A session's opening is measurably more expensive — an index of a hundred notes instead of eight lines. Claude Code spends ~9k tokens on exactly this, of its own accord, every session; this is the ecosystem's normal price for not searching.
-
-### Neutral
-
-- No table. Notes, raw entries, the index and the retirement record are files; a partition is a Resource row like every other kind.
-- No `remember` tool. An agent records something the way it already does; Coffer picks it up on the next pass.
-- The derived tree still does not travel to the sync remote, and the partition's Resource row does not either.
-
-## Alternatives considered
-
-- **Keep verbatim storage and raise the delivery ceiling.** The cheapest fix, and it addresses only the third mistake. 284 triple-redundant entries at a higher ceiling is a larger bad index, and the cross-agent merge still matches nothing.
-- **Make retrieval smarter instead of showing the index.** Multi-term matching, fuzzy matching, or restoring embeddings. Rejected on the evidence: the tool was called five times in its life, so the problem was never that queries missed — it was that no query was ever made. Both hosts reached the same conclusion independently and neither ships a search tool over its own memory.
-- **Store notes only, with no `.raw/`.** Smaller, and it makes the distillation unrepeatable without re-reading every agent, and leaves a note's claim unquotable back to its source. The raw layer is cheap and hidden; the two properties it buys are not.
-- **Delete a retired note outright, with no record.** What the maintainer first proposed, and it does not hold: the source still holds the material, so the next pass re-imports what the last one deleted. Recording the retirement is the only way a deletion survives a pass.
-- **Write the distilled notes back into each agent's native memory.** Delivery would need no hook. Rejected: this is native projection under a new name, with the same reversibility and legibility problems.
-
-## Revision history
-
-- **2026-06-18** — *Memory via MCP, not native projection*: the native-projection layer was removed; Coffer kept its own per-fact store, agents reached it through MCP tools, and ambient loading was deferred to a session hook.
-- **2026-09-12** — Rewritten as this ADR. The prohibition survives verbatim and is now load-bearing; the ownership model inverts. Coffer no longer holds the canonical store that agents write into — the agents hold it, Coffer aggregates it. Facts were stored in the sources' own words, merged by literal comparison, and delivered as a budgeted three-layer digest with `coffer__recall` for the remainder.
-- **2026-09-17** — Rewritten again, against measurements of the shipped design. The prohibition is untouched for the third time; what changes is everything downstream of the read. Verbatim storage becomes a hidden input layer and the product becomes Coffer's own distilled notes, one topic per file. Literal cross-agent matching — which matched nothing in 378 facts — becomes a judgement the internal connection makes. Retirement gains a written record, without which a deletion cannot survive the next pass. The budgeted three-layer digest becomes the whole index plus a directory path, and `coffer__recall` narrows from the way bodies are reached to a locator for partitions the session was not opened in. Partition identity moves from the working directory's path to the repository, collapsing worktrees and excluding scratch directories.
+- **The cross-agent merge can happen.** It is a judgement about meaning, made
+  by a model, instead of a string comparison that never matched.
+- **Coffer stops re-importing raw material** its sources had already distilled.
+- **Nothing is left to fetch.** The delivered payload is an index the agent has
+  been shown; the "8 lines and a tool name" failure is not repeated by a bigger
+  ceiling but by there being nothing to go and fetch.
+- **A note is an ordinary Markdown file at a path**, read the way both agents
+  read their own memory.
+- **"Delete and rebuild" is equivalent, not identical.** `.raw/` is
+  byte-reproducible and is what notes' provenance points at; the notes are a
+  distillation.
+- **The distil pass is the layer's cost.** A model call per changed partition;
+  the mechanical path keeps an installation without a connection working,
+  visibly worse.
+- **Two readers stay coupled to two private formats.** A format change must
+  break one reader loudly and locally, not the layer.
+- **`enabled` governs what Coffer serves, not what a process can open.** Memory
+  carries no per-agent reach; handing an agent a path is handing it the file.
+- **A session's opening is more expensive** — an index of a hundred notes
+  rather than eight lines; Claude Code spends ~9k tokens on its own index every
+  session, so this is the ecosystem's normal price for not searching.
+- **No table, no `remember` tool.** Notes, raw entries, the index and the
+  retirement record are files; an agent records something the way it already
+  does and Coffer picks it up on the next pass. The derived tree does not travel
+  to the sync remote ([Sync Withholds Derived Output](sync-withholds-derived-output.md)).
+- **Enforcement.** Spec memory "Never write an agent's native memory",
+  spec memory "Read no transcripts or rollouts",
+  spec memory "Record provenance and merge by meaning",
+  spec memory "Record retirements so they stick",
+  spec memory "Deliver the index and the notes path at session start",
+  spec memory "Deliver to channel turns through the system prompt",
+  spec memory "Reintroduce no retired mechanism".

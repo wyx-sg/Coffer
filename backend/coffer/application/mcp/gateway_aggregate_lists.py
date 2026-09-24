@@ -17,7 +17,8 @@ Two design decisions matter:
    and tripped client read timeouts (concurrent_clients spec).
 
 On per-server timeout / unavailable: log the server and error, then leave
-that server out of the batch and NAME it in the outcome (ADR budget-driven-tool-tiering). The
+that server out of the batch and NAME it in the outcome
+(ADR tool-overload-tier-the-list-search-the-rest). The
 supervisor's retry/cooldown continues in the background; the session uses
 the named failures to retry and tell the client to re-list, because a
 client that cached the truncated list will otherwise never see those tools
@@ -157,7 +158,8 @@ async def list_tools_across(
     servers: list[str],
 ) -> AggregateOutcome:
     """Returns the outcome, not a bare list: the tools path is the one that
-    needs to know which servers failed so it can retry them (ADR budget-driven-tool-tiering)."""
+    needs to know which servers failed so it can retry them
+    (ADR tool-overload-tier-the-list-search-the-rest)."""
     return await _aggregate(
         discovery.list_tools,
         ensure_subscribed,

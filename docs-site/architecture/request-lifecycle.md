@@ -224,17 +224,41 @@ Messaging channels (Telegram, SeaTalk) are how a user reaches an agent away from
 
 - **Telegram (long-poll).** Telegram inbound runs as a long-poll loop inside the daemon (no public endpoint), normalising each update into the same inbound shape before it reaches the orchestrator.
 
+**Inbound documents become text.** An inbound channel attachment that is a document (a PDF, a docx) reaches the agent as extracted text rather than an opaque path (spec channels "Give documents to every agent as extracted text"), through `DocumentExtractor` in `infrastructure/chat/document_extract.py`, which imports MarkItDown lazily and optionally; when the library or the extraction fails it degrades to a plain file attachment. MarkItDown is imported in exactly two places — this extractor and the knowledge upload converter (`infrastructure/knowledge/converters/`) — which an importlinter contract enforces.
+
 Progress is rendered from the transport's capabilities, not the adapter type: both transports keep one live surface updating during a turn — Telegram by editing a message, SeaTalk through its streaming API; the core asks `supports_live_text`, never the adapter type.
 
 ## Knowledge lifecycle
 
-Knowledge has almost no request lifecycle left, and that is the point. There is no retrieval tool and no index between an agent and the disk: an agent reads the documents with its own `Read` and `Grep`, at the absolute paths the `coffer-guide` skill carries, and Coffer is not in that path at all.
+The knowledge layer is **a directory, not a database**, and a collection is **one tree of documents** under `~/.coffer/knowledge/<collection>/`, co-written by people and Coffer. A person edits a document in their own editor, an agent may edit one with its own file tools, and an internal-model **curation pass** rewrites documents as it merges new knowledge in. There is no `documents` table and no chunk table, so nothing has to be reconciled and a document edited in the user's own editor is live on the very next read (ADR knowledge-is-plain-files; see [Persistence → Knowledge is plain files](/architecture/persistence#knowledge-is-plain-files)).
 
-What does pass through Coffer is new knowledge arriving, and it takes three steps:
+A file's **path is its identity** — names are readable slugs, not ULIDs. Frontmatter carries `title`, `description`, `actor` and timestamps, plus `coffer_curated_at`: when curation last had the document in front of it, compared against the file's own mtime, which is how a sweep finds a document someone edited out of band without any state file or table. A collection describes itself in its own `README.md` rather than in a database row, so the person browsing the folder sees the same sentence the delivered skill does.
 
-1. **Submit.** `coffer__write`, `POST /api/v1/knowledge/material`, an upload (converted to Markdown first) and a channel `/save` all write one item of material into the collection's hidden `.inbox/`, and record an audit event. With no internal model configured, the item is promoted to a document of its own on the spot.
-2. **Merge.** The curation sweep, every minute, takes each pending item — inbox material first, then any document edited since curation last stamped it — and runs one bounded pass over it: at most five candidate documents, found by a literal `ripgrep` match, plus the catalogue of titles, and at most eight writes.
+### Reading: no tool, no index
+
+Knowledge has almost no read lifecycle, and that is the point. `coffer__list`, `grep`, `read`, `search` and `delete` are deleted: an audit of 448 Claude Code sessions found the delivered skill had never once been loaded and no knowledge tool had ever been called — a tool an agent does not remember to call is not retrieval, and every agent Coffer supports already has `Read` and `Grep`, which need no remembering. So an agent reads the documents with its own tools, at the absolute paths the `coffer-guide` skill carries, and Coffer is not in that path at all. Ripgrep survives inside the process only as the candidate selector a curation pass uses (`infrastructure/knowledge/grep.py`, with an identical Python walk in `grep_fallback.py` where `rg` is absent).
+
+**Coffer embeds nothing.** Ranked semantic retrieval over a disposable vector sidecar was built, shipped and then removed (2026-09-14); the `~/.coffer/index` directory, the `/embeddings` client and every embedding setting are gone. What replaces conceptual recall is the model reading a catalogue, which works while the catalogue fits in context — into the hundreds of files. Literal matching is a **placeholder**, not a verdict: semantic retrieval is expected back once the knowledge and memory design settles, with the files still the only truth and any index a disposable sidecar outside the vault.
+
+### The guide skill
+
+The layer contributes **one** builtin tool, `coffer__write` (see [Surfaces → Builtin tools](/architecture/surfaces#builtin-tools)), because writing is where an agent genuinely needs Coffer: the collection, the inbox, the frontmatter and the audit entry are Coffer's to decide. Everything else rides **Coffer's own skill**, `coffer-guide` (ADR coffer-ships-its-own-skill). The knowledge layer renders its text — `application/knowledge/guide_render.py`, pure, with the hand-written half of the body shipped as package data in `skill_assets/` — and the skill kind writes, registers and delivers it like any other skill; the composition root (`surfaces/http/guide_wiring.py`) is the one place allowed to join the two, since kinds may not import each other. Its description names Coffer, its builtin tools and the subjects the enabled collections cover — the only part always in a model's context — and its body carries Coffer's manual followed by the knowledge root and every document's path, title and description. Nothing is injected into a session and no agent's own memory is written to.
+
+The rendered file is **byte-identical for the same build over the same catalogue**, so an unchanged boot writes, audits and delivers nothing — hence the `~`-relative knowledge root and the fieldless `builtin` source (spec knowledge "Render the guide skill deterministically", spec skill-manager "Regenerate Coffer's builtin skill from the build"). It still differs between machines, because it lists the *enabled* collections and `enabled` is machine-local, so it does not converge (see [Vault sync → What travels](/architecture/sync#what-travels)).
+
+### Writing: material in, curation merges
+
+New knowledge arrives as **material**, never as a file in the tree, in three steps:
+
+1. **Submit.** `coffer__write`, `POST /api/v1/knowledge/material`, an upload (converted to Markdown first) and a channel `/save` all write one item of material into the collection's hidden `.inbox/` — the one hidden directory Coffer writes — and record an audit event. With no internal model configured, the item is promoted to a document of its own on the spot, so nothing waits on a connection nobody set up. Neither an upload's original bytes nor its extracted text is kept as a file: the collection holds the knowledge, merged.
+2. **Merge.** The curation pass is a bounded agentic rewrite of one collection's documents, driven by the internal-engine connection. It takes one pending item — inbox material, or a document edited since its `coffer_curated_at` stamp — plus at most five candidate documents, found by a literal `ripgrep` match, and the collection's whole catalogue of titles. Its tools are `list_documents`, `read_document`, `write_document` and `retire_document`; it may write at most eight files, and it may not record a reference to another knowledge file — enforced at the write, because 343 of the corpus's 398 internal references were already dead when the rule was introduced. Newer material wins over what a document says, and a person's edit stands: the pass carries it outward and never reverts it.
 3. **Settle and re-render.** A completed pass deletes the inbox item (or stamps the edited document), and the catalogue in `coffer-guide` is re-rendered so every agent can reach what changed.
+
+Curation is triggerable by hand (the UI, and `coffer knowledge curate`). The interval worker sweeps every minute by default, draining the inbox first and then edited documents; it is governed by one installation-wide setting on `internal_engine_config` that defaults **on** and names an owner machine, so that once a vault spans several machines only one of them rewrites.
+
+Editing a document directly stays a complete way to add knowledge — no import, no registration, and the next sweep carries the edit into the rest of the collection. Upload is a human surface, not an agent tool; a person may delete any document, and no agent-facing tool deletes anything.
+
+### Memory recall
 
 `coffer__recall`, memory's pull tool, is the one retrieval call Coffer still serves: a case-insensitive literal scan across the memory notes, answering with paths the caller reads itself.
 

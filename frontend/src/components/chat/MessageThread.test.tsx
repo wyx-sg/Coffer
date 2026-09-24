@@ -68,7 +68,7 @@ describe("MessageThread", () => {
   test("renders the thread with a per-conversation agent model picker", async () => {
     // Chat talks only to managed agents (Claude Code, Codex). The per-conversation
     // model is the agent's own model (agent_config.model, the
-    // builtin-agent-is-internal-capability and provider-switching ADRs), so
+    // coffer-model-is-an-internal-engine and model-catalogue-read-from-the-agent ADRs), so
     // the thread bar carries a model picker — but never the built-in agent's
     // "No model configured" empty state.
     chatApiMock.listMessages = vi.fn().mockResolvedValue({ messages: [] });

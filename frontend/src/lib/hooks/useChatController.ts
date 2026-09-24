@@ -28,8 +28,8 @@ export function useChatController() {
   // Draft top-bar selection (the agent + optional model + optional effort) before
   // the conversation exists; null until the user touches a selector — the
   // defaults are derived below. `model` is the agent's own per-conversation model
-  // (agent_config.model, the builtin-agent-is-internal-capability and
-  // provider-switching ADRs); null inherits the active provider profile's
+  // (agent_config.model, the coffer-model-is-an-internal-engine and
+  // model-catalogue-read-from-the-agent ADRs); null inherits the active provider profile's
   // default. `effort` is the reasoning level that model runs at — its own field
   // beside the model, not part of its name — and it is carried here rather than
   // set after the fact because the FIRST turn is the one a user most wants to

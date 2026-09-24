@@ -1,6 +1,20 @@
 # Harness — Agent Control Layer
 
-Coffer ships a checked-in control layer so the agent-facing harness is enforced, not just documented. See [Harness in Layers](../docs/decisions/industrial-grade-harness-in-layers.md) for the five-layer model.
+Coffer ships a checked-in control layer so the agent-facing harness is enforced, not just documented: the right thing is the default path, destructive commands are blocked, and feedback is fast, deterministic and legible to humans, CI and agents alike.
+
+## The layers
+
+The harness around this repo is a stack, and each layer has one home:
+
+| Layer         | What it gives                                                                                  | Where it lives                                                                                                                                  |
+| ------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Control       | Hooks and permission rules that act on the agent's tool calls, not just advise it             | `.claude/` — this page                                                                                                                          |
+| Knowledge     | What an agent reads before working                                                             | `AGENTS.md`, `.agents/*.md`, the principles, the architecture pages, `docs/decisions/`, `openspec/specs/`                                      |
+| Hermeticity   | The same dependency set on every machine and in CI                                             | `.python-version` (3.12) and `backend/uv.lock`, installed with `uv sync --frozen` by CI and the release workflow; `make lock` refreshes the lock |
+| Feedback      | One command that says whether the tree is good                                                 | `make verify` and the test tiers ([`testing.md`](./testing.md)), pre-commit, the CI workflows                                                   |
+| Eval          | A regression net for non-deterministic behaviour that exact-match tests cannot pin             | `evals/`, `make eval`, `.github/workflows/evals.yml` — see [Eval harness](#eval-harness) below                                                  |
+
+A hook or gate must stay fast: a slow one trains people to bypass it.
 
 ## What is wired (`.claude/`)
 
@@ -33,18 +47,18 @@ Coffer ships a checked-in control layer so the agent-facing harness is enforced,
 
 The hooks and settings are pinned by `backend/tests/integration/harness/`, which subprocess the real scripts with synthetic stdin. They run under `make verify-integration`, so the harness tests itself.
 
-## Eval harness (Layer D)
+## Eval harness
 
-Non-deterministic AI behaviour — retrieval quality and tool-routing — is measured under [`evals/`](../evals/README.md): `make eval` (local, deterministic) and `make eval-routing` (needs a local LLM). It is the regression net for prompt / model / retrieval changes; see [Harness in Layers](../docs/decisions/industrial-grade-harness-in-layers.md) for the layer model.
+Non-deterministic AI behaviour — tool-search ranking and tool routing — is measured under [`evals/`](../evals/README.md): `make eval` (local, deterministic) and `make eval-routing` (needs a local LLM). It is the regression net for prompt / model / catalogue changes; the design is recorded in [Eval Capture and Regression Gate](../docs/decisions/eval-capture-and-regression-gate.md).
 
 ## The eval flywheel (loop engineering)
 
-[Eval Flywheel](../docs/decisions/close-the-eval-flywheel.md) closes the loop so the eval suite is not just a static instrument but a self-feeding cycle — the development-time loop that keeps Coffer's non-deterministic behaviour from drifting:
+[Eval Capture and Regression Gate](../docs/decisions/eval-capture-and-regression-gate.md) closes the loop so the eval suite is not just a static instrument but a self-feeding cycle — the development-time loop that keeps Coffer's non-deterministic behaviour from drifting:
 
 1. **Capture** — set `COFFER_EVAL_CAPTURE` and real `coffer__search_tools` calls record their `(query → ranked tools)` shape to a local, gitignored JSONL sink (opt-in; off by default; never tool args/results). The invocation log was made honest first (in-band `isError` → `status=error`) so failures are legible.
 2. **Curate** — `make eval-curate` turns captured queries into labelled `datasets/*.jsonl` golden cases (dedup vs the existing dataset; you mark which returned tools were relevant), tagged `"source": "captured"`.
 3. **Gate** — the `evals.yml` workflow runs the deterministic, model-free suites on PRs touching prompts / mcp / retrieval / catalogue and fails on **relative regression vs the committed baseline** (`evals/run.py`). The model-bearing routing suite stays on-demand (`make eval-routing`), out of CI.
-4. **Feedback** — a real-usage failure becomes a captured case → a curated golden case → a baseline regression the gate catches → a fix → `python -m evals.run --update-baseline`. The dataset ratchets up from real usage; the human + Claude Code inner loop still owns the fix (the flywheel measures and guards, it does not auto-optimise — see the [Eval Flywheel](../docs/decisions/close-the-eval-flywheel.md) ADR's deferred repair-assist).
+4. **Feedback** — a real-usage failure becomes a captured case → a curated golden case → a baseline regression the gate catches → a fix → `python -m evals.run --update-baseline`. The dataset ratchets up from real usage; the human + Claude Code inner loop still owns the fix (the flywheel measures and guards, it does not auto-optimise — see [Eval Capture and Regression Gate](../docs/decisions/eval-capture-and-regression-gate.md)).
 
 ## Conventions
 

@@ -15,7 +15,7 @@ through. The decision the page rests on is recorded in
 [Chat Is a Single-Owner Live Mirror](../../../docs/decisions/chat-single-owner-live-mirror.md).
 Chat talks to **managed** agents only — the former `builtin` chat persona is
 retired, see
-[Built-in Agent Is Internal](../../../docs/decisions/builtin-agent-is-internal-capability.md).
+[Coffer's Model Is an Internal Engine](../../../docs/decisions/coffer-model-is-an-internal-engine.md).
 
 What the platform promises as outcomes: adding a third agent takes one registry
 entry and one adapter and touches no conversation schema, orchestrator code or
@@ -97,7 +97,7 @@ through a port rather than an import.
 - **WHEN** the platform is asked which agents it offers,
 - **THEN** the managed agents (`claude_code`, `codex`) are listed, each with a
   display name and an availability flag, the `builtin` agent is **not** among
-  them ([Built-in Agent Is Internal](../../../docs/decisions/builtin-agent-is-internal-capability.md)),
+  them ([Coffer's Model Is an Internal Engine](../../../docs/decisions/coffer-model-is-an-internal-engine.md)),
   and the list is reachable from the REST API.
 
 ### Requirement: Distinguish a missing agent path from a bad turn body
@@ -791,9 +791,8 @@ by the time the conversation exists that turn is already running.
 A missing Coffer LLM connection MUST NOT block the page: with none configured
 the draft surface still accepts a message and the turn runs on the agent's own
 built-in model and login, because a Coffer connection is an optional override,
-not a prerequisite ([provider-switching](../provider-switching/spec.md), and the
-2026-06-22 amendment of
-[Provider Switching](../../../docs/decisions/provider-switching.md)).
+not a prerequisite ([provider-switching](../provider-switching/spec.md), and
+[Provider Connections Projected Into Agent Config](../../../docs/decisions/provider-connections-projected-into-agent-config.md)).
 
 #### Scenario: chat runs on the built-in model when no connection
 - **GIVEN** a running daemon with no Coffer LLM connection configured for the
@@ -847,8 +846,7 @@ what the page shows. Each adapter then materialises the reference in its own
 native shape (a vision agent inlines the content, a path-native agent receives
 the path), and the path itself MUST NOT reach the wire: only the adapter, which
 has to read the bytes, ever sees it. See
-[Persisted Attachment Reference](../../../docs/decisions/persisted-attachment-reference.md)
-and [Channel Media](../../../docs/decisions/channel-media.md).
+[Channel Attachments](../../../docs/decisions/channel-attachments.md).
 
 #### Scenario: a later turn re-materialises the attachment from history
 - **GIVEN** a user message carrying a persisted attachment reference,

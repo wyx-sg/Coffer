@@ -1,4 +1,4 @@
-"""Environment-sourced knobs for tool tiering (ADR budget-driven-tool-tiering).
+"""Environment-sourced knobs for tool tiering (ADR tool-overload-tier-the-list-search-the-rest).
 
 Follows the repo's existing env-var tuning pattern (cf.
 ``COFFER_MCP_SESSION_IDLE_S``). No DB table and no CRUD surface: these are

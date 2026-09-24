@@ -43,7 +43,7 @@ export type ConversationPatch = Schemas["ConversationPatch"];
 /**
  * A conversation's agent config (managed agents). `model` is the agent's own
  * per-conversation model, free-text and passed through to its CLI (the
- * builtin-agent-is-internal-capability and provider-switching ADRs). `effort`
+ * coffer-model-is-an-internal-engine and model-catalogue-read-from-the-agent ADRs). `effort`
  * is the reasoning level that model is run at, which the agents that have one
  * carry beside the model rather than inside its name; null for an agent (or a
  * model) that has no such setting. `session_id` is provider-internal and not

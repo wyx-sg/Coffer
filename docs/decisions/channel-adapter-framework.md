@@ -1,161 +1,235 @@
-# Channel Adapter Framework
+# Channels Are Thin Transport Adapters Over One Shared Core, Supervised In-Daemon
 
 **Status**: Accepted
-**Date**: 2026-06-12
+**Date**: 2026-09-24
 **Deciders**: Yuxing Wu
-**Spec**: [channels](../../openspec/specs/channels/spec.md)
-
-> **Amended (2026-09-24).** SeaTalk inbound is websocket-only
-> ([SeaTalk Inbound Over WebSocket](seatalk-websocket-inbound.md)). Decision 5's
-> callback listener, its signature check and the tunnel in front of it are
-> deleted, and Coffer has no public-reachable surface. Adapters, pairing, the
-> reconciler and the turn seam are unchanged.
+**Related**: spec channels ("Run the channel lifecycle through the resource framework", "Render replies by the adapter's declared capabilities", "Route the owner's messages into a turn-platform conversation", "Drive every managed agent from one bot", "Bind each channel to the one machine that runs it");
+[Channel Owner Gate](channel-owner-gate.md), [Channel Live Surface Strategy](channel-live-surface-strategy.md),
+[SeaTalk Inbound Over WebSocket](seatalk-websocket-inbound.md), [Telegram Long Polling](telegram-long-polling.md),
+[Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md), [Resource Framework Designed Upfront](resource-framework-upfront.md),
+[Per-Agent Resource Scope](per-agent-resource-scope.md);
+research note [IM–agent bridges](../research/im-agent-bridges.md); PRs #59, #375, #431
 
 ## Context
 
-Coffer needs messaging channels (Telegram, SeaTalk, more later) through which
-the single owner talks to any agent on the chat platform (the Agent Chat spec) and
-receives notifications. More channels AND more agents are
-expected, so the integration cost must stay N + M: a new channel must not
-touch agent code, and a new agent must not touch channel code.
+Coffer lets its one owner drive a managed agent (Claude Code or Codex) from a
+messaging app — Telegram and SeaTalk today — and receive notifications there.
+More platforms and more agents are both expected, so the integration cost must
+stay **N + M**: a new platform must not touch agent code, and a new agent must
+not touch platform code.
 
-Two platform constraints shape the design:
+The forces:
 
-- Coffer's principles require public-reachable surfaces to run as a separate
-  process limited to signed callback paths; SeaTalk delivers events only by
-  public webhook.
-- The daemon is the single owner of all state and already runs supervised
-  background workers (retention worker) and child processes (MCP upstreams).
+- **The daemon already owns all state and already supervises long-lived work**
+  — in-process background workers (retention, sync) and MCP child processes —
+  and it never idle-exits ([Daemon Is a Resident Login
+  Service](daemon-is-a-resident-login-service.md)), so an inbound message that
+  arrives at night finds it up.
+- **Nothing but the daemon's loopback socket may listen**
+  ([principles](../../docs-site/architecture/principles.md), "Network
+  defaults"). Both transports honour that from the outside in: Telegram is a
+  long poll the daemon makes ([Telegram Long
+  Polling](telegram-long-polling.md)) and SeaTalk is one outbound websocket the
+  daemon opens ([SeaTalk Inbound Over WebSocket](seatalk-websocket-inbound.md)).
+  No inbound path requires a public endpoint, a separate listener process or a
+  signature check.
+- **The platforms differ in exactly the places that shape a reply**: Telegram
+  can edit a delivered message and has reactions and a draft-streaming API;
+  SeaTalk cannot edit a text message at all but can stream one, has a typing
+  cue but no reactions, and can fetch a thread's history. A core that branched
+  on platform would grow a conditional per platform per behaviour.
+- **The chat platform already exists** — conversations, a per-conversation turn
+  queue, interrupt, the live event bus ([Chat Is a Single-Owner Live
+  Mirror](chat-single-owner-live-mirror.md)) — and the web Chat page already
+  drives it through its seams.
+- **A bot identity tolerates one consumer.** Two daemons answering one bot
+  would answer the owner twice, and a channel resource now travels between
+  machines with vault sync.
+
+## Options Considered
+
+### Option A — Thin transport adapters declaring capabilities, one shared core, in-daemon reconciler (chosen)
+
+- **Channels are a resource kind** (`channel`), riding the generic lifecycle,
+  audit and credential-reference machinery; secrets live in the credential
+  store and config carries refs, probed at registration.
+- **An adapter is transport only**: start/stop, outbound send/edit/stream,
+  normalising inbound platform payloads into the envelopes in
+  `domain/channel/envelopes.py` (`InboundMessage`, `InboundCallback`,
+  `InboundLifecycle`), and a `ChannelCapabilities` declaration —
+  `supports_edit`, `supports_live_text`, `live_text_persists`,
+  `supports_typing`, `supports_reactions`, `supports_buttons`,
+  `supports_card_update`, `supports_media`, `supports_groups`,
+  `supports_history_fetch`, `max_message_chars`, mention templates.
+- **The core** (`application/channel/`) owns pairing and the owner gate,
+  commands, conversation mapping, queueing, rendering strategy and turn
+  context, and picks behaviour from capabilities, never from adapter type
+  (`turn_render.py`, `turn_context.py`).
+- **The chat platform is reached only through its seams.** A channel message
+  goes through `TurnOrchestrator.enqueue_message`
+  (`application/channel/turn_driver.py`) exactly as a web message does, so web
+  and channel share one FIFO per conversation and a turn that ends on either
+  surface advances the same queue; the channel keeps only an `on_start` sink
+  that hands it the turn's event queue to render. A chat's backlog is bounded
+  at `QUEUE_MAX = 10` pending messages, past which the bot says it is busy;
+  control commands (`/stop`, `/new`) bypass the queue. Conversations are
+  created through the chat service's `create_conversation`. The agent cannot
+  tell a channel turn from a web turn.
+- **Adapters run in-daemon as supervised asyncio tasks**, managed by
+  `ChannelRuntime` (`application/channel/runtime.py`): every 2 s it asks the
+  gate in `application/channel/wanted.py` which channels this machine should
+  run and converges. The gate has three parts, in order: **enabled**; **the
+  machine binding** (`runs_on` names this machine — failing closed for another
+  machine, an unknown one or none); **routing** (the channel names a
+  registered default agent inside its own scope). The same gate is the one
+  place an agent uid becomes the turn platform's agent key. A running channel
+  is rebuilt when its config or its routing changes; a failed start is retried
+  after 30 s (`FAILURE_RETRY_SECONDS`). REST, CLI and UI never start or stop an
+  adapter; they edit the resource and the next tick converges. A SeaTalk
+  channel's websocket connection is reconciled in the same tick
+  (`runtime_supervision.py`), keyed by the channel's uid so a rename does not
+  re-register the socket.
+- **No platform SDKs for anything Coffer can speak itself.** Both transports
+  call their HTTP APIs with `httpx` against fixed hosts. The one exception is
+  SeaTalk's websocket client, which has no published wire protocol and is
+  loaded from an operator-supplied directory ([SeaTalk Inbound Over
+  WebSocket](seatalk-websocket-inbound.md)).
+
+Pros: a new platform is one adapter plus one config schema plus its
+import-linter entries, and a test fake adapter (`application/channel/ports.py`
+names it as the recipe) exercises the whole core. A new agent registered with
+the chat platform is reachable from every channel with no channel code. Status
+is truthful because one loop owns every runtime transition. Everything runs in
+the process that already holds the state it needs.
+
+Cons: a platform feature the capability set cannot express needs a new
+capability flag, which touches the envelope module and every adapter's
+declaration. A channel adapter that misbehaves (a blocking call on the event
+loop) degrades the daemon, not a separate process. The 2 s tick is the latency
+of an enable or a rebind.
+
+Wins because it holds N + M with the smallest process surface, and the
+capability split has already paid for itself: when SeaTalk gained streaming,
+only its adapter changed (`supports_live_text` became true) while the renderer
+stayed identical.
+
+### Option B — Adopt platform SDKs or bot frameworks (python-telegram-bot, aiogram, a SeaTalk SDK for everything)
+
+How it works: each adapter wraps a mature SDK, which brings its own polling
+loop, retry and rate-limit handling, and typed payloads.
+
+Pros: less wire code; some flood-control handling for free.
+
+Cons: each SDK brings its own event loop and lifecycle model, which the
+reconciler would have to wrap rather than own; import confinement needs a
+contract per SDK; the Bot API methods Coffer uses are a small set, so the SDK
+adds a dependency to save a few dozen lines. For SeaTalk, the only SDK is
+distributed from an internal portal under no public licence, so it cannot be a
+declared dependency of an MIT project at all.
+
+Loses because the leverage is small and the ownership cost (a second lifecycle
+model per platform, a dependency that cannot be declared) is not.
+
+### Option C — A separate channel-gateway process per channel or for all channels
+
+How it works: a sidecar process (the shape OpenClaw uses) owns the platform
+connections and forwards normalised events to the daemon over loopback.
+
+Pros: a crashing or blocking adapter cannot hurt the daemon; the gateway could
+be restarted independently.
+
+Cons: doubles the process-management surface for a single-user local daemon —
+detect-or-spawn, pidfiles, orphan sweeps, log plumbing, a token handshake, a
+second binary to ship. The gateway would still need the daemon for every
+decision (pairing, conversations, turns), so the isolation buys little. Coffer
+did run one extra process for a time — a SeaTalk webhook listener, justified
+only because a public endpoint must not live inside the daemon — and it was
+deleted with webhook delivery in PR #431 once no inbound path needed a
+listening socket.
+
+Loses because with no public-facing ingress left, nothing justifies the second
+process.
+
+### Option D — Fat per-platform adapters that each own pairing, commands and rendering
+
+How it works: every adapter implements the whole bot — its own owner gate, its
+own command handling, its own reply rendering tuned to its platform.
+
+Pros: each adapter can use its platform to the fullest with no shared
+abstraction in the way.
+
+Cons: the owner gate, the security boundary, would be written once per
+platform, and a fix to one would not reach the others. Command semantics
+(`/agent`, `/model`, `/stop`) would drift between platforms. The cost of a new
+platform becomes the cost of a whole bot.
+
+Loses because the security boundary and the command vocabulary must be single
+sources.
+
+### Option E — A generic external IM bridge (cc-connect-style) in front of the agents' CLIs
+
+How it works: run an existing bridge that connects a chat platform to an
+agent CLI, and let Coffer stay out of the message path.
+
+Pros: no channel code in Coffer at all.
+
+Cons: such bridges drive a CLI of their own rather than the conversation the
+web page shows, so a phone turn would not appear on, or be steerable from, the
+Chat page; none speaks SeaTalk; each couples to its own agent runtime and
+process model. Coffer's channel value is precisely one paired bot driving any
+managed agent through the same conversations as the web page.
+
+Loses because it forfeits the shared conversation and does not cover SeaTalk.
+
+### Option F — Channels as MCP servers
+
+How it works: expose each platform as an MCP server the agent calls.
+
+Pros: reuses the gateway machinery.
+
+Cons: inverts the data flow — MCP is agent-to-tool and outbound; a channel is
+user-to-agent and inbound, and needs to start turns, not answer tool calls.
+
+Loses on direction.
 
 ## Decision
 
-1. **Channels are a resource kind** (`channel:<name>`, [Everything Is a Resource Kind](everything-is-a-resource-kind.md)) riding the
-   generic lifecycle, audit, and credential-ref machinery. Secrets live in
-   the credential store; config carries refs, probed at registration.
-2. **Thin adapters over a shared core.** An adapter implements transport
-   only: lifecycle, outbound send/edit, inbound normalization into common
-   envelopes, and a `ChannelCapabilities` declaration (can it edit messages?
-   show buttons? type?). Pairing, the owner gate, commands, queueing,
-   conversation mapping, and rendering strategy live in
-   the kind-agnostic channel core. The core selects behavior from
-   capabilities, never from adapter type — Telegram streams progress by
-   editing one message, SeaTalk degrades to ack-then-final, with zero
-   platform conditionals in the core.
-3. **The chat platform is reached only through its existing seams** —
-   `ChatService.create_conversation`, `TurnOrchestrator.start_turn` /
-   `interrupt_turn` — in-process, exactly as the web UI
-   does over HTTP. Channels know nothing about agents; agents cannot tell a
-   channel turn from a UI turn. Any registered agent is reachable from any
-   channel with no code change on either side.
-4. **Adapters run in-daemon as supervised asyncio tasks** managed by a
-   reconciler loop (RetentionWorker pattern): every tick it diffs enabled
-   channel resources against running adapters and starts/stops/restarts to
-   match. No new lifecycle hooks in the resource framework; disable, config
-   edits, and delete all converge within a tick.
-5. **SeaTalk ingress is a separate callback-listener process**, spawned by
-   the daemon while any SeaTalk channel is enabled. It serves only
-   `POST /seatalk/{channel}` on a loopback port: answers the platform's
-   verification challenge, verifies `sha256(body + signing_secret)`, and
-   forwards valid events to the daemon over loopback with the daemon token.
-   The user points a tunnel (cloudflared/ngrok) at the port; Coffer never
-   exposes the daemon itself.
+A channel is a resource kind whose adapter implements transport only and
+declares what it can do as `ChannelCapabilities`; the kind-agnostic core in
+`application/channel/` owns pairing, the owner gate, commands, conversations,
+queueing and rendering, and selects every strategy from capabilities. The core
+reaches the chat platform only through `enqueue_message` and the conversation
+service, like the web page. Adapters run as asyncio tasks inside the daemon,
+started and stopped only by `ChannelRuntime`'s 2 s reconcile against the
+three-part gate (enabled, bound to this machine, routable). Transports speak
+their platforms over `httpx`; a vendor library is used only where no wire
+protocol is published.
 
-   _Amended (2026-09-24):_ withdrawn. SeaTalk events arrive over one outbound
-   websocket connection per channel, supervised inside the daemon, and nothing
-   Coffer runs for a SeaTalk channel is reachable from the network.
-6. **Owner binding is pairing-code-only**: an 8-character single-use code
-   (unambiguous alphabet, 1-hour TTL, bounded guesses, memory-only) issued
-   from the UI/CLI and sent to the bot from the owner's account. Everyone
-   else is ignored silently. Re-pairing replaces the binding. No
-   user-id-entry path exists — pairing also proves the transport round-trip,
-   and a typo'd id would bind silently to the wrong account.
-7. **No platform SDKs.** Both transports speak raw httpx to fixed hosts; the
-   API surface used is small, and an SDK would add a dependency plus an
-   import-confinement contract for no leverage.
+Rules a future change must respect:
 
-## Alternatives considered
-
-- **Separate channel-gateway process (OpenClaw shape)** — better isolation,
-  but doubles the process-management surface (detect-or-spawn, PID, logs)
-  for a single-user local daemon; rejected.
-- **Channels as MCP servers** — inverts the data flow (MCP is agent→tool
-  outbound; channels are user→agent inbound); rejected.
-- **Webhook relay service for SeaTalk** — a hosted relay would spare the
-  user a tunnel but adds operated infrastructure and a third-party trust
-  root; the tunnel keeps everything user-owned. Revisit if real usage
-  demands it.
-- **Direct user-id allowlist as a pairing alternative** — rejected; see
-  decision 6.
+- No platform conditional in `application/channel/`. A behaviour that differs
+  by platform becomes a capability.
+- Nothing starts or stops an adapter except the reconciler.
+- No channel code path opens a listening socket.
+- A new channel type adds an adapter and a config-union member; it does not
+  touch agent code.
 
 ## Consequences
 
-- A third channel = one adapter + one config schema + symmetric importlinter
-  entries; the suite's fake adapter demonstrates the recipe.
-- A second agent on the platform is immediately reachable from Telegram and
-  SeaTalk; the suite drives a scripted provider through a channel to pin
-  this.
-- The reconciler owns all runtime state transitions; REST/CLI/UI never
-  start or stop adapters directly, which keeps status truthful.
-- ~~The listener's spawn pattern (env-injected secrets, pidfile, orphan sweep)
-  reuses the MCP-subprocess conventions, including frozen-build sibling
-  binary resolution.~~ — **Withdrawn (2026-09-24)** with the listener.
-
-## Implementation notes
-
-What the framework looks like after the channel work that followed this
-decision, and the research the decisions above rest on.
-
-- **Two points above were superseded.** Decision 2's "SeaTalk degrades to
-  ack-then-final" no longer holds: the core asks one question,
-  `supports_live_text` ("is there a surface I can keep updating while the turn
-  runs?"), and both transports answer yes — Telegram by editing one status
-  message, SeaTalk through its own streaming API. `supports_edit` is a separate
-  capability. Each transport buffers its own cadence (Telegram ~1.5 s between
-  edits, SeaTalk ~100 ms) and the core adds no throttle of its own (spec
-  [channels](../../openspec/specs/channels/spec.md), "Grow a reply in place on
-  one live surface"). Decision 5 is withdrawn, and decision 7's "no platform
-  SDKs" holds for every outbound call: a SeaTalk channel receives over a
-  websocket through an operator-supplied SDK ([SeaTalk Inbound Over
-  WebSocket](seatalk-websocket-inbound.md)).
-- **The turn seam is `TurnOrchestrator.enqueue_message`**, not `start_turn`: a
-  channel message joins the conversation's pending queue exactly as a web
-  message does, and the `on_start` hook hands the channel that turn's event
-  queue. A chat's queue is bounded (`QUEUE_MAX` in
-  `application/channel/turn_driver.py`); control commands such as `/stop` and
-  `/new` bypass it.
-- **The reconciler asks three gates, in order** — `enabled`, then the machine
-  binding (`runs_on` names this machine), then scope — so a channel bound to
-  another machine is never weighed against this one's agent registry
-  (`application/channel/wanted.py`, every ~2 s). The gate is also the one place
-  a channel's agent uids (its `scope` and `default_agent`) become the turn
-  platform's agent keys; nothing below the live binding compares a uid.
-- **Runtime state is keyed by channel uid, not name** — the running adapters
-  and the SeaTalk websocket connections — so a rename moves nothing that is
-  live.
-- **Conversation identity is `(channel, chat, thread)`**, one level finer than
-  the per-peer key both prior arts use: a group's threads are independent
-  conversations, and a per-chat key made two of them collide on one turn lock.
-- **Pairing codes are memory-only**, so a daemon restart discards an
-  outstanding code and status reports none pending; re-issuing is one step.
-
-### Research behind the decisions
-
-Gathered in July 2026 from OpenClaw and NousResearch Hermes (docs and source)
-and SeaTalk's official `cs-bot` repository and platform docs. It describes other
-products as they were then; nothing in Coffer depends on them still doing it.
-
-| Decision | Choice | Rationale |
-| --- | --- | --- |
-| Shape | thin adapters over a shared core, capabilities over special-casing | both prior arts converge on it (Hermes' base adapter is three methods; OpenClaw adds optional capability surfaces) |
-| Telegram transport | long polling via raw httpx; offset committed only after dispatch | local-first with no ingress; the handful of Bot API methods used do not justify an SDK |
-| Telegram rendering | markdown → Telegram's HTML subset, chunked at 4000 characters, plain-text retry when the platform rejects formatting | proven in OpenClaw; MarkdownV2 escaping is a known bug farm |
-| Pairing | 8 characters with no `0O1I`, 1 h TTL, bounded guesses, fail closed | matches both prior arts, and Hermes' hardening after a fail-open setup incident |
-| Mid-turn input | bounded FIFO queue, control commands bypass | predictable; avoids an interrupt-by-default surprise |
-| Adopt or build | build Coffer's own adapters; port patterns (album debounce, edit-to-stream, ack reactions, event dedup), not code | both prior arts are Node monorepos coupled to their own agent runtimes, and neither speaks SeaTalk |
-
-The same survey found no official SeaTalk integration for any coding agent, and
-official Telegram/Slack integrations that were either research previews,
-personal-only, cloud-hosted or single-agent. That is why the channel plane
-manages only Coffer-hosted channels — one paired bot driving any managed agent —
-and treats externally hosted gateways and official integrations as out of scope
-rather than something to proxy.
+- Adding a platform: one adapter module set under `infrastructure/channel/`,
+  one member of the config union in `domain/channel/config.py`, its
+  import-linter entries, and a child spec under `openspec/specs/channels/`.
+- A channel's reported status is what is actually running, because only the
+  reconciler changes it; a channel that is dark because it is bound to another
+  machine or routes nowhere logs why once rather than every tick.
+- Rebinding a channel to another machine, narrowing its scope or editing its
+  config needs no restart: each is a config change, and a config change is a
+  tick.
+- Adapters are held in the runtime by channel name, while the SeaTalk
+  websocket controller is keyed by uid; a rename therefore rebuilds the
+  adapter binding on the next tick but does not re-register the socket.
+- Enforced by: `ChannelCapabilities` in `domain/channel/envelopes.py`; the
+  `ChannelAdapter` port in `application/channel/ports.py`; the gate in
+  `application/channel/wanted.py`; the reconciler in
+  `application/channel/runtime.py`; spec channels "Render replies by the
+  adapter's declared capabilities".

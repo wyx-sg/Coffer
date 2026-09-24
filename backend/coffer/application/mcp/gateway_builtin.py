@@ -270,7 +270,7 @@ async def dispatch_tool_search(
         args = params.get("arguments") or {}
         result = await execute_tool_search(args, aggregated_tools)
         # Capture the (intent -> ranked tools) shape for the eval flywheel.
-        # Best-effort and opt-in (ADR close-the-eval-flywheel); a no-op unless
+        # Best-effort and opt-in (ADR eval-capture-and-regression-gate); a no-op unless
         # COFFER_EVAL_CAPTURE is set. ``query`` is a validated non-empty str by
         # the time we get here.
         record_tool_search(args["query"], [t["name"] for t in result["tools"]])

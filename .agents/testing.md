@@ -224,8 +224,9 @@ Two consequences worth internalising:
   id form (an amendment letter after a capability, a numbered `CODE-` error id,
   an uppercase `SPEC-` id), so renaming a requirement fails until every
   citation of the old title follows;
-  `check_architecture_doc.py` holds `docs/architecture.md` to the
-  code. Run `make lint` after touching markdown, not just after touching code.
+  `check_architecture_doc.py` holds the code-layout tree in
+  `docs-site/architecture/layering.md` and the builtin-tool roster in
+  `docs-site/architecture/` to the code. Run `make lint` after touching markdown, not just after touching code.
 - **`lint-imports` is invoked with `PYTHONPATH=$(BACKEND)`, and that is
   load-bearing in a worktree** — a bare invocation resolves `coffer` through
   the editable install (which points at the main checkout) and reports contract

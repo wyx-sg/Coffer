@@ -54,7 +54,7 @@ export function useConversation(id: string) {
 
 /**
  * A conversation's managed-agent model (agent_config.model); see the
- * builtin-agent-is-internal-capability and provider-switching ADRs.
+ * coffer-model-is-an-internal-engine and model-catalogue-read-from-the-agent ADRs.
  */
 export function useAgentConfig(id: string, enabled = true) {
   return useQuery({

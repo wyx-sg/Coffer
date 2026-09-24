@@ -19,7 +19,7 @@ vi.mock("@/lib/api/chat", () => ({
     unarchiveConversation: vi.fn(),
     listMessages: vi.fn(),
     // Per-conversation managed-agent model (the
-    // builtin-agent-is-internal-capability and provider-switching ADRs).
+    // coffer-model-is-an-internal-engine and model-catalogue-read-from-the-agent ADRs).
     getAgentConfig: vi.fn().mockResolvedValue({ cwd: null, model: null }),
     setAgentModel: vi.fn().mockResolvedValue({ cwd: null, model: null }),
     // Fire-and-return turn control (ADR chat-single-owner-live-mirror).
