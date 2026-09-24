@@ -220,7 +220,7 @@ eval-curate:
 # Coverage on demand. No threshold gates are wired yet — thresholds need
 # empirical data from real feature code. When ready, add `--cov-fail-under=N`
 # here (and `--coverage.thresholds.lines=N` on the vitest side) via an
-# amendment to docs/principles.md.
+# amendment to docs-site/architecture/principles.md.
 coverage:
 	@if [ -d $(BACKEND)/tests ]; then \
 		$(PY) -m pytest $(BACKEND)/tests --cov=coffer --cov-report=term-missing --cov-report=xml; \

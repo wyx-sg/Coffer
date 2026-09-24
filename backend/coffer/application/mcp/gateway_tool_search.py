@@ -83,7 +83,7 @@ async def execute_tool_search(
 
     Coffer's own ``coffer__`` built-ins are excluded so search only surfaces
     upstream capabilities (the overload source). Ranking is the deterministic
-    BM25 ranker (ADR builtin-agent-is-internal-capability); the alternative
+    BM25 ranker (ADR coffer-model-is-an-internal-engine); the alternative
     cosine-over-embeddings path was removed with every other use of embeddings
     in Coffer, and was never wired to a real embedder in any case.
     """

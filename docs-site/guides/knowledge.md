@@ -377,4 +377,4 @@ The files are the only copy. Coffer keeps no history of deleted or rewritten doc
 - [Knowledge architecture](/architecture/knowledge)
 - [MCP tools reference](/reference/mcp-tools)
 - [Knowledge spec](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md)
-- [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) and [One Shared Knowledge Store Across Agents](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-native-shared-memory.md)
+- [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) and [Aggregate the Agents' Memory; Never Write It](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md)

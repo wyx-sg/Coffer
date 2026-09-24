@@ -286,6 +286,6 @@ def configure_logging(level: str = "INFO") -> None:
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
-    # Opt-in eval-capture sink (ADR close-the-eval-flywheel): no-op unless
+    # Opt-in eval-capture sink (ADR eval-capture-and-regression-gate): no-op unless
     # COFFER_EVAL_CAPTURE is set.
     install_eval_capture_handler()

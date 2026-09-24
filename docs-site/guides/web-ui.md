@@ -114,4 +114,4 @@ The recovery the banner offers depends on the host. In a browser it shows the co
 - [Running the daemon](/guides/daemon) — ports, login service and lifecycle.
 - [Security model](/architecture/security) — why the token lives in the page and what the host check protects.
 - [Spec: web-ui](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/web-ui/spec.md)
-- [The Daemon Serves Its Token in the Page](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-serves-the-token-in-the-page.md)
+- [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-auth-and-origin-guard.md)

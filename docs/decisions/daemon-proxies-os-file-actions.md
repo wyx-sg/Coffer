@@ -1,134 +1,136 @@
-# Local Daemon Proxies OS File Actions
+# The Loopback Daemon Performs OS File Actions for the UI
 
 **Status**: Accepted
 **Date**: 2026-06-21
 **Deciders**: Yuxing Wu
-**Spec**: the `/fs` router (now [daemon](../../openspec/specs/daemon/spec.md) "Open and reveal existing absolute paths") and the shared FileActions bar (now [agent-registry](../../openspec/specs/agent-registry/spec.md) "Open config files in an external editor or reveal them") are new here; this touches the open/reveal fallback clause on three other viewers — the skill file viewer and the "添加 Skill" folder picker, both of which spec [skill-manager](../../openspec/specs/skill-manager/spec.md) now states as assumptions rather than requirements of its own; the document viewer (now [knowledge](../../openspec/specs/knowledge/spec.md) "Present a collection as one tree in the web UI"); and the fact viewer (now [memory](../../openspec/specs/memory/spec.md) "Present partitions as a table and a file tree") — no new spec; the `spec.md` files are updated before implementation.
-**Supersedes**: the "on the web, open/reveal falls back to copy-path" stance in [agent-registry](../../openspec/specs/agent-registry/spec.md) "Open config files in an external editor or reveal them", in the skill file viewer's open/reveal clause (spec skill-manager, since restated as an assumption), in the retired Knowledge Base spec's document-viewer requirement (now knowledge "Present a collection as one tree in the web UI") and in the retired Memory spec's fact-viewer requirement (now memory "Present partitions as a table and a file tree").
+**Related**: [The Desktop Shell Hosts the Shared Frontend](desktop-shell-over-a-shared-frontend.md), [Daemon Auth and Origin Guard](daemon-auth-and-origin-guard.md), spec daemon "Open and reveal existing absolute paths", spec daemon "Browse folders without reading files", spec daemon "Open the host's native folder picker", spec agent-registry "Open config files in an external editor or reveal them", spec agent-registry "Offer a folder picker for a custom config directory", spec web-ui "Let the user choose an external editor", PRs #182, #190, #323
 
 ## Context
 
-Coffer's file viewers are **read-only** (the UI Shell, Agent Registry, Skill Manager, Knowledge Base and Knowledge Layer specs): the user edits
-in their own editor, reached through a shared `FileActions` bar that takes a managed
-file (or its containing folder) to the OS — **open in external editor**, **reveal in
-file manager**, **copy absolute path**.
+Coffer's file viewers are read-only by design: agent config files, skill
+folders, knowledge files, memory files and native memory stores are shown, and
+the user edits in their own editor. So every viewer needs a way to take a file
+to the operating system — **open it in the user's editor** and **reveal it in the
+file manager** — and several forms need the reverse, **picking a folder** and
+getting its absolute path back (an agent's custom config directory, a skill
+folder to import).
 
-Two distinct filesystem operations live behind these surfaces:
+The UI is a web page, and a web page cannot do any of these. Browsers
+deliberately withhold absolute paths and have no API to launch an application
+or open Finder. But the premise "so the UI cannot do it" confuses the page with
+the product. The daemon is bound to loopback only and every call carries its
+token ([Daemon Auth and Origin Guard](daemon-auth-and-origin-guard.md)), so the
+page talking to it is always on the same machine as the daemon, and the daemon
+is an ordinary local process that can run `open` as well as any other.
 
-- **Picking** an input path — the agent `config_dir` ([agent-registry](../../openspec/specs/agent-registry/spec.md) "Offer a folder picker for a custom config directory" / [daemon](../../openspec/specs/daemon/spec.md) "Browse folders without reading files") and the
-  "添加 Skill" import path. The UI picks it through the daemon-backed folder browser
-  (`GET /api/v1/fs/browse`), which yields an absolute path.
-- **Acting** on an existing path — open-in-editor / reveal-in-file-manager. This was
-  specced to **fall back to copy-path**, on the premise that a browser-hosted UI
-  cannot reach the OS at all.
+The same UI also runs inside the desktop shell's webview
+([The Desktop Shell Hosts the Shared Frontend](desktop-shell-over-a-shared-frontend.md)),
+which could use native Tauri plugins. Whatever is chosen must work in both hosts
+without splitting the frontend.
 
-That fallback rests on a premise stated in the retired Knowledge Base spec's document-viewer requirement — *"the daemon cannot act on
-the user's machine"* — and in `FileActions.tsx` — *"a browser cannot touch the
-filesystem."* The browser half is true; the daemon half is **false for Coffer's
-architecture**. The Coffer daemon is **loopback-only** (`127.0.0.1`) + token-guarded
-([daemon](../../openspec/specs/daemon/spec.md) "Bind every endpoint to loopback only"), so the web client is **always co-located with the daemon on the user's own
-machine**. A local daemon process can open files and reveal them in the OS file
-manager (`open` / `open -R` on macOS, `xdg-open` on Linux, `explorer /select` on
-Windows) exactly as any native process on that machine can. The browser limitation only
-binds operations the browser performs *directly*; Coffer always routes through a local
-daemon with full OS reach.
+## Options Considered
 
-Two concrete gaps follow:
+### Option A — Daemon routes perform the OS action (chosen)
 
-1. The four read-only viewers (agent config files, skill files, memory facts, KB
-   documents) show only "copy path" instead of real open/reveal — an avoidable
-   downgrade, given the daemon is local.
-2. The "添加 Skill" dialog never received the folder picker that the agent
-   `config_dir` dialog has ([agent-registry](../../openspec/specs/agent-registry/spec.md) "Offer a folder picker for a custom config directory" / [daemon](../../openspec/specs/daemon/spec.md) "Browse folders without reading files"); it still requires the user to type the
-   absolute path.
+The daemon exposes the file actions as token-guarded HTTP routes under
+`/api/v1/fs` (`backend/coffer/surfaces/http/fs_routes.py`, services in
+`backend/coffer/application/fs/`):
+
+- `POST /fs/open {path, with?}` opens a path in the named editor, or the OS
+  default; `POST /fs/reveal {path}` selects it in the file manager. macOS uses
+  `open` / `open -a <app>` / `open -R`, Windows `explorer /select,`, Linux
+  `xdg-open` — where Linux has no portable "select this file", reveal opens the
+  containing folder.
+- `GET /fs/editors` lists the GUI editors actually installed on this host
+  (app bundles under `/Applications` and `~/Applications` on macOS, commands on
+  `PATH` elsewhere), each with the exact value `/fs/open`'s `with` accepts, so
+  the Settings editor picker offers real choices instead of a free-text field.
+  The chosen editor is a per-browser preference (`coffer.preferredEditor`).
+- `POST /fs/pick-folder` opens the host's native directory dialog (`osascript`
+  on macOS, `zenity` or `kdialog` on Linux) and returns `{available, path}`.
+  Where there is no argv-only dialog — Windows, or a Linux host with neither
+  tool — it answers `available: false` and `FolderPicker` falls back to the
+  in-app browser over `GET /fs/browse`, which lists subdirectories and never a
+  file.
+
+On the frontend, `useFsActions()` in `frontend/src/lib/fsActions.ts` is the one
+way to call open/reveal; `components/FileActions.tsx` renders the bar every
+viewer uses; `components/FolderPicker.tsx` (through `FolderPickerField`) serves
+the agent forms and the skill import dialog.
+
+Pros: works in any browser and in the webview unchanged, because both reach a
+loopback route the same way; one implementation per OS, in the process that
+already does local filesystem work; the frontend has no host branches. Cons: the
+daemon gains routes that launch processes, so they must be fenced (see
+Decision); and a Windows host gets no native folder dialog. It wins because it
+is the only option that does the real action in both hosts with one code path.
+
+### Option B — Copy the path and let the user do the rest
+
+Each viewer offers "copy absolute path"; the user pastes it into their editor or
+Finder. This was the specced behaviour for the browser host before this
+decision, on the stated premise that the daemon "cannot act on the user's
+machine". Pros: no OS surface at all. Cons: every open is three manual steps,
+and the premise is false for a loopback daemon. It loses on usability once the
+premise falls. Copy-path was deleted outright rather than kept as a fallback,
+since open and reveal always run.
+
+### Option C — Native Tauri `dialog` and `opener` plugins in the shell
+
+The desktop shell calls the OS directly through Tauri plugins, with the browser
+host on something else. This is what the desktop shell did before PR #317.
+Pros: a genuinely native call with no HTTP hop. Cons: it covers only the desktop
+host, so the browser still needs Option A or B; it puts an `isTauri()` branch in
+every file component, which is what made the frontend expensive to change; and a
+webview already reaches the daemon routes exactly as a tab does. It loses
+because it adds a second path for nothing a user can perceive; `desktop/Cargo.toml`
+deliberately declares neither plugin.
+
+### Option D — The browser's File System Access API
+
+`showDirectoryPicker()` / `showOpenFilePicker()` give the page a handle to a
+user-chosen directory or file. Pros: no daemon route; the browser mediates
+consent. Cons: a handle is not an absolute path, and an absolute path is exactly
+what an agent config directory or a skill import needs; the API cannot launch an
+editor or reveal anything; and it is Chromium-only — Safari, and so the macOS
+WKWebView the desktop shell runs in, does not expose the pickers. It loses on
+all three counts.
+
+### Option E — Also proxy native open-file and save-file dialogs
+
+Add `pick-file` and `save-file` routes beside `pick-folder`. They were built on
+2026-06-21 and deleted in PR #323. Pros: one uniform native-dialog family. Cons:
+the browser already has both — `<input type="file">` opens a file and hands the
+page its contents rather than a path the daemon must then read, and
+`<a download>` saves one. It loses because only a folder needs the daemon: the
+browser withholds its absolute path, and registering an agent requires it.
 
 ## Decision
 
-**Route OS file actions through the local daemon, so the browser-hosted UI performs
-real OS actions.**
+**OS file actions are daemon routes, the same in the browser and in the desktop
+shell: open, reveal, list installed editors, and one native dialog — the folder
+picker.** Every such route must:
 
-> **2026-09-09:** this ADR originally described a second, native branch for
-> open/reveal (`tauri-plugin-opener` inside the packaged desktop shell). That shell was
-> removed and the daemon endpoints below are now the single mechanism.
->
-> **2026-09-12:** the desktop shell is back ([The Desktop Shell
-> Returns](./desktop-shell-over-a-shared-frontend.md)) and the native branch is
-> **deliberately not**. A webview reaches a loopback HTTP route exactly as a
-> browser tab does, so the daemon endpoints already work inside the shell;
-> restoring the plugin path would buy nothing a user could perceive and would
-> cost the `isTauri()` fan-out this ADR's consolidation removed. The endpoints
-> below remain the single mechanism, now for both hosts ([desktop-app](../../openspec/specs/desktop-app/spec.md) "Reimplement no daemon route in the shell").
+- be guarded by the same loopback bind and token as every daemon route;
+- accept only a path that is absolute and exists, answering
+  `FS_PATH_NOT_OPENABLE` (400) otherwise, before anything is launched;
+- launch with a fixed argument vector, the path as one element of it, never a
+  shell string;
+- create nothing.
 
-### 1. Daemon FS-action endpoints (daemon "Open and reveal existing absolute paths")
-
-The daemon gains two write-side siblings of the read-only `GET /fs/browse`, under the
-same loopback + token guard:
-
-- `POST /api/v1/fs/open` `{ path, with? }` — open `path` in an application. `with` is
-  the preferred-editor preference (web-ui); when absent the OS default
-  application is used. Serves both "open file in editor" and "open folder in editor".
-- `POST /api/v1/fs/reveal` `{ path }` — select / reveal `path` in the OS file manager.
-
-Both validate that `path` is **absolute and exists** before acting, and shell out with
-an **argument vector** (never a shell string — no interpolation). An unopenable /
-missing path returns an error, never a partial action.
-
-### 2. FileActions performs real open/reveal (agent-registry "Open config files in an external editor or reveal them", and its parallels)
-
-The shared bar exposes one `useFsActions()` hook with `open(path, with)` /
-`reveal(path)`, both backed by the daemon endpoints above.
-
-The preferred-editor value (a frontend `localStorage` setting,
-`coffer.preferredEditor`) is passed in the request `with` field. The bar shows the full
-button set — open-file-in-editor, reveal-file-in-file-manager, open-folder-in-editor.
-
-**copy-path is removed.** It existed only as the fallback for when open/reveal could
-not run; now that open/reveal always run it serves no purpose, and a personal,
-local-first tool keeps the surface minimal. The `copyPath` / `copyFolderPath` actions
-and their i18n strings are deleted, not demoted.
-
-### 3. "添加 Skill" gets the folder picker (spec skill-manager, `## Purpose`)
-
-The skill import dialog reuses the existing `FolderPicker` (the daemon-backed folder
-browser — [agent-registry](../../openspec/specs/agent-registry/spec.md) "Offer a folder picker for a custom config directory" / [daemon](../../openspec/specs/daemon/spec.md) "Browse folders without reading files"). The folder is **picked**, not typed; the resolved absolute
-path feeds the unchanged `POST /skills/import`.
-
-### 4. Picking stays out of scope here — since retired
-
-This ADR unified open/reveal but not *picking*: at the time an OS-native directory
-dialog was available only inside the packaged native shell, so the browser UI kept the
-in-app daemon folder browser. The native shell is gone, and the daemon now opens the
-host's native **directory** dialog itself ([daemon](../../openspec/specs/daemon/spec.md) "Open the host's native folder picker"). It does not proxy an
-open-file or save-file dialog: the browser's own `<input type="file">` and
-`<a download>` cover those, and the first is better — it hands over the file's
-contents rather than a path the daemon must then read. A folder is the exception,
-because the browser deliberately withholds absolute paths.
+No open-file or save-file dialog is proxied, and the desktop shell implements
+none of these natively (spec desktop-app "Reimplement no daemon route in the
+shell").
 
 ## Consequences
 
-- Real open/reveal now runs across all four read-only viewer surfaces; consumers of
-  `FileActions` are unchanged (they already pass `filePath` / `folderPath`).
-- The false "daemon cannot act on the user's machine" premise is removed from the
-  touched FRs; the rationale becomes "the loopback daemon is on the user's machine, so
-  it acts on the user's behalf".
-- New OS-action surface area on the daemon. Mitigated by: loopback + token guard
-  (same as every daemon route), absolute-and-exists path validation, argument-vector
-  shell-out (no injection), and the fact that `GET /fs/browse` already exposes the
-  local filesystem at the same trust level — this adds *acting on* a path the user
-  navigated to, not new reach.
-- Cross-platform reveal has no universal "select the file" primitive on Linux; the
-  daemon degrades to opening the containing folder there. macOS (`open -R`) and
-  Windows (`explorer /select`) select the item.
-- Consistent with the personal-tool, local-first posture (Principle I in `docs/principles.md`): the
-  daemon already performs local filesystem work on the user's behalf; opening a path
-  the UI surfaced is benign and single-user.
-
-## Implementation notes
-
-- **No caller-supplied string reaches a shell.** The `application/fs/` services
-  build fixed argument vectors (`open`, `open -R`, `osascript`, `zenity`,
-  `kdialog`, …) and pass the validated path as one element of them.
-- **The folder picker degrades to "unavailable", not to an error.** On Windows,
-  and on a Linux host with neither `zenity` nor `kdialog`, there is no argv-only
-  native dialog, so `POST /fs/pick-folder` answers `available: false` and the UI
-  falls back to the in-app folder browser. That path is not exercised in CI.
+- Every read-only viewer offers real open-in-editor and reveal, in both hosts,
+  through one hook and one bar.
+- The daemon has a process-launching surface. It adds no new reach: the page
+  could already list the local filesystem through `GET /fs/browse` at the same
+  trust level, and these routes act on a path the user navigated to.
+- Windows has no native folder dialog and Linux reveal opens the folder rather
+  than selecting the file; both degrade to something that works rather than an
+  error. The `available: false` path is not exercised in CI.
+- Adding a new OS action means a daemon route with the four rules above, never
+  a Tauri plugin or a browser API branch.

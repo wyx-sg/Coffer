@@ -15,7 +15,7 @@ The sidebar is grouped **by role**: **agents** are the _consumers_ (the agents
 you use, and the chat you hold with one), and **resources** are the _assets_
 those agents draw on — named, configured, lifecycle-managed entities behind a
 kind-agnostic framework. See
-[Everything Is a Resource Kind](../../../docs/decisions/everything-is-a-resource-kind.md)
+[Sidebar Grouped by Role](../../../docs/decisions/sidebar-grouped-by-role.md)
 (Amended 2026-05-30) for the decision behind this role-based information
 architecture (agents as a separate consumer axis; rejected alternative: a
 separate "surface" concept; sidebar policy: no "soon" placeholders).

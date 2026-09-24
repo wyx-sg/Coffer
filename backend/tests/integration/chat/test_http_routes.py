@@ -247,7 +247,7 @@ def test_unauthenticated_request_returns_401() -> None:
 
 # ---------------------------------------------------------------------------
 # Agent-config — the per-conversation managed-agent model
-# (ADR builtin-agent-is-internal-capability -> ADR provider-switching)
+# (ADR coffer-model-is-an-internal-engine -> ADR model-catalogue-read-from-the-agent)
 # ---------------------------------------------------------------------------
 
 

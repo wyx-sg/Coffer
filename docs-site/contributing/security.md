@@ -41,7 +41,7 @@ Only `main` is supported. Fixes land on `main` and ship in the next release. Old
 
 ## Security invariants for contributors
 
-These rules come from [`docs/principles.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/principles.md), which outranks every other project document. A change that breaks one is not a style issue. It needs an amendment to the principles, proposed and agreed in its own pull request, before any code relies on it.
+These rules come from [Principles](/architecture/principles), which outranks every other project document. A change that breaks one is not a style issue. It needs an amendment to the principles, proposed and agreed in its own pull request, before any code relies on it.
 
 ### The daemon listens on loopback only
 

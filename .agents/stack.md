@@ -59,7 +59,7 @@ infrastructure/— adapters for SQLite, keyring, and outbound I/O
 
 **Import direction is one-way**: `surfaces → application → domain`; `infrastructure` adapts to ports defined in `application`. `domain/` is pure.
 
-The layering import rules, the credential-access rule, and the "extract cross-cutting modules only after the second feature needs them" rule are invariants owned by [`docs/principles.md`](../docs/principles.md). The Python-specific way they land in this codebase:
+The layering import rules, the credential-access rule, and the "extract cross-cutting modules only after the second feature needs them" rule are invariants owned by [`docs-site/architecture/principles.md`](../docs-site/architecture/principles.md). The Python-specific way they land in this codebase:
 
 - `domain/` stays pure Python + Pydantic only — no FastAPI, SQLAlchemy, httpx, or other external SDKs.
 - `application/` defines ports; `infrastructure/` adapts to them.

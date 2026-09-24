@@ -37,7 +37,7 @@ Every path below is resolved against `$HOME`. The storage-location environment v
 ├── cache/agent/                  # derived agent state
 ├── state/                        # one-off markers
 ├── upstream-pids/                # pid files of spawned upstream MCP servers
-├── channel-media/                # images received over channels
+├── channel-media/                # attachments received over channels
 ├── workspace/                    # default working directory for chats
 ├── vendor/                       # operator-supplied SeaTalk SDK
 └── eval-capture.jsonl            # only with COFFER_EVAL_CAPTURE set
@@ -118,7 +118,7 @@ Each applied round is preceded by a git tag under `coffer/pre-apply/` in this re
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
 | `cache/agent/.transcript_summaries.json` | What the transcript reader already parsed, so the conversation history list loads without rereading every transcript. | daemon | No | Yes; it is rebuilt, slowly, on the next read. |
-| `channel-media/` | Images received over Telegram and SeaTalk, saved so the agent can open them. Files older than 30 days are pruned. | daemon | No | Yes. |
+| `channel-media/` | Attachments (images, files, voice, documents) received over Telegram and SeaTalk, saved so the agent can open them. Files older than 30 days are pruned. | daemon | No | Yes. |
 | `workspace/` | The default working directory for a chat when you pick none. | daemon | No | Only if no chat uses it. |
 | `vendor/` | Where you place the SeaTalk WebSocket SDK (`seatalk_oapi_sdk`). Coffer only reads it. | you | No | Yes, if you do not use SeaTalk. |
 | `eval-capture.jsonl` | Captured `coffer__search_tools` calls, only when `COFFER_EVAL_CAPTURE` is set. | daemon | No | Yes. |

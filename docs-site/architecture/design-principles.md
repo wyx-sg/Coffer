@@ -1,13 +1,13 @@
 ---
-title: Design principles
+title: Design philosophy
 description: The rules Coffer's codebase keeps — local-first, spec as truth, one resource model, derived state, pull-based delivery, machine-local reach, encrypted secrets — each with its rationale, its consequences in the code and what it rules out.
 ---
 
-# Design principles
+# Design philosophy
 
-This page states the design philosophy behind Coffer as a set of principles. Each one gives the rule, why it exists, where it shows up in the code, and what it deliberately rules out. Read it before proposing a change that crosses a boundary: most of what looks like an arbitrary restriction in the code is one of these principles doing its job.
+This page states the design philosophy behind Coffer as a set of principles. The binding rules themselves — the principles, constraints, quality gates and governance — are on [Principles](/architecture/principles); this page explains the reasoning they rest on. Each one gives the rule, why it exists, where it shows up in the code, and what it deliberately rules out. Read it before proposing a change that crosses a boundary: most of what looks like an arbitrary restriction in the code is one of these principles doing its job.
 
-The invariants themselves are owned by [`docs/principles.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/principles.md) and the capability specs under [`openspec/specs/`](https://github.com/wyx-sg/Coffer/tree/main/openspec/specs); the reasoning behind individual decisions is in the [decision records](/architecture/decisions).
+The invariants themselves are owned by [Principles](/architecture/principles) and the capability specs under [`openspec/specs/`](https://github.com/wyx-sg/Coffer/tree/main/openspec/specs); the reasoning behind individual decisions is in the [decision records](/architecture/decisions).
 
 ## The philosophy in one paragraph
 
@@ -191,7 +191,7 @@ Three tensions are resolved by a declared, bounded exception rather than by quie
 - **Pull, not push, versus memory at session start.** The memory index is the one thing a session is handed, through a hook you install per agent, remove the same way, and see fire in the audit log. See [Pull, not push](#pull-not-push).
 - **Extract on second use versus a shared resource model.** The Resource framework was designed before the second kind existed, because extracting it later would have meant re-modelling audit, routes and retention at once. See [Everything user-managed is a Resource](#everything-user-managed-is-a-resource).
 
-When a proposal needs a fourth exception, that is the signal to amend [`docs/principles.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/principles.md) in its own pull request, not to add a special case in code.
+When a proposal needs a fourth exception, that is the signal to amend [Principles](/architecture/principles) in its own pull request, not to add a special case in code.
 
 ## Related
 
@@ -199,4 +199,4 @@ When a proposal needs a fourth exception, that is the signal to amend [`docs/pri
 - [Layering and code layout](/architecture/layering)
 - [Security model](/architecture/security)
 - [Decision records](/architecture/decisions)
-- [`docs/principles.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/principles.md)
+- [Principles](/architecture/principles)

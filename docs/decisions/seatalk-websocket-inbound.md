@@ -1,260 +1,224 @@
-# SeaTalk Inbound Over WebSocket, With an Operator-Supplied SDK
+# SeaTalk Inbound Is One Outbound WebSocket, Through an Operator-Supplied SDK
 
 **Status**: Accepted
-**Date**: 2026-09-12
+**Date**: 2026-09-24
 **Deciders**: Yuxing Wu
-**Related**: spec [channels/seatalk](../../openspec/specs/channels/seatalk/spec.md) ("Receive every event over one outbound websocket connection", "Report the websocket connection as the channel's inbound state", "Load the websocket client library from an operator-supplied directory");
-[Channel Adapter Framework](channel-adapter-framework.md);
-[Daemon Detect-or-Spawn](daemon-detect-or-spawn.md)
-
-> **Amended (2026-09-24).** Webhook delivery is deleted and WebSocket is
-> SeaTalk's only inbound transport. The owner's production bot runs on
-> websocket delivery, and keeping the webhook path cost a second process, a
-> signature scheme, a supervised tunnel and a public hostname for one remaining
-> user: an installation that cannot obtain the SDK. The `coffer-callback`
-> listener, signature verification, the `event_verification` handshake, the
-> managed `cloudflared` tunnel, the public base URL and the reachability probe
-> are gone, and so are the `delivery`, `signing_secret_ref`, `public_base_url`
-> and `tunnel_token_ref` fields — migration `0103` strips them from every stored
-> SeaTalk channel and leaves the credential values their refs cited in the
-> credential store. A SeaTalk channel is configured by `app_id` and
-> `app_secret_ref` alone, and its status reports the websocket connection as its
-> inbound state. An installation without the SDK has no SeaTalk inbound: its
-> channels report `sdk_missing` and still send. The SDK stays operator-supplied,
-> never vendored and never declared. Points of the decision below that this
-> changes are marked in place.
+**Related**: spec channels/seatalk ("Receive every event over one outbound websocket connection", "Report the websocket connection as the channel's inbound state", "Load the websocket client library from an operator-supplied directory", "Configure a SeaTalk channel by app id and secret reference");
+spec channels ("Bind each channel to the one machine that runs it", "Process each inbound event once");
+[Channels Are Thin Transport Adapters](channel-adapter-framework.md), [Telegram Long Polling](telegram-long-polling.md),
+[Daemon Is a Resident Login Service](daemon-is-a-resident-login-service.md);
+change archive `openspec/changes/archive/2026-09-24-remove-seatalk-webhook-delivery/`; PRs #375, #431
 
 ## Context
 
-SeaTalk inbound has always been a webhook. The platform POSTs an event to a
-public URL, so Coffer — a local-first vault that binds to loopback and owns no
-public address — has to manufacture one. The apparatus that does it is the most
-elaborate piece of machinery in the channel layer:
+SeaTalk offers a bot two ways to receive events, and **a bot uses exactly one
+of them at a time**, chosen in SeaTalk's Developer Portal:
 
-- a **separate listener process**, spawned by the daemon while a SeaTalk channel
-  is enabled, because Coffer's principles will not let a publicly reachable surface
-  live inside the daemon;
-- **signature verification** on every request, which exists solely because the
-  endpoint is reachable by anyone who finds it;
-- a **tunnel** from that endpoint to the loopback port — originally one the owner
-  stood up by hand, and since the managed-tunnel work a `cloudflared` child the
-  daemon spawns and supervises from a connector token on the channel;
-- a **public base URL** recorded on the channel so status can report what the
-  platform was given, and a reachability test to probe it.
+- **Webhook.** The platform POSTs each event to a public URL.
+- **WebSocket Event Callback.** The bot holds one outbound connection to the
+  platform, registers on it with its `app_id` and `app_secret`, and events
+  arrive on the socket it opened.
 
-Every part of that exists to undo the fact that the bot has no public address.
-None of it is what the product is about.
+The facts about the websocket path that shape the decision:
 
-SeaTalk now documents a second delivery method: **WebSocket Event Callback**. The
-bot holds one outbound connection to the platform, registers on it with its app
-credentials, and events arrive on the socket it opened. No public URL, no
-listener, no tunnel, no signature. The platform's own constraint is that a bot
-uses **one delivery method at a time** — the two are alternatives, not layers.
+- **One live connection per app; the newest registration wins.** Registering
+  the same app from a second process kicks the first.
+- **The protocol is unpublished; only a client library is documented.** The
+  register handshake, framing, ack and kick semantics are available only
+  through SeaTalk's own Python SDK, `seatalk-oapi-sdk-py`.
+- **That SDK is distributed from an internal corporate portal**, is absent
+  from public PyPI, and carries no public licence. Coffer is MIT and
+  open-source-bound.
+- **The SDK is synchronous and thread-based and does not reconnect.**
+  `connect()` blocks on the handshake, `listen()` blocks for the life of the
+  connection, and its dispatcher acks each event itself as soon as the
+  handler returns.
+- **The portal's Re-verify passes only while a connection is live**, so the
+  order is: enable the channel in Coffer, then verify in the portal.
 
-This was previously recorded as out of scope, for two reasons that have both
-changed:
+Coffer's own constraints: nothing but the daemon's loopback socket may listen
+([principles](../../docs-site/architecture/principles.md), "Network
+defaults"); the daemon is always up once started ([Daemon Is a Resident Login
+Service](daemon-is-a-resident-login-service.md)); and a channel runs on exactly
+one machine, named by its `runs_on`.
 
-1. **The protocol was undocumented.** The published material covered only how to
-   call a vendor SDK. The capability is documented now, so the behaviour Coffer
-   implements is a contract rather than a guess.
-2. **The SDK was unusable by an MIT repository.** `seatalk-oapi-sdk-py` is
-   distributed from an internal corporate portal, is absent from public PyPI, and
-   carries no public licence. That has *not* changed. What changed is the
-   realisation that Coffer does not need to solve it — see the decision below.
+SeaTalk is also the platform where Coffer is the only possible bridge: no
+official or third-party integration connects it to any coding agent.
+
+## Options Considered
+
+### Option A — WebSocket only, with the SDK supplied by the operator (chosen)
+
+- **One connection per SeaTalk channel, inside the daemon.** A connector
+  (`infrastructure/channel/seatalk_ws.py`) runs the SDK's blocking calls on a
+  thread it owns and crosses each event back to the event loop with
+  `call_soon_threadsafe`; the handler never waits for the turn and never
+  raises, so one bad frame cannot drop the connection. Every event is ingested
+  at `ChannelService.ingest_event`, the channel's single entry point for
+  de-duplication, the owner gate, media and the turn.
+- **Supervision is Coffer's.** On failure the connector backs off
+  exponentially from 1 s to 30 s. A kick backs off a flat 60 s instead of
+  racing the other holder, since two processes fighting over one app starve
+  each other. The channel runtime reconciles one connector per enabled SeaTalk
+  channel bound to this machine, keyed by channel uid
+  (`application/channel/runtime_supervision.py`).
+- **Configuration is `app_id` and `app_secret_ref`**, plus the common channel
+  fields (`domain/channel/config.py`). Migration `0103` removed the webhook-era
+  fields — `delivery`, `signing_secret_ref`, `public_base_url`,
+  `tunnel_token_ref` — from every stored SeaTalk channel and left the
+  credential values they cited in the store, because a migration that deletes
+  secrets cannot be reversed.
+- **The SDK is an optional runtime dependency the operator provides.**
+  `infrastructure/channel/seatalk_sdk.py` looks in `$COFFER_SEATALK_SDK_DIR`,
+  else `~/.coffer/vendor`, adds that directory to the import path only if it
+  exists, and imports lazily when a connection starts. When the import fails,
+  the channel's inbound state is `sdk_missing`, naming the directory searched
+  and the platform's documentation, and the connector keeps retrying, so
+  dropping the SDK in needs no restart. Outbound sends never touch the SDK and
+  keep working.
+- **Status reports the connection as the channel's inbound state**:
+  `connecting`, `connected`, `kicked`, `sdk_missing` or `error`, with the last
+  error verbatim. There is no listener, port, public URL or reachability probe
+  to report.
+
+Pros: nothing Coffer runs for SeaTalk is reachable from the network — no
+public URL, no listener, no signature scheme, no tunnel — so the loopback-only
+rule has no exception. No second process. Setup is two values. The
+repository never contains or declares code it has no licence to distribute.
+
+Cons: an installation without the SDK has **no SeaTalk inbound** — such a
+channel can send to its owner but receives nothing — which is what an outside
+user of this project gets. Events that arrive while the connection is down
+(restart, network drop, back-off) are the platform's to retry or drop; Coffer
+cannot queue them. A second machine registering the same app takes the events
+away, which is why the machine binding matters.
+
+Wins because it removes every piece of machinery that existed only to
+compensate for Coffer having no public address, for the one installation that
+uses SeaTalk in earnest, while staying legal to publish.
+
+### Option B — Webhook only
+
+How it works — the design first shipped: the daemon spawned a separate
+callback-listener process (a publicly reachable surface was not allowed inside
+the daemon) serving `POST /seatalk/{channel}` on a loopback port. It answered
+the platform's `event_verification` challenge, verified
+`sha256(body + signing_secret)` on every request and forwarded valid events to
+the daemon over loopback. A tunnel — first one the owner ran by hand, later a
+`cloudflared` child the daemon supervised from a token on the channel — gave
+it a public hostname, recorded on the channel as `public_base_url` and probed
+by a reachability test.
+
+Pros: needs no vendor library, so it works for anyone who can create a
+SeaTalk app; the protocol is documented.
+
+Cons: a second binary (`coffer-callback`), a signature scheme, a supervised
+tunnel child, a public hostname and a reachability probe — all to undo the
+fact that a local vault has no public address — and the only publicly
+reachable surface in the product.
+
+Loses because every part of it exists to manufacture an address the vault
+deliberately does not have.
+
+### Option C — WebSocket, with webhook kept as the fallback for installations without the SDK
+
+How it works — the design that ran from PR #375 until PR #431: a `delivery`
+field on each SeaTalk channel chose `webhook` (the default) or `websocket`,
+and the whole webhook apparatus stayed for owners who could not obtain the
+SDK.
+
+Pros: an outside user still gets SeaTalk inbound; the websocket path is an
+upgrade, not a floor.
+
+Cons: two transports to test and document, a config field that decides which
+other fields may exist, and the listener, signature check and tunnel kept
+alive for one remaining user — an installation that cannot obtain the SDK. The
+owner's production bot ran on websocket. The archived change's design records
+the trade: the owner accepted losing inbound for SDK-less installations to
+delete the apparatus
+(`openspec/changes/archive/2026-09-24-remove-seatalk-webhook-delivery/design.md`).
+
+Loses on carrying cost for a user base of zero.
+
+### Option D — Run both methods on one bot, webhook as the fallback for a dropped socket
+
+How it works: when the websocket drops, events arrive by webhook instead.
+
+Pros: no gap in delivery during a reconnect.
+
+Cons: the platform forbids it — a bot has one delivery method at a time. A
+fallback would mean flipping the portal setting from code mid-outage, which
+Coffer cannot do and would be hidden state that makes an outage harder to
+reason about.
+
+Loses because the platform does not allow it.
+
+### Option E — Vendor the SDK into the repository
+
+How it works: copy `seatalk_oapi_sdk` into Coffer's source tree.
+
+Pros: works out of the box for everyone.
+
+Cons: redistributes code under no public licence from an internal portal in a
+public MIT repository.
+
+Loses outright on licensing.
+
+### Option F — Declare the SDK as a dependency
+
+How it works: list it in `pyproject.toml`.
+
+Pros: normal dependency management.
+
+Cons: it is not on public PyPI, so every outside install and CI would fail to
+resolve it.
+
+Loses because a dependency nobody can fetch is a broken build.
+
+### Option G — Reimplement the wire protocol
+
+How it works: speak the websocket protocol directly, as a few hundred lines
+over a websocket library, reverse-engineered from the SDK.
+
+Pros: no vendor library; works for everyone.
+
+Cons: the handshake, envelope, ack and kick semantics are unpublished; Coffer
+would own a guess that the platform is free to change without notice, with no
+contract to test against.
+
+Loses because a transport built on reverse-engineering has no specification to
+stay correct against.
 
 ## Decision
 
-**Adopt WebSocket as a second inbound transport for SeaTalk, selected per
-channel, and treat the platform's SDK as an optional dependency the operator
-supplies rather than something this repository carries.**
+SeaTalk inbound is one outbound websocket connection per channel, held and
+supervised inside the daemon (exponential back-off to 30 s, flat 60 s after a
+kick), configured by `app_id` and `app_secret_ref` alone, and ingested at the
+channel's single entry point. The platform's SDK is an operator-supplied
+optional dependency loaded lazily from `$COFFER_SEATALK_SDK_DIR` or
+`~/.coffer/vendor`; without it a SeaTalk channel reports `sdk_missing` and can
+only send. There is no webhook transport. Outbound SeaTalk calls do not use the
+SDK.
 
-1. **`delivery` is a field on the SeaTalk channel config** — `webhook` (the
-   default, and what every channel stored before the field is) or `websocket` —
-   and it decides which other fields may exist at all. A websocket channel
-   forbids `signing_secret_ref`, `public_base_url`, and `tunnel_token_ref`: there
-   is no body to sign, no URL to describe, no tunnel to supervise, and a config
-   field that decides nothing misrepresents the running system. `app_id` and
-   `app_secret_ref` are required on both, because the register handshake
-   authenticates with them.
+Rules a future change must respect:
 
-   _Amended (2026-09-24):_ `delivery` is deleted with webhook delivery, and so
-   are the three webhook fields. The configuration is `app_id` and
-   `app_secret_ref` plus the common channel fields.
-
-2. **The transport ends at the existing ingest seam, one line above the
-   adapter.** The SDK's generic event handler hands over the raw event dict,
-   which is the same shape the webhook body already had, so the connector calls
-   the same channel-service ingest entry point the HTTP route calls. Everything
-   downstream — dedup, normalization, the owner gate, media download, threading,
-   the turn — is shared, unchanged, and untested-per-transport because there is
-   nothing per-transport left to test. Only the two genuinely webhook-shaped
-   things stay behind in the listener: signature verification and the
-   `event_verification` handshake.
-
-   _Amended (2026-09-24):_ the listener and both of those are deleted; the
-   websocket connector is now the only caller of the ingest entry point.
-
-3. **Supervision is Coffer's, because the SDK has none.** The SDK is synchronous
-   and thread-based and does not reconnect. So each websocket channel gets a
-   connector with its own supervision loop — connect, listen on a worker thread,
-   back off and retry on failure — owned by a per-channel controller shaped like
-   the existing tunnel controller, reconciled by the channel runtime exactly as
-   tunnels are. The runtime's listener count now includes only webhook channels,
-   so a websocket-only deployment runs no listener at all.
-
-   _Amended (2026-09-24):_ there is no tunnel controller or listener left; the
-   websocket controller is the channel runtime's only SeaTalk reconciler.
-
-4. **The SDK is an operator-supplied optional dependency.** Coffer does not
-   vendor it, does not declare it, and does not import it at daemon import time.
-   It looks for it in a vendor directory — `$COFFER_SEATALK_SDK_DIR` when set,
-   otherwise `~/.coffer/vendor` — prepends that to the import path only when the
-   directory exists, and imports lazily when a websocket channel starts. A
-   missing SDK is a per-channel condition with an actionable message naming the
-   directory searched and the platform's documentation, not a crash and not a
-   daemon-wide failure.
-
-## Alternatives Considered
-
-- **Vendor the SDK into this repository.** Rejected outright. Coffer is MIT and
-  OSS-bound; the SDK is distributed from an internal corporate portal under no
-  public licence. Copying it in would put code in a public repository that nobody
-  has licensed us to redistribute. No amount of convenience survives that.
-
-- **Declare it as a dependency.** Rejected: it is not on public PyPI, so every
-  outside user's install would break, and CI could not resolve it either. A
-  dependency that cannot be fetched is not a dependency, it is a broken build.
-
-- **Reimplement the wire protocol.** Tempting, because the SDK is a thin client
-  over raw sockets with its own framing and a ping thread — a few hundred lines.
-  Rejected because the protocol is not published: the register handshake, the
-  envelope and ack shapes, and the kick semantics would all be reverse-engineered
-  from a binary nobody documents, and the platform is free to change any of them
-  without notice. We would own a guess and call it a transport. Reading the
-  documented SDK surface and asking the operator for the SDK is honest about what
-  we know.
-
-- **Keep webhook as the only transport.** Rejected: it keeps a listener process,
-  a signature scheme, a tunnel child, and a public hostname alive to compensate
-  for an address the vault deliberately does not have — for the one platform where
-  Coffer is the only possible bridge. Where an owner can supply the SDK, the
-  better-shaped transport should be available to them.
-
-- **Run both methods on one bot, webhook as fallback for a dropped socket.**
-  Rejected because the platform forbids it: a bot uses one delivery method at a
-  time. Building a fallback would mean flipping the app's own portal setting from
-  code during an outage, which is both unavailable to us and precisely the kind of
-  hidden state that makes an outage worse.
+- The SDK is never vendored, declared, or imported at daemon import time.
+- No SeaTalk code path opens a listening socket.
+- Connection state is reported as the channel's inbound state, never inferred
+  from logs.
+- Enable a SeaTalk channel on one machine only; the kick back-off makes a
+  conflict visible but does not resolve it.
 
 ## Consequences
 
-- **One connection per SeaTalk app, and the newest registration wins.** If the
-  same app is registered from a second machine — another install, a colleague
-  testing — that registration kicks this one, and events go there. The connector
-  reports the kicked state and backs off on a long flat delay instead of fighting
-  for the socket, because two processes racing to register would starve both. An
-  owner who runs Coffer on two machines must enable the channel on only one; this
-  is the same single-consumer rule the spec already states for a channel's
-  platform identity, now with a visible failure mode.
-
-- **Event delivery pauses while the connection is down.** There is no public
-  endpoint absorbing events during a restart, a network drop or a back-off
-  window; whatever the platform does with undeliverable events is the platform's
-  behaviour, not something Coffer can queue around. The connection is inside the
-  daemon, where the owner cannot watch it — hence the connection state being a
-  first-class thing status reports, rather than a log line.
-
-- **The portal setting and Coffer must agree.** The bot's event delivery setting
-  in SeaTalk's Developer Portal is WebSocket. The portal's Re-verify only passes
-  while the connection is actually live, so the order is *enable in Coffer, then
-  verify there* — a sequencing trap worth documenting, because getting it
-  backwards looks like a broken product.
-
-- ~~**An install without the SDK is a first-class configuration.** That is what an
-  outside user of this project has, and webhook delivery remains fully supported
-  for exactly that reason. WebSocket is a capability an operator can add, never a
-  floor the product stands on.~~ — **Superseded (2026-09-24).** An install
-  without the SDK has no SeaTalk inbound: its SeaTalk channels report
-  `sdk_missing`, naming the directory searched, and keep sending replies and
-  notifications. The owner accepted that cost for outside users. No test may
-  skip because the real SDK is absent, so the suite still codes against a stub
-  that is the contract.
-
-- ~~**The webhook apparatus stays.** Nothing is deleted: the listener, the signature
-  check, the managed tunnel, the public base URL and the reachability test are all
-  still the right implementation of webhook delivery, and remain the only option
-  for an owner who cannot obtain the SDK.~~ — **Superseded (2026-09-24).** The
-  apparatus is deleted, the `coffer-callback` binary with it, and a deploy
-  removes its `~/.coffer/bin/` link on existing installs. Coffer has no
-  public-reachable surface at all.
-
-## SeaTalk platform facts
-
-The SeaTalk wire contract the channel code is written against, recorded here
-because the platform docs sit behind a login and an unrecorded detail has
-cost a debugging round more than once. Read from the official `cs-bot`
-repository and open.seatalk.io (July and September 2026) and verified against a
-live app unless marked otherwise. The requirements they support are in spec
-[channels/seatalk](../../openspec/specs/channels/seatalk/spec.md).
-
-**Inbound.** An event body is
-`{event_id, event_type, timestamp, app_id, event}`; a DM sender is identified by
-`employee_code`. The websocket SDK is synchronous and thread-based, registers
-with `app_id` + `app_secret`, acks by `callback_id`, does not reconnect, and a
-new registration of the same app kicks the previous holder. A bot uses one
-delivery method at a time, set in the Developer Portal. Group text lives at `text.plain_text`, not
-`text.content`. A group message reaches the bot only when it @mentions the bot
-(`new_mentioned_message_received_from_group_chat`, with `thread_id` set when it
-is inside a thread); non-@ group-main messages and emoji reactions are never
-delivered, and the group-main history endpoint needs a permission a self-built
-app is not granted, so group-main context is never read.
-
-**Sending.** `POST /auth/app_access_token` returns a token valid for 7200 s;
-error 100 means expired (refresh and retry), 101 means rate-limited. Messages
-are Markdown with `format: 1`, plain with `format: 2`, 4096 characters at most.
-`thread_id` and `quoted_message_id` go **inside** the `message` object — a
-top-level `thread_id` is silently ignored and the reply lands in the group main
-chat; inside `message` it threads the reply, rooting a new thread at that id if
-none exists. A thread is read with
-`GET /messaging/v2/group_chat/get_thread_by_thread_id`, whose list key is
-`thread_messages`. It pages oldest-first: `page_size` is at most 100 (101 is
-refused with code 102) and each page but the last carries a `next_cursor`,
-passed back as `cursor`. A quoted message is read with
-`GET /messaging/v2/get_message_by_message_id?message_id=…`, which answers with
-one message in the same shape as a thread message; the id is per app, so only
-the bot that received it can resolve it.
-
-**Cards.** An interactive card is `tag: "interactive_message"` with
-`button_type: "callback"` buttons carrying a custom `value`; a tap comes back as
-an `interactive_message_click` event with that `value` and the `message_id`. A
-DM tap names the tapper by `employee_code`; a group tap also carries `group_id`
-and names the tapper under `sender`.
-
-**Streaming.** `init_stream` and `update_stream` each take the target
-(`employee_code` or `group_id`). `init_stream` requires a `message` whose `tag`
-fixes the kind (`text` or `interactive_message`) and returns `stream_id`;
-`update_stream` carries content only, with `seq` starting at 1, and each update
-is the whole accumulated text — the client replaces rather than animates, so
-visible smoothness is update frequency alone. Consecutive updates more than 30 s
-apart terminate the stream; a terminated `stream_id` is rejected. The docs
-suggest buffering to about one call per 200 ms and publish no rate limit;
-Coffer buffers at 100 ms (`COFFER_SEATALK_STREAM_INTERVAL`) because 200 ms reads
-as sentence-sized jumps. Clients older than 3.67 see only the final message.
-Unverified: whether a group-main stream is accepted without a `thread_id`.
-
-**Mentions.** A mention is a self-closing
-`<mention-tag target="seatalk://user?id=ID"/>` (or `?email=…`) inside Markdown
-content; `id=0` means everyone and Coffer never builds it. The id is the
-`seatalk_id` — an inference from the inbound `mentioned_list`, which uses the
-same id space — and it is the only sender id guaranteed present, since
-`employee_code` and `email` are empty for a sender outside the bot's
-organisation. The @ notification is decided when the message is created, so a
-streamed reply must carry the mention in what `init_stream` posts; every
-snapshot is therefore `format: 1` with in-flight text escaped, and mention tags
-are lifted out of every escaping pass because ids and emails may contain `_`.
-
-**Typing.** `single_chat_typing` takes `employee_code`; `group_chat_typing` takes
-`group_id` and an optional `thread_id` (an unthreaded root message under 7 days
-old may be passed as the thread). The cue lasts 4 s, so it is re-sent on a
-heartbeat; the limit is 300 per minute, it needs SeaTalk 3.55+, and error 7003
-means a group over 200 members, where no indicator exists.
+- Coffer has no public-reachable surface; the `coffer-callback` binary is
+  gone and frozen deploys prune its stale `~/.coffer/bin/` link.
+- An outside user without access to the SDK can use SeaTalk for notifications
+  but not to drive agents; Telegram is unaffected.
+- The test suite codes against a stub of the SDK surface; no test skips for
+  lack of the real SDK.
+- A new SeaTalk-side capability (streaming, cards, thread reads) is an
+  outbound `httpx` call and does not involve the SDK.
+- Enforced by: `infrastructure/channel/seatalk_ws.py`,
+  `seatalk_ws_controller.py` and `seatalk_sdk.py`; `SeaTalkChannelConfig` in
+  `domain/channel/config.py`; migration `0103`.

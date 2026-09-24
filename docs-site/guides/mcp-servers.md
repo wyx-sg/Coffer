@@ -281,5 +281,5 @@ See [MCP gateway](/architecture/mcp-gateway) for the full request lifecycle.
 - [Credentials](/guides/credentials) — storing the secrets servers cite
 - [Agents](/guides/agents#manage-the-agent-s-own-mcp-entries) — adopting MCP entries already in an agent's config
 - [MCP tools reference](/reference/mcp-tools) — Coffer's own `coffer__…` tools
-- [Tool Retrieval](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-retrieval-for-overload.md), [Budget-Driven Tool Tiering](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/budget-driven-tool-tiering.md), [Session Subprocess Model](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/session-subprocess-model.md)
+- [Tool Overload: List a Usage-Ranked Slice, Search the Rest](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md), [Tool Overload: List a Usage-Ranked Slice, Search the Rest](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md), [Session Subprocess Model](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/session-subprocess-model.md)
 - Spec: [mcp-gateway](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/mcp-gateway/spec.md)

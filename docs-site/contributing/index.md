@@ -23,7 +23,7 @@ Coffer is a single-maintainer, MIT-licensed project developed in the open at [gi
 
 The product contract lives in [`openspec/specs/`](https://github.com/wyx-sg/Coffer/tree/main/openspec/specs), written with [OpenSpec](https://github.com/Fission-AI/OpenSpec). A spec is not documentation that trails the code. It states what the code must do, and if the two disagree the code is wrong. A pull request that changes externally visible behaviour carries an OpenSpec change that says what will be true afterwards. That change is archived into `openspec/specs/` in the same pull request, so the specs on `main` always describe the code on `main`. See [Spec-driven workflow](/contributing/spec-workflow).
 
-The lasting invariants sit one level above the specs, in [`docs/principles.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/principles.md): local-first, loopback only, secrets only as ciphertext, layered architecture. When any two sources disagree, the principles win.
+The lasting invariants sit one level above the specs, in [Principles](/architecture/principles): local-first, loopback only, secrets only as ciphertext, layered architecture. When any two sources disagree, the principles win.
 
 ### AI-assisted development is the default
 
@@ -97,7 +97,7 @@ flowchart TD
    git checkout -b feature/<short-name>
    ```
 
-4. **Change code, spec and docs together.** When behaviour changes, update in the same pull request, never as a follow-up: the spec deltas, the OpenAPI contract, `docs/architecture.md`, the relevant ADR, `docs-site/` pages and any `.agents/` convention it touches. Add tests in the right tier, and tag each scenario the change covers with an acceptance marker.
+4. **Change code, spec and docs together.** When behaviour changes, update in the same pull request, never as a follow-up: the spec deltas, the OpenAPI contract, the architecture pages under `docs-site/architecture/`, the relevant ADR, `docs-site/` pages and any `.agents/` convention it touches. Add tests in the right tier, and tag each scenario the change covers with an acceptance marker.
 5. **Run `make verify`** until it is green. Run `make verify-all` too when you touched a surface: a web page, an HTTP route, the CLI or the MCP shim.
 6. **Archive the change** with `/opsx:archive` or `npx openspec archive <change-id> --yes`. This merges its deltas into `openspec/specs/`.
 7. **Squash and open the pull request:**

@@ -84,7 +84,7 @@ The rules, which `openspec/config.yaml` also feeds to the CLI when it plans a ch
 
 - A requirement title is a short imperative phrase, unique within its spec. Requirements have no numbers. A requirement is identified by its title.
 - A scenario name is unique within its spec, because acceptance markers quote it.
-- State user-observable behaviour. Internal mechanics belong in the change's `design.md`, in [`docs/architecture.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/architecture.md) or in an ADR, not in `spec.md`.
+- State user-observable behaviour. Internal mechanics belong in the change's `design.md`, in the [architecture pages](/architecture/) or in an ADR, not in `spec.md`.
 - Write plain English with no time annotations such as "Day 3" or "last updated".
 
 `openspec validate --all --strict` fails any requirement without a scenario. `make verify-acceptance` runs it.
@@ -210,7 +210,7 @@ When a change alters behaviour, the same pull request updates:
 - the spec deltas, archived into `openspec/specs/`
 - `contracts/api.openapi.yaml`, when an endpoint or schema changes. Then run `make frontend-codegen`
 - `data-model.md`, when an entity changes
-- [`docs/architecture.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/architecture.md). `scripts/check_architecture_doc.py` fails if its code-layout tree or its built-in tool roster drifts from the code
+- The architecture pages under [`docs-site/architecture/`](/architecture/). `scripts/check_architecture_doc.py` fails if its code-layout tree or its built-in tool roster drifts from the code
 - the affected ADR, the pages of this site, and any `.agents/` convention
 
 A pure refactor, or a frontend-only change with no contract impact, needs no spec edit.
@@ -226,7 +226,7 @@ The specs say *what* Coffer does. ADRs in [`docs/decisions/`](https://github.com
 
 Do not write one for a version bump, a routine bug fix, naming or formatting, or a scope decision that belongs in a spec's `## Purpose`.
 
-ADRs use the Michael Nygard format and a kebab-case title with no number, for example `experimental-features-instead-of-a-release-branch.md`:
+An ADR states **one** decision and argues every serious option, the chosen one included. Its file name is its title in kebab case with no number, for example `experimental-features-instead-of-a-release-branch.md`:
 
 ```markdown
 # Experimental Features Instead of a Release Branch
@@ -237,12 +237,14 @@ ADRs use the Michael Nygard format and a kebab-case title with no number, for ex
 **Related**: spec [experimental-features](../../openspec/specs/experimental-features/spec.md)
 
 ## Context
+## Options Considered
+### Option A — <name> (chosen)
+### Option B — <name>
 ## Decision
-## Alternatives Considered
 ## Consequences
 ```
 
-The directory records the **live** design, not a chronological log. When a decision changes, rewrite the ADR that owns it. When the thing it decided is removed, delete the ADR. Git history keeps the rest. Add each new ADR to the index in [`docs/decisions/README.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/README.md), which `check_doc_numbering.py` keeps in step with the files. A change to [`docs/principles.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/principles.md) itself is an amendment. It needs its own proposal pull request that explains motivation, impact and alternatives.
+The directory records the **live** design, not a chronological log. When a decision changes, rewrite the ADR that owns it so it reads as if written today, with the design it replaced argued as one of its options. When the thing it decided is removed, delete the ADR. Git history keeps the rest. Add each new ADR to the index in [`docs/decisions/README.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/README.md), which `check_doc_numbering.py` keeps in step with the files. A change to [Principles](/architecture/principles) itself is an amendment. It needs its own proposal pull request that explains motivation, impact and alternatives.
 
 The site's [decision records](/architecture/decisions) page summarises the current ADRs.
 

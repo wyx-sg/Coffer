@@ -276,5 +276,5 @@ Long, model-driven rewrites — knowledge curation over a collection, memory dis
 - [Resource Framework Designed Upfront](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-framework-upfront.md)
 - [Resource Identity Is an Immutable `uid`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identity-is-an-immutable-uid.md)
 - [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md)
-- [Everything Is a Resource Kind](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/everything-is-a-resource-kind.md)
+- [The Resource Framework Is Core Domain, Designed Before the Second Kind](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-framework-upfront.md)
 - [Layering and code layout](/architecture/layering) — how kinds are wired at the composition root.

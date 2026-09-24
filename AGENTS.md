@@ -9,7 +9,7 @@ Operating manual for AI agents (Claude Code, Codex, future ones) entering Coffer
 | **Project**         | Coffer — local-first AI agent vault. Single-user, one vault across the user's machines. OSS-bound. |
 | **Methodology**     | [OpenSpec](https://github.com/Fission-AI/OpenSpec).                                                |
 | **Languages**       | Python 3.12+ (backend); TypeScript / React (frontend).                                             |
-| **Source of truth** | `docs/principles.md` (principles); `openspec/specs/` (product contracts).                          |
+| **Source of truth** | `docs-site/architecture/principles.md` (principles); `openspec/specs/` (product contracts).        |
 | **Default branch**  | `main`.                                                                                            |
 | **License**         | MIT.                                                                                               |
 
@@ -17,7 +17,7 @@ Operating manual for AI agents (Claude Code, Codex, future ones) entering Coffer
 
 In order:
 
-1. **`docs/principles.md`** — lasting principles + invariants.
+1. **`docs-site/architecture/principles.md`** — lasting principles + invariants.
 2. **`AGENTS.md`** (this file).
 3. The relevant **`.agents/<topic>.md`** for today's scope:
    - [`.agents/openspec.md`](./.agents/openspec.md) — OpenSpec layout, the change workflow, acceptance scenarios, end-to-end deliverable rule.

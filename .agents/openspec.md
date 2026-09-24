@@ -110,7 +110,7 @@ The system SHALL <behaviour>.
   whole vertical slice — backend plus whatever surfaces deliver it (CLI, MCP /
   shim, REST, web). Do not split one behaviour into per-surface specs.
 - `spec.md` is the user-visible contract. Don't restate architecture in it;
-  link [`docs/architecture.md`](../docs/architecture.md) or an ADR. Plain
+  link the relevant [`docs-site/architecture/`](../docs-site/architecture/) page or an ADR. Plain
   English, no time annotations (`Day N`, `Last updated`).
 
 Tests cover each scenario through the `acceptance(spec, scenario)` marker — see
@@ -128,7 +128,7 @@ in the same PR — before or alongside the code, never as a follow-up:
   to match the code, then re-run frontend codegen;
 - `data-model.md` when an entity changes;
 - the cross-cutting docs the change touches: the relevant `docs/decisions/`
-  ADR, [`docs/architecture.md`](../docs/architecture.md), `docs-site/`, and any
+  ADR, the [`docs-site/architecture/`](../docs-site/architecture/) pages, the rest of `docs-site/`, and any
   affected `.agents/*` convention.
 
 A pure refactor or a frontend-only change with no contract impact needs no spec
@@ -139,7 +139,7 @@ change with it.
 
 Cross-cutting mechanisms get one shared module rather than a copy inside each
 kind that uses them; "extract only after the second feature needs them" is an
-invariant in [`docs/principles.md`](../docs/principles.md). Being shared says
+invariant in [`docs-site/architecture/principles.md`](../docs-site/architecture/principles.md). Being shared says
 nothing about **whose spec** a mechanism is:
 
 | Mechanism | Where it lives | Whose spec |
@@ -214,7 +214,7 @@ What follows is the procedure, recovered from that audit.
 - **Q2 — implemented alone, can a user do something?** Name the commands, the
   routes, the pages. No → it is substrate or a layer. Fold it into the spec it
   serves. If it is policy over several specs, it goes in this file or
-  [`docs/principles.md`](../docs/principles.md), never into a spec of its own.
+  [`docs-site/architecture/principles.md`](../docs-site/architecture/principles.md), never into a spec of its own.
 - **Q3 — where does its code want to live?** Four signals: route family, code
   packages, consumer list, ADR. Three or four pointing at an existing spec →
   **update that one**. Three or four pointing at a new name → **new spec**.

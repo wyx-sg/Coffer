@@ -64,7 +64,7 @@ class ConversationCreate(BaseModel):
     """Body for POST /conversations.
 
     ``agent_key`` selects the Coffer-managed agent to talk to (required — chat
-    has no built-in agent of its own, ADR builtin-agent-is-internal-capability).
+    has no built-in agent of its own, ADR coffer-model-is-an-internal-engine).
     ``agent_config`` is an opaque, agent-specific configuration object the named
     agent validates and stores (e.g. ``cwd`` for ``claude_code`` / ``codex``).
     """
@@ -88,7 +88,7 @@ class AgentConfigPatch(BaseModel):
     default; an empty or null ``effort`` clears it so the agent keeps whatever
     its own config says. Each field is written only when the body mentions it,
     so setting one leaves the other alone; ``cwd`` / ``session_id`` are
-    preserved (ADR builtin-agent-is-internal-capability → ADR provider-switching).
+    preserved (ADR coffer-model-is-an-internal-engine → ADR model-catalogue-read-from-the-agent).
     """
 
     model: str | None = None

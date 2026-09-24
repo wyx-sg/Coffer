@@ -1,11 +1,11 @@
 ---
 title: Decision records
-description: An index of Coffer's architecture decision records, grouped by theme, with a one-sentence summary of what each one decides.
+description: An index of Coffer's architecture decision records, grouped by area, each stating the decision it records.
 ---
 
 # Decision records
 
-This page indexes every architecture decision record (ADR) in the Coffer repository and summarises, in one sentence each, what it decides. Read it when you want the *why* behind a part of the design, or before you propose a change that would reverse one of these choices.
+Coffer records every structural technical decision as an architecture decision record (ADR) in [`docs/decisions/`](https://github.com/wyx-sg/Coffer/tree/main/docs/decisions). This page indexes them by area. Read the record when you want the *why* behind a part of the design, or before you propose a change that would reverse one.
 
 ## How decisions are recorded
 
@@ -13,126 +13,117 @@ Coffer keeps three kinds of design text, each with one job:
 
 | Artefact | Lives in | Answers |
 | --- | --- | --- |
-| Specification | [`openspec/specs/<capability>/spec.md`](https://github.com/wyx-sg/Coffer/tree/main/openspec/specs) | *What* the product must do: requirements, each with scenarios that tests cover. |
-| Change proposal | `openspec/changes/<change-id>/` | *How* one change is planned: `proposal.md`, `design.md`, `tasks.md` and spec deltas. |
-| Decision record | [`docs/decisions/`](https://github.com/wyx-sg/Coffer/tree/main/docs/decisions) | *Why* a structural choice was made, and which alternatives lost. |
+| Specification | [`openspec/specs/`](https://github.com/wyx-sg/Coffer/tree/main/openspec/specs) | *What* the product must do: requirements, each with scenarios that tests cover. |
+| Change proposal | `openspec/changes/<change-id>/` | *How* one change is planned: proposal, design, tasks and spec deltas. |
+| Decision record | [`docs/decisions/`](https://github.com/wyx-sg/Coffer/tree/main/docs/decisions) | *Why* a technical choice was made, with every serious option argued. |
 
-A decision earns a record when it is hard to reverse, constrains more than one module, carries a trade-off a future contributor will question, or departs from a convention or a [design principle](/architecture/design-principles). Library bumps, routine fixes and naming preferences do not.
+A decision earns a record when it is hard to change later, constrains more than one module, carries a trade-off a future contributor will question, or departs from a convention or a clause of the [Principles](/architecture/principles). Product scope belongs in the specs and project process in `.agents/`, not in a record.
 
-Each record follows the Michael Nygard format — **Context**, **Decision**, **Consequences**, **Alternatives Considered** — under a header that states its **Status** (`Proposed`, `Accepted`, `Superseded by …` or `Deprecated`) and links related specs and records. Files are named by their title in kebab case, never by number, so a reference can never silently point at a different decision.
+Each record states **one** decision under four headings — **Context**, **Options Considered** (the chosen option included, each argued on its merits), **Decision** and **Consequences** — and is named by its title in kebab case, never by a number. The directory records the live design: when a decision changes, the record that owns it is rewritten to read as if written today, with the design it replaced argued as one of its options; when the thing it decided is removed, the record is deleted. The authoring rules are in the [directory README](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/README.md).
 
-The directory records the **live** design rather than a chronological archive:
+Every record listed here is `Accepted`.
 
-- When a decision changes, the record that owns it is rewritten, or amended with a marked note in place.
-- When the thing a record decided is removed outright, the record is deleted. Git history (`git log --follow docs/decisions/`) is the archive.
-- A superseded record stays only while it still explains a constraint the live design inherits.
 
-::: tip
-When a record says *Amended*, read the amendment as part of the decision. Where this index says "amended by", the summary already describes the amended decision.
-:::
+## Resource framework & persistence
 
-## Foundations
+Explained in: [Resource framework](/architecture/resource-framework), [Persistence](/architecture/persistence).
 
-How the codebase and the product are shaped as a whole. See [Design principles](/architecture/design-principles) and [Layering and code layout](/architecture/layering).
-
-| Record | Decision |
+| Decision | Record |
 | --- | --- |
-| [Resource Framework Designed Upfront](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-framework-upfront.md) | The resource abstraction — kind-agnostic identity, lifecycle, audit and config validation, but not behaviour — is core domain, designed while only one kind existed rather than extracted once a second arrived. |
-| [Code Layout — Layer-First with Kind Subdirectories](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/code-layout-layer-first.md) | The backend is organised by layer (`domain`, `application`, `infrastructure`, `surfaces`) with one subdirectory per kind inside each layer, not as vertical per-kind slices, and import-linter enforces the dependency direction. |
-| [Information Architecture — Everything Is a Resource Kind](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/everything-is-a-resource-kind.md) | Every user-managed asset is a resource kind surfaced under one navigation model, consumers and cross-cutting tooling get their own role-based groups, and nothing appears in the sidebar until it works. |
-| [Product Scope Is Settled](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/product-scope-is-settled.md) | The desktop shell, the web Chat page, bidirectional vault sync, the Activity page, and knowledge and memory as two kinds are settled scope; removing one requires amending this record. Amended by [Experimental Features Instead of a Release Branch](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md): an experimental feature is off by default on `stable`, not removed. |
+| The Resource Framework Is Core Domain, Designed Before the Second Kind | [`resource-framework-upfront`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-framework-upfront.md) |
+| A Kind Plugs In as One Frozen Record of Optional Hooks: Validators Before the Write, Reactions After | [`kind-plugin-contract`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/kind-plugin-contract.md) |
+| Resource Identity Is an Immutable `uid`, Not the Name | [`resource-identity-is-an-immutable-uid`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identity-is-an-immutable-uid.md) |
+| Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind | [`per-agent-resource-scope`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md) |
+| Resource Reach Is Machine-Local and Never Converges | [`resource-reach-is-machine-local`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-reach-is-machine-local.md) |
+| Code Layout Is Layer-First, With One Subdirectory per Kind | [`code-layout-layer-first`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/code-layout-layer-first.md) |
+| Kinds Are Wired Explicitly by One Composition Root, With No Global Registry | [`composition-root-explicit-wiring`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/composition-root-explicit-wiring.md) |
+| Control-Plane State Is One SQLite File, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage | [`sqlite-alembic-persistence`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sqlite-alembic-persistence.md) |
+| Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table | [`audit-and-retention`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/audit-and-retention.md) |
 
-## Resources
+## Daemon, shell & distribution
 
-Identity, reach and credentials shared by every kind. See [Resource framework](/architecture/resource-framework) and [Security model](/architecture/security).
+Explained in: [Daemon and processes](/architecture/daemon), [Distribution and releases](/architecture/distribution).
 
-| Record | Decision |
+| Decision | Record |
 | --- | --- |
-| [Resource Identity Is an Immutable `uid`, Not the Name](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identity-is-an-immutable-uid.md) | A resource is identified by an immutable `uid` and its name is a mutable label, so renaming never looks like delete-plus-create to sync, cascades or references. |
-| [Resource Identifier Format — `<kind>:<name>`, Not URN](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identifier-format.md) | **Superseded by** [Resource Identity Is an Immutable `uid`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/resource-identity-is-an-immutable-uid.md); it made `<kind>:<name>` the external identifier, and is kept for the naming rules that still govern resource labels. |
-| [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md) | One framework-owned `scope` field — an allow-list of agent uids, where absent means every agent and empty means dormant — together with `enabled` forms a resource's *reach*, which is machine-local and never syncs; each kind enforces it at its own delivery point. |
-| [Envelope-Encrypted Credential Store](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md) | Secrets are stored as Fernet ciphertext in SQLite under one master key kept in a `0600` file by default, with the OS keychain as an opt-in location, so an unsigned binary never triggers keychain prompts. |
+| Any Surface Finds the Daemon or Spawns It | [`daemon-detect-or-spawn`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-detect-or-spawn.md) |
+| The Daemon Binds a Fixed Port and Refuses to Start Without It | [`daemon-binds-a-fixed-port`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-binds-a-fixed-port.md) |
+| The Daemon Is Resident: It Never Idles Out, and a Login Service Restarts Only a Crash | [`daemon-is-a-resident-login-service`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-is-a-resident-login-service.md) |
+| A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard | [`daemon-auth-and-origin-guard`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-auth-and-origin-guard.md) |
+| Agents Reach the Gateway Through a stdio Shim, Not a Native HTTP Entry | [`stdio-shim-bridge`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/stdio-shim-bridge.md) |
+| The Desktop Shell Hosts the Shared Frontend and Owns Only What a Browser Cannot Do | [`desktop-shell-over-a-shared-frontend`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/desktop-shell-over-a-shared-frontend.md) |
+| The Loopback Daemon Performs OS File Actions for the UI | [`daemon-proxies-os-file-actions`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-proxies-os-file-actions.md) |
+| Distribution — Three PyInstaller Binaries, Shipped as a CLI Archive and a Desktop App | [`distribution-pyinstaller`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/distribution-pyinstaller.md) |
+| Experimental Features Instead of a Release Branch | [`experimental-features-instead-of-a-release-branch`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md) |
+| The Sidebar Is Grouped by Role: Agents, Resources, System | [`sidebar-grouped-by-role`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sidebar-grouped-by-role.md) |
 
 ## MCP gateway
 
-How Coffer aggregates upstream MCP servers behind one endpoint. See [MCP gateway](/architecture/mcp-gateway).
+Explained in: [MCP gateway](/architecture/mcp-gateway).
 
-| Record | Decision |
+| Decision | Record |
 | --- | --- |
-| [One Upstream Subprocess Set Per Downstream Client Session](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/session-subprocess-model.md) | Each connected client session gets its own lazily spawned set of upstream subprocesses, reaped with the session, instead of sharing and multiplexing upstreams across clients. |
-| [MCP Capability State — Preferences in DB, List Live-Queried From Upstream](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/capability-state-model.md) | The database stores only the user's enable/disable preference per tool, resource and prompt; the capability lists themselves are queried live from upstream and cached in memory for a short TTL. |
-| [Tool Retrieval for Aggregation Overload](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-retrieval-for-overload.md) | Coffer exposes `coffer__search_tools`, a lexical (BM25-style) ranker over the whole aggregated catalogue, so an agent can find a tool by describing it. Amended by the two records below: ranking is lexical only, and the listed catalogue is tiered by the gateway. |
-| [Budget-Driven Tool Tiering at the Gateway](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/budget-driven-tool-tiering.md) | The gateway lists a budgeted slice of upstream tools (50 by default) ranked by real invocation history, always lists Coffer's own tools, keeps at least one tool per server, and still lets any unlisted tool be called by name. |
-| [Coffer Ships Its Own Manual as a Skill Resource](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md) | Coffer's manual and knowledge catalogue ship as one built-in `coffer-guide` skill resource, regenerated from the running build, because a skill costs one resident description while the MCP handshake instructions are capped and charged to every session. |
+| One Upstream Subprocess Set Per Downstream Client Session | [`session-subprocess-model`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/session-subprocess-model.md) |
+| MCP Capability State — Preferences in the Database, Lists Live-Queried From Upstream | [`capability-state-model`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/capability-state-model.md) |
+| Tool Overload: List a Usage-Ranked Slice, Search the Rest | [`tool-overload-tier-the-list-search-the-rest`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/tool-overload-tier-the-list-search-the-rest.md) |
+| Evals: Opt-In Capture, Hand Curation, and a Deterministic Regression Gate | [`eval-capture-and-regression-gate`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/eval-capture-and-regression-gate.md) |
 
-## Daemon, desktop and web UI
+## Agents, providers & the internal engine
 
-The long-lived process and the surfaces that reach it. See [Daemon and processes](/architecture/daemon).
+Explained in: [Agents](/guides/agents), [Model providers](/guides/providers).
 
-| Record | Decision |
+| Decision | Record |
 | --- | --- |
-| [Daemon Detect-or-Spawn Pattern](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-detect-or-spawn.md) | The daemon is an independent, resident process on a fixed loopback port (8000 unless configured); the CLI and the MCP shim read `~/.coffer/daemon.json`, connect to a live daemon or spawn a detached one, and authenticate with its token. |
-| [The Daemon Serves Its Token in the Page, Guarded by the Host Header](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-serves-the-token-in-the-page.md) | The daemon injects its live API token into the `index.html` it serves, and refuses any request whose `Host` header is not a loopback authority, so a served page is authenticated without being open to DNS rebinding. |
-| [The Desktop Shell Returns, Owning Only What a Browser Cannot Do](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/desktop-shell-over-a-shared-frontend.md) | A native Tauri shell hosts the same built frontend and owns exactly four things a browser cannot do: a window with a Dock icon, a resident tray, detect-or-spawn of the daemon at launch, and handing the page its daemon connection over IPC; it reimplements no daemon route. |
-| [Local Daemon Proxies OS File Actions](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-proxies-os-file-actions.md) | Opening a file in an editor or revealing it in the file manager goes through daemon endpoints under the loopback and token guard, one mechanism for both the browser and the desktop shell. |
+| Per-Agent Behaviour Lives in One Descriptor Record per Agent | [`agent-descriptor-manifest`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-descriptor-manifest.md) |
+| Writing Agent-Native Config Safely | [`writing-agent-native-config-safely`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/writing-agent-native-config-safely.md) |
+| Coffer's Agent Hooks Are Marker-Scoped, Explicit, Audited and Repaired When Stale | [`agent-hook-installation`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-hook-installation.md) |
+| LLM Connections Are Projected Into Each Agent's Own Config File | [`provider-connections-projected-into-agent-config`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-connections-projected-into-agent-config.md) |
+| Provider Keys Never Land in an Agent's Native Config | [`provider-keys-never-land-in-native-config`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-keys-never-land-in-native-config.md) |
+| The Model Catalogue Is Read Back From the Installed Agent | [`model-catalogue-read-from-the-agent`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/model-catalogue-read-from-the-agent.md) |
+| Coffer's Own Model Is an Internal Engine, Not a Persona or a Tool | [`coffer-model-is-an-internal-engine`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-model-is-an-internal-engine.md) |
+| The Engine Owns Its Model; Its Endpoint Is Borrowed From a Flagged Connection | [`internal-engine-settings`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/internal-engine-settings.md) |
 
-## Agents, chat and channels
+## Chat & channels
 
-How Coffer drives coding agents and reaches them from other surfaces. See [Chat and turns](/architecture/chat).
+Explained in: [Chat and turns](/architecture/chat), [Channels](/guides/channels).
 
-| Record | Decision |
+| Decision | Record |
 | --- | --- |
-| [The Built-in Agent Is an Internal Capability, Not a Chat Persona](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/builtin-agent-is-internal-capability.md) | Coffer's own model use is an internal auxiliary capability behind its tools and upkeep passes, not a user-facing chat agent; chat talks to managed agents only. |
-| [Chat Is a Single-Owner Live Mirror](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-single-owner-live-mirror.md) | The web Chat page is the browser view of the same conversations the owner drives from a phone: one agent session per conversation, observed live over a per-conversation event bus, interruptible, with queued messages. |
-| [Remove the Tool-Approval System; Owner-Pairing Is the Gate](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/remove-tool-approval.md) | Driven agents run with full permissions and no per-tool approval, because every instruction comes from the paired owner and the approval relay added friction without safety. |
-| [Provider Switching](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-switching.md) | A provider connection is a credentialed endpoint with a protocol that Coffer projects into each agent's native config, keeping the API key in the vault and handing it over through a helper instead of writing plaintext; model and effort belong to the agent. |
-| [Channel Adapter Framework](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md) | Channels are a resource kind whose thin per-platform adapters handle transport only, while pairing, the owner gate, commands and rendering live in a shared core that reaches agents through the chat platform's own seams. |
-| [Channel Entrypoint Differentiation Layer](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-entrypoint-differentiation.md) | Switching agent from a channel opens a new conversation while switching model applies to the next turn, the chosen agent is sticky per thread, and channel turns run in Coffer's managed default workspace. |
-| [Channel media — reference in the DB, materialise per agent at send](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-media.md) | Inbound attachment bytes are stored on disk outside the chat database and materialised per agent at send time: inline content blocks for Claude Code, file paths for Codex. Its "defer a persisted attachment block" clause is superseded by the next record. |
-| [Persist channel attachments as a reference block, re-materialise from history](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/persisted-attachment-reference.md) | An attachment is persisted in the user message as a reference block (path, MIME type, filename — never bytes), and each turn re-materialises attachments from that persisted history. |
-| [SeaTalk Inbound Over WebSocket, With an Operator-Supplied SDK](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/seatalk-websocket-inbound.md) | SeaTalk events arrive over one outbound WebSocket connection using an SDK the operator supplies, so Coffer needs no public endpoint, signature check or tunnel; without the SDK a channel can still send. |
+| Coffer Drives Claude Code Through the Agent SDK and Codex Through `codex app-server` | [`driving-agents-through-sdk-and-app-server`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/driving-agents-through-sdk-and-app-server.md) |
+| Managed Agents Run With Full Permissions; Owner Pairing Is the Gate | [`managed-agents-run-with-full-permissions`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/managed-agents-run-with-full-permissions.md) |
+| Chat Is a Single-Owner Live Mirror | [`chat-single-owner-live-mirror`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-single-owner-live-mirror.md) |
+| Channels Are Thin Transport Adapters Over One Shared Core, Supervised In-Daemon | [`channel-adapter-framework`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-adapter-framework.md) |
+| A Channel Answers Only Its Paired Owner, and Fails Closed in Groups | [`channel-owner-gate`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-owner-gate.md) |
+| A Channel Conversation Is Keyed by (Channel, Chat, Thread) and Grounded in Its Thread and Quote | [`channel-conversation-identity-and-context`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-conversation-identity-and-context.md) |
+| Channel Switches: the Agent Opens a New Conversation, Model and Effort Apply Next Turn | [`channel-switches-structural-vs-parametric`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-switches-structural-vs-parametric.md) |
+| A Channel Reply Grows on One Live Surface, Paced by the Transport | [`channel-live-surface-strategy`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-live-surface-strategy.md) |
+| Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send | [`channel-attachments`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md) |
+| SeaTalk Inbound Is One Outbound WebSocket, Through an Operator-Supplied SDK | [`seatalk-websocket-inbound`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/seatalk-websocket-inbound.md) |
+| Telegram Inbound Is a Long Poll That Commits the Offset After Dispatch | [`telegram-long-polling`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/telegram-long-polling.md) |
 
-## Knowledge and memory
+## Skills, knowledge & memory
 
-What agents share beyond tools. See [Knowledge](/architecture/knowledge) and [Memory](/architecture/memory).
+Explained in: [Knowledge](/architecture/knowledge), [Memory](/architecture/memory), [Skills](/guides/skills).
 
-| Record | Decision |
+| Decision | Record |
 | --- | --- |
-| [One Shared Knowledge Store Across Agents](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/agent-native-shared-memory.md) | Coffer holds one store shared by every agent rather than one per agent, so a project fact exists once instead of drifting between agents' private copies. |
-| [The knowledge layer is a directory of files, not an index](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) | A collection is one Markdown tree that people and Coffer's internal model write together; new material lands in a hidden inbox that a curation pass merges into documents, agents read with their own file tools, and there is no derived index. |
-| [Retrieval Stack — Markdown Files as Truth, Not a Vendored Engine](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/files-as-truth-sqlite-retrieval.md) | **Superseded by** [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md); kept because it explains the import contract that still bans vendored retrieval and embedding engines from every layer. |
-| [Aggregate the agents' memory; never write it](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md) | Coffer reads each agent's native memory read-only, distils it into its own one-topic-per-file notes partitioned by repository, and delivers the index of those notes at session start with the path to read them as files. |
-| [Cross-Platform Skill Delivery — Symlink / Junction / Copy-Fallback](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/cross-platform-skill-delivery.md) | Each skill has one master folder in `~/.coffer/skills/`, delivered into every agent's skill directory as a symlink on POSIX or a junction on Windows, falling back to a copy only where links fail, with the link mode recorded. |
+| Skills Reach an Agent as a Directory Link to One Master Folder | [`cross-platform-skill-delivery`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/cross-platform-skill-delivery.md) |
+| Coffer Ships Its Own Manual as a Skill Resource | [`coffer-ships-its-own-skill`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md) |
+| Knowledge Is a Directory of Markdown Files, Not an Index | [`knowledge-is-plain-files`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md) |
+| Knowledge Curation Merges New Material Into the Documents | [`knowledge-curation`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-curation.md) |
+| Aggregate the Agents' Memory; Never Write It | [`aggregate-agent-memory-never-write-it`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/aggregate-agent-memory-never-write-it.md) |
 
-## Sync
+## Sync & credentials
 
-Keeping one vault across a user's machines. See [Vault sync](/architecture/vault-sync).
+Explained in: [Vault sync](/architecture/vault-sync), [Security model](/architecture/security).
 
-| Record | Decision |
+| Decision | Record |
 | --- | --- |
-| [Vault Sync](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/vault-sync.md) | The vault converges with one git repository the user owns: each round commits the serialised vault, merges the remote with git's three-way merge as the only arbiter, applies the result and pushes, and the remote is a rendezvous that any single machine can rebuild. |
-
-## Distribution and releases
-
-How Coffer is built and shipped. See [Distribution and releases](/architecture/distribution).
-
-| Record | Decision |
-| --- | --- |
-| [Distribution — PyInstaller-Bundled Daemon, Shim, and CLI](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/distribution-pyinstaller.md) | The daemon, the MCP shim and the CLI are frozen with PyInstaller into self-contained binaries, shipped from one release job as a terminal archive and inside the desktop `.dmg`, so users need no Python. |
-| [Experimental Features Instead of a Release Branch](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/experimental-features-instead-of-a-release-branch.md) | `main` keeps every feature; unfinished ones are registered as experimental and switched off by default in `stable` builds, with a per-machine runtime switch stored in `~/.coffer/daemon-config.json` that never syncs. |
-
-## Engineering harness
-
-How Coffer itself is built and verified, by humans and coding agents. See [Contributing](/contributing/).
-
-| Record | Decision |
-| --- | --- |
-| [Industrial-Grade Harness, Built in Layers](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/industrial-grade-harness-in-layers.md) | The engineering and agent-facing harness is built in independent layers — agent permissions and hooks, a reproducible environment, smoke checks and evals. Status: the agent-control layer, the eval layer and the committed lockfile are in place; the devcontainer, per-branch database and smoke layer were not built. |
-| [Close the Eval Flywheel (Loop Engineering)](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/close-the-eval-flywheel.md) | Coffer's non-deterministic behaviour gets a closed quality loop — an honest invocation log, an opt-in local capture sink, curation into golden cases, and an eval gate — built as independently shippable slices. |
-
-## Related
-
-- [Architecture overview](/architecture/)
-- [Design principles](/architecture/design-principles)
-- [Spec-driven workflow](/contributing/spec-workflow)
-- [All decision records on GitHub](https://github.com/wyx-sg/Coffer/tree/main/docs/decisions)
+| The Vault Converges With One User-Owned Git Remote, Git's Merge as Arbiter | [`vault-sync`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/vault-sync.md) |
+| A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves | [`sync-deletion-breaker`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-deletion-breaker.md) |
+| A Machine Is Identified by a Hash of Its Host's Own ID, and Owns One Descriptor in the Tree | [`sync-machine-identity`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-machine-identity.md) |
+| An Unattended Rewriter of Synced Content Runs on One Named Owner Machine | [`single-owner-machine-for-unattended-rewrites`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/single-owner-machine-for-unattended-rewrites.md) |
+| Sync Withholds Derived Output; Each Machine Renders Its Own | [`sync-withholds-derived-output`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/sync-withholds-derived-output.md) |
+| Envelope-Encrypted Credential Store | [`envelope-encrypted-credential-store`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md) |
+| Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use | [`credential-references`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/credential-references.md) |
+| Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository | [`credentials-across-machines`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/credentials-across-machines.md) |

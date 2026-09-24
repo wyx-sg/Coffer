@@ -40,7 +40,7 @@ flowchart TB
 | `infrastructure/` | Adapters: persistence, the credential store, subprocess and HTTP clients, git, file-tree I/O, LLM and agent SDK wrappers. | `domain/`, `application/` ports. Not `surfaces/`. |
 | `surfaces/` | Entry points: the FastAPI app and routes, the Typer CLI, the stdio shim, plus the composition root that wires everything. | Everything below. |
 
-The architectural style is fixed by [`docs/principles.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/principles.md); the choice of a layer-first layout over vertical slices is explained in [Layer-First Code Layout](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/code-layout-layer-first.md).
+The architectural style is fixed by [Principles](/architecture/principles); the choice of a layer-first layout over vertical slices is explained in [Layer-First Code Layout](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/code-layout-layer-first.md).
 
 ### Why layer-first with kind subdirectories
 
@@ -122,19 +122,34 @@ backend/coffer/
 │   ├── audit.py            # audit event vocabulary
 │   ├── errors.py           # error hierarchy and codes
 │   ├── features.py         # experimental-feature registry
-│   └── mcp/ agent/ skill/ knowledge/ channel/ chat/ memory/ provider/ sync/
-├── application/
+│   ├── mcp/                # tool search and tiering, server config
+│   ├── agent/              # agent config, facets, model catalogue
+│   ├── skill/              # skill bundle values
+│   ├── knowledge/          # catalogue and file values
+│   ├── channel/            # channel config, envelopes
+│   ├── chat/               # conversation, message, attachment, turn events
+│   ├── memory/             # note, partition, budget, reader protocol
+│   ├── provider/           # provider config, projection rules
+│   └── sync/               # manifest, diff, convergence and machine rules
+├── application/            # each kind package holds its services, ports and make_<kind>_kind()
 │   ├── resource_service.py # kind-agnostic CRUD, plus resource_*_ops.py
 │   ├── audit_service.py
-│   ├── retention_*.py      # registry, service, worker
+│   ├── retention_service.py # plus retention_registry.py, retention_worker.py
 │   ├── builtin_tools.py    # BuiltinTool and its registry
 │   ├── features.py         # FeatureService: pin, machine setting, channel default
 │   ├── upkeep_runs.py      # passes in flight, in process
 │   ├── credentials/        # ref-to-secret resolver
 │   ├── engine/             # which model Coffer's own passes run on
 │   ├── fs/                 # browse, pick, open, editor
-│   └── mcp/ agent/ skill/ knowledge/ channel/ chat/ memory/ provider/ sync/
-│                           # each kind: services, ports, make_<kind>_kind()
+│   ├── mcp/                # gateway, supervisor, discovery, search_tools
+│   ├── agent/              # agent services
+│   ├── skill/              # skill services, builtin-skill seed
+│   ├── knowledge/          # the write tool, curation, guide rendering
+│   ├── channel/            # adapter protocol, pairing, inbound, runtime
+│   ├── chat/               # turn orchestrator, runner, conversation service
+│   ├── memory/             # aggregate, distil, delivery, recall
+│   ├── provider/           # provider service, projection, reconcile
+│   └── sync/               # converge round, exporter, appliers, worker, ports
 ├── infrastructure/
 │   ├── persistence/        # SQLAlchemy engine, ORM models, repos, Alembic
 │   ├── credentials/        # encrypted store, master key; the only keyring user
@@ -143,7 +158,15 @@ backend/coffer/
 │   ├── logging/            # structlog setup, log files
 │   ├── llm/                # LangChain models, completion, transcription
 │   ├── agent_files/        # agent transcript readers shared by two kinds
-│   └── mcp/ agent/ skill/ knowledge/ channel/ chat/ memory/ provider/ sync/
+│   ├── mcp/                # upstream subprocess and HTTP clients
+│   ├── agent/              # agent config-file store
+│   ├── skill/              # master store, delivery engine
+│   ├── knowledge/          # paths, file tree, frontmatter, ripgrep
+│   ├── channel/            # Telegram and SeaTalk transports
+│   ├── chat/               # Claude SDK and Codex adapters, persistence
+│   ├── memory/             # native-memory readers, store
+│   ├── provider/           # provider introspector
+│   └── sync/               # git mirror, tree mirror, machine id
 └── surfaces/
     ├── http/               # FastAPI app, composition root, routes, *_wiring.py
     │   └── chat/ knowledge/ mcp/ memory/
@@ -151,7 +174,7 @@ backend/coffer/
     └── shim/               # coffer-mcp-shim
 ```
 
-`scripts/check_architecture_doc.py` keeps the tree in [`docs/architecture.md`](https://github.com/wyx-sg/Coffer/blob/main/docs/architecture.md) level with the real package list, so a package added or removed without updating the document fails the build.
+`scripts/check_architecture_doc.py` keeps the tree on this page level with the real package list, so a package added or removed without updating the document fails the build.
 
 ### Where a new piece of code goes
 
@@ -192,7 +215,7 @@ A structure that is only a convention erodes one convenient shortcut at a time, 
 | `lint-imports` | Every import contract above. |
 | [`scripts/check_file_sizes.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_file_sizes.py) | File-size ceilings: backend Python and desktop Rust at most 400 lines; frontend pages 200, components 250, hooks and utilities 300. Generated files are exempt. |
 | [`scripts/check_response_models.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_response_models.py) | Every FastAPI route declares `response_model=` (or `response_class=` for streaming and no-body responses), so no route returns an undeclared `dict`. |
-| [`scripts/check_architecture_doc.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_architecture_doc.py) | The code-layout tree and the builtin-tool list in `docs/architecture.md` match the code. |
+| [`scripts/check_architecture_doc.py`](https://github.com/wyx-sg/Coffer/blob/main/scripts/check_architecture_doc.py) | The code-layout tree on this page and the builtin-tool list across the architecture pages match the code. |
 | `make verify-contract` | The runtime OpenAPI document matches each spec's hand-written contract. |
 | `mypy --strict` | Full static typing of `backend/coffer`, so a port and its adapter cannot silently disagree. |
 

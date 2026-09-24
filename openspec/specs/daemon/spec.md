@@ -348,7 +348,7 @@ the one standing exception, since the shell loads the same UI from them and the 
 origin, is the boundary ([desktop-app](../desktop-app/spec.md)). The Vite dev-server origins stay reachable only behind the existing `COFFER_DEV_CORS` opt-in. An
 install with no built UI — the normal state of a source checkout before `npm run build` — MUST skip
 the mount and keep serving the API. See
-[The Daemon Serves Its Token in the Page](../../../docs/decisions/daemon-serves-the-token-in-the-page.md).
+[Daemon Auth and Origin Guard](../../../docs/decisions/daemon-auth-and-origin-guard.md).
 
 #### Scenario: the built UI is served same-origin and a missing build leaves the API up
 - **GIVEN** a daemon with a built web UI and no `COFFER_DEV_CORS` opt-in,

@@ -130,6 +130,8 @@ Plaintext exists in memory only between decrypt and the spawn or header injectio
 
 The daemon is the only owner of secret material. The CLI and the web UI store and read secrets through `/api/v1/credentials`; an import contract forbids the CLI from importing the credential module at all, so each machine has exactly one reader of the key.
 
+**The daemon is the sole credential-store owner.** Every surface — web UI, CLI, shim — reaches secrets through the daemon's `/api/v1/credentials` routes and toggles master-key storage via `/api/v1/settings/credentials`; the CLI never touches the store in-process (an importlinter contract forbids the CLI from reaching the keychain) (ADR envelope-encrypted-credential-store).
+
 ### The master key
 
 The one secret outside the database is the Fernet master key, managed by [`MasterKeyManager`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/credentials/master_key.py). It lives in exactly one of two places:
@@ -232,7 +234,7 @@ See [Vault sync](/architecture/vault-sync) for the full protocol.
 - [Credentials guide](/guides/credentials)
 - [Security policy](/contributing/security) — how to report a vulnerability.
 - [Envelope-Encrypted Credential Store](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/envelope-encrypted-credential-store.md)
-- [The Daemon Serves Its Token in the Page](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-serves-the-token-in-the-page.md)
+- [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/daemon-auth-and-origin-guard.md)
 - [Per-Agent Resource Scope](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/per-agent-resource-scope.md)
-- [Remove the Tool-Approval System](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/remove-tool-approval.md)
+- [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/managed-agents-run-with-full-permissions.md)
 - Specs: [credentials](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/credentials/spec.md), [daemon](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/daemon/spec.md), [channels](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/channels/spec.md)

@@ -3,7 +3,7 @@ inbound attachments as references").
 
 Channel media bytes live under ``~/.coffer/channel-media`` (out-of-band; the
 chat DB keeps only an ``AttachmentBlock`` reference — ADR:
-persisted-attachment-reference). Those bytes
+channel-attachments). Those bytes
 accumulate, so they are swept on the retention cadence. The *decision* — which
 files are old enough to delete — is pure and lives here so it is trivially
 testable; the actual ``stat``/``unlink`` I/O is an infrastructure sweep that

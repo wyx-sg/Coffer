@@ -212,5 +212,5 @@ At most one provider is the internal-engine default, and at most one carries spe
 - [Agents](/guides/agents) — model binding and the agent's own catalogue
 - [Credentials](/guides/credentials) — where provider keys are stored
 - [Chat](/guides/chat) and [Channels](/guides/channels) — where models are picked per conversation
-- [Provider Switching](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-switching.md)
+- [LLM Connections Are Projected Into Each Agent's Own Config File](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/provider-connections-projected-into-agent-config.md)
 - Specs: [provider-switching](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/provider-switching/spec.md), [internal-engine](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md)

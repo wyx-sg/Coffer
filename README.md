@@ -208,7 +208,7 @@ docs/decisions/       Architectural Decision Records (ADRs)
 .agents/              Guides: workflow, OpenSpec, stack, frontend, visual language, testing, harness
 ```
 
-Architecture deep-dive: [docs/architecture.md](docs/architecture.md). Principles: [docs/principles.md](docs/principles.md).
+Architecture deep-dive: [docs-site/architecture/](docs-site/architecture/index.md). Principles: [docs-site/architecture/principles.md](docs-site/architecture/principles.md).
 ADRs: [docs/decisions/](docs/decisions/).
 
 ---

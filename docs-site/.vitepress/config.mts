@@ -70,7 +70,8 @@ const architecture = [
     text: 'Foundations',
     items: [
       { text: 'Overview', link: '/architecture/' },
-      { text: 'Design principles', link: '/architecture/design-principles' },
+      { text: 'Principles', link: '/architecture/principles' },
+      { text: 'Design philosophy', link: '/architecture/design-principles' },
       { text: 'Resource framework', link: '/architecture/resource-framework' },
       { text: 'Layering and code layout', link: '/architecture/layering' },
     ],

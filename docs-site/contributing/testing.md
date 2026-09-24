@@ -159,7 +159,7 @@ Use **Node 20**, the version CI uses, when you run the frontend suite locally.
 | `scripts/check_response_models.py` | Every FastAPI route declares `response_model=` (or `response_class=` for streaming and file responses), so no route returns an untyped `dict` |
 | `scripts/check_doc_numbering.py` | Specs, ADRs and requirements stay named, not numbered. Links inside `docs/decisions/` resolve, and the ADR index lists exactly the ADRs that exist |
 | `scripts/check_spec_citations.py` | Every `spec <capability> "<Title>"` citation in any tracked file names a real requirement, and retired id forms stay out |
-| `scripts/check_architecture_doc.py` | `docs/architecture.md` names every package in the code layout, names nothing that is gone, and lists every built-in `coffer__*` tool |
+| `scripts/check_architecture_doc.py` | The code-layout tree in `docs-site/architecture/layering.md` names every package, names nothing that is gone, and the architecture pages name every built-in `coffer__*` tool |
 | `scripts/check_pyinstaller_specs.py` | The three PyInstaller specs point at files that exist and keep the `-X utf8` runtime option. No pull request job runs PyInstaller, so this is the only early warning |
 | `scripts/check_cli_reference.py` | This site's generated CLI and REST API reference pages match the code. Fix drift with `make docs-reference` |
 | `ruff check`, `ruff format --check` | Lint and formatting over `backend/` and `evals/`, under the rules in `backend/pyproject.toml` |

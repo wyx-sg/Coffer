@@ -38,7 +38,7 @@ interface NavGroup {
 }
 
 /**
- * Sidebar navigation — a role-based information architecture (ADR everything-is-a-resource-kind):
+ * Sidebar navigation — a role-based information architecture (ADR sidebar-grouped-by-role):
  *
  * - **Agents** — the consumers: the agents you use (Claude Code, Codex), and
  *   Chat with them. Agents are NOT vault assets, so they are not under
@@ -53,7 +53,7 @@ interface NavGroup {
  *   / metrics) is a reserved future surface and is not Activity: a record of
  *   what happened is not a measurement of how the system is doing.
  *
- * Sidebar policy (ADR everything-is-a-resource-kind): show only what ships today — no "soon"
+ * Sidebar policy (ADR sidebar-grouped-by-role): show only what ships today — no "soon"
  * placeholders, and no entry outliving its feature.
  *
  * Every entry matches by path prefix (segment-aware), so a detail page keeps
