@@ -35,6 +35,7 @@ from typer.testing import CliRunner
 
 import coffer.surfaces.cli._client as _cli_client
 from coffer.domain.scope import Scope
+from coffer.domain.sync.backup import BackupRemote
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
@@ -203,6 +204,61 @@ def test_remote_set_on_a_paused_remote_keeps_it_paused(fleet: Fleet) -> None:
     assert stored.interval_seconds == 120
     assert stored.enabled is False
     assert "disabled" in result.output
+
+
+def _configured(fleet: Fleet, tmp_path: pathlib.Path) -> Any:
+    """A remote carrying a non-default value in every option ``remote set``
+    takes, plus a custom working tree it has no flag for."""
+    fleet.a.set_credential("sync-push", "tok-123")
+    remote = fleet.run(fleet.a.remote_config())
+    custom = dataclasses.replace(
+        remote,
+        branch="vault",
+        credential_ref="sync-push",
+        include_credentials=True,
+        interval_seconds=300,
+        worktree_path=str(tmp_path / "custom-tree"),
+    )
+    fleet.run(fleet.a.service().set_remote(custom))
+    return custom
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="reconfiguring a remote changes only what it names"
+)
+def test_remote_set_changes_only_the_option_it_names(fleet: Fleet, tmp_path) -> None:
+    before = _configured(fleet, tmp_path)
+
+    fleet.ok("sync", "remote", "set", fleet.a.remote_url, "--interval", "600")
+
+    stored = fleet.run(fleet.a.service().get_remote())
+    assert stored == dataclasses.replace(before, interval_seconds=600)
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="reconfiguring a remote changes only what it names"
+)
+def test_remote_set_without_credentials_switches_credential_sync_off(
+    fleet: Fleet, tmp_path
+) -> None:
+    before = _configured(fleet, tmp_path)
+
+    result = fleet.ok("sync", "remote", "set", fleet.a.remote_url, "--without-credentials")
+
+    stored = fleet.run(fleet.a.service().get_remote())
+    assert stored == dataclasses.replace(before, include_credentials=False)
+    assert "credentials excluded" in result.output
+
+
+def test_first_remote_set_stores_the_defaults(fleet: Fleet) -> None:
+    fleet.ok("sync", "remote", "set", fleet.a.remote_url)
+
+    stored = fleet.run(fleet.a.service().get_remote())
+    assert stored is not None
+    assert (stored.branch, stored.interval_seconds) == ("main", 3600)
+    assert (stored.include_credentials, stored.credential_ref) == (False, None)
+    assert stored.enabled is True
+    assert stored.worktree_path == BackupRemote(url=fleet.a.remote_url).worktree_path
 
 
 def test_remote_set_refuses_a_remote_it_cannot_reach(fleet: Fleet, tmp_path) -> None:
@@ -781,6 +837,7 @@ def test_the_sync_group_offers_every_command_and_option_it_owes() -> None:
             "--branch",
             "--interval",
             "--with-credentials",
+            "--without-credentials",
             "--credential-ref",
         },
         ("sync", "remote", "show"): set(),
@@ -794,7 +851,9 @@ def test_the_sync_group_offers_every_command_and_option_it_owes() -> None:
     }
     for path, options in owed.items():
         assert path in tree, f"missing: coffer {' '.join(path)}"
-        offered = {opt for param in tree[path].params for opt in param.opts}
+        offered = {
+            opt for param in tree[path].params for opt in (*param.opts, *param.secondary_opts)
+        }
         assert options <= offered, f"coffer {' '.join(path)} lacks {options - offered}"
     # The positional arguments the requirement names.
     positional = {

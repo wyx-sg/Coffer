@@ -17,13 +17,12 @@ from typing import Any
 import typer
 from rich.console import Console
 
-from coffer.domain.sync.backup import DEFAULT_BRANCH, DEFAULT_INTERVAL_SECONDS
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli import sync_join
 from coffer.surfaces.cli.sync_machine_cmd import key_app, machine_app
+from coffer.surfaces.cli.sync_remote_cmd import print_remote, remote_app
 
 app = typer.Typer(help="Keep this vault converged with a git remote you own")
-remote_app = typer.Typer(help="The one git remote this vault converges with")
 app.add_typer(remote_app, name="remote")
 app.add_typer(machine_app, name="machine")
 app.add_typer(key_app, name="key")
@@ -263,7 +262,7 @@ def status(ctx: typer.Context) -> None:
     if not payload.get("configured"):
         _console.print("no sync remote configured — 'coffer sync remote set <url>'")
     else:
-        _print_remote(payload["remote"])
+        print_remote(payload["remote"])
     _console.print(f"this machine: {payload.get('machine_id')}")
     if not payload.get("machine_id_is_derived"):
         _console.print(
@@ -321,80 +320,3 @@ def history(
             + _counts("published", run.get("published") or {})
             + f"  {commit}"
         )
-
-
-# --- remote -----------------------------------------------------------------
-
-
-def _print_remote(remote: dict[str, Any]) -> None:
-    _console.print(f"remote: {remote['url']}  branch {remote['branch']}")
-    _console.print(
-        f"  every {remote['interval_seconds']}s · "
-        f"credentials {'included' if remote['include_credentials'] else 'excluded'} · "
-        f"{'enabled' if remote['enabled'] else 'disabled'}"
-    )
-    if remote.get("credential_ref"):
-        _console.print(f"  push credential: {remote['credential_ref']}")
-    _console.print(f"  working tree: {remote['worktree_path']}")
-
-
-@remote_app.command("set")
-def remote_set(
-    ctx: typer.Context,
-    url: str = typer.Argument(..., help="Git remote URL you own (https, ssh, or file://)"),
-    branch: str = typer.Option(DEFAULT_BRANCH, "--branch"),
-    interval: int = typer.Option(
-        DEFAULT_INTERVAL_SECONDS, "--interval", help="Seconds between automatic rounds"
-    ),
-    with_credentials: bool = typer.Option(
-        False, "--with-credentials", help="Carry credential ciphertext (never the master key)"
-    ),
-    credential_ref: str = typer.Option(
-        None, "--credential-ref", help="Name of the push credential in the credential store"
-    ),
-) -> None:
-    """Configure the remote. It is probed before being accepted.
-
-    ``enabled`` carries over (a first remote starts enabled): re-running never unpauses."""
-    body = {
-        "url": url,
-        "branch": branch,
-        "interval_seconds": interval,
-        "include_credentials": with_credentials,
-        "credential_ref": credential_ref,
-    }
-    verbose = _verbose(ctx)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        current = c.get("/sync/remote")
-        _cli_client.check(current, verbose=verbose)
-        body["enabled"] = (current.json().get("remote") or {}).get("enabled", True)
-        r = c.put("/sync/remote", json=body)
-        _cli_client.check(r, verbose=verbose)
-        _print_remote(r.json())
-
-
-@remote_app.command("show")
-def remote_show(ctx: typer.Context) -> None:
-    verbose = _verbose(ctx)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.get("/sync/remote")
-        _cli_client.check(r, verbose=verbose)
-        payload = r.json()
-    if not payload.get("configured"):
-        _console.print("no sync remote configured")
-        return
-    _print_remote(payload["remote"])
-
-
-@remote_app.command("clear")
-def remote_clear(ctx: typer.Context) -> None:
-    """Forget the remote. The vault is left exactly as it is."""
-    verbose = _verbose(ctx)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.delete("/sync/remote")
-        _cli_client.check(r, verbose=verbose)
-        payload = r.json()
-    _console.print("[green]cleared[/green]" if payload.get("cleared") else "nothing to clear")

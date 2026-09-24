@@ -67,13 +67,14 @@ def run() -> None:
     """Entry point for the `coffer` script in pyproject.toml.
 
     A daemon that stops answering after a command built its client surfaces as
-    ``httpx.ConnectError`` from wherever the request was made; it is reported
-    here, once, as exit 3 with a message rather than a traceback (spec
+    an ``httpx.TransportError`` from wherever the request was made — refused
+    before the request, or dropped, reset or timed out during it; it is
+    reported here, once, as exit 3 with a message rather than a traceback (spec
     mcp-gateway "Manage MCP servers as resources").
     """
     try:
         app()
-    except httpx.ConnectError as err:
+    except httpx.TransportError as err:
         sys.exit(int(_client.render_http_error(err, verbose=False)))
 
 

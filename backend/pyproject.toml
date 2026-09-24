@@ -340,6 +340,7 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    "coffer.surfaces.cli.sync_remote_cmd",
 ]
 
 # Managed coding agents and their on-disk config.
@@ -412,6 +413,7 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    "coffer.surfaces.cli.sync_remote_cmd",
 ]
 
 # Skills: the master store and per-agent delivery.
@@ -484,6 +486,7 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    "coffer.surfaces.cli.sync_remote_cmd",
 ]
 
 # Knowledge: ``domain.knowledge`` and ``infrastructure.knowledge`` are the
@@ -560,6 +563,7 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    "coffer.surfaces.cli.sync_remote_cmd",
 ]
 
 # IM channels: adapters, pairing, the inbound processor, the runtime.
@@ -632,6 +636,7 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    "coffer.surfaces.cli.sync_remote_cmd",
 ]
 ignore_imports = [
     "coffer.application.channel.* -> coffer.domain.chat.*",
@@ -710,6 +715,7 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    "coffer.surfaces.cli.sync_remote_cmd",
 ]
 
 # LLM connections and their projection into each agent's config.
@@ -782,6 +788,7 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    "coffer.surfaces.cli.sync_remote_cmd",
 ]
 ignore_imports = [
     "coffer.domain.provider.* -> coffer.domain.agent.*",
@@ -859,6 +866,7 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    "coffer.surfaces.cli.sync_remote_cmd",
 ]
 ignore_imports = [
     "coffer.application.memory.* -> coffer.domain.agent.*",
@@ -879,6 +887,7 @@ source_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    "coffer.surfaces.cli.sync_remote_cmd",
 ]
 forbidden_modules = [
     "coffer.domain.mcp",
@@ -1049,6 +1058,7 @@ forbidden_modules = [
     "coffer.surfaces.http.sync_schemas",
     "coffer.surfaces.cli.sync_cmd",
     "coffer.surfaces.cli.sync_machine_cmd",
+    "coffer.surfaces.cli.sync_remote_cmd",
 ]
 ignore_imports = [
     "coffer.infrastructure.persistence.migrations.env -> coffer.infrastructure.channel.persistence",

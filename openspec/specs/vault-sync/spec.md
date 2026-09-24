@@ -1352,7 +1352,7 @@ The CLI MUST cover the round and the vault's lifecycle — `coffer sync now`,
 `adopt [<url>] [--keep-local] [--yes]`, `status`, `history [--limit]`,
 `restore [--at <rev|date>]`, `confirm`, `reject`, `rebuild [--yes]`, `rollback`
 — and its administration:
-`remote set <url> [--branch] [--interval <seconds>] [--with-credentials] [--credential-ref]`,
+`remote set <url> [--branch] [--interval <seconds>] [--with-credentials|--without-credentials] [--credential-ref]`,
 `remote show`, `remote clear`, `machine list`, `machine rename <name>`,
 `machine remove <id>`, `key export <file>`, `key import <file>`,
 `key fingerprint`.
@@ -1361,7 +1361,7 @@ The CLI MUST cover the round and the vault's lifecycle — `coffer sync now`,
 - **GIVEN** the `coffer sync` command group
 - **WHEN** its commands and options are listed
 - **THEN** it offers `now`, `adopt` with `--keep-local` and `--yes`, `status`, `history` with `--limit`, `restore` with `--at`, `confirm`, `reject`, `rebuild` with `--yes` and `rollback`
-- **AND** it offers `remote set` with `--branch`, `--interval`, `--with-credentials` and `--credential-ref`, `remote show`, `remote clear`, `machine list`, `machine rename`, `machine remove`, `key export`, `key import` and `key fingerprint`
+- **AND** it offers `remote set` with `--branch`, `--interval`, `--with-credentials`, `--without-credentials` and `--credential-ref`, `remote show`, `remote clear`, `machine list`, `machine rename`, `machine remove`, `key export`, `key import` and `key fingerprint`
 
 ### Requirement: Cover the same operations over HTTP
 The HTTP API MUST cover the same operations under `/api/v1/sync`:
@@ -1491,8 +1491,11 @@ entry and the desktop shell marks nothing — even over a round the vault was
 paused on, because a user who met a hold by switching sync off has answered it
 too. The remote, the pointer and the history MUST all be kept, so switching it
 back on resumes where the vault left off. Re-running `coffer sync remote set`
-MUST keep a paused remote paused — it changes what it names and nothing else —
-and a remote configured for the first time is stored enabled.
+MUST keep a paused remote paused — it changes what it names and nothing else:
+every option it is not given keeps its stored value, including the branch, the
+interval, whether credentials travel, the push credential and the working tree
+— and a remote configured for the first time is stored enabled, with the
+defaults for every option it is not given.
 
 #### Scenario: a paused remote runs no round and asks for nothing
 - **GIVEN** a joined vault whose last round is held at the deletion guard, and
@@ -1508,3 +1511,12 @@ and a remote configured for the first time is stored enabled.
 - **WHEN** `coffer sync remote set` is run again with a different interval
 - **THEN** the stored remote carries the new interval and is still switched off
 - **AND** a remote set for the first time is stored switched on
+
+#### Scenario: reconfiguring a remote changes only what it names
+- **GIVEN** a configured remote with a non-default branch, interval, push
+  credential and working tree, carrying credentials
+- **WHEN** `coffer sync remote set` is run again naming only a new interval
+- **THEN** the stored remote carries the new interval and every other setting
+  exactly as it was
+- **AND** running it with `--without-credentials` switches credential sync off
+  and changes nothing else

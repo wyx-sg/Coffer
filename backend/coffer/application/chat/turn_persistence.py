@@ -32,12 +32,15 @@ from coffer.domain.chat.message import (
 
 log = logging.getLogger(__name__)
 
-#: The flush throttle's clock; a module attribute so tests can drive it.
+#: The flush throttle's clock and sleep; module attributes so tests can drive them.
 _clock = time.monotonic
+_sleep = asyncio.sleep
 
 #: At most one mid-turn write of the partial reply per this many seconds. A
-#: daemon that dies mid-turn loses no more than this much of the reply; a turn
-#: streaming hundreds of tokens a second still costs one row update per second.
+#: daemon that dies mid-turn loses no more than about this much of the reply —
+#: a trailing write catches text streamed just before a quiet stretch — and a
+#: turn streaming hundreds of tokens a second still costs one row update per
+#: second.
 DEFAULT_PARTIAL_FLUSH_SECONDS = 1.0
 
 
@@ -97,9 +100,15 @@ class PartialFlusher:
     the end; in between, the text only lived in memory, so a daemon that died
     mid-turn left the startup sweep an empty ``failed`` row. After each content
     event this writes the accumulated blocks onto the ``streaming`` row, but at
-    most once per ``interval`` seconds — never per token. ``interval=None``
-    disables it. The write is guarded on ``status='streaming'`` in the store, so
-    a flush racing the finalise cannot clobber it.
+    most once per ``interval`` seconds — never per token. An event the throttle
+    skips schedules one **trailing** write for when the interval is up, so text
+    streamed just before a long quiet stretch (a tool run, thinking) is on disk
+    within about ``interval`` rather than only when the next event arrives. Every
+    write, trailing or not, lands at least ``interval`` after the previous one,
+    so the bound stays one write per interval. ``close()`` cancels the trailing
+    write and waits out an in-flight one; the runner calls it before finalising,
+    so nothing is written after the row is final (and the store guards the write
+    on ``status='streaming'`` besides). ``interval=None`` disables it.
     """
 
     def __init__(
@@ -113,23 +122,62 @@ class PartialFlusher:
         self._content = content
         self._interval = interval
         self._last = _clock()
+        self._trailing: asyncio.Task[None] | None = None
+        self._inflight: asyncio.Future[None] | None = None
+        self._closed = False
 
     async def after(self, event: AgentEvent, message_id: str | None) -> None:
-        """Flush if ``event`` changed the content and the interval has passed."""
-        if self._interval is None or message_id is None:
+        """Flush if ``event`` changed the content and the interval has passed;
+        otherwise make sure a trailing flush is scheduled."""
+        if self._interval is None or message_id is None or self._closed:
             return
         if not isinstance(event, (TextDelta, ToolCall, ToolResult)):
             return
-        now = _clock()
-        if now - self._last < self._interval:
+        wait = self._interval - (_clock() - self._last)
+        if wait > 0:
+            if self._trailing is None or self._trailing.done():
+                self._trailing = asyncio.create_task(self._flush_later(wait, message_id))
             return
-        self._last = now
+        self._cancel_trailing()
+        await self._write(message_id)
+
+    async def close(self) -> None:
+        """Stop flushing: cancel a pending trailing write, wait out one in flight."""
+        self._closed = True
+        self._cancel_trailing()
+        inflight = self._inflight
+        if inflight is not None and not inflight.done():
+            try:
+                await asyncio.shield(inflight)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                pass  # already logged by ``_write``
+
+    def stop(self) -> None:
+        """Synchronous last resort (``finally``): no further writes are started."""
+        self._closed = True
+        self._cancel_trailing()
+
+    def _cancel_trailing(self) -> None:
+        if self._trailing is not None and not self._trailing.done():
+            self._trailing.cancel()
+        self._trailing = None
+
+    async def _flush_later(self, delay: float, message_id: str) -> None:
+        await _sleep(delay)
+        if not self._closed:
+            await self._write(message_id)
+
+    async def _write(self, message_id: str) -> None:
+        self._last = _clock()
+        # Shielded: a cancellation mid-write leaves the (guarded) write to finish
+        # rather than tearing the session down half-way; ``close`` awaits it.
+        self._inflight = asyncio.ensure_future(
+            self._chat.save_partial_message(message_id, self._content.blocks())
+        )
         try:
-            # Shielded: a cancellation mid-write leaves the (guarded) write to
-            # finish rather than tearing the session down half-way.
-            await asyncio.shield(
-                self._chat.save_partial_message(message_id, self._content.blocks())
-            )
+            await asyncio.shield(self._inflight)
         except asyncio.CancelledError:
             raise
         except Exception:

@@ -15,7 +15,11 @@ neither may leave a second one — which the partial unique index
   applies it with the flag cleared and hands the round a note to report. The
   exception is a *move*: when the tree this round is applying also clears the
   flag on the local holder, another machine moved it, and the holder is
-  released first so the move lands whatever order the two documents apply in.
+  released ahead of the target so the move lands whatever order the two
+  documents apply in. The release is handed back as a :class:`_ReleaseHolder`
+  rather than written here: the applier runs it after the target's gate, just
+  before the target's write, and reverts it if that write fails — so a target
+  that cannot land leaves this machine its internal default.
 """
 
 from __future__ import annotations
@@ -83,6 +87,26 @@ def refusing_hooks(
     return on_register, on_update
 
 
+class _ReleaseHolder:
+    """Clear the flag on ``holder``; revert puts back the config it had."""
+
+    def __init__(self, rows: _WritableRows, holder: Resource, actor: str) -> None:
+        self._rows = rows
+        self._holder = holder
+        self._actor = actor
+
+    async def _write(self, config: dict[str, Any]) -> None:
+        await self._rows.update_config(
+            self._holder.uid, config, self._actor, allow_lifecycle_kind=True
+        )
+
+    async def apply(self) -> None:
+        await self._write({**self._holder.config, _FLAG: False})
+
+    async def revert(self) -> None:
+        await self._write(dict(self._holder.config))
+
+
 class ProviderInternalDefaultNormaliser:
     """Implements ``application.sync.ports.ImportNormaliser`` structurally."""
 
@@ -97,27 +121,24 @@ class ProviderInternalDefaultNormaliser:
         uid: str,
         config: Mapping[str, object],
         tree_config: Callable[[str], Awaitable[Mapping[str, object] | None]],
-    ) -> tuple[dict[str, object], str | None]:
+    ) -> tuple[dict[str, object], str | None, _ReleaseHolder | None]:
         out = dict(config)
         if out.get(_FLAG) is not True:
-            return out, None
+            return out, None, None
         holder = await other_holder(self._rows, uid)
         if holder is None:
-            return out, None
+            return out, None, None
         holder_in_tree = await tree_config(holder.uid)
         if holder_in_tree is not None and holder_in_tree.get(_FLAG) is not True:
             # A move made on another machine: its document for the holder
-            # clears the flag in this same tree. Released here rather than left
-            # to that document's own turn, which may come after this one.
-            await self._rows.update_config(
-                holder.uid,
-                {**holder.config, _FLAG: False},
-                self._actor,
-                allow_lifecycle_kind=True,
-            )
-            return out, None
+            # clears the flag in this same tree. Released with this document's
+            # write rather than left to that document's own turn, which may
+            # come after this one.
+            return out, None, _ReleaseHolder(self._rows, holder, self._actor)
         out[_FLAG] = False
-        return out, (
+        return (
+            out,
             f"applied without internal_default: connection {holder.name!r} "
-            f"is this machine's internal-engine default and keeps it"
+            f"is this machine's internal-engine default and keeps it",
+            None,
         )

@@ -9,7 +9,9 @@ chat "Keep partial output when a turn is interrupted or fails"): a user
 interrupt finalises the partial as complete; an adapter stream that stops
 without a terminal event is reported as ``stream_ended`` and the partial marked
 failed; a daemon shutdown cancelling the task marks it failed too. Only a
-delete (``ActiveTurn.discarded``) throws the turn away. While streaming, the
+delete (``ActiveTurn.discarded``) throws the turn away. A turn ends exactly
+once: a cancel landing after its terminal event (e.g. mid-finalize) re-runs
+the finalize under a shield and emits nothing more. While streaming, the
 reply so far is flushed onto the ``streaming`` row (throttled —
 ``PartialFlusher``) so a daemon that dies outright leaves the text for the
 startup sweep.
@@ -142,6 +144,17 @@ async def run_turn_task(
     placeholder_id: str | None = None
     append_task: asyncio.Task[Message] | None = None
 
+    async def finalize(done: TurnDone | None, error: TurnError | None) -> None:
+        await finalize_assistant_message(
+            chat=chat,
+            conversation_id=conversation_id,
+            message_id=placeholder_id,
+            model_id=model_id,
+            content=content,
+            final_done=done,
+            error_event=error,
+        )
+
     try:
         history = await chat.list_messages(conversation_id, limit=HISTORY_LIMIT)
         turn_attachments = _attachments_from_history(history)
@@ -212,80 +225,54 @@ async def run_turn_task(
             )
             emit(error_event)
 
-        await finalize_assistant_message(
-            chat=chat,
-            conversation_id=conversation_id,
-            message_id=placeholder_id,
-            model_id=model_id,
-            content=content,
-            final_done=final_done,
-            error_event=error_event,
-        )
+        await flusher.close()
+        await finalize(final_done, error_event)
     except asyncio.CancelledError:
         # The cancel may have landed while the placeholder write was still in
         # flight; recover the committed row's id so it is not orphaned.
         placeholder_id = await recover_placeholder_id(placeholder_id, append_task)
-        if active.interrupted:
-            # User interrupt: keep whatever the agent produced. Emit a terminal
-            # event and finalise the partial message. The finalise is shielded so
-            # a second cancellation (e.g. the conversation is deleted while this
-            # interrupt is mid-write) cannot abort the write half-done.
-            done = TurnDone(prompt_tokens=None, completion_tokens=None, stop_reason="interrupted")
-            emit(done)
-            await asyncio.shield(
-                finalize_assistant_message(
-                    chat=chat,
-                    conversation_id=conversation_id,
-                    message_id=placeholder_id,
-                    model_id=model_id,
-                    content=content,
-                    final_done=done,
-                    error_event=None,
-                )
-            )
-            # Cancellation handled — do NOT re-raise.
-        elif active.discarded:
+        await flusher.close()
+        if active.discarded:
             # Conversation deleted: discard the partial turn entirely — remove the
             # placeholder so no orphan streaming row remains.
             if placeholder_id is not None:
                 await asyncio.shield(chat.delete_message(placeholder_id))
             log.debug("Turn for conversation %s cancelled and discarded", conversation_id)
             raise
-        else:
-            # Nobody asked for this cancellation: the daemon is going down. Keep the
-            # partial, marked failed — what the startup sweep would give it.
-            error_event = TurnError(code=DAEMON_STOPPED, message=DAEMON_STOPPED_MESSAGE)
-            emit(error_event)
-            await asyncio.shield(
-                finalize_assistant_message(
-                    chat=chat,
-                    conversation_id=conversation_id,
-                    message_id=placeholder_id,
-                    model_id=model_id,
-                    content=content,
-                    final_done=None,
-                    error_event=error_event,
+        # A terminal event (TurnDone / TurnError) already out means the turn has
+        # ended — the cancel landed after it, e.g. mid-finalize: the turn ends as
+        # that event said, with no second terminal, and the finalize is re-run
+        # whole (same content, same status).
+        if final_done is None and error_event is None:
+            if active.interrupted:
+                # User interrupt: keep whatever the agent produced, complete.
+                final_done = TurnDone(
+                    prompt_tokens=None, completion_tokens=None, stop_reason="interrupted"
                 )
-            )
+                emit(final_done)
+            else:
+                # Nobody asked for this cancellation: the daemon is going down.
+                # Keep the partial, marked failed — what the startup sweep gives it.
+                error_event = TurnError(code=DAEMON_STOPPED, message=DAEMON_STOPPED_MESSAGE)
+                emit(error_event)
+        # Shielded so a second cancellation (e.g. the conversation is deleted while
+        # an interrupt is mid-write) cannot abort the write half-done.
+        await asyncio.shield(finalize(final_done, error_event))
+        if not active.interrupted:
             log.info("Turn for conversation %s stopped by shutdown; partial kept", conversation_id)
             raise
+        # User interrupt handled — do NOT re-raise.
     except Exception as exc:
         log.exception("Unexpected error in turn task for conversation %s", conversation_id)
         error_event = TurnError(code="INTERNAL_ERROR", message=str(exc))
         emit(error_event)
+        await flusher.close()
         # placeholder_id may be None when the placeholder write itself failed;
-        # _finalize falls back to appending a failed row so the turn still leaves a
-        # persisted trace.
-        await finalize_assistant_message(
-            chat=chat,
-            conversation_id=conversation_id,
-            message_id=placeholder_id,
-            model_id=model_id,
-            content=content,
-            final_done=final_done,
-            error_event=error_event,
-        )
+        # the finalize falls back to appending a failed row so the turn still
+        # leaves a persisted trace.
+        await finalize(final_done, error_event)
     finally:
+        flusher.stop()
         # Ownership-checked release — only our own entry, so a racing start that
         # registered a fresh turn is not lost.
         release_active(conversation_id, active)

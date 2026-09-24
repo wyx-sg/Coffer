@@ -198,8 +198,11 @@ async def run_curation(
     label = found.path
     if len(found.body) > MAX_SOURCE_CHARS:
         # No pass can hold it, so it leaves the queue as it stands rather than
-        # being offered to — and refused by — every sweep for ever.
+        # being offered to — and refused by — every sweep for ever. Settled,
+        # so its cut-off count goes with it.
         shelved = await asyncio.to_thread(shelve_oversized, collection, item)
+        if truncations is not None:
+            truncations.clear(collection_uid, label)
         return {
             "status": "too_large",
             "collection": collection,

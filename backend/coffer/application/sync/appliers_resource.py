@@ -20,7 +20,7 @@ from collections.abc import Mapping, Sequence
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.appliers_read import read_yaml
 from coffer.application.sync.convergence_ops import is_inapplicable
-from coffer.application.sync.ports import ImportGate, ImportNormaliser
+from coffer.application.sync.ports import ImportGate, ImportNormaliser, PreWrite
 from coffer.domain.error_base import CofferError
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource
@@ -152,9 +152,10 @@ class ResourceApplier:
         # "Keep at most one internal-engine default"). A note means it did, and
         # travels back to the round to be reported; the path still applies.
         note: str | None = None
+        pre_write: PreWrite | None = None
         normaliser = self._normalisers.get(kind)
         if normaliser is not None:
-            config, note = await normaliser.normalise(
+            config, note, pre_write = await normaliser.normalise(
                 uid, config, lambda other: self._tree_config(kind, other)
             )
 
@@ -170,6 +171,29 @@ class ResourceApplier:
 
         raw_description = doc.get("description")
         description = raw_description if isinstance(raw_description, str) else None
+        # The normaliser's write to another row (a moved internal default's
+        # release) runs only once the gate has passed, and is reverted if this
+        # document's own write then fails — so a document that does not land
+        # leaves that row as it was.
+        if pre_write is not None:
+            await pre_write.apply()
+        try:
+            await self._write(existing, uid, kind, name, config, description)
+        except Exception:
+            if pre_write is not None:
+                await pre_write.revert()
+            raise
+        return note
+
+    async def _write(
+        self,
+        existing: Resource | None,
+        uid: str,
+        kind: str,
+        name: str,
+        config: dict[str, object],
+        description: str | None,
+    ) -> None:
         if existing is None:
             # Registered at the identity the document carries rather than a
             # fresh one, so both machines go on holding the same resource. A
@@ -215,7 +239,6 @@ class ResourceApplier:
                 description=description,
                 allow_lifecycle_kind=True,
             )
-        return note
 
     async def _tree_config(self, kind: str, uid: str) -> Mapping[str, object] | None:
         """The config of ``resources/<kind>/<uid>.yaml`` in this round's tree."""

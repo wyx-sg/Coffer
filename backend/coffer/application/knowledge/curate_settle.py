@@ -100,9 +100,13 @@ def shelve_oversized(collection: str, item: Pending) -> dict[str, Any]:
     with it, since the model cannot merge it either — and an edited document,
     which is already a document and has nothing to promote, is stamped as seen
     so the sweep stops handing it back. Neither changes a word of the item.
+    Material removed since the pass read it has nothing left to promote, and
+    is reported as promoting nothing — as in :func:`give_up`.
     """
     if item.material is not None:
-        return {"promoted": [fs.promote(collection, item.material).path]}
+        with contextlib.suppress(KnowledgeFileNotFound):
+            return {"promoted": [fs.promote(collection, item.material).path]}
+        return {"promoted": []}
     settle(collection, item)
     return {"stamped": item.document or ""}
 

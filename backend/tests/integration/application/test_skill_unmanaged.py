@@ -378,6 +378,37 @@ async def test_adopt_from_a_disabled_agent_links_in_place(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_a_skill_adopted_from_a_disabled_agent_is_reclaimed_then_restored(tmp_path):
+    """The exception adoption makes (spec agent-registry "Switch an agent off
+    with the kind-agnostic enabled flag") ends at the agent's next reconcile,
+    and enabling the agent puts the skill back."""
+    from coffer.application.skill.delivery_ops import apply_scope_for_agent
+
+    skill_svc, agent_svc, _, store, _, engine = await _setup(tmp_path)
+    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="off")
+    await skill_svc._rs.set_enabled(agent.uid, False, actor="cli")
+    original = skill_dir / "kept-here"
+    _write_skill_folder(original, name="kept-here", body="still mine")
+    r = await skill_svc.adopt_unmanaged(
+        agent_uid=agent.uid, skill_name="kept-here", location="skills", actor="cli"
+    )
+
+    await apply_scope_for_agent(service=skill_svc, agent_uid=agent.uid, actor="cli")
+
+    assert not original.exists() and not original.is_symlink()
+    bindings = await skill_svc.bindings_for(r.uid)
+    assert [(b.agent_resource_id, b.enabled) for b in bindings] == [(agent.id, False)]
+
+    await skill_svc._rs.set_enabled(agent.uid, True, actor="cli")
+    await apply_scope_for_agent(service=skill_svc, agent_uid=agent.uid, actor="cli")
+
+    assert original.resolve() == store.paths_for("kept-here").folder.resolve()
+    bindings = await skill_svc.bindings_for(r.uid)
+    assert [(b.agent_resource_id, b.enabled) for b in bindings] == [(agent.id, True)]
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 @pytest.mark.acceptance(spec="skill-manager", scenario="delete an unmanaged skill")
 async def test_delete_unmanaged_dir(tmp_path):
     skill_svc, agent_svc, audit, _, _, engine = await _setup(tmp_path)

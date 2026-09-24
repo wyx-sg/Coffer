@@ -197,7 +197,9 @@ def render_http_error(
 
         if code_name in ("CREDENTIAL_MISSING", "CREDENTIAL_LOCKED"):
             exit_code = ExitCode.CREDENTIAL_ISSUE
-    elif isinstance(err, httpx.ConnectError):
+    elif isinstance(err, httpx.TransportError):
+        # Refused, reset, closed without a response or timed out: from the
+        # CLI's side each is the daemon not answering.
         typer.echo(
             "daemon not reachable — it may have crashed; check ~/.coffer/logs/daemon.log",
             err=True,

@@ -55,7 +55,9 @@ class ImportNormaliser(Protocol):
     ``tree_config`` reads the config of another document of the same kind, by
     uid, from the tree this round is applying — so a normaliser can tell a
     conflicting document from one half of a change the other half of which is
-    in the same tree."""
+    in the same tree. A write to another row the arriving config depends on
+    comes back as a :class:`PreWrite` for the applier to run after the gate,
+    just before this document's own write, and to revert if that write fails."""
 
     kind: str
 
@@ -64,7 +66,15 @@ class ImportNormaliser(Protocol):
         uid: str,
         config: Mapping[str, object],
         tree_config: Callable[[str], Awaitable[Mapping[str, object] | None]],
-    ) -> tuple[dict[str, object], str | None]: ...
+    ) -> tuple[dict[str, object], str | None, PreWrite | None]: ...
+
+
+class PreWrite(Protocol):
+    """A normaliser's write to another row, deferred to the applier."""
+
+    async def apply(self) -> None: ...
+
+    async def revert(self) -> None: ...
 
 
 class PostImportHook(Protocol):
