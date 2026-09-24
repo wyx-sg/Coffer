@@ -1,13 +1,12 @@
 """Hold SeaTalk's inbound WebSocket open, and supervise it.
 
-The third inbound-supervision sibling next to ``listener_spawn`` (one callback
-child for the whole daemon) and ``tunnel_spawn`` (one cloudflared child per
-channel): one *connection* per websocket-delivery channel, held inside this
-process. It needs no public URL, no signing secret, no listener and no tunnel —
-the register handshake authenticates the socket, and events arrive on it in
-exactly the shape the webhook POSTs carry.
+The only way SeaTalk inbound arrives (spec channels/seatalk "Receive every
+event over one outbound websocket connection"): one *connection* per SeaTalk
+channel, held inside this process. It needs no public URL, no signing secret,
+no listener and no tunnel — the register handshake authenticates the socket,
+and events arrive on it as the platform's event envelopes.
 
-Two things make this unlike the other two.
+Two things make this unlike a polled transport.
 
 **The SDK is synchronous and thread-based.** ``connect()`` blocks on a register
 handshake; ``listen()`` blocks for the life of the connection. Neither may touch
@@ -55,7 +54,7 @@ _JOIN_TIMEOUT_SECONDS = 5.0
 
 # ``(channel_uid, envelope) -> None`` — ChannelService.ingest_event in
 # production, which does the unknown-channel and adapter-down checks and hands
-# the envelope to the same adapter seam the webhook route uses.
+# the envelope to the adapter's one ingest seam.
 IngestFn = Callable[[str, dict[str, Any]], Awaitable[None]]
 SdkLoader = Callable[[], ModuleType]
 

@@ -17,16 +17,15 @@ revealing it in the file manager — and it ships as one archive that needs no r
 checkout.
 
 The single user runs Coffer on their own machine: loopback binding plus a locally minted token is
-the whole of the access model, there is no multi-tenant or remote-access requirement, and the
-daemon itself is never exposed through a tunnel — only the separate `coffer-callback` listener of
-the channels spec is. Process inspection is available for processes the user owns; wherever it is
+the whole of the access model, there is no multi-tenant or remote-access requirement, and
+nothing Coffer runs is reachable from off the machine. Process inspection is available for processes the user owns; wherever it is
 not, every rule here reads the answer as "not ours" and does nothing, which is the safe direction
 for all of them. The desktop shell of the desktop-app spec reads `daemon.json` and drives
 `POST /daemon/shutdown` from Rust, in a separate crate: the file's shape is this spec's to change,
 and a change to it is a change to that shell. There is no fleet, no leader election and no
 daemon-to-daemon protocol; the daemon spawns children but does not install runtimes or package
 managers for them, and the `.dmg` and the shell inside it belong to the desktop-app spec, which
-wraps the same four binaries this spec builds.
+wraps the same three binaries this spec builds.
 
 Not every daemon operation is reachable from both REST and the CLI. Three gaps are deliberate and
 one is not. The pre-bind port setting is CLI-only by design, because it must work with no daemon
@@ -173,8 +172,7 @@ than tearing down inline, so an API stop and a signal stop cannot diverge. Exit 
 
 ### Requirement: Manage the daemon from the command line
 Users MUST be able to run `coffer daemon start`, `stop`, `restart`, `status [--json]`,
-`rotate-token`, `port show|set|clear`, `idle show|set|never` and
-`service install|uninstall|status`. `start` MUST key off the liveness probe rather than the
+`rotate-token`, `port show|set|clear` and `service install|uninstall|status`. `start` MUST key off the liveness probe rather than the
 presence of `daemon.json`, MUST diagnose a port that is already held *before* spawning rather than
 after a boot timeout, and MUST wait a bounded time for the daemon to publish itself. That pre-flight
 check MUST be allowed to report "free" when the port is not — a port in `TIME_WAIT` from the daemon
@@ -182,7 +180,7 @@ a `restart` has just stopped is bindable and must not be called a conflict — a
 other way: a missed conflict resolves downstream as "already running", while a false one blocks a
 legitimate start. `stop` MUST confirm the recorded pid is still a Coffer daemon before signalling
 it, and MUST clean up the stale discovery file instead when it is not. `restart` is `stop` then
-`start`, and is how a setting read before the bind takes effect. The `port`, `idle` and `service`
+`start`, and is how a setting read before the bind takes effect. The `port` and `service`
 groups MUST work with no daemon running (see "Bind a fixed, settable port" and "Change residency
 from the settings page or the command line").
 
@@ -192,18 +190,15 @@ from the settings page or the command line").
 - **THEN** no signal is sent to that process; the stale discovery file is removed instead, and the command says so.
 
 ### Requirement: Own and reap the daemon's long-lived children
-The daemon MUST spawn, record and terminate every long-lived child it owns — the `coffer-callback`
-listener, a channel tunnel, an agent app-server — through one path: recording the child's pid is
+The daemon MUST spawn, record and terminate every long-lived child it owns — such as an agent
+app-server — through one path: recording the child's pid is
 inseparable from spawning it, and termination is one `SIGTERM` → bounded wait → `SIGKILL` → bounded
 wait ladder whose pid record is dropped only because the child was reaped here. Each child's record
 is one file naming its pid and command line. At startup the daemon MUST sweep what a previous crash
 left behind: recorded children, and sibling daemon processes **provably serving this same vault**.
 "Not provably ours" MUST mean "leave it alone" — a candidate whose vault cannot be read, or a
 matching executable running against another `HOME`, MUST NOT be touched, because a wrong kill costs
-somebody a running daemon while a missed one costs only a port the next start reports. The daemon
-owns `coffer-callback` as a *process*: spawning it, supervising it, and shipping and deploying it
-(see "Release the macOS arm64 terminal archive" and "Deploy frozen sibling binaries and back up the
-vault before migrating"). The ingress protocol that listener serves is the channels spec's.
+somebody a running daemon while a missed one costs only a port the next start reports.
 
 #### Scenario: the daemon reaps only the children it can prove are its own
 - **GIVEN** a previous daemon crashed leaving a recorded long-lived child running, and another daemon binary is running against a different vault under a throwaway `HOME`,
@@ -265,10 +260,12 @@ the day, a channel message arriving while no window is open, a terminal session 
 nobody has opened Coffer from. Each of those clients can start one, and each then pays the seconds a
 cold start takes, once per gap.
 
-The service MUST restart the daemon **only on an unsuccessful exit**. A deliberate stand-down (see
-"Stand down after an idle window") is a clean exit, and a supervisor that restarted those too would
-turn the idle shutdown into a restart loop; nothing is lost by letting one stand, because every
-client can start a daemon.
+The service MUST restart the daemon **only on an unsuccessful exit**. A deliberate exit — `coffer
+daemon stop`, the shutdown the desktop shell's restart asks for (see
+[desktop-app](../desktop-app/spec.md) "Restart by stopping the running daemon first"), or standing down because another daemon superseded it
+(see "Stand down only when provably superseded") — is a clean exit, and a supervisor that restarted
+those too would fight the user's own stop and the daemon that superseded it; nothing is lost by
+letting one stand, because every client can start a daemon.
 
 It MUST carry the user's own `PATH`, read from their login shell: a login service otherwise
 inherits a minimal one, and the `npx` / `uvx` MCP upstreams the daemon spawns then resolve to
@@ -288,31 +285,7 @@ be reversible without trace; removing it MUST NOT stop a daemon that is already 
 - **GIVEN** a machine where the login service is installed and no Coffer window is open,
 - **WHEN** the user logs in,
 - **THEN** the daemon is started by the system, with the user's own `PATH`, logging to the daemon log,
-- **AND** a daemon that dies badly is restarted, while one that stood down on purpose is left alone.
-
-### Requirement: Stand down after an idle window
-A daemon that nothing has wanted for long enough MUST stand down, by exiting cleanly. Resident is
-not the same as immortal: without a ceiling, a login service means a python process, its MCP
-upstreams and its channel listeners survive every weekend nobody worked. The window MUST be
-configurable, MUST default to twelve hours — overnight and then some, so a working day's gap never
-costs a restart — and MUST be settable to "never", which is the setting for a vault whose channels
-must answer at any hour. It lives beside the port in `~/.coffer/daemon-config.json` for the same
-reason and is read at start, so a change takes effect at the next one.
-
-What counts as being wanted MUST be requests that reached the application, not traffic that
-arrived: a request the loopback host guard refused is an attack, and counting it would keep the
-daemon resident on the strength of one. It MUST also be measurable as *readiness* rather than only
-as requests — a subsystem whose job is to be reachable MUST be able to hold the daemon in service
-while it is, and the channel listener MUST do so, because the request that justifies it is the one
-that arrives the next morning, after a daemon counting yesterday's traffic would already have gone.
-The clock MUST be monotonic: a laptop that slept for nine hours did not go nine hours unused, and
-standing down the instant the lid opens is the opposite of the intent.
-
-#### Scenario: a daemon nothing has wanted stands down
-- **GIVEN** a running daemon and a configured idle window,
-- **WHEN** that window passes with nothing reaching the application,
-- **THEN** the daemon exits cleanly, and the next client to want one starts it,
-- **AND** the window does not pass while a subsystem whose job is to be reachable holds it open, nor because the machine was asleep.
+- **AND** a daemon that dies badly is restarted, while one that exited cleanly on purpose is left alone.
 
 ### Requirement: Bind every endpoint to loopback only
 The daemon MUST bind every HTTP endpoint it exposes — the management API and the MCP protocol
@@ -360,8 +333,7 @@ host, but not a **browser** on a page whose hostname an attacker re-resolves to 
 rebinding, which the browser then treats as same-origin, so CORS does not apply. Rebinding does not
 change the `Host` header, so a rebound request still names the attacker's own hostname and is
 refused before it can read a token out of the served document. The rule MUST hold for every surface
-the daemon exposes. It does not reach the separate `coffer-callback` listener, which is a different
-process on a different port and is the only thing a tunnel is ever pointed at (the channels spec).
+the daemon exposes.
 
 #### Scenario: a rebound page is refused before it can read the token
 - **GIVEN** a page on an attacker-controlled origin whose hostname resolves to `127.0.0.1`, which the browser therefore treats as same-origin with the daemon,
@@ -485,7 +457,7 @@ per-process and per-upstream log files MUST NOT delete it or its rotations: it i
 deleting it would leave the daemon logging nowhere until the next restart.
 
 Because several writers share it — Coffer's own structured JSON, uvicorn, a rich-rendered upstream,
-a child's zerolog, some of it colour-escaped — the file is deliberately not one format, and every
+some of it colour-escaped — the file is deliberately not one format, and every
 reader of it is obliged to normalise rather than to assume (see "Serve the daemon log tail
 normalised"). What the daemon *itself* writes, however, MUST be one format: every record produced
 inside the daemon process — its own modules and the libraries logging alongside them, alembic and
@@ -535,9 +507,8 @@ are usable with no separate deployment step. See
 
 ### Requirement: Release the macOS arm64 terminal archive
 The release pipeline MUST produce, per `v*` tag, the **terminal-install tier** for **macOS arm64
-only**: a `coffer-cli-<triple>.tar.gz` archive containing `coffer` (the management CLI),
-`coffer-daemon`, `coffer-mcp-shim`, and the runtime helper binary the daemon spawns
-(`coffer-callback`). The binaries MUST stay co-located inside the archive so the frozen resolution
+only**: a `coffer-cli-<triple>.tar.gz` archive containing exactly three binaries: `coffer` (the
+management CLI), `coffer-daemon` and `coffer-mcp-shim`. The binaries MUST stay co-located inside the archive so the frozen resolution
 of "Spawn a detached daemon from any surface that needs one" finds `coffer-daemon` next to
 `coffer`. macOS x64 (Intel), Linux and Windows are deliberately not built — those legs were never
 validated end to end. This archive carries the "no system Python required" promise on its own: on a
@@ -549,7 +520,7 @@ neither is a substitute for the other.
 #### Scenario: release tag produces the CLI archive and SHA256SUMS
 - **GIVEN** a release tag matching `v*` is pushed,
 - **WHEN** the release workflow finishes,
-- **THEN** the release contains the terminal tier — `coffer-cli-<triple>.tar.gz` for macOS arm64, holding `coffer`, `coffer-daemon`, `coffer-mcp-shim` and `coffer-callback`, co-located,
+- **THEN** the release contains the terminal tier — `coffer-cli-<triple>.tar.gz` for macOS arm64, holding `coffer`, `coffer-daemon` and `coffer-mcp-shim`, co-located, and no other binary,
 - **AND** the release contains a single aggregated `SHA256SUMS` file covering every artifact of every tier, including the desktop tier of [desktop-app](../desktop-app/spec.md) "Ship the desktop tier as a macOS arm64 dmg",
 - **AND** no other platform is built.
 
@@ -566,7 +537,7 @@ downloaders can verify integrity without trusting the GitHub Release UI alone.
 
 ### Requirement: Deploy frozen sibling binaries and back up the vault before migrating
 When the daemon detects that it is running as a frozen build, it MUST idempotently deploy its
-sibling binaries — `coffer`, `coffer-daemon`, `coffer-mcp-shim`, `coffer-callback` — into
+sibling binaries — `coffer`, `coffer-daemon`, `coffer-mcp-shim` — into
 `~/.coffer/bin/` at startup. `coffer` is in that list so that a user who installed only the desktop
 tier has the management CLI on disk after the first launch, and `coffer-daemon` so the frozen shim
 can resolve it as a sibling. Each build MUST land in its own `~/.coffer/bin/<version>/` directory,
@@ -576,20 +547,30 @@ for a rollback (the two newest version directories are kept; older ones are prun
 be atomic (temp sibling in the same directory, executable bit set, then rename, with the version
 sentinel written last) so that a crash or a concurrently executing binary never observes a truncated
 file, and staleness MUST be decided by two signals — byte size and the version sentinel — never
-mtime, which says when a build was extracted rather than what it contains.
+mtime, which says when a build was extracted rather than what it contains. A deploy MUST also
+remove every public `~/.coffer/bin/<name>` symlink that points into a version directory under a
+name this build does not ship, so a binary a release dropped stops resolving to an old build
+instead of lingering on the user's `PATH`; anything at such a path that is not a symlink into a
+version directory is not Coffer's deployment and MUST be left alone.
 
 Before `alembic upgrade head` changes an on-disk `coffer.db`, the daemon MUST copy it (and any
 `-wal`/`-shm` companions) to `coffer.db.pre-<revision>`, keeping the three newest copies; an
 already-current schema or an in-memory database MUST NOT be copied. A source install MUST NOT do
 any of this: `pip install` already puts the console scripts on `PATH` (see "Install the console
-scripts from source"). The daemon owns the deployment because it is the process that spawns
-`coffer-callback` at runtime.
+scripts from source"). The daemon owns the deployment because it is the one process every frozen install starts,
+whichever tier it came from.
 
 #### Scenario: a frozen daemon deploys its sibling binaries on start
-- **GIVEN** a frozen `coffer-daemon` started from an extracted release archive, with `coffer`, `coffer-mcp-shim` and `coffer-callback` beside it,
+- **GIVEN** a frozen `coffer-daemon` started from an extracted release archive, with `coffer` and `coffer-mcp-shim` beside it,
 - **WHEN** the daemon starts,
 - **THEN** each sibling binary is reachable and executable at `~/.coffer/bin/<name>` — a symlink into `~/.coffer/bin/<version>/`, where the file was copied atomically through a temp sibling and a rename, and the symlink itself was flipped atomically,
 - **AND** a second start with nothing changed leaves those files untouched, while a version change deploys the new build into its own `<version>/` directory and re-points the symlinks — as decided by the byte-size and version-sentinel staleness check — keeping the previous version's directory on disk so the upgrade can be undone by pointing the links back; only the two newest version directories are kept.
+
+#### Scenario: a deploy removes the link of a binary the build no longer ships
+- **GIVEN** `~/.coffer/bin/coffer-callback` is a symlink into a version directory an earlier build deployed, and a frozen `coffer-daemon` whose build ships only `coffer`, `coffer-daemon` and `coffer-mcp-shim`,
+- **WHEN** the daemon starts and deploys its siblings,
+- **THEN** `~/.coffer/bin/coffer-callback` no longer exists, while `coffer`, `coffer-daemon` and `coffer-mcp-shim` point into the new build's version directory,
+- **AND** a regular file at `~/.coffer/bin/<name>` for a name the build does not ship is left untouched.
 
 #### Scenario: a schema upgrade keeps a copy of the vault
 - **GIVEN** a daemon starting against a `coffer.db` whose Alembic revision is behind this build's head,
@@ -597,47 +578,51 @@ scripts from source"). The daemon owns the deployment because it is the process 
 - **THEN** `coffer.db.pre-<revision>` (with its `-wal`/`-shm` companions, when present) holds the pre-upgrade state beside the live file, only the three newest such copies are kept, and a start against an already-current schema — or an in-memory database — copies nothing.
 
 ### Requirement: Change residency from the settings page or the command line
-The two residency settings — whether the login service is installed (see "Run as a login
-service") and how long the daemon serves nothing before standing down (see "Stand down after an
-idle window") — MUST be readable and settable both over REST and from the CLI.
+The one residency setting — whether the login service is installed (see "Run as a login service")
+— MUST be readable and settable both over REST and from the CLI. The daemon never stands down on
+its own: once started it serves until it is stopped, or until another daemon supersedes it (see
+"Stand down only when provably superseded"), so there is no idle window to configure.
 
-`GET /api/v1/daemon/residency` MUST report whether a login service is supported on this host,
-whether it is installed, and the idle window in hours, where `null` means never. `PUT` on the same
-route MUST set both halves in one request. `idle_shutdown_hours` MUST be required on the `PUT`, and
-`null` MUST mean "never stand down": because `null` already carries that meaning, an omitted field
-cannot also mean "leave it alone", so the request is refused instead. A window below a quarter of
-an hour MUST be refused with `422` and nothing written. The login service MUST take effect at once,
-because the system's service manager is a different process; the idle window MUST take effect at
-the next daemon start, because the running daemon read it when it booted. The step that can fail —
-installing or removing the service — MUST run first, so a failure leaves the idle window unchanged.
-On a host with no login service, a request to install one MUST leave it off and say so rather than
-fail. The response MUST report what is true after the change, and the change MUST be audited as
-`daemon_residency_updated` with those same values.
+`GET /api/v1/daemon/residency` MUST report whether a login service is supported on this host and
+whether it is installed. `PUT` on the same route MUST install or remove it, and the change MUST take
+effect at once, because the system's service manager is a different process. On a host with no
+login service, a request to install one MUST leave it off and say so rather than fail. The response
+MUST report what is true after the change, and the change MUST be audited as
+`daemon_residency_updated` with that same value.
 
-This pair has a REST surface where the port deliberately does not: a port is changed when the
+This setting has a REST surface where the port deliberately does not: a port is changed when the
 daemon cannot start, so a route the daemon would have to serve is useless exactly then, while
 residency is a settings question asked of a daemon that is working.
 
-`coffer daemon idle show|set <hours>|never` and `coffer daemon service install|uninstall|status`
-MUST read and write the same settings directly, with no daemon involved and none required, since
-the state they are most often reached from is "no daemon is running". `idle set` MUST refuse a
-window below the floor and write nothing; `idle set` and `idle never` MUST say that the change takes
-effect at the next start. On a host that has no login service, `service install` and
-`service uninstall` MUST refuse with a clear message and a non-zero exit, while `service status`
-MUST exit successfully and report that a login service is not supported there. The CLI path records no audit entry, for the reason the port records none: it must
-work with no daemon running, so the audit table is unreachable on exactly the path it serves.
+`coffer daemon service install|uninstall|status` MUST read and write the same setting directly,
+with no daemon involved and none required, since the state it is most often reached from is "no
+daemon is running". On a host that has no login service, `service install` and `service uninstall`
+MUST refuse with a clear message and a non-zero exit, while `service status` MUST exit successfully
+and report that a login service is not supported there. The CLI path records no audit entry, for
+the reason the port records none: it must work with no daemon running, so the audit table is
+unreachable on exactly the path it serves.
+
+`~/.coffer/daemon-config.json` MUST NOT carry an idle window. An `idle_shutdown_hours` key an earlier
+build wrote there MUST be ignored when the file is read and MUST be dropped the next time the file
+is written, so the file only ever states settings that still decide something.
 
 #### Scenario: the settings page changes residency in one request
 - **GIVEN** a running daemon on a host that supports a login service, with nothing configured,
-- **WHEN** a client reads `GET /api/v1/daemon/residency` and then sends `PUT /api/v1/daemon/residency` with `login_service_installed: true` and `idle_shutdown_hours: 6`,
-- **THEN** the read reports the default window of `12` hours, the login service is installed at once, and `6` is written to `~/.coffer/daemon-config.json` for the next start to read,
-- **AND** the response and a `daemon_residency_updated` audit entry both report `login_service_installed: true` and `idle_shutdown_hours: 6`, while a `PUT` that omits `idle_shutdown_hours` is refused with `422`.
+- **WHEN** a client reads `GET /api/v1/daemon/residency` and then sends `PUT /api/v1/daemon/residency` with `login_service_installed: true`,
+- **THEN** the read reports a supported login service that is not installed, and the login service is installed at once,
+- **AND** the response and a `daemon_residency_updated` audit entry both report `login_service_installed: true`, and neither carries an idle window.
 
 #### Scenario: the command line changes residency with no daemon running
 - **GIVEN** no daemon running, on a host that supports a login service,
-- **WHEN** the user runs `coffer daemon idle set 3`, `coffer daemon idle never`, `coffer daemon service install`, `coffer daemon service status` and `coffer daemon service uninstall`,
-- **THEN** the idle window in `~/.coffer/daemon-config.json` becomes `3` and then `null`, each change saying it takes effect at the next start, and the login service is installed, reported installed, and removed,
-- **AND** `coffer daemon idle set 0.1` is refused and writes nothing, and no database is opened and no audit entry recorded.
+- **WHEN** the user runs `coffer daemon service install`, `coffer daemon service status` and `coffer daemon service uninstall`,
+- **THEN** the login service is installed, reported installed, and removed,
+- **AND** no database is opened and no audit entry recorded, and `coffer daemon idle` is not a command.
+
+#### Scenario: an idle window left in the daemon config is ignored and dropped
+- **GIVEN** a `~/.coffer/daemon-config.json` an earlier build wrote, carrying `idle_shutdown_hours: 6` beside a pinned port,
+- **WHEN** the daemon starts, and the user then runs `coffer daemon port set` with another port,
+- **THEN** the daemon serves on the pinned port and never stands down on its own,
+- **AND** the rewritten file carries the new port and no `idle_shutdown_hours` key.
 
 ### Requirement: Clear inherited agent-home variables at start
 The daemon MUST remove `CLAUDE_CONFIG_DIR` and `CODEX_HOME` — every agent type's home variable — from its own environment when it starts, before it spawns anything, and log once which ones it removed. A daemon started from a shell that exports one would otherwise hand it to every agent process it spawns, so an agent registered on the default directory would run against the exported one while Coffer delivers its skills, MCP entry and config into the default. An agent gets the variable only from its own registered config directory ([agent-registry](../agent-registry/spec.md)), set on that agent's process alone.

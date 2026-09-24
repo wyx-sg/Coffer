@@ -218,23 +218,19 @@ describe("the agent the channel drives", () => {
 });
 
 describe("AddChannelDialog", () => {
-  test("seatalk requires all three secrets before anything is written", async () => {
+  test("seatalk requires the app id and app secret before anything is written", async () => {
     const api = registeringApi();
     renderDialog();
 
     fireEvent.click(screen.getByRole("button", { name: /seatalk/i }));
     fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "st" } });
-    fireEvent.change(screen.getByLabelText(/app id/i), { target: { value: "app-1" } });
-    // app_secret + signing_secret intentionally left blank.
+    // app_id + app_secret intentionally left blank.
     submit();
 
     // One translated message under each missing field — never zod's own
     // "String must contain…", and no toast for a validation miss.
     const alerts = await screen.findAllByRole("alert");
-    expect(alerts.map((a) => a.textContent)).toEqual([
-      "Enter the App secret",
-      "Enter the signing secret",
-    ]);
+    expect(alerts.map((a) => a.textContent)).toEqual(["Enter the App ID", "Enter the App secret"]);
     expect(screen.queryByText(/must contain/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/app secret/i)).toHaveAttribute("aria-invalid", "true");
     expect(api.POST).not.toHaveBeenCalled();
@@ -264,71 +260,6 @@ describe("AddChannelDialog", () => {
       fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "st" } });
       fireEvent.change(screen.getByLabelText(/app id/i), { target: { value: "app-1" } });
       fireEvent.change(screen.getByLabelText(/app secret/i), { target: { value: "s1" } });
-      fireEvent.change(screen.getByLabelText(/signing secret/i), { target: { value: "s2" } });
-      submit();
-
-      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(3));
-      expect(api.POST.mock.calls.map((c) => c[0])).toEqual([
-        "/credentials",
-        "/credentials",
-        "/resources",
-      ]);
-      expect(api.POST.mock.calls[2][1]).toEqual({
-        body: {
-          kind: "channel",
-          name: "st",
-          config: {
-            channel_type: "seatalk",
-            delivery: "webhook",
-            app_id: "app-1",
-            app_secret_ref: writtenRef(api, 0),
-            signing_secret_ref: writtenRef(api, 1),
-            default_agent: CLAUDE.uid,
-            runs_on: HERE,
-          },
-        },
-      });
-    },
-  );
-
-  describe("seatalk delivery method", () => {
-    function pickSeatalk() {
-      fireEvent.click(screen.getByRole("button", { name: /seatalk/i }));
-      fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "st" } });
-      fireEvent.change(screen.getByLabelText(/app id/i), { target: { value: "app-1" } });
-      fireEvent.change(screen.getByLabelText(/app secret/i), { target: { value: "s1" } });
-    }
-
-    function pickWebsocket() {
-      fireEvent.click(screen.getByRole("button", { name: /^websocket$/i }));
-    }
-
-    test("webhook is the default, and websocket hides every webhook-only field", () => {
-      installApi(mockApiClient());
-      renderDialog();
-      pickSeatalk();
-
-      expect(screen.getByRole("button", { name: /^webhook$/i })).toHaveAttribute(
-        "aria-pressed",
-        "true",
-      );
-      expect(screen.getByLabelText(/signing secret/i)).toBeInTheDocument();
-
-      pickWebsocket();
-
-      expect(screen.queryByLabelText(/signing secret/i)).not.toBeInTheDocument();
-      expect(screen.queryByLabelText(/public callback url/i)).not.toBeInTheDocument();
-      expect(screen.queryByLabelText(/tunnel token/i)).not.toBeInTheDocument();
-      // The two things Coffer cannot do for the owner are stated on the spot.
-      expect(screen.getByText(/~\/\.coffer\/vendor/)).toBeInTheDocument();
-      expect(screen.getByText(/Developer Portal/)).toBeInTheDocument();
-    });
-
-    test("websocket registers with no signing secret and writes only the app secret", async () => {
-      const api = registeringApi();
-      renderDialog();
-      pickSeatalk();
-      pickWebsocket();
       submit();
 
       await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
@@ -343,7 +274,6 @@ describe("AddChannelDialog", () => {
           name: "st",
           config: {
             channel_type: "seatalk",
-            delivery: "websocket",
             app_id: "app-1",
             app_secret_ref: writtenRef(api, 0),
             default_agent: CLAUDE.uid,
@@ -351,20 +281,26 @@ describe("AddChannelDialog", () => {
           },
         },
       });
-    });
+    },
+  );
 
-    test("switching to websocket drops a signing secret already typed", async () => {
-      const api = registeringApi();
-      renderDialog();
-      pickSeatalk();
-      fireEvent.change(screen.getByLabelText(/signing secret/i), { target: { value: "s2" } });
-      pickWebsocket();
-      submit();
+  test("seatalk asks for its app credentials only, and says what Coffer cannot do for the owner", () => {
+    installApi(mockApiClient());
+    renderDialog();
+    fireEvent.click(screen.getByRole("button", { name: /seatalk/i }));
 
-      // Two writes, not three: the cleared signing secret reaches no ref.
-      await waitFor(() => expect(api.POST).toHaveBeenCalledTimes(2));
-      expect(api.POST.mock.calls.map((c) => c[0])).toEqual(["/credentials", "/resources"]);
-    });
+    expect(screen.getByLabelText(/app id/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/app secret/i)).toBeInTheDocument();
+    // No transport to choose and nothing a webhook needed.
+    expect(
+      screen.queryByRole("button", { name: /^webhook$|^websocket$/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/signing secret/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/public callback url/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/tunnel token/i)).not.toBeInTheDocument();
+    // The SDK and the portal setting are stated on the spot.
+    expect(screen.getByText(/~\/\.coffer\/vendor/)).toBeInTheDocument();
+    expect(screen.getByText(/Developer Portal/)).toBeInTheDocument();
   });
 
   test("writes nothing at all while this machine's id is unknown", async () => {

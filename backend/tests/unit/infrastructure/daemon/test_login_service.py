@@ -34,14 +34,15 @@ def test_the_agent_starts_at_login_and_survives_a_crash() -> None:
 
 @pytest.mark.acceptance(
     spec="daemon",
-    scenario="a daemon nothing has wanted stands down",
+    scenario="the daemon is up before anything asks for it",
 )
-def test_a_clean_exit_is_not_restarted() -> None:
-    """The one key that would quietly break the idle shutdown.
+def test_a_crash_is_restarted_and_a_clean_exit_is_not() -> None:
+    """A daemon that dies badly is restarted; one that exited on purpose is not.
 
     ``KeepAlive: true`` reads like the obvious way to say "keep it running",
-    and it turns a deliberate stand-down into a restart a second later,
-    forever. Only an *unsuccessful* exit is restarted.
+    and it would fight every deliberate exit — ``coffer daemon stop``, a quit
+    from the desktop shell, a superseded daemon standing down — restarting it
+    a second later. Only an *unsuccessful* exit is restarted.
     """
     assert _plist()["KeepAlive"] == {"SuccessfulExit": False}
 

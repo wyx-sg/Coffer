@@ -1,6 +1,6 @@
 """ChannelRuntime._reconcile_websockets: hold/drop/retry per channel.
 
-See spec channels/seatalk "Carry no ingress fields on websocket delivery".
+See spec channels/seatalk "Receive every event over one outbound websocket connection".
 
 Drives the reconcile step directly with the recording stub controller and a fake
 materialize — no SDK, no socket, no DB. The real connector's threading lives in
@@ -38,32 +38,27 @@ def _runtime(websockets: Any, *, materialize: Any = _materialize) -> ChannelRunt
     )
 
 
-def _seatalk(delivery: str, *, app_id: str = "app-1") -> dict[str, object]:
-    cfg: dict[str, object] = {
+def _seatalk(*, app_id: str = "app-1") -> dict[str, object]:
+    return {
         "channel_type": "seatalk",
         "app_id": app_id,
         "app_secret_ref": "channel/st/app-secret",
-        "delivery": delivery,
     }
-    if delivery == "webhook":
-        cfg["signing_secret_ref"] = "channel/st/sign"
-    return cfg
 
 
-async def test_holds_a_connection_for_a_websocket_channel_with_materialized_secret():
+async def test_holds_a_connection_for_a_seatalk_channel_with_materialized_secret():
     ws = StubWebSocketController()
     rt = _runtime(ws)
-    await rt._reconcile_websockets({"st": channel_row("st", _seatalk("websocket"))})
+    await rt._reconcile_websockets({"st": channel_row("st", _seatalk())})
     assert ws.started == {_ST: ("app-1", "secret::channel/st/app-secret")}
     assert ws.running(_ST) is True
 
 
-async def test_skips_webhook_and_telegram_channels():
+async def test_skips_telegram_channels():
     ws = StubWebSocketController()
     rt = _runtime(ws)
     await rt._reconcile_websockets(
         {
-            "st": channel_row("st", _seatalk("webhook")),
             "tg": channel_row(
                 "tg", {"channel_type": "telegram", "bot_token_ref": "channel/tg/bot"}, id=2
             ),
@@ -72,31 +67,19 @@ async def test_skips_webhook_and_telegram_channels():
     assert ws.started == {}
 
 
-async def test_a_seatalk_config_without_delivery_is_a_webhook_channel():
-    """No migration restates the stored reality, so the absent key must mean
-    webhook here exactly as it does in the domain model."""
+async def test_a_webhook_era_delivery_key_is_ignored():
+    """A document from an older build may still say ``delivery: webhook``; there
+    is one transport, so the key decides nothing and the connection is held."""
     ws = StubWebSocketController()
     rt = _runtime(ws)
-    await rt._reconcile_websockets(
-        {"st": channel_row("st", {"channel_type": "seatalk", "app_id": "a", "app_secret_ref": "r"})}
-    )
-    assert ws.started == {}
-
-
-async def test_stops_the_connection_when_the_channel_switches_back_to_webhook():
-    ws = StubWebSocketController()
-    rt = _runtime(ws)
-    await rt._reconcile_websockets({"st": channel_row("st", _seatalk("websocket"))})
-    assert ws.running(_ST) is True
-    await rt._reconcile_websockets({"st": channel_row("st", _seatalk("webhook"))})
-    assert _ST in ws.stopped
-    assert ws.running(_ST) is False
+    await rt._reconcile_websockets({"st": channel_row("st", {**_seatalk(), "delivery": "webhook"})})
+    assert set(ws.started) == {_ST}
 
 
 async def test_stops_the_connection_when_the_channel_is_disabled_or_deleted():
     ws = StubWebSocketController()
     rt = _runtime(ws)
-    await rt._reconcile_websockets({"st": channel_row("st", _seatalk("websocket"))})
+    await rt._reconcile_websockets({"st": channel_row("st", _seatalk())})
     await rt._reconcile_websockets({})  # disabled → absent from desired
     assert ws.running(_ST) is False
 
@@ -110,7 +93,7 @@ async def test_a_steady_state_does_not_touch_the_credential_store_again():
 
     ws = StubWebSocketController()
     rt = _runtime(ws, materialize=counting)
-    desired = {"st": channel_row("st", _seatalk("websocket"))}
+    desired = {"st": channel_row("st", _seatalk())}
     await rt._reconcile_websockets(desired)
     await rt._reconcile_websockets(desired)
     await rt._reconcile_websockets(desired)
@@ -120,8 +103,8 @@ async def test_a_steady_state_does_not_touch_the_credential_store_again():
 async def test_a_changed_app_id_reconnects():
     ws = StubWebSocketController()
     rt = _runtime(ws)
-    await rt._reconcile_websockets({"st": channel_row("st", _seatalk("websocket"))})
-    await rt._reconcile_websockets({"st": channel_row("st", _seatalk("websocket", app_id="app-2"))})
+    await rt._reconcile_websockets({"st": channel_row("st", _seatalk())})
+    await rt._reconcile_websockets({"st": channel_row("st", _seatalk(app_id="app-2"))})
     assert ws.started == {_ST: ("app-2", "secret::channel/st/app-secret")}
 
 
@@ -129,7 +112,7 @@ async def test_start_failure_is_latched_not_raised():
     ws = StubWebSocketController(fail=True)
     rt = _runtime(ws)
     # e.g. the SDK is missing — must not raise out of the reconcile tick.
-    await rt._reconcile_websockets({"st": channel_row("st", _seatalk("websocket"))})
+    await rt._reconcile_websockets({"st": channel_row("st", _seatalk())})
     assert ws.running(_ST) is False
 
 
@@ -139,20 +122,20 @@ async def test_materialize_failure_is_latched_not_raised():
 
     ws = StubWebSocketController()
     rt = _runtime(ws, materialize=boom)
-    await rt._reconcile_websockets({"st": channel_row("st", _seatalk("websocket"))})
+    await rt._reconcile_websockets({"st": channel_row("st", _seatalk())})
     assert ws.started == {}
 
 
 async def test_no_controller_wired_is_a_no_op():
     rt = _runtime(None)
-    await rt._reconcile_websockets({"st": channel_row("st", _seatalk("websocket"))})
+    await rt._reconcile_websockets({"st": channel_row("st", _seatalk())})
     assert rt.websocket_state(_ST) is None
 
 
 async def test_websocket_state_passes_the_controller_answer_through():
     ws = StubWebSocketController()
     rt = _runtime(ws)
-    await rt._reconcile_websockets({"st": channel_row("st", _seatalk("websocket"))})
+    await rt._reconcile_websockets({"st": channel_row("st", _seatalk())})
     assert rt.websocket_state(_ST) == ("connecting", None)
     ws.set_state(_ST, "kicked", "another process holds it")
     assert rt.websocket_state(_ST) == ("kicked", "another process holds it")

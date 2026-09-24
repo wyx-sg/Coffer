@@ -12,14 +12,12 @@ from __future__ import annotations
 
 import re
 from typing import Annotated, Any, Literal
-from urllib.parse import urlparse
 
 from pydantic import (
     BaseModel,
     Field,
     RootModel,
     field_validator,
-    model_validator,
 )
 
 # A credential ref is a vault ADDRESS, not a secret: Coffer mints
@@ -116,101 +114,19 @@ class SeaTalkChannelConfig(_CommonChannelFields):
     channel_type: Literal["seatalk"] = "seatalk"
     app_id: str = Field(min_length=1, max_length=128)
     app_secret_ref: str = Field(min_length=1, max_length=256)
-    # spec channels/seatalk "Choose exactly one inbound delivery per channel": how
-    # SeaTalk delivers this bot's events. "webhook" is the HTTPS
-    # Event Callback — a public URL the platform POSTs to, which needs a signing
-    # secret and some form of ingress. "websocket" is the platform's WebSocket
-    # Event Callback: the bot holds one outbound connection and needs no public
-    # URL at all. SeaTalk allows exactly one method per bot at a time, so this
-    # is a choice, never a pair.
-    #
-    # The default is "webhook" because that is what every channel configured
-    # before this field existed actually is — the absent key already describes
-    # the stored reality, so nothing is being reinterpreted and no migration is
-    # needed.
-    delivery: Literal["webhook", "websocket"] = "webhook"
-    # Credential-store ref for the callback signing secret. Required on webhook
-    # delivery (the listener verifies every POST with it); forbidden on
-    # websocket delivery, where the register handshake authenticates the
-    # connection and nothing is ever signed.
-    signing_secret_ref: str | None = Field(default=None, min_length=1, max_length=256)
-    # The tunnel's public base URL (scheme://host[:port]); the full SeaTalk
-    # callback URL is this + "/seatalk/<channel uid>". Optional: until the user records
-    # their public base URL here we only know the loopback address.
-    public_base_url: str | None = Field(default=None, max_length=512)
-    # Credential-store ref for a cloudflared connector token. When set, the
-    # daemon runs and supervises a `cloudflared tunnel run` child for this
-    # channel (a managed named tunnel); absent means the user runs their own.
-    tunnel_token_ref: str | None = Field(default=None, max_length=256)
+    # SeaTalk inbound has one transport: the outbound websocket connection the
+    # daemon holds (spec channels/seatalk "Receive every event over one
+    # outbound websocket connection"). Its register handshake authenticates
+    # from exactly these two values, so the configuration carries nothing
+    # else — no delivery switch, no signing secret, no public URL, no tunnel.
+    # A stored document still carrying those webhook-era keys (a second
+    # machine on an older build) is read cleanly: unknown keys are ignored,
+    # as for every channel config.
 
-    @field_validator("app_secret_ref", "signing_secret_ref", "tunnel_token_ref")
+    @field_validator("app_secret_ref")
     @classmethod
-    def _ref_not_secret(cls, v: str | None) -> str | None:
-        if v is None:
-            return None
-        return _reject_raw_secret("secret ref", v)
-
-    @field_validator("public_base_url")
-    @classmethod
-    def _normalize_public_base_url(cls, v: str | None) -> str | None:
-        if v is None:
-            return None
-        v = v.strip()
-        if not v:
-            return None
-        parsed = urlparse(v)
-        if parsed.scheme != "https":
-            raise ValueError("public_base_url must start with https:// (SeaTalk requires HTTPS)")
-        if not parsed.netloc:
-            raise ValueError("public_base_url must include a host, e.g. https://example.com")
-        if parsed.path.strip("/") or parsed.query or parsed.fragment:
-            raise ValueError(
-                "public_base_url must be a bare base URL (scheme://host) with no path; "
-                "Coffer appends /seatalk/<channel uid> itself"
-            )
-        return v.rstrip("/")
-
-    @model_validator(mode="after")
-    def _delivery_decides_which_fields_exist(self) -> SeaTalkChannelConfig:
-        """Each delivery method owns a disjoint set of fields.
-
-        Spec channels/seatalk "Carry no ingress fields on websocket delivery".
-
-        A field that decides nothing is a lie about the system, so a websocket
-        channel may not carry a signing secret, a public base URL or a tunnel
-        token — none of them is consulted on that path, and leaving them behind
-        would make the channel look like it still has webhook ingress. Switching
-        an existing channel between methods therefore clears the other method's
-        fields. That is honest: the switch is never free anyway, because the
-        delivery method is also a per-bot setting on SeaTalk's Developer Portal
-        and has to be changed there in step.
-
-        ``app_id`` / ``app_secret_ref`` stay required on both — the websocket
-        register handshake authenticates with exactly those.
-        """
-        if self.delivery == "webhook":
-            if not self.signing_secret_ref:
-                raise ValueError(
-                    "signing_secret_ref is required when delivery is 'webhook': "
-                    "SeaTalk signs every callback POST and the listener verifies it"
-                )
-            return self
-        forbidden = [
-            name
-            for name, value in (
-                ("signing_secret_ref", self.signing_secret_ref),
-                ("public_base_url", self.public_base_url),
-                ("tunnel_token_ref", self.tunnel_token_ref),
-            )
-            if value
-        ]
-        if forbidden:
-            raise ValueError(
-                f"{', '.join(forbidden)} must be empty when delivery is 'websocket': "
-                "a websocket channel has no public callback URL to describe, no "
-                "tunnel to manage and nothing signed to verify"
-            )
-        return self
+    def _ref_not_secret(cls, v: str) -> str:
+        return _reject_raw_secret("app_secret_ref", v)
 
 
 ChannelConfig = Annotated[

@@ -44,12 +44,14 @@ be inspected answers `False`, and every caller treats that as "do nothing".
 Settings read **before** the database is opened, so nothing here can live in
 SQLite (`infrastructure/daemon/config.py`). Mode `0600`. Written by **merge**,
 never by replacement, so several settings share one file and a key written by a
-newer build survives being touched by an older one.
+newer build survives being touched by an older one — with one exception:
+`idle_shutdown_hours`, which earlier builds wrote for an idle stand-down the
+daemon no longer has, is ignored on read and removed by every write (spec daemon
+"Change residency from the settings page or the command line").
 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `port` | int or absent | The port the user pinned. Absent, unreadable or nonsensical all mean "no usable instruction", which resolves to the default of `8000` — never to some other port. Validated to `1024 ≤ port ≤ 65535`, because below 1024 needs privileges the daemon does not have and must not acquire. |
-| `idle_shutdown_hours` | number, `null` or absent | How long the daemon serves nothing before standing down (spec daemon "Stand down after an idle window"). Absent means the default of `12`; `null` means never stand down, which a bare absent key could not say. At least `0.25`: below that the setting stops meaning "nobody is using it" and starts meaning "restart constantly". A value that is not a number or is below the floor is warned about and read as the default. Read once at start, so a change takes effect at the next one. |
 | `machine_name` | string or absent | This machine's display label. Defaults to the hostname with a `.local` suffix stripped. Free to change: nothing references it. |
 | `features` | object or absent | This machine's own experimental-feature switches, `{"<key>": true\|false}` (spec experimental-features "Decide a feature's state per machine"). A key that is absent falls back to the build channel's default — off on `stable`, on on `dev` — and a `COFFER_FEATURES` pin (`key=on\|off`, comma-separated, read once at start) overrides it. Written by `PUT /api/v1/daemon/features/{key}` before it answers, and takes effect at once, without a restart. A value that is not a boolean is warned about and ignored; keys the build does not know are kept. Machine-local on purpose: the database syncs, and a switch in it would switch every machine. |
 | `memory_delivery_withdrawn` | array of strings or absent | The agents, by uid, whose memory delivery hook was taken out when the `memory` feature was switched off (spec experimental-features "Withdraw what a switched-off feature put in front of agents"). Switching `memory` back on — at once, or at a later boot — reinstalls the hook into exactly these agents and empties the list; an agent deleted meanwhile is dropped. Machine-local for the same reason as `features`. |
@@ -75,7 +77,7 @@ spawns it so a child can never exist unrecorded
 
 | Field | Meaning |
 | --- | --- |
-| name | Which child — the callback listener, a channel tunnel, an agent app-server, an MCP upstream. |
+| name | Which child — an agent app-server, an MCP upstream. |
 | pid | The child. |
 | command line | What it was spawned as, so a startup sweep can tell a live child from a recycled pid. |
 | spawned at | When. |
@@ -93,8 +95,11 @@ chasing a pid that may by then belong to a stranger.
 ~/.coffer/bin/0.1.1/coffer-daemon            (the previous build, kept)
 ```
 
-Four binaries per version: `coffer`, `coffer-daemon`, `coffer-mcp-shim`,
-`coffer-callback`. The public names never move, so every caller's path is
+Three binaries per version: `coffer`, `coffer-daemon`, `coffer-mcp-shim`. A
+deploy removes any public `~/.coffer/bin/<name>` symlink into a version
+directory whose name the running build does not ship — `coffer-callback`, which
+earlier builds deployed — and leaves anything at such a path that is not one of
+its symlinks alone. The public names never move, so every caller's path is
 stable; what changes is which version directory the symlink points into. Two
 version directories are kept, so the last upgrade can always be undone by
 pointing the links back.
@@ -128,7 +133,7 @@ normalises every writer onto the same shape, and keeps what it cannot parse:
 | Field | Meaning |
 | --- | --- |
 | `timestamp` | ISO-8601, whichever writer's spelling it arrived in. |
-| `level` | Normalised onto one vocabulary — `debug`, `info`, `warning`, `error`, `critical` — across structured JSON, the stdlib formatter's five-character truncations, uvicorn, and a child's three-character zerolog tokens. |
+| `level` | Normalised onto one vocabulary — `debug`, `info`, `warning`, `error`, `critical` — across structured JSON, the stdlib formatter's five-character truncations, and uvicorn. |
 | `logger` | The emitting logger, where the line named one. |
 | `event` | The message. |
 | `continuation` | The lines that belong to this record — a traceback, a wrapped message — rather than a run of empty rows. |
@@ -142,7 +147,7 @@ hiding at the bottom of a severity filter.
 | Event | Emitted by |
 | --- | --- |
 | `token_rotated` | A rotation through either surface (spec daemon "Rotate the token from REST or the command line"). |
-| `daemon_residency_updated` | `PUT /api/v1/daemon/residency` (spec daemon "Change residency from the settings page or the command line"). Details `{login_service_installed, idle_shutdown_hours}`, read back after the change, so they record what became true rather than what was asked for. The `coffer daemon idle` and `coffer daemon service` commands write the same settings with no daemon involved and record nothing, for the reason the port records nothing. |
+| `daemon_residency_updated` | `PUT /api/v1/daemon/residency` (spec daemon "Change residency from the settings page or the command line"). Details `{login_service_installed}`, read back after the change, so they record what became true rather than what was asked for. The `coffer daemon service` commands write the same setting with no daemon involved and record nothing, for the reason the port records nothing. |
 
 The fixed-port setting deliberately emits nothing — see spec daemon "Bind a fixed, settable port" for
 why recording it only when a daemon happens to be running would be less honest

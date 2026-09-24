@@ -12,16 +12,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-import httpx
-
 from coffer.application.audit_service import AuditService
-from coffer.application.channel.callback_ops import (
-    CallbackInfo,
-    MaterializeFn,
-    callback_info,
-    test_callback,
-)
-from coffer.application.channel.callback_probe import CallbackTestResult
+from coffer.application.channel.inbound_status import InboundInfo, inbound_info
 from coffer.application.channel.pairing import PairingManager, start_link
 from coffer.application.channel.ports import EventIngestAdapter
 from coffer.application.channel.store_ports import (
@@ -72,7 +64,9 @@ class ChannelStatus:
     # pointer are different lifetimes: the pairing converges between machines,
     # the pointer names a row in THIS machine's conversation store.
     peer_conversation_id: str | None
-    callback: CallbackInfo | None
+    # A SeaTalk channel's websocket connection; None for telegram, whose
+    # inbound is the adapter's own polling and is reported by ``running``.
+    inbound: InboundInfo | None
     # spec channels "Diagnose configuration a platform setting defeats": contradictions
     # between the configuration and what the platform actually permits. Empty is the
     # healthy case.
@@ -99,8 +93,6 @@ class ChannelService:
         pairing: PairingManager,
         runtime: ChannelRuntime,
         audit: AuditService,
-        materialize: MaterializeFn | None = None,
-        http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._resources = resources
         self._peers = peers
@@ -108,11 +100,6 @@ class ChannelService:
         self._pairing = pairing
         self._runtime = runtime
         self._audit = audit
-        # Injected by the composition root for the callback self-test: resolve
-        # the signing secret and make the outbound probe. Absent in unit tests
-        # that don't exercise test_callback.
-        self._materialize = materialize
-        self._http = http_client
         self._ingest_tasks: set[asyncio.Task[None]] = set()
 
     async def _channel(self, channel_uid: str) -> Resource:
@@ -230,9 +217,9 @@ class ChannelService:
         # for every channel that had been talking for weeks.
         dm = await self._threads.get(resource.id, peer.chat_id, "") if peer else None
         channel_type = str(resource.config.get("channel_type", ""))
-        callback: CallbackInfo | None = None
+        inbound: InboundInfo | None = None
         if channel_type == "seatalk":
-            callback = callback_info(resource, runtime=self._runtime)
+            inbound = inbound_info(resource, runtime=self._runtime)
         raw_binding = resource.config.get("runs_on")
         runs_on = raw_binding if isinstance(raw_binding, str) and raw_binding else None
         # Asked of the runtime rather than resolved here: the runtime is what
@@ -250,7 +237,7 @@ class ChannelService:
             pending_pairing=self._pairing.pending(name),
             peer=peer,
             peer_conversation_id=dm.active_conversation_id if dm else None,
-            callback=callback,
+            inbound=inbound,
             runs_on=runs_on,
             # A runtime with no machine of its own is not bound anywhere else
             # either, so it treats every channel as local — the same reading its
@@ -258,24 +245,17 @@ class ChannelService:
             runs_here=runs_here,
         )
 
-    async def test_callback(self, channel_uid: str) -> CallbackTestResult:
-        """Probe this channel's public callback URL (``callback_ops``)."""
-        resource = await self._channel(channel_uid)
-        return await test_callback(resource, materialize=self._materialize, http=self._http)
-
     async def ingest_event(self, channel_uid: str, envelope: dict[str, object]) -> None:
-        """Accept a verified platform event forwarded by the callback listener.
+        """Accept a platform event pushed down the channel's websocket connection.
 
         Addressed by uid, unlike every other method here, and for a reason none
-        of them shares: its caller is not a person. Both inbound transports
-        identify the channel to the daemon by the key their supervisor was
-        started with — the last segment of the public callback path, or the
-        websocket connection's own key — and both of those are the channel's uid
-        (``runtime_supervision``). A name here would be a second spelling that
-        only the plumbing ever writes.
+        of them shares: its caller is not a person. The websocket supervisor
+        identifies the channel by the key its connection was started with, which
+        is the channel's uid (``runtime_supervision``). A name here would be a
+        second spelling that only the plumbing ever writes.
 
-        Processing is scheduled in the background: the listener must answer
-        the platform within seconds, and a command/pairing reply can involve
+        Processing is scheduled in the background: the connection's listen
+        thread must not wait on a turn, and a command/pairing reply can involve
         rate-limited outbound API calls.
         """
         resource = await self._channel(channel_uid)  # unknown uid -> 404

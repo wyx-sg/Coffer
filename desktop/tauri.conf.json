@@ -35,8 +35,7 @@
     "externalBin": [
       "binaries/coffer",
       "binaries/coffer-daemon",
-      "binaries/coffer-mcp-shim",
-      "binaries/coffer-callback"
+      "binaries/coffer-mcp-shim"
     ],
     "icon": [
       "icons/32x32.png",

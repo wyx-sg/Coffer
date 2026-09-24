@@ -5,7 +5,7 @@
 //! path (spec daemon "Deploy frozen sibling binaries and back up the vault
 //! before migrating",
 //! `backend/coffer/application/binary_deploy.py`), which deploys `coffer`,
-//! `coffer-daemon`, `coffer-mcp-shim` and `coffer-callback` itself. Doing it
+//! `coffer-daemon` and `coffer-mcp-shim` itself. Doing it
 //! here as well would put two processes in a race to write the same
 //! directory, so the shell only *reads* the bundle now — it never writes to
 //! the user's bin dir.

@@ -56,7 +56,9 @@ def test_extractor_pulls_telegram_bot_token_ref():
     assert refs == {"bot_token_ref": "channel/tg/bot-token"}
 
 
-def test_extractor_pulls_both_seatalk_refs():
+def test_extractor_pulls_the_seatalk_app_secret_ref_only():
+    """A webhook-era key a document may still carry is not a ref to probe:
+    nothing reads it, so nothing must be made to exist for it."""
     extractor = make_channel_kind().credential_ref_extractor
     assert extractor is not None
     refs = extractor(
@@ -65,12 +67,10 @@ def test_extractor_pulls_both_seatalk_refs():
             "app_id": "app-123",
             "app_secret_ref": "channel/st/app-secret",
             "signing_secret_ref": "channel/st/signing-secret",
+            "tunnel_token_ref": "channel/st/tunnel-token",
         }
     )
-    assert refs == {
-        "app_secret_ref": "channel/st/app-secret",
-        "signing_secret_ref": "channel/st/signing-secret",
-    }
+    assert refs == {"app_secret_ref": "channel/st/app-secret"}
 
 
 def test_extractor_skips_missing_empty_and_non_string_values():
@@ -81,7 +81,6 @@ def test_extractor_skips_missing_empty_and_non_string_values():
             "channel_type": "telegram",
             "bot_token_ref": "",  # empty: skipped
             "app_secret_ref": 123,  # non-string: skipped
-            "signing_secret_ref": None,  # non-string: skipped
         }
     )
     assert refs == {}

@@ -52,7 +52,6 @@ _TOKEN = "test-token-channel"
 
 _TG_REF = "channel/tg/bot"
 _ST_SECRET_REF = "channel/st/secret"
-_ST_SIGNING_REF = "channel/st/signing"
 
 #: The one registered agent every channel here is bound to, as a person names
 #: it. What gets STORED is its uid — the CLI resolves the name once, which is
@@ -87,10 +86,8 @@ _MACHINE_ID = "0123456789abcdef"
 class _StubRuntime:
     def __init__(self) -> None:
         self.adapters: dict[str, _StubAdapter] = {}
-        self.listener_port = 8787
-        self.listener_running = True
         #: channel UID -> (state, last error), as ``ChannelRuntime.websocket_state``
-        #: answers for a websocket-delivery SeaTalk channel. Keyed by uid and
+        #: answers for a SeaTalk channel. Keyed by uid and
         #: not by name, because the real websocket controller is: the
         #: connection's own key is the channel's uid, so a rename does not drop
         #: a live connection on the floor.
@@ -108,9 +105,6 @@ class _StubRuntime:
 
     async def local_machine_id(self) -> str:
         return _MACHINE_ID
-
-    def tunnel_running(self, channel_uid: str) -> bool:
-        return False
 
     def adapter(self, name: str) -> _StubAdapter | None:
         return self.adapters.get(name)
@@ -166,7 +160,7 @@ def channel_daemon(tmp_path, monkeypatch):
     loop.run_until_complete(_create_tables(engine))
     sm = session_maker(engine)
     audit = AuditService(SqlAlchemyAuditRepo(sm))
-    keyring = _FakeKeyring({_TG_REF: "raw", _ST_SECRET_REF: "raw", _ST_SIGNING_REF: "raw"})
+    keyring = _FakeKeyring({_TG_REF: "raw", _ST_SECRET_REF: "raw"})
 
     async def _agent_names() -> dict[str, str]:
         return {a.uid: a.name for a in await resources.list(kind="agent")}
@@ -274,7 +268,7 @@ def _register_tg(name: str = "tg") -> Any:
     )
 
 
-def _register_st(name: str = "st", *, delivery: str = "webhook") -> Any:
+def _register_st(name: str = "st") -> Any:
     argv = [
         "channel",
         "register",
@@ -285,16 +279,9 @@ def _register_st(name: str = "st", *, delivery: str = "webhook") -> Any:
         "app-1",
         "--app-secret-ref",
         _ST_SECRET_REF,
-        "--delivery",
-        delivery,
         "--agent",
         _AGENT_NAME,
     ]
-    if delivery == "webhook":
-        # Only webhook delivery has anything signed to verify (spec channels/seatalk "Carry
-        # no ingress fields on websocket delivery"); the CLI refuses the flag on websocket
-        # delivery.
-        argv += ["--signing-secret-ref", _ST_SIGNING_REF]
     return runner.invoke(app, argv)
 
 
@@ -523,7 +510,7 @@ def test_pair_unknown_channel_exits_4(channel_daemon: _Daemon) -> None:
     assert r.exit_code == 4
 
 
-def test_status_renders_runtime_pairing_and_callback(channel_daemon: _Daemon) -> None:
+def test_status_renders_runtime_pairing_and_inbound(channel_daemon: _Daemon) -> None:
     assert _register_st().exit_code == 0
     channel_daemon.runtime.adapters["st"] = _StubAdapter()
     channel_daemon.pair("st")
@@ -534,56 +521,90 @@ def test_status_renders_runtime_pairing_and_callback(channel_daemon: _Daemon) ->
     assert "running: True" in r.output
     assert "no pending code" in r.output
     assert "peer:     Yu (chat emp-1)" in r.output
-    # The callback path is the channel's UID, not its name: it is the URL the
-    # owner registers on SeaTalk's Portal and the key the listener's
-    # signing-secret map uses, so a rename must not move it under either.
-    st_path = f"/seatalk/{channel_daemon.uid('st')}"
-    assert f"inbound:  webhook 127.0.0.1:8787{st_path} (listener up)" in r.output
-    # spec channels/seatalk "Keep status truthful per transport": not managed is said,
-    # not left blank — the owner may front the callback themselves and needs to know
-    # Coffer is not doing it.
-    assert "tunnel:   not managed by Coffer" in r.output
+    # No connection attempt yet: said as such, not as a fault.
+    assert "inbound:  websocket (not connected yet)" in r.output
 
     as_json = runner.invoke(app, ["channel", "status", "st", "--json"])
     assert as_json.exit_code == 0, as_json.output
     body = json.loads(as_json.output)
-    assert body["callback"] == {
-        "delivery": "webhook",
-        "port": 8787,
-        "path": st_path,
-        "listener_running": True,
-        "public_base_url": None,
-        "public_callback_url": None,
-        "tunnel_managed": False,
-        "tunnel_running": False,
-        "websocket_state": None,
-        "websocket_error": None,
-    }
+    assert body["inbound"] == {"websocket_state": None, "websocket_error": None}
+    assert "callback" not in body
+
+
+def test_register_seatalk_takes_no_inbound_transport_option(channel_daemon: _Daemon) -> None:
+    """The SeaTalk channel is its app credentials: there is no delivery choice,
+    signing secret, public URL or tunnel token to give it."""
+    for flag, value in (
+        ("--delivery", "webhook"),
+        ("--signing-secret-ref", "channel/st/signing"),
+    ):
+        r = runner.invoke(
+            app,
+            [
+                "channel",
+                "register",
+                "st",
+                "--type",
+                "seatalk",
+                "--app-id",
+                "app-1",
+                "--app-secret-ref",
+                _ST_SECRET_REF,
+                "--agent",
+                _AGENT_NAME,
+                flag,
+                value,
+            ],
+        )
+        assert r.exit_code != 0
+    assert _listed_names(channel_daemon) == []
+    assert _register_st().exit_code == 0
+    config = channel_daemon.channel("st").config
+    for key in ("delivery", "signing_secret_ref", "public_base_url", "tunnel_token_ref"):
+        assert key not in config
 
 
 @pytest.mark.acceptance(
     spec="channels/seatalk",
-    scenario="status reports webhook-only facts as absent rather than as defaults",
+    scenario="status names the websocket connection state",
 )
-def test_status_of_a_websocket_channel_reports_no_webhook_facts(
-    channel_daemon: _Daemon,
-) -> None:
-    """Spec channels/seatalk "Keep status truthful per transport". The service
-    reports ``port=0`` / ``listener_running=False`` / ``path=""`` for a websocket
-    channel deliberately — there is no listener to have. The CLI used to render
-    those as ``callback: 127.0.0.1:0 (listener down)``, i.e. a healthy channel
-    described as broken ingress at a port nothing is on.
+def test_status_names_the_websocket_connection_state(channel_daemon: _Daemon) -> None:
+    """Spec channels/seatalk "Report the websocket connection as the channel's
+    inbound state": one channel connected, one whose last attempt failed, read
+    through the REST body (``--json`` is the route's own answer) and the CLI's
+    rendering of it. Neither surface names a listener, port, path, URL or tunnel.
     """
-    assert _register_st(delivery="websocket").exit_code == 0
-    channel_daemon.runtime.adapters["st"] = _StubAdapter()
-    channel_daemon.runtime.websocket_states[channel_daemon.uid("st")] = "connected"
+    assert _register_st("up").exit_code == 0
+    assert _register_st("down").exit_code == 0
+    for name in ("up", "down"):
+        channel_daemon.runtime.adapters[name] = _StubAdapter()
+    channel_daemon.runtime.websocket_states[channel_daemon.uid("up")] = "connected"
+    down = channel_daemon.uid("down")
+    channel_daemon.runtime.websocket_states[down] = "error"
+    channel_daemon.runtime.websocket_errors[down] = "register handshake refused: bad app secret"
 
-    r = runner.invoke(app, ["channel", "status", "st"])
-    assert r.exit_code == 0, r.output
-    assert "inbound:  websocket (connected)" in r.output
-    assert "127.0.0.1:0" not in r.output
-    assert "listener" not in r.output
-    assert "tunnel:" not in r.output
+    up_text = runner.invoke(app, ["channel", "status", "up"])
+    down_text = runner.invoke(app, ["channel", "status", "down"])
+    assert up_text.exit_code == 0 and down_text.exit_code == 0
+    assert "inbound:  websocket (connected)" in up_text.output
+    assert "ws error" not in up_text.output
+    assert "inbound:  websocket (error)" in down_text.output
+    assert "ws error: register handshake refused: bad app secret" in down_text.output
+
+    up_json = json.loads(runner.invoke(app, ["channel", "status", "up", "--json"]).output)
+    down_json = json.loads(runner.invoke(app, ["channel", "status", "down", "--json"]).output)
+    assert up_json["inbound"] == {"websocket_state": "connected", "websocket_error": None}
+    assert down_json["inbound"] == {
+        "websocket_state": "error",
+        "websocket_error": "register handshake refused: bad app secret",
+    }
+
+    for rendered in (up_text.output, down_text.output):
+        for word in ("listener", "127.0.0.1", "/seatalk/", "tunnel", "https://"):
+            assert word not in rendered
+    for body in (up_json, down_json):
+        assert set(body["inbound"]) == {"websocket_state", "websocket_error"}
+        assert "callback" not in body
 
 
 def test_status_of_a_websocket_channel_prints_its_error_verbatim(
@@ -592,7 +613,7 @@ def test_status_of_a_websocket_channel_prints_its_error_verbatim(
     """The two websocket failures that matter — no SDK installed, another
     process already holding the connection — are only actionable if the owner
     can read them."""
-    assert _register_st(delivery="websocket").exit_code == 0
+    assert _register_st().exit_code == 0
     channel_daemon.runtime.adapters["st"] = _StubAdapter()
     st_uid = channel_daemon.uid("st")
     channel_daemon.runtime.websocket_states[st_uid] = "kicked"

@@ -108,7 +108,7 @@ function status(
     running: true,
     pending_pairing: false,
     peer: null,
-    callback: null,
+    inbound: null,
     runs_on: HERE,
     runs_here: true,
     ...over,

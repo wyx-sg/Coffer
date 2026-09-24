@@ -13,7 +13,7 @@ coffer channel pair mybot                                    # → an 8-char, si
 coffer channel status mybot                                  # adapter state + paired peer
 ```
 
-- Telegram needs `--bot-token-ref`; SeaTalk needs `--app-id --app-secret-ref`, plus `--signing-secret-ref` on webhook delivery or `--delivery websocket` for the outbound-connection transport. `--agent` (required) names the agent that answers by default; `--agent-config` takes that agent's default settings as JSON.
+- Telegram needs `--bot-token-ref`; SeaTalk needs `--app-id --app-secret-ref`. `--agent` (required) names the agent that answers by default; `--agent-config` takes that agent's default settings as JSON.
 - **Pairing is the security boundary.** Coffer is single-user: send the code to the bot from your own account to become its sole owner. Anyone else is ignored silently. A code is valid for one hour and works once; issuing a new one and sending it from another account replaces the owner.
 
 The **Channels** page does the same without the terminal: **Add channel** stores the secret and registers the channel in one step, and **Pair** on the channel's page issues the code.
@@ -25,27 +25,27 @@ The **Channels** page does the same without the terminal: **Add channel** stores
 3. Run `coffer channel pair <name>` and send the code to your bot. The bot confirms; you are the owner.
 4. Send any message. It lands in a conversation with the channel's agent and the reply comes back to Telegram.
 
-Telegram uses long polling — no public URL, no tunnel, nothing to expose.
+Telegram uses long polling — no public URL, nothing to expose.
 
 ## SeaTalk
 
-SeaTalk needs an org-approved app on the [SeaTalk Open Platform](https://open.seatalk.io/): create the app, enable the **Bot** capability and set it Online, and request the scopes your admin must approve (at minimum _Send Message to Bot User_). Note the **App ID** and **App Secret**; on webhook delivery also note the Event Callback **Signing Secret**.
+SeaTalk needs an org-approved app on the [SeaTalk Open Platform](https://open.seatalk.io/): create the app, enable the **Bot** capability and set it Online, and request the scopes your admin must approve (at minimum _Send Message to Bot User_). Note the **App ID** and **App Secret**.
 
-SeaTalk delivers events one of two ways, and the platform lets a bot use **only one at a time**. The choice lives both on the channel (`--delivery`) and on the app's event-delivery setting in the Developer Portal, and the two must agree.
+Coffer receives SeaTalk events over one outbound WebSocket connection per channel: the daemon dials out and SeaTalk pushes events down that connection. There is no public URL, no listening port and nothing to expose.
 
-### WebSocket delivery
+1. **Get the SeaTalk SDK.** The connection needs SeaTalk's own Python client library, which is distributed from SeaTalk's portal and which Coffer neither bundles nor depends on. Unpack it so that `~/.coffer/vendor/seatalk_oapi_sdk/` exists, or point `COFFER_SEATALK_SDK_DIR` at the directory you keep it in. The daemon picks it up without a restart.
+2. **Register the channel** with its app id and a reference to the app secret (or **Channels → Add channel → SeaTalk**):
 
-Coffer holds one outbound connection to SeaTalk: no public URL, no tunnel, no listener, no signing secret. It needs SeaTalk's own Python client library, which is distributed from SeaTalk's portal and which Coffer neither bundles nor depends on — unpack it so that `~/.coffer/vendor/seatalk_oapi_sdk/` exists, or point `COFFER_SEATALK_SDK_DIR` at the directory you keep it in.
+   ```bash
+   coffer credentials set channel/st/app-secret
+   coffer channel register my-seatalk --type seatalk --app-id <APP_ID> \
+     --app-secret-ref channel/st/app-secret --agent claude-code
+   ```
 
-```bash
-coffer credentials set channel/st/app-secret
-coffer channel register my-seatalk --type seatalk --app-id <APP_ID> \
-  --app-secret-ref channel/st/app-secret --delivery websocket --agent claude-code
-```
+3. **Set the bot's event callback to WebSocket** in the SeaTalk Open Platform.
+4. **Press Re-verify there once Coffer shows the connection as `connected`.** Re-verify passes only while the connection is live, so the channel has to be enabled in Coffer first.
 
-Then switch the app's event delivery to **WebSocket** in the Developer Portal. The portal's **Re-verify** passes only while the connection is live, so enable the channel in Coffer first.
-
-`coffer channel status my-seatalk` prints the connection state — `connecting`, `connected`, `kicked`, `sdk_missing` or `error` — plus a verbatim `ws error:` line when there is one; `--json` carries it as `websocket_state` and `websocket_error`, and the channel's page names it in words:
+`coffer channel status my-seatalk` prints the connection state — `connecting`, `connected`, `kicked`, `sdk_missing` or `error` — plus a verbatim `ws error:` line when there is one; `--json` carries it under `inbound` as `websocket_state` and `websocket_error`, and the channel's page shows it on its inbound card:
 
 ```
 inbound:  websocket (connected)
@@ -53,40 +53,9 @@ inbound:  websocket (connected)
 
 - **One connection per SeaTalk app.** If the same app is connected from somewhere else — a second machine, a colleague testing — that connection takes the events and this one reports `kicked` and retries slowly rather than fighting for the socket.
 - **Events pause while the connection is down**; there is no public endpoint queuing them for you.
-- **Without the library**, that one channel refuses to start and names the directory it searched; the daemon and every other channel keep running.
+- **Without the SDK**, the channel receives nothing and reports `sdk_missing`, naming the directory it searched. It keeps retrying, so dropping the SDK in needs no restart, and it can still send: replies and notifications to the paired owner never touch the SDK. The daemon and every other channel keep running.
 
-### Webhook delivery
-
-SeaTalk POSTs each event to a public URL you own.
-
-```bash
-coffer credentials set channel/st/app-secret
-coffer credentials set channel/st/signing-secret
-coffer channel register my-seatalk --type seatalk --app-id <APP_ID> \
-  --app-secret-ref channel/st/app-secret \
-  --signing-secret-ref channel/st/signing-secret --agent claude-code
-```
-
-While a webhook SeaTalk channel is enabled, Coffer runs a local callback listener on `127.0.0.1:8787` (override with `COFFER_CALLBACK_PORT`). It is loopback-only, so something has to carry the internet to it — Coffer never exposes the daemon itself:
-
-- **Run the tunnel yourself**: `cloudflared tunnel --url http://127.0.0.1:8787` or `ngrok http 8787`.
-- **Let Coffer supervise one**: create a Cloudflare named tunnel whose ingress points at `http://127.0.0.1:8787`, then on the channel's page (**Edit channel**) paste its connector token and the public base URL it answers on. The token goes into the credential store, and Coffer keeps a `cloudflared` child alive for as long as the channel is enabled, restarting it if it dies.
-
-Set the app's **Event Callback URL** to the one Coffer composes, `<public-url>/seatalk/<channel uid>` — copy it from the `register:` line of `coffer channel status` rather than typing it. The listener answers SeaTalk's verification challenge automatically.
-
-```
-inbound:  webhook 127.0.0.1:8787/seatalk/<channel uid> (listener up)
-tunnel:   managed (up)
-register: https://<public-host>/seatalk/<channel uid>
-```
-
-The tunnel line reads `not managed by Coffer` when you front the callback yourself — a choice, not a fault. `--json` carries the same facts as `tunnel_managed` and `tunnel_running`.
-
-### Switching delivery later
-
-Change it on the channel and in the Developer Portal in the same sitting. Coffer drops the fields the other method owns — a websocket channel keeps no signing secret, public URL or tunnel token, and a webhook channel needs its signing secret back. Going to webhook, set the callback URL in the portal; going to websocket, switch the portal to WebSocket and Re-verify while Coffer holds the connection.
-
-Pairing and chatting are identical on both delivery methods. Replies render SeaTalk Markdown.
+Pairing works as on Telegram. Replies render SeaTalk Markdown.
 
 ## Use it
 
@@ -118,8 +87,8 @@ Naming a chat the channel is not paired to is refused. Over HTTP the same thing 
 
 ### Day-to-day
 
-- **Edit** a channel from its page (**Edit channel**): change the default agent, or rotate a secret. A rotated secret is written back to the same credential reference, so binding and pairing are untouched; leave a secret field blank to keep the current value.
-- **Disable** a channel on the Channels page to stop its traffic at once (polling halts, events are refused); **enable** to resume.
+- **Edit** a channel from its page (**Edit channel**): change the default agent or a SeaTalk app id, or rotate a secret. A rotated secret is written back to the same credential reference, so binding and pairing are untouched; leave a secret field blank to keep the current value.
+- **Disable** a channel on the Channels page to stop its traffic at once (Telegram polling halts, a SeaTalk connection closes); **enable** to resume.
 - **Delete** a channel to remove it; its past conversations stay in Chat history until the retention policy prunes them.
 
 ## Moving a channel to another machine

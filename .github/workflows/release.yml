@@ -123,8 +123,8 @@ jobs:
       # triple suffix) so both the one-line installer and manual extraction
       # yield co-located plain-named binaries, which the frozen detect-or-spawn
       # logic requires (ADR daemon-detect-or-spawn): `coffer` looks for `coffer-daemon` next to
-      # itself at runtime, and the daemon deploys `coffer-callback` from its
-      # own directory into ~/.coffer/bin/ at startup.
+      # itself at runtime, and the daemon deploys its siblings from its own
+      # directory into ~/.coffer/bin/ at startup.
       - name: package CLI archive
         shell: bash
         run: |
@@ -135,7 +135,6 @@ jobs:
             coffer
             coffer-daemon
             coffer-mcp-shim
-            coffer-callback
           )
           for b in "${binaries[@]}"; do
             if [ ! -f "dist/$b" ]; then
@@ -148,7 +147,7 @@ jobs:
           tar -czf "artifacts/$archive" -C dist "${binaries[@]}"
           echo "packaged: artifacts/$archive"
 
-      # The .app bundles the very same four binaries the archive above ships.
+      # The .app bundles the very same three binaries the archive above ships.
       # Stage them where tauri.conf.json's `externalBin` looks: Tauri resolves
       # each `binaries/<name>` entry to `binaries/<name>-<target-triple>`.
       # Deliberately a copy of dist/, NOT a second PyInstaller run — freezing
@@ -159,7 +158,7 @@ jobs:
           set -euo pipefail
           triple="${{ matrix.triple }}"
           mkdir -p desktop/binaries
-          for b in coffer coffer-daemon coffer-mcp-shim coffer-callback; do
+          for b in coffer coffer-daemon coffer-mcp-shim; do
             cp "dist/$b" "desktop/binaries/$b-$triple"
             chmod +x "desktop/binaries/$b-$triple"
           done
@@ -260,8 +259,8 @@ jobs:
           ### Command line
 
           Download `coffer-cli-<platform>.tar.gz` and extract it. It contains
-          `coffer` (management CLI), `coffer-daemon`, `coffer-mcp-shim` and
-          `coffer-callback`. Keep the binaries
+          `coffer` (management CLI), `coffer-daemon` and `coffer-mcp-shim`.
+          Keep the binaries
           co-located: `coffer` finds `coffer-daemon` next to itself, and the
           daemon deploys the helper binaries into `~/.coffer/bin/` on startup.
 
@@ -272,7 +271,7 @@ jobs:
 
           `Coffer-unsigned-<platform>.dmg` is the same web UI in a native
           window, with a Dock icon and a tray item, and it starts the daemon
-          for you. It carries the same four binaries and deploys them into
+          for you. It carries the same three binaries and deploys them into
           `~/.coffer/bin/` on first launch, so installing the app installs the
           CLI too.
 

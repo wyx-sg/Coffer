@@ -41,10 +41,10 @@ whichever fits how you work.
 Download `Coffer-unsigned-<triple>.dmg` from
 [Releases](https://github.com/wyx-sg/Coffer/releases/latest), drag Coffer to
 Applications, and open it. Nothing else is required: the app carries `coffer`,
-`coffer-daemon`, `coffer-mcp-shim` and `coffer-callback` inside it, starts the
+`coffer-daemon` and `coffer-mcp-shim` inside it, starts the
 daemon for you, and stays in the menu-bar tray between uses.
 
-It installs the command line too. On first launch the daemon deploys all four
+It installs the command line too. On first launch the daemon deploys all three
 binaries into `~/.coffer/bin`, so putting that directory on your `PATH` gives you
 `coffer` and lets MCP clients resolve `coffer-mcp-shim`:
 
@@ -86,7 +86,7 @@ Each `v*` tag publishes two tiers from
 | macOS Apple silicon | `coffer-cli-<triple>.tar.gz`   | The command line and its binaries |
 
 Coffer currently ships macOS (Apple Silicon) only. The archive contains `coffer`,
-`coffer-daemon`, `coffer-mcp-shim` and the runtime helper binaries. Verify either download
+`coffer-daemon` and `coffer-mcp-shim`. Verify either download
 against the release's aggregated `SHA256SUMS` file, which covers every published artifact.
 
 ```sh
@@ -196,7 +196,7 @@ backend/              Python daemon + CLI + shim
     domain/           pure types + business rules (no I/O)
     application/      services + orchestration
     infrastructure/   DB, MCP transports, encrypted credential store, daemon discovery
-    surfaces/         HTTP (FastAPI), CLI (Typer), stdio shim, SeaTalk callback listener
+    surfaces/         HTTP (FastAPI), CLI (Typer), stdio shim
 frontend/             React + TypeScript + Vite web UI, served by the daemon
 desktop/              Tauri (Rust) macOS shell — Dock icon, menu-bar tray, bundled binaries
 e2e/                  Playwright suites — the web UI and the MCP gateway
@@ -207,10 +207,6 @@ openspec/             OpenSpec config, capability specs (`specs/<capability>/`, 
 docs/decisions/       Architectural Decision Records (ADRs)
 .agents/              Guides: workflow, OpenSpec, stack, frontend, visual language, testing, harness
 ```
-
-The `surfaces/callback/` process is the `coffer-callback` binary above: a standalone
-listener a tunnel points at, which verifies a SeaTalk signature and forwards the event
-to the daemon over loopback.
 
 Architecture deep-dive: [docs/architecture.md](docs/architecture.md). Principles: [docs/principles.md](docs/principles.md).
 ADRs: [docs/decisions/](docs/decisions/).

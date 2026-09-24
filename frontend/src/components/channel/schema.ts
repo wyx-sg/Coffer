@@ -16,7 +16,7 @@
 // (see `editChannel.ts`) rather than mint a second one nothing reads.
 import { z } from "zod";
 
-import type { ChannelDelivery, ChannelType } from "@/lib/api/channels";
+import type { ChannelType } from "@/lib/api/channels";
 import { mintCredentialRef } from "@/lib/credentialRef";
 
 // There is no DEFAULT_AGENT constant any more. `default_agent` holds an agent
@@ -34,10 +34,13 @@ const channelNameSchema = z
   .max(64, `${ERR}.nameTooLong`)
   .regex(/^[a-zA-Z0-9_-]+$/, `${ERR}.nameFormat`);
 
-/** The inbound transport a new SeaTalk channel is created on. */
-export const DEFAULT_DELIVERY: ChannelDelivery = "webhook";
-
-const addChannelFormUnion = z.discriminatedUnion("channel_type", [
+/**
+ * The add-channel form. A SeaTalk channel carries its app id and app secret
+ * and nothing else of SeaTalk's: it receives every event over one outbound
+ * websocket connection, so there is no signature, public URL or tunnel to
+ * configure.
+ */
+export const addChannelFormSchema = z.discriminatedUnion("channel_type", [
   z.object({
     channel_type: z.literal("telegram"),
     name: channelNameSchema,
@@ -46,43 +49,10 @@ const addChannelFormUnion = z.discriminatedUnion("channel_type", [
   z.object({
     channel_type: z.literal("seatalk"),
     name: channelNameSchema,
-    // Which transport SeaTalk delivers events on. Webhook is the default: it
-    // is the method that works without the operator-supplied official SDK.
-    delivery: z.enum(["webhook", "websocket"]).default(DEFAULT_DELIVERY),
     app_id: z.string().min(1, `${ERR}.appId`),
     app_secret: z.string().min(1, `${ERR}.appSecret`),
-    // Required on webhook (it verifies every request's signature), forbidden on
-    // websocket (the register handshake authenticates) — enforced below.
-    signing_secret: z.string().optional(),
-    // Optional: the tunnel's public base URL (https://host). The full SeaTalk
-    // callback URL is composed from this on the channel detail page.
-    public_base_url: z.string().optional(),
-    // Optional: a cloudflared connector token. When set, Coffer runs the
-    // named tunnel itself instead of the user running cloudflared by hand.
-    tunnel_token: z.string().optional(),
   }),
 ]);
-
-/**
- * The add-channel form. The cross-field rule sits on the union (a refinement
- * cannot live inside a discriminated-union member) and mirrors the backend's
- * `SeaTalkChannelConfig` validator field for field, so a submit never fails on
- * something the form could have told the user first.
- */
-export const addChannelFormSchema = addChannelFormUnion.superRefine((values, ctx) => {
-  if (values.channel_type !== "seatalk") return;
-  const reject = (path: string, message: string) =>
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
-  if (values.delivery === "webhook") {
-    if (!values.signing_secret) reject("signing_secret", `${ERR}.signingSecret`);
-    return;
-  }
-  // Websocket owns no signature, no public URL and no tunnel — a config field
-  // that decides nothing would be a lie about the system.
-  for (const field of ["signing_secret", "public_base_url", "tunnel_token"] as const) {
-    if (values[field]?.trim()) reject(field, `${ERR}.websocketField`);
-  }
-});
 
 export type AddChannelFormValues = z.output<typeof addChannelFormSchema>;
 
@@ -104,7 +74,7 @@ export interface ChannelEditPlan extends ChannelPlan {
 }
 
 /** The secrets a channel can hold, and the logical key each one's ref ends in. */
-export type ChannelSecret = "bot-token" | "app-secret" | "signing-secret" | "tunnel-token";
+type ChannelSecret = "bot-token" | "app-secret";
 
 /**
  * Mint the credential-store ref for one of a channel's secrets:
@@ -116,7 +86,7 @@ export type ChannelSecret = "bot-token" | "app-secret" | "signing-secret" | "tun
  * on `PATCH /resources/{uid}` for every kind, which is what reached the hazard;
  * an opaque address is what closes it. See `@/lib/credentialRef`.
  */
-export function channelSecretRef(secret: ChannelSecret): string {
+function channelSecretRef(secret: ChannelSecret): string {
   return mintCredentialRef("channel", secret);
 }
 
@@ -151,44 +121,18 @@ export function planChannel(
       secrets: [{ ref, value: values.bot_token }],
     };
   }
+  // The bot dials out and the register handshake (app id + app secret)
+  // authenticates the connection, so the app secret is the only secret.
   const appSecretRef = channelSecretRef("app-secret");
-  if (values.delivery === "websocket") {
-    // No signing secret, no public URL, no tunnel: the bot dials out and the
-    // register handshake (app id + app secret) authenticates the connection.
-    return {
-      name: values.name,
-      config: {
-        channel_type: "seatalk" satisfies ChannelType,
-        delivery: "websocket" satisfies ChannelDelivery,
-        app_id: values.app_id,
-        app_secret_ref: appSecretRef,
-        default_agent: defaultAgentUid,
-        runs_on: runsOn,
-      },
-      secrets: [{ ref: appSecretRef, value: values.app_secret }],
-    };
-  }
-  const signingSecretRef = channelSecretRef("signing-secret");
-  const tunnelToken = values.tunnel_token?.trim();
-  const tunnelTokenRef = channelSecretRef("tunnel-token");
   return {
     name: values.name,
     config: {
       channel_type: "seatalk" satisfies ChannelType,
-      delivery: "webhook" satisfies ChannelDelivery,
       app_id: values.app_id,
       app_secret_ref: appSecretRef,
-      signing_secret_ref: signingSecretRef,
       default_agent: defaultAgentUid,
       runs_on: runsOn,
-      ...(values.public_base_url?.trim() ? { public_base_url: values.public_base_url.trim() } : {}),
-      ...(tunnelToken ? { tunnel_token_ref: tunnelTokenRef } : {}),
     },
-    secrets: [
-      { ref: appSecretRef, value: values.app_secret },
-      // The refinement above guarantees a signing secret on webhook delivery.
-      { ref: signingSecretRef, value: values.signing_secret ?? "" },
-      ...(tunnelToken ? [{ ref: tunnelTokenRef, value: tunnelToken }] : []),
-    ],
+    secrets: [{ ref: appSecretRef, value: values.app_secret }],
   };
 }

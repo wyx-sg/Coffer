@@ -2,9 +2,8 @@
 
 The controller half of ``seatalk_ws`` (split only to keep each file inside the
 400-line limit): ``SeaTalkWebSocketConnector`` holds and supervises one socket,
-and this decides which channels have one. It is the websocket sibling of
-``TunnelController`` in ``tunnel_spawn`` — same shape, so ``ChannelRuntime``
-reconciles both the same way.
+and this decides which channels have one, in the shape ``ChannelRuntime``'s
+reconciler drives (``WebSocketControllerPort``).
 """
 
 from __future__ import annotations
@@ -27,9 +26,9 @@ class _Entry:
 
 
 class SeaTalkWebSocketController:
-    """Owns one connector per websocket-delivery channel.
+    """Owns one connector per enabled SeaTalk channel.
 
-    Satisfies ``WebSocketControllerPort``, mirroring ``TunnelController``: the
+    Satisfies ``WebSocketControllerPort``: the
     reconciler asks for the set it wants and this converges. ``running(name)``
     reports that a *supervisor* is alive for the channel — not that the socket
     is up, which is what ``state(name)`` is for; a connector stuck on

@@ -1,6 +1,6 @@
 """`coffer daemon` subcommand group: start / stop / restart / status, the
-three settings that decide where it listens, how long it stays, and whether the
-system starts it at all, and the experimental features it serves."""
+two settings that decide where it listens and whether the system starts it at
+all, and the experimental features it serves."""
 
 from __future__ import annotations
 
@@ -16,16 +16,10 @@ from coffer.infrastructure.daemon import bootstrap, port_alloc
 from coffer.infrastructure.daemon.pid_lock import pid_is_coffer_daemon
 from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli import (
-    daemon_features_cmd,
-    daemon_idle_cmd,
-    daemon_port_cmd,
-    daemon_service_cmd,
-)
+from coffer.surfaces.cli import daemon_features_cmd, daemon_port_cmd, daemon_service_cmd
 
 app = typer.Typer(help="Daemon lifecycle")
 app.add_typer(daemon_port_cmd.app, name="port")
-app.add_typer(daemon_idle_cmd.app, name="idle")
 app.add_typer(daemon_service_cmd.app, name="service")
 app.add_typer(daemon_features_cmd.app, name="features")
 

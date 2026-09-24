@@ -12,7 +12,7 @@ release notes link to. Choose the path that fits your use case:
 
 ::: tip Two artifacts, one Coffer
 A release publishes the CLI archive `coffer-cli-<triple>.tar.gz` and the desktop app
-`Coffer-unsigned-<triple>.dmg`. They carry the **same four binaries** and drive the same
+`Coffer-unsigned-<triple>.dmg`. They carry the **same three binaries** and drive the same
 daemon and the same web UI, so the choice is only how you reach it: `coffer open` in a
 browser, or a Dock icon. Installing the app installs the CLI too — on first launch it
 deploys those binaries into `~/.coffer/bin/`.
@@ -36,9 +36,6 @@ unpacks its binaries into `~/.coffer/bin`:
 - **`coffer-daemon`** — the long-lived background process that aggregates upstream MCP servers
   and serves the web UI
 - **`coffer-mcp-shim`** — the stdio bridge that MCP clients (Claude Code, Codex, …) talk to
-
-plus the runtime helper binary the daemon spawns for itself (`coffer-callback`, for SeaTalk
-channels).
 
 ### macOS (Apple Silicon)
 
@@ -125,8 +122,8 @@ app resolves one for itself, in a fixed order: an already-running daemon named b
 your `PATH`. The window appears once a daemon answers, or once the attempt has failed — in
 which case it opens on a banner that says why.
 
-The `.dmg` is **self-contained**: it embeds `coffer`, `coffer-daemon`, `coffer-mcp-shim` and
-`coffer-callback`, and deploys them into `~/.coffer/bin/` on first launch. Installing the
+The `.dmg` is **self-contained**: it embeds `coffer`, `coffer-daemon` and `coffer-mcp-shim`,
+and deploys them into `~/.coffer/bin/` on first launch. Installing the
 app therefore installs the CLI as well — add `~/.coffer/bin` to your `PATH` and
 `coffer …` and `coffer-mcp-shim` are available in a terminal too.
 
@@ -164,8 +161,8 @@ the artifact for your platform:
 
 | Platform                       | File                            | What it is                                  |
 | ------------------------------ | ------------------------------- | ------------------------------------------- |
-| macOS Apple silicon (M-series) | `coffer-cli-<triple>.tar.gz`    | The four binaries, for the terminal         |
-| macOS Apple silicon (M-series) | `Coffer-unsigned-<triple>.dmg`  | The [desktop app](#desktop-app), carrying the same four |
+| macOS Apple silicon (M-series) | `coffer-cli-<triple>.tar.gz`    | The three binaries, for the terminal        |
+| macOS Apple silicon (M-series) | `Coffer-unsigned-<triple>.dmg`  | The [desktop app](#desktop-app), carrying the same three |
 
 Coffer ships macOS (Apple Silicon) builds only. On Linux or Intel macOS, use the
 [from-source install](#from-source-developers).
@@ -178,7 +175,7 @@ shasum -a 256 -c SHA256SUMS --ignore-missing
 tar -xzf coffer-cli-<triple>.tar.gz -C ~/.coffer/bin
 ```
 
-Keep the four binaries in one directory: a frozen `coffer` looks for `coffer-daemon` beside
+Keep the three binaries in one directory: a frozen `coffer` looks for `coffer-daemon` beside
 itself. Add `~/.coffer/bin` to your `PATH` so MCP clients can find `coffer-mcp-shim`.
 
 ### macOS Gatekeeper (unsigned — signing pending)
@@ -204,8 +201,9 @@ so that path skips this step entirely.
 ### After install
 
 The first time the daemon starts from a frozen build, it deploys its sibling binaries into
-`~/.coffer/bin/` (idempotently — unchanged binaries are left alone), so MCP clients can find
-the shim and the shim can auto-spawn the daemon. Then:
+`~/.coffer/bin/` (idempotently — unchanged binaries are left alone, and the link of any
+binary the build no longer ships is removed), so MCP clients can find the shim and the shim
+can auto-spawn the daemon. Then:
 
 ```sh
 claude mcp add coffer coffer-mcp-shim

@@ -10,12 +10,13 @@ launchd is the fix macOS already has. This module writes one user agent:
 
 * ``RunAtLoad`` — it is up as soon as the user logs in, before anything asks.
 * ``KeepAlive: {SuccessfulExit: false}`` — a crash is restarted, a clean exit
-  is not. That asymmetry is load-bearing, not caution: the daemon stands down
-  by *exiting cleanly* when nothing has wanted it for hours
-  (:func:`coffer.infrastructure.daemon.entry._stand_down_when_idle`), and a
-  plain ``KeepAlive: true`` would restart it a second later, forever. Every
-  client can start a daemon, so nothing is lost by letting a deliberate exit
-  stand.
+  is not. That asymmetry is load-bearing, not caution: the daemon exits
+  cleanly on purpose — ``coffer daemon stop``, a quit from the desktop shell,
+  or standing down because another daemon superseded it
+  (:func:`coffer.infrastructure.daemon.entry._evict_when_superseded`) — and a
+  plain ``KeepAlive: true`` would fight each of those, restarting it a second
+  later. Every client can start a daemon, so nothing is lost by letting a
+  deliberate exit stand.
 * ``EnvironmentVariables.PATH`` — captured from the shell that ran the
   install. A launchd agent otherwise inherits a minimal ``PATH``, and the
   daemon spawns ``npx`` / ``uvx`` MCP upstreams that then resolve to nothing.
@@ -90,8 +91,8 @@ def build_plist(*, program: list[str], path_env: str, log_file: Path) -> dict[st
         "Label": LABEL,
         "ProgramArguments": program,
         "RunAtLoad": True,
-        # Restart a crash; let a deliberate stand-down stand. See the module
-        # docstring — inverting this turns the idle shutdown into a restart loop.
+        # Restart a crash; let a deliberate exit stand. See the module
+        # docstring — inverting this would undo every deliberate stop.
         "KeepAlive": {"SuccessfulExit": False},
         "EnvironmentVariables": {"PATH": path_env, "HOME": str(Path.home())},
         "StandardOutPath": str(log_file),

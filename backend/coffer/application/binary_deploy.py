@@ -1,12 +1,10 @@
 """Deploy a frozen build's sibling binaries into ``~/.coffer/bin`` (spec daemon "Deploy
 frozen sibling binaries and back up the vault before migrating").
 
-The Tauri shell used to do this on every launch. With the shell gone the daemon
-inherits the job, and it is the right owner: ``coffer-callback`` (the channel
-webhook listener) is a process the *daemon* spawns at runtime, and
-``coffer-mcp-shim`` must be able to find
-``coffer-daemon`` as a sibling so an MCP client can auto-spawn a daemon after a
-reboot (ADR daemon-detect-or-spawn).
+The daemon owns the job because it is the one process every frozen install
+starts, whichever tier it came from, and ``coffer-mcp-shim`` must be able to
+find ``coffer-daemon`` as a sibling so an MCP client can auto-spawn a daemon
+after a reboot (ADR daemon-detect-or-spawn).
 
 Only frozen builds need this. A source install has already been handled by
 ``pip install``, which puts the console scripts on PATH (spec daemon "Install the console
@@ -25,7 +23,9 @@ that a deploy never overwrites the binary a user may be running or may need to
 go back to: the new build is copied beside the old one and the symlink is
 flipped atomically, so a bad build is undone by pointing the link back at the
 previous directory. The last :data:`KEEP_VERSIONS` directories survive; older
-ones are pruned once a newer deploy lands.
+ones are pruned once a newer deploy lands. A public name this build no longer
+ships — ``coffer-callback`` after the webhook listener was deleted — has its
+symlink removed, so it stops resolving to an old build on the user's ``PATH``.
 
 Staleness is two signals — byte size and a version sentinel written after the
 copy completes. mtime is deliberately not one: a build's mtime says when it was
@@ -52,7 +52,6 @@ DEPLOYED_BINARIES: tuple[str, ...] = (
     "coffer",
     "coffer-daemon",
     "coffer-mcp-shim",
-    "coffer-callback",
 )
 
 #: Version directories kept under ``~/.coffer/bin``: the current one and the
@@ -154,6 +153,53 @@ def prune_versions(dest_dir: Path, *, keep: int = KEEP_VERSIONS) -> list[str]:
     return removed
 
 
+def _points_into_a_version_dir(link: Path, dest_dir: Path) -> bool:
+    """Whether ``link`` is one of this module's links: ``<bin>/<version>/<name>``.
+
+    Read from the link's own text rather than by resolving it, so a link whose
+    version directory was already pruned — dangling — is still recognised.
+    """
+    try:
+        raw = os.readlink(link)
+    except OSError:
+        return False
+    target = Path(os.path.normpath(dest_dir / raw))
+    version_dir = target.parent
+    if version_dir.parent != dest_dir or target.name != link.name:
+        return False
+    return not version_dir.exists() or _is_version_dir(version_dir)
+
+
+def retire_unshipped_links(
+    dest_dir: Path, *, shipped: tuple[str, ...] = DEPLOYED_BINARIES
+) -> list[str]:
+    """Remove each public symlink into a version directory under a name not shipped.
+
+    Spec daemon "Deploy frozen sibling binaries and back up the vault before
+    migrating": a binary a release dropped must stop resolving to an old build
+    rather than linger on the user's ``PATH``. Generic by design, so the next
+    binary a release drops needs no special case. Anything at such a path that
+    is not provably one of these links — a regular file, a link elsewhere — is
+    not Coffer's deployment and is left alone. Returns the names removed.
+    """
+    if not dest_dir.is_dir():
+        return []
+    removed: list[str] = []
+    for entry in sorted(dest_dir.iterdir()):
+        name = entry.name
+        if name in shipped or name.startswith(".") or not entry.is_symlink():
+            continue
+        if not _points_into_a_version_dir(entry, dest_dir):
+            continue
+        try:
+            entry.unlink()
+        except OSError:
+            log.warning("binary_deploy.retire_failed", extra={"binary": name}, exc_info=True)
+            continue
+        removed.append(name)
+    return removed
+
+
 def deploy_frozen_sidecars(*, version: str | None = None) -> list[str]:
     """Idempotently place this frozen build's siblings in ``~/.coffer/bin``.
 
@@ -200,6 +246,14 @@ def deploy_frozen_sidecars(*, version: str | None = None) -> list[str]:
 
     if deployed:
         log.info("binary_deploy.completed", extra={"binaries": deployed, "dest": str(dest_dir)})
+    try:
+        retired = retire_unshipped_links(dest_dir)
+    except OSError:
+        log.warning("binary_deploy.retire_failed", exc_info=True)
+        retired = []
+    if retired:
+        log.info("binary_deploy.retired", extra={"binaries": retired})
+    if deployed or retired:
         try:
             pruned = prune_versions(dest_dir)
         except OSError:

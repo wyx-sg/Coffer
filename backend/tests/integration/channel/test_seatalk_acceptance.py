@@ -15,7 +15,9 @@ import pytest
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
+from coffer.application.channel.ports import AdapterCallbacks
 from coffer.domain.errors import ConfigValidationError
+from coffer.infrastructure.channel.seatalk_ws import SeaTalkWebSocketConnector
 from tests.integration.infrastructure.channel.conftest import (
     FakeSeaTalk,
     RecordingCallbacks,
@@ -23,19 +25,17 @@ from tests.integration.infrastructure.channel.conftest import (
 )
 
 from .conftest import DEFAULT_AGENT_KEY, ChannelEnv, tap_event, wait_until
+from .fake_seatalk_sdk import build_fake_sdk, deliver, envelope, hold
 
 _APP_SECRET_REF = "channel/st/app-secret"
-_SIGNING_REF = "channel/st/signing-secret"
 
 
 async def _seatalk_config(env: ChannelEnv, **overrides: Any) -> dict[str, Any]:
     env.keyring.set(_APP_SECRET_REF, "app-secret-value")
-    env.keyring.set(_SIGNING_REF, "signing-secret-value")
     config: dict[str, Any] = {
         "channel_type": "seatalk",
         "app_id": "app-1",
         "app_secret_ref": _APP_SECRET_REF,
-        "signing_secret_ref": _SIGNING_REF,
         "default_agent": await env.agent_uid(DEFAULT_AGENT_KEY),
     }
     config.update(overrides)
@@ -64,47 +64,9 @@ async def test_app_id_and_app_secret_ref_are_both_required(env: ChannelEnv) -> N
     assert resource.config["app_secret_ref"] == _APP_SECRET_REF
     # The secret itself never enters the stored configuration — only its ref.
     assert "app-secret-value" not in repr(resource.config)
-
-
-@pytest.mark.acceptance(
-    spec="channels/seatalk", scenario="a webhook channel without a signing secret is refused"
-)
-async def test_webhook_delivery_requires_a_signing_secret(env: ChannelEnv) -> None:
-    with pytest.raises(ConfigValidationError):
-        await env.resources.register(
-            kind="channel",
-            name="st",
-            config=await _seatalk_config(env, delivery="webhook", signing_secret_ref=None),
-            actor="test",
-        )
-    assert await env.resources.list(kind="channel") == []
-
-    # With the signing secret it is accepted; public_base_url and the tunnel
-    # token ref are optional (neither is given here).
-    bare = await env.resources.register(
-        kind="channel",
-        name="st",
-        config=await _seatalk_config(env, delivery="webhook"),
-        actor="test",
-    )
-    assert bare.config["signing_secret_ref"] == _SIGNING_REF
-    assert not bare.config.get("public_base_url")
-    assert not bare.config.get("tunnel_token_ref")
-
-    env.keyring.set("channel/st2/tunnel", "tunnel-token")
-    full = await env.resources.register(
-        kind="channel",
-        name="st2",
-        config=await _seatalk_config(
-            env,
-            delivery="webhook",
-            public_base_url="https://bot.example.com",
-            tunnel_token_ref="channel/st2/tunnel",
-        ),
-        actor="test",
-    )
-    assert full.config["public_base_url"] == "https://bot.example.com"
-    assert full.config["tunnel_token_ref"] == "channel/st2/tunnel"
+    # And nothing about an inbound transport is asked for or stored.
+    for key in ("delivery", "signing_secret_ref", "public_base_url", "tunnel_token_ref"):
+        assert key not in resource.config
 
 
 # -- the real adapter bound into the core ------------------------------------------
@@ -227,3 +189,59 @@ async def test_a_main_chat_mention_is_answered_in_a_thread_rooted_at_it(env: Cha
     assert fake.single_chat_calls == []
     # The thread holds only the @mention itself, so no history is read.
     assert fake.thread_calls == []
+
+
+@pytest.mark.acceptance(
+    spec="channels/seatalk", scenario="a websocket channel receives an event with no public url"
+)
+async def test_an_event_pushed_down_the_socket_drives_a_turn(env: ChannelEnv) -> None:
+    """End to end over the one inbound transport: a channel configured with
+    nothing but its app credentials, the fake SDK pushing a DM down the held
+    connection, and the real adapter and processor answering it."""
+    fake = FakeSeaTalk()
+    resource, adapter = await _bound_seatalk(env, fake, owner="emp-1")
+    assert {"app_id", "app_secret_ref"} <= set(resource.config)
+    for key in ("delivery", "signing_secret_ref", "public_base_url", "tunnel_token_ref"):
+        assert key not in resource.config
+    await adapter.start(
+        AdapterCallbacks(
+            on_message=env.processor.on_message,
+            on_callback=env.processor.on_callback,
+            on_lifecycle=env.processor.on_lifecycle,
+            on_stop=env.processor.on_stop,
+        )
+    )
+    sdk = build_fake_sdk()
+    sdk.plan[:] = [deliver(envelope()), hold()]
+
+    async def ingest(channel_uid: str, payload: dict[str, Any]) -> None:
+        # What ChannelService.ingest_event does once it has found the adapter.
+        assert channel_uid == resource.uid
+        await adapter.handle_event(payload)
+
+    connector = SeaTalkWebSocketConnector(
+        resource.uid,
+        "app-1",
+        "app-secret-value",
+        ingest=ingest,
+        loader=lambda: sdk.module,
+        backoff_initial=0.01,
+        backoff_max=0.04,
+        kick_backoff=60.0,
+        join_timeout=2.0,
+    )
+    await connector.start()
+    try:
+
+        def replied() -> bool:
+            return any(
+                "Hello world" in str(body)
+                for _s, body in fake.init_stream_calls + fake.update_stream_calls
+            ) or any("Hello world" in str(body) for body, _ in fake.single_chat_calls)
+
+        await wait_until(replied, message="the pushed event never drove a turn")
+        assert connector.state() == ("connected", None)
+        assert sdk.connects == [("app-1", "app-secret-value")]
+    finally:
+        await connector.stop()
+        await adapter.stop()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Keep the PyInstaller specs level with the tree.
 
-The four specs under `backend/` name paths as strings: the entry script each
+The three specs under `backend/` name paths as strings: the entry script each
 binary is frozen from, and the data files it has to carry because they are not
 importable modules. Nothing imports those strings, so when the file they point
 at is deleted or moved the spec keeps naming it and every gate stays green —

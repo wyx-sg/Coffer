@@ -3,9 +3,26 @@
 **Status**: Accepted
 **Date**: 2026-09-12
 **Deciders**: Yuxing Wu
-**Related**: spec [channels/seatalk](../../openspec/specs/channels/seatalk/spec.md) ("Carry no ingress fields on websocket delivery", "Load the websocket client library from an operator-supplied directory");
+**Related**: spec [channels/seatalk](../../openspec/specs/channels/seatalk/spec.md) ("Receive every event over one outbound websocket connection", "Report the websocket connection as the channel's inbound state", "Load the websocket client library from an operator-supplied directory");
 [Channel Adapter Framework](channel-adapter-framework.md);
 [Daemon Detect-or-Spawn](daemon-detect-or-spawn.md)
+
+> **Amended (2026-09-24).** Webhook delivery is deleted and WebSocket is
+> SeaTalk's only inbound transport. The owner's production bot runs on
+> websocket delivery, and keeping the webhook path cost a second process, a
+> signature scheme, a supervised tunnel and a public hostname for one remaining
+> user: an installation that cannot obtain the SDK. The `coffer-callback`
+> listener, signature verification, the `event_verification` handshake, the
+> managed `cloudflared` tunnel, the public base URL and the reachability probe
+> are gone, and so are the `delivery`, `signing_secret_ref`, `public_base_url`
+> and `tunnel_token_ref` fields — migration `0103` strips them from every stored
+> SeaTalk channel and leaves the credential values their refs cited in the
+> credential store. A SeaTalk channel is configured by `app_id` and
+> `app_secret_ref` alone, and its status reports the websocket connection as its
+> inbound state. An installation without the SDK has no SeaTalk inbound: its
+> channels report `sdk_missing` and still send. The SDK stays operator-supplied,
+> never vendored and never declared. Points of the decision below that this
+> changes are marked in place.
 
 ## Context
 
@@ -60,6 +77,10 @@ supplies rather than something this repository carries.**
    `app_secret_ref` are required on both, because the register handshake
    authenticates with them.
 
+   _Amended (2026-09-24):_ `delivery` is deleted with webhook delivery, and so
+   are the three webhook fields. The configuration is `app_id` and
+   `app_secret_ref` plus the common channel fields.
+
 2. **The transport ends at the existing ingest seam, one line above the
    adapter.** The SDK's generic event handler hands over the raw event dict,
    which is the same shape the webhook body already had, so the connector calls
@@ -70,6 +91,9 @@ supplies rather than something this repository carries.**
    things stay behind in the listener: signature verification and the
    `event_verification` handshake.
 
+   _Amended (2026-09-24):_ the listener and both of those are deleted; the
+   websocket connector is now the only caller of the ingest entry point.
+
 3. **Supervision is Coffer's, because the SDK has none.** The SDK is synchronous
    and thread-based and does not reconnect. So each websocket channel gets a
    connector with its own supervision loop — connect, listen on a worker thread,
@@ -77,6 +101,9 @@ supplies rather than something this repository carries.**
    the existing tunnel controller, reconciled by the channel runtime exactly as
    tunnels are. The runtime's listener count now includes only webhook channels,
    so a websocket-only deployment runs no listener at all.
+
+   _Amended (2026-09-24):_ there is no tunnel controller or listener left; the
+   websocket controller is the channel runtime's only SeaTalk reconciler.
 
 4. **The SDK is an operator-supplied optional dependency.** Coffer does not
    vendor it, does not declare it, and does not import it at daemon import time.
@@ -133,32 +160,33 @@ supplies rather than something this repository carries.**
 - **Event delivery pauses while the connection is down.** There is no public
   endpoint absorbing events during a restart, a network drop or a back-off
   window; whatever the platform does with undeliverable events is the platform's
-  behaviour, not something Coffer can queue around. Webhook delivery has the same
-  exposure whenever the tunnel is down, but a tunnel's uptime is the owner's to
-  see, while this one is inside the daemon — hence the connection state being a
+  behaviour, not something Coffer can queue around. The connection is inside the
+  daemon, where the owner cannot watch it — hence the connection state being a
   first-class thing status reports, rather than a log line.
 
-- **The delivery method is a two-sided setting.** It lives on the channel here and
-  on the app in SeaTalk's Developer Portal, and the two must move together.
-  Switching in Coffer clears the fields the other method owns, which is honest
-  rather than lossy: the switch was never free, because the portal has to change
-  in step. On the websocket side the portal's Re-verify only passes while the
-  connection is actually live, so the order is *enable in Coffer, then verify
-  there* — a sequencing trap worth documenting, because getting it backwards
-  looks like a broken product.
+- **The portal setting and Coffer must agree.** The bot's event delivery setting
+  in SeaTalk's Developer Portal is WebSocket. The portal's Re-verify only passes
+  while the connection is actually live, so the order is *enable in Coffer, then
+  verify there* — a sequencing trap worth documenting, because getting it
+  backwards looks like a broken product.
 
-- **An install without the SDK is a first-class configuration.** That is what an
+- ~~**An install without the SDK is a first-class configuration.** That is what an
   outside user of this project has, and webhook delivery remains fully supported
   for exactly that reason. WebSocket is a capability an operator can add, never a
-  floor the product stands on; no test may skip because the real SDK is absent,
-  so the suite codes against a stub that is the contract.
+  floor the product stands on.~~ — **Superseded (2026-09-24).** An install
+  without the SDK has no SeaTalk inbound: its SeaTalk channels report
+  `sdk_missing`, naming the directory searched, and keep sending replies and
+  notifications. The owner accepted that cost for outside users. No test may
+  skip because the real SDK is absent, so the suite still codes against a stub
+  that is the contract.
 
-- **The webhook apparatus stays.** Nothing is deleted: the listener, the signature
+- ~~**The webhook apparatus stays.** Nothing is deleted: the listener, the signature
   check, the managed tunnel, the public base URL and the reachability test are all
   still the right implementation of webhook delivery, and remain the only option
-  for an owner who cannot obtain the SDK. The cost of the second transport is
-  therefore a second path to maintain — paid because the new one removes the
-  public surface entirely, which no amount of polishing the old one can do.
+  for an owner who cannot obtain the SDK.~~ — **Superseded (2026-09-24).** The
+  apparatus is deleted, the `coffer-callback` binary with it, and a deploy
+  removes its `~/.coffer/bin/` link on existing installs. Coffer has no
+  public-reachable surface at all.
 
 ## SeaTalk platform facts
 
@@ -169,15 +197,12 @@ repository and open.seatalk.io (July and September 2026) and verified against a
 live app unless marked otherwise. The requirements they support are in spec
 [channels/seatalk](../../openspec/specs/channels/seatalk/spec.md).
 
-**Inbound.** Both delivery methods carry the same body,
+**Inbound.** An event body is
 `{event_id, event_type, timestamp, app_id, event}`; a DM sender is identified by
 `employee_code`. The websocket SDK is synchronous and thread-based, registers
 with `app_id` + `app_secret`, acks by `callback_id`, does not reconnect, and a
-new registration of the same app kicks the previous holder. The webhook URL must
-be publicly reachable; saving it sends an `event_verification` whose
-`event.seatalk_challenge` must be echoed within 5 s; every callback carries a
-`Signature` header equal to the hex `sha256(raw_body + signing_secret)`; a non-200
-is retried up to three times. Group text lives at `text.plain_text`, not
+new registration of the same app kicks the previous holder. A bot uses one
+delivery method at a time, set in the Developer Portal. Group text lives at `text.plain_text`, not
 `text.content`. A group message reaches the bot only when it @mentions the bot
 (`new_mentioned_message_received_from_group_chat`, with `thread_id` set when it
 is inside a thread); non-@ group-main messages and emoji reactions are never

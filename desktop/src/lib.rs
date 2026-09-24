@@ -70,8 +70,8 @@ pub fn run() {
     //
     // No binary deployment either. The daemon's own frozen-start path
     // (spec daemon "Deploy frozen sibling binaries and back up the vault
-    // before migrating") deploys `coffer`, `coffer-daemon`,
-    // `coffer-mcp-shim` and `coffer-callback` into ~/.coffer/bin — which is
+    // before migrating") deploys `coffer`, `coffer-daemon` and
+    // `coffer-mcp-shim` into ~/.coffer/bin — which is
     // also how installing only the .app installs the CLI. Doing it here as
     // well would put two processes in a race to write that directory.
     tauri::Builder::default()

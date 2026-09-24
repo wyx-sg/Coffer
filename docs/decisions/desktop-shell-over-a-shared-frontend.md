@@ -7,6 +7,11 @@
 **Supersedes in part**: the "A desktop shell" explicit non-goal recorded in the roadmap on 2026-09-09
 **Related**: [The Daemon Serves Its Token in the Page](./daemon-serves-the-token-in-the-page.md) (which this amends — its "there is no third case" now has one), [Detect-or-Spawn](./daemon-detect-or-spawn.md), [PyInstaller Distribution](./distribution-pyinstaller.md), [The Daemon Proxies OS File Actions](./daemon-proxies-os-file-actions.md)
 
+> **Amended (2026-09-24).** The app bundles three frozen binaries, not four:
+> `coffer-callback` is deleted with SeaTalk webhook delivery
+> ([SeaTalk Inbound Over WebSocket](./seatalk-websocket-inbound.md)). The counts
+> below are updated in place; nothing else in the decision changes.
+
 ## Context
 
 The Tauri shell was retired on 2026-09-09. The reasoning was about operating
@@ -125,8 +130,8 @@ the escape hatch is better placed where a squatted port is diagnosed:
 
 ### The app is a self-contained installer, and installing it installs the CLI
 
-The `.app` bundles four frozen binaries as Tauri `externalBin` — `coffer`,
-`coffer-daemon`, `coffer-mcp-shim` and `coffer-callback` — and the build emits a
+The `.app` bundles three frozen binaries as Tauri `externalBin` — `coffer`,
+`coffer-daemon` and `coffer-mcp-shim` — and the build emits a
 `.dmg`. Download, drag to Applications, double-click: nothing else is required,
 which is what "desktop app" has to mean to be worth having.
 
@@ -148,13 +153,13 @@ a binary rather than a dead one; the rest stay as the recovery path for a bundle
 whose sidecar is missing or unrunnable.
 
 **Installing the app also installs the CLI**, without the shell doing anything.
-The daemon deploys its own siblings — all four, `coffer` included — into
+The daemon deploys its own siblings — all three, `coffer` included — into
 `~/.coffer/bin/` on frozen start ([daemon](../../openspec/specs/daemon/spec.md) "Deploy frozen sibling binaries and back up the vault before migrating"), so the first launch of the app leaves
 the command-line tools on disk for the user to put on `PATH`. This is the
 arrangement Ollama, Docker Desktop and Tailscale all use: one installable app,
 with the CLI linked out of it rather than installed before it.
 
-What this costs is build time. `make desktop` now runs PyInstaller for four
+What this costs is build time. `make desktop` now runs PyInstaller for three
 binaries before it runs Tauri — on the order of an hour — where a shell without
 bundling would have taken minutes. That is the operating cost the 2026-09-09
 retirement objected to, accepted deliberately this time, and bounded by the fact
@@ -192,7 +197,7 @@ single highest-value thing that account would buy.
   than an automatic one.
 - **The release grows a second tier again, and it is nearly free.** [daemon](../../openspec/specs/daemon/spec.md)
   "Release the macOS arm64 terminal archive" collapsed the release to one `coffer-cli-<triple>.tar.gz`; a `.dmg` joins it.
-  The expensive half — PyInstaller over four binaries — is work the release job
+  The expensive half — PyInstaller over three binaries — is work the release job
   already does for the CLI archive, so the desktop tier reuses those artifacts
   and adds only a Tauri build. The hour-long cost is a *local* `make desktop`
   cost, not a release one.

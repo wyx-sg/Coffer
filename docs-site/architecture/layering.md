@@ -52,7 +52,7 @@ The credential module deserves special mention: `infrastructure/credentials/` is
 
 ### surfaces/
 
-The surfaces layer adapts external protocols to application calls. It contains the FastAPI application (`surfaces/http/`), the Typer CLI (`surfaces/cli/`), the stdio shim entry point (`surfaces/shim/`), and the channel callback listener (`surfaces/callback/` — the `coffer-callback` process that receives SeaTalk webhooks). Surfaces are thin: they parse requests, call application services, and format responses. They contain no business logic.
+The surfaces layer adapts external protocols to application calls. It contains the FastAPI application (`surfaces/http/`), the Typer CLI (`surfaces/cli/`), and the stdio shim entry point (`surfaces/shim/`). Surfaces are thin: they parse requests, call application services, and format responses. They contain no business logic.
 
 The two composition roots — `surfaces/http/app.py` for the daemon's HTTP server, and `surfaces/cli/main.py` for the CLI — are the only places where all four layers meet. Each kind exposes one factory — `make_<kind>_kind()` in `application/<kind>/kind.py` — that returns a frozen `Kind` (`domain/resource.py`): the kind's identity, config schema and lifecycle hooks, and nothing else. The composition root does the wiring itself, explicitly: `surfaces/http/app.py` hands off to `kind_wiring.py` and the per-kind `*_wiring.py` modules, each of which builds that kind's infrastructure and services, registers its routers, and returns a typed dataclass (`AgentSkillWiring`, `ProviderWiring`, `KnowledgeWiring`, `MemoryWiring`, `McpWiring`, `KindWirings`, `ChatWiring`, `BackgroundWorkers`) that `app.py` passes forward to the next step; the factories' `Kind` records populate `app.state.kinds`. `surfaces/cli/main.py` mounts the Typer groups the same way. Route handlers reach their services through per-kind FastAPI dependency modules (`surfaces/http/{agent,workspace,skill,provider}_dependencies.py`, `surfaces/http/{chat,knowledge,memory,mcp}/dependencies.py`); `surfaces/http/dependencies.py` keeps only the kind-agnostic getters. There is no global kind registry and no import-time side effects. Adding a new kind means creating its subdirectories in each layer, writing its factory, and adding one wiring module the composition root calls.
 
@@ -97,7 +97,7 @@ backend/coffer/
 │   ├── mcp/                      # MCP-specific value objects
 │   ├── agent/                    # agent config value objects
 │   ├── skill/                    # skill value objects
-│   ├── channel/                  # channel config, envelopes, signing
+│   ├── channel/                  # channel config, envelopes
 │   ├── knowledge/                # collection config + entry/document value objects
 │   ├── memory/                   # partition + fact value objects
 │   ├── provider/                 # connection protocol + projection value objects
@@ -151,7 +151,6 @@ backend/coffer/
     │   ├── resource_cmd.py
     │   ├── daemon_cmd.py         # + daemon_port_cmd.py — the one group that needs no daemon
     │   └── mcp.py
-    ├── callback/                 # coffer-callback channel listener (separate process)
     └── shim/                     # coffer-mcp-shim stdio entry point
 ```
 

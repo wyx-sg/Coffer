@@ -25,6 +25,7 @@ from coffer.application.channel.service import ChannelService
 from coffer.application.channel.store_ports import ChannelPeer
 from coffer.application.resource_service import ResourceService
 from coffer.domain.channel.envelopes import SentMessage
+from coffer.domain.channel.errors import ChannelNotRunning
 from coffer.infrastructure.channel.persistence import (
     ChannelPeerRepo,
     ChannelThreadConversationRepo,
@@ -35,9 +36,12 @@ from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlch
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.channel_routes import (
+    get_channel_service,
+    set_channel_service,
+)
+from coffer.surfaces.http.channel_routes import (
     router as channel_router,
 )
-from coffer.surfaces.http.channel_routes import set_channel_service
 
 _TOKEN = "test-token"
 _PAIRING_ALPHABET = set("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
@@ -66,14 +70,14 @@ class _StubAdapter:
 class _StubRuntime:
     def __init__(self) -> None:
         self.adapters: dict[str, _StubAdapter] = {}
-        self.listener_port = 8787
-        self.listener_running = True
+        #: channel uid -> (websocket state, last error)
+        self.websockets: dict[str, tuple[str, str | None]] = {}
 
     def is_running(self, name: str) -> bool:
         return name in self.adapters
 
-    def tunnel_running(self, name: str) -> bool:
-        return False
+    def websocket_state(self, channel_uid: str) -> tuple[str, str | None] | None:
+        return self.websockets.get(channel_uid)
 
     def adapter(self, name: str) -> _StubAdapter | None:
         return self.adapters.get(name)
@@ -139,7 +143,6 @@ async def ctx(tmp_path) -> AsyncIterator[_Ctx]:
             "channel_type": "seatalk",
             "app_id": "app-1",
             "app_secret_ref": "channel/st/secret",
-            "signing_secret_ref": "channel/st/signing",
         },
         actor="test",
     )
@@ -196,7 +199,6 @@ async def test_unknown_channel_is_404_on_every_route(ctx: _Ctx) -> None:
         ("GET", "/api/v1/channels/nope/status", None),
         ("POST", "/api/v1/channels/nope/pairing-code", None),
         ("POST", "/api/v1/channels/nope/notify", {"text": "hi"}),
-        ("POST", "/api/v1/channels/nope/events", {"event_type": "x", "event": {}}),
     ]
     async with _client(ctx.app) as c:
         for method, path, body in requests:
@@ -232,7 +234,7 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
         "running": False,
         "pending_pairing": False,
         "peer": None,
-        "callback": None,  # telegram needs no callback ingress
+        "inbound": None,  # telegram's inbound is its own polling, reported by `running`
         "diagnostics": [],  # nothing contradicts the configuration
         # The binding travels on the wire even when there is nothing to say:
         # a surface must be able to tell "bound elsewhere" from "stopped", and
@@ -248,6 +250,7 @@ async def test_status_telegram_defaults(ctx: _Ctx) -> None:
 )
 async def test_status_reports_runtime_pairing_and_callback_details(ctx: _Ctx) -> None:
     ctx.runtime.adapters["st"] = _StubAdapter()
+    ctx.runtime.websockets[ctx.st_uid] = ("connected", None)
     await _pair(ctx, ctx.st_id)
     async with _client(ctx.app) as c:
         issued = await c.post(f"/api/v1/channels/{ctx.st_uid}/pairing-code")
@@ -264,21 +267,10 @@ async def test_status_reports_runtime_pairing_and_callback_details(ctx: _Ctx) ->
     assert body["peer"]["chat_id"] == "emp-1"
     assert body["peer"]["display_name"] == "Yu"
     assert body["peer"]["active_conversation_id"] == "conv-9"
-    assert body["callback"] == {
-        "delivery": "webhook",
-        "port": 8787,
-        # The public callback path spells the UID. It is registered by hand on
-        # SeaTalk's portal and never re-read, so the one thing it may not
-        # contain is a label the owner is invited to change (``callback_path``).
-        "path": f"/seatalk/{ctx.st_uid}",
-        "listener_running": True,
-        "public_base_url": None,
-        "public_callback_url": None,
-        "tunnel_managed": False,
-        "tunnel_running": False,
-        "websocket_state": None,
-        "websocket_error": None,
-    }
+    # The channel type's own inbound state: for SeaTalk, its websocket
+    # connection, and nothing about a listener, port, path, URL or tunnel.
+    assert body["inbound"] == {"websocket_state": "connected", "websocket_error": None}
+    assert "callback" not in body
 
 
 @pytest.mark.acceptance(
@@ -359,7 +351,22 @@ async def test_notify_rejects_empty_text(ctx: _Ctx) -> None:
     assert r.json()["error"]["code"] == "CONFIG_INVALID"
 
 
-async def test_events_ingest_reaches_the_adapter(ctx: _Ctx) -> None:
+async def test_the_webhook_routes_are_gone(ctx: _Ctx) -> None:
+    """No route here is called by an IM platform any more: SeaTalk pushes down
+    the websocket connection the daemon holds."""
+    ctx.runtime.adapters["st"] = _StubAdapter()
+    async with _client(ctx.app) as c:
+        for path in (
+            f"/api/v1/channels/{ctx.st_uid}/events",
+            f"/api/v1/channels/{ctx.st_uid}/callback-test",
+        ):
+            r = await c.post(path, json={"event_type": "x", "event": {}})
+            assert r.status_code in (404, 405), (path, r.status_code)
+
+
+async def test_ingest_hands_a_pushed_event_to_the_adapter(ctx: _Ctx) -> None:
+    """``ChannelService.ingest_event`` is the seam the websocket controller
+    feeds; it schedules the adapter's handling in the background."""
     adapter = _StubAdapter()
     ctx.runtime.adapters["st"] = adapter
     envelope = {
@@ -367,12 +374,7 @@ async def test_events_ingest_reaches_the_adapter(ctx: _Ctx) -> None:
         "timestamp": 1718000000,
         "event": {"employee_code": "emp-1", "message": {"tag": "text", "text": {"content": "hi"}}},
     }
-    async with _client(ctx.app) as c:
-        r = await c.post(f"/api/v1/channels/{ctx.st_uid}/events", json=envelope)
-    assert r.status_code == 200
-    assert r.json() == {"accepted": True}
-    # Processing is scheduled in the background so the listener's tight
-    # forward timeout is never blocked by outbound platform calls.
+    await get_channel_service().ingest_event(ctx.st_uid, envelope)
     for _ in range(100):
         if adapter.events:
             break
@@ -380,10 +382,6 @@ async def test_events_ingest_reaches_the_adapter(ctx: _Ctx) -> None:
     assert adapter.events == [envelope]  # the raw envelope reached handle_event
 
 
-async def test_events_with_adapter_down_is_409(ctx: _Ctx) -> None:
-    async with _client(ctx.app) as c:
-        r = await c.post(
-            f"/api/v1/channels/{ctx.st_uid}/events", json={"event_type": "x", "event": {}}
-        )
-    assert r.status_code == 409
-    assert r.json()["error"]["code"] == "CHANNEL_NOT_RUNNING"
+async def test_ingest_with_the_adapter_down_is_refused(ctx: _Ctx) -> None:
+    with pytest.raises(ChannelNotRunning):
+        await get_channel_service().ingest_event(ctx.st_uid, {"event_type": "x", "event": {}})

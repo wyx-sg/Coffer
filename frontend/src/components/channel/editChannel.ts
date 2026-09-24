@@ -6,9 +6,8 @@
 // value and PATCHing a live resource are both in-place updates.
 import { getApiClient } from "@/lib/api/client";
 import { throwApiError } from "@/lib/api/errors";
-import type { ChannelDelivery } from "@/lib/api/channels";
 
-import { channelSecretRef, type ChannelEditPlan } from "./schema";
+import type { ChannelEditPlan } from "./schema";
 
 async function writeSecret(ref: string, value: string): Promise<void> {
   const { error } = await getApiClient().POST("/credentials", { body: { ref, value } });
@@ -47,16 +46,8 @@ interface ChannelEditValues {
   bot_token?: string;
   /** SeaTalk app id (mutable config — not a secret). */
   app_id?: string;
-  /** SeaTalk inbound transport; undefined keeps whatever the config says. */
-  delivery?: ChannelDelivery;
   /** New SeaTalk app secret; blank leaves the stored credential untouched. */
   app_secret?: string;
-  /** New SeaTalk signing secret; blank leaves the stored credential untouched. */
-  signing_secret?: string;
-  /** SeaTalk public base URL (mutable config — not a secret); blank clears it. */
-  public_base_url?: string;
-  /** New cloudflared tunnel token; blank leaves the stored credential untouched. */
-  tunnel_token?: string;
 }
 
 export interface ChannelEditInput {
@@ -97,43 +88,6 @@ export function planChannelEdit(input: ChannelEditInput): ChannelEditPlan {
     const appSecretRef = config.app_secret_ref;
     if (values.app_secret && typeof appSecretRef === "string") {
       secrets.push({ ref: appSecretRef, value: values.app_secret });
-    }
-    const delivery = values.delivery ?? (config.delivery === "websocket" ? "websocket" : "webhook");
-    nextConfig.delivery = delivery;
-    if (delivery === "websocket") {
-      // The backend rejects a websocket config still carrying a webhook field,
-      // so the switch drops them. Credential VALUES stay; only the refs go.
-      delete nextConfig.signing_secret_ref;
-      delete nextConfig.public_base_url;
-      delete nextConfig.tunnel_token_ref;
-      return { uid: input.uid, name: input.name, config: nextConfig, secrets };
-    }
-    if (values.public_base_url !== undefined) {
-      // Blank clears the stored URL (backend normalizes "" → null).
-      nextConfig.public_base_url = values.public_base_url.trim() || null;
-    }
-    if (values.signing_secret) {
-      // Reuse the channel's ref, or mint a fresh one — the latter is the
-      // switch back to webhook, where the reference was dropped. Reuse is not
-      // an optimisation: minting a second address for a secret that already
-      // has one moves it, and a move crosses the sync remote as a delete plus
-      // an add of something nothing recognises.
-      const ref =
-        typeof config.signing_secret_ref === "string" && config.signing_secret_ref
-          ? config.signing_secret_ref
-          : channelSecretRef("signing-secret");
-      nextConfig.signing_secret_ref = ref;
-      secrets.push({ ref, value: values.signing_secret });
-    }
-    if (values.tunnel_token?.trim()) {
-      // Reuse the existing ref, or mint one the first time a token is set
-      // (which also turns on Coffer-managed tunneling for this channel).
-      const ref =
-        typeof config.tunnel_token_ref === "string" && config.tunnel_token_ref
-          ? config.tunnel_token_ref
-          : channelSecretRef("tunnel-token");
-      nextConfig.tunnel_token_ref = ref;
-      secrets.push({ ref, value: values.tunnel_token.trim() });
     }
   }
 

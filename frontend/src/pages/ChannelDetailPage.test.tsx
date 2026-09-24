@@ -2,7 +2,7 @@
 //
 // The channel operating surface (spec channels, User Stories 2 + 8). Data hooks
 // and the generic resource mutations are mocked so the test asserts the
-// page's own rendering: status (peer + callback), pairing-code generation,
+// page's own rendering: status (peer + inbound state), pairing-code generation,
 // the machine card (which machine runs the adapter, and rebinding it), and
 // the header reach control's wiring.
 //
@@ -128,7 +128,7 @@ function stubStatus(status: Partial<ChannelStatus> = {}) {
       running: true,
       pending_pairing: false,
       peer: null,
-      callback: null,
+      inbound: null,
       runs_on: HERE,
       runs_here: true,
       ...status,
@@ -191,38 +191,37 @@ beforeEach(() => {
   useNotifyChannelMock.mockReturnValue(notify as unknown as ReturnType<typeof useNotifyChannel>);
 });
 
-// The UI half of the status scenario: the page queries /channels/{name}/status
-// over REST and reports adapter run state, the paired peer, and the seatalk
-// callback details (the CLI half lives in the backend suite).
+// The UI half of the status scenario: the page queries /channels/{uid}/status
+// over REST and reports adapter run state, the paired peer, and a seatalk
+// channel's own inbound state — its websocket connection and the last error
+// behind it, with no listener, port, public URL or tunnel (the CLI half lives
+// in the backend suite).
 acceptance("channels", "channel status reports runtime, pairing, and callback details", () => {
   stubResource();
   stubStatus({
+    running: true,
     peer: {
       chat_id: "chat-77",
       display_name: "Yuxing",
       paired_at: "2026-06-12T08:00:00Z",
       active_conversation_id: "conv-1",
     },
-    callback: {
-      delivery: "webhook",
-      port: 8466,
-      path: "/seatalk/st",
-      listener_running: true,
-      public_base_url: null,
-      public_callback_url: null,
-      tunnel_managed: false,
-      tunnel_running: false,
-      websocket_state: null,
-      websocket_error: null,
+    inbound: {
+      websocket_state: "error",
+      websocket_error: "register failed: invalid app secret",
     },
   });
   stubPairing();
   renderPage();
 
+  expect(screen.getAllByText("Running").length).toBeGreaterThan(0);
   expect(screen.getByText("Yuxing")).toBeInTheDocument();
   expect(screen.getByText("chat-77")).toBeInTheDocument();
   expect(screen.getByText("conv-1")).toBeInTheDocument();
-  expect(screen.getByText("127.0.0.1:8466/seatalk/st")).toBeInTheDocument();
+  expect(screen.getByText("SeaTalk connection")).toBeInTheDocument();
+  expect(screen.getByText("Error")).toBeInTheDocument();
+  expect(screen.getByText("register failed: invalid app secret")).toBeInTheDocument();
+  expect(screen.queryByText(/listener|tunnel|callback url/i)).not.toBeInTheDocument();
 });
 
 describe("ChannelDetailPage", () => {

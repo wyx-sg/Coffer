@@ -210,7 +210,7 @@ def _select_stale_daemons(
     throwaway ``HOME``, and reaping one of those kills a daemon that was never
     stale and was never ours to stop. It happened — a smoke test against a
     freshly built ``dist/`` took down the maintainer's live daemon, its
-    ``daemon.json``, its callback child and its tunnel.
+    ``daemon.json`` and the children it held.
 
     A candidate whose vault could not be read is never selected, and neither is
     anything when our own vault is unknown: "not provably ours" has to mean

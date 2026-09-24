@@ -132,6 +132,13 @@ def effective_port() -> int:
     return DEFAULT_PORT if fixed is None else fixed
 
 
+#: Keys an earlier build wrote that no current setting reads. Every read
+#: ignores them and every write removes them (spec daemon "Change residency from
+#: the settings page or the command line"): ``idle_shutdown_hours`` configured
+#: an idle stand-down the daemon no longer has.
+_RETIRED_KEYS = frozenset({"idle_shutdown_hours"})
+
+
 def _merge(**fields: Any) -> None:
     """Write ``fields`` into the config file, keeping everything else.
 
@@ -141,8 +148,11 @@ def _merge(**fields: Any) -> None:
     preservation is the whole forward-compatibility story — earlier builds also
     stamped a ``version``, which nothing ever read or branched on; files that
     carry it keep it, as an unknown key like any other.
+
+    The one exception is :data:`_RETIRED_KEYS`: a setting that no longer
+    decides anything is dropped on every write, so the file stops stating it.
     """
-    payload = dict(_read_raw() or {})
+    payload = {k: v for k, v in (_read_raw() or {}).items() if k not in _RETIRED_KEYS}
     payload.update(fields)
     write_json_0600(config_path(), payload)
 
@@ -159,81 +169,6 @@ def write_fixed_port(port: int | None) -> None:
     if port is not None:
         validate_port(port)
     _merge(port=port)
-
-
-# --- idle shutdown ----------------------------------------------------------
-
-
-#: How long the daemon serves with nothing asking of it before standing down,
-#: when the user has configured nothing.
-#:
-#: Twelve hours is "overnight, and then some": a working day's gap in use does
-#: not cost a restart, and a machine left alone over a weekend does not keep a
-#: python process and its MCP upstreams resident for two days over nothing.
-#: The daemon is a login service now (``coffer daemon service install``), so
-#: without a ceiling it would otherwise live exactly as long as the login
-#: session does.
-DEFAULT_IDLE_SHUTDOWN_HOURS = 12.0
-
-#: The shortest idle window the daemon will honour. Below this the setting
-#: stops meaning "nobody is using it" and starts meaning "restart constantly":
-#: a client that goes quiet for a minute between calls is normal, and paying a
-#: five-second cold start for each gap is worse than the process it saves.
-MIN_IDLE_SHUTDOWN_HOURS = 0.25
-
-
-class InvalidIdleShutdown(ValueError):  # noqa: N818
-    """Raised when a caller asks for an idle window the daemon will not honour."""
-
-
-def validate_idle_shutdown_hours(hours: float | None) -> float | None:
-    """Return ``hours`` if the daemon will honour it; raise otherwise.
-
-    ``None`` is a legitimate setting and means "never stand down" — the daemon
-    stays up for as long as the login session does. It is the setting for
-    someone whose channels must answer at any hour.
-    """
-    if hours is None:
-        return None
-    if hours < MIN_IDLE_SHUTDOWN_HOURS:
-        raise InvalidIdleShutdown(
-            f"the idle window must be at least {MIN_IDLE_SHUTDOWN_HOURS} hours "
-            f"(or unset, to never stand down), got {hours}"
-        )
-    return hours
-
-
-def read_idle_shutdown_hours() -> float | None:
-    """The configured idle window, or :data:`DEFAULT_IDLE_SHUTDOWN_HOURS`.
-
-    Distinguishes "not configured" (absent key → the default) from "configured
-    off" (``null`` → never stand down), which a bare ``get`` could not.
-    """
-    payload = _read_raw()
-    if payload is None or "idle_shutdown_hours" not in payload:
-        return DEFAULT_IDLE_SHUTDOWN_HOURS
-    raw = payload["idle_shutdown_hours"]
-    if raw is None:
-        return None
-    if not isinstance(raw, (int, float)) or isinstance(raw, bool):
-        _logger.warning("daemon config idle_shutdown_hours %r is not a number; ignoring it", raw)
-        return DEFAULT_IDLE_SHUTDOWN_HOURS
-    try:
-        return validate_idle_shutdown_hours(float(raw))
-    except InvalidIdleShutdown as exc:
-        _logger.warning("daemon config %s; ignoring it", exc)
-        return DEFAULT_IDLE_SHUTDOWN_HOURS
-
-
-def write_idle_shutdown_hours(hours: float | None) -> None:
-    """Set the idle window, or ``None`` to never stand down.
-
-    Takes effect at the next daemon start: the running daemon read this when
-    it booted, and a setting that re-read itself mid-run would be a second way
-    for the same value to be true.
-    """
-    validate_idle_shutdown_hours(hours)
-    _merge(idle_shutdown_hours=hours)
 
 
 # --- machine identity -------------------------------------------------------

@@ -32,7 +32,7 @@ export function useChannels() {
 }
 
 /**
- * Live status of one channel (adapter running, paired peer, callback info).
+ * Live status of one channel (adapter running, paired peer, inbound state).
  * Pass `poll: true` on surfaces that stay open (the detail page) so pairing
  * confirmations and adapter restarts show up without a manual refresh.
  */

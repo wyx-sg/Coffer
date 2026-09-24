@@ -1,6 +1,6 @@
 # Daemon & Processes
 
-Coffer is built around a clear separation of concerns between processes: one long-lived daemon that owns all state, short-lived entry points that talk to it, per-session subprocess trees for upstream MCP servers, and — while a SeaTalk channel on webhook delivery is enabled — a daemon-spawned callback listener for inbound webhooks.
+Coffer is built around a clear separation of concerns between processes: one long-lived daemon that owns all state, short-lived entry points that talk to it, and per-session subprocess trees for upstream MCP servers. Nothing but the daemon's loopback socket listens: channel inbound is a poll or an outbound connection the daemon itself opens.
 
 ## The process roles
 
@@ -12,9 +12,9 @@ The daemon is the system's center of gravity. It is a FastAPI application bound 
 - Owns all in-memory session state for connected MCP clients.
 - Spawns and supervises upstream MCP server subprocesses (one set per connected client session — see [Upstream session model](#upstream-session-model-adr-session-subprocess-model) below).
 - Persists all control-plane state: resource registrations, capability preferences, audit log, retention policies, the encrypted credential store, chat conversations and turns, channel bindings, and sync state. Knowledge and memory are **not** in that list: they are directories of Markdown files, with nothing in `coffer.db` mirroring or indexing them.
-- Outlives any single client or CLI invocation. It keeps running until `coffer daemon stop`, a system shutdown, or a long enough stretch with nothing using it (see [Resident, but not forever](#resident-but-not-forever)).
+- Outlives any single client or CLI invocation. It keeps running until `coffer daemon stop`, a system shutdown, or another daemon superseding it — never stopping on its own for want of use (see [Resident](#resident)).
 
-### Resident, but not forever
+### Resident
 
 The daemon can be installed as a **login service** — a per-user launchd agent — so it is already running before anything asks for it:
 
@@ -26,15 +26,7 @@ coffer daemon service uninstall
 
 This matters because most of what talks to Coffer has no window: an agent in a terminal, an editor plugin, a chat channel. Started only on demand, the daemon is down at exactly those moments, and whoever asks first pays the five-to-fifteen seconds a cold start takes. The Settings → General page has the same switch.
 
-A resident daemon needs a ceiling, or it survives every weekend nobody worked. So it **stands down after a long enough silence** — twelve hours by default:
-
-```bash
-coffer daemon idle show
-coffer daemon idle set 4        # hours
-coffer daemon idle never        # for a vault whose channels must answer at any hour
-```
-
-What counts as use is a request that reached the application — a request the loopback host guard refused is an attack, not use. Readiness counts too: while a channel listener is up the daemon is never idle, because the message that justifies it arrives the next morning. The clock is monotonic, so a laptop that slept did not thereby go unused. Standing down is a **clean exit**, which is why the launchd agent restarts only *unsuccessful* ones — otherwise the shutdown would be undone a second later. Whatever next needs a daemon starts one, as every client already knows how to do.
+Once started, the daemon **never stands down on its own**. It serves until it is stopped or superseded by another daemon, so a channel message that arrives at three in the morning finds it up. The launchd agent restarts it only after an *unsuccessful* exit: `coffer daemon stop` and a superseded daemon standing down are clean exits, and a supervisor that restarted those would fight the user's own stop. Whatever next needs a daemon starts one, as every client already knows how to do.
 
 ### The port is fixed
 
@@ -78,15 +70,6 @@ The CLI (`coffer …`) is a short-lived child process. Users invoke it for manag
 
 The desktop shell is a native macOS process the *user* starts (Dock, Spotlight, Cmd-Tab), hosting the same web UI build in a webview. For the process model, what matters is that it is a **fourth detect-or-spawn caller** alongside the shim and the CLI, with one extra rule: it resolves a daemon in a fixed order — a live daemon named by `daemon.json`, then its own app bundle, then `~/.coffer/bin/`, then `PATH` — and the liveness probe comes **first**, so it takes over a running daemon rather than starting a second one. Under the fixed port that second daemon could not bind anyway, so getting the order wrong would turn "attach to what is already there" into a startup error. Quitting the app does not stop the daemon. See [Surfaces](/architecture/surfaces#desktop-shell-cofferapp) and [Distribution](/architecture/distribution#the-desktop-shell-and-what-it-owns).
 
-### callback listener (coffer-callback)
-
-The callback listener is a daemon-spawned child process that exists only to accept inbound SeaTalk webhooks. Unlike the shim and CLI — which the user (or an MCP client) starts — the listener is spawned and supervised by the daemon itself. It:
-
-- Runs **only while a SeaTalk channel on webhook delivery is enabled**. The channel reconciler starts it when the first webhook SeaTalk channel comes up and stops it when the last one goes away. A channel on websocket delivery needs no listener: the daemon holds that channel's outbound connection on a worker thread of its own (ADR seatalk-websocket-inbound).
-- Serves exactly one route, `POST /seatalk/{channel}`, on a loopback port (default `8787`, overridable via `COFFER_CALLBACK_PORT`). It holds no other state and can reach nothing but the daemon.
-- Verifies each callback's SeaTalk signature, answers the platform's verification handshake, and forwards valid events to the daemon over loopback carrying the daemon token. A tunnel points at the listener's port — the managed `cloudflared` the daemon spawns and supervises for a channel that records a connector token, or one the owner runs (cloudflared/ngrok); the daemon itself stays loopback-only.
-- Gets its signing secrets, the daemon URL, and the daemon token injected into its environment at spawn (the upstream-subprocess pattern — secrets land only in the child's env, never on disk). Its spawn is recorded in `~/.coffer/upstream-pids/` so a daemon crash leaves nothing behind: the startup orphan sweep reaps it. A daemon-token rotation respawns the listener.
-
 ## Supervised background workers
 
 Beyond the subprocesses above, the daemon runs a set of in-process background workers — supervised asyncio tasks, not separate processes — that keep vault state converging without any user action. Six are started at composition time (`surfaces/http/background_workers.py`), in dependency order, plus the channel reconciler:
@@ -99,7 +82,7 @@ Beyond the subprocesses above, the daemon runs a set of in-process background wo
 | Memory distil      | The distil pass over each memory partition — on by default, because the tree it rewrites is derived and rebuildable. |
 | Memory aggregate   | Re-derives Coffer's memory tree from the agents' own native memory: a catch-up pass at startup, then hourly. It only reads the agents' memory and only writes the derived tree, so it waits on none of the vault rewriters above. |
 | Transcript warm    | Warms the transcript-summary cache, so the first visit to an agent's Conversations tab is never the one that pays the cold read. |
-| Channel reconciler | On every tick it diffs enabled channel resources against running adapters and starts/stops/restarts to match — and starts or stops the callback listener with the set of webhook SeaTalk channels. REST/CLI/UI never start or stop adapters directly; the reconciler owns all runtime state transitions, which keeps status truthful. |
+| Channel reconciler | On every tick it diffs enabled channel resources against running adapters and starts/stops/restarts to match, including each SeaTalk channel's outbound websocket connection, which runs on a worker thread inside the daemon. REST/CLI/UI never start or stop adapters directly; the reconciler owns all runtime state transitions, which keeps status truthful. |
 
 Three of these — curation, distil and aggregate — are the **unattended passes**: each has its own on/off switch and interval under **Settings → Coffer's model** (`/settings/engine`), and what they are doing right now is readable at `GET /api/v1/upkeep/runs`. An unattended rewriter should be something the user turned on, never something they discover running.
 

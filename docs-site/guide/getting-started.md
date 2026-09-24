@@ -51,7 +51,7 @@ The browser needs no login step: the daemon puts its live token into the page it
 
 `stop` checks the recorded pid is still a Coffer daemon before signalling it; if a crashed daemon's pid has been reused by another process, it only cleans up the stale `~/.coffer/daemon.json`.
 
-**Keep it running.** On macOS, `coffer daemon service install` makes the daemon a login service, so it is already up before the first agent call of the day and is restarted if it crashes (`uninstall` and `status` too). It stands down after twelve hours with nothing using it; change that with `coffer daemon idle set <hours>`, or `coffer daemon idle never`. See [Daemon & Processes](/architecture/processes#resident-but-not-forever).
+**Keep it running.** On macOS, `coffer daemon service install` makes the daemon a login service, so it is already up before the first agent call of the day and is restarted if it crashes (`uninstall` and `status` too). Once started, the daemon runs until you stop it — it never shuts itself down for want of use. See [Daemon & Processes](/architecture/processes#resident).
 
 **Change the port.** The daemon always binds `8000`, so bookmarks and browser-stored preferences survive restarts. If something else owns that port the daemon refuses to start and names the process holding it. To move:
 
@@ -62,7 +62,7 @@ coffer daemon restart
 coffer daemon port clear     # back to 8000
 ```
 
-`port` and `idle` write `~/.coffer/daemon-config.json` directly, so they work with no daemon running — the state a port conflict leaves you in.
+`port` writes `~/.coffer/daemon-config.json` directly, and `service` talks to launchd directly, so they work with no daemon running — the state a port conflict leaves you in.
 
 **Read the log.** `tail -f ~/.coffer/logs/daemon.log` shows what the daemon, the processes it starts, and the desktop app wrote, in one timeline. The same file is the **Daemon** tab under [Activity](./activity). If a start fails with "daemon failed to start within 10s", the reason is in that file.
 

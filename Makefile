@@ -45,7 +45,7 @@ help:
 	@echo "  Dev:"
 	@echo "  make dev                   run backend (:8000) + frontend (:5173) in parallel"
 	@echo "  make frontend-codegen      regenerate the frontend's OpenAPI types from the daemon"
-	@echo "  make bundle-binaries       freeze the four CLI binaries with PyInstaller (into dist/)"
+	@echo "  make bundle-binaries       freeze the three CLI binaries with PyInstaller (into dist/)"
 	@echo "  make clean                 remove venv + node_modules + caches"
 
 # Use `./.venv/bin/python3` directly in the install recipe instead of $(PY).
@@ -307,12 +307,12 @@ bundle-binaries:
 # refuse a browser-downloaded copy on double-click until a Developer ID
 # exists; a locally-built one runs fine.
 #
-# The .app bundles the four frozen binaries via tauri.conf.json's
+# The .app bundles the three frozen binaries via tauri.conf.json's
 # `externalBin`, which is why this target has to run PyInstaller first. Tauri
 # resolves each `binaries/<name>` entry to `binaries/<name>-<target-triple>`,
 # so the freshly-built binaries are staged under that suffixed name.
 desktop:
-	@echo "make desktop: this runs PyInstaller for four binaries before the"
+	@echo "make desktop: this runs PyInstaller for three binaries before the"
 	@echo "  Tauri build — expect roughly 50 minutes on a laptop. The result is"
 	@echo "  UNSIGNED: macOS Gatekeeper will block a downloaded copy of it."
 	@echo ""
@@ -332,7 +332,7 @@ desktop:
 # tauri.conf.json's beforeBuildCommand builds it too; doing it up front
 # fails fast on a broken frontend instead of after the PyInstaller hour.
 	npm run build --prefix $(FRONTEND)
-# (2) Freeze coffer / coffer-daemon / coffer-mcp-shim / coffer-callback.
+# (2) Freeze coffer / coffer-daemon / coffer-mcp-shim.
 	$(MAKE) bundle-binaries
 # (3) Stage them where externalBin expects, under the rustc host triple
 # (the same value Tauri exposes as TAURI_ENV_TARGET_TRIPLE).
@@ -340,7 +340,7 @@ desktop:
 	TRIPLE=$$(rustc -vV | awk '/^host:/ {print $$2}'); \
 	case "$$TRIPLE" in *windows*) EXT=.exe ;; *) EXT= ;; esac; \
 	mkdir -p desktop/binaries; \
-	for b in coffer coffer-daemon coffer-mcp-shim coffer-callback; do \
+	for b in coffer coffer-daemon coffer-mcp-shim; do \
 		cp "dist/$$b$$EXT" "desktop/binaries/$$b-$$TRIPLE$$EXT"; \
 		chmod +x "desktop/binaries/$$b-$$TRIPLE$$EXT"; \
 	done; \
@@ -354,7 +354,7 @@ desktop:
 # externalBin entries to resolve at build time, so a checkout with no frozen
 # binaries staged cannot compile it. Stand in a placeholder for any that is
 # missing: it is gitignored like the real ones, and it announces itself loudly
-# if it ever escapes into a bundle. A real `make desktop` overwrites all four.
+# if it ever escapes into a bundle. A real `make desktop` overwrites all three.
 # Split out of `desktop-test` so the CI desktop job (.github/workflows/
 # desktop.yml) stages the same placeholders before `cargo check`/`clippy`
 # instead of keeping a second copy of this loop.
@@ -369,7 +369,7 @@ desktop-stage-binaries:
 	TRIPLE=$$(rustc -vV | awk '/^host:/ {print $$2}'); \
 	case "$$TRIPLE" in *windows*) EXT=.exe ;; *) EXT= ;; esac; \
 	mkdir -p desktop/binaries; \
-	for b in coffer coffer-daemon coffer-mcp-shim coffer-callback; do \
+	for b in coffer coffer-daemon coffer-mcp-shim; do \
 		f="desktop/binaries/$$b-$$TRIPLE$$EXT"; \
 		if [ ! -e "$$f" ]; then \
 			printf '#!/bin/sh\necho "%s: placeholder staged by make desktop-stage-binaries; run make desktop to build the real binary" >&2\nexit 1\n' "$$b" > "$$f"; \

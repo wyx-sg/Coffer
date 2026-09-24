@@ -101,20 +101,6 @@ Typical commands read as `coffer mcp add`, `coffer mcp tool enable/disable`, `co
 
 ---
 
-## Callback Listener
-
-**What it is.** The only public-reachable surface. It is a separate signed-callback process that receives inbound webhooks from chat platforms — concretely `POST /seatalk/{channel}` — verifies each request's SeaTalk signature against the channel's signing secret, answers the `event_verification` challenge, and forwards genuine events to the daemon for the channel runtime to handle. It exists because SeaTalk pushes events to a URL rather than letting Coffer long-poll (the model Telegram uses), so a reachable HTTP endpoint is required.
-
-**Which process.** A daemon-spawned child process, deliberately separate from the daemon. It runs only while at least one SeaTalk channel on **webhook** delivery is enabled; a channel on websocket delivery holds an outbound connection from inside the daemon and needs no listener (ADR seatalk-websocket-inbound). Keeping it out of the main daemon means the public-reachable code path is a small, isolated surface that handles signature verification before anything reaches the stateful core.
-
-**Transport.** HTTP on `127.0.0.1:<callback-port>`, serving only the signed callback paths. The listener itself binds to loopback; reachability from SeaTalk's servers is provided by a **tunnel** — the managed `cloudflared` child the daemon spawns and supervises for a channel that records a connector token, or one the owner stands up out-of-band. Coffer never opens a public port itself.
-
-**Lifecycle.** Spawned by the daemon when a webhook SeaTalk channel is enabled; torn down when the last webhook SeaTalk channel is disabled. Its lifetime is bound to channel state, not to any client session.
-
-**Security boundary.** Unlike the loopback surfaces, this one accepts traffic that originates off-machine, so its trust boundary is the **per-channel SeaTalk signature**: every request body is verified with `verify_seatalk_signature` against the channel's secret before it is forwarded, and unsigned or mis-signed requests are rejected. The `X-Coffer-Token` is not the gate here — the signature is.
-
----
-
 ## Web UI
 
 **What it is.** The browser-based management interface. The Web UI provides a visual equivalent of every CLI management operation: registering MCP servers via JSON import, browsing server health and capability lists, toggling tools/resources/prompts on/off, reading the audit log and invocation history, and configuring retention policies. The information architecture reflects the resource-kind model, in three sidebar groups:
@@ -159,7 +145,6 @@ No "coming soon" placeholders appear — a kind only appears once it works, and 
 | MCP endpoint   | Daemon            | — (is the daemon)          | System / manual     | Daemon lifetime     |
 | CLI (`coffer`) | Short-lived child | Loopback HTTP              | User / shell        | Per-command         |
 | Stdio shim     | Per-session       | HTTP/SSE                   | MCP client          | MCP client session  |
-| Callback listener | Daemon-spawned child | Loopback HTTP (forwards to daemon) | Daemon (on webhook SeaTalk enable) | While a webhook SeaTalk channel is enabled |
 | Web UI         | Browser tab       | Loopback HTTP (REST)       | `coffer open` / browser | Browser tab session |
 | Desktop shell  | Native app + webview | Loopback HTTP (REST); local page | User (Dock / Spotlight) | Until quit from the tray |
 

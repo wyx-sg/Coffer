@@ -290,23 +290,32 @@ async def test_a_travelling_channel_publishes_refs_and_not_secrets(pair) -> None
     repository the user pushes somewhere."""
     a, b = pair
     a.set_credential("channel/tg/bot-token", "placeholder-not-a-real-bot-token")
+    a.set_credential("channel/st/app-secret", "placeholder-not-a-real-app-secret")
     await a.register(
         "channel",
         "tg",
         {"value": "telegram", "credential_ref": "channel/tg/bot-token"},
     )
+    # A SeaTalk channel's one secret is its app secret, cited the same way.
+    await a.register(
+        "channel",
+        "st",
+        {"value": "seatalk", "credential_ref": "channel/st/app-secret"},
+    )
     await settle(a, b)
 
-    document = await a.remote_text(await a.doc_path("channel", "tg"))
-    assert document is not None
-    assert "channel/tg/bot-token" in document
-    assert "placeholder-not-a-real-bot-token" not in document
+    secrets = ("placeholder-not-a-real-bot-token", "placeholder-not-a-real-app-secret")
+    for name, ref in (("tg", "channel/tg/bot-token"), ("st", "channel/st/app-secret")):
+        document = await a.remote_text(await a.doc_path("channel", name))
+        assert document is not None
+        assert ref in document
+        assert not any(secret in document for secret in secrets)
 
     # And nowhere else in the tree either — a credential blob, if this remote
     # carries credentials at all, is Fernet ciphertext.
     for path in await a.remote_paths():
         text = await a.remote_text(path)
-        assert text is None or "placeholder-not-a-real-bot-token" not in text
+        assert text is None or not any(secret in text for secret in secrets)
 
 
 # --- identity ---------------------------------------------------------------

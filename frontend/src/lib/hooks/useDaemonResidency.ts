@@ -1,9 +1,8 @@
 // frontend/src/lib/hooks/useDaemonResidency.ts
 //
 // Whether the daemon outlives the things that use it (spec daemon "Run as a
-// login service") and for how long it stays once nothing does ("Stand down
-// after an idle window"). One route, because they
-// are one question with two halves — see the contract.
+// login service"). Nothing ends it on its own, so there is no idle window to
+// read or write — see the contract.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getApiClient } from "@/lib/api/client";
 import { ApiError, throwApiError } from "@/lib/api/errors";
@@ -35,9 +34,8 @@ export function useSetDaemonResidency() {
       return data;
     },
     // The daemon answers with what is true AFTER the change — the login
-    // service may have refused, and the idle window it reports is the one the
-    // next start will read. Seed the cache from that rather than from what
-    // was asked for.
+    // service may have refused. Seed the cache from that rather than from
+    // what was asked for.
     onSuccess: (fresh) => qc.setQueryData(daemonResidencyKey, fresh),
   });
 }

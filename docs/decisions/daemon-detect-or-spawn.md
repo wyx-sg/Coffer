@@ -1,7 +1,7 @@
 # Daemon Detect-or-Spawn Pattern
 
 **Status**: Accepted
-**Date**: 2026-05-20 (revised 2026-05-30; see Revision history)
+**Date**: 2026-05-20 (revised 2026-09-24; see Revision history)
 **Deciders**: Yuxing Wu
 **Related**: [daemon](../../openspec/specs/daemon/spec.md) "Spawn a detached daemon from any surface that needs one", [daemon](../../openspec/specs/daemon/spec.md) "Install the console scripts from source", [Session Subprocess Model](session-subprocess-model.md)
 
@@ -38,12 +38,14 @@ owns its lifecycle.
   3. Otherwise, spawn `coffer-daemon` as a detached process (stdio
      redirected to `~/.coffer/logs/daemon.log`), wait briefly for
      `daemon.json` to appear, then connect.
-- The daemon stands down cleanly after an idle window (twelve hours by
-  default, `coffer daemon idle`), and otherwise exits on `coffer daemon stop`
-  or system shutdown. `coffer daemon service install` makes it a macOS login
-  service that restarts it only after an unsuccessful exit, so the idle
-  stand-down is not undone (spec daemon, "Run as a login service" and "Stand
-  down after an idle window").
+- The daemon is resident: once started it serves until it is stopped
+  (`coffer daemon stop`, system shutdown) or superseded by another daemon. It
+  never stands down on its own for want of use, and quitting the desktop app
+  does not stop it.
+  `coffer daemon service install` makes it a macOS login service that restarts
+  it only after an unsuccessful exit, so a deliberate stop stays stopped (spec
+  daemon, "Run as a login service" and "Change residency from the settings page
+  or the command line").
 - All clients carry the token from `daemon.json` in an `X-Coffer-Token` header
   on every request.
 
@@ -130,7 +132,8 @@ owns its lifecycle.
   `coffer-daemon`, so `scripts/smoke_test_bundle.sh` — which starts a freshly
   built `dist/coffer-daemon` under a throwaway `HOME` precisely so it touches
   nothing real — had its daemon reap the maintainer's live one, taking
-  `daemon.json`, the `coffer-callback` child and the cloudflared tunnel with it.
+  `daemon.json`, the `coffer-callback` child and the cloudflared tunnel with it
+  (both since deleted with SeaTalk webhook delivery).
   A daemon's vault is in neither its executable path nor its command line (every
   vault runs the same binary with no arguments), so the candidate's own `HOME`
   is read from its environment and compared with ours; a candidate whose
@@ -161,6 +164,17 @@ two files are deliberately distinguishable at a glance: `daemon-config.json`
 goes in and survives shutdown, `daemon.json` comes out and is unlinked on exit.
 
 ## Revision history
+
+- **2026-09-24** — The idle stand-down is withdrawn. The daemon stood down
+  after an idle window (twelve hours by default), and every subsystem that had
+  to be reachable at any hour — a channel's inbound connection above all — had
+  to hold that clock open to survive it. A login service already decides when
+  the daemon starts, so the window only added a way for it to be down when a
+  message arrived. The idle clock, its holds, the request-tracking middleware
+  that fed it, the `coffer daemon idle` command group and the "Stand down
+  after" control are deleted; residency is the login service alone. An
+  `idle_shutdown_hours` key an earlier build left in `daemon-config.json` is
+  ignored on read and dropped by the next write.
 
 - **2026-09-23** — The Decision bullets were brought up to date in place: the
   port is fixed (8000 or the pinned one) since [The Desktop Shell

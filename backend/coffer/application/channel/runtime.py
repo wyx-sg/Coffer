@@ -32,15 +32,9 @@ from coffer.application.channel.runtime_supervision import (
     FAILURE_RETRY_SECONDS,
     Desired,
     Latch,
-    reconcile_listener,
-    reconcile_tunnels,
     reconcile_websockets,
 )
-from coffer.application.channel.supervision_ports import (
-    ListenerControllerPort,
-    TunnelControllerPort,
-    WebSocketControllerPort,
-)
+from coffer.application.channel.supervision_ports import WebSocketControllerPort
 from coffer.application.channel.wanted import Gate, Routing
 from coffer.domain.channel.config import parse_channel_config
 from coffer.domain.resource import Resource
@@ -69,37 +63,24 @@ class ChannelRuntime:
         adapter_factory: AdapterFactory,
         processor: InboundProcessor,
         pairing: PairingManager,
-        listener: ListenerControllerPort | None = None,
-        tunnel: TunnelControllerPort | None = None,
         websockets: WebSocketControllerPort | None = None,
         materialize: Callable[[dict[str, str]], Awaitable[dict[str, str]]] | None = None,
         interval_seconds: float = _DEFAULT_INTERVAL_SECONDS,
         machine_id: Callable[[], Awaitable[str]] | None = None,
-        service_hold: Callable[[bool], None] | None = None,
     ) -> None:
         self._resources = resources
         self._factory = adapter_factory
         self._processor = processor
         self._pairing = pairing
-        self._listener = listener
-        self._tunnel = tunnel
         self._websockets = websockets
         self._materialize = materialize
         self._interval = interval_seconds
-        # Told, each tick, whether a listener is up. The daemon stands down
-        # when nothing has wanted it for hours, and a listener is the case
-        # that measure gets wrong — see ``_hold_the_daemon_open``. The runtime
-        # is handed the function rather than reaching for the daemon's clock
-        # itself: application code does not import infrastructure.
-        self._service_hold = service_hold
         # Which channels are this machine's to run — enabled, bound here, and
         # able to drive their own default agent. Three gates, one predicate,
         # kept out of the lifecycle loop (see ``wanted.py``).
         self._gate = Gate(machine_id_provider=machine_id)
         self._running: dict[str, _Running] = {}
         self._failed_at: dict[str, float] = {}
-        self._listener_latch: Latch[dict[str, str]] = Latch()
-        self._tunnel_latch: Latch[dict[str, str]] = Latch()
         self._websocket_latch: Latch[dict[str, tuple[str, str]]] = Latch()
         self._stop = asyncio.Event()
 
@@ -112,22 +93,11 @@ class ChannelRuntime:
         entry = self._running.get(name)
         return entry.adapter if entry is not None else None
 
-    @property
-    def listener_port(self) -> int:
-        return self._listener.port if self._listener is not None else 0
-
-    @property
-    def listener_running(self) -> bool:
-        return self._listener is not None and self._listener.running()
-
-    def tunnel_running(self, channel_uid: str) -> bool:
-        return self._tunnel is not None and self._tunnel.running(channel_uid)
-
     def websocket_state(self, channel_uid: str) -> tuple[str, str | None] | None:
         """``(state, last error)`` of this channel's SeaTalk WebSocket, or None.
 
-        None covers every case where the question does not apply: a webhook
-        channel, a Telegram channel, a disabled one, or a daemon wired without a
+        None covers every case where the question does not apply: a Telegram
+        channel, a disabled one, or a daemon wired without a
         websocket controller at all.
         """
         if self._websockets is None:
@@ -148,20 +118,10 @@ class ChannelRuntime:
                 await asyncio.wait_for(self._stop.wait(), timeout=self._interval)
 
     async def dispose(self) -> None:
-        """Stop every adapter and the listener (daemon shutdown / final)."""
+        """Stop every adapter and websocket connection (daemon shutdown / final)."""
         self.stop()
-        if self._service_hold is not None:
-            self._service_hold(False)
         for name in list(self._running):
             await self._stop_adapter(name)
-        if self._listener is not None:
-            with contextlib.suppress(Exception):
-                await self._listener.ensure_stopped()
-        self._listener_latch.forget()
-        if self._tunnel is not None:
-            with contextlib.suppress(Exception):
-                await self._tunnel.dispose()
-        self._tunnel_latch.forget()
         if self._websockets is not None:
             with contextlib.suppress(Exception):
                 await self._websockets.dispose()
@@ -173,25 +133,20 @@ class ChannelRuntime:
 
         Takes the row, which is what the kind's ``on_delete`` hook is handed:
         the adapter and the pairing codes are keyed by the channel's name, the
-        supervised children by its uid, and both answers have to be the row's
+        websocket connection by its uid, and both answers have to be the row's
         own rather than derived from each other."""
         name = resource.name
         await self._stop_adapter(name)
         self._pairing.clear(name)
-        if self._tunnel is not None:
-            with contextlib.suppress(Exception):
-                await self._tunnel.ensure_stopped(resource.uid)
         if self._websockets is not None:
             with contextlib.suppress(Exception):
                 await self._websockets.ensure_stopped(resource.uid)
         desired = await self._enabled_channels()
         # The eviction hook can run while the row is still visible (it fires
         # before/inside the delete), so the table would otherwise tell the
-        # reconcilers to start back up everything we just stopped. The channel
+        # reconciler to start back up what we just stopped. The channel
         # being evicted is not wanted, whatever the table still says.
         desired.pop(name, None)
-        await self._reconcile_listener(desired)
-        await self._reconcile_tunnels(desired)
         await self._reconcile_websockets(desired)
 
     # -- reconciliation ----------------------------------------------------
@@ -213,28 +168,10 @@ class ChannelRuntime:
                     return
                 if name not in self._running and self._may_retry(name):
                     await self._start_adapter(name, resource, self._gate.routing[name])
-            await self._reconcile_listener(desired)
-            await self._reconcile_tunnels(desired)
             await self._reconcile_websockets(desired)
-            self._hold_the_daemon_open()
         except Exception:
             # The reconciler must outlive any single bad tick.
             _logger.exception("channel.runtime.tick_failed")
-
-    def _hold_the_daemon_open(self) -> None:
-        """Keep the daemon in service for as long as a listener is up.
-
-        A daemon stands down when nothing has wanted it for hours
-        (spec daemon "Stand down after an idle window"), and "wanted" is measured in requests that
-        arrived. A channel listener is the case that measure gets wrong: its
-        job is to be *reachable*, and the request that proves it was worth
-        keeping is the one that arrives at nine the next morning — after a
-        daemon counting only yesterday's traffic would already have gone. So
-        the listener says so directly, and re-says it every tick, which is
-        also how the claim is dropped when the last channel is disabled.
-        """
-        if self._service_hold is not None:
-            self._service_hold(self.listener_running)
 
     async def local_machine_id(self) -> str | None:
         """This machine's id, or ``None`` when no provider is wired.
@@ -323,16 +260,6 @@ class ChannelRuntime:
             with contextlib.suppress(Exception):
                 await entry.adapter.stop()
             _logger.info("channel.adapter.stopped", extra={"channel": name})
-
-    async def _reconcile_listener(self, desired: Desired) -> None:
-        if self._listener is None or self._stop.is_set():
-            return
-        await reconcile_listener(self._listener, self._materialize, desired, self._listener_latch)
-
-    async def _reconcile_tunnels(self, desired: Desired) -> None:
-        if self._tunnel is None or self._stop.is_set():
-            return
-        await reconcile_tunnels(self._tunnel, self._materialize, desired, self._tunnel_latch)
 
     async def _reconcile_websockets(self, desired: Desired) -> None:
         if self._websockets is None or self._stop.is_set():

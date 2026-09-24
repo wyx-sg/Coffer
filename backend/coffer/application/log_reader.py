@@ -21,9 +21,8 @@ the shape :func:`_structured` tries first.
 *What other processes write* is theirs to decide, and the rest of the parsers
 below are the ones that have actually been observed in the file: uvicorn's
 ``ERROR:    …`` (it configures its own three loggers and keeps them off the
-root), an upstream MCP server's rich panels and ``LEVEL - logger - message``
-lines, and the zerolog of the cloudflared child a tunnel respawns
-(``2026-09-14T06:29:20Z INF … key=value``). ``_BRACKETED`` is the one parser
+root), and an upstream MCP server's rich panels and ``LEVEL - logger - message``
+lines. ``_BRACKETED`` is the one parser
 kept for lines nothing writes any more: it reads the alembic-formatter shape
 the daemon used to produce, and a log file written before that was fixed holds
 them by the thousand inside the tail this module reads.
@@ -59,26 +58,19 @@ _ANSI = re.compile(r"\x1b(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\))
 #: Every level token any of the writers below spells, onto the lowercase
 #: vocabulary Coffer's own lines use — so one badge vocabulary serves the whole
 #: file.
-#: The 5-character truncations come from ``%(levelname)-5.5s``; the
-#: 3-character ones from zerolog.
+#: The 5-character truncations come from ``%(levelname)-5.5s``.
 _LEVELS = {
     "TRACE": "debug",
-    "TRC": "debug",
     "DEBUG": "debug",
-    "DBG": "debug",
     "INFO": "info",
-    "INF": "info",
     "WARN": "warning",
     "WARNI": "warning",
     "WARNING": "warning",
-    "WRN": "warning",
     "ERROR": "error",
-    "ERR": "error",
     "EXCEPTION": "error",
     "CRITI": "critical",
     "CRITICAL": "critical",
     "FATAL": "critical",
-    "FTL": "critical",
 }
 
 #: Levels that ``errors_only`` keeps. A line whose level we could not read at
@@ -95,7 +87,7 @@ def normalise_level(raw: str) -> str:
     """One level name from whatever a line called it.
 
     ``_LEVELS`` is the same table the parsers use, so a level read off a
-    zerolog line and one read off Coffer's own JSON land on the same word.
+    uvicorn line and one read off Coffer's own JSON land on the same word.
     Returns ``""`` for anything the table does not know.
     """
     token = raw.strip()
@@ -121,11 +113,6 @@ def at_least(record: dict[str, Any], floor: str) -> bool:
     return _LEVEL_ORDER.index(level) >= _LEVEL_ORDER.index(wanted)
 
 
-# cloudflared (zerolog): `2026-09-14T06:29:20Z INF Registered tunnel … ip=…`
-_ZEROLOG = re.compile(
-    r"^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)"
-    r"\s+(?P<level>[A-Z]{3})\s+(?P<event>.*)$"
-)
 # The daemon's own records, back when alembic's fileConfig had re-pointed the
 # root handler at `%(levelname)-5.5s [%(name)s] %(message)s`:
 # `WARNI [coffer.chat.codex] …`. Nothing writes this shape any more — the
@@ -197,7 +184,7 @@ def _structured(line: str) -> dict[str, Any] | None:
         if isinstance(parsed, dict):
             return parsed
 
-    for pattern in (_ZEROLOG, _RICH, _BRACKETED, _DASHED, _PREFIXED):
+    for pattern in (_RICH, _BRACKETED, _DASHED, _PREFIXED):
         match = pattern.match(line)
         if match is None:
             continue
@@ -208,9 +195,9 @@ def _structured(line: str) -> dict[str, Any] | None:
             # with `NOTE: …`. Not this writer's line; keep looking.
             continue
         record: dict[str, Any] = {"level": level, "event": fields["event"].rstrip()}
-        timestamp = fields.get("timestamp")
-        if pattern is _RICH:
-            timestamp = _local_wall_clock_to_utc(fields["date"], fields["time"])
+        timestamp = (
+            _local_wall_clock_to_utc(fields["date"], fields["time"]) if pattern is _RICH else None
+        )
         if timestamp:
             record["timestamp"] = timestamp
         if fields.get("logger"):

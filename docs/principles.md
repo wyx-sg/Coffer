@@ -85,10 +85,7 @@ principle and requires an amendment with an explicit migration plan.
   `/sync/key/import`, which move key material and nothing else).
 - **Network defaults.** Loopback-only. Outbound HTTP goes through a
   SSRF-guarded client (`coffer.infrastructure.net.ssrf_guard`, which rejects
-  loopback, private and link-local destinations). The one public-reachable
-  surface runs as a separate process limited to signed callback paths
-  (`coffer.surfaces.callback`, which verifies the platform signature and can
-  reach nothing but the daemon over loopback).
+  loopback, private and link-local destinations).
 
 ## Quality Gates
 

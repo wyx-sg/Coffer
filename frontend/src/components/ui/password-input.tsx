@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 
 // A masked text input with an eye toggle that reveals the value, so the user
-// can verify a secret they typed (App Secret, Signing Secret, tokens, …).
+// can verify a secret they typed (App Secret, tokens, …).
 // Drop-in replacement for `<Input type="password" />`: forwards the ref and
 // spreads all input props; the `type` prop is ignored (it owns masking).
 export interface PasswordInputProps extends Omit<InputProps, "type"> {

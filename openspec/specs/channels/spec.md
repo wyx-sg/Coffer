@@ -17,8 +17,8 @@ the pending queue, the turn lifecycle and the web Chat page onto them — is spe
 
 This spec owns what every channel type shares. The per-platform mechanics live
 in its two children: [`channels/telegram`](telegram/spec.md) (the Bot API
-transport) and [`channels/seatalk`](seatalk/spec.md) (both SeaTalk inbound
-transports, and SeaTalk's ingress story). Watching and steering the same
+transport) and [`channels/seatalk`](seatalk/spec.md) (the SeaTalk websocket
+transport and SeaTalk's own message shapes). Watching and steering the same
 conversation from the browser is the web Chat page's, in spec `chat`. Channels
 route to **managed** agents (Claude Code, Codex, …) only: [Built-in Agent Is
 Internal](../../../docs/decisions/builtin-agent-is-internal-capability.md)
@@ -85,7 +85,8 @@ channel's adapter (see "Bind each channel to the one machine that runs it").
 ### Requirement: Run the channel lifecycle through the resource framework
 Channel lifecycle (register, enable, disable, update, delete) MUST ride the
 generic resource framework, with audit on every transition. Disabling a channel
-stops its adapter (polling halts, events are refused); enabling restarts it;
+stops its adapter (Telegram polling halts, a SeaTalk websocket connection
+closes); enabling restarts it;
 deleting the channel stops the adapter and removes its peer binding.
 
 #### Scenario: disable stops the adapter and enable restarts it
@@ -257,23 +258,18 @@ through the credential store), show each row's paired peer and health, set each
 channel's reach (enable/disable and scope), bind each channel to the machine
 that runs it (see "Bind each channel to the one machine that runs it"), and
 delete a channel from its row. A channel's detail page MUST show its status
-(adapter running, paired peer, ingress facts the channel's type has to report),
+(adapter running, paired peer, and the inbound state the channel's type
+reports — for SeaTalk, its websocket connection),
 issue pairing codes, edit the channel, send a test notification to its paired
 owner (see "Notify the paired owner on demand"), and delete it.
 
 Editing changes the channel's default agent and its type's plain settings (a
-SeaTalk app id, delivery transport and public base URL). Rotating an existing
+SeaTalk app id). Rotating an existing
 secret happens **in place**: the new value MUST be written to the credential
 store under the ref the channel already cites before the configuration is
 saved, and that ref MUST stay in the saved configuration, so a rotation moves
 no secret and leaves the channel's machine binding and pairing untouched. A
-secret field left blank rotates nothing. A SeaTalk secret the channel does not
-yet cite — a signing secret after switching back to webhook delivery, or a
-first tunnel token — is written under a newly minted ref that the saved
-configuration then cites. Switching a SeaTalk channel to websocket delivery
-drops its signing-secret ref, tunnel-token ref and public base URL from the
-configuration, since websocket delivery refuses webhook fields; the stored
-credential values stay in the credential store.
+secret field left blank rotates nothing.
 
 The CLI MUST offer these operations across three command groups:
 `coffer channel list / register / bind / pair / status / notify` for the
@@ -292,8 +288,8 @@ channel's default agent or type settings is served by the detail page and
 #### Scenario: channel status reports runtime, pairing, and callback details
 - **GIVEN** channels in various states
 - **WHEN** the user queries status via REST and CLI
-- **THEN** adapter run state, paired peer, and the channel type's own ingress
-  facts are reported accurately
+- **THEN** adapter run state, paired peer, and the channel type's own inbound
+  state are reported accurately
 
 #### Scenario: rotating a channel secret keeps its refs and pairing
 - **GIVEN** a registered telegram channel whose bot token is stored under a
@@ -813,7 +809,7 @@ channel is one answer the machines must share.
 - `agents: []` MUST be accepted on both write paths. It is the vault-wide
   meaning of dormant — this channel is off — and off MUST NOT also mean frozen:
   a channel the owner deliberately switched off MUST remain editable, so a wrong
-  bot token or tunnel token can still be corrected without reactivating it
+  bot token or app secret can still be corrected without reactivating it
   first.
 - A thread's sticky `/agent` choice MUST be dropped in favour of the channel
   default once the scope no longer admits it, so narrowing a scope takes effect
@@ -880,7 +876,7 @@ carry two unrelated answers.
 
 ### Requirement: Bind each channel to the one machine that runs it
 A channel MUST name the one machine that runs it. A channel's platform
-identity — a polled bot, a webhook endpoint, a held WebSocket — tolerates
+identity — a polled bot, a held WebSocket — tolerates
 exactly ONE consumer, so "which machine answers this bot" must have exactly one
 answer, and that answer is written down. Its configuration carries `runs_on`,
 the `machine_id` of the machine whose daemon starts this channel's adapter

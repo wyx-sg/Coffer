@@ -91,217 +91,40 @@ describe("planChannelEdit", () => {
     expect(plan.config.default_agent_config).toEqual({ temperature: 0.2 });
   });
 
-  test("seatalk: rotates both secrets to their existing refs and updates app id", () => {
+  test("seatalk: rotates the app secret to its existing ref and updates app id", () => {
     const plan = planChannelEdit({
       ...ST,
       config: {
         channel_type: "seatalk",
         app_id: "app-old",
         app_secret_ref: "channel/st/app-secret",
-        signing_secret_ref: "channel/st/signing-secret",
         default_agent: AGENT_A,
       },
-      values: {
-        default_agent: AGENT_A,
-        app_id: "app-new",
-        app_secret: "s1",
-        signing_secret: "s2",
-      },
+      values: { default_agent: AGENT_A, app_id: "app-new", app_secret: "s1" },
     });
 
-    expect(plan.secrets).toEqual([
-      { ref: "channel/st/app-secret", value: "s1" },
-      { ref: "channel/st/signing-secret", value: "s2" },
-    ]);
+    expect(plan.secrets).toEqual([{ ref: "channel/st/app-secret", value: "s1" }]);
     expect(plan.config).toEqual({
       channel_type: "seatalk",
-      // Absent in the stored config means webhook; the PATCH says so out loud.
-      delivery: "webhook",
       app_id: "app-new",
       app_secret_ref: "channel/st/app-secret",
-      signing_secret_ref: "channel/st/signing-secret",
       default_agent: AGENT_A,
     });
   });
 
-  test("seatalk: sets public_base_url, and a blank value clears it (null)", () => {
-    const base = {
-      channel_type: "seatalk",
-      app_id: "app-1",
-      app_secret_ref: "channel/st/app-secret",
-      signing_secret_ref: "channel/st/signing-secret",
-      default_agent: AGENT_A,
-    };
-    const set = planChannelEdit({
-      ...ST,
-      config: base,
-      values: { default_agent: AGENT_A, public_base_url: "https://x.trycloudflare.com/" },
-    });
-    expect(set.config.public_base_url).toBe("https://x.trycloudflare.com/");
-
-    const cleared = planChannelEdit({
-      ...ST,
-      config: { ...base, public_base_url: "https://x.trycloudflare.com" },
-      values: { default_agent: AGENT_A, public_base_url: "  " },
-    });
-    expect(cleared.config.public_base_url).toBeNull();
-  });
-
-  test("seatalk: a tunnel token mints a ref + secret write and turns on managed tunneling", () => {
+  test("seatalk: a blank app secret rotates nothing but still patches the agent", () => {
     const plan = planChannelEdit({
       ...ST,
       config: {
         channel_type: "seatalk",
         app_id: "app-1",
         app_secret_ref: "channel/st/app-secret",
-        signing_secret_ref: "channel/st/signing-secret",
         default_agent: AGENT_A,
       },
-      values: { default_agent: AGENT_A, tunnel_token: "cf-token" },
-    });
-    // A minted ref is opaque: `channel/<uuid4 hex>/<secret>`, carrying nothing
-    // of the channel's name, so renaming the channel afterwards leaves it
-    // describing nothing that can go stale. Asserted as a shape because there
-    // is no value a test could name.
-    expect(plan.config.tunnel_token_ref).toMatch(/^channel\/[0-9a-f]{32}\/tunnel-token$/);
-    expect(plan.config.tunnel_token_ref).not.toContain(ST.name);
-    expect(plan.secrets).toContainEqual({
-      ref: plan.config.tunnel_token_ref,
-      value: "cf-token",
-    });
-  });
-
-  test("seatalk: a tunnel token rotates into the existing ref", () => {
-    const plan = planChannelEdit({
-      ...ST,
-      config: {
-        channel_type: "seatalk",
-        app_id: "app-1",
-        app_secret_ref: "channel/st/app-secret",
-        signing_secret_ref: "channel/st/signing-secret",
-        tunnel_token_ref: "channel/st/tunnel-token",
-        default_agent: AGENT_A,
-      },
-      values: { default_agent: AGENT_A, tunnel_token: "rotated" },
-    });
-    expect(plan.secrets).toEqual([{ ref: "channel/st/tunnel-token", value: "rotated" }]);
-  });
-
-  test("seatalk: switching to websocket drops the fields webhook owned", () => {
-    const plan = planChannelEdit({
-      ...ST,
-      config: {
-        channel_type: "seatalk",
-        app_id: "app-1",
-        app_secret_ref: "channel/st/app-secret",
-        signing_secret_ref: "channel/st/signing-secret",
-        tunnel_token_ref: "channel/st/tunnel-token",
-        public_base_url: "https://x.trycloudflare.com",
-        default_agent: AGENT_A,
-      },
-      values: { default_agent: AGENT_A, delivery: "websocket", app_id: "app-1" },
+      values: { default_agent: AGENT_B, app_id: "app-1", app_secret: "" },
     });
 
-    expect(plan.config).toEqual({
-      channel_type: "seatalk",
-      delivery: "websocket",
-      app_id: "app-1",
-      app_secret_ref: "channel/st/app-secret",
-      default_agent: AGENT_A,
-    });
-    expect(plan.config).not.toHaveProperty("signing_secret_ref");
-    expect(plan.config).not.toHaveProperty("public_base_url");
-    expect(plan.config).not.toHaveProperty("tunnel_token_ref");
-  });
-
-  test("seatalk websocket: a stale signing secret or tunnel token is never written", () => {
-    const plan = planChannelEdit({
-      ...ST,
-      config: {
-        channel_type: "seatalk",
-        app_id: "app-1",
-        app_secret_ref: "channel/st/app-secret",
-        signing_secret_ref: "channel/st/signing-secret",
-        default_agent: AGENT_A,
-      },
-      values: {
-        default_agent: AGENT_A,
-        delivery: "websocket",
-        app_secret: "rotated",
-        signing_secret: "leftover",
-        tunnel_token: "leftover",
-      },
-    });
-
-    // The app secret still rotates (websocket registers with it); the webhook
-    // credentials do not, so no value reaches a ref the config no longer names.
-    expect(plan.secrets).toEqual([{ ref: "channel/st/app-secret", value: "rotated" }]);
-  });
-
-  test("seatalk: switching back to webhook re-mints the signing-secret ref", () => {
-    const plan = planChannelEdit({
-      ...ST,
-      config: {
-        channel_type: "seatalk",
-        delivery: "websocket",
-        app_id: "app-1",
-        app_secret_ref: "channel/st/app-secret",
-        default_agent: AGENT_A,
-      },
-      values: {
-        default_agent: AGENT_A,
-        delivery: "webhook",
-        signing_secret: "sig",
-      },
-    });
-
-    expect(plan.config.delivery).toBe("webhook");
-    // Credential refs are their own namespace — nothing addresses a resource
-    // through one — and a minted ref now spells NEITHER the channel's name nor
-    // its uid: an opaque body, and a readable tail saying which secret it is.
-    // The name is what this used to spell, and what made renaming a channel
-    // leave its config citing an address that no longer described it.
-    expect(plan.config.signing_secret_ref).toMatch(/^channel\/[0-9a-f]{32}\/signing-secret$/);
-    expect(plan.config.signing_secret_ref).not.toContain(ST.name);
-    expect(plan.config.signing_secret_ref).not.toContain(ST.uid);
-    expect(plan.secrets).toEqual([{ ref: plan.config.signing_secret_ref, value: "sig" }]);
-  });
-
-  test("seatalk: an unspecified delivery keeps the stored websocket choice", () => {
-    const plan = planChannelEdit({
-      ...ST,
-      config: {
-        channel_type: "seatalk",
-        delivery: "websocket",
-        app_id: "app-1",
-        app_secret_ref: "channel/st/app-secret",
-        default_agent: AGENT_A,
-      },
-      values: { default_agent: AGENT_B },
-    });
-
-    expect(plan.config.delivery).toBe("websocket");
+    expect(plan.secrets).toEqual([]);
     expect(plan.config.default_agent).toBe(AGENT_B);
-  });
-
-  test("seatalk: only the signing secret rotates when the app secret is blank", () => {
-    const plan = planChannelEdit({
-      ...ST,
-      config: {
-        channel_type: "seatalk",
-        app_id: "app-1",
-        app_secret_ref: "channel/st/app-secret",
-        signing_secret_ref: "channel/st/signing-secret",
-        default_agent: AGENT_A,
-      },
-      values: {
-        default_agent: AGENT_A,
-        app_id: "app-1",
-        app_secret: "",
-        signing_secret: "s2-new",
-      },
-    });
-
-    expect(plan.secrets).toEqual([{ ref: "channel/st/signing-secret", value: "s2-new" }]);
   });
 });

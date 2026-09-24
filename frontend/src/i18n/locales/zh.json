@@ -416,12 +416,7 @@
       "title": "Coffer 守护进程",
       "autostart": "开机自启动",
       "autostartHelp": "不管 Coffer 有没有打开，守护进程都保持运行，这样 agent 当天第一次调用不用等它启动；崩溃后会自动拉起。",
-      "autostartUnsupported": "仅 macOS 可用。",
-      "idle": "闲置多久后停止",
-      "idleHelp": "没有任何东西使用守护进程时，它还会继续运行多久。之后谁需要它，谁就会重新拉起它。下次启动守护进程时生效。",
-      "idleHours_one": "{{count}} 小时",
-      "idleHours_other": "{{count}} 小时",
-      "idleNever": "永不停止"
+      "autostartUnsupported": "仅 macOS 可用。"
     },
     "features": {
       "title": "实验功能",
@@ -1351,11 +1346,9 @@
       "type": "类型",
       "name": "名称",
       "namePlaceholder": "例如 my-telegram",
-      "publicBaseUrlPlaceholder": "https://tunnel.example.com",
       "botToken": "Bot token",
       "appId": "App ID",
       "appSecret": "App Secret",
-      "signingSecret": "Signing Secret",
       "errors": {
         "name": "请输入名称",
         "nameFormat": "只能包含字母、数字、短横线和下划线",
@@ -1363,24 +1356,14 @@
         "botToken": "请输入 bot token",
         "appId": "请输入 App ID",
         "appSecret": "请输入 App Secret",
-        "signingSecret": "请输入 Signing Secret",
-        "websocketField": "WebSocket 投递不使用此项——请清空，或切换到 Webhook",
         "agent": "请先注册一个 Agent —— 渠道必须指明它驱动的 Agent。"
       },
       "telegramHint": "BotFather 给你的机器人 token。",
-      "seatalkHint": "来自 SeaTalk 开放平台应用的 App ID、App Secret 和 Signing Secret。",
-      "publicBaseUrl": "公网回调地址（base URL）",
-      "publicBaseUrlHint": "可选。你的隧道公网地址（如 https://xxx.trycloudflare.com）。Coffer 会据此拼出完整回调 URL，供你填到 SeaTalk 开放平台。",
-      "tunnelToken": "Cloudflare 隧道 token",
-      "tunnelTokenHint": "可选。填入 cloudflared 命名隧道的连接器 token 后，消息渠道启用时 Coffer 会自动起并维持隧道（需先装 cloudflared，并在 Cloudflare 控制台把该隧道指向 http://127.0.0.1:8787）。",
+      "seatalkHint": "来自 SeaTalk 开放平台应用的 App ID 和 App Secret。",
       "created": "消息渠道 {{name}} 已注册",
       "machineUnknown": "Coffer 暂时读不到本机的机器 id，这个消息渠道就没有可运行的机器。请稍后重试。",
-      "delivery": "事件投递方式",
-      "deliveryWebhook": "Webhook",
-      "deliveryWebsocket": "WebSocket",
-      "deliveryHint": "Webhook 需要一个公网可达地址和 Signing Secret；WebSocket 由机器人主动向 SeaTalk 建立一条出站连接，两者都不需要。同一个机器人同时只能用其中一种。",
-      "websocketSdkNote": "WebSocket 需要把 SeaTalk 官方 Python SDK 放在 ~/.coffer/vendor（或 $COFFER_SEATALK_SDK_DIR）。它不在 PyPI 上，Coffer 无法随包分发——SDK 到位前该消息渠道不会启动。",
-      "websocketPortalNote": "同时要在 SeaTalk 开发者后台把该机器人的事件投递方式切到 WebSocket。后台的 Re-verify 只有在 Coffer 正持有连接时才能通过。",
+      "seatalkSdkNote": "Coffer 通过 SeaTalk 官方 Python SDK 接收 SeaTalk 事件，SDK 需放在 ~/.coffer/vendor（或 $COFFER_SEATALK_SDK_DIR）。它不在 PyPI 上，Coffer 无法随包分发——SDK 到位前该消息渠道不会启动。",
+      "seatalkPortalNote": "在 SeaTalk 开发者后台把该机器人的事件投递方式设为 WebSocket。先在这里启用消息渠道：后台的 Re-verify 只有在 Coffer 正持有连接时才能通过。",
       "agent": "默认 Agent",
       "agentHint": "此渠道中的新会话都会在该 Agent 上开始。"
     },
@@ -1391,11 +1374,9 @@
       "agentHint": "该消息渠道上的新会话将使用此 Agent。",
       "newBotToken": "新的机器人 token",
       "newAppSecret": "新的 App Secret",
-      "newSigningSecret": "新的 Signing Secret",
       "rotateHint": "存入 Coffer 凭据库；沿用现有引用。",
       "save": "保存修改",
-      "saved": "消息渠道 {{name}} 已更新",
-      "signingSecretRequired": "Webhook 投递需要校验每个请求的签名——请填入 SeaTalk 开发者后台的 Signing Secret。"
+      "saved": "消息渠道 {{name}} 已更新"
     },
     "test": {
       "send": "发送",
@@ -1442,23 +1423,10 @@
       "openLink": "打开配对链接",
       "expires": "{{time}} 过期（仅可使用一次）。"
     },
-    "callback": {
-      "title": "SeaTalk 回调",
-      "registerUrl": "填到 SeaTalk 的回调地址",
-      "copy": "复制",
-      "copied": "已复制",
-      "test": "测试可达性",
-      "testing": "测试中…",
-      "testOk": "可达",
-      "testFailed": "不可达",
-      "setBaseUrlHint": "在「编辑」里填入你的隧道公网地址（base URL），这里就会显示要填到 SeaTalk 的完整回调地址。",
-      "endpoint": "本地监听",
-      "listener": "监听进程",
-      "tunnel": "隧道",
-      "hint": "用隧道工具（cloudflared、ngrok）指向本地监听地址。可达性测试仅验证链路与握手，签名密钥是否与 SeaTalk 一致需真实事件才能确认。",
-      "websocketTitle": "SeaTalk WebSocket",
+    "inbound": {
+      "title": "SeaTalk 连接",
       "connection": "连接",
-      "websocketState": {
+      "state": {
         "connecting": "连接中…",
         "connected": "已连接",
         "kicked": "已被挤下线——另一个进程正持有该机器人的连接",
@@ -1466,7 +1434,7 @@
         "error": "错误",
         "unknown": "未知"
       },
-      "websocketHint": "Coffer 主动连向 SeaTalk，因此没有回调地址、监听进程和隧道。一个机器人只能有一条连接：另一个 Coffer 注册同一个应用会把这条挤下线。连接断开期间事件会暂停投递。"
+      "hint": "Coffer 通过一条 WebSocket 连接主动连向 SeaTalk，不向网络暴露任何东西。一个机器人只能有一条连接：另一个 Coffer 注册同一个应用会把这条挤下线。连接断开期间事件会暂停投递。"
     },
     "deleteTitle": "删除消息渠道",
     "deleteConfirm": "确定删除消息渠道「{{name}}」？其适配器将停止，配对关系也会被移除。",
