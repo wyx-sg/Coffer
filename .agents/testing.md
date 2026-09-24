@@ -61,7 +61,7 @@ e2e/
 ├── web/
 │   └── specs/                 # browser against the daemon-served UI
 │       ├── *.spec.ts          # agent_workspace, shell_activity, shell_agents,
-│       │                      # shell_cold_start, shell_knowledge,
+│       │                      # shell_chat_attachments, shell_cold_start, shell_knowledge,
 │       │                      # shell_mcp_flows, shell_settings, shell_skills
 │       └── _acceptance.ts, _helpers.ts   # support modules, not specs
 └── mcp/

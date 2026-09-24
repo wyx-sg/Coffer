@@ -14,7 +14,8 @@ import { useFollowScroll } from "@/lib/hooks/useFollowScroll";
 import { describeTurnError } from "@/lib/chat/turnErrors";
 import { retryTextFor } from "@/lib/chat/threadView";
 import type { LiveMessage, PendingEcho } from "@/lib/hooks/useChatTurn";
-import type { Conversation, Message } from "@/lib/api/chat";
+import { echoContent } from "@/lib/chat/echoes";
+import type { ChatAttachment, Conversation, Message } from "@/lib/api/chat";
 import { Button } from "@/components/ui/button";
 import { AgentModelBar } from "./AgentModelBar";
 import { ChatErrorBanner } from "./ChatErrorBanner";
@@ -41,7 +42,11 @@ interface Props {
   onClearTurnError?: () => void;
   /** Called when the user stops the in-flight turn. */
   onStop?: () => void;
-  onSend: (text: string) => void;
+  /**
+   * Send a message; `attachments` are uploads the composer finished. Resolves
+   * whether the send was accepted (the composer keeps its chips until it is).
+   */
+  onSend: (text: string, attachments?: ChatAttachment[]) => void | Promise<boolean>;
   /** Messages queued behind the in-flight turn. */
   pending?: string[];
   /** Replace the pending queue (used to remove a queued message). */
@@ -65,7 +70,7 @@ function echoAsMessage(echo: PendingEcho, conversationId: string): Message {
     conversation_id: conversationId,
     seq: Number.MAX_SAFE_INTEGER,
     role: "user",
-    content: [{ type: "text", text: echo.text }],
+    content: echoContent(echo),
     status: "complete",
     created_at: new Date(echo.sentAt).toISOString(),
   };
@@ -201,7 +206,7 @@ export function MessageThread({
             retryText && !readOnly
               ? () => {
                   onClearTurnError?.();
-                  onSend(retryText);
+                  void onSend(retryText);
                 }
               : undefined
           }

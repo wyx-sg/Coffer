@@ -98,6 +98,7 @@ Explained in: [Chat and turns](/architecture/chat), [Channels](/guides/channels)
 | Channel Switches: the Agent Opens a New Conversation, Model and Effort Apply Next Turn | [`channel-switches-structural-vs-parametric`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-switches-structural-vs-parametric.md) |
 | A Channel Reply Grows on One Live Surface, Paced by the Transport | [`channel-live-surface-strategy`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-live-surface-strategy.md) |
 | Channel Attachments: Bytes on Disk, a Reference in the Message, Materialised per Agent at Send | [`channel-attachments`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/channel-attachments.md) |
+| The Chat Page Uploads a File First and Sends Its Id, Into a Sibling Media Directory | [`chat-attachment-uploads`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/chat-attachment-uploads.md) |
 | SeaTalk Inbound Is One Outbound WebSocket, Through an Operator-Supplied SDK | [`seatalk-websocket-inbound`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/seatalk-websocket-inbound.md) |
 | Telegram Inbound Is a Long Poll That Commits the Offset After Dispatch | [`telegram-long-polling`](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/telegram-long-polling.md) |
 

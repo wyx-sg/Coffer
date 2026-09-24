@@ -30,11 +30,16 @@ from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.chat.conversation_routes import router as conversation_router
 from coffer.surfaces.http.chat.dependencies import (
     get_agent_registry,
+    get_attachment_service,
     get_chat_service,
     get_turn_orchestrator,
 )
 from coffer.surfaces.http.chat.turn_routes import router as turn_router
-from tests.unit.chat.conftest import FakeAgentProvider, make_chat_services
+from tests.unit.chat.conftest import (
+    FakeAgentProvider,
+    make_attachment_service,
+    make_chat_services,
+)
 
 _TOKEN = "test-token"
 
@@ -60,6 +65,7 @@ def _build_app(chat_svc: Any, orchestrator: Any, registry: Any) -> FastAPI:
     app.dependency_overrides[get_chat_service] = lambda: chat_svc
     app.dependency_overrides[get_turn_orchestrator] = lambda: orchestrator
     app.dependency_overrides[get_agent_registry] = lambda: registry
+    app.dependency_overrides[get_attachment_service] = lambda: make_attachment_service()
     return app
 
 

@@ -90,7 +90,7 @@ machine, exactly like a route the build does not have. The tables below mark tho
 
 ## Routes
 
-The daemon mounts 160 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 161 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -111,7 +111,7 @@ The daemon mounts 160 operations in 20 groups. Groups follow the order the daemo
 | [memory](#memory) | 12 |
 | [agent-providers](#agent-providers) | 2 |
 | [models](#models) | 3 |
-| [chat](#chat) | 14 |
+| [chat](#chat) | 15 |
 | [channels](#channels) | 3 |
 | [providers](#providers) | 11 |
 
@@ -362,6 +362,7 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `memory` 
 | `GET` | `/api/v1/chat/conversations/{id}/events` | Subscribe to the conversation's live turn events. |
 | `PUT` | `/api/v1/chat/conversations/{id}/pending` | Replace the conversation's pending message queue (resume / drop / reorder). |
 | `POST` | `/api/v1/chat/conversations/{id}/interrupt` | Stop the conversation's in-flight turn (keeping its partial output) and pause the pending queue. |
+| `POST` | `/api/v1/chat/attachments` | Store one file for a later send and return its id, name, type and size (spec chat "Upload a file for a web message"). |
 
 ### channels
 

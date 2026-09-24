@@ -15,6 +15,7 @@ from typing import Any
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.audit import AuditEntry
 from coffer.domain.chat.agent_config import AgentConfig
+from coffer.domain.chat.attachment import Attachment, UploadedAttachment
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.errors import ConversationNotFound
 from coffer.domain.chat.events import AgentEvent, TextDelta, TurnDone, TurnStarted
@@ -295,6 +296,39 @@ def make_chat_services(
     )
     orchestrator = TurnOrchestrator(chat_service=chat_svc, registry=registry)
     return chat_svc, orchestrator, registry
+
+
+# ---------------------------------------------------------------------------
+# Web composer uploads
+# ---------------------------------------------------------------------------
+
+
+class FakeChatMediaStore:
+    """In-memory ``ChatMediaStore``: records saves, resolves what it saved.
+
+    Paths are fabricated (``/fake/chat-media/<id>``) — nothing is written."""
+
+    def __init__(self) -> None:
+        self.saved: dict[str, tuple[bytes, Attachment]] = {}
+        self._serial = 0
+
+    async def save(self, *, data: bytes, filename: str, mime: str) -> UploadedAttachment:
+        self._serial += 1
+        attachment_id = f"{self._serial:032x}"
+        path = f"/fake/chat-media/{attachment_id}"
+        self.saved[attachment_id] = (data, Attachment(path=path, mime=mime, filename=filename))
+        return UploadedAttachment(id=attachment_id, filename=filename, mime=mime, size=len(data))
+
+    async def resolve(self, attachment_id: str) -> Attachment | None:
+        entry = self.saved.get(attachment_id)
+        return entry[1] if entry is not None else None
+
+
+def make_attachment_service(store: FakeChatMediaStore | None = None) -> Any:
+    """A ``ChatAttachmentService`` over an in-memory store (a fresh one by default)."""
+    from coffer.application.chat.attachments import ChatAttachmentService
+
+    return ChatAttachmentService(store if store is not None else FakeChatMediaStore())
 
 
 # ---------------------------------------------------------------------------

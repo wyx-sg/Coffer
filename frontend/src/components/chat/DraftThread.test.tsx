@@ -95,7 +95,7 @@ describe("DraftThread", () => {
     const box = screen.getByRole("textbox", { name: /message input/i });
     fireEvent.change(box, { target: { value: "first message" } });
     fireEvent.keyDown(box, { key: "Enter", shiftKey: false });
-    expect(onSend).toHaveBeenCalledWith("first message");
+    expect(onSend).toHaveBeenCalledWith("first message", []);
   });
 
   test("shows the no-managed-agent empty state when none is available", () => {

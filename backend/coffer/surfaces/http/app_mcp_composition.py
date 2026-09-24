@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
+from datetime import datetime
 
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -36,8 +37,14 @@ from coffer.application.retention_registry import (
     PrunableRegistry,
     PrunableTable,
 )
-from coffer.application.retention_service import RetentionService
-from coffer.infrastructure.channel.media_retention import default_media_sweep
+from coffer.application.retention_service import (
+    CHANNEL_MEDIA_RESULT_KEY,
+    CHAT_MEDIA_RESULT_KEY,
+    RetentionService,
+)
+from coffer.domain.retention import MEDIA_RETENTION_DAYS
+from coffer.infrastructure.channel.seatalk_media import default_media_dir
+from coffer.infrastructure.chat.media_store import FileChatMediaStore, default_chat_media_dir
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.mcp.factory import build_upstream
 from coffer.infrastructure.mcp.persistence import (
@@ -45,6 +52,7 @@ from coffer.infrastructure.mcp.persistence import (
     MCPInvocationRepo,
     MCPServerHealthRepo,
 )
+from coffer.infrastructure.media_retention import prune_media_dir
 from coffer.surfaces.http.mcp.dependencies import (
     set_capability_discovery,
     set_health_repo,
@@ -230,12 +238,19 @@ def build_prunable_registry() -> PrunableRegistry:
     return registry
 
 
+def _channel_media_sweep(now: datetime) -> list[str]:
+    """Prune ``~/.coffer/channel-media`` (spec channels "Persist inbound
+    attachments as references") with the shared media window."""
+    return prune_media_dir(default_media_dir(), max_age_days=MEDIA_RETENTION_DAYS, now=now)
+
+
 def build_retention_service(
     sm: async_sessionmaker[AsyncSession], *, audit: AuditService
 ) -> RetentionService:
     """Compose the ``RetentionService`` (registry + repo + audit) and bind the
-    channel-media dir sweep (spec channels "Persist inbound attachments as
-    references") at composition root, so the
+    two media dir sweeps — ``channel-media`` (spec channels "Persist inbound
+    attachments as references") and ``chat-media`` (spec chat "Prune uploaded
+    chat media on the retention cadence") — at composition root, so the
     application layer never imports the infrastructure prune. The caller runs
     ``initialize_defaults`` and drives the worker cadence."""
     from coffer.infrastructure.persistence.repos import SqlAlchemyRetentionRepo
@@ -249,7 +264,10 @@ def build_retention_service(
         registry=registry,
         repo=SqlAlchemyRetentionRepo(sm, allowlist=allowlist_from_registry(registry.all())),
         audit=audit,
-        media_sweep=default_media_sweep,
+        media_sweeps={
+            CHANNEL_MEDIA_RESULT_KEY: _channel_media_sweep,
+            CHAT_MEDIA_RESULT_KEY: FileChatMediaStore(default_chat_media_dir()).prune,
+        },
     )
 
 

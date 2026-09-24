@@ -6,7 +6,8 @@
 **Related**: spec channels ("Hand inbound photos and files to the agent", "Persist inbound attachments as references", "Give documents to every agent as extracted text", "Transcribe inbound voice only when the user opted in", "Download the media a thread's messages carry");
 spec chat ("Re-materialise attachments from persisted history", "Extract document attachments to text", "Transcribe audio attachments when transcription is configured");
 [Channels Are Thin Transport Adapters](channel-adapter-framework.md), [Driving Agents Through the SDK and App-Server](driving-agents-through-sdk-and-app-server.md),
-[Audit and Retention](audit-and-retention.md), [Internal Engine Settings](internal-engine-settings.md);
+[Audit and Retention](audit-and-retention.md), [Internal Engine Settings](internal-engine-settings.md),
+[Chat Attachment Uploads](chat-attachment-uploads.md) (the web Chat page's entrance to the same path);
 PRs #241, #265, #268
 
 ## Context
@@ -75,8 +76,9 @@ Chat page and lost after a daemon restart.
   leaves the daemon (`surfaces/http/chat/conversation_routes.py`).
 - **Retention.** `~/.coffer/channel-media` is swept on the retention cadence:
   files whose mtime is more than 30 days old are deleted
-  (`domain/channel/media_retention.py` decides, an infrastructure sweep bound
-  into `RetentionService` does the I/O). There is no size cap and no
+  (`files_to_prune` in the kind-agnostic `domain/retention.py` decides,
+  `infrastructure/media_retention.py` does the I/O, bound into
+  `RetentionService` as one sweep per media directory). There is no size cap and no
   reference check.
 
 Pros: the database holds kilobytes per attachment, not megabytes; each agent
@@ -191,4 +193,5 @@ Rules a future change must respect:
 - Enforced by: `AttachmentBlock` in `domain/chat/message.py`;
   `turn_orchestrator.py` and `turn_runner.py` in `application/chat/`; the two
   adapters and the transcription and extraction seams in
-  `infrastructure/chat/`; `domain/channel/media_retention.py`.
+  `infrastructure/chat/`; `domain/retention.py` and
+  `infrastructure/media_retention.py`.

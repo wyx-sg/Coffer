@@ -24,11 +24,16 @@ from typing import Any
 from fastapi import APIRouter, Depends, Response, status
 from sse_starlette.sse import EventSourceResponse
 
+from coffer.application.chat.attachments import ChatAttachmentService
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
 from coffer.domain.chat.events import AgentEvent
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.chat.dependencies import get_chat_service, get_turn_orchestrator
+from coffer.surfaces.http.chat.dependencies import (
+    get_attachment_service,
+    get_chat_service,
+    get_turn_orchestrator,
+)
 from coffer.surfaces.http.chat.schemas import (
     PendingQueueIn,
     PendingQueueOut,
@@ -53,7 +58,9 @@ router = APIRouter(
 async def send_message(
     id: str,
     body: SendMessageRequest,
+    svc: ChatService = Depends(get_chat_service),  # noqa: B008
     orchestrator: TurnOrchestrator = Depends(get_turn_orchestrator),  # noqa: B008
+    attachments_svc: ChatAttachmentService = Depends(get_attachment_service),  # noqa: B008
 ) -> SendMessageAck:
     """Start a turn for the message, or enqueue it behind the in-flight one.
 
@@ -61,8 +68,21 @@ async def send_message(
     — a message sent during a turn is queued, not rejected. Turn events are
     consumed via ``GET .../events``.
     ``ConversationNotFound`` propagates to the global handler as 404.
+
+    ``attachment_ids`` resolve to the uploaded files, which the orchestrator
+    persists as references after the text exactly as it does a channel's media
+    (spec chat "Send uploaded files with a web message"); an id naming no
+    upload is ``AttachmentNotFound`` (422) and nothing is persisted or queued.
     """
-    queued = await orchestrator.enqueue_message(id, body.text)
+    await svc.get_conversation(id)  # a missing path answers before a bad body
+    attachments = await attachments_svc.resolve(body.attachment_ids)
+    text = attachments_svc.message_text(body.text, attachments)
+    queued = await orchestrator.enqueue_message(
+        id,
+        text,
+        attachments=attachments,
+        title_hint=attachments_svc.title_hint(body.text, attachments),
+    )
     return SendMessageAck(queued=queued)
 
 

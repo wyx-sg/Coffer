@@ -155,6 +155,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload a file for a later web message
+         * @description The web composer's entrance for a file (see "Upload a file for a web message"). The bytes are stored under `~/.coffer/chat-media` and the response names them by an opaque id, which `POST /conversations/{id}/messages` then carries in `attachment_ids`; the local path never leaves the daemon. Not tied to a conversation, so a draft can attach before its conversation exists. One file per call, at most 20 MB; accepted types are images, audio, documents (PDF, Word, PowerPoint, Excel, RTF, EPUB, CSV) and any UTF-8 text file. Stored files are pruned 30 days after upload.
+         */
+        post: operations["uploadChatAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/conversations/{id}/events": {
         parameters: {
             query?: never;
@@ -299,7 +319,7 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             error?: string | null;
-            /** @description An `attachment` block references channel media by filename and mime only; the local path is never emitted to the wire (see "Re-materialise attachments from persisted history"). */
+            /** @description An `attachment` block references a file a channel downloaded or the web composer uploaded, by filename and mime only; the local path is never emitted to the wire (see "Re-materialise attachments from persisted history"). */
             filename?: string | null;
             mime?: string | null;
         };
@@ -321,8 +341,22 @@ export interface components {
         MessageListOut: {
             messages: components["schemas"]["MessageOut"][];
         };
+        /** @description A message carries text, at least one attachment, or both — never neither (422). An attachment-only message is persisted with a short stand-in text naming its files. */
         SendMessageRequest: {
+            /** @default  */
             text: string;
+            /** @description Ids returned by `POST /api/v1/chat/attachments`, in the order the files are attached. Each is persisted on the user message as an attachment reference (see "Send uploaded files with a web message"); an id naming no stored upload is refused with `ATTACHMENT_NOT_FOUND` (422) and nothing is persisted or queued. */
+            attachment_ids?: string[];
+        };
+        ChatAttachmentOut: {
+            /** @description Opaque upload id (32 hex characters) a send names. */
+            id: string;
+            /** @description The display name, reduced to its last path segment. */
+            filename: string;
+            /** @description The type the file is stored and handed to the agent under. */
+            mime: string;
+            /** @description Size in bytes. */
+            size: number;
         };
         SendMessageAck: {
             /** @description True when the message was enqueued behind an in-flight turn; false when its turn started immediately. */
@@ -666,6 +700,61 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            /** @description Neither text nor an attachment, more than ten attachments, or an attachment id naming no stored upload (`ATTACHMENT_NOT_FOUND`). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    uploadChatAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAttachmentOut"];
+                };
+            };
+            /** @description Over the 20 MB ceiling (`ATTACHMENT_TOO_LARGE`); the message names the limit. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description A type no agent can use from a turn (`ATTACHMENT_TYPE_UNSUPPORTED`). */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: components["responses"]["BadRequest"];
         };
     };
     subscribeConversationEvents: {

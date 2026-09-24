@@ -156,6 +156,7 @@ backend/coffer/
 │   ├── daemon/             # bootstrap, port, spawn, pid lock, daemon-config.json
 │   ├── net/                # SSRF guard
 │   ├── logging/            # structlog setup, log files
+│   ├── media_retention.py  # age sweep for the two attachment media dirs
 │   ├── llm/                # LangChain models, completion, transcription
 │   ├── agent_files/        # agent transcript readers shared by two kinds
 │   ├── mcp/                # upstream subprocess and HTTP clients

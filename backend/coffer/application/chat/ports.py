@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Sequence
 from typing import Any, Protocol
 
-from coffer.domain.chat.attachment import Attachment
+from coffer.domain.chat.attachment import Attachment, UploadedAttachment
 from coffer.domain.chat.events import AgentEvent
 from coffer.domain.chat.message import Message
 
@@ -121,3 +121,22 @@ class ModelCatalogPort(Protocol):
     """
 
     async def offered(self, agent_key: str) -> Sequence[CatalogueModel]: ...
+
+
+class ChatMediaStore(Protocol):
+    """Where the web composer's uploads live until — and after — they are sent.
+
+    The bytes stay on disk beside a record of their display name and type; the
+    id handed back is opaque, and only :meth:`resolve` turns it into the
+    ``Attachment`` (with its local path) a turn persists as a reference. The
+    file-backed store is ``coffer.infrastructure.chat.media_store``.
+    """
+
+    async def save(self, *, data: bytes, filename: str, mime: str) -> UploadedAttachment:
+        """Store one upload and return its id, name, type and size."""
+        ...
+
+    async def resolve(self, attachment_id: str) -> Attachment | None:
+        """The stored file an id names, or ``None`` when there is none (never
+        uploaded, or pruned)."""
+        ...

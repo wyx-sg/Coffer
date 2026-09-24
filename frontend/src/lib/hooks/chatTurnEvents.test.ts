@@ -6,15 +6,18 @@ import { QueryClient } from "@tanstack/react-query";
 
 import type { Message } from "@/lib/api/chat";
 import {
-  ECHO_MATCH_WINDOW_MS,
-  createEcho,
   handleEvent,
-  reconcileEchoes,
   subscribeMessagesCache,
   type HandlerCtx,
   type LiveMessage,
-  type PendingEcho,
 } from "./chatTurnEvents";
+import {
+  ECHO_MATCH_WINDOW_MS,
+  createEcho,
+  echoContent,
+  reconcileEchoes,
+  type PendingEcho,
+} from "@/lib/chat/echoes";
 import { messagesKey } from "@/lib/api/queryKeys";
 
 const T0 = Date.parse("2026-01-01T12:00:00Z");
@@ -126,6 +129,45 @@ describe("reconcileEchoes", () => {
     const echo = createEcho("q", [], T0);
     const row = { ...userRow("u1", 1, "q", T0), created_at: "" };
     expect(reconcileEchoes([echo], [row])).toEqual([]);
+  });
+});
+
+describe("echoes that carry attachments", () => {
+  const png = { filename: "shot.png", mime: "image/png" };
+
+  function rowWith(id: string, seq: number, text: string, files: string[]): Message {
+    return {
+      ...userRow(id, seq, text, T0 + 50),
+      content: [
+        { type: "text", text },
+        ...files.map((f) => ({ type: "attachment" as const, filename: f, mime: "image/png" })),
+      ],
+    };
+  }
+
+  test("an echo shows its text then one attachment block per file", () => {
+    const echo = createEcho("look", [], T0, [png]);
+    expect(echoContent(echo)).toEqual([
+      { type: "text", text: "look" },
+      { type: "attachment", filename: "shot.png", mime: "image/png" },
+    ]);
+    // An attachment-only echo carries no empty text block.
+    expect(echoContent(createEcho("", [], T0, [png]))).toEqual([
+      { type: "attachment", filename: "shot.png", mime: "image/png" },
+    ]);
+  });
+
+  test("an attachment-only echo is claimed by its row's files despite the stand-in text", () => {
+    const echo = createEcho("", [], T0, [png]);
+    const row = rowWith("u1", 1, "(sent 1 image: shot.png)", ["shot.png"]);
+    expect(reconcileEchoes([echo], [row])).toEqual([]);
+  });
+
+  test("a row with the same text but other files does not claim the echo", () => {
+    const echo = createEcho("look", [], T0, [png]);
+    expect(reconcileEchoes([echo], [rowWith("u1", 1, "look", [])])).toEqual([echo]);
+    expect(reconcileEchoes([echo], [rowWith("u1", 1, "look", ["other.png"])])).toEqual([echo]);
+    expect(reconcileEchoes([echo], [rowWith("u1", 1, "look", ["shot.png"])])).toEqual([]);
   });
 });
 

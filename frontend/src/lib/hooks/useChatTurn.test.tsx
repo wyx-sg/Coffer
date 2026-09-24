@@ -102,13 +102,27 @@ describe("useChatTurn", () => {
     await waitFor(() =>
       expect(result.current.pendingEchoes.map((e) => e.text)).toEqual(["what is OAuth?"]),
     );
-    expect(chatApiMock.sendMessage).toHaveBeenCalledWith("conv-1", "what is OAuth?");
+    expect(chatApiMock.sendMessage).toHaveBeenCalledWith("conv-1", "what is OAuth?", []);
 
     await act(async () => {
       resolveSend();
     });
     // Still standing until the persisted row lands.
     expect(result.current.pendingEchoes).toHaveLength(1);
+  });
+
+  test("send() carries the composer's uploads by id and echoes them as chips", async () => {
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+    const upload = { id: "b".repeat(32), filename: "shot.png", mime: "image/png", size: 3 };
+
+    await act(async () => {
+      await result.current.send("look", [upload]);
+    });
+
+    expect(chatApiMock.sendMessage).toHaveBeenCalledWith("conv-1", "look", ["b".repeat(32)]);
+    expect(result.current.pendingEchoes[0]?.attachments).toEqual([
+      { filename: "shot.png", mime: "image/png" },
+    ]);
   });
 
   test("identical consecutive sends both echo, and each retires against its own persisted row", async () => {
@@ -256,7 +270,7 @@ describe("useChatTurn", () => {
       await result.current.send("queued message");
     });
 
-    expect(chatApiMock.sendMessage).toHaveBeenCalledWith("conv-1", "queued message");
+    expect(chatApiMock.sendMessage).toHaveBeenCalledWith("conv-1", "queued message", []);
     release();
   });
 

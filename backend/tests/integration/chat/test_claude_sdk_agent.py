@@ -36,7 +36,7 @@ from claude_agent_sdk import (
     ToolUseBlock as SdkToolUseBlock,
 )
 
-from coffer.domain.chat.attachment import Attachment
+from coffer.domain.chat.attachment import INLINE_IMAGE_MAX_BYTES, Attachment
 from coffer.domain.chat.events import (
     STREAM_ENDED_MESSAGE,
     TextDelta,
@@ -52,6 +52,10 @@ from coffer.infrastructure.chat.claude_sdk_agent import (
     ClaudeSdkAgentAdapter,
     map_sdk_message,
 )
+
+#: A real PNG signature: an image is inlined only when its bytes prove its type.
+_PNG_BYTES = b"\x89PNG\r\n\x1a\n" + b"fake-body"
+_JPEG_BYTES = b"\xff\xd8\xff\xe0\x00\x10JFIF"
 
 # ---------------------------------------------------------------------------
 # Fakes
@@ -183,7 +187,7 @@ def test_build_content_is_the_plain_prompt_without_attachments() -> None:
 )
 def test_build_content_inlines_an_image_as_a_base64_block(tmp_path: Any) -> None:
     img = tmp_path / "photo.png"
-    img.write_bytes(b"\x89PNG-fake")
+    img.write_bytes(_PNG_BYTES)
     att = Attachment(path=str(img), mime="image/png", filename="photo.png")
 
     content = ClaudeSdkAgentAdapter._build_content("what is this?", [att])
@@ -195,7 +199,7 @@ def test_build_content_inlines_an_image_as_a_base64_block(tmp_path: Any) -> None
     assert image["source"]["type"] == "base64"
     assert image["source"]["media_type"] == "image/png"
     # The bytes are read from disk and encoded here, never stored as base64.
-    assert base64.b64decode(image["source"]["data"]) == b"\x89PNG-fake"
+    assert base64.b64decode(image["source"]["data"]) == _PNG_BYTES
 
 
 def test_build_content_hands_off_a_non_vision_file_by_path(tmp_path: Any) -> None:
@@ -225,6 +229,71 @@ def test_build_content_does_not_inline_an_unsupported_image_format(tmp_path: Any
     assert str(heic) in content[0]["text"]
 
 
+@pytest.mark.acceptance(
+    spec="chat", scenario="an image the API cannot take inline reaches the agent as a path"
+)
+def test_build_content_inlines_a_mislabelled_image_under_its_sniffed_type(tmp_path: Any) -> None:
+    # A JPEG a browser or channel called image/png would be rejected by the API
+    # ("image does not match media type"); it is sent as the JPEG it is.
+    img = tmp_path / "photo.png"
+    img.write_bytes(_JPEG_BYTES)
+    att = Attachment(path=str(img), mime="image/png", filename="photo.png")
+
+    content = ClaudeSdkAgentAdapter._build_content("", [att])
+
+    assert isinstance(content, list)
+    assert content[0]["type"] == "image"
+    assert content[0]["source"]["media_type"] == "image/jpeg"
+    assert base64.b64decode(content[0]["source"]["data"]) == _JPEG_BYTES
+
+
+def test_build_content_hands_an_image_over_the_inline_ceiling_off_by_path(
+    tmp_path: Any,
+) -> None:
+    # One byte past what encodes to 5 MB: inlining it would 400 the whole turn.
+    img = tmp_path / "huge.png"
+    img.write_bytes(_PNG_BYTES.ljust(INLINE_IMAGE_MAX_BYTES * 3 // 4 + 1, b"\x00"))
+    att = Attachment(path=str(img), mime="image/png", filename="huge.png")
+
+    content = ClaudeSdkAgentAdapter._build_content("look", [att])
+
+    assert isinstance(content, list)
+    assert [b["type"] for b in content] == ["text", "text"]
+    assert str(img) in content[1]["text"]
+
+
+def test_build_content_inlines_an_image_exactly_at_the_inline_ceiling(tmp_path: Any) -> None:
+    img = tmp_path / "edge.png"
+    img.write_bytes(_PNG_BYTES.ljust(INLINE_IMAGE_MAX_BYTES * 3 // 4, b"\x00"))
+    att = Attachment(path=str(img), mime="image/png", filename="edge.png")
+
+    content = ClaudeSdkAgentAdapter._build_content("", [att])
+
+    assert isinstance(content, list)
+    assert content[0]["type"] == "image"
+    assert len(content[0]["source"]["data"]) == INLINE_IMAGE_MAX_BYTES
+
+
+def test_build_content_hands_off_an_image_whose_bytes_are_not_an_image(tmp_path: Any) -> None:
+    img = tmp_path / "fake.png"
+    img.write_bytes(b"this is not a picture")
+    att = Attachment(path=str(img), mime="image/png", filename="fake.png")
+
+    content = ClaudeSdkAgentAdapter._build_content("", [att])
+
+    assert isinstance(content, list)
+    assert content[0]["type"] == "text"
+    assert str(img) in content[0]["text"]
+
+
+def test_build_content_notes_an_attachment_whose_file_is_gone(tmp_path: Any) -> None:
+    att = Attachment(path=str(tmp_path / "gone.png"), mime="image/png", filename="gone.png")
+
+    content = ClaudeSdkAgentAdapter._build_content("", [att])
+
+    assert content == [{"type": "text", "text": "[Attached file 'gone.png' could not be read]"}]
+
+
 def test_build_content_no_longer_inlines_a_pdf_as_a_document_block(tmp_path: Any) -> None:
     # Documents are text-extracted upstream (spec channels "Give documents to every
     # agent as extracted text"), so a PDF that reaches _build_content (extraction
@@ -250,7 +319,7 @@ async def test_pdf_reaches_claude_as_extracted_text_not_a_document_block(tmp_pat
     pdf = tmp_path / "report.pdf"
     pdf.write_bytes(b"%PDF-1.7 fake")
     img = tmp_path / "chart.png"
-    img.write_bytes(b"\x89PNG-fake")
+    img.write_bytes(_PNG_BYTES)
     pdf_att = Attachment(path=str(pdf), mime="application/pdf", filename="report.pdf")
     img_att = Attachment(path=str(img), mime="image/png", filename="chart.png")
     extractor = _FakeExtractor("Quarterly revenue was $4.2M.")

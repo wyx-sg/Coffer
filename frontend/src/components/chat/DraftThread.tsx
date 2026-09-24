@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { AgentProviderInfo } from "@/lib/api/agentProviders";
+import type { ChatAttachment } from "@/lib/api/chat";
 import { Composer } from "./Composer";
 import { EffortPicker } from "./EffortPicker";
 import { ModelPicker } from "./ModelPicker";
@@ -33,7 +34,8 @@ interface Props {
   /** The reasoning level that model runs at (null = the agent's own default). */
   effortValue?: string | null;
   onEffortChange?: (effort: string | null) => void;
-  onSend: (text: string) => void;
+  /** Create the conversation and send; resolves whether the create succeeded. */
+  onSend: (text: string, attachments: ChatAttachment[]) => void | Promise<boolean>;
   /** True while the create-then-send round-trip is in flight. */
   creating?: boolean;
 }
