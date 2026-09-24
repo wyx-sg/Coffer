@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import sys
+
+import httpx
 import typer
 
 from coffer.surfaces.cli import (
+    _client,
     agent_cmd,
     audit_cmd,
     channel_cmd,
@@ -60,8 +64,18 @@ app.add_typer(sync_cmd.app, name="sync")
 
 
 def run() -> None:
-    """Entry point for the `coffer` script in pyproject.toml."""
-    app()
+    """Entry point for the `coffer` script in pyproject.toml.
+
+    A daemon that stops answering after a command built its client surfaces as
+    an ``httpx.TransportError`` from wherever the request was made — refused
+    before the request, or dropped, reset or timed out during it; it is
+    reported here, once, as exit 3 with a message rather than a traceback (spec
+    mcp-gateway "Manage MCP servers as resources").
+    """
+    try:
+        app()
+    except httpx.TransportError as err:
+        sys.exit(int(_client.render_http_error(err, verbose=False)))
 
 
 if __name__ == "__main__":

@@ -96,21 +96,28 @@ def media_specs(message: dict[str, Any]) -> list[tuple[str, str, str]]:
 
 
 def _oversized(message: dict[str, Any]) -> list[str]:
-    """Human labels for attachments too large for a bot to download.
+    """Human labels for attachments too large for a bot to download."""
+    return list(_oversized_files(message).values())
+
+
+def _oversized_files(message: dict[str, Any]) -> dict[str, str]:
+    """``file_id`` → human label for each attachment too large for a bot to download.
 
     ``file_size`` rides on the media object itself, so the cap is known before
     ``getFile`` is ever called — the user can be told exactly which file was
-    left behind instead of watching an answer that never mentions it.
+    left behind instead of watching an answer that never mentions it, and the
+    download loop skips it rather than failing a second time. Keyed by
+    ``file_id`` so an animation and its document twin count once.
     """
-    labels: list[str] = []
+    files: dict[str, str] = {}
     for key, _mime, default_name in _MEDIA_FIELDS:
         item = message.get(key)
-        if not isinstance(item, dict):
+        if not (isinstance(item, dict) and item.get("file_id")):
             continue
         size = item.get("file_size")
         if isinstance(size, int) and size > _DOWNLOAD_LIMIT_BYTES:
-            labels.append(str(item.get("file_name") or default_name))
-    return labels
+            files.setdefault(str(item["file_id"]), str(item.get("file_name") or default_name))
+    return files
 
 
 def inline_keyboard(buttons: Sequence[ChoiceButton]) -> dict[str, Any]:
@@ -224,14 +231,18 @@ async def download_attachments(
 ) -> FetchedMedia:
     """Download each attachment on ``message`` to ``media_dir``. Best-effort: a
     download that fails is skipped (logged) and noted, never wedging the
-    message — the text/caption still drives a turn."""
+    message — the text/caption still drives a turn. A file the update already
+    says is over the download cap is noted once and never requested."""
     out: list[InboundAttachment] = []
+    oversized = _oversized_files(message)
     notes: list[str] = [
         f"[attachment '{label}' is larger than the {_DOWNLOAD_LIMIT_BYTES // (1024 * 1024)} MB "
         "a bot may download — it did not reach the agent]"
-        for label in _oversized(message)
+        for label in oversized.values()
     ]
     for file_id, mime, filename in media_specs(message):
+        if file_id in oversized:
+            continue  # already noted above; getFile would only fail and note it twice
         # The file endpoint's URL carries the bot token, so this path never logs
         # a traceback: an httpx error's message quotes the request URL, and a
         # traceback would carry it into the daemon log. ``_download_file``

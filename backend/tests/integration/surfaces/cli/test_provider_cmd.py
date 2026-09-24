@@ -227,6 +227,45 @@ def test_cli_key_by_connection_and_scope(provider_daemon):
 
 @pytest.mark.acceptance(
     spec="provider-switching",
+    scenario="a disabled or unreached connection's uid helper resolves no key",
+)
+def test_cli_key_by_connection_uid_refuses_a_disabled_connection(provider_daemon):
+    """The projected ``apiKeyHelper`` line keeps calling this after the user
+    disables the connection; it must then fail loudly rather than hand the
+    agent the key (spec provider-switching "Resolve a key for exactly one
+    connection")."""
+    added = _runner.invoke(
+        cli_app,
+        [
+            "provider",
+            "add",
+            "acme",
+            "--protocol",
+            "anthropic",
+            "--base-url",
+            "https://gw/anthropic",
+            "--secret",
+            "sk-acme",
+        ],
+    )
+    assert added.exit_code == 0, added.output
+    uid = json.loads(_runner.invoke(cli_app, ["provider", "show", "acme"]).output)["uid"]
+    live = _runner.invoke(cli_app, ["provider", "key", "--connection-uid", uid])
+    assert live.exit_code == 0, live.output
+    assert live.output.strip() == "sk-acme"
+
+    off = _runner.invoke(cli_app, ["resource", "disable", "provider", "acme"])
+    assert off.exit_code == 0, off.output
+
+    key = _runner.invoke(cli_app, ["provider", "key", "--connection-uid", uid])
+    assert key.exit_code == 4, key.output
+    assert "sk-acme" not in key.output
+    assert f"no key for connection {uid!r}" in key.output
+    assert "disabled" in key.output
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
     scenario="the command line covers create, list, switch and revert",
 )
 def test_cli_use_builtin_reverts_a_wire_to_the_agents_own_login(provider_daemon):

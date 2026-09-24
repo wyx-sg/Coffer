@@ -27,7 +27,7 @@ the tree.
 | `credential_ref` | str? | a **reference** into the credential store, never a secret |
 | `include_credentials` | bool | whether ciphertext rides along; default off |
 | `interval_seconds` | int | default 3600, `> 0` by check constraint |
-| `enabled` | bool | sync is off until the user configures a remote |
+| `enabled` | bool | sync is off until the user configures a remote; `false` pauses a configured remote — rounds report `disabled` and record nothing — while the remote, pointer and history are kept |
 | `worktree_path` | str | default `~/.coffer/sync` |
 | `last_started_at` | ts? | when the most recent round began — the pair with `last_run_at` is what tells a surface how long a round took, and how long one that never finished has been running |
 | `last_run_at` | ts? | when the most recent round finished |

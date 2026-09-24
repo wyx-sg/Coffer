@@ -11,7 +11,7 @@ concrete adapters.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Any, Protocol
 
 from coffer.application.sync.git_port import GitMirrorPort
@@ -38,6 +38,43 @@ class ImportGate(Protocol):
     kind: str
 
     async def validate(self, config: Mapping[str, object]) -> None: ...
+
+
+class ImportNormaliser(Protocol):
+    """Per-kind rewrite of an arriving document's config, run BEFORE the gate
+    and the write (spec vault-sync "Apply resource documents through the
+    resource service").
+
+    For a document that is right in general but would break an invariant of
+    THIS machine's rows — the provider kind's one internal-engine default. It
+    returns the config to apply and, when it changed something, a note: the
+    path is applied and released, and the note is reported among the round's
+    failures so the user sees what was not taken, without the path being held
+    for a retry that would meet the same rows every round.
+
+    ``tree_config`` reads the config of another document of the same kind, by
+    uid, from the tree this round is applying — so a normaliser can tell a
+    conflicting document from one half of a change the other half of which is
+    in the same tree. A write to another row the arriving config depends on
+    comes back as a :class:`PreWrite` for the applier to run after the gate,
+    just before this document's own write, and to revert if that write fails."""
+
+    kind: str
+
+    async def normalise(
+        self,
+        uid: str,
+        config: Mapping[str, object],
+        tree_config: Callable[[str], Awaitable[Mapping[str, object] | None]],
+    ) -> tuple[dict[str, object], str | None, PreWrite | None]: ...
+
+
+class PreWrite(Protocol):
+    """A normaliser's write to another row, deferred to the applier."""
+
+    async def apply(self) -> None: ...
+
+    async def revert(self) -> None: ...
 
 
 class PostImportHook(Protocol):
@@ -298,8 +335,12 @@ class VaultApplyPort(Protocol):
     #: Bundle path prefix this applier owns (``knowledge/``, ``resources/``, …).
     prefix: str
 
-    async def upsert(self, path: str) -> None:
-        """Apply the working tree's version of ``path`` to the vault."""
+    async def upsert(self, path: str) -> str | None:
+        """Apply the working tree's version of ``path`` to the vault.
+
+        Returns a note when the document was applied other than as written
+        (an ``ImportNormaliser`` changed it); the round reports it and does
+        not hold the path."""
 
     async def remove(self, path: str) -> None:
         """Remove from the vault what ``path`` used to carry."""
@@ -347,6 +388,7 @@ __all__ = [
     "CredentialSyncPort",
     "GitMirrorPort",
     "ImportGate",
+    "ImportNormaliser",
     "MasterKeyPort",
     "PostImportHook",
     "SyncRemoteRepoPort",

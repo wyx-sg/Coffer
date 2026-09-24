@@ -148,6 +148,9 @@ acceptance("web-ui", "the sidebar carries no placeholder entries", () => {
 // still gets noticed — without the one that did not: arguing on every page
 // until the underlying state changes.
 
+/** A configured remote that is switched on — a paused one never raises the dot. */
+const ON = { enabled: true };
+
 const HELD = {
   status: "awaiting_confirmation",
   conflicts: [],
@@ -158,7 +161,7 @@ const HELD = {
 describe("the Sync attention dot", () => {
   test("is absent while the vault is converging", () => {
     syncStatus.mockReturnValue({
-      data: { last_run: { status: "ok", conflicts: [], error: null, pending: null } },
+      data: { remote: ON, last_run: { status: "ok", conflicts: [], error: null, pending: null } },
       isError: false,
     } as never);
     const { queryByTestId } = renderNav();
@@ -166,13 +169,13 @@ describe("the Sync attention dot", () => {
   });
 
   test("appears when the last round needs answering", async () => {
-    syncStatus.mockReturnValue({ data: { last_run: HELD }, isError: false } as never);
+    syncStatus.mockReturnValue({ data: { remote: ON, last_run: HELD }, isError: false } as never);
     const { findByTestId } = renderNav();
     expect(await findByTestId("nav-dot-sync")).toBeInTheDocument();
   });
 
   acceptance("vault-sync", "a held vault says so where the user already is", async () => {
-    syncStatus.mockReturnValue({ data: { last_run: HELD }, isError: false } as never);
+    syncStatus.mockReturnValue({ data: { remote: ON, last_run: HELD }, isError: false } as never);
     // On /sync the user is looking at the thing itself: no dot over their own
     // reading, and the situation is marked seen.
     const onPage = renderNav("/sync");
@@ -188,13 +191,13 @@ describe("the Sync attention dot", () => {
   test("a daemon that cannot answer raises no sync dot", () => {
     // That is the offline banner's job, and a stale cached round must not
     // outlive it into a second claim on the same screen.
-    syncStatus.mockReturnValue({ data: { last_run: HELD }, isError: true } as never);
+    syncStatus.mockReturnValue({ data: { remote: ON, last_run: HELD }, isError: true } as never);
     const { queryByTestId } = renderNav();
     expect(queryByTestId("nav-dot-sync")).toBeNull();
   });
 
   test("survives a collapsed rail, where the label is gone", async () => {
-    syncStatus.mockReturnValue({ data: { last_run: HELD }, isError: false } as never);
+    syncStatus.mockReturnValue({ data: { remote: ON, last_run: HELD }, isError: false } as never);
     const { findByTestId } = renderNav("/", true);
     expect(await findByTestId("nav-dot-sync")).toBeInTheDocument();
   });

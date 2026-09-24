@@ -17,7 +17,7 @@ buses.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from coffer.application.chat.bus import ConversationBus
@@ -57,7 +57,12 @@ class ActiveTurn:
     # it receives every event plus a ``None`` end-of-stream sentinel.
     primary_queue: asyncio.Queue[AgentEvent | None] | None = None
     task: asyncio.Task[None] | None = None
+    # Why the task was cancelled, set by whoever cancels it: ``interrupted`` (the
+    # user stopped it — keep the partial, complete) or ``discarded`` (the
+    # conversation is being deleted — throw the turn away). A cancellation with
+    # neither is the daemon going down: the partial is kept, marked failed.
     interrupted: bool = field(default=False)
+    discarded: bool = field(default=False)
 
 
 @dataclass
@@ -80,6 +85,22 @@ class TurnState:
 
 # conversation_id → state. Mutated in place (never re-bound) so importers share it.
 _STATES: dict[str, TurnState] = {}
+
+
+def reconcile_queue(queue: list[PendingMessage], texts: Sequence[str]) -> list[PendingMessage]:
+    """The queue ``texts`` describes, reusing an existing entry for each text it
+    still contains (first unused match wins) so a reordered or partly-dropped
+    queue keeps every message's attachments and renderer."""
+    unused = list(queue)
+    result: list[PendingMessage] = []
+    for text in texts:
+        match = next((m for m in unused if m.text == text), None)
+        if match is not None:
+            unused.remove(match)
+            result.append(match)
+        else:
+            result.append(PendingMessage(text=text))
+    return result
 
 
 def state_for(conversation_id: str) -> TurnState:
@@ -125,4 +146,74 @@ def held_conversations() -> set[str]:
 
 def clear_active_turns() -> None:
     """Clear all per-conversation orchestrator state (test teardown only)."""
+    global _stopping_loop
     _STATES.clear()
+    _stopping_loop = None
+
+
+class TurnsStopping(RuntimeError):  # noqa: N818
+    """A turn start refused because the daemon is shutting down."""
+
+
+# The event loop :func:`stop_all_turns` ran on; from then on no turn starts on
+# it. Scoped to the loop rather than the process so an app started afresh on a
+# new loop in the same process (tests, an in-process restart) is not refused.
+_stopping_loop: asyncio.AbstractEventLoop | None = None
+
+
+def is_stopping() -> bool:
+    """Whether the daemon has begun stopping its turns (no new turn may start)."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return _stopping_loop is loop
+
+
+async def stop_all_turns(*, timeout: float = 5.0) -> int:
+    """Stop every in-flight turn and wait for each to finish writing its partial.
+
+    Called by the daemon's teardown before the database is disposed. First it
+    closes the door: no turn starts after this (``is_stopping``) and every
+    pending queue is paused, so a cancelled turn's end does not auto-advance
+    into a fresh one mid-teardown. Queued messages stay queued; the queue is
+    in-memory, so they go with the daemon, uncommitted (spec chat "Queue
+    messages sent during a turn"). A turn cancelled this way is neither an
+    interrupt nor a delete, so its runner keeps the partial reply and marks it
+    failed (spec chat "Keep partial output when a turn is interrupted or
+    fails").
+
+    A start already underway when the door closed — its slot reserved, its
+    task not yet spawned — is waited for too, and cancelled if it got as far
+    as spawning. Waiting is bounded: whatever does not settle within
+    ``timeout`` is left to the startup sweep. Returns how many turns were
+    cancelled.
+    """
+    global _stopping_loop
+    loop = asyncio.get_running_loop()
+    _stopping_loop = loop
+    for st in _STATES.values():
+        st.paused = True
+    deadline = loop.time() + timeout
+    cancelled: set[asyncio.Task[None]] = set()
+    while True:
+        running: list[asyncio.Task[None]] = []
+        starting = False
+        for st in list(_STATES.values()):
+            if st.active is None:
+                continue
+            if st.active.task is None:
+                starting = True
+            elif not st.active.task.done():
+                running.append(st.active.task)
+        for task in running:
+            if task not in cancelled:
+                task.cancel()
+                cancelled.add(task)
+        remaining = deadline - loop.time()
+        if (not running and not starting) or remaining <= 0:
+            return len(cancelled)
+        if running:
+            await asyncio.wait(running, timeout=remaining)
+        else:
+            await asyncio.sleep(min(0.01, remaining))

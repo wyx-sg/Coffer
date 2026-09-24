@@ -257,6 +257,20 @@ class MessageRepo:
             await session.execute(stmt)
             await session.commit()
 
+    async def save_partial(self, message_id: str, *, content: list[ContentBlock]) -> None:
+        """Overwrite a ``streaming`` row's content with the turn's output so far.
+
+        Guarded on ``status='streaming'`` so a flush that lands after the turn was
+        finalised can never clobber the final content or status."""
+        async with self._sm() as session:
+            stmt = (
+                update(MessageModel)
+                .where(MessageModel.id == message_id, MessageModel.status == "streaming")
+                .values(content=_encode_content(content))
+            )
+            await session.execute(stmt)
+            await session.commit()
+
     async def delete_message(self, message_id: str) -> None:
         """Delete a single message by id (used to discard a placeholder row)."""
         async with self._sm() as session:

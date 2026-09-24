@@ -181,7 +181,7 @@ def test_agent_list_after_register(tmp_path, monkeypatch):
 
 
 def test_agent_patch_config_dir(tmp_path, monkeypatch):
-    """PATCH updates config_dir (agents have no enable/disable concept)."""
+    """PATCH updates config_dir."""
     app = _app(tmp_path, monkeypatch, 59604)
     config_dir = tmp_path / "cfg"
     config_dir.mkdir()

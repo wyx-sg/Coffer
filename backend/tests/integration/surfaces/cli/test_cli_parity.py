@@ -88,6 +88,8 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "list",
         "show",
         "detect",
+        # The web model picker's list (GET /agent-providers/{agent_key}/models).
+        "models",
         "config",
         "mcp",
         "plugin",

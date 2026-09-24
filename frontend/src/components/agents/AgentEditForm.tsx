@@ -1,5 +1,5 @@
 // frontend/src/components/agents/AgentEditForm.tsx — spec agent-registry
-// "Manage the agent lifecycle without an enable state": edit an existing agent's name, config_dir
+// "Manage the agent lifecycle": edit an existing agent's name, config_dir
 // override and description. Rendered as a modal dialog (mirrors AgentAddDialog); the agent's
 // TYPE is immutable post-registration and shows read-only.
 //

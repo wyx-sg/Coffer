@@ -277,11 +277,20 @@ class ProviderService:
         By uid because that helper line is written once into a file Coffer does
         not own and then read on every turn, for as long as the connection
         lives: a name in it would stop resolving the moment the user renamed
-        the connection. Raises ``NoActiveProvider`` for a keyless (ollama)
-        connection.
+        the connection.
+
+        Raises ``NoActiveProvider`` when the connection reaches no agent — it is
+        disabled, scoped to no agent, or keyless (ollama). Reach is the same
+        effective projection the wire form reads (``projection_targets``), so a
+        live helper line stops receiving the key the moment the user switches
+        the connection off (spec provider-switching "Resolve a key for exactly
+        one connection").
         """
         resource = await self.get(uid)
-        return await self._key_of(self._cfg(resource), label=resource.name)
+        cfg = self._cfg(resource)
+        if not self._compat(resource, await self._agents.list()):
+            raise NoActiveProvider(resource.name)
+        return await self._key_of(cfg, label=resource.name)
 
     async def resolve_active_key_for_agent(self, agent_type: AgentType) -> str:
         """The decrypted key of the connection currently active AND reaching

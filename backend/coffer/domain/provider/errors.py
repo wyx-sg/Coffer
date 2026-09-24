@@ -73,3 +73,26 @@ class NoActiveProvider(CofferError):  # noqa: N818
     def __init__(self, protocol: str) -> None:
         super().__init__(f"no active provider profile for protocol {protocol!r}")
         self.protocol = protocol
+
+
+class ProviderInternalDefaultTaken(CofferError):  # noqa: N818
+    """A write would flag a second connection as the internal-engine default.
+
+    At most one connection carries ``internal_default`` (spec provider-switching
+    "Keep at most one internal-engine default"), and the one write that may
+    move it is ``set_internal_default``, which clears the holder first. Any
+    other write that sets the flag while a different connection holds it — the
+    kind-agnostic resource PATCH or POST — is refused here rather than left to
+    the database's unique index. Maps to 409: the body is well-formed, and the
+    dedicated route moves the flag.
+    """
+
+    code = "PROVIDER_INTERNAL_DEFAULT_TAKEN"
+
+    def __init__(self, holder: str) -> None:
+        super().__init__(
+            f"connection {holder!r} is already Coffer's internal-engine default — "
+            f"move the flag with `coffer provider internal-default <name>` "
+            f"(POST /api/v1/providers/{{uid}}/internal-default) instead"
+        )
+        self.holder = holder

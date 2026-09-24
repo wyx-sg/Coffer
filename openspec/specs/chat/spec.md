@@ -384,16 +384,32 @@ resumes the held queue.
   auto-run until they are resumed or dropped.
 
 ### Requirement: Keep partial output when a turn is interrupted or fails
-An interrupted or failed turn — user interrupt, adapter failure, timeout, or
-daemon restart — MUST leave its partial assistant message persisted rather than
-discarded: marked `complete` when the owner interrupted it, and `failed` when the
-adapter failed, the turn timed out, or the daemon restarted under it. Stopping a turn is distinct from discarding the conversation, which
-throws the turn away.
+An interrupted or failed turn — user interrupt, adapter failure, a stream that
+ends without a terminal event, timeout, daemon shutdown, or a daemon that dies
+outright — MUST leave its partial assistant message persisted rather than
+discarded: marked `complete` when the owner interrupted it, and `failed` in every
+other case. Only deleting the conversation discards a turn: the running turn is
+cancelled and its placeholder row removed with the conversation. Stopping a turn
+is distinct from discarding the conversation.
 
-Two failures the platform detects itself, agent-agnostically: an agent whose
-event stream ends without a terminal event (its process died or lost its
-connection mid-turn) MUST be reported as a turn error (`stream_ended`), never
-as a completed turn — a tick on a reply cut mid-sentence is a lie; and a turn
+The partial text MUST be saved onto the turn's `streaming` row while the turn
+streams, at most once per second — never per token — so a daemon that dies
+outright keeps what was streamed up to the last save, which the startup sweep of
+"Sweep streaming rows left by a crashed daemon" then marks `failed`. A save that
+lands after the row was finalised MUST NOT change it.
+
+A daemon shutdown MUST stop running turns itself, before the database closes:
+each is cancelled, emits a `daemon_stopped` turn error, and keeps its partial
+reply marked `failed`, the shutdown waiting a bounded time for those writes; a
+turn that does not settle in that time is left to the startup sweep.
+
+Three turn errors are the platform's own rather than an agent's —
+`stream_ended`, `turn_timeout` and `daemon_stopped`. Two of them it detects
+agent-agnostically: an agent whose event stream ends without a terminal event
+(its process died or lost its connection mid-turn) MUST be reported as a turn
+error (`stream_ended`) by the platform's turn runner whether or not the adapter
+reports it, never as a completed turn — a tick on a reply cut mid-sentence is a
+lie; and a turn
 that produces no event for the idle window
 (`COFFER_TURN_IDLE_TIMEOUT_SECONDS`, default 300; `0` disables the watchdog)
 MUST be cancelled with a `turn_timeout` error, its agent process stopped
@@ -418,6 +434,24 @@ and delivered ahead of the notice.
 - **WHEN** the channel renders it,
 - **THEN** the chat receives the text, then the error notice, then the failed
   summary
+
+#### Scenario: a stream that ends without a terminal is a failure, not a reply
+- **GIVEN** an agent that streams part of a reply and then ends its event stream with no terminal event,
+- **WHEN** the turn is driven,
+- **THEN** the last event every subscriber receives is a `stream_ended` turn error and no turn-done is emitted
+- **AND** the assistant message keeps the streamed text and is marked failed
+
+#### Scenario: a daemon that dies mid-turn keeps what was streamed
+- **GIVEN** a turn that has streamed text for longer than the save interval and is still running,
+- **WHEN** the daemon dies without finalising the turn and a new daemon starts on the same database,
+- **THEN** the startup sweep finds the assistant row, marks it failed, and the row carries the text streamed up to the last save
+- **AND** a turn streaming hundreds of tokens saves at most once per second, not once per token
+
+#### Scenario: a shutdown keeps the partial reply
+- **GIVEN** running turns that have streamed partial text,
+- **WHEN** the daemon shuts down,
+- **THEN** the turns are stopped before the database is closed, each ending with a `daemon_stopped` turn error
+- **AND** each assistant message keeps its streamed text, marked failed
 
 ### Requirement: Sweep streaming rows left by a crashed daemon
 A `streaming` placeholder assistant row MUST be written **before** the first
@@ -531,8 +565,10 @@ history instead.
 ### Requirement: Show every conversation on the Chat page
 The web UI MUST carry a **Chat page**: two columns, the conversation list on
 the left and the selected conversation's message thread with its draft surface
-on the right. The list MUST show every conversation in the vault whatever
-opened it — a conversation an IM channel created is listed, readable,
+on the right. The list MUST show every conversation in the vault not owned by
+another surface, whatever opened it — a conversation carrying an `owner` belongs
+to that surface, is left out of the list, and stays readable by id — so a
+conversation an IM channel created is listed, readable,
 watchable, and continuable from the page, and carries a badge naming the
 channel it is also reachable on. There is no web-only conversation kind: the
 page and the channel are two windows onto one timeline, driven by one owner,

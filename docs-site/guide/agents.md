@@ -42,6 +42,8 @@ coffer agent edit my-codex --config-dir ~/work/.codex --description "work profil
 
 `edit` also binds the model an agent answers with (`--model`, `--fast-model`, `--clear-fast-model`, `--wire-api`) — see [Model providers](/guide/providers).
 
+`coffer agent models <type>` lists the models that binding can name — the same list the web model picker offers — one per line, with each model's reasoning-effort levels and the agent's default marked `*`. It takes the agent **type** (`claude_code`, `codex`), not a registered name; `--json` prints the daemon's response.
+
 Removing an agent is not permanent. Coffer keeps no suppression list, so an agent that is still installed is offered again by the next `coffer agent detect`, and one confirmation brings it back.
 
 ## Edit config files

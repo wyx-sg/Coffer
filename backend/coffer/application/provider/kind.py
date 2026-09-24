@@ -4,14 +4,19 @@ A provider profile is a pure-config resource (no on-disk artifact), so it uses
 the generic create/update path. Its only credential is ``credential_ref``,
 surfaced to ResourceService so a missing key fails before the DB write and so
 deleting a still-cited credential is refused.
+
+Handed the rows it guards, the kind also refuses a direct write that would flag
+a second internal-engine default (spec provider-switching "Keep at most one
+internal-engine default"; ``internal_default_guard``).
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Protocol
 
+from coffer.application.provider.internal_default_guard import refusing_hooks
 from coffer.domain.provider.config import ProviderConfig, starts_dormant
-from coffer.domain.resource import Kind
+from coffer.domain.resource import Kind, Resource
 from coffer.domain.scope import Scope
 
 
@@ -46,8 +51,20 @@ def _provider_default_scope(config: dict[str, Any]) -> Scope | None:
     return None
 
 
-def make_provider_kind() -> Kind:
-    """Construct the ``provider`` Kind."""
+class _Rows(Protocol):
+    async def list(
+        self, kind: str | None = None, enabled: bool | None = None
+    ) -> list[Resource]: ...
+
+
+def make_provider_kind(rows: _Rows | None = None) -> Kind:
+    """Construct the ``provider`` Kind.
+
+    ``rows`` is the resource table the one-flag rule is checked against — the
+    composition root passes its ``ResourceService``. Omitted, the kind has no
+    pre-write hooks and the database's unique index is the only guard left.
+    """
+    on_register, on_update = refusing_hooks(rows) if rows is not None else (None, None)
     return Kind(
         name="provider",
         display_name="Provider",
@@ -62,4 +79,6 @@ def make_provider_kind() -> Kind:
         # self-heal all read it.
         supports_scope=True,
         default_scope=_provider_default_scope,
+        validate_config=on_register,
+        on_update_config=on_update,
     )

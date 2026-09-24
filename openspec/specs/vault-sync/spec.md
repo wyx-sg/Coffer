@@ -1081,13 +1081,14 @@ order.
   and the other machine absorbs the migration with no confirmation of its own.
 
 ### Requirement: Say a vault needs a human where the user already is
-A vault whose last round needs a human — held for confirmation, conflicted, or
-failed to push or run — MUST say so where the user already is, not only on the
-page built for it. `coffer sync status` MUST exit non-zero, the web UI MUST mark
-its **navigation entry** for the sync page, and the desktop shell MUST raise it
-as a notification and mark its icon. A held vault converges no further, so a
-hold nobody sees is an outage that looks like silence: the first one in the
-field stood for four days.
+A vault whose last round needs a human — held for confirmation, conflicted,
+failed to push or run, or waiting to join (`awaiting_join`) — MUST say so where
+the user already is, not only on the page built for it. `coffer sync status`
+MUST exit non-zero, the web UI MUST mark its **navigation entry** for the sync
+page, and the desktop shell MUST raise it as a notification and mark its icon. A
+held vault converges no further, and neither does a machine that has not joined
+its remote, so a hold nobody sees is an outage that looks like silence: the
+first one in the field stood for four days.
 
 The web UI's mark MUST be cleared by **visiting the page**, not by the situation
 changing, and MUST NOT return for the same situation. The rounds are
@@ -1107,6 +1108,14 @@ again only when the answer would be different.
   notification — once for that condition, not once per poll,
 - **AND** opening the sync page clears the web UI's mark, which does not
   return while the same thing is wrong, however many rounds re-raise it.
+
+#### Scenario: a machine that has not joined says so everywhere
+- **GIVEN** a machine with a remote configured that it has not joined, so its
+  round reports `awaiting_join` and converges nothing
+- **WHEN** the user is anywhere other than the sync page
+- **THEN** `coffer sync status` exits non-zero and points at `coffer sync adopt`,
+  the web UI's navigation entry for sync is marked, and the desktop shell marks
+  its icon and raises one notification
 
 ### Requirement: Release a hold whose diff no longer breaches
 A round MUST re-derive its diff even while a confirmation is outstanding, and
@@ -1343,7 +1352,7 @@ The CLI MUST cover the round and the vault's lifecycle — `coffer sync now`,
 `adopt [<url>] [--keep-local] [--yes]`, `status`, `history [--limit]`,
 `restore [--at <rev|date>]`, `confirm`, `reject`, `rebuild [--yes]`, `rollback`
 — and its administration:
-`remote set <url> [--branch] [--interval <seconds>] [--with-credentials] [--credential-ref]`,
+`remote set <url> [--branch] [--interval <seconds>] [--with-credentials|--without-credentials] [--credential-ref]`,
 `remote show`, `remote clear`, `machine list`, `machine rename <name>`,
 `machine remove <id>`, `key export <file>`, `key import <file>`,
 `key fingerprint`.
@@ -1352,7 +1361,7 @@ The CLI MUST cover the round and the vault's lifecycle — `coffer sync now`,
 - **GIVEN** the `coffer sync` command group
 - **WHEN** its commands and options are listed
 - **THEN** it offers `now`, `adopt` with `--keep-local` and `--yes`, `status`, `history` with `--limit`, `restore` with `--at`, `confirm`, `reject`, `rebuild` with `--yes` and `rollback`
-- **AND** it offers `remote set` with `--branch`, `--interval`, `--with-credentials` and `--credential-ref`, `remote show`, `remote clear`, `machine list`, `machine rename`, `machine remove`, `key export`, `key import` and `key fingerprint`
+- **AND** it offers `remote set` with `--branch`, `--interval`, `--with-credentials`, `--without-credentials` and `--credential-ref`, `remote show`, `remote clear`, `machine list`, `machine rename`, `machine remove`, `key export`, `key import` and `key fingerprint`
 
 ### Requirement: Cover the same operations over HTTP
 The HTTP API MUST cover the same operations under `/api/v1/sync`:
@@ -1472,3 +1481,42 @@ vault is in now and the only round that may carry Undo or a hold's answers.
 - **WHEN** the Runs table's rows are built
 - **THEN** the newest failure is a row of its own, the two failures before it are one row counting two, and the round that published is a row of its own
 - **AND** a stretch of consecutive rounds held for confirmation folds the same way beneath a newer round
+
+### Requirement: Pause a configured remote without forgetting it
+A configured remote MUST carry an `enabled` switch, and switching it off MUST
+pause sync without forgetting anything. While it is off every round MUST report
+`disabled`, record nothing, commit and push nothing, and raise no attention on
+any surface — `coffer sync status` exits zero, the web UI does not mark its sync
+entry and the desktop shell marks nothing — even over a round the vault was
+paused on, because a user who met a hold by switching sync off has answered it
+too. The remote, the pointer and the history MUST all be kept, so switching it
+back on resumes where the vault left off. Re-running `coffer sync remote set`
+MUST keep a paused remote paused — it changes what it names and nothing else:
+every option it is not given keeps its stored value, including the branch, the
+interval, whether credentials travel, the push credential and the working tree
+— and a remote configured for the first time is stored enabled, with the
+defaults for every option it is not given.
+
+#### Scenario: a paused remote runs no round and asks for nothing
+- **GIVEN** a joined vault whose last round is held at the deletion guard, and
+  its remote then switched off
+- **WHEN** a note is written and a round is requested
+- **THEN** the round reports `disabled`, the history is exactly what it was, the
+  note is not on the remote, and the pointer and the remote are kept
+- **AND** `coffer sync status` exits zero, the web UI does not mark its sync
+  entry and the desktop shell marks nothing
+
+#### Scenario: reconfiguring a paused remote keeps it paused
+- **GIVEN** a configured remote that has been switched off
+- **WHEN** `coffer sync remote set` is run again with a different interval
+- **THEN** the stored remote carries the new interval and is still switched off
+- **AND** a remote set for the first time is stored switched on
+
+#### Scenario: reconfiguring a remote changes only what it names
+- **GIVEN** a configured remote with a non-default branch, interval, push
+  credential and working tree, carrying credentials
+- **WHEN** `coffer sync remote set` is run again naming only a new interval
+- **THEN** the stored remote carries the new interval and every other setting
+  exactly as it was
+- **AND** running it with `--without-credentials` switches credential sync off
+  and changes nothing else

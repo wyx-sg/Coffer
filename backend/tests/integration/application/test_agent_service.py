@@ -412,8 +412,9 @@ async def test_audit_records_lifecycle_events(agent_bundle, tmp_path):
     agent = await agent_bundle.svc.register(
         agent_type=AgentType.CODEX, name="a", config_dir=str(custom), actor="cli"
     )
-    # Agents have no enable/disable concept — the lifecycle is create, update,
-    # remove (each via the kind-agnostic resource_* events).
+    # The lifecycle is create, update, remove (each via the kind-agnostic
+    # resource_* events); the enable/disable toggle is audited the same way and
+    # covered by test_skill_delivery.py.
     await agent_bundle.svc.update_config_dir(uid=agent.uid, new_config_dir=str(new), actor="cli")
     await agent_bundle.svc.remove(uid=agent.uid, actor="cli")
 

@@ -293,6 +293,54 @@ async def test_a_disabled_agent_is_never_written_into(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="disabling an agent reclaims its skills and drops it from the catalogue",
+)
+async def test_disabling_an_agent_reclaims_skills_and_leaves_the_catalogue(tmp_path):
+    """The agent's own ``enabled`` flag, toggled through the kind-agnostic
+    resource route, is the one switch that stops Coffer writing into it: the
+    skills it holds are reclaimed, its config dir stops feeding the model
+    catalogue, and the toggle is audited as ``resource_disabled``."""
+    from coffer.application.agent.model_catalogue import AgentModelCatalogueService
+    from coffer.domain.agent.model_catalogue import AgentModel
+    from coffer.domain.audit import AuditEventType
+
+    skill_svc, agent_svc, audit, engine = await _setup(tmp_path)
+    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="solo")
+    await _import_skill(skill_svc, tmp_path, "held")
+    assert (skill_dir / "held").is_symlink()
+
+    seen: list = []
+
+    class _Discovery:
+        async def discover(self, *, agent_key, config_dir):
+            seen.append(config_dir)
+            return [AgentModel("m-1")]
+
+    class _Agents:
+        async def list(self):
+            return await skill_svc._rs.list(kind="agent")
+
+    catalogue = AgentModelCatalogueService(agents=_Agents(), discovery=_Discovery())
+    await catalogue.catalogue("claude_code")
+    assert seen == [tmp_path / "solo-cfg"]
+
+    await skill_svc._rs.set_enabled(agent.uid, False, actor="cli")
+
+    assert not (skill_dir / "held").exists()
+    assert await _delivered_names(skill_svc, agent) == set()
+    seen.clear()
+    await catalogue.catalogue("claude_code")
+    assert seen == [None]  # no enabled agent answers for the type any more
+    disabled = await audit.query(event_type=AuditEventType.RESOURCE_DISABLED.value)
+    assert [(e.resource_kind, e.resource_name, e.actor) for e in disabled] == [
+        ("agent", "solo", "cli")
+    ]
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 @pytest.mark.acceptance(spec="skill-manager", scenario="re-enabling a skill redelivers it")
 async def test_re_enabling_a_skill_redelivers_it(tmp_path):
     skill_svc, agent_svc, _audit, engine = await _setup(tmp_path)

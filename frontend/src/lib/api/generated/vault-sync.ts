@@ -538,7 +538,16 @@ export interface components {
              * @default 3600
              */
             interval_seconds: number;
-            /** @default true */
+            /**
+             * @description Whether sync runs. `false` PAUSES the remote without forgetting it:
+             *     every round reports `disabled`, records nothing and raises no
+             *     attention on any surface, while the remote, the pointer and the
+             *     history are kept (see "Pause a configured remote without
+             *     forgetting it"). `coffer sync remote set` sends the stored value
+             *     back, so re-running it keeps a paused remote paused; a first remote
+             *     is stored enabled.
+             * @default true
+             */
             enabled: boolean;
             /**
              * @description The separate working tree the round commits from — never the live

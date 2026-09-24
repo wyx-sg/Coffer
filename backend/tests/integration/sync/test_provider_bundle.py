@@ -2,11 +2,12 @@
 
 A ``provider`` resource is pure config, so it rides ``ResourceDoc`` like any
 other kind: :class:`SyncExporter` writes it and :class:`ResourceApplier` puts it
-back, with no sync-specific code of its own anywhere in the provider module.
-This is the regression test for that claim — if someone gives ``provider`` a
-bespoke export path, or a new config field stops surviving the YAML round trip
-(the curated ``models`` list and its per-entry modality are the fragile part),
-it fails here.
+back. Its one sync-specific piece is an import normaliser that drops a second
+internal-default flag (spec provider-switching "Keep at most one internal-engine
+default"); export and the round trip of every field are generic. This is the
+regression test for that — if someone gives ``provider`` a bespoke export path,
+or a new config field stops surviving the YAML round trip (the curated
+``models`` list and its per-entry modality are the fragile part), it fails here.
 
 Two independent vaults — separate SQLite files, separate homes — meet through
 one bundle directory on disk. No git, no round, no convergence state.

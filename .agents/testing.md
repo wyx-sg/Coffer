@@ -207,7 +207,8 @@ make format              # ruff format + ruff --fix + prettier (frontend)
 
 **`make lint` is the whole static gate, not a formatter pass.** In order
 (`Makefile`): `scripts/check_file_sizes.py`, `scripts/check_response_models.py`,
-`scripts/check_doc_numbering.py`, `scripts/check_architecture_doc.py`,
+`scripts/check_doc_numbering.py`, `scripts/check_spec_citations.py`,
+`scripts/check_architecture_doc.py`,
 `scripts/check_pyinstaller_specs.py`, `ruff check`, `ruff format --check`,
 `mypy --strict`, `lint-imports` (the layering + cross-kind fence), and — when
 `frontend/node_modules` is present — `scripts/dump_i18n_backend_keys.py --check`
@@ -217,6 +218,12 @@ Two consequences worth internalising:
 
 - **A docs-only edit can fail `make lint`.** `check_doc_numbering.py` rejects a
   numbered ADR/spec token and a dead link under `docs/decisions/`;
+  `check_spec_citations.py` rejects a requirement citation —
+  `spec <capability> "<Title>"` or a link to a capability's `spec.md` followed
+  by a quoted title — whose capability or title does not exist, and a retired
+  id form (an amendment letter after a capability, a numbered `CODE-` error id,
+  an uppercase `SPEC-` id), so renaming a requirement fails until every
+  citation of the old title follows;
   `check_architecture_doc.py` holds `docs/architecture.md` to the
   code. Run `make lint` after touching markdown, not just after touching code.
 - **`lint-imports` is invoked with `PYTHONPATH=$(BACKEND)`, and that is

@@ -40,6 +40,7 @@ from collections.abc import Callable, Sequence
 
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService, MessageRepo
+from coffer.application.chat.turn_persistence import DEFAULT_PARTIAL_FLUSH_SECONDS
 from coffer.application.chat.turn_runner import (
     DEFAULT_TURN_IDLE_TIMEOUT_SECONDS,
     run_turn_task,
@@ -49,9 +50,12 @@ from coffer.application.chat.turn_state import (
     ActiveTurn,
     PendingMessage,
     TurnSink,
+    TurnsStopping,
     TurnState,
     evict_if_idle,
+    is_stopping,
     peek,
+    reconcile_queue,
     state_for,
 )
 from coffer.application.chat.turn_state import active_turns as active_turns
@@ -74,12 +78,15 @@ class TurnOrchestrator:
         chat_service: ChatService,
         registry: AgentProviderRegistry,
         idle_timeout: float | None = DEFAULT_TURN_IDLE_TIMEOUT_SECONDS,
+        flush_interval: float | None = DEFAULT_PARTIAL_FLUSH_SECONDS,
     ) -> None:
         self._chat = chat_service
         self._registry = registry
         # How long a turn may go without producing an event before the watchdog
         # cancels it (``turn_runner``); ``None`` disables the watchdog.
         self._idle_timeout = idle_timeout
+        # Throttle for persisting the partial reply mid-turn; ``None`` disables it.
+        self._flush_interval = flush_interval
         # Keep references to fire-and-forget advance tasks so they are not GC'd
         # mid-flight; each discards itself on completion.
         self._bg_tasks: set[asyncio.Task[None]] = set()
@@ -141,10 +148,15 @@ class TurnOrchestrator:
         )
         start_now = state.active is None and not state.paused and not state.queue
         state.paused = False
-        if start_now:
-            await self._begin_turn(conversation_id, message)
-            self._broadcast_queue_changed(conversation_id)
-            return False
+        if start_now and not is_stopping():
+            try:
+                await self._begin_turn(conversation_id, message)
+            except TurnsStopping:
+                pass  # the daemon began stopping mid-start: hold it in the queue
+            else:
+                self._broadcast_queue_changed(conversation_id)
+                return False
+        # Held while the daemon stops — the in-memory queue goes with it.
         state.queue.append(message)
         self._broadcast_queue_changed(conversation_id)
         # Unpaused above — drain the head if the conversation is now idle (e.g. a
@@ -162,7 +174,7 @@ class TurnOrchestrator:
         """
         await self._chat.get_conversation(conversation_id)  # raises ConversationNotFound -> 404
         state = state_for(conversation_id)
-        state.queue = _reconcile(state.queue, texts)
+        state.queue = reconcile_queue(state.queue, texts)
         state.paused = False
         self._broadcast_queue_changed(conversation_id)
         await self._maybe_advance(conversation_id)
@@ -229,6 +241,7 @@ class TurnOrchestrator:
             return
         active = state.active
         if active is not None and active.task is not None and not active.task.done():
+            active.discarded = True
             active.task.cancel()
             log.debug("Cancelled turn for conversation %s", conversation_id)
         state.queue.clear()
@@ -258,13 +271,19 @@ class TurnOrchestrator:
         state = peek(conversation_id)
         if state is None:
             return
-        if state.active is not None or state.paused or not state.queue:
+        if state.active is not None or state.paused or not state.queue or is_stopping():
+            # Stopping: a cancelled turn's end must not start the next one
+            # mid-teardown (``turn_state.stop_all_turns``); the queue is held.
             evict_if_idle(conversation_id)
             return
         message = state.queue.pop(0)
         self._broadcast_queue_changed(conversation_id)
         try:
             await self._begin_turn(conversation_id, message)
+        except TurnsStopping:
+            state.queue.insert(0, message)
+            state.paused = True
+            self._broadcast_queue_changed(conversation_id)
         except Exception:
             log.exception("auto-advance turn failed for conversation %s", conversation_id)
             # Re-insert the head and pause so the message is neither lost nor retried in
@@ -301,7 +320,13 @@ class TurnOrchestrator:
         persisted history"), so they survive a daemon restart and are not threaded down
         as a separate param. The title hint rides along to the persisted user message,
         where the placeholder-title rule uses it instead of the raw text (spec chat
-        "Persist conversations and messages in SQLite")."""
+        "Persist conversations and messages in SQLite").
+
+        Raises ``TurnsStopping`` once the daemon has begun stopping its turns —
+        checked on entry and again just before the user message is committed, so
+        a start that raced ``stop_all_turns`` commits nothing and spawns nothing."""
+        if is_stopping():
+            raise TurnsStopping(conversation_id)
         state = state_for(conversation_id)
         if message.on_start is not None and primary_queue is None:
             primary_queue = asyncio.Queue()
@@ -313,6 +338,8 @@ class TurnOrchestrator:
             conv = await self._chat.get_conversation(conversation_id)
             provider = self._registry.get(conv.agent_key)
             adapter = await provider.build_adapter(conversation_id)
+            if is_stopping():
+                raise TurnsStopping(conversation_id)
             await self._chat.append_message(
                 conversation_id,
                 role=Role.USER,
@@ -341,6 +368,7 @@ class TurnOrchestrator:
                 adapter=adapter,
                 chat=self._chat,
                 idle_timeout=self._idle_timeout,
+                flush_interval=self._flush_interval,
             ),
             name=f"turn:{conversation_id}",
         )
@@ -357,22 +385,6 @@ class TurnOrchestrator:
             advance.add_done_callback(self._bg_tasks.discard)
 
         return _cb
-
-
-def _reconcile(queue: list[PendingMessage], texts: Sequence[str]) -> list[PendingMessage]:
-    """The queue ``texts`` describes, reusing an existing entry for each text it
-    still contains (first unused match wins) so a reordered or partly-dropped
-    queue keeps every message's attachments and renderer."""
-    unused = list(queue)
-    result: list[PendingMessage] = []
-    for text in texts:
-        match = next((m for m in unused if m.text == text), None)
-        if match is not None:
-            unused.remove(match)
-            result.append(match)
-        else:
-            result.append(PendingMessage(text=text))
-    return result
 
 
 __all__ = [

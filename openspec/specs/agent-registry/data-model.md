@@ -63,7 +63,9 @@ provider-switching](../provider-switching/spec.md)'s. A `models` curated-set
 field existed briefly and is gone: migration `0060` backfilled it and migration
 `0063` dropped it again.
 
-Skills are delivered to `<config_dir>/skills`; the config-file allowlist resolves against `config_dir`. Only one agent may exist per resolved `config_dir`. The agent record carries no skill-delivery policy of its own: which skills reach it is decided entirely by each skill's `enabled` flag and its agent scope (spec skill-manager, [ADR per-agent-resource-scope](../../../docs/decisions/per-agent-resource-scope.md)) — the `follow_all_skills` / `skill_exclusions` fields this table once carried are gone, stripped from stored configs by migration `0058`.
+Skills are delivered to `<config_dir>/skills`; the config-file allowlist resolves against `config_dir`. Only one agent may exist per resolved `config_dir`.
+
+Beside this schema the agent row carries the kind-agnostic Resource `enabled` flag (resource-framework), toggled only through the generic enable/disable routes — `AgentOut` does not carry it and `PATCH /api/v1/agents/{uid}` does not change it. A disabled agent is never written into: its delivered skills are reclaimed (the `on_enabled_changed` hook below, spec skill-manager), its native memory is not read (`application/memory/aggregate.py`, spec memory), and its native config does not feed the model catalogue (`application/agent/model_catalogue.py`). The agent record carries no skill-delivery policy of its own: which skills reach it is decided entirely by each skill's `enabled` flag and its agent scope (spec skill-manager, [ADR per-agent-resource-scope](../../../docs/decisions/per-agent-resource-scope.md)) — the `follow_all_skills` / `skill_exclusions` fields this table once carried are gone, stripped from stored configs by migration `0058`.
 
 Validators:
 
@@ -223,7 +225,7 @@ The workspace amendment adds:
 | `agent_plugin_toggled`       | A plugin was enabled or disabled on its documented surface                      |
 | `agent_plugin_uninstalled`   | A plugin was uninstalled, by config edit or by the agent's own CLI               |
 
-The lifecycle steps required by "Audit every agent lifecycle event" — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected agent's `uid`). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. A successful config-file save emits `agent_config_file_written` (the agent's `uid`, details `{key}`). Agents have no enable/disable concept, and discovery is read-only and registers nothing, so neither emits an audit event of its own.
+The lifecycle steps required by "Audit every agent lifecycle event" — registration, update, and removal — are emitted as the existing kind-agnostic `resource_created`, `resource_updated`, and `resource_deleted` events (each carrying the affected agent's `uid`). No `agent_*` duplicates are added for these; surfaces filter by `kind='agent'` plus the kind-agnostic event type. A successful config-file save emits `agent_config_file_written` (the agent's `uid`, details `{key}`). Disabling or re-enabling an agent through the kind-agnostic `POST /api/v1/resources/{uid}/disable|enable` (or `coffer resource disable|enable agent <name>`) is recorded as the kind-agnostic `resource_disabled` / `resource_enabled`; discovery is read-only and registers nothing, so it emits no audit event.
 
 ## Application service contracts (`backend/coffer/application/agent/`)
 

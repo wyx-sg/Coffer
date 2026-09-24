@@ -1130,6 +1130,60 @@ def test_scoping_a_connection_to_no_agent_retires_its_reach(tmp_path, monkeypatc
         assert c.get(f"/api/v1/providers/{uid}").json()["compatible_agents"] == []
 
 
+def test_the_uid_key_route_resolves_an_enabled_connection_in_reach(tmp_path, monkeypatch):
+    """The form Claude Code's projected ``apiKeyHelper`` calls
+    (``coffer provider key --connection-uid <uid>``) answers with the key while
+    the connection is switched on and reaches an agent."""
+    app = _app(tmp_path, monkeypatch, 59941)
+    with _client(app) as c:
+        uid = _new(c, _anthropic_body("acme", secret_value="sk-live"))
+        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
+
+        r = c.get(f"/api/v1/providers/{uid}/key")
+        assert r.status_code == 200, r.text
+        assert r.json() == {"value": "sk-live"}
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a disabled or unreached connection's uid helper resolves no key",
+)
+def test_the_uid_key_route_resolves_no_key_for_a_disabled_connection(tmp_path, monkeypatch):
+    """Spec provider-switching "Resolve a key for exactly one connection": a disabled
+    connection resolves none — including by uid, the form the live helper line
+    calls, so disabling a connection stops a running Claude Code getting its key."""
+    app = _app(tmp_path, monkeypatch, 59942)
+    with _client(app) as c:
+        uid = _new(c, _anthropic_body("acme", secret_value="sk-live"))
+        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
+        assert c.post(f"/api/v1/resources/{uid}/disable").status_code == 200
+
+        r = c.get(f"/api/v1/providers/{uid}/key")
+        assert r.status_code == 404, r.text
+        assert r.json()["error"]["code"] == "NO_ACTIVE_PROVIDER"
+        assert "sk-live" not in r.text
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a disabled or unreached connection's uid helper resolves no key",
+)
+def test_the_uid_key_route_resolves_no_key_for_a_connection_scoped_to_no_agent(
+    tmp_path, monkeypatch
+):
+    app = _app(tmp_path, monkeypatch, 59943)
+    with _client(app) as c:
+        uid = _new(c, _anthropic_body("acme", secret_value="sk-live"))
+        assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
+        scoped = c.put(f"/api/v1/resources/{uid}/scope", json={"scope": {"agents": []}})
+        assert scoped.status_code == 200, scoped.text
+
+        r = c.get(f"/api/v1/providers/{uid}/key")
+        assert r.status_code == 404, r.text
+        assert r.json()["error"]["code"] == "NO_ACTIVE_PROVIDER"
+        assert "sk-live" not in r.text
+
+
 async def _flags(uid: str) -> tuple[bool, bool]:
     """``(internal_default, transcribe_default)`` as the connection stores them.
 

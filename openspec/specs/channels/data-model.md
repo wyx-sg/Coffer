@@ -76,8 +76,8 @@ Validation rules:
   default, and the `/model` card offers that agent's whole catalogue and refuses
   no id. Migration `20260912_0068_drop_channel_model_curation.py` takes both keys
   off every stored channel config in one direction only, with no load-time shim
-  (house rule) — `_CommonChannelFields` forbids extra keys, so a row still
-  carrying them would fail to validate on load.
+  (house rule). `_CommonChannelFields` IGNORES unknown keys, so nothing
+  rejects a row still carrying them — the migration is what removes them.
 - `runs_on` is the `machine_id` of the one machine whose daemon starts this
   channel's adapter (see "Bind each channel to the one machine that runs it"). It lives in `config_json` and not in a column of
   its own because it must TRAVEL: config is what a resource document carries

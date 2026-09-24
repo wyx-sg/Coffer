@@ -71,8 +71,12 @@ pub fn notification_body(status: &str) -> &'static str {
              changes are not on the remote yet."
         }
         "failed" => "The last round failed to run. The vault has stopped converging.",
-        // Unreachable through `next_action`, which only raises on the four
-        // above; a default keeps a daemon that grew a fifth status from being
+        "awaiting_join" => {
+            "This machine has not joined the sync remote yet. Nothing converges \
+             until you review the join and adopt it."
+        }
+        // Unreachable through `next_action`, which only raises on the five
+        // above; a default keeps a daemon that grew a sixth status from being
         // reported as nothing at all.
         _ => "The last round needs your attention before sync can continue.",
     }
@@ -87,6 +91,7 @@ pub fn tray_label(status: &str) -> String {
         "conflict" => "conflict",
         "push_failed" => "push failed",
         "failed" => "run failed",
+        "awaiting_join" => "not joined yet",
         _ => status,
     };
     format!("Sync needs attention — {reason}")

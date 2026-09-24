@@ -48,8 +48,9 @@ DECISIONS = REPO_ROOT / "docs" / "decisions"
 SPECS = REPO_ROOT / "openspec" / "specs"
 
 NUMBERED_ADR = re.compile(r"ADR-\d+")
-#: `spec 001`, `Specs 004`, `spec-009` — every shape the prose used to take.
-NUMBERED_SPEC = re.compile(r"\b[Ss]pecs?[ -](00[1-9]|0[1-9][0-9])\b")
+#: `spec 001`, `Specs 004`, `spec-009` — every shape the prose used to take,
+#: in any case, since a capitalised id is the same id.
+NUMBERED_SPEC = re.compile(r"\bspecs?[ -](00[1-9]|0[1-9][0-9])\b", re.IGNORECASE)
 NUMBERED_REQUIREMENT = re.compile(r"\b(?:FR|SC)-\d")
 SPECKIT = re.compile(r"spec-?kit|\.specify/", re.IGNORECASE)
 #: Change folders may describe the numbers and the methodology they replaced.

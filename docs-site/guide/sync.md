@@ -20,12 +20,12 @@ coffer sync remote set https://github.com/you/coffer-vault.git \
 | --- | --- |
 | `--branch` | Branch to converge on. Default `main`. |
 | `--interval` | **Seconds** between automatic rounds. Default `3600`. |
-| `--with-credentials` | Carry credential **ciphertext**. Off by default. |
-| `--credential-ref` | Name of the push credential in the credential store. |
+| `--with-credentials` / `--without-credentials` | Carry credential **ciphertext**, or stop carrying it. Off by default. |
+| `--credential-ref` | Name of the push credential in the credential store; `''` removes it. |
 
 `coffer credentials set` reads the secret from stdin, so the token never lands in your shell history. `--value` exists for scripts and says in its own help that it is the unsafe way.
 
-The remote is probed before it is accepted, so a typo or a token that cannot push fails here rather than an hour later. `coffer sync remote show` prints what is configured; `coffer sync remote clear` forgets it and leaves the vault exactly as it is.
+The remote is probed before it is accepted, so a typo or a token that cannot push fails here rather than an hour later. Re-running `remote set` changes what it names and nothing else: an option you leave out keeps its stored value, and a paused remote stays paused. `coffer sync remote show` prints what is configured; `coffer sync remote clear` forgets it and leaves the vault exactly as it is.
 
 Then join the remote. Joining is always explicit — the timer and `coffer sync now` never join on their own — so even the first machine adopts the repository it just named:
 

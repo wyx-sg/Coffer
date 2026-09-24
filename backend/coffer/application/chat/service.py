@@ -83,6 +83,11 @@ class MessageRepo(Protocol):
         """Update an existing (streaming) message with its final content/status."""
         ...
 
+    async def save_partial(self, message_id: str, *, content: list[ContentBlock]) -> None:
+        """Overwrite a still-``streaming`` row's content (a mid-turn flush); a row
+        already finalised is left untouched."""
+        ...
+
     async def delete_message(self, message_id: str) -> None:
         """Delete a single message by id."""
         ...
@@ -349,6 +354,11 @@ class ChatService:
             completion_tokens=completion_tokens,
         )
         await self._conversations.touch(conversation_id, datetime.now(tz=UTC))
+
+    async def save_partial_message(self, message_id: str, content: list[ContentBlock]) -> None:
+        """Persist a streaming turn's content so far (spec chat "Keep partial output
+        when a turn is interrupted or fails"); a no-op once the row is finalised."""
+        await self._messages.save_partial(message_id, content=content)
 
     async def delete_message(self, message_id: str) -> None:
         """Delete a single message by id (used to discard a placeholder row)."""

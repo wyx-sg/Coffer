@@ -51,6 +51,7 @@ from coffer.application.sync.machines import MachineRegistry
 from coffer.application.sync.ports import (
     GitMirrorPort,
     ImportGate,
+    ImportNormaliser,
     PostImportHook,
     SyncedStatePort,
 )
@@ -119,6 +120,7 @@ def wire_sync(
     credential_resolver: Callable[[str], str],
     state_providers: Sequence[SyncedStatePort] = (),
     import_gates: Sequence[ImportGate] = (),
+    import_normalisers: Sequence[ImportNormaliser] = (),
     post_import_hooks: Sequence[PostImportHook] = (),
 ) -> SyncWiring:
     # Resolved once and shared — the fingerprint, every round's locked-ref check
@@ -131,6 +133,7 @@ def wire_sync(
     state = SqlAlchemyConvergenceStateRepo(sm)
     providers = list(state_providers)
     gates = list(import_gates)
+    normalisers = list(import_normalisers)
     hooks = list(post_import_hooks)
 
     identity = resolve_identity()
@@ -193,7 +196,13 @@ def wire_sync(
                     live_root=skills_root(),
                     excluded=non_converging_tree_paths(),
                 ),
-                ResourceApplier(resource_svc, worktree=worktree, gates=gates, home=home),
+                ResourceApplier(
+                    resource_svc,
+                    worktree=worktree,
+                    gates=gates,
+                    normalisers=normalisers,
+                    home=home,
+                ),
                 StateApplier(providers, worktree=worktree, home=home),
                 CredentialApplier(cred_sync, worktree=worktree),
             ],
@@ -262,7 +271,8 @@ def start_sync(
     credential_resolver: Callable[[str], str],
 ) -> SyncWiring:
     """Wire convergence over what the kinds contributed during composition
-    (their shared-state providers, import gates and post-import hooks).
+    (their shared-state providers, import gates and normalisers, and post-import
+    hooks).
 
     Returns the graph so the caller can start a worker over it — wiring and
     starting stay separate, because a test wants the graph without a timer.
@@ -278,6 +288,7 @@ def start_sync(
         credential_resolver=credential_resolver,
         state_providers=tuple(contributions.state_providers),
         import_gates=tuple(contributions.import_gates),
+        import_normalisers=tuple(contributions.import_normalisers),
         post_import_hooks=tuple(contributions.post_import_hooks),
     )
     # The routes hold module-level singletons, matching every other surface

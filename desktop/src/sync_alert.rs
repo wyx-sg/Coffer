@@ -13,16 +13,24 @@
 //! decides on, the same split `restart.rs` and `daemon.rs` already use.
 
 /// The `ConvergeStatus` values (backend `domain/sync/convergence.py`) that mean
-/// the round ended needing a person. The other three — `ok`, `no_change`,
-/// `disabled` — are a vault that is fine, and `disabled` in particular is the
-/// ordinary state of a machine whose remote is switched off, not a fault.
+/// the round ended needing a person. `awaiting_join` is one: a machine that has
+/// not joined its remote converges nothing until someone runs adopt. The other
+/// three — `ok`, `no_change`, `disabled` — are a vault that is fine, and
+/// `disabled` in particular is the ordinary state of a machine whose remote is
+/// switched off, not a fault.
 ///
 /// This list is a copy of a vocabulary the daemon owns, which is the same
 /// arrangement `daemon.json`'s fields are already in (spec desktop-app "Read the
 /// daemon's credentials from its discovery file"):
-/// a change on either side is made on both.
-pub const ATTENTION_STATUSES: [&str; 4] =
-    ["conflict", "awaiting_confirmation", "push_failed", "failed"];
+/// a change on either side is made on both — and on the CLI's
+/// `_NEEDS_ATTENTION` and the web's `useSyncAttention.ts`, which list the same five.
+pub const ATTENTION_STATUSES: [&str; 5] = [
+    "conflict",
+    "awaiting_confirmation",
+    "push_failed",
+    "failed",
+    "awaiting_join",
+];
 
 /// The part of `GET /api/v1/sync/status` this shell reads: is a remote
 /// configured at all, and how did the last round end.
@@ -198,7 +206,7 @@ mod tests {
     // --- which statuses are a fault ---
 
     #[test]
-    fn the_four_attention_statuses_are_faults() {
+    fn every_attention_status_is_a_fault() {
         for status in ATTENTION_STATUSES {
             assert_eq!(
                 attention_status(&snapshot(true, Some(status))),
@@ -206,6 +214,21 @@ mod tests {
                 "{status} should need a human"
             );
         }
+    }
+
+    // acceptance(spec = "vault-sync", scenario = "a machine that has not joined says so everywhere")
+    #[test]
+    fn a_machine_that_has_not_joined_needs_a_human() {
+        // The CLI (`_NEEDS_ATTENTION`) and the web (`useSyncAttention.ts`) both
+        // count it: every round converges nothing until someone runs adopt.
+        assert_eq!(
+            attention_status(&snapshot(true, Some("awaiting_join"))),
+            Some("awaiting_join")
+        );
+        assert_eq!(
+            next_action(None, &snapshot(true, Some("awaiting_join"))),
+            AlertAction::Raise("awaiting_join".into())
+        );
     }
 
     #[test]
@@ -224,6 +247,7 @@ mod tests {
         assert_eq!(attention_status(&snapshot(false, Some("failed"))), None);
     }
 
+    // acceptance(spec = "vault-sync", scenario = "a paused remote runs no round and asks for nothing")
     #[test]
     fn a_remote_switched_off_is_never_an_attention_state() {
         // The bug this closes: a disabled remote makes the daemon return a

@@ -99,6 +99,8 @@ class FakeMessageRepo:
 
     def __init__(self) -> None:
         self._messages: list[Message] = []
+        # How many mid-stream partial flushes reached the store.
+        self.partial_writes = 0
 
     async def append(self, message: Message) -> Message:
         self._messages.append(message)
@@ -122,6 +124,13 @@ class FakeMessageRepo:
                     prompt_tokens=prompt_tokens,
                     completion_tokens=completion_tokens,
                 )
+                return
+
+    async def save_partial(self, message_id: str, *, content: list[Any]) -> None:
+        self.partial_writes += 1
+        for i, m in enumerate(self._messages):
+            if m.id == message_id and m.status == "streaming":
+                self._messages[i] = dataclasses.replace(m, content=content)
                 return
 
     async def delete_message(self, message_id: str) -> None:

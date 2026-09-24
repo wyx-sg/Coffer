@@ -1,5 +1,9 @@
 """Settling a curation item — after its pass completes, or when a pass never will.
 
+Three ways out of the queue without a completed pass live here too: no model at
+all (``promote_all``), an item too large for any pass (``shelve_oversized``) and
+an item cut off every time (``give_up``).
+
 An item is settled only once its pass completes (spec knowledge "Settle an item
 only after its pass completes"): material leaves the inbox, an edited document
 is stamped. A pass the recursion limit cuts off leaves its item owed, so the
@@ -25,6 +29,7 @@ from __future__ import annotations
 
 import contextlib
 import threading
+from typing import Any
 
 from coffer.domain.knowledge.entry import Pending
 from coffer.domain.knowledge.errors import KnowledgeFileNotFound
@@ -86,6 +91,26 @@ def give_up(collection: str, item: Pending) -> list[str]:
     return []
 
 
+def shelve_oversized(collection: str, item: Pending) -> dict[str, Any]:
+    """Take an item no pass can hold out of the queue, and say what was done.
+
+    Left where it was, it would be offered to every sweep and refused by every
+    pass, and the collection's pending count would never drop. So material is
+    promoted to a document as it stands — exactly what the no-model path does
+    with it, since the model cannot merge it either — and an edited document,
+    which is already a document and has nothing to promote, is stamped as seen
+    so the sweep stops handing it back. Neither changes a word of the item.
+    Material removed since the pass read it has nothing left to promote, and
+    is reported as promoting nothing — as in :func:`give_up`.
+    """
+    if item.material is not None:
+        with contextlib.suppress(KnowledgeFileNotFound):
+            return {"promoted": [fs.promote(collection, item.material).path]}
+        return {"promoted": []}
+    settle(collection, item)
+    return {"stamped": item.document or ""}
+
+
 def promote_all(collection: str) -> list[str]:
     """Every inbox item made a document as it stands — the no-model path."""
     return [fs.promote(collection, name).path for name in fs.inbox_items(collection)]
@@ -98,4 +123,5 @@ __all__ = [
     "pending_items",
     "promote_all",
     "settle",
+    "shelve_oversized",
 ]

@@ -141,7 +141,8 @@ async def connection_key(
     no rename route any more: what Coffer writes into another tool's config file
     has to survive the user relabelling the connection, and only the uid does
     (ADR resource-identity-is-an-immutable-uid). 404 when the connection is
-    absent or keyless (ollama)."""
+    absent, or reaches no agent — disabled, scoped to no agent, or keyless
+    (ollama): ``NO_ACTIVE_PROVIDER``, as the wire form answers."""
     return ActiveKeyOut(value=await svc.resolve_connection_key(uid))
 
 

@@ -351,6 +351,64 @@ async def test_adopt_unknown_raises_not_found(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="adopting from a disabled agent links the skill in place"
+)
+async def test_adopt_from_a_disabled_agent_links_in_place(tmp_path):
+    """Adoption is the one write into a disabled agent: the folder was already
+    there, so replacing it with the managed link changes nothing the agent sees."""
+    skill_svc, agent_svc, audit, store, _, engine = await _setup(tmp_path)
+    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="off")
+    await skill_svc._rs.set_enabled(agent.uid, False, actor="cli")
+    original = skill_dir / "kept-here"
+    _write_skill_folder(original, name="kept-here", body="still mine")
+
+    r = await skill_svc.adopt_unmanaged(
+        agent_uid=agent.uid, skill_name="kept-here", location="skills", actor="cli"
+    )
+
+    assert original.is_symlink()
+    assert original.resolve() == store.paths_for("kept-here").folder.resolve()
+    assert "still mine" in (original / "SKILL.md").read_text()
+    bindings = await skill_svc.bindings_for(r.uid)
+    assert [(b.agent_resource_id, b.enabled) for b in bindings] == [(agent.id, True)]
+    adopted = await audit.query(event_type=AuditEventType.SKILL_ADOPTED.value)
+    assert [e.resource_name for e in adopted] == ["kept-here"]
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_a_skill_adopted_from_a_disabled_agent_is_reclaimed_then_restored(tmp_path):
+    """The exception adoption makes (spec agent-registry "Switch an agent off
+    with the kind-agnostic enabled flag") ends at the agent's next reconcile,
+    and enabling the agent puts the skill back."""
+    from coffer.application.skill.delivery_ops import apply_scope_for_agent
+
+    skill_svc, agent_svc, _, store, _, engine = await _setup(tmp_path)
+    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="off")
+    await skill_svc._rs.set_enabled(agent.uid, False, actor="cli")
+    original = skill_dir / "kept-here"
+    _write_skill_folder(original, name="kept-here", body="still mine")
+    r = await skill_svc.adopt_unmanaged(
+        agent_uid=agent.uid, skill_name="kept-here", location="skills", actor="cli"
+    )
+
+    await apply_scope_for_agent(service=skill_svc, agent_uid=agent.uid, actor="cli")
+
+    assert not original.exists() and not original.is_symlink()
+    bindings = await skill_svc.bindings_for(r.uid)
+    assert [(b.agent_resource_id, b.enabled) for b in bindings] == [(agent.id, False)]
+
+    await skill_svc._rs.set_enabled(agent.uid, True, actor="cli")
+    await apply_scope_for_agent(service=skill_svc, agent_uid=agent.uid, actor="cli")
+
+    assert original.resolve() == store.paths_for("kept-here").folder.resolve()
+    bindings = await skill_svc.bindings_for(r.uid)
+    assert [(b.agent_resource_id, b.enabled) for b in bindings] == [(agent.id, True)]
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
 @pytest.mark.acceptance(spec="skill-manager", scenario="delete an unmanaged skill")
 async def test_delete_unmanaged_dir(tmp_path):
     skill_svc, agent_svc, audit, _, _, engine = await _setup(tmp_path)

@@ -35,6 +35,7 @@ from typer.testing import CliRunner
 
 import coffer.surfaces.cli._client as _cli_client
 from coffer.domain.scope import Scope
+from coffer.domain.sync.backup import BackupRemote
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
@@ -179,6 +180,87 @@ def test_remote_set_carries_the_options_it_was_given(fleet: Fleet) -> None:
     assert "credentials included" in result.output
 
 
+@pytest.mark.acceptance(spec="vault-sync", scenario="reconfiguring a paused remote keeps it paused")
+def test_first_remote_set_leaves_sync_enabled(fleet: Fleet) -> None:
+    fleet.ok("sync", "remote", "set", fleet.a.remote_url)
+
+    stored = fleet.run(fleet.a.service().get_remote())
+    assert stored is not None and stored.enabled is True
+
+
+@pytest.mark.acceptance(spec="vault-sync", scenario="reconfiguring a paused remote keeps it paused")
+def test_remote_set_on_a_paused_remote_keeps_it_paused(fleet: Fleet) -> None:
+    """Re-running ``remote set`` changes what it names — here the interval — and
+    nothing else: pausing is the web toggle's decision, not the CLI's to undo."""
+    fleet.ok("sync", "remote", "set", fleet.a.remote_url)
+    remote = fleet.run(fleet.a.service().get_remote())
+    assert remote is not None
+    fleet.run(fleet.a.service().set_remote(dataclasses.replace(remote, enabled=False)))
+
+    result = fleet.ok("sync", "remote", "set", fleet.a.remote_url, "--interval", "120")
+
+    stored = fleet.run(fleet.a.service().get_remote())
+    assert stored is not None
+    assert stored.interval_seconds == 120
+    assert stored.enabled is False
+    assert "disabled" in result.output
+
+
+def _configured(fleet: Fleet, tmp_path: pathlib.Path) -> Any:
+    """A remote carrying a non-default value in every option ``remote set``
+    takes, plus a custom working tree it has no flag for."""
+    fleet.a.set_credential("sync-push", "tok-123")
+    remote = fleet.run(fleet.a.remote_config())
+    custom = dataclasses.replace(
+        remote,
+        branch="vault",
+        credential_ref="sync-push",
+        include_credentials=True,
+        interval_seconds=300,
+        worktree_path=str(tmp_path / "custom-tree"),
+    )
+    fleet.run(fleet.a.service().set_remote(custom))
+    return custom
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="reconfiguring a remote changes only what it names"
+)
+def test_remote_set_changes_only_the_option_it_names(fleet: Fleet, tmp_path) -> None:
+    before = _configured(fleet, tmp_path)
+
+    fleet.ok("sync", "remote", "set", fleet.a.remote_url, "--interval", "600")
+
+    stored = fleet.run(fleet.a.service().get_remote())
+    assert stored == dataclasses.replace(before, interval_seconds=600)
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="reconfiguring a remote changes only what it names"
+)
+def test_remote_set_without_credentials_switches_credential_sync_off(
+    fleet: Fleet, tmp_path
+) -> None:
+    before = _configured(fleet, tmp_path)
+
+    result = fleet.ok("sync", "remote", "set", fleet.a.remote_url, "--without-credentials")
+
+    stored = fleet.run(fleet.a.service().get_remote())
+    assert stored == dataclasses.replace(before, include_credentials=False)
+    assert "credentials excluded" in result.output
+
+
+def test_first_remote_set_stores_the_defaults(fleet: Fleet) -> None:
+    fleet.ok("sync", "remote", "set", fleet.a.remote_url)
+
+    stored = fleet.run(fleet.a.service().get_remote())
+    assert stored is not None
+    assert (stored.branch, stored.interval_seconds) == ("main", 3600)
+    assert (stored.include_credentials, stored.credential_ref) == (False, None)
+    assert stored.enabled is True
+    assert stored.worktree_path == BackupRemote(url=fleet.a.remote_url).worktree_path
+
+
 def test_remote_set_refuses_a_remote_it_cannot_reach(fleet: Fleet, tmp_path) -> None:
     result = fleet.invoke("sync", "remote", "set", str(tmp_path / "no-such.git"))
 
@@ -219,6 +301,9 @@ def test_sync_now_publishes_the_vault_and_says_what_it_did(fleet: Fleet) -> None
     assert "knowledge/notes/one.md" in fleet.run(fleet.a.remote_paths())
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a machine that has not joined says so everywhere"
+)
 def test_sync_now_and_status_on_a_machine_that_has_not_joined_point_at_adopt(
     fleet: Fleet,
 ) -> None:
@@ -427,6 +512,35 @@ def test_status_exits_zero_once_sync_is_switched_off(fleet: Fleet) -> None:
     # The round it is still carrying has NOT been rewritten — only the
     # question of whether anyone should be told about it has changed.
     assert "awaiting_confirmation" in result.output
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a paused remote runs no round and asks for nothing"
+)
+def test_a_paused_remote_runs_no_round_and_asks_for_nothing(fleet: Fleet) -> None:
+    """Pausing is not forgetting: the remote, the pointer and the history all
+    stay, a round does nothing and records nothing, and nothing asks for the
+    user — not even over the hold the vault was paused on."""
+    _hold_a_deletion(fleet)
+    remote = fleet.run(fleet.a.service().get_remote())
+    assert remote is not None
+    pointer = fleet.run(fleet.a.state.pointer())
+    runs_before = fleet.run(fleet.a.service().runs())
+    fleet.run(fleet.a.service().set_remote(dataclasses.replace(remote, enabled=False)))
+    fleet.a.write_knowledge("notes", "while-paused", "written while paused\n")
+
+    now = fleet.ok("sync", "now")
+    status = fleet.invoke("sync", "status")
+
+    assert "disabled" in now.output
+    assert status.exit_code == 0, status.output
+    # Nothing recorded, nothing published, nothing forgotten.
+    assert fleet.run(fleet.a.service().runs()) == runs_before
+    assert "knowledge/notes/while-paused.md" not in fleet.run(fleet.a.remote_paths())
+    assert fleet.run(fleet.a.state.pointer()) == pointer
+    kept = fleet.run(fleet.a.service().get_remote())
+    assert kept is not None and kept.url == remote.url and kept.enabled is False
+    assert "no sync remote configured" not in fleet.ok("sync", "remote", "show").output
 
 
 def test_status_exits_zero_once_the_hold_is_answered(fleet: Fleet) -> None:
@@ -723,6 +837,7 @@ def test_the_sync_group_offers_every_command_and_option_it_owes() -> None:
             "--branch",
             "--interval",
             "--with-credentials",
+            "--without-credentials",
             "--credential-ref",
         },
         ("sync", "remote", "show"): set(),
@@ -736,7 +851,9 @@ def test_the_sync_group_offers_every_command_and_option_it_owes() -> None:
     }
     for path, options in owed.items():
         assert path in tree, f"missing: coffer {' '.join(path)}"
-        offered = {opt for param in tree[path].params for opt in param.opts}
+        offered = {
+            opt for param in tree[path].params for opt in (*param.opts, *param.secondary_opts)
+        }
         assert options <= offered, f"coffer {' '.join(path)} lacks {options - offered}"
     # The positional arguments the requirement names.
     positional = {
