@@ -4,7 +4,7 @@
 // to latest" pill brings them back — useFollowScroll), restarts at the bottom
 // whenever another conversation opens, and on a failed turn swaps the
 // in-progress bubble for the error banner with a Retry that re-sends the
-// message that failed. Which persisted rows render is decided by
+// message that failed, attachments included. Which persisted rows render is decided by
 // useMessageThread (lib/chat/threadView); the echoes are the turn hook's.
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -12,15 +12,16 @@ import { ArrowDown } from "lucide-react";
 import { useMessageThread } from "@/lib/hooks/useMessageThread";
 import { useFollowScroll } from "@/lib/hooks/useFollowScroll";
 import { describeTurnError } from "@/lib/chat/turnErrors";
-import { retryTextFor } from "@/lib/chat/threadView";
+import { retryTargetFor } from "@/lib/chat/threadView";
 import type { LiveMessage, PendingEcho } from "@/lib/hooks/useChatTurn";
-import { echoContent } from "@/lib/chat/echoes";
-import type { ChatAttachment, Conversation, Message } from "@/lib/api/chat";
+import { type EchoAttachment, echoAsMessage } from "@/lib/chat/echoes";
+import type { Conversation } from "@/lib/api/chat";
 import { Button } from "@/components/ui/button";
 import { AgentModelBar } from "./AgentModelBar";
 import { ChatErrorBanner } from "./ChatErrorBanner";
 import { MessageBubble } from "./MessageBubble";
 import { Composer, type ComposerHandle } from "./Composer";
+import type { ComposerRestore } from "@/lib/hooks/useComposerRestore";
 import { PendingQueue } from "./PendingQueue";
 import { FindWidget } from "@/components/preview/FindWidget";
 import { useDomFind } from "@/components/preview/useDomFind";
@@ -40,13 +41,20 @@ interface Props {
   turnError?: Error | null;
   /** Called when the user dismisses the turn error banner. */
   onClearTurnError?: () => void;
+  /** False when turnError is a refused send (it stays in the composer): no Retry. */
+  retryable?: boolean;
+  /** Send a persisted user message again, attachments included (Retry). */
+  onResend?: (messageId: string) => void | Promise<boolean>;
   /** Called when the user stops the in-flight turn. */
   onStop?: () => void;
   /**
    * Send a message; `attachments` are uploads the composer finished. Resolves
    * whether the send was accepted (the composer keeps its chips until it is).
    */
-  onSend: (text: string, attachments?: ChatAttachment[]) => void | Promise<boolean>;
+  onSend: (text: string, attachments?: EchoAttachment[]) => void | Promise<boolean>;
+  /** A refused message handed back to the composer (see Composer `restore`). */
+  restore?: ComposerRestore | null;
+  onRestored?: () => void;
   /** Messages queued behind the in-flight turn. */
   pending?: string[];
   /** Replace the pending queue (used to remove a queued message). */
@@ -63,19 +71,6 @@ interface Props {
 
 const NO_ECHOES: PendingEcho[] = [];
 
-/** Shape an echo as a user message so MessageBubble renders it like a row. */
-function echoAsMessage(echo: PendingEcho, conversationId: string): Message {
-  return {
-    id: echo.id,
-    conversation_id: conversationId,
-    seq: Number.MAX_SAFE_INTEGER,
-    role: "user",
-    content: echoContent(echo),
-    status: "complete",
-    created_at: new Date(echo.sentAt).toISOString(),
-  };
-}
-
 export function MessageThread({
   conversation,
   liveMessage,
@@ -83,8 +78,12 @@ export function MessageThread({
   isStreaming,
   turnError,
   onClearTurnError,
+  retryable = true,
+  onResend,
   onStop,
   onSend,
+  restore,
+  onRestored,
   pending = [],
   onSetPending,
   agentLabel,
@@ -115,8 +114,9 @@ export function MessageThread({
   // banner reports the state, and keep whatever text already streamed.
   const liveForRender =
     turnError && liveMessage ? { ...liveMessage, streaming: false } : liveMessage;
-  // Retry re-sends the newest echo, else the last persisted user message.
-  const retryText = retryTextFor(messages, pendingEchoes[pendingEchoes.length - 1]?.text);
+  // Retry re-sends the newest echo, else the last persisted user message — with
+  // its attachments either way.
+  const retry = retryable && !readOnly ? retryTargetFor(messages, pendingEchoes.at(-1)) : null;
 
   const scroll = useFollowScroll({
     scrollRef,
@@ -203,10 +203,12 @@ export function MessageThread({
           message={describeTurnError(t, turnError)}
           onDismiss={onClearTurnError}
           onRetry={
-            retryText && !readOnly
+            retry && (retry.kind === "send" || onResend)
               ? () => {
                   onClearTurnError?.();
-                  void onSend(retryText);
+                  void (retry.kind === "send"
+                    ? onSend(retry.text, retry.attachments)
+                    : onResend?.(retry.messageId));
                 }
               : undefined
           }
@@ -230,7 +232,14 @@ export function MessageThread({
           />
           {/* The composer is NEVER disabled by streaming: a message sent during a
               turn queues server-side. */}
-          <Composer ref={composerRef} onSend={onSend} streaming={isStreaming} onStop={onStop} />
+          <Composer
+            ref={composerRef}
+            onSend={onSend}
+            streaming={isStreaming}
+            onStop={onStop}
+            restore={restore}
+            onRestored={onRestored}
+          />
         </>
       )}
     </div>

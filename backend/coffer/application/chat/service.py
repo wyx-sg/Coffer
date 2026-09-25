@@ -22,7 +22,7 @@ from typing import Any, Protocol
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.conversation import Conversation
-from coffer.domain.chat.errors import ConversationNotFound, UnknownAgent
+from coffer.domain.chat.errors import ConversationNotFound, MessageNotFound, UnknownAgent
 from coffer.domain.chat.message import ContentBlock, Message, Role, TextBlock
 
 _TITLE_MAX_CHARS = 60
@@ -373,6 +373,15 @@ class ChatService:
         ``None`` returns everything (the message API)."""
         await self.get_conversation(conversation_id)  # existence check
         return await self._messages.list_by_conversation(conversation_id, limit=limit)
+
+    async def get_user_message(self, conversation_id: str, message_id: str) -> Message:
+        """One of the conversation's user messages, to send again; raises
+        ``ConversationNotFound`` for the conversation and ``MessageNotFound``
+        when it holds no user message with that id."""
+        for message in await self.list_messages(conversation_id):
+            if message.id == message_id and message.role is Role.USER:
+                return message
+        raise MessageNotFound(conversation_id, message_id)
 
 
 # ---------------------------------------------------------------------------

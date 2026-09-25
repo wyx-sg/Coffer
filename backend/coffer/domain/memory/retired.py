@@ -45,6 +45,14 @@ class RetiredNote:
       ("Keep distil out of the raw directory"), so without the record the same
       entry is routed to the model on
       every pass for the rest of the vault's life.
+    * **A note whose sources are all gone** (spec memory "Retire a note whose
+      raw entries are all gone"). Every raw entry its provenance names has
+      left the partition's ``.raw/`` — the agent deleted the fact, or
+      aggregation now files it into another partition. ``sources_gone`` is set
+      and ``entry_ids`` is empty: there is nothing left to exclude, and the
+      subject was never judged untrue, so its title is **not** an exclusion
+      the next routing prompt is handed. Should the material come back, it is
+      distilled afresh.
 
     ``entry_ids`` is what :mod:`coffer.application.memory.distil` matches on
     in both cases; ``slug`` is for the human and for naming a file that
@@ -66,6 +74,10 @@ class RetiredNote:
     #: The raw entries this record accounts for, so no later pass offers them
     #: again.
     entry_ids: tuple[str, ...] = ()
+    #: The note was retired because every raw entry it was built from is gone,
+    #: not because anything contradicted it. Such a record keeps the note out
+    #: of ``notes/`` and says why, but excludes no subject from later passes.
+    sources_gone: bool = False
 
 
 __all__ = ["RetiredNote"]

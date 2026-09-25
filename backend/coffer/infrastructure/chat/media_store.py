@@ -55,6 +55,9 @@ class FileChatMediaStore:
     async def resolve(self, attachment_id: str) -> Attachment | None:
         return await asyncio.to_thread(self._resolve, attachment_id)
 
+    async def present(self, attachment: Attachment) -> bool:
+        return await asyncio.to_thread(pathlib.Path(attachment.path).is_file)
+
     def prune(self, now: datetime) -> list[str]:
         """Delete stored files older than the media retention window — the
         sweep the composition root binds into the retention cadence."""

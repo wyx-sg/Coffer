@@ -161,13 +161,14 @@ Aggregation never compares two agents' entries. Two agents describing one lesson
 
 The distil pass turns a partition's new raw entries into notes and rewrites `MEMORY.md`. It runs on its own interval as an upkeep pass of the internal engine, not after each aggregation, and sweeps every partition that holds raw entries it has not yet distilled; a partition with nothing new costs no model call. The pass runs on the [internal engine](/guides/providers) connection when one is configured. It is incremental: no single model request ever carries all of a partition's note bodies.
 
-An entry counts as new when its id appears neither in any note's provenance (`origins`) nor in any `RETIRED.md` record.
+Before anything is routed, the pass retires every note none of whose `origins` is still under `.raw/` (see [Notes whose sources are gone](#notes-whose-sources-are-gone)). An entry counts as new when its id appears neither in any note's provenance (`origins`) nor in any `RETIRED.md` record.
 
 ```mermaid
 sequenceDiagram
   participant P as distil_partition
   participant M as Internal model
   participant FS as Partition files
+  P->>FS: retire notes whose .raw entries are all gone
   P->>FS: list new .raw entries, index lines, RETIRED.md
   loop batches of up to 20 new entries
     P->>M: routing request (entries + index lines + retired titles)
@@ -195,6 +196,12 @@ So a partition of 100 notes that gained three entries costs one routing request 
 ### Retirements stick
 
 A retirement deletes the note's file from `notes/` and appends a record to `RETIRED.md`: the title, the reason, the replacing note if there is one, and the raw entry ids the record excludes. A drop is recorded the same way. This is the one mechanism that makes a deletion hold. The material behind a retired note still lives in the agent's own memory, outside Coffer's control, so the next aggregation reads it again. Without the record, the next distil pass would re-open the note.
+
+### Notes whose sources are gone
+
+Aggregation deletes a raw entry when its source stops producing it: the agent removed the fact from its own memory, or placement now files the entry into a different partition (a `feedback` entry that carries a project root, for example, moves from `global` to that project). A note built only from such entries has nothing left under it, so every distil pass, including the mechanical one, retires it first: the file leaves `notes/` and `RETIRED.md` gains a record with the reason and `sources_gone: true`. A note with at least one surviving origin is left alone.
+
+This record is not an exclusion. It names no entry ids, and its title is not sent to routing among the retired subjects, because nobody judged the note untrue. If the material comes back, it is distilled like any new entry.
 
 ### Degrading safely
 

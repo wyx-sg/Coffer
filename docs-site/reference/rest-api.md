@@ -90,7 +90,7 @@ machine, exactly like a route the build does not have. The tables below mark tho
 
 ## Routes
 
-The daemon mounts 161 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 162 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -111,7 +111,7 @@ The daemon mounts 161 operations in 20 groups. Groups follow the order the daemo
 | [memory](#memory) | 12 |
 | [agent-providers](#agent-providers) | 2 |
 | [models](#models) | 3 |
-| [chat](#chat) | 15 |
+| [chat](#chat) | 16 |
 | [channels](#channels) | 3 |
 | [providers](#providers) | 11 |
 
@@ -359,6 +359,7 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `memory` 
 | `POST` | `/api/v1/chat/conversations/{id}/unarchive` | Restore an archived conversation back into the active list. |
 | `GET` | `/api/v1/chat/conversations/{id}/messages` | Return message history for a conversation, ordered by seq ascending. |
 | `POST` | `/api/v1/chat/conversations/{id}/messages` | Start a turn for the message, or enqueue it behind the in-flight one. |
+| `POST` | `/api/v1/chat/conversations/{id}/messages/{message_id}/resend` | Send one of the conversation's user messages again, attachments included. |
 | `GET` | `/api/v1/chat/conversations/{id}/events` | Subscribe to the conversation's live turn events. |
 | `PUT` | `/api/v1/chat/conversations/{id}/pending` | Replace the conversation's pending message queue (resume / drop / reorder). |
 | `POST` | `/api/v1/chat/conversations/{id}/interrupt` | Stop the conversation's in-flight turn (keeping its partial output) and pause the pending queue. |

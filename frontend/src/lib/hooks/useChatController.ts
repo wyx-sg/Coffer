@@ -3,7 +3,7 @@
 // streaming turn, and the draft → create → first-message flow, exposing a flat
 // interface the ChatPage component renders. Keeping this out of the page keeps
 // the component presentational (and under the file-size limit).
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -19,6 +19,13 @@ import {
 import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useChatTurn } from "@/lib/hooks/useChatTurn";
 import type { ChatAttachment } from "@/lib/api/chat";
+
+/** The draft's first message, bound for the conversation the draft created. */
+interface FirstMessage {
+  convId: string;
+  text: string;
+  attachments: ChatAttachment[];
+}
 
 export function useChatController() {
   const navigate = useNavigate();
@@ -44,11 +51,12 @@ export function useChatController() {
   } | null>(null);
   // After creating from the draft, the first message is sent once the turn hook
   // re-binds to the new conversation id (see effect below).
-  const [pendingFirst, setPendingFirst] = useState<{
-    convId: string;
-    text: string;
-    attachments: ChatAttachment[];
-  } | null>(null);
+  const [pendingFirst, setPendingFirst] = useState<FirstMessage | null>(null);
+  // A first message the daemon refused (e.g. ATTACHMENT_NOT_FOUND) once its
+  // conversation existed: the draft's composer is gone by then, so its text and
+  // chips are handed to the new conversation's composer rather than lost.
+  const [refusedFirst, setRefusedFirst] = useState<FirstMessage | null>(null);
+  const clearRefusedFirst = useCallback(() => setRefusedFirst(null), []);
 
   const { data: conversations = [], isPending: convLoading } = useConversations();
   const { data: archivedConversations = [], isPending: archivedLoading } =
@@ -83,14 +91,20 @@ export function useChatController() {
 
   // Once navigation has bound the turn hook to the freshly-created conversation,
   // fire its first message. Gated on the id matching so it never sends to the
-  // wrong thread.
+  // wrong thread. Keyed on the stable `send`, not the `turn` object (new every
+  // render): a render that lands before `setPendingFirst(null)` is processed
+  // must not send the message a second time.
+  const sendTurn = turn.send;
   useEffect(() => {
     if (pendingFirst && activeConv?.id === pendingFirst.convId) {
-      const { text, attachments } = pendingFirst;
+      const first = pendingFirst;
       setPendingFirst(null);
-      void turn.send(text, attachments);
+      // A refusal is also the turn's `error`, shown in the thread's banner.
+      void sendTurn(first.text, first.attachments).then((accepted) => {
+        if (!accepted) setRefusedFirst(first);
+      });
     }
-  }, [pendingFirst, activeConv?.id, turn]);
+  }, [pendingFirst, activeConv?.id, sendTurn]);
 
   // Chat talks only to Coffer-managed agents (claude_code / codex). The draft
   // defaults to the first available one; when none is available the draft
@@ -113,7 +127,8 @@ export function useChatController() {
   };
 
   // Resolves whether the conversation was created; a failed create keeps the
-  // draft composer's chips (the error shows as `createError`).
+  // draft composer's chips (the error shows as `createError`). A first message
+  // refused after the create comes back as `refusedFirst`.
   const sendDraft = (text: string, attachments: ChatAttachment[] = []) =>
     new Promise<boolean>((resolve) => {
       // No per-turn working directory: send an empty agent_config and let the
@@ -191,6 +206,9 @@ export function useChatController() {
     startDraft,
     selectConversation,
     sendDraft,
+    // The refused first message, for the open conversation's composer to take back.
+    refusedFirst: refusedFirst?.convId === activeConv?.id ? refusedFirst : null,
+    clearRefusedFirst,
     creating: createConv.isPending,
     createError: createConv.isError ? createConv.error : null,
     resetCreateError: () => createConv.reset(),

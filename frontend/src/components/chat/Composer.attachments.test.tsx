@@ -259,6 +259,44 @@ describe("Composer attachments", () => {
     expect(screen.queryByRole("list", { name: /attached files/i })).not.toBeInTheDocument();
   });
 
+  test("a refused send gives its text back unless something was typed since", async () => {
+    let refuse: (accepted: boolean) => void = () => {};
+    const onSend = vi.fn(() => new Promise<boolean>((resolve) => (refuse = resolve)));
+    render(<Composer onSend={onSend} />);
+    const box = screen.getByRole("textbox");
+
+    fireEvent.change(box, { target: { value: "first try" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(box).toHaveValue("");
+    await act(async () => refuse(false));
+    expect(box).toHaveValue("first try");
+
+    fireEvent.keyDown(box, { key: "Enter" });
+    fireEvent.change(box, { target: { value: "typed meanwhile" } });
+    await act(async () => refuse(false));
+    expect(box).toHaveValue("typed meanwhile");
+  });
+
+  test("a restored message puts its text and files back as ready chips, once", async () => {
+    const uploaded = stored("shot.png", "image/png", 3);
+    const onRestored = vi.fn();
+    const onSend = vi.fn().mockResolvedValue(true);
+    const restore = { text: "what is this?", attachments: [uploaded] };
+    const { rerender } = render(
+      <Composer onSend={onSend} restore={restore} onRestored={onRestored} />,
+    );
+
+    expect(screen.getByRole("textbox")).toHaveValue("what is this?");
+    expect(screen.getByRole("list", { name: /attached files/i })).toHaveTextContent("shot.png");
+    expect(onRestored).toHaveBeenCalledTimes(1);
+    rerender(<Composer onSend={onSend} restore={null} onRestored={onRestored} />);
+    await act(async () => {
+      fireEvent.click(sendButton());
+    });
+    expect(onSend).toHaveBeenCalledWith("what is this?", [uploaded]);
+    expect(uploadMock).not.toHaveBeenCalled();
+  });
+
   test("a file dropped on a disabled composer is claimed but not attached", () => {
     render(<Composer onSend={vi.fn()} disabled />);
     const composer = screen.getByTestId("composer");

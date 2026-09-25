@@ -18,6 +18,7 @@ vi.mock("@/lib/chat/streamClient", () => ({
 vi.mock("@/lib/api/chat", () => ({
   chatApi: {
     sendMessage: vi.fn(),
+    resendMessage: vi.fn(),
     setPending: vi.fn(),
     interruptTurn: vi.fn(),
   },
@@ -58,6 +59,7 @@ describe("useChatTurn", () => {
     // Default: an empty subscription that ends immediately.
     subscribeMock.mockImplementation(fromEvents());
     chatApiMock.sendMessage.mockResolvedValue({ queued: false });
+    chatApiMock.resendMessage.mockResolvedValue({ queued: false });
     chatApiMock.setPending.mockResolvedValue({ pending: [] });
     chatApiMock.interruptTurn.mockResolvedValue(undefined);
   });
@@ -120,8 +122,9 @@ describe("useChatTurn", () => {
     });
 
     expect(chatApiMock.sendMessage).toHaveBeenCalledWith("conv-1", "look", ["b".repeat(32)]);
+    // The echo keeps the upload id, so a Retry before its row lands re-sends it.
     expect(result.current.pendingEchoes[0]?.attachments).toEqual([
-      { filename: "shot.png", mime: "image/png" },
+      { id: "b".repeat(32), filename: "shot.png", mime: "image/png" },
     ]);
   });
 
@@ -636,6 +639,52 @@ describe("useChatTurn", () => {
 
     expect(result.current.error).toBeInstanceOf(ApiError);
     expect((result.current.error as ApiError).code).toBe("CONVERSATION_NOT_FOUND");
+  });
+
+  test("a refused send is not retryable; a failed turn is", async () => {
+    chatApiMock.sendMessage.mockRejectedValue(new ApiError("ATTACHMENT_NOT_FOUND", "gone"));
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      expect(await result.current.send("hi")).toBe(false);
+    });
+    expect(result.current.error).not.toBeNull();
+    expect(result.current.retryable).toBe(false);
+
+    // A later turn failure is a new error: that one offers a Retry.
+    subscribeMock.mockImplementation(
+      fromEvents({ event: "turn_error", data: { code: "MODEL_ERROR", message: "boom" } }),
+    );
+    const turn = renderHook(() => useChatTurn("conv-2"), { wrapper: makeWrapper() });
+    await waitFor(() => expect(turn.result.current.error).toBeInstanceOf(ApiError));
+    expect(turn.result.current.retryable).toBe(true);
+  });
+
+  test("resend() POSTs the persisted message's id and adds no echo", async () => {
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      expect(await result.current.resend("msg-7")).toBe(true);
+    });
+
+    expect(chatApiMock.resendMessage).toHaveBeenCalledWith("conv-1", "msg-7");
+    expect(chatApiMock.sendMessage).not.toHaveBeenCalled();
+    expect(result.current.pendingEchoes).toEqual([]);
+  });
+
+  test("a resend refused because its file was pruned surfaces ATTACHMENT_EXPIRED", async () => {
+    chatApiMock.resendMessage.mockRejectedValue(
+      new ApiError("ATTACHMENT_EXPIRED", "attachment 'shot.png' is no longer stored"),
+    );
+    const { result } = renderHook(() => useChatTurn("conv-1"), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      expect(await result.current.resend("msg-7")).toBe(false);
+    });
+
+    expect((result.current.error as ApiError).code).toBe("ATTACHMENT_EXPIRED");
+    // Retrying it again would fail the same way: no Retry is offered.
+    expect(result.current.retryable).toBe(false);
   });
 
   test("clearError resets error state", async () => {

@@ -67,6 +67,25 @@ def _raw(
 
 
 def _existing_note(slug: str, body: str, *, stamp: str = "2025-01-01T00:00:00+00:00") -> Note:
+    # The raw entry the note was distilled from is still standing: a note with
+    # none left is retired by the pass (see "Retire a note whose raw entries are
+    # all gone"), which is not what these scenarios are about.
+    write_raw_entry(
+        StoredRawEntry(
+            partition=_PARTITION,
+            agent="claude-code",
+            native_path=f"/old/{slug}.md",
+            captured_at=stamp,
+            entry=RawEntry(
+                title=slug,
+                description=body,
+                type=TYPE_PROJECT,
+                body=body,
+                anchor=slug,
+                project_root="/home/dev/coffer",
+            ),
+        )
+    )
     note = Note(
         slug=slug,
         title=slug.replace("-", " ").title(),
@@ -291,7 +310,8 @@ async def test_a_merge_an_open_and_a_retirement_leave_every_raw_file_untouched()
     )
     raw_dir = paths.raw_dir(_PARTITION)
     before = _snapshot(raw_dir)
-    assert len(before) == 3
+    # Three new entries plus the one each existing note was distilled from.
+    assert len(before) == 5
 
     result = await distil_partition(
         _PARTITION, completion=completion, model_selector=StubModelSelector()

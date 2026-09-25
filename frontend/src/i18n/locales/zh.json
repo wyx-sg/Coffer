@@ -787,7 +787,9 @@
     "KNOWLEDGE_TOPIC_REFERENCES_FILE": "归纳出的文档不能引用另一个知识文件的文件名——集合重整时文件名会变。",
     "ATTACHMENT_TOO_LARGE": "文件超过 20 MB 上限。",
     "ATTACHMENT_TYPE_UNSUPPORTED": "不支持此文件类型。请添加图片、文档、音频或文本文件。",
-    "ATTACHMENT_NOT_FOUND": "某个附件已不可用，请重新添加。"
+    "ATTACHMENT_NOT_FOUND": "某个附件已不可用，请重新添加。",
+    "ATTACHMENT_EXPIRED": "这条消息携带的文件已超过 30 天被清理，无法重新发送。请重新添加文件后发送新消息。",
+    "MESSAGE_NOT_FOUND": "该消息已不在此对话中。"
   },
   "pagination": {
     "summary": "第 {{page}} / {{pageCount}} 页 · 共 {{total}} 条",

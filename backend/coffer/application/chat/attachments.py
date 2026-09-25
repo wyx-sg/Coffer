@@ -25,10 +25,12 @@ from coffer.domain.chat.attachment import (
     upload_mime,
 )
 from coffer.domain.chat.errors import (
+    AttachmentExpired,
     AttachmentNotFound,
     AttachmentTooLarge,
     AttachmentTypeUnsupported,
 )
+from coffer.domain.chat.message import AttachmentBlock, Message, TextBlock
 
 
 class ChatAttachmentService:
@@ -64,6 +66,22 @@ class ChatAttachmentService:
                 raise AttachmentNotFound(attachment_id)
             resolved.append(found)
         return resolved
+
+    async def reattach(self, message: Message) -> tuple[str, list[Attachment]]:
+        """The text and files a persisted user message carries, to send it again
+        (spec chat "Show a failed turn as one inline banner with Retry"). Raises
+        ``AttachmentExpired`` for the first referenced file no longer on disk, so
+        a retry never goes out without a file the original carried."""
+        text = "".join(b.text for b in message.content if isinstance(b, TextBlock))
+        attachments = [
+            Attachment(path=b.path, mime=b.mime, filename=b.filename)
+            for b in message.content
+            if isinstance(b, AttachmentBlock)
+        ]
+        for attachment in attachments:
+            if not await self._store.present(attachment):
+                raise AttachmentExpired(attachment.filename)
+        return text, attachments
 
     @staticmethod
     def message_text(text: str, attachments: Sequence[Attachment]) -> str:

@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { ChatAttachment } from "@/lib/api/chat";
 import { useComposerAttachments } from "@/lib/hooks/useComposerAttachments";
+import { type ComposerRestore, useComposerRestore } from "@/lib/hooks/useComposerRestore";
 import { useFileDrop } from "@/lib/hooks/useFileDrop";
 import { cn, formatBytes } from "@/lib/utils";
 import { AttachmentChip } from "./AttachmentChip";
@@ -28,9 +29,9 @@ interface Props {
   /**
    * Send the message with the uploads that finished, in attach order. May
    * return a promise of whether the send was accepted: the chips stay attached
-   * until it resolves `true`, so a refused send (the error surfaces wherever the
-   * caller shows send errors) can be retried with the same files. Returning
-   * nothing counts as accepted.
+   * until it resolves `true`, and a refused message's text comes back, so a
+   * refused send (the error surfaces wherever the caller shows send errors) can
+   * be retried as it was. Returning nothing counts as accepted.
    */
   onSend: (text: string, attachments: ChatAttachment[]) => void | Promise<boolean>;
   /**
@@ -45,6 +46,12 @@ interface Props {
   streaming?: boolean;
   /** Called when the user stops an in-flight turn. Shown only while streaming. */
   onStop?: () => void;
+  /**
+   * A refused message to put back — the draft's first message, refused after
+   * the draft's own composer was gone. Applied once; `onRestored` then fires.
+   */
+  restore?: ComposerRestore | null;
+  onRestored?: () => void;
 }
 
 /**
@@ -64,7 +71,7 @@ export interface ComposerHandle {
 const MAX_HEIGHT = 200;
 
 export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
-  { onSend, disabled = false, streaming = false, onStop },
+  { onSend, disabled = false, streaming = false, onStop, restore, onRestored },
   ref,
 ) {
   const { t } = useTranslation();
@@ -88,6 +95,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     el.style.overflowY = el.scrollHeight > MAX_HEIGHT ? "auto" : "hidden";
   }, [value]);
 
+  useComposerRestore(restore, onRestored, setValue, files.restore);
+
   useImperativeHandle(ref, () => ({
     setText: (text: string) => {
       setValue(text);
@@ -103,7 +112,8 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
   const handleSend = () => {
     if (!canSend) return;
     const sentKeys = files.readyKeys;
-    const result = onSend(value.trim(), files.ready);
+    const text = value.trim();
+    const result = onSend(text, files.ready);
     setValue("");
     textareaRef.current?.focus();
     if (!result) {
@@ -116,6 +126,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     void result
       .then((accepted) => {
         if (accepted) files.clear(sentKeys);
+        else setValue((current) => current || text); // unless something was typed since
       })
       .finally(() => setSending(false));
   };

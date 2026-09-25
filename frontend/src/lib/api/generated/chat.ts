@@ -155,6 +155,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/chat/conversations/{id}/messages/{message_id}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Conversation id */
+                id: components["parameters"]["ConversationId"];
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a persisted user message again (the page's Retry)
+         * @description Rebuilds the user message from its persisted row — its text and every attachment reference, from the web composer or a channel — and starts or enqueues a turn for it exactly as `POST .../messages` does, persisting a new user row. A referenced file the 30-day media sweep has since deleted is refused with `ATTACHMENT_EXPIRED` (410) and nothing is persisted or queued; the message is never sent without it.
+         */
+        post: operations["resendMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/chat/attachments": {
         parameters: {
             query?: never;
@@ -702,6 +726,48 @@ export interface operations {
             404: components["responses"]["NotFound"];
             /** @description Neither text nor an attachment, more than ten attachments, or an attachment id naming no stored upload (`ATTACHMENT_NOT_FOUND`). */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    resendMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Conversation id */
+                id: components["parameters"]["ConversationId"];
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted — the turn started, or the message was queued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendMessageAck"];
+                };
+            };
+            /** @description No such conversation (`CONVERSATION_NOT_FOUND`), or no user message with that id in it (`MESSAGE_NOT_FOUND`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description A file the message referenced is no longer stored (`ATTACHMENT_EXPIRED`). */
+            410: {
                 headers: {
                     [name: string]: unknown;
                 };

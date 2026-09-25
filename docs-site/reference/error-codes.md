@@ -151,6 +151,8 @@ give the status each code is actually sent with.
 | `TURN_IN_PROGRESS` | 409 | The conversation already has a turn running. | Wait, or interrupt the running turn. |
 | `UNKNOWN_AGENT` | 400 | No agent provider is registered for the conversation's agent. | Choose an agent from `GET /api/v1/agent-providers`. |
 | `AGENT_CONFIG_REJECTED` | 400 | The agent rejected the conversation's config, for example an unknown model. `details.reason` is a short token such as `model_not_found`. | Pick a model the agent offers. |
+| `MESSAGE_NOT_FOUND` | 404 | A resend named no user message of that conversation. | Refresh the conversation; retry the message shown there. |
+| `ATTACHMENT_EXPIRED` | 410 | A message being sent again (Retry) carried a file the 30-day media sweep has since deleted; nothing was sent. | Attach the file again and send a new message. |
 | `CHANNEL_NOT_PAIRED` | 409 | The channel has no paired chat to send to. | Pair it: `coffer channel pair <name>`. See [Channels](/guides/channels). |
 | `CHANNEL_NOT_RUNNING` | 409 | The channel's adapter is not running (disabled or still starting). | Enable the channel and wait for it to connect. |
 | `CHANNEL_SEND_FAILED` | 502 | The messaging platform refused or failed the send. | Read `message`; check the bot's token and permissions. |

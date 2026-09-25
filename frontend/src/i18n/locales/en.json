@@ -787,7 +787,9 @@
     "KNOWLEDGE_TOPIC_REFERENCES_FILE": "A curated document may not name another knowledge file — file names change when the collection is reorganised.",
     "ATTACHMENT_TOO_LARGE": "This file is over the 20 MB limit.",
     "ATTACHMENT_TYPE_UNSUPPORTED": "This file type can't be attached. Attach an image, a document, audio, or a text file.",
-    "ATTACHMENT_NOT_FOUND": "An attached file is no longer available. Attach it again."
+    "ATTACHMENT_NOT_FOUND": "An attached file is no longer available. Attach it again.",
+    "ATTACHMENT_EXPIRED": "A file this message carried was deleted after 30 days, so it can't be sent again. Attach the file again and send a new message.",
+    "MESSAGE_NOT_FOUND": "That message is no longer in this conversation."
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",

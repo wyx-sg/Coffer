@@ -189,21 +189,25 @@ def write_retired(partition: str, retired: Sequence[RetiredNote]) -> str:
         if path.is_file():
             path.unlink()
         return paths.relative_of(path)
-    frontmatter: dict[str, Any] = {
-        "retired": [
-            {
-                "slug": r.slug,
-                "title": r.title,
-                "reason": r.reason,
-                "replaced_by": r.replaced_by,
-                "retired_at": r.retired_at,
-                "entry_ids": list(r.entry_ids),
-            }
-            for r in retired
-        ]
-    }
+    frontmatter: dict[str, Any] = {"retired": [_retired_record(r) for r in retired]}
     atomic_write(path, render_frontmatter(frontmatter, _render_retired_prose(retired)))
     return paths.relative_of(path)
+
+
+def _retired_record(r: RetiredNote) -> dict[str, Any]:
+    """One record as the fence stores it. ``sources_gone`` is written only when
+    set, so a file with none of those records reads exactly as it always has."""
+    record: dict[str, Any] = {
+        "slug": r.slug,
+        "title": r.title,
+        "reason": r.reason,
+        "replaced_by": r.replaced_by,
+        "retired_at": r.retired_at,
+        "entry_ids": list(r.entry_ids),
+    }
+    if r.sources_gone:
+        record["sources_gone"] = True
+    return record
 
 
 def _render_retired_prose(retired: Sequence[RetiredNote]) -> str:
@@ -213,6 +217,8 @@ def _render_retired_prose(retired: Sequence[RetiredNote]) -> str:
         details = []
         if r.slug:
             details.append(f"was `notes/{r.slug}.md`")
+            if r.sources_gone:
+                details.append("its sources are gone")
         else:
             # No slug means this record accounts for entries a pass kept
             # nothing from: there was never a note and never a file, so
@@ -246,6 +252,7 @@ def read_retired(partition: str) -> tuple[RetiredNote, ...]:
             replaced_by=str(r.get("replaced_by", "")),
             retired_at=str(r.get("retired_at", "")),
             entry_ids=text_list(r.get("entry_ids")),
+            sources_gone=r.get("sources_gone") is True,
         )
         for r in (fm.get("retired") or [])
         if isinstance(r, dict)

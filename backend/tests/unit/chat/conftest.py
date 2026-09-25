@@ -306,10 +306,12 @@ def make_chat_services(
 class FakeChatMediaStore:
     """In-memory ``ChatMediaStore``: records saves, resolves what it saved.
 
-    Paths are fabricated (``/fake/chat-media/<id>``) — nothing is written."""
+    Paths are fabricated (``/fake/chat-media/<id>``) — nothing is written. A
+    path added to ``gone`` reads as swept off disk."""
 
     def __init__(self) -> None:
         self.saved: dict[str, tuple[bytes, Attachment]] = {}
+        self.gone: set[str] = set()
         self._serial = 0
 
     async def save(self, *, data: bytes, filename: str, mime: str) -> UploadedAttachment:
@@ -322,6 +324,9 @@ class FakeChatMediaStore:
     async def resolve(self, attachment_id: str) -> Attachment | None:
         entry = self.saved.get(attachment_id)
         return entry[1] if entry is not None else None
+
+    async def present(self, attachment: Attachment) -> bool:
+        return attachment.path not in self.gone
 
 
 def make_attachment_service(store: FakeChatMediaStore | None = None) -> Any:

@@ -4,23 +4,24 @@
 // to render. The event-folding reducer lives in ./chatTurnEvents.
 //
 // API:
-//   const { send, isStreaming, liveMessage, pendingEchoes, error, clearError,
-//           interrupt, pending, setPending } = useChatTurn(convId);
+//   const { send, resend, isStreaming, liveMessage, pendingEchoes, error,
+//           retryable, clearError, interrupt, pending, setPending } = useChatTurn(convId);
 //
 // The subscription is opened on the active conversation and stays open across
-// turns (it replays the in-flight turn then streams live). `send` is
-// fire-and-return: it POSTs the message and returns immediately — the turn's
-// events arrive over the subscription, not the POST.
+// turns (it replays the in-flight turn then streams live). `send` and `resend`
+// (./useChatSend) are fire-and-return: they POST and return immediately — the
+// turn's events arrive over the subscription, not the POST.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { subscribeConversationEvents } from "@/lib/chat/streamClient";
-import { chatApi, type ChatAttachment, type Message } from "@/lib/api/chat";
+import { chatApi, type Message } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
-import { conversationsKey, messagesKey } from "@/lib/api/queryKeys";
-import { type PendingEcho, createEcho, reconcileEchoes } from "@/lib/chat/echoes";
+import { messagesKey } from "@/lib/api/queryKeys";
+import { type EchoAttachment, type PendingEcho, reconcileEchoes } from "@/lib/chat/echoes";
 import { type LiveMessage, handleEvent, subscribeMessagesCache } from "./chatTurnEvents";
+import { useChatSend } from "./useChatSend";
 
 export type { LiveMessage } from "./chatTurnEvents";
 export type { PendingEcho } from "@/lib/chat/echoes";
@@ -36,7 +37,9 @@ export interface UseChatTurnResult {
    * composer's finished uploads. Resolves whether the daemon accepted it; a
    * refusal is also surfaced as `error`.
    */
-  send: (text: string, attachments?: ChatAttachment[]) => Promise<boolean>;
+  send: (text: string, attachments?: EchoAttachment[]) => Promise<boolean>;
+  /** Send a persisted user message again, attachments included (Retry). */
+  resend: (messageId: string) => Promise<boolean>;
   /** True while a turn is in flight on the subscription. */
   isStreaming: boolean;
   /** Live partial message — non-null while streaming (and briefly after). */
@@ -49,6 +52,11 @@ export interface UseChatTurnResult {
   pendingEchoes: PendingEcho[];
   /** Latest error from a failed send/stream. */
   error: Error | null;
+  /**
+   * False when `error` is a refused send: that message never ran and stays in
+   * the composer, so a Retry would re-send an older one.
+   */
+  retryable: boolean;
   /** Clear any error to allow a retry. */
   clearError: () => void;
   /** Stop the in-flight turn; its partial output is kept server-side. */
@@ -66,6 +74,8 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
   const [error, setError] = useState<Error | null>(null);
   const [pending, setPendingState] = useState<string[]>([]);
   const [echoes, setEchoes] = useState<PendingEcho[]>([]);
+  // The last error that was a refused POST rather than a failed turn.
+  const [refused, setRefused] = useState<Error | null>(null);
 
   // Mirror of isStreaming for send(): a message sent while a turn is in flight
   // is queued server-side and shown by the queue chip, so it gets no echo.
@@ -212,52 +222,13 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
     };
   }, [conversationId, qc]);
 
-  const send = useCallback(
-    async (text: string, attachments: ChatAttachment[] = []): Promise<boolean> => {
-      // Fire-and-return: NEVER blocks on an in-flight turn. A second message sent
-      // mid-turn is queued server-side and surfaced via queue_changed.
-      setError(null);
-      // Optimistic echo so the prompt is visible immediately. Not while a turn
-      // streams: that send is queued and the queue chip shows it. The echo
-      // remembers what this client had already fetched so its own row — and
-      // never an older identical prompt — retires it.
-      const echo = isStreamingRef.current
-        ? null
-        : createEcho(
-            text,
-            qc.getQueryData<Message[]>(messagesKey(conversationId)) ?? [],
-            Date.now(),
-            attachments.map((a) => ({ filename: a.filename, mime: a.mime })),
-          );
-      if (echo) setEchoes((prev) => [...prev, echo]);
-      const dropEcho = () => {
-        if (echo) setEchoes((prev) => prev.filter((e) => e.id !== echo.id));
-      };
-      try {
-        const ids = attachments.map((a) => a.id);
-        const ack = await chatApi.sendMessage(conversationId, text, ids);
-        // Queued behind a turn this client did not know about: no row exists
-        // yet and the queue chip owns the message until its turn starts.
-        if (ack.queued) dropEcho();
-        return true;
-      } catch (err) {
-        const wrapped = err instanceof Error ? err : new ApiError("INTERNAL_ERROR", String(err));
-        setError(wrapped);
-        dropEcho();
-        return false;
-      } finally {
-        // Refresh the conversation list (first turn auto-titles it) AND the
-        // messages. The messages refetch is the safety net for the draft→first-
-        // send race: if the turn finished before the subscription attached (the
-        // bus ring buffer is already cleared), turn_start/turn_done never fire on
-        // this client, so nothing else would load the committed user message and
-        // reply — leaving the optimistic echo stranded.
-        void qc.invalidateQueries({ queryKey: conversationsKey });
-        void qc.invalidateQueries({ queryKey: messagesKey(conversationId) });
-      }
-    },
-    [conversationId, qc],
-  );
+  const { send, resend } = useChatSend({
+    conversationId,
+    isStreamingRef,
+    setEchoes,
+    setError,
+    setRefused,
+  });
 
   const interrupt = useCallback(async () => {
     try {
@@ -287,10 +258,12 @@ export function useChatTurn(conversationId: string): UseChatTurnResult {
 
   return {
     send,
+    resend,
     isStreaming,
     liveMessage,
     pendingEchoes: echoes,
     error,
+    retryable: error !== null && error !== refused,
     clearError,
     interrupt,
     pending,

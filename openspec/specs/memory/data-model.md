@@ -171,7 +171,9 @@ second origin on a later pass keeps the identity it had.
 ## Retirement
 
 `RETIRED.md` is a list: one record per retired note, and one per entry a
-pass kept nothing from (empty `slug`):
+pass kept nothing from (empty `slug`). A note is retired either because a later
+entry contradicted it or because every raw entry it was built from is gone
+("Retire a note whose raw entries are all gone"):
 
 | Field | Notes |
 |---|---|
@@ -181,6 +183,7 @@ pass kept nothing from (empty `slug`):
 | `replaced_by` | The slug of the note that replaced it, or empty when the subject was simply dropped. |
 | `retired_at` | When. |
 | `entry_ids` | The raw entries the record accounts for — the retired note's own sources, or the one entry kept nothing from — so no later pass routes them to the model again. What the distil pass matches on. |
+| `sources_gone` | Present and `true` only on a note retired because its raw entries are all gone. Such a record names no `entry_ids` and its title is not handed to routing as an excluded subject — nobody judged the note untrue, so material that comes back is distilled afresh. |
 
 It is not a bin. **It is the mechanism** ("Record retirements so they stick"):
 the sources a note was built from still live in the agents' own memory, so
@@ -228,6 +231,13 @@ entry:
 | open | a new note file |
 | retire | a note leaves `notes/` and gains a record in `RETIRED.md` |
 | keep nothing | no note is written; a `RETIRED.md` record names the entry so no later pass re-routes it; the entry stays in `.raw/` |
+
+Before routing, every pass — the mechanical one included — retires each note
+none of whose `origins` is still under `.raw/`, recording it with
+`sources_gone` ("Retire a note whose raw entries are all gone"). Aggregation
+removes a raw entry when its source stops producing it or files it into
+another partition, so this is what keeps a partition's notes derived from
+what it actually holds.
 
 With no internal connection configured, no model is called: each raw entry
 becomes a note of its own and `MEMORY.md` is written from their frontmatter

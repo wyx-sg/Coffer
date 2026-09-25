@@ -254,8 +254,10 @@ async def build_plan(
     stamp = now()
     for chunk in routing.chunks(entries, chunk_size):
         # Every retirement is an exclusion the model must see, including the
-        # ones this pass has just decided (see "Record retirements so they stick").
-        retired_titles = [r.title for r in retired if r.title]
+        # ones this pass has just decided (see "Record retirements so they stick") —
+        # except a note retired only because its sources are gone, which no one
+        # judged untrue (see "Retire a note whose raw entries are all gone").
+        retired_titles = [r.title for r in retired if r.title and not r.sources_gone]
         retired_titles.extend(r.title for r in plan.retirements.values() if r.title)
         actions = await routing.route_chunk(
             chunk,

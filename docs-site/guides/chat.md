@@ -100,7 +100,9 @@ The next message you send — from the page or from a channel — resumes the pa
 
 ## When a turn fails
 
-A failed turn replaces the in-progress bubble with one error banner above the composer, carrying **Retry** (resend the message that failed) and **Dismiss**. Whatever the agent had written before the failure stays in the thread, marked **This response did not complete.**
+A failed turn replaces the in-progress bubble with one error banner above the composer, carrying **Retry** (resend the message that failed, with its attachments) and **Dismiss**. Whatever the agent had written before the failure stays in the thread, marked **This response did not complete.**
+
+A message the daemon refuses before it runs, for example because an attached file is no longer available, is not a failed turn: the banner gives the reason without **Retry**, and the message stays in the composer with its text and files so you can fix it and send again. This holds for the first message of a new conversation too.
 
 Coffer reports three failures of its own, besides whatever the agent reports:
 
@@ -144,7 +146,7 @@ How the agent receives an attachment depends on its kind, whichever way it arriv
 
 The bytes stay on disk; the conversation stores only a reference, and a later turn reads the file back from there. Files you attach on the Chat page are kept in `~/.coffer/chat-media`, and files a channel received in `~/.coffer/channel-media`; both are pruned 30 days after they were last modified. After that the thread still shows the chip, but the agent can no longer open the file.
 
-Retrying a failed turn resends the message text only. Attach the files again if the retry needs them.
+Retrying a failed turn resends the message with its attachments. If a file it carried has since been pruned, the retry is refused with an error saying so, and nothing is sent: attach the file again and send a new message.
 
 ## Manage conversations
 

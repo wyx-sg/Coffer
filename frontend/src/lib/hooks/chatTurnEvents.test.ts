@@ -133,7 +133,7 @@ describe("reconcileEchoes", () => {
 });
 
 describe("echoes that carry attachments", () => {
-  const png = { filename: "shot.png", mime: "image/png" };
+  const png = { id: "a".repeat(32), filename: "shot.png", mime: "image/png" };
 
   function rowWith(id: string, seq: number, text: string, files: string[]): Message {
     return {

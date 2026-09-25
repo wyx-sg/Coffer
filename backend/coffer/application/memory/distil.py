@@ -65,6 +65,17 @@ recorded as a retirement record naming the **entry ids** it excludes — the ide
 what is being left out — and that record's title joins the retired subjects the next
 routing prompt must not re-open.
 
+**A note whose raw entries are all gone is retired (see "Retire a note whose raw
+entries are all gone").** Aggregation deletes a raw entry when its source stops
+producing it — the agent deleted the fact, or placement now files it into another
+partition — and a note is only derived from what ``.raw/`` holds. So every pass,
+on every path, first retires each note none of whose origins is still in
+``.raw/``, and records it in ``RETIRED.md`` with ``sources_gone`` set. That is
+not a judgement about meaning, so the mechanical path does it too, and it is
+not an exclusion either: the record names no entry ids and its title is not
+handed to routing, so material that comes back is distilled afresh. A note
+that still has one origin standing is left alone.
+
 A retired *note*'s own origins go on its record the same way. Nothing else
 accounts for them once the note file is gone, so leaving them off would send
 them back through routing a round later only to be dropped — charged to the
@@ -107,8 +118,8 @@ class DistilResult:
     merged: int
     #: Notes created for a subject not yet covered.
     opened: int
-    #: Notes a later entry contradicted — removed from ``notes/`` and recorded
-    #: in ``RETIRED.md``.
+    #: Notes a later entry contradicted, or whose raw entries are all gone —
+    #: removed from ``notes/`` and recorded in ``RETIRED.md``.
     retired: int
     #: Entries the pass kept nothing from.
     dropped: int
@@ -139,6 +150,50 @@ def undistilled(
     return tuple(e for e in raw_store.list_raw_entries(partition) if e.entry_id not in accounted)
 
 
+SOURCES_GONE_REASON = (
+    "Every raw entry this note was built from is gone from this partition's `.raw/` — "
+    "the agent no longer holds it, or it is now filed into another partition."
+)
+
+
+def retire_sourceless(
+    partition: str, notes: Sequence[Note], retired: Sequence[RetiredNote]
+) -> tuple[tuple[Note, ...], tuple[RetiredNote, ...], int]:
+    """Retire every note none of whose origins is left in ``.raw/``.
+
+    Returns the notes still standing, the full retirement list (what was
+    already recorded plus the new records) and how many were retired. Both
+    halves of each retirement happen here — the file leaves ``notes/`` and
+    ``RETIRED.md`` is rewritten — so the pass that follows starts from a
+    partition that already agrees with its sources (see "Retire a note whose
+    raw entries are all gone"). A note with no origins at all is left alone:
+    there is no provenance to judge it by.
+    """
+    present = {e.entry_id for e in raw_store.list_raw_entries(partition)}
+    standing: list[Note] = []
+    records: list[RetiredNote] = []
+    for note in notes:
+        if not note.origins or any(o.key in present for o in note.origins):
+            standing.append(note)
+            continue
+        store.delete_note(partition, note.slug)
+        records.append(
+            RetiredNote(
+                slug=note.slug,
+                title=note.title,
+                reason=SOURCES_GONE_REASON,
+                retired_at=planning.now(),
+                sources_gone=True,
+            )
+        )
+        logger.info("memory.distil.sources_gone; partition=%s slug=%s", partition, note.slug)
+    if not records:
+        return tuple(notes), tuple(retired), 0
+    every = (*retired, *records)
+    store.write_retired(partition, every)
+    return tuple(standing), every, len(records)
+
+
 def _write_index(partition: str, repository_path: str) -> None:
     """Rewrite ``MEMORY.md`` from what is on disk now. Every path ends here."""
     store.write_index(
@@ -156,6 +211,7 @@ def _distil_mechanically(
     retired: Sequence[RetiredNote],
     entries: Sequence[StoredRawEntry],
     repository_path: str,
+    retired_count: int = 0,
 ) -> DistilResult:
     """Distil without a model: one note per entry, then the index (see "Distil
     mechanically with no internal connection").
@@ -164,10 +220,12 @@ def _distil_mechanically(
     which is how "MUST NOT call a model on any path" is held structurally
     rather than by a condition somebody could later invert.
 
-    There is no merging and no retirement here, because both are judgements
-    about meaning and nothing mechanical can make them. What there *is* is a
-    real partition: notes at real paths, an index over them, and a delivery.
-    Thinner than the model's, not absent.
+    There is no merging and no retirement by contradiction here, because both
+    are judgements about meaning and nothing mechanical can make them. The one
+    retirement that is not a judgement — a note whose sources are all gone —
+    has already happened by the time this runs, and ``retired_count`` carries
+    it. What there *is* is a real partition: notes at real paths, an index over
+    them, and a delivery. Thinner than the model's, not absent.
     """
     taken = {n.slug for n in notes} | {r.slug for r in retired if r.slug}
     opened = 0
@@ -194,7 +252,12 @@ def _distil_mechanically(
     _write_index(partition, repository_path)
     logger.info("memory.distil.mechanical_pass; partition=%s opened=%d", partition, opened)
     return DistilResult(
-        partition=partition, merged=0, opened=opened, retired=0, dropped=0, model_used=False
+        partition=partition,
+        merged=0,
+        opened=opened,
+        retired=retired_count,
+        dropped=0,
+        model_used=False,
     )
 
 
@@ -232,8 +295,9 @@ async def distil_partition(
     settings change mid-pass takes effect from the next one. ``None`` is the
     built-in default (spec internal-engine "Carry the bound on one model call").
     """
-    notes = store.list_notes(partition)
-    retired = store.read_retired(partition)
+    notes, retired, sourceless = retire_sourceless(
+        partition, store.list_notes(partition), store.read_retired(partition)
+    )
     entries = undistilled(partition, notes, retired)
 
     model = await model_selector.get_default() if model_selector is not None else None
@@ -244,12 +308,18 @@ async def distil_partition(
             retired=retired,
             entries=entries,
             repository_path=repository_path,
+            retired_count=sourceless,
         )
 
     if not entries:
         _write_index(partition, repository_path)
         return DistilResult(
-            partition=partition, merged=0, opened=0, retired=0, dropped=0, model_used=True
+            partition=partition,
+            merged=0,
+            opened=0,
+            retired=sourceless,
+            dropped=0,
+            model_used=True,
         )
 
     resolver = credential_resolver if credential_resolver is not None else _unbound_credential
@@ -281,17 +351,23 @@ async def distil_partition(
         len(entries),
         counts.merged,
         counts.opened,
-        counts.retired,
+        counts.retired + sourceless,
         counts.dropped,
     )
     return DistilResult(
         partition=partition,
         merged=counts.merged,
         opened=counts.opened,
-        retired=counts.retired,
+        retired=counts.retired + sourceless,
         dropped=counts.dropped,
         model_used=True,
     )
 
 
-__all__ = ["DistilResult", "distil_partition", "undistilled"]
+__all__ = [
+    "SOURCES_GONE_REASON",
+    "DistilResult",
+    "distil_partition",
+    "retire_sourceless",
+    "undistilled",
+]

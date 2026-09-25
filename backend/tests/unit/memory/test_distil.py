@@ -21,7 +21,7 @@ from __future__ import annotations
 import pytest
 
 from coffer.application.memory.distil import distil_partition, undistilled
-from coffer.domain.memory.note import TYPE_PROJECT, TYPE_USER, Note, Origin
+from coffer.domain.memory.note import TYPE_PROJECT, TYPE_USER, Note
 from coffer.domain.memory.reader import RawEntry
 from coffer.domain.memory.retired import RetiredNote
 from coffer.infrastructure.memory import paths, store
@@ -279,6 +279,7 @@ def test_undistilled_reads_raw_and_writes_nothing() -> None:
 
 @pytest.mark.asyncio
 async def test_a_pass_with_no_new_entries_still_rewrites_the_index() -> None:
+    standing = _entry("Standing", "b", anchor="x")
     store.write_note(
         Note(
             slug="standing",
@@ -287,7 +288,7 @@ async def test_a_pass_with_no_new_entries_still_rewrites_the_index() -> None:
             type=TYPE_USER,
             body="b",
             partition=_PARTITION,
-            origins=(Origin(agent="codex", native_path="/n.md", anchor="x"),),
+            origins=(standing.origin,),
         )
     )
 

@@ -38,6 +38,8 @@ export interface ComposerAttachments {
   remove: (key: string) => void;
   /** Detach the given chips (every chip when omitted), cancelling their uploads. */
   clear: (keys?: string[]) => void;
+  /** Put back finished uploads a refused message carried, as ready chips. */
+  restore: (uploads: ChatAttachment[]) => void;
   /** Some upload is still in flight. */
   uploading: boolean;
   /** Some upload failed and is still attached. */
@@ -143,6 +145,21 @@ export function useComposerAttachments(): ComposerAttachments {
     [cancel, update],
   );
 
+  const restore = useCallback(
+    (uploads: ChatAttachment[]) => {
+      const held = new Set(itemsRef.current.map((it) => it.uploaded?.id));
+      const back = uploads
+        .filter((u) => !held.has(u.id))
+        .map((u): DraftAttachment => {
+          draftSerial += 1;
+          const { filename: name, size, mime } = u;
+          return { key: `draft-${draftSerial}`, name, size, mime, status: "ready", uploaded: u };
+        });
+      if (back.length > 0) update((prev) => [...prev, ...back]);
+    },
+    [update],
+  );
+
   // Leaving the page cancels whatever is still uploading.
   useEffect(() => {
     const live = controllers.current;
@@ -159,10 +176,11 @@ export function useComposerAttachments(): ComposerAttachments {
       add,
       remove,
       clear,
+      restore,
       uploading: items.some((it) => it.status === "uploading"),
       failed: items.some((it) => it.status === "failed"),
       ready: done.map((it) => it.uploaded!),
       readyKeys: done.map((it) => it.key),
     };
-  }, [items, add, remove, clear]);
+  }, [items, add, remove, clear, restore]);
 }
