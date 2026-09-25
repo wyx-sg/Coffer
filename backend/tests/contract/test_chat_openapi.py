@@ -61,6 +61,7 @@ def spec_doc() -> dict[str, Any]:
         ("/api/v1/chat/conversations/{id}/unarchive", "post"),
         ("/api/v1/chat/conversations/{id}/messages", "get"),
         ("/api/v1/chat/conversations/{id}/messages", "post"),
+        ("/api/v1/chat/conversations/{id}/messages/{message_id}/resend", "post"),
         ("/api/v1/chat/conversations/{id}/events", "get"),
         ("/api/v1/chat/conversations/{id}/pending", "put"),
         ("/api/v1/chat/conversations/{id}/interrupt", "post"),

@@ -107,6 +107,10 @@ export function ChatPage() {
               return c.turn.send(text, attachments);
             }}
             onClearTurnError={c.turn.clearError}
+            retryable={c.turn.retryable}
+            restore={c.refusedFirst}
+            onRestored={c.clearRefusedFirst}
+            onResend={c.turn.resend}
             pending={c.turn.pending}
             onSetPending={(texts) => void c.turn.setPending(texts)}
             agentLabel={c.activeAgent?.display_name ?? c.activeConv.agent_key}

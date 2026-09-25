@@ -113,6 +113,11 @@ _STATUS: dict[str, int] = {
     "ATTACHMENT_TOO_LARGE": 413,
     "ATTACHMENT_TYPE_UNSUPPORTED": 415,
     "ATTACHMENT_NOT_FOUND": 422,
+    # resending a message (spec chat "Show a failed turn as one inline banner
+    # with Retry"): its row is a missing subresource; a file the media sweep
+    # deleted since is gone for good, which is what 410 says.
+    "MESSAGE_NOT_FOUND": 404,
+    "ATTACHMENT_EXPIRED": 410,
     # channels (spec channels)
     "CHANNEL_NOT_PAIRED": 409,
     "CHANNEL_NOT_RUNNING": 409,

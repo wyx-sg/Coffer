@@ -3,6 +3,8 @@
 Live mirror + pending queue (ADR chat-single-owner-live-mirror):
 - ``POST .../messages`` is **fire-and-return**: it starts or enqueues a turn and
   returns ``202 {queued}``; it is no longer the event stream.
+- ``POST .../messages/{message_id}/resend`` sends a persisted user message
+  again, attachments included (the page's Retry).
 - ``GET .../events`` is the SSE subscription any client attaches to; it replays
   the in-flight turn then streams live, and stays open across turns.
 - ``PUT .../pending`` replaces the pending queue (resume / drop / reorder).
@@ -82,6 +84,37 @@ async def send_message(
         text,
         attachments=attachments,
         title_hint=attachments_svc.title_hint(body.text, attachments),
+    )
+    return SendMessageAck(queued=queued)
+
+
+@router.post(
+    "/conversations/{id}/messages/{message_id}/resend",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=SendMessageAck,
+)
+async def resend_message(
+    id: str,
+    message_id: str,
+    svc: ChatService = Depends(get_chat_service),  # noqa: B008
+    orchestrator: TurnOrchestrator = Depends(get_turn_orchestrator),  # noqa: B008
+    attachments_svc: ChatAttachmentService = Depends(get_attachment_service),  # noqa: B008
+) -> SendMessageAck:
+    """Send one of the conversation's user messages again, attachments included.
+
+    This is the page's Retry after a failed turn (spec chat "Show a failed turn
+    as one inline banner with Retry"). The daemon rebuilds the message from its
+    persisted row, so the retry carries the original's text AND its attachment
+    references, whether they came from the web composer or a channel; a new
+    user row is persisted exactly as a send would. A referenced file the media
+    sweep has since deleted is ``AttachmentExpired`` (410) and nothing is
+    persisted or queued; an id naming no user message of the conversation is
+    ``MessageNotFound`` (404).
+    """
+    message = await svc.get_user_message(id, message_id)
+    text, attachments = await attachments_svc.reattach(message)
+    queued = await orchestrator.enqueue_message(
+        id, attachments_svc.message_text(text, attachments), attachments=attachments
     )
     return SendMessageAck(queued=queued)
 

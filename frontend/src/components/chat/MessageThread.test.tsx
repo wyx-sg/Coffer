@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MessageThread } from "./MessageThread";
 import { acceptance } from "@/test/acceptance";
 import type { Conversation, Message } from "@/lib/api/chat";
+import { ApiError } from "@/lib/api/errors";
 
 vi.mock("@/lib/api/chat", () => ({
   chatApi: {
@@ -113,7 +114,7 @@ describe("MessageThread", () => {
         {
           id: "echo-9",
           text: "",
-          attachments: [{ filename: "shot.png", mime: "image/png" }],
+          attachments: [{ id: "a".repeat(32), filename: "shot.png", mime: "image/png" }],
           sentAt: Date.now(),
           afterSeq: -1,
         },
@@ -356,13 +357,55 @@ describe("MessageThread", () => {
       messages: [makeMsg({ role: "user", content: [{ type: "text", text: "try again" }] })],
     });
     const onSend = vi.fn();
+    const onResend = vi.fn();
     const onClearTurnError = vi.fn();
-    renderThread({ turnError: new Error("boom"), onSend, onClearTurnError });
+    renderThread({ turnError: new Error("boom"), onSend, onResend, onClearTurnError });
     // Retry appears once the failed prompt is on screen (it is what gets re-sent).
     await waitFor(() => expect(screen.getByText("try again")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /retry/i }));
     expect(onClearTurnError).toHaveBeenCalled();
-    expect(onSend).toHaveBeenCalledWith("try again");
+    // The persisted message is resent by id, so the daemon rebuilds it whole.
+    expect(onResend).toHaveBeenCalledWith("msg-1");
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  acceptance("chat", "a retry re-sends the failed message's attachments", async () => {
+    // Before the failed prompt's row lands, Retry re-sends the echo as it was
+    // sent: its text and its files' upload ids, never the text alone.
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    const png = { id: "a".repeat(32), filename: "shot.png", mime: "image/png" };
+    const onSend = vi.fn();
+    renderThread({
+      turnError: new Error("boom"),
+      onSend,
+      pendingEchoes: [
+        { id: "echo-1", text: "look", attachments: [png], sentAt: Date.now(), afterSeq: -1 },
+      ],
+    });
+    fireEvent.click(await screen.findByRole("button", { name: /retry/i }));
+    expect(onSend).toHaveBeenCalledWith("look", [png]);
+  });
+
+  test("a refused send offers no Retry — its message is still in the composer", async () => {
+    chatApiMock.listMessages.mockResolvedValue({
+      messages: [makeMsg({ role: "user", content: [{ type: "text", text: "older" }] })],
+    });
+    const onResend = vi.fn();
+    renderThread({ turnError: new Error("refused"), retryable: false, onResend });
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/refused/i));
+    await waitFor(() => expect(screen.getByText("older")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+  });
+
+  test("a retry refused because its file was pruned says so", async () => {
+    chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+    renderThread({
+      turnError: new ApiError("ATTACHMENT_EXPIRED", "attachment 'shot.png' is no longer stored"),
+      retryable: false,
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/deleted after 30 days/i),
+    );
   });
 
   test("a not-logged-in agent error maps to actionable copy", async () => {

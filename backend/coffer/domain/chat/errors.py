@@ -90,3 +90,31 @@ class AttachmentNotFound(CofferError):  # noqa: N818
     def __init__(self, attachment_id: str) -> None:
         super().__init__(f"attachment not found: {attachment_id!r}; upload the file again")
         self.attachment_id = attachment_id
+
+
+class MessageNotFound(CofferError):  # noqa: N818
+    """A resend names no user message of that conversation — never sent there,
+    deleted with its conversation, or an assistant reply rather than a prompt."""
+
+    code = "MESSAGE_NOT_FOUND"
+
+    def __init__(self, conversation_id: str, message_id: str) -> None:
+        super().__init__(f"no user message {message_id!r} in conversation {conversation_id!r}")
+        self.conversation_id = conversation_id
+        self.message_id = message_id
+
+
+class AttachmentExpired(CofferError):  # noqa: N818
+    """A message being sent again references a file that is no longer on disk —
+    the 30-day media sweep deleted it. The resend is refused rather than sent
+    without the file (spec chat "Show a failed turn as one inline banner with
+    Retry")."""
+
+    code = "ATTACHMENT_EXPIRED"
+
+    def __init__(self, filename: str) -> None:
+        super().__init__(
+            f"attachment {filename!r} is no longer stored (uploads are kept for 30 days); "
+            "attach it again"
+        )
+        self.filename = filename

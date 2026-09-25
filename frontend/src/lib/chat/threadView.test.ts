@@ -2,7 +2,7 @@
 import { describe, expect, test } from "vitest";
 
 import type { Message } from "@/lib/api/chat";
-import { retryTextFor, textOf, visibleThreadMessages } from "./threadView";
+import { retryTargetFor, textOf, visibleThreadMessages } from "./threadView";
 
 const msg = (over: Partial<Message>): Message => ({
   id: "m",
@@ -57,19 +57,26 @@ describe("visibleThreadMessages", () => {
   });
 });
 
-describe("retryTextFor", () => {
-  test("prefers the optimistic echo", () => {
-    expect(retryTextFor([msg({})], "echoed")).toBe("echoed");
+describe("retryTargetFor", () => {
+  const png = { id: "a".repeat(32), filename: "shot.png", mime: "image/png" };
+
+  test("prefers the optimistic echo, re-sending its text and its files' upload ids", () => {
+    const echo = { id: "echo-1", text: "echoed", attachments: [png], sentAt: 0, afterSeq: -1 };
+    expect(retryTargetFor([msg({})], echo)).toEqual({
+      kind: "send",
+      text: "echoed",
+      attachments: [png],
+    });
   });
 
-  test("falls back to the last persisted user message, or empty", () => {
+  test("falls back to resending the last persisted user message by id, or nothing", () => {
     const rows = [
       msg({ id: "1", content: [{ type: "text", text: "first" }] }),
       msg({ id: "2", role: "assistant", content: [{ type: "text", text: "reply" }] }),
-      msg({ id: "3", content: [{ type: "text", text: "last" }] }),
+      msg({ id: "3", content: [{ type: "attachment", filename: "shot.png", mime: "image/png" }] }),
       msg({ id: "4", role: "assistant", status: "failed", content: [] }),
     ];
-    expect(retryTextFor(rows, undefined)).toBe("last");
-    expect(retryTextFor([], undefined)).toBe("");
+    expect(retryTargetFor(rows, undefined)).toEqual({ kind: "resend", messageId: "3" });
+    expect(retryTargetFor([], undefined)).toBeNull();
   });
 });

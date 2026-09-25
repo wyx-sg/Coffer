@@ -3,7 +3,7 @@
 // until its persisted row lands, then retired against that row. Pure — the SSE
 // reducer (lib/hooks/chatTurnEvents) and useChatTurn own when these run.
 
-import type { ContentBlock, Message } from "@/lib/api/chat";
+import type { ChatAttachment, ContentBlock, Message } from "@/lib/api/chat";
 
 /**
  * A prompt this client sent whose persisted user row has not been fetched yet.
@@ -50,11 +50,11 @@ export const ECHO_MATCH_WINDOW_MS = 60_000;
  */
 const ECHO_CLOCK_SKEW_MS = 5_000;
 
-/** What an echo keeps of an attached file: what its chip shows. */
-export interface EchoAttachment {
-  filename: string;
-  mime: string;
-}
+/**
+ * What an echo keeps of an attached file: what its chip shows, and the upload id
+ * a Retry re-sends before the message's row has landed.
+ */
+export type EchoAttachment = Pick<ChatAttachment, "id" | "filename" | "mime">;
 
 let echoSerial = 0;
 
@@ -80,6 +80,19 @@ export function echoContent(echo: PendingEcho): ContentBlock[] {
       mime: a.mime,
     })),
   ];
+}
+
+/** Shape an echo as a user message so the thread renders it like a row. */
+export function echoAsMessage(echo: PendingEcho, conversationId: string): Message {
+  return {
+    id: echo.id,
+    conversation_id: conversationId,
+    seq: Number.MAX_SAFE_INTEGER,
+    role: "user",
+    content: echoContent(echo),
+    status: "complete",
+    created_at: new Date(echo.sentAt).toISOString(),
+  };
 }
 
 function createdAtMs(row: Message): number | null {

@@ -689,7 +689,10 @@ components:
           description: Notes created for a subject the partition did not cover.
         retired:
           type: integer
-          description: Notes a later entry contradicted, moved to `RETIRED.md`.
+          description: |
+            Notes a later entry contradicted, or whose raw entries are all
+            gone, moved to `RETIRED.md` ("Retire a note whose raw entries are
+            all gone").
         dropped:
           type: integer
           description: |

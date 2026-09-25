@@ -5,6 +5,7 @@
 // the turn hook's — it retires each one when its persisted row lands.)
 import type { Message } from "@/lib/api/chat";
 import type { LiveMessage } from "@/lib/hooks/chatTurnEvents";
+import type { EchoAttachment, PendingEcho } from "@/lib/chat/echoes";
 
 /** The text blocks of a message, joined. */
 export function textOf(m: Message): string {
@@ -34,14 +35,23 @@ export function visibleThreadMessages(
 }
 
 /**
- * The message a Retry re-sends: the newest optimistic echo, else the last persisted
- * user message (the failed turn's prompt survives server-side). Empty when
+ * What a Retry re-sends. The newest optimistic echo is sent again as it was — its
+ * text and its files' upload ids — since its row has not landed; otherwise the
+ * last persisted user message (the failed turn's prompt survives server-side) is
+ * resent by id, and the daemon rebuilds it with its attachments. `null` when
  * there is nothing to resend.
  */
-export function retryTextFor(visible: Message[], echoText: string | undefined): string {
-  if (echoText !== undefined) return echoText;
+export type RetryTarget =
+  | { kind: "send"; text: string; attachments: EchoAttachment[] }
+  | { kind: "resend"; messageId: string };
+
+export function retryTargetFor(
+  visible: Message[],
+  echo: PendingEcho | undefined,
+): RetryTarget | null {
+  if (echo) return { kind: "send", text: echo.text, attachments: echo.attachments };
   for (let i = visible.length - 1; i >= 0; i -= 1) {
-    if (visible[i].role === "user") return textOf(visible[i]);
+    if (visible[i].role === "user") return { kind: "resend", messageId: visible[i].id };
   }
-  return "";
+  return null;
 }

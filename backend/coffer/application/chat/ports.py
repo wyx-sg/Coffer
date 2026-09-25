@@ -140,3 +140,8 @@ class ChatMediaStore(Protocol):
         """The stored file an id names, or ``None`` when there is none (never
         uploaded, or pruned)."""
         ...
+
+    async def present(self, attachment: Attachment) -> bool:
+        """Whether a persisted reference's bytes are still on disk — a web
+        upload's or a channel's, which the same 30-day sweep ages out."""
+        ...

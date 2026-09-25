@@ -1,6 +1,6 @@
 // pages/ChatPage.test.tsx
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ChatPage } from "./ChatPage";
@@ -24,6 +24,8 @@ vi.mock("@/lib/api/chat", () => ({
     setAgentModel: vi.fn().mockResolvedValue({ cwd: null, model: null }),
     // Fire-and-return turn control (ADR chat-single-owner-live-mirror).
     sendMessage: vi.fn().mockResolvedValue({ queued: false }),
+    resendMessage: vi.fn().mockResolvedValue({ queued: false }),
+    uploadAttachment: vi.fn(),
     setPending: vi.fn().mockResolvedValue({ pending: [] }),
     interruptTurn: vi.fn().mockResolvedValue(undefined),
   },
@@ -277,6 +279,60 @@ describe("ChatPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /start a new chat/i }));
     expect(await screen.findByRole("textbox", { name: /message input/i })).toBeInTheDocument();
   });
+
+  acceptance(
+    "chat",
+    "a draft's first message refused after its conversation is created keeps its text and files",
+    async () => {
+      const shot = { id: "a".repeat(32), filename: "shot.png", mime: "image/png", size: 2048 };
+      chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
+      chatApiMock.listMessages.mockResolvedValue({ messages: [] });
+      chatApiMock.createConversation.mockResolvedValue(makeConv({ id: "new-conv" }));
+      chatApiMock.getConversation.mockResolvedValue(makeConv({ id: "new-conv" }));
+      chatApiMock.uploadAttachment.mockResolvedValue(shot);
+      chatApiMock.sendMessage.mockRejectedValueOnce(
+        new ApiError("ATTACHMENT_NOT_FOUND", "attachment not found"),
+      );
+      renderPage("/chat");
+
+      const draft = await screen.findByRole("textbox", { name: /message input/i });
+      fireEvent.change(screen.getByTestId("composer-file-input"), {
+        target: { files: [new File([new Uint8Array(2048)], "shot.png", { type: "image/png" })] },
+      });
+      await waitFor(() => expect(screen.getByRole("button", { name: /send/i })).toBeEnabled());
+      fireEvent.change(draft, { target: { value: "what is this?" } });
+      fireEvent.keyDown(draft, { key: "Enter", shiftKey: false });
+
+      // The conversation is created, then its first message is refused.
+      await waitFor(() =>
+        expect(chatApiMock.sendMessage).toHaveBeenCalledWith("new-conv", "what is this?", [
+          shot.id,
+        ]),
+      );
+      // The refusal is shown — without a Retry, since the message never ran …
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(/no longer available/i);
+      expect(within(alert).queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+      // … and the new conversation's composer holds the text and the file again.
+      const composer = screen.getByTestId("composer");
+      await waitFor(() =>
+        expect(within(composer).getByTestId("attachment-chip")).toHaveTextContent("shot.png"),
+      );
+      expect(within(composer).getByRole("textbox", { name: /message input/i })).toHaveValue(
+        "what is this?",
+      );
+      expect(screen.getByText(/send a message to start the conversation/i)).toBeInTheDocument();
+
+      // Sending it again from there carries the same file.
+      chatApiMock.sendMessage.mockResolvedValueOnce({ queued: false });
+      fireEvent.click(within(composer).getByRole("button", { name: /send/i }));
+      await waitFor(() =>
+        expect(chatApiMock.sendMessage).toHaveBeenLastCalledWith("new-conv", "what is this?", [
+          shot.id,
+        ]),
+      );
+    },
+  );
 
   test("surfaces an error when creating a conversation fails", async () => {
     chatApiMock.listConversations.mockResolvedValue({ conversations: [] });
