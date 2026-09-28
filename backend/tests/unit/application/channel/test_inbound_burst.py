@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from coffer.application.channel import inbound_burst
 from coffer.application.channel.inbound_burst import BurstPart, InboundBurst, merge_parts
 from coffer.application.channel.turn_driver import QueuedInbound
 from coffer.domain.chat.attachment import Attachment
@@ -14,12 +15,18 @@ from coffer.domain.chat.attachment import Attachment
 KEY = ("chan", "chat", "")
 
 
-def _part(body: str, *, msg_id: str = "", wants_more: bool = False, **item: Any) -> BurstPart:
+@pytest.fixture(autouse=True)
+def _real_window_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The suite-wide conftest caps windows at 0; these tests are about windows.
+    monkeypatch.setattr(inbound_burst, "MAX_WINDOW_SECONDS", 60.0)
+
+
+def _part(body: str, *, msg_id: str = "", window: float = 0.02, **item: Any) -> BurstPart:
     return BurstPart(
         origin=f"[origin {msg_id}]",
         body=body,
         item=QueuedInbound(text="", reply_to_message_id=msg_id, **item),
-        wants_more=wants_more,
+        window=window,
     )
 
 
@@ -36,7 +43,7 @@ def test_merge_keeps_one_origin_every_body_and_every_attachment() -> None:
     a = Attachment(path="/tmp/a.png", mime="image/png", filename="a.png")
     merged = merge_parts(
         [
-            _part("record", msg_id="m1", attachments=(a,), wants_more=True),
+            _part("record", msg_id="m1", attachments=(a,), window=0.08),
             _part("look into this", msg_id="m2", title_hint="look into this"),
         ]
     )
@@ -51,8 +58,8 @@ def test_merge_keeps_one_origin_every_body_and_every_attachment() -> None:
 )
 async def test_a_message_inside_the_window_joins_the_burst() -> None:
     released, on_flush = _collector()
-    burst = InboundBurst(on_flush, short_window=0.02, long_window=0.08)
-    burst.add(KEY, None, _part("record", msg_id="m1", wants_more=True))
+    burst = InboundBurst(on_flush)
+    burst.add(KEY, None, _part("record", msg_id="m1", window=0.08))
     await asyncio.sleep(0.04)  # inside the long window
     assert released == []
     burst.add(KEY, None, _part("look into this", msg_id="m2"))
@@ -66,7 +73,7 @@ async def test_a_message_inside_the_window_joins_the_burst() -> None:
 )
 async def test_messages_further_apart_than_the_window_are_separate() -> None:
     released, on_flush = _collector()
-    burst = InboundBurst(on_flush, short_window=0.02, long_window=0.08)
+    burst = InboundBurst(on_flush)
     burst.add(KEY, None, _part("one", msg_id="m1"))
     await asyncio.sleep(0.05)
     burst.add(KEY, None, _part("two", msg_id="m2"))
@@ -76,7 +83,7 @@ async def test_messages_further_apart_than_the_window_are_separate() -> None:
 
 async def test_other_keys_do_not_merge() -> None:
     released, on_flush = _collector()
-    burst = InboundBurst(on_flush, short_window=0.02, long_window=0.08)
+    burst = InboundBurst(on_flush)
     burst.add(KEY, None, _part("dm"))
     burst.add(("chan", "chat", "t1"), None, _part("thread"))
     await asyncio.sleep(0.05)
@@ -85,8 +92,8 @@ async def test_other_keys_do_not_merge() -> None:
 
 async def test_flush_releases_now_and_awaits_the_submission() -> None:
     released, on_flush = _collector()
-    burst = InboundBurst(on_flush, short_window=10, long_window=10)
-    burst.add(KEY, None, _part("held"))
+    burst = InboundBurst(on_flush)
+    burst.add(KEY, None, _part("held", window=10))
     await burst.flush(KEY)
     assert len(released) == 1
     assert not burst.holding(KEY)
@@ -95,7 +102,7 @@ async def test_flush_releases_now_and_awaits_the_submission() -> None:
 @pytest.mark.acceptance(spec="channels", scenario="/stop drops messages still being held")
 async def test_drop_discards_the_burst() -> None:
     released, on_flush = _collector()
-    burst = InboundBurst(on_flush, short_window=0.02, long_window=0.02)
+    burst = InboundBurst(on_flush)
     burst.add(KEY, None, _part("never"))
     await burst.drop(KEY)
     await asyncio.sleep(0.05)

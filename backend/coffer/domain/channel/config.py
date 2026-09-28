@@ -69,6 +69,11 @@ class _CommonChannelFields(BaseModel):
     # it also mentions the bot, so the bot never butts into human-aimed traffic.
     require_mention: bool = True
     ignore_other_mentions: bool = False
+    # The quiet windows of "Take a burst of messages as one turn", in seconds: how
+    # long to wait after a text message, and after a forwarded record or files with
+    # no text, before the held burst runs. 0 runs every message as its own turn.
+    wait_after_text_seconds: float = Field(default=1.5, ge=0, le=60)
+    wait_after_forward_seconds: float = Field(default=5.0, ge=0, le=60)
     # NOTE: a channel curates no MODELS. A new conversation opens on the bound
     # agent's own CLI default and ``/model`` offers that agent's whole
     # catalogue, refusing nothing — picking a model is the agent's business,

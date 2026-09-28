@@ -89,6 +89,8 @@ Send the bot a message. The first message opens a conversation on the channel's 
 
 Messages sent in quick succession are one question. The channel waits for a short pause after each message before it starts the turn: 1.5 seconds after text, 5 seconds after a forwarded chat record or files with no text. Anything you send inside that pause joins the same turn. So you can forward a record and then type "look into this", and the agent answers once, having seen both. Each message is still acknowledged the moment it arrives.
 
+Both pauses are per-channel settings: on the Channels page under **Edit** → **Message batching**, or with `coffer channel set <name> --wait-after-text <seconds> --wait-after-forward <seconds>`. Each takes 0 to 60 seconds; 0 answers every such message on its own.
+
 Messages you send while a turn is running wait in the conversation's queue and run in order — the same queue the Chat page shows. A burst sent during a turn joins the queue as one entry. The channel accepts up to 10 waiting messages; past that it tells you the channel is busy and drops the message.
 
 ### Parallel conversations

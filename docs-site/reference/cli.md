@@ -1253,6 +1253,8 @@ Its secrets are credential refs: store each secret first with `coffer credential
 | `--runs-on` | option | text |  | machine_id of the machine that runs this channel (default: this one) |
 | `--require-mention / --no-require-mention` | option | boolean |  | In groups, answer only when @mentioned or replied to (default: on) |
 | `--ignore-other-mentions / --no-ignore-other-mentions` | option | boolean |  | In groups, drop a message that @mentions anyone else (default: off) |
+| `--wait-after-text` | option | float (0-60) |  | Seconds to wait after a text message for more before answering (default: 1.5; 0 = none) |
+| `--wait-after-forward` | option | float (0-60) |  | Seconds to wait after a forwarded record or files with no text (default: 5; 0 = none) |
 
 ### channel pair
 
@@ -1300,7 +1302,7 @@ Takes effect without a restart: the binding is config, and both daemons reconcil
 coffer channel set [OPTIONS] NAME
 ```
 
-Change when the bot answers in a group.
+Change when the bot answers in a group, and how long it waits for more.
 
 Options left out keep their current value.
 
@@ -1309,6 +1311,8 @@ Options left out keep their current value.
 | `NAME` | argument | text | required | Channel name |
 | `--require-mention / --no-require-mention` | option | boolean |  | In groups, answer only when @mentioned or replied to (default: on) |
 | `--ignore-other-mentions / --no-ignore-other-mentions` | option | boolean |  | In groups, drop a message that @mentions anyone else (default: off) |
+| `--wait-after-text` | option | float (0-60) |  | Seconds to wait after a text message for more before answering (default: 1.5; 0 = none) |
+| `--wait-after-forward` | option | float (0-60) |  | Seconds to wait after a forwarded record or files with no text (default: 5; 0 = none) |
 
 ### channel notify
 

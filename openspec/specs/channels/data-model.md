@@ -16,6 +16,8 @@ ChannelConfig (discriminator: channel_type)
 │   ├── default_agent_config: dict | None
 │   ├── require_mention: bool = True        # group gating
 │   ├── ignore_other_mentions: bool = False # group gating
+│   ├── wait_after_text_seconds: float = 1.5     # burst quiet window after text (0–60)
+│   ├── wait_after_forward_seconds: float = 5.0  # …after a forward or bare files (0–60)
 │   └── runs_on: str | None = None          # machine_id that runs the adapter
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"

@@ -85,13 +85,12 @@ def _isolated_agent_state_root(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def _no_channel_burst_window(monkeypatch):
     """Release a channel message as soon as the loop turns instead of after the
-    1.5 s / 5 s quiet window (spec channels "Take a burst of messages as one turn"),
-    so the suite does not sleep through it on every turn. The burst's own tests
-    pass their windows explicitly; a test that wants the real ones restores them."""
+    channel's quiet window (spec channels "Take a burst of messages as one turn"),
+    so the suite does not sleep through it on every turn. A test about the window
+    itself raises the cap again."""
     from coffer.application.channel import inbound_burst
 
-    monkeypatch.setattr(inbound_burst, "SHORT_WINDOW_SECONDS", 0.0)
-    monkeypatch.setattr(inbound_burst, "LONG_WINDOW_SECONDS", 0.0)
+    monkeypatch.setattr(inbound_burst, "MAX_WINDOW_SECONDS", 0.0)
 
 
 # Accept any Host header across the suite. The loopback-Host guard

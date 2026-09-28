@@ -27,7 +27,7 @@ from coffer.application.channel.ephemeral import (
     safe_send,
     target_for_command,
 )
-from coffer.application.channel.inbound_burst import BurstPart, InboundBurst
+from coffer.application.channel.inbound_burst import BurstPart, InboundBurst, window_for
 from coffer.application.channel.inbound_events import InboundEvents
 from coffer.application.channel.pairing import PairingManager, claim_pairing
 from coffer.application.channel.parallel_threads import resolve_conversation_thread_id
@@ -321,8 +321,7 @@ class InboundProcessor:
                 origin=format_origin(msg, platform=binding.channel_type),
                 body=text or attachment_note(attachments),
                 item=item,
-                # A forwarded record or bare files are rarely the whole ask.
-                wants_more=msg.forwarded or not msg.text.strip(),
+                window=window_for(binding, msg),
             ),
         )
 

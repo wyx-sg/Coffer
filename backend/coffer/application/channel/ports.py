@@ -235,6 +235,9 @@ class ChannelBinding:
     # from the channel config.
     require_mention: bool = True
     ignore_other_mentions: bool = False
+    # Quiet windows of "Take a burst of messages as one turn", from the channel config.
+    wait_after_text_seconds: float = 1.5
+    wait_after_forward_seconds: float = 5.0
     # The channel's framework-level ``scope`` off the row (ADR
     # per-agent-resource-scope), rewritten into agent KEYS by the gate
     # (``wanted.Routing``) — the row names agent UIDS, every reader below here

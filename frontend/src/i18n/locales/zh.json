@@ -1386,7 +1386,7 @@
     },
     "edit": {
       "title": "编辑消息渠道",
-      "subtitle": "更换绑定的 Agent、轮换密钥，或设置机器人在群聊中何时回复。密钥字段留空则保留当前值。",
+      "subtitle": "更换绑定的 Agent、轮换密钥，设置机器人在群聊中何时回复，或它等待后续消息的时长。密钥字段留空则保留当前值。",
       "agent": "默认 Agent",
       "agentHint": "该消息渠道上的新会话将使用此 Agent。",
       "newBotToken": "新的机器人 token",
@@ -1400,6 +1400,15 @@
         "requireMentionHint": "机器人在群里保持沉默，直到有人 @ 它或回复它。关闭后，它会处理你在群里发的每一条消息——这需要先在 BotFather 里关闭机器人的隐私模式。",
         "ignoreOtherMentions": "忽略同时 @ 了其他人的消息",
         "ignoreOtherMentionsHint": "群消息只要 @ 了其他人，即使也 @ 了机器人，机器人也不回应。"
+      },
+      "burst": {
+        "title": "消息合并",
+        "unit": "秒",
+        "waitAfterText": "文字消息后等待",
+        "waitAfterTextHint": "这段时间内再发的消息会合成一个回合。设为 0 则每条消息单独回答。",
+        "waitAfterForward": "转发记录或附件后等待",
+        "waitAfterForwardHint": "转发的聊天记录、不带文字的文件很少是完整的问题，所以多等一会儿。",
+        "invalid": "请输入 {{min}} 到 {{max}} 之间的秒数。"
       }
     },
     "test": {

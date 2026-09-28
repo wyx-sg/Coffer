@@ -7,9 +7,10 @@ it. Each message is held per ``(channel, chat, thread)`` for a short quiet
 window; a message arriving inside the window joins the burst and restarts it,
 and when the chat goes quiet the burst is released as ONE ``QueuedInbound``.
 
-The window depends on what arrived last: a text message is usually the whole
-ask (short wait), while a forwarded record or files without text rarely are
-(long wait). Platform-independent — the album buffer of spec channels/telegram
+The window depends on what arrived last and is the channel's own setting: a text
+message is usually the whole ask (``wait_after_text_seconds``), while a forwarded
+record or files without text rarely are (``wait_after_forward_seconds``).
+Platform-independent — the album buffer of spec channels/telegram
 "Debounce an album into one turn" runs before this, inside the transport.
 """
 
@@ -22,25 +23,25 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.turn_driver import QueuedInbound
+from coffer.domain.channel.envelopes import InboundMessage
 from coffer.domain.chat.attachment import Attachment
 
 __all__ = [
-    "LONG_WINDOW_SECONDS",
-    "SHORT_WINDOW_SECONDS",
+    "MAX_WINDOW_SECONDS",
     "BurstKey",
     "BurstPart",
     "InboundBurst",
     "merge_parts",
+    "window_for",
 ]
 
 _logger = logging.getLogger(__name__)
 
-#: Quiet window after a text message.
-SHORT_WINDOW_SECONDS = 1.5
-#: Quiet window after a message that is rarely the whole ask — a forwarded
-#: record, or files with no text of their own.
-LONG_WINDOW_SECONDS = 5.0
+#: The longest any window is held, whatever the config says — the config's own
+#: bound, restated where the timer is armed.
+MAX_WINDOW_SECONDS = 60.0
 
 #: ``(channel, chat_id, thread_id)`` — the reply thread, not the conversation
 #: key: two threads that share a conversation still never merge into one turn.
@@ -55,8 +56,16 @@ class BurstPart:
     origin: str
     body: str
     item: QueuedInbound
-    #: Whether this message wants the long window (see ``LONG_WINDOW_SECONDS``).
-    wants_more: bool = False
+    #: How long the chat must stay quiet after this message (see ``window_for``).
+    window: float = 0.0
+
+
+def window_for(binding: ChannelBinding, msg: InboundMessage) -> float:
+    """The quiet window after ``msg``: the longer one for a forwarded record or
+    files with no text of their own, which are rarely the whole ask."""
+    if msg.forwarded or not msg.text.strip():
+        return binding.wait_after_forward_seconds
+    return binding.wait_after_text_seconds
 
 
 #: ``(context, merged) -> awaitable`` — submits the released turn. ``context``
@@ -99,14 +108,8 @@ class InboundBurst:
     def __init__(
         self,
         on_flush: FlushCallback,
-        *,
-        short_window: float | None = None,
-        long_window: float | None = None,
     ) -> None:
         self._on_flush = on_flush
-        # Read at construction, not bound as defaults, so a test can shorten them.
-        self._short = SHORT_WINDOW_SECONDS if short_window is None else short_window
-        self._long = LONG_WINDOW_SECONDS if long_window is None else long_window
         self._bursts: dict[BurstKey, _Burst] = {}
         self._timers: dict[BurstKey, asyncio.TimerHandle] = {}
         #: The latest release of each key still being submitted.
@@ -119,7 +122,7 @@ class InboundBurst:
         burst.context = context
         burst.parts.append(part)
         self._cancel_timer(key)
-        window = self._long if part.wants_more else self._short
+        window = max(0.0, min(part.window, MAX_WINDOW_SECONDS))
         self._timers[key] = asyncio.get_running_loop().call_later(window, self._fire, key)
 
     def holding(self, key: BurstKey) -> bool:
