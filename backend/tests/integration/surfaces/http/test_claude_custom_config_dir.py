@@ -89,10 +89,10 @@ def test_custom_config_dir_agent_uses_its_own_claude_json(tmp_path, monkeypatch)
         pairs = sorted((e["name"], e["source"]) for e in r.json()["items"])
         assert pairs == [("custom-only", "global")]
 
-        # Install writes Coffer's entry into it.
-        r = c.post(f"/api/v1/agents/{uid}/mcp-install")
+        # Connecting writes Coffer's gateway entry into it.
+        r = c.post(f"/api/v1/agents/{uid}/coffer-connection")
         assert r.status_code == 200, r.text
-        assert r.json()["installed"] is True
+        assert {p["key"]: p["installed"] for p in r.json()["parts"]}["mcp"] is True
 
     data = json.loads(inner_json.read_text())
     assert data["mcpServers"]["coffer"] == {
@@ -124,7 +124,7 @@ def test_default_config_dir_agent_uses_home_claude_json(tmp_path, monkeypatch):
         r = c.get(f"/api/v1/agents/{uid}/mcp-entries")
         assert sorted(e["name"] for e in r.json()["items"]) == ["home-only"]
 
-        r = c.post(f"/api/v1/agents/{uid}/mcp-install")
+        r = c.post(f"/api/v1/agents/{uid}/coffer-connection")
         assert r.status_code == 200, r.text
 
     assert json.loads(home_json.read_text())["mcpServers"]["coffer"]["command"] == str(shim)

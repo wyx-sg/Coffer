@@ -19,8 +19,8 @@ import {
   usePatchAgent,
   useAgentConfigFiles,
   useAgentConfigFile,
-  useAgentMcpStatus,
-  useAgentMcpInstall,
+  useAgentConnection,
+  useAgentConnect,
 } from "./useAgents";
 
 function makeClient() {
@@ -158,58 +158,57 @@ describe("useAgentConfigFile", () => {
   });
 });
 
-describe("useAgentMcpStatus", () => {
-  test("GETs the mcp-install status and is gated on a uid", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(200, { installed: false, command: null }),
-    );
+describe("useAgentConnection", () => {
+  test("GETs the Coffer connection and is gated on a uid", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { state: "disconnected", parts: [] }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const off = renderHook(() => useAgentMcpStatus(""), { wrapper: wrapperFor(makeClient()) });
+    const off = renderHook(() => useAgentConnection(""), { wrapper: wrapperFor(makeClient()) });
     expect(off.result.current.fetchStatus).toBe("idle");
 
-    const { result } = renderHook(() => useAgentMcpStatus("u-cur"), {
+    const { result } = renderHook(() => useAgentConnection("u-cur"), {
       wrapper: wrapperFor(makeClient()),
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data?.installed).toBe(false);
-    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/u-cur\/mcp-install$/);
+    expect(result.current.data?.state).toBe("disconnected");
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/u-cur\/coffer-connection$/);
   });
 });
 
-describe("useAgentMcpInstall", () => {
-  test("POSTs to install when given true and invalidates the status query", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(200, { installed: true, command: "coffer mcp" }),
-    );
+describe("useAgentConnect", () => {
+  test("POSTs to connect when given true and stores the answer as the status", async () => {
+    const answer = {
+      state: "connected",
+      parts: [{ key: "mcp", installed: true, detail: "/opt/coffer-mcp-shim" }],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, answer));
     vi.stubGlobal("fetch", fetchMock);
 
     const qc = makeClient();
-    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
-    const { result } = renderHook(() => useAgentMcpInstall("u-cur"), { wrapper: wrapperFor(qc) });
+    const { result } = renderHook(() => useAgentConnect("u-cur"), { wrapper: wrapperFor(qc) });
     await result.current.mutateAsync(true);
 
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/u-cur\/mcp-install$/);
+    expect(String(url)).toMatch(/\/agents\/u-cur\/coffer-connection$/);
     expect((init as RequestInit).method).toBe("POST");
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ["agents", "u-cur", "mcp-install"],
-    });
+    expect(qc.getQueryData(["agents", "u-cur", "coffer-connection"])).toEqual(answer);
   });
 
-  test("DELETEs to uninstall when given false", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse(200, { installed: false, command: null }),
-    );
+  test("DELETEs to disconnect when given false", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { state: "disconnected", parts: [] }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const { result } = renderHook(() => useAgentMcpInstall("u-cur"), {
+    const { result } = renderHook(() => useAgentConnect("u-cur"), {
       wrapper: wrapperFor(makeClient()),
     });
     await result.current.mutateAsync(false);
 
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/u-cur\/mcp-install$/);
+    expect(String(url)).toMatch(/\/agents\/u-cur\/coffer-connection$/);
     expect((init as RequestInit).method).toBe("DELETE");
   });
 });

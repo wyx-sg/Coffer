@@ -52,9 +52,9 @@ def test_restart_moves_the_home_entry_into_the_custom_dir(tmp_path, monkeypatch)
 
     set_active_token(TOKEN)
     with TestClient(create_app(), headers={"X-Coffer-Token": TOKEN}) as c:
-        r = c.get(f"/api/v1/agents/{uid}/mcp-install")
+        r = c.get(f"/api/v1/agents/{uid}/coffer-connection")
         assert r.status_code == 200, r.text
-        assert r.json()["installed"] is True
+        assert {p["key"]: p["installed"] for p in r.json()["parts"]}["mcp"] is True
 
     assert json.loads((custom / ".claude.json").read_text()) == {"mcpServers": {"coffer": entry}}
     assert json.loads(home_json.read_text()) == {"mcpServers": {}}

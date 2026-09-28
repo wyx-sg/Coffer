@@ -3,9 +3,11 @@ hook for an agent the developer drives themselves (spec memory "Install
 delivery hooks explicitly and removably", "Audit every delivery fire").
 
 **Explicit only.** Nothing installs this as a side effect of registering an
-agent, moving its config dir, or aggregating memory — only a direct call to
-`install()` ever writes into a settings file, and every install/remove is
-audited with its actor. `status()` never writes anything.
+agent, moving its config dir, or aggregating memory. What calls `install()` is
+the user connecting the agent to Coffer (spec agent-registry "Connect an agent
+to Coffer in one action", which composes this hook as one of its parts), or the
+`memory` switch turning on for an agent the user already connected; every
+install/remove is audited with its actor. `status()` never writes anything.
 
 Touches an agent's config directory the same way `AgentConfigFileService`
 does: through the allowlisted `ConfigFileSpec` from
@@ -158,24 +160,15 @@ class DeliveryService:
             event=adapter.event,
         )
 
-    async def status(self, agent_uid: str | None = None) -> tuple[DeliveryStatus, ...]:
-        """Delivery status for one agent, or for every registered agent that
-        has an adapter (types with none are silently skipped, not errored,
-        since a mixed-fleet status view shouldn't fail on an untouchable
-        one)."""
-        if agent_uid is not None:
-            agent, cfg = await self._agent(agent_uid)
-            return (await self._status_for(agent, cfg),)
-        out: list[DeliveryStatus] = []
-        for resource in await self._agents.list():
-            try:
-                cfg = AgentConfig.model_validate(resource.config)
-            except Exception:
-                continue
-            if cfg.type not in _ADAPTERS:
-                continue
-            out.append(await self._status_for(resource, cfg))
-        return tuple(out)
+    @staticmethod
+    def supports(agent_type: AgentType) -> bool:
+        """Whether Coffer has a hook adapter for `agent_type`."""
+        return agent_type in _ADAPTERS
+
+    async def status(self, agent_uid: str) -> DeliveryStatus:
+        """Whether the hook is installed for one agent. Writes nothing."""
+        agent, cfg = await self._agent(agent_uid)
+        return await self._status_for(agent, cfg)
 
     async def install(self, agent_uid: str, *, actor: str) -> DeliveryStatus:
         """Install Coffer's hook for one agent. Idempotent: a prior install is
@@ -242,14 +235,13 @@ class DeliveryService:
             notes.append(f"{resource.name}: delivery hook rewritten to the current command")
         return tuple(notes)
 
-    async def remove_everywhere(self, *, actor: str) -> tuple[list[str], list[str]]:
-        """Remove the hook from every agent that carries one. Returns the uids
-        it was removed from and a note per agent, removed or not.
+    async def remove_everywhere(self, *, actor: str) -> tuple[str, ...]:
+        """Remove the hook from every agent that carries one. Returns a note
+        per agent, removed or not.
 
         Best-effort per agent, like ``heal_drift``: one malformed settings file
         must not keep the hook in every other agent.
         """
-        removed: list[str] = []
         notes: list[str] = []
         for resource in await self._agents.list():
             try:
@@ -265,9 +257,8 @@ class DeliveryService:
             except Exception as exc:
                 notes.append(f"{resource.name}: could not remove the delivery hook ({exc!r})")
                 continue
-            removed.append(resource.uid)
             notes.append(f"{resource.name}: delivery hook removed")
-        return removed, notes
+        return tuple(notes)
 
     async def remove(self, agent_uid: str, *, actor: str) -> DeliveryStatus:
         """Remove Coffer's hook for one agent. A clean no-op — no write, no

@@ -17,8 +17,8 @@ import {
   agentConfigFilesKey,
   agentKey,
   agentMcpEntriesKey,
+  agentConnectionKey,
   agentMcpEntryKey,
-  agentMcpInstallKey,
   agentPluginKey,
   agentPluginsKey,
   agentsKey,
@@ -29,7 +29,7 @@ import {
 
 /** Shared onError → toast handler — a failed mutation must never be silent.
  *  Mutations whose consumer already renders the translated error inline
- *  (register, patch, mcp-install, adopt-mcp-entry) or toasts at the call site
+ *  (register, patch, coffer-connection, adopt-mcp-entry) or toasts at the call site
  *  (unmanaged skills) do not use it, so one failure is reported once. */
 function useAgentToastError() {
   const { t } = useTranslation();
@@ -115,24 +115,25 @@ export function useAgentConfigFile(uid: string, key: string | null) {
   });
 }
 
-// --- Coffer MCP install (spec agent-registry v2) ---
+// --- Coffer connection (spec agent-registry "Connect an agent to Coffer in one action") ---
 
-export function useAgentMcpStatus(uid: string) {
+export function useAgentConnection(uid: string) {
   return useQuery({
-    queryKey: agentMcpInstallKey(uid),
-    queryFn: () => agentsApi.mcpStatus(uid),
+    queryKey: agentConnectionKey(uid),
+    queryFn: () => agentsApi.connection(uid),
     enabled: !!uid,
   });
 }
 
-export function useAgentMcpInstall(uid: string) {
+/** `true` connects (installs every applicable part), `false` disconnects. */
+export function useAgentConnect(uid: string) {
   const qc = useQueryClient();
   const onError = useAgentToastError();
   return useMutation({
-    mutationFn: (install: boolean) =>
-      install ? agentsApi.mcpInstall(uid) : agentsApi.mcpUninstall(uid),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: agentMcpInstallKey(uid) });
+    mutationFn: (connect: boolean) =>
+      connect ? agentsApi.connect(uid) : agentsApi.disconnect(uid),
+    onSuccess: (data) => {
+      qc.setQueryData(agentConnectionKey(uid), data);
     },
     onError,
   });

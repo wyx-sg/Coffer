@@ -539,7 +539,7 @@ def test_codex_internal_state_tables_survive_every_write(tmp_path, monkeypatch):
     with _client(app) as c:
         uid = _register(c, "codex", "cx")
         writes = [
-            lambda: c.post(f"/api/v1/agents/{uid}/mcp-install"),
+            lambda: c.post(f"/api/v1/agents/{uid}/coffer-connection"),
             lambda: c.patch(f"/api/v1/agents/{uid}/plugins/p2@m1", json={"enabled": False}),
             lambda: c.delete(f"/api/v1/agents/{uid}/plugins/p1@m1"),
             lambda: c.delete(f"/api/v1/agents/{uid}/mcp-entries/fetcher"),

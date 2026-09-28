@@ -22,9 +22,8 @@ belongs to an upstream server and is named `<server>__<tool>`.
 <!-- end:memory -->
 | `coffer__diagnose` | Coffer itself is misbehaving and you want its side of the story. |
 
-If you cannot see these at all, Coffer's MCP server is not installed for the
-agent you are running as; the developer installs it with
-`coffer agent mcp install <agent>`.
+If you cannot see these at all, the agent you are running as is not connected
+to Coffer; the developer connects it with `coffer agent connect <agent>`.
 
 `coffer__diagnose` answers with two correlated timelines for a window you
 choose — what changed in Coffer (its audit log) and what its daemon logged —

@@ -32,7 +32,7 @@ The gateway:
 ## Prerequisites
 
 - The daemon is running (see [Running the daemon](/guides/daemon)).
-- At least one agent has Coffer's MCP entry installed (see [Agents](/guides/agents#install-coffer-s-mcp-entry)), or another client is [connected](/guides/connect-a-client).
+- At least one agent has Coffer's MCP entry installed (see [Agents](/guides/agents#connect-an-agent-to-coffer)), or another client is [connected](/guides/connect-a-client).
 
 ## Register a stdio server
 

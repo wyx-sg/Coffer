@@ -24,8 +24,11 @@ import type { AgentOut } from "@/lib/api/agents";
 vi.mock("@/lib/hooks/useAgents", () => ({
   useRemoveAgent: vi.fn(),
   // The "Coffer MCP" column renders a status badge per row.
-  useAgentMcpStatus: vi.fn(() => ({ data: { installed: false }, isPending: false })),
-  useAgentMcpInstall: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useAgentConnection: vi.fn(() => ({
+    data: { state: "disconnected", parts: [] },
+    isPending: false,
+  })),
+  useAgentConnect: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 
 // The "Coffer skills" column counts enabled bindings from the skills list.

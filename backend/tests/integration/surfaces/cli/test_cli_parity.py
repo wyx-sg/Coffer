@@ -93,6 +93,11 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         # The web model picker's list (GET /agent-providers/{agent_key}/models).
         "models",
         "config",
+        # An agent's Coffer connection (spec agent-registry "Connect an agent
+        # to Coffer in one action"): the gateway entry and the memory hook.
+        "connect",
+        "disconnect",
+        "connection",
         "mcp",
         "plugin",
         "native-memory",
@@ -101,15 +106,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "transcripts",
     },
     "agent config": {"files", "ls", "cat", "write", "edit", "rm"},
-    "agent mcp": {
-        "status",
-        "install",
-        "uninstall",
-        "adopt",
-        "entries",
-        "show-entry",
-        "remove-entry",
-    },
+    "agent mcp": {"adopt", "entries", "show-entry", "remove-entry"},
     "agent plugin": {"list", "show", "enable", "disable", "uninstall"},
     "channel": {"register", "list", "status", "pair", "bind", "set", "notify"},
     # `files`, `cat` and `write` are the skill-file tree the web editor browses
@@ -147,9 +144,6 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     },
     "memory": {
         "context",
-        "delivery",
-        "delivery-install",
-        "delivery-remove",
         "distil",
         "ls",
         "note",

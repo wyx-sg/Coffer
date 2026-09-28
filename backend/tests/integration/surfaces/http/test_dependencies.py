@@ -69,7 +69,7 @@ _PROVIDERS: list[_Provider] = [
         "_agent_service",
         "_auto_detect_service",
         "_agent_config_file_service",
-        "_agent_mcp_service",
+        "_agent_connection_service",
         "_agent_model_catalogue",
     ),
     *_pairs(

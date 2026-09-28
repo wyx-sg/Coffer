@@ -55,7 +55,7 @@ Skills, knowledge, memory and model providers work the same way: kept once, deli
 
 ## Does Coffer change my agents' configuration files?
 
-Only when you ask it to, and each change is recorded in the audit log. Installing Coffer's MCP entry writes one server entry into the agent's configuration. Delivering a skill places a link to it in the agent's skills directory (for Claude Code, `~/.claude/skills`). Switching a model provider writes the provider's settings into the agent's own configuration. Installing memory delivery (`coffer memory delivery-install <agent>`) adds a session-start hook to the agent's settings. Coffer reads an agent's own memory files but never writes them. See [Agents](/guides/agents).
+Only when you ask it to, and each change is recorded in the audit log. Connecting an agent to Coffer writes one MCP server entry into the agent's configuration and, while the `memory` feature is on, a session-start hook into its settings. Delivering a skill places a link to it in the agent's skills directory (for Claude Code, `~/.claude/skills`). Switching a model provider writes the provider's settings into the agent's own configuration. Coffer reads an agent's own memory files but never writes them. See [Agents](/guides/agents).
 
 ## Do I have to start the daemon myself?
 

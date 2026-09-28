@@ -101,7 +101,7 @@ Work through these causes in order:
 | --- | --- | --- |
 | The tool is not advertised, because the catalogue exceeds the listing budget (50 upstream tools by default). | The server is healthy and the tool is enabled. | The tool still works. Ask the agent to find it with `coffer__search_tools`, or set `COFFER_TOOL_TIERING=off` in the daemon's environment to list everything. |
 | The server is disabled on this machine, or its reach does not include this agent. | The server's reach control, or `coffer scope show mcp_server <name>`. | Enable it, or add the agent: `coffer resource enable mcp_server <name>`, `coffer scope set mcp_server <name> --agents <agent>`. |
-| The agent's session reports no identity, so it sees only unscoped servers. | The agent's MCP entry runs `coffer-mcp-shim` without `--agent-uid`. | Reinstall Coffer's MCP entry: `coffer agent mcp install <agent>`. |
+| The agent's session reports no identity, so it sees only unscoped servers. | The agent's MCP entry runs `coffer-mcp-shim` without `--agent-uid`. | Connect the agent again: `coffer agent connect <agent>`. |
 | The individual tool is switched off. | The server's **Tools** tab, or `coffer mcp tool list <name>`. | Switch it on there, or with `coffer mcp tool enable`. |
 | The server cannot start: its launcher is missing. | The server shows `npx is not installed on this machine` (or `uvx`, …). | Install that runtime, then **Refresh capabilities**. Coffer does not install runtimes. |
 | The server is failing or slow to answer. | `coffer mcp test <name>`; the server's stderr in `~/.coffer/logs/upstream/<name>.log`. | Fix the server's configuration or credentials. A server that misses discovery is retried in the background and its tools reappear when it answers. |

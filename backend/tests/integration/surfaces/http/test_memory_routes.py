@@ -88,6 +88,11 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("COFFER_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
     (tmp_path / ".claude").mkdir(parents=True, exist_ok=True)
     (tmp_path / ".codex").mkdir(parents=True, exist_ok=True)
+    # Connecting an agent (which is what installs the delivery hook) writes the
+    # gateway entry first, and that needs a shim to point at.
+    shim = tmp_path / "coffer-mcp-shim"
+    shim.write_text("#!/bin/sh\n", encoding="utf-8")
+    monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(shim))
 
     app = create_app()
     set_active_token(_TOKEN)
@@ -687,27 +692,32 @@ def test_context_for_a_directory_in_no_repository_is_global(client, tmp_path) ->
 
 
 # ----- delivery -------------------------------------------------------------
+#
+# The hook is installed by connecting the agent to Coffer (spec agent-registry
+# "Connect an agent to Coffer in one action"); this family only serves what the
+# installed hook asks for.
 
 
-def test_delivery_install_status_and_record_fired_round_trip(client) -> None:
+def _hook(client: TestClient, uid: str, method: str = "GET") -> dict:
+    r = client.request(method, f"/api/v1/agents/{uid}/coffer-connection")
+    assert r.status_code == 200, r.text
+    return next(p for p in r.json()["parts"] if p["key"] == "memory_hook")
+
+
+def test_connect_status_and_record_fired_round_trip(client) -> None:
     cc_uid = _register_agent(client, "cc")
 
-    status = client.get("/api/v1/memory/delivery", params={"agent_uid": cc_uid}).json()
-    assert status["delivery"][0]["installed"] is False
-    # Both halves travel: the uid a surface acts on, the label it renders. A row
-    # carrying one of the two would send every client back for the other.
-    assert status["delivery"][0]["agent_uid"] == cc_uid
-    assert status["delivery"][0]["agent_name"] == "cc"
-    # A fire is an event, never a field on the status ("Audit every delivery fire",
-    # "Show delivery state on the agent's own page").
-    assert "last_fired_at" not in status["delivery"][0]
+    status = _hook(client, cc_uid)
+    assert status["installed"] is False
+    # A fire is an event, never a field on the status ("Audit every delivery fire").
+    assert set(status) == {"key", "installed", "detail"}
 
-    installed = client.post(f"/api/v1/memory/delivery/{cc_uid}/install").json()
+    installed = _hook(client, cc_uid, "POST")
     assert installed["installed"] is True
     # The uid goes INTO the installed command, so the entry keeps naming this
     # agent however the user relabels it — the whole reason delivery is keyed
     # on an identity rather than on a label.
-    assert f"coffer memory context --agent-uid {cc_uid}" in installed["command"]
+    assert f"coffer memory context --agent-uid {cc_uid}" in installed["detail"]
 
     audit = client.get("/api/v1/audit").json()
     assert any(e["event_type"] == "memory_delivery_installed" for e in audit["entries"])
@@ -721,12 +731,10 @@ def test_delivery_install_status_and_record_fired_round_trip(client) -> None:
     audit2 = client.get("/api/v1/audit").json()
     assert any(e["event_type"] == "memory_delivery_fired" for e in audit2["entries"])
     # Installation is unchanged by a fire.
-    assert client.get("/api/v1/memory/delivery", params={"agent_uid": cc_uid}).json()["delivery"][
-        0
-    ]["installed"]
+    assert _hook(client, cc_uid)["installed"] is True
 
-    removed = client.delete(f"/api/v1/memory/delivery/{cc_uid}").json()
-    assert removed["installed"] is False
+    removed = client.delete(f"/api/v1/agents/{cc_uid}/coffer-connection").json()
+    assert removed["state"] == "disconnected"
 
 
 def test_an_installed_hook_survives_the_agent_being_renamed(client) -> None:
@@ -736,18 +744,15 @@ def test_an_installed_hook_survives_the_agent_being_renamed(client) -> None:
     the user edited it — and every session's fire would go unattributed.
     """
     cc_uid = _register_agent(client, "cc")
-    installed = client.post(f"/api/v1/memory/delivery/{cc_uid}/install").json()
-    command = installed["command"]
+    command = _hook(client, cc_uid, "POST")["detail"]
 
     renamed = client.patch(f"/api/v1/resources/{cc_uid}", json={"name": "claude-code"})
     assert renamed.status_code == 200, renamed.text
 
-    # The command on disk was not rewritten, and it is still recognised …
-    status = client.get("/api/v1/memory/delivery", params={"agent_uid": cc_uid}).json()
-    assert status["delivery"][0]["installed"] is True
-    assert status["delivery"][0]["command"] == command
-    # … under the agent's new label, which is what the row renders.
-    assert status["delivery"][0]["agent_name"] == "claude-code"
+    # The command on disk was not rewritten, and it is still recognised.
+    status = _hook(client, cc_uid)
+    assert status["installed"] is True
+    assert status["detail"] == command
 
     # And the fire it records still lands on this agent.
     r = client.post(
@@ -761,12 +766,19 @@ def test_an_installed_hook_survives_the_agent_being_renamed(client) -> None:
 
 def test_context_without_record_fired_does_not_record_a_fire(client) -> None:
     cc_uid = _register_agent(client, "cc")
-    client.post(f"/api/v1/memory/delivery/{cc_uid}/install")
+    _hook(client, cc_uid, "POST")
 
     client.post("/api/v1/memory/context", json={"agent_uid": cc_uid, "cwd": "/tmp"})
 
     audit = client.get("/api/v1/audit").json()
     assert not any(e["event_type"] == "memory_delivery_fired" for e in audit["entries"])
+
+
+def test_the_delivery_management_routes_are_gone(client) -> None:
+    """Installed with the connection, and nowhere else."""
+    cc_uid = _register_agent(client, "cc")
+    assert client.get("/api/v1/memory/delivery").status_code in (404, 405)
+    assert client.post(f"/api/v1/memory/delivery/{cc_uid}/install").status_code in (404, 405)
 
 
 # ----- the partition's own files -------------------------------------------

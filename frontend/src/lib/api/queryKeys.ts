@@ -46,7 +46,7 @@ export const agentConfigFileKey = (uid: string, key: string) =>
   ["agents", uid, "config-files", key] as const;
 export const agentConfigChildKey = (uid: string, key: string, relpath: string) =>
   ["agents", uid, "config-files", key, relpath] as const;
-export const agentMcpInstallKey = (uid: string) => ["agents", uid, "mcp-install"] as const;
+export const agentConnectionKey = (uid: string) => ["agents", uid, "coffer-connection"] as const;
 export const agentMcpEntriesKey = (uid: string) => ["agents", uid, "mcp-entries"] as const;
 /** One entry's detail — under the listing's key, so whatever refreshes the
  *  listing (a remove, an adopt) refreshes the detail too. */
@@ -193,7 +193,7 @@ export const knowledgeTreeKey = (path: string) => ["knowledge", "tree", path] as
 export const knowledgeFileKey = (path: string) => ["knowledge", "file", path] as const;
 
 // ---------------------------------------------------------------------------
-// memory — partitions, files, delivery
+// memory — partitions, files
 // ---------------------------------------------------------------------------
 
 export const memoryKey = ["memory"] as const;
@@ -204,9 +204,6 @@ export const memoryPartitionFilesKey = (partitionUid: string) =>
   ["memory", "partitions", partitionUid, "files"] as const;
 export const memoryPartitionFileKey = (partitionUid: string, path: string) =>
   ["memory", "partitions", partitionUid, "files", "content", path] as const;
-export const memoryDeliveryKey = ["memory", "delivery"] as const;
-export const memoryAgentDeliveryKey = (agentUid: string) =>
-  ["memory", "delivery", agentUid] as const;
 
 // ---------------------------------------------------------------------------
 // upkeep — the long rewrites (memory organise, knowledge curation) in flight
