@@ -32,7 +32,12 @@ PROTOCOL_BASE_URLS: dict[str, str | None] = {
 }
 
 _ANTHROPIC_VERSION = "2023-06-01"
-_TIMEOUT = 15.0
+#: One attempt, one budget. A probe is something a person is waiting on with a
+#: spinner, so it answers once: the OpenAI SDK's default two retries turned a
+#: single slow model into a 46-second wait before "Request timed out.". The
+#: budget is long enough for a reasoning model's first reply to a one-token
+#: request, since there is no retry behind it.
+_TIMEOUT = 30.0
 #: Loopback hostnames → an internal-only (ollama-style) connection.
 _LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "0.0.0.0", "::1", "host.docker.internal"})
 
@@ -53,7 +58,12 @@ class ProviderIntrospector:
     def _openai_client(self, base_url: str | None, api_key: str | None):  # type: ignore[no-untyped-def]
         from openai import AsyncOpenAI
 
-        return AsyncOpenAI(api_key=api_key or "not-needed", base_url=base_url, timeout=_TIMEOUT)
+        return AsyncOpenAI(
+            api_key=api_key or "not-needed",
+            base_url=base_url,
+            timeout=_TIMEOUT,
+            max_retries=0,
+        )
 
     async def list_models(
         self, *, provider: str, base_url: str | None, api_key: str | None
