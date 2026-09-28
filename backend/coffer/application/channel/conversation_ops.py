@@ -81,14 +81,16 @@ async def open_conversation(
         channel_uid=binding.resource.uid,
         peer_chat_id=peer.chat_id,
     )
-    await threads.set_active_conversation(binding.resource.id, peer.chat_id, thread_id, conv.id)
     mark = row.parallel_mark if row is not None else None
     if mark is not None:
         # A parallel thread's conversation is titled with its mark, however it
         # was (re)opened — `/thread` itself, `/new` inside it, a deleted one
         # recreated (see "Open parallel conversations in a direct chat"). Named
-        # before its first message, so that message's words never replace it.
+        # before its first message, so that message's words never replace it,
+        # and before it becomes the thread's active one, so nothing that finds
+        # it through the thread ever sees it untitled.
         await conversations.rename_conversation(str(conv.id), new_title=mark)
+    await threads.set_active_conversation(binding.resource.id, peer.chat_id, thread_id, conv.id)
     return str(conv.id)
 
 
