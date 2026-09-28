@@ -102,6 +102,8 @@ class SeaTalkAdapter:
             # documented email form is the fallback for a sender with no id.
             mention_template=SEATALK_MENTION_TEMPLATE,
             mention_email_template=SEATALK_MENTION_EMAIL_TEMPLATE,
+            # Any DM message can root a thread, so a DM thread is a casual reply.
+            direct_threads_are_replies=True,
         )
 
     # -- lifecycle ---------------------------------------------------------
@@ -129,6 +131,7 @@ class SeaTalkAdapter:
         key = dedup_key(envelope, event)
         if key and not self._seen.add(key):
             return
+        sent_at = datetime.fromtimestamp(int(envelope.get("timestamp", 0) or 0), tz=UTC)
         if event_type == "message_from_bot_subscriber":
             message = event.get("message") or {}
             tag = str(message.get("tag", ""))
@@ -144,15 +147,14 @@ class SeaTalkAdapter:
                     sender_display=str(event.get("email", "") or event.get("seatalk_id", "")),
                     text=text,
                     platform_message_id=str(message.get("message_id", "")),
-                    timestamp=datetime.fromtimestamp(
-                        int(envelope.get("timestamp", 0) or 0), tz=UTC
-                    ),
+                    timestamp=sent_at,
                     # SeaTalk DMs are 1:1, so the sender is the employee_code.
                     sender_id=str(event.get("employee_code", "")),
                     thread_id=str(message.get("thread_id", "")),
                     # Only this bot can resolve it (ids differ per app); the turn
                     # fetches the body through ``fetch_quoted``.
                     quoted_message_id=str(message.get("quoted_message_id") or ""),
+                    forwarded=tag == "combined_forwarded_chat_history",
                     attachments=await media_attachments(
                         self._client, self._media_dir, self._transport.ensure_token, message
                     ),
@@ -184,9 +186,7 @@ class SeaTalkAdapter:
                     sender_display=str(sender.get("email", "") or sender.get("seatalk_id", "")),
                     text=plain_text,
                     platform_message_id=message_id,
-                    timestamp=datetime.fromtimestamp(
-                        int(envelope.get("timestamp", 0) or 0), tz=UTC
-                    ),
+                    timestamp=sent_at,
                     sender_id=str(sender.get("employee_code", "")),
                     # The id an outbound @mention points at, kept apart
                     # from sender_id because they are different values here —
@@ -205,6 +205,7 @@ class SeaTalkAdapter:
                     ),
                     thread_id=reply_thread_id,
                     quoted_message_id=str(message.get("quoted_message_id") or ""),
+                    forwarded=tag == "combined_forwarded_chat_history",
                     attachments=await media_attachments(
                         self._client, self._media_dir, self._transport.ensure_token, message
                     ),
@@ -293,6 +294,15 @@ class SeaTalkAdapter:
             chat_kind=chat_kind,
         )
 
+    async def open_thread(self, chat_id: str, mark: str, body: str) -> str:
+        """A thread's id is its root message's id, so posting the mark as a new DM
+        message opens one (spec channels/seatalk "Open a parallel thread by posting
+        its root message")."""
+        sent = await self.send_text(chat_id, f"{mark}\n{body}")
+        if not sent.message_id:
+            raise ChannelSendFailed(self._name, "single_chat returned no message_id")
+        return sent.message_id
+
     async def open_live_text(
         self, chat_id: str, *, thread_id: str = "", chat_kind: str = "direct"
     ) -> SeaTalkLiveText:
@@ -303,9 +313,8 @@ class SeaTalkAdapter:
         )
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:
-        # supports_edit stays literally false: no SeaTalk API rewrites a
-        # delivered TEXT message. Live progress goes through open_live_text, and
-        # a delivered CARD is rewritable through update_card below.
+        # No SeaTalk API rewrites a delivered TEXT message: live progress goes
+        # through open_live_text, a delivered CARD through update_card below.
         raise ChannelSendFailed(self._name, "seatalk cannot edit messages")
 
     async def update_card(

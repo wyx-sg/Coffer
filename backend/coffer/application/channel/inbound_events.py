@@ -59,11 +59,16 @@ class InboundEvents:
     #: collection"): the pending document a `/save` tap saves lives there.
     session: SessionAccessor
 
-    async def on_callback(self, binding: ChannelBinding, cb: InboundCallback) -> None:
+    async def on_callback(
+        self, binding: ChannelBinding, cb: InboundCallback, *, conversation_thread_id: str
+    ) -> None:
         """A selection-card button tap. Owner-gated exactly like ``on_message``
         (an intruder in a paired group must not flip the owner's agent/model by
         tapping), then routed to the same switch the text command performs. A
-        tap never pairs — an unpaired/foreign chat is ignored silently."""
+        tap never pairs — an unpaired/foreign chat is ignored silently.
+        ``conversation_thread_id`` is the conversation the tap is about, resolved
+        by the processor (see "Key conversation identity by channel, chat and
+        thread"); ``cb.thread_id`` is where the answer goes."""
         if cb.chat_kind == "group":
             # A group card is shared, exactly like a group @mention: prove the
             # tapper is the channel owner (never fall through on an empty
@@ -96,9 +101,10 @@ class InboundEvents:
             peer,
             cb.data,
             self.safe_send,
-            session=self.session(binding.resource.name, cb.chat_id, cb.thread_id),
+            session=self.session(binding.resource.name, cb.chat_id, conversation_thread_id),
             chat_kind=cb.chat_kind,
             thread_id=cb.thread_id,
+            conversation_thread_id=conversation_thread_id,
             card_message_id=cb.platform_message_id,
         )
 
@@ -155,7 +161,14 @@ class InboundEvents:
         )
         await self.safe_send(binding, event.chat_id, EXTERNAL_GROUP_WARNING, chat_kind="group")
 
-    async def on_stop(self, binding: ChannelBinding, event: InboundStop, *, session: Any) -> None:
+    async def on_stop(
+        self,
+        binding: ChannelBinding,
+        event: InboundStop,
+        *,
+        session: Any,
+        conversation_thread_id: str,
+    ) -> None:
         """The user pressed the platform's own stop control (see "Stop the turn from the
         platform's own stop control").
 
@@ -175,4 +188,5 @@ class InboundEvents:
             self.safe_send,
             chat_kind=event.chat_kind,
             thread_id=event.thread_id,
+            conversation_thread_id=conversation_thread_id,
         )

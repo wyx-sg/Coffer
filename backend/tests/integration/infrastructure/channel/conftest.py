@@ -85,6 +85,9 @@ class FakeTelegram:
         #: Canned ``result`` per method for the ones with no bespoke branch
         #: below (getMe, getMyDescription, …) — consulted before the {} default.
         self.results: dict[str, Any] = {}
+        #: Method → the description a 400 refusal of it carries, for the
+        #: methods a test scripts the platform to refuse outright.
+        self.refusals: dict[str, str] = {}
         #: Whether this server knows Bot API 10.1's sendRichMessage. Defaults to
         #: NO so the adapter's fallback (spec channels/telegram "Send rich messages
         #: where the Bot API offers them") is what most tests exercise —
@@ -166,6 +169,10 @@ class FakeTelegram:
                     "ok": True,
                     "result": {"file_id": file_id, "file_path": f"downloads/{file_id}.bin"},
                 }
+            )
+        if method in self.refusals:
+            return JSONResponse(
+                status_code=400, content={"ok": False, "description": self.refusals[method]}
             )
         if method in self.results:
             return JSONResponse(content={"ok": True, "result": self.results[method]})

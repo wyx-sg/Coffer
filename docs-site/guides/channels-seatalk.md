@@ -138,9 +138,9 @@ Where the answer goes:
 
 - **@mention in the group's main chat** — the bot starts a thread rooted at your message and answers there. It reads no history: the thread holds only your message.
 - **@mention inside a thread** — the bot reads the whole thread, every page of it, oldest first, downloads the images and files earlier messages carry, and answers in that thread.
-- **A thread in a direct chat** — read and answered in the same way.
+- **A thread in a direct chat** — read and answered in the same way. A reply-in-thread under any message in your direct chat stays in the direct chat's conversation, with its context; only a thread opened with `/thread` is a separate conversation. `/thread` posts a message marked `🧵#N title`, and you reply under it.
 
-Each thread is its own conversation, so you can run Claude Code in one thread and Codex in another. A group answer opens by @mentioning you, so SeaTalk notifies you.
+Each group thread is its own conversation, so you can run Claude Code in one thread and Codex in another. A group answer opens by @mentioning you, so SeaTalk notifies you.
 
 To have the bot leave alone a message that also @mentions another person, turn on **Ignore messages that @mention someone else** under **Edit** → **In group chats**, or run `coffer channel set my-seatalk --ignore-other-mentions`. SeaTalk has no **Answer only when @mentioned** switch: it already delivers only @mentions.
 

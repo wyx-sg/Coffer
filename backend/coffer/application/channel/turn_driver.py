@@ -73,7 +73,10 @@ class QueuedInbound:
     what a group reply opens by @mentioning (see "Mention the asker in a group answer");
     and ``title_hint`` is the human's own words, carried apart from the driving text
     (spec chat "Persist conversations and messages in SQLite"; "" when nothing was
-    nameable).
+    nameable). ``conversation_thread_id`` is which of the chat's conversations the
+    turn joins — ``thread_id`` itself, or ``""`` for a casual direct-chat
+    reply-in-thread that belongs to the direct chat's conversation (see "Key
+    conversation identity by channel, chat and thread").
     """
 
     text: str
@@ -84,6 +87,7 @@ class QueuedInbound:
     mention_user_id: str = ""
     mention_user_email: str = ""
     title_hint: str = ""
+    conversation_thread_id: str = ""
 
 
 class TurnPort(Protocol):
@@ -143,6 +147,23 @@ class TurnDriver:
         self._safe_send = safe_send
         self._session = session
 
+    async def acknowledge(
+        self, binding: ChannelBinding, peer: ChannelPeer, item: QueuedInbound
+    ) -> None:
+        """Say "heard" the moment a message arrives — before its burst window closes
+        (see "Take a burst of messages as one turn") and before a queued turn starts: a
+        👀 reaction where the transport has reactions (Telegram), else the typing signal
+        (SeaTalk). Best-effort — a failed ack never breaks the turn (see "Acknowledge
+        receipt and completion by capability")."""
+        adapter = binding.adapter
+        with contextlib.suppress(Exception):
+            if adapter.capabilities.supports_reactions and item.reply_to_message_id:
+                await adapter.set_reaction(peer.chat_id, item.reply_to_message_id, "👀")
+            elif adapter.capabilities.supports_typing:
+                await adapter.send_typing(
+                    peer.chat_id, thread_id=item.thread_id, chat_kind=item.chat_kind
+                )
+
     async def submit(self, binding: ChannelBinding, peer: ChannelPeer, item: QueuedInbound) -> None:
         """Queue ``item`` as a turn on this thread's conversation.
 
@@ -152,7 +173,6 @@ class TurnDriver:
         message is dropped and the chat told (see "Answer the conversation commands from
         any paired chat"): a flood must not pile up forever.
         """
-        adapter = binding.adapter
 
         async def _say(text: str) -> None:
             await self._safe_send(
@@ -161,7 +181,7 @@ class TurnDriver:
 
         try:
             conversation_id = await ensure_conversation(
-                self._conversations, self._threads, binding, peer, item.thread_id
+                self._conversations, self._threads, binding, peer, item.conversation_thread_id
             )
         except CofferError as e:
             # e.g. the channel's default agent is unknown/misconfigured — the
@@ -171,14 +191,6 @@ class TurnDriver:
         if len(self._turns.pending(conversation_id)) >= QUEUE_MAX:
             await _say("⚠️ Busy — message dropped, try again.")
             return
-        # An immediate receipt ack (👀) on the user's message where the
-        # transport supports reactions (Telegram); SeaTalk has none and leans on
-        # the typing signal the renderer sends. Best-effort — a failed ack never
-        # breaks the turn. At receipt, not at start: a queued message was heard
-        # too.
-        if adapter.capabilities.supports_reactions and item.reply_to_message_id:
-            with contextlib.suppress(Exception):
-                await adapter.set_reaction(peer.chat_id, item.reply_to_message_id, "👀")
 
         def on_start(queue: asyncio.Queue[Any]) -> None:
             self._spawn_render(binding, peer, item, conversation_id, queue)
@@ -208,7 +220,9 @@ class TurnDriver:
         queue: asyncio.Queue[Any],
     ) -> None:
         """The orchestrator began this message's turn: render it into the chat."""
-        session = self._session(binding.resource.name, peer.chat_id, item.thread_id)
+        # Keyed by the conversation, so `/stop` from anywhere that conversation is
+        # reached finds its running turn; the task name says where it renders.
+        session = self._session(binding.resource.name, peer.chat_id, item.conversation_thread_id)
         task = asyncio.create_task(
             self._render(binding, peer, item, conversation_id, queue, session),
             name=f"channel-render:{binding.resource.name}:{peer.chat_id}:{item.thread_id}",
