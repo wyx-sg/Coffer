@@ -63,6 +63,18 @@ DEFAULT_START_DELAY_S = 5.0
 #: a missed nudge is not noticed.
 DEFAULT_INTERVAL_S = 5.0
 
+#: A run whose advance raised waits ``interval * 2**(failures-1)`` before the
+#: next try, never longer than this. Without a wait a run that fails the same
+#: way every time is retried back to back — each failure used to wake the loop
+#: at once — and an idle daemon wrote a traceback per attempt, ~2 MB a second.
+DEFAULT_MAX_BACKOFF_S = 300.0
+
+#: After this many failures in a row the advancer stops retrying the run on
+#: its own. Something that fails five times with backoff in between is not
+#: transient; retrying it forever only fills the log. A nudge (a developer
+#: command) or a restart gives it a fresh budget.
+DEFAULT_MAX_FAILURES = 5
+
 #: The runs worth looking at this tick — this machine's runs in a status that
 #: can still move. Answering with a run that turns out to have nothing due is
 #: free; omitting one stalls it until something nudges.
@@ -137,15 +149,22 @@ class AdvanceWorker:
         advance_run: AdvanceRun,
         start_delay_s: float = DEFAULT_START_DELAY_S,
         interval_s: float = DEFAULT_INTERVAL_S,
+        max_backoff_s: float = DEFAULT_MAX_BACKOFF_S,
+        max_failures: int = DEFAULT_MAX_FAILURES,
     ) -> None:
         self._due_runs = due_runs
         self._advance_run = advance_run
         self._start_delay = start_delay_s
         self._interval = interval_s
+        self._max_backoff = max_backoff_s
+        self._max_failures = max_failures
         self._stop = asyncio.Event()
         self._wake = asyncio.Event()
         self._loop_task: asyncio.Task[None] | None = None
         self._inflight: dict[str, asyncio.Task[None]] = {}
+        #: run id → (failures in a row, loop time before which it is skipped).
+        #: A run at ``max_failures`` is skipped until a nudge clears this.
+        self._failures: dict[str, tuple[int, float]] = {}
 
     def start(self) -> None:
         if self._loop_task is None:
@@ -157,7 +176,11 @@ class AdvanceWorker:
         Called after a command that could have made a node due — starting a
         run, completing a node, deciding an approval. It is a hint: missing one
         costs a tick, never a node.
+
+        It also gives every failing run a fresh retry budget: a developer acted,
+        so whatever made the run fail may have changed.
         """
+        self._failures.clear()
         self._wake.set()
 
     async def stop(self) -> None:
@@ -199,11 +222,15 @@ class AdvanceWorker:
         except Exception:  # the loop outlives any single round
             _logger.exception("workflow.advance.due_failed")
             return
+        now = asyncio.get_running_loop().time()
         for run_id in run_ids:
             if run_id in self._inflight:
                 # Spec workflow "Run at most one node at a time", enforced on
                 # this side too: the run is already moving, and a second
                 # advance would race its own node.
+                continue
+            failures, retry_at = self._failures.get(run_id, (0, 0.0))
+            if failures >= self._max_failures or now < retry_at:
                 continue
             self._inflight[run_id] = asyncio.create_task(
                 self._advance(run_id), name=f"workflow-advance:{run_id}"
@@ -217,13 +244,33 @@ class AdvanceWorker:
         except Exception:
             # One run raising must not touch another run, and must not take the
             # loop with it. The attempt stays as the service last wrote it; the
-            # developer retries it.
-            _logger.exception("workflow.advance.run_failed", extra={"run_id": run_id})
-        finally:
-            self._inflight.pop(run_id, None)
+            # developer retries it. No wake: waking here is what turned a run
+            # that fails every time into a tight retry loop.
+            self._record_failure(run_id)
+        else:
+            self._failures.pop(run_id, None)
             # The node that just ended may have made the next one due; do not
             # make the run wait out an interval to find out.
             self._wake.set()
+        finally:
+            self._inflight.pop(run_id, None)
+
+    def _record_failure(self, run_id: str) -> None:
+        """Log the failure and hold the run back before its next try."""
+        failures = self._failures.get(run_id, (0, 0.0))[0] + 1
+        backoff = min(self._interval * 2 ** (failures - 1), self._max_backoff)
+        self._failures[run_id] = (failures, asyncio.get_running_loop().time() + backoff)
+        extra = {"run_id": run_id, "failures": failures}
+        if failures == 1:
+            _logger.exception("workflow.advance.run_failed", extra=extra)
+        elif failures >= self._max_failures:
+            # The traceback was logged on the first failure; repeating it
+            # would say nothing new.
+            _logger.error("workflow.advance.run_given_up", extra=extra)
+        else:
+            _logger.warning(
+                "workflow.advance.run_failed_again", extra={**extra, "retry_in_s": backoff}
+            )
 
     async def _sleep(self, seconds: float) -> None:
         """Wait out the interval, returning early on a stop or a nudge."""

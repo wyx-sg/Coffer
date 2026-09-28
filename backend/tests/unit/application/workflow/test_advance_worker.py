@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import itertools
 from collections.abc import Callable, Sequence
 from typing import ClassVar
 
@@ -260,3 +261,117 @@ async def test_driver_for_wires_all_three_reports_to_one_service() -> None:
 
     assert sink.outputs == [("att-9", MANUAL_NODE_SUMMARY, 0)]
     assert sink.failures == []
+
+
+async def test_a_run_that_keeps_failing_is_not_retried_in_a_tight_loop() -> None:
+    # A failed advance used to wake the loop at once, so a run whose advance
+    # raised the same way every time was retried back to back with a full
+    # traceback per attempt — an idle daemon wrote ~2 MB of log a second.
+    service = FakeService(raise_for={"run-a": RuntimeError("run A is broken")})
+
+    async def due() -> Sequence[str]:
+        return ["run-a"]
+
+    worker = make_worker(service, due, interval_s=30.0)
+    worker.start()
+    try:
+        await until(lambda: service.started == ["run-a"])
+        await asyncio.sleep(0.1)
+        assert service.started == ["run-a"]
+    finally:
+        await worker.stop()
+
+
+async def test_a_failing_run_is_retried_less_often_each_time() -> None:
+    service = FakeService(raise_for={"run-a": RuntimeError("run A is broken")})
+    loop = asyncio.get_running_loop()
+    attempts: list[float] = []
+
+    async def due() -> Sequence[str]:
+        return ["run-a"]
+
+    async def advance(run_id: str) -> None:
+        attempts.append(loop.time())
+        await service.advance(run_id)
+
+    worker = AdvanceWorker(due_runs=due, advance_run=advance, start_delay_s=0.0, interval_s=0.02)
+    worker.start()
+    try:
+        await until(lambda: len(attempts) >= 4)
+    finally:
+        await worker.stop()
+
+    gaps = [b - a for a, b in itertools.pairwise(attempts)]
+    assert gaps[2] > gaps[0] * 2
+
+
+async def test_a_run_that_recovers_is_no_longer_held_back() -> None:
+    service = FakeService()
+
+    async def due() -> Sequence[str]:
+        return ["run-a"]
+
+    async def advance(run_id: str) -> None:
+        if not service.started:  # only the first attempt fails
+            service.started.append(run_id)
+            raise RuntimeError("once")
+        await service.advance(run_id)
+
+    # A nudge-free success after a failure must reset the backoff: with an
+    # interval this short, three successes arrive well within the timeout only
+    # if the run is back to being advanced every tick.
+    worker = AdvanceWorker(due_runs=due, advance_run=advance, start_delay_s=0.0, interval_s=0.01)
+    worker.start()
+    try:
+        await until(lambda: len(service.finished) >= 3)
+    finally:
+        await worker.stop()
+
+
+async def test_a_repeated_failure_logs_its_traceback_once(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    service = FakeService(raise_for={"run-a": RuntimeError("run A is broken")})
+
+    async def due() -> Sequence[str]:
+        return ["run-a"]
+
+    worker = AdvanceWorker(
+        due_runs=due, advance_run=service.advance, start_delay_s=0.0, interval_s=0.005
+    )
+    with caplog.at_level("WARNING", logger="coffer.application.workflow.advance_worker"):
+        worker.start()
+        try:
+            await until(lambda: len(service.started) >= 3)
+        finally:
+            await worker.stop()
+
+    with_traceback = [r for r in caplog.records if r.exc_info]
+    assert len(with_traceback) == 1
+
+
+async def test_a_run_is_given_up_after_too_many_failures_until_nudged() -> None:
+    service = FakeService(raise_for={"run-a": RuntimeError("run A is broken")})
+
+    async def due() -> Sequence[str]:
+        return ["run-a"]
+
+    worker = AdvanceWorker(
+        due_runs=due,
+        advance_run=service.advance,
+        start_delay_s=0.0,
+        interval_s=0.005,
+        max_failures=3,
+    )
+    worker.start()
+    try:
+        await until(lambda: len(service.started) == 3)
+        await asyncio.sleep(0.2)  # many backoffs' worth of ticks
+        assert len(service.started) == 3
+
+        worker.nudge()  # a developer acted: a fresh budget
+        await until(lambda: len(service.started) == 6)
+        await asyncio.sleep(0.2)
+        assert len(service.started) == 6
+    finally:
+        await worker.stop()
