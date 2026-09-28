@@ -32,6 +32,7 @@ from datetime import UTC
 from datetime import datetime as dt
 
 import pytest
+import typer
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 from typer.testing import CliRunner
@@ -576,14 +577,13 @@ def test_scan_lists_the_candidate_and_registers_nothing(agent_cli_daemon):
 
 
 def test_agent_group_offers_the_new_commands_only():
-    help_out = _runner.invoke(cli_app, ["agent", "--help"], env={"COLUMNS": "200"}).output
-    for cmd in (
+    # Read off the command tree, not the rendered --help: the help layout is
+    # the renderer's, and it changes between typer/rich releases.
+    group = typer.main.get_command(cli_app).commands["agent"]  # type: ignore[attr-defined]
+    assert set(group.commands) == {
         "list", "show", "add", "edit", "rm", "enable", "disable",
         "connect", "disconnect", "transcript", "models", "config", "plugin",
-    ):  # fmt: skip
-        assert f" {cmd} " in help_out, cmd
-    for gone in ("detect", "native-memory", "native-memory-files", "transcripts", "mcp", "scope"):
-        assert f" {gone} " not in help_out, gone
+    }  # fmt: skip
 
 
 # ---------------------------------------------------------------------------

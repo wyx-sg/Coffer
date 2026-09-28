@@ -19,6 +19,7 @@ from datetime import datetime as dt
 from typing import Any
 
 import pytest
+import typer
 from fastapi import FastAPI
 from pydantic import BaseModel
 from starlette.testclient import TestClient
@@ -686,11 +687,12 @@ def test_mcp_rm_declined_confirmation_exits_1(mcp_daemon: Any) -> None:
 
 
 def test_mcp_group_offers_the_new_verbs_only() -> None:
-    help_out = _runner.invoke(app, ["mcp", "--help"], env={"COLUMNS": "200"}).output
-    for verb in ("list", "show", "add", "edit", "rm", "enable", "disable", "scope", "test", "cap"):
-        assert f" {verb} " in help_out, verb
-    for gone in ("remove", "refresh", "invocations", "tool", "resource", "prompt"):
-        assert f" {gone} " not in help_out, gone
+    # Read off the command tree, not the rendered --help (whose layout changes
+    # between typer/rich releases).
+    group = typer.main.get_command(app).commands["mcp"]  # type: ignore[attr-defined]
+    assert set(group.commands) == {
+        "list", "show", "add", "edit", "rm", "enable", "disable", "scope", "test", "cap",
+    }  # fmt: skip
 
 
 # ---------------------------------------------------------------------------

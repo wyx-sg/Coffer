@@ -25,6 +25,7 @@ from datetime import UTC
 from datetime import datetime as dt
 
 import pytest
+import typer
 from fastapi import FastAPI
 from starlette.testclient import TestClient
 from typer.testing import CliRunner
@@ -497,13 +498,16 @@ def test_config_and_mcp_commands_mirror_their_rest_routes(agent_config_cli):
 
 
 def test_config_key_help_names_real_keys(agent_config_cli):
-    for cmd in ("edit",):
-        r = _runner.invoke(cli_app, ["agent", "config", cmd, "--help"])
-        assert r.exit_code == 0, r.output
-        # Rich wraps help inside a box; flatten borders and line breaks first.
-        flat = " ".join(r.output.replace("│", " ").split())
-        assert "settings, config, instructions" in flat
-        assert "memory" not in flat
+    # The KEY argument's own help, read off the command rather than out of the
+    # rendered --help, whose layout changes between typer/rich releases.
+    edit = typer.main.get_command(cli_app).commands["agent"].commands["config"].commands["edit"]  # type: ignore[attr-defined]
+    help_text = (
+        " ".join(" ".join(str(getattr(p, "help", "") or "").split()) for p in edit.params)
+        + " "
+        + " ".join((edit.help or "").split())
+    )
+    assert "settings, config, instructions" in help_text
+    assert "memory" not in help_text
 
 
 def test_config_edit_refuses_when_the_file_changed_since_its_read(agent_config_cli, monkeypatch):

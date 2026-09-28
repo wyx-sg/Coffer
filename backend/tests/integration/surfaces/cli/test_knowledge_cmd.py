@@ -22,6 +22,7 @@ from datetime import UTC
 from datetime import datetime as dt
 
 import pytest
+import typer
 from starlette.testclient import TestClient
 from typer.testing import CliRunner
 
@@ -288,7 +289,8 @@ def test_edit_takes_no_description_because_the_readme_holds_it(knowledge_cli_dae
         cli_app, [KIND_KNOWLEDGE, "edit", "shopee", "--description", "ignored"]
     )
     assert refused.exit_code == 2, refused.output
-    assert "--description" in refused.output
+    edit = typer.main.get_command(cli_app).commands[KIND_KNOWLEDGE].commands["edit"]  # type: ignore[attr-defined]
+    assert not any("--description" in p.opts for p in edit.params)
 
 
 def test_add_sets_a_title_when_asked(knowledge_cli_daemon):
