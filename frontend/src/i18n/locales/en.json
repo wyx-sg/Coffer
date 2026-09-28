@@ -1386,7 +1386,7 @@
     },
     "edit": {
       "title": "Edit channel",
-      "subtitle": "Change the bound agent, rotate a secret, or set when the bot answers in a group. Leave a secret field blank to keep the current value.",
+      "subtitle": "Change the bound agent, rotate a secret, set when the bot answers in a group, or how long it waits for more messages. Leave a secret field blank to keep the current value.",
       "agent": "Default agent",
       "agentHint": "New conversations on this channel start on this agent.",
       "newBotToken": "New bot token",
@@ -1400,6 +1400,15 @@
         "requireMentionHint": "The bot stays quiet in a group until someone @mentions it or replies to it. Turned off, it acts on every group message you send — which needs the bot's privacy mode off in BotFather.",
         "ignoreOtherMentions": "Ignore messages that @mention someone else",
         "ignoreOtherMentionsHint": "A group message that also @mentions another person is left alone, even when it mentions the bot too."
+      },
+      "burst": {
+        "title": "Message batching",
+        "unit": "s",
+        "waitAfterText": "Wait after a text message",
+        "waitAfterTextHint": "Messages sent within this pause join one turn. 0 answers every message on its own.",
+        "waitAfterForward": "Wait after a forward or files",
+        "waitAfterForwardHint": "A forwarded chat record or files without text are rarely the whole question, so wait longer for what follows.",
+        "invalid": "Enter a number of seconds from {{min}} to {{max}}."
       }
     },
     "test": {

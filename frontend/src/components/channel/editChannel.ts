@@ -2,7 +2,7 @@
 // Apply plumbing for EditChannelDialog: rotated secrets are written to their
 // existing credential refs FIRST (so the channel keeps working off the same
 // refs), then the resource config is PATCHed (bound agent / SeaTalk app id /
-// group gating).
+// group gating / message batching).
 // Unlike registration there is nothing to roll back — overwriting a ref's
 // value and PATCHing a live resource are both in-place updates.
 import { getApiClient } from "@/lib/api/client";
@@ -55,6 +55,49 @@ interface ChannelEditValues {
   require_mention?: boolean;
   /** Drop a group message that also @mentions another user. */
   ignore_other_mentions?: boolean;
+  /** Quiet window (seconds) after a text message before the burst runs as one
+   *  turn. Undefined leaves the stored value alone. */
+  wait_after_text_seconds?: number;
+  /** Quiet window (seconds) after a forwarded chat record or text-less files. */
+  wait_after_forward_seconds?: number;
+}
+
+/**
+ * The two message-batching windows — spec channels "Take a burst of messages
+ * as one turn". The defaults are the backend's, used when the config key is
+ * absent; 0 means "don't wait" (every message is its own turn).
+ */
+const BURST_WAIT_DEFAULTS = {
+  wait_after_text_seconds: 1.5,
+  wait_after_forward_seconds: 5,
+} as const;
+export type BurstWaitKey = keyof typeof BURST_WAIT_DEFAULTS;
+export const BURST_WAIT_MIN = 0;
+export const BURST_WAIT_MAX = 60;
+
+/** A stored batching window, or the backend default when absent / not a number. */
+export function storedBurstWait(config: Record<string, unknown>, key: BurstWaitKey): number {
+  const v = config[key];
+  return typeof v === "number" && Number.isFinite(v) ? v : BURST_WAIT_DEFAULTS[key];
+}
+
+/** Parse what the user typed into a batching field: seconds in [0, 60], or
+ *  null for anything else (blank, not a number, out of range). */
+export function parseBurstWait(text: string): number | null {
+  if (text.trim() === "") return null;
+  const n = Number(text);
+  if (!Number.isFinite(n) || n < BURST_WAIT_MIN || n > BURST_WAIT_MAX) return null;
+  return n;
+}
+
+/** Whether both batching fields, as typed, parse to a value the backend accepts. */
+export function burstDraftValid(draft: {
+  waitAfterText: string;
+  waitAfterForward: string;
+}): boolean {
+  return (
+    parseBurstWait(draft.waitAfterText) !== null && parseBurstWait(draft.waitAfterForward) !== null
+  );
 }
 
 /**
@@ -83,7 +126,7 @@ export interface ChannelEditInput {
  * never moves the ref, so the config is unchanged when only a secret changes)
  * and build the full config PATCH preserving every `*_ref` / unknown field
  * while applying the mutable changes (bound agent, SeaTalk app id, group
- * gating).
+ * gating, message batching).
  *
  * Pure (no network), mirroring planChannel: the config is fully assembled
  * before any side effect runs. A blank secret value writes no credential.
@@ -110,6 +153,11 @@ export function planChannelEdit(input: ChannelEditInput): ChannelEditPlan {
     values.ignore_other_mentions !== (config.ignore_other_mentions ?? false)
   ) {
     nextConfig.ignore_other_mentions = values.ignore_other_mentions;
+  }
+  // The batching windows follow the same rule: written only when changed.
+  for (const key of Object.keys(BURST_WAIT_DEFAULTS) as BurstWaitKey[]) {
+    const next = values[key];
+    if (next !== undefined && next !== storedBurstWait(config, key)) nextConfig[key] = next;
   }
 
   if (config.channel_type === "telegram") {

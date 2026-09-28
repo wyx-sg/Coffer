@@ -36,7 +36,7 @@ async def test_paired_message_runs_a_turn_and_delivers_the_reply(env: ChannelEnv
     await wait_until(lambda: "Hello world" in adapter.texts())
 
     assert ("owner", "Hello world") in adapter.sent
-    assert adapter.typing == ["owner"]  # typing ack before the turn
+    assert set(adapter.typing) == {"owner"}  # typing ack on arrival and at turn start
 
     conversations = await env.chat.list_conversations()
     assert len(conversations) == 1

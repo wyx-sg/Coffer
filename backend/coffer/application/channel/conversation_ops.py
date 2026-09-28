@@ -48,6 +48,8 @@ class ConversationPort(Protocol):
 
     async def set_agent_config(self, conversation_id: str, config: AgentConfig) -> None: ...
 
+    async def rename_conversation(self, conversation_id: str, *, new_title: str) -> Any: ...
+
 
 async def open_conversation(
     conversations: ConversationPort,
@@ -80,6 +82,13 @@ async def open_conversation(
         peer_chat_id=peer.chat_id,
     )
     await threads.set_active_conversation(binding.resource.id, peer.chat_id, thread_id, conv.id)
+    mark = row.parallel_mark if row is not None else None
+    if mark is not None:
+        # A parallel thread's conversation is titled with its mark, however it
+        # was (re)opened — `/thread` itself, `/new` inside it, a deleted one
+        # recreated (see "Open parallel conversations in a direct chat"). Named
+        # before its first message, so that message's words never replace it.
+        await conversations.rename_conversation(str(conv.id), new_title=mark)
     return str(conv.id)
 
 

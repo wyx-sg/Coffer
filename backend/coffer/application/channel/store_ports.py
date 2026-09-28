@@ -109,6 +109,23 @@ class ChannelThreadConversation:
     # use. ``None`` means fall back to the channel default.
     preferred_agent: str | None
     updated_at: datetime
+    # Set only on a parallel thread `/thread` opened (see "Open parallel
+    # conversations in a direct chat"): its number within the chat and the title
+    # its mark ``🧵#N title`` is built from. ``None`` on every other row.
+    parallel_ordinal: int | None = None
+    parallel_title: str | None = None
+
+    @property
+    def parallel_mark(self) -> str | None:
+        """``🧵#N title`` — the one string shown wherever a parallel thread is."""
+        if self.parallel_ordinal is None:
+            return None
+        return parallel_mark(self.parallel_ordinal, self.parallel_title or "")
+
+
+def parallel_mark(ordinal: int, title: str) -> str:
+    """The mark of parallel thread ``ordinal`` titled ``title``."""
+    return f"🧵#{ordinal} {title}".rstrip()
 
 
 class ChannelThreadConversationRepoPort(Protocol):
@@ -136,4 +153,24 @@ class ChannelThreadConversationRepoPort(Protocol):
     ) -> None:
         """Upsert the thread's sticky agent, leaving ``active_conversation_id``
         untouched (creating the row if this thread has none yet)."""
+        ...
+
+    async def next_parallel_ordinal(self, resource_id: int, chat_id: str) -> int:
+        """The number the chat's next parallel thread gets: ``max + 1`` over the
+        chat's rows, so a number is never reused after a conversation is replaced
+        (see "Open parallel conversations in a direct chat"). Read before the
+        thread exists, because the thread's root message carries its mark."""
+        ...
+
+    async def open_parallel(
+        self, resource_id: int, chat_id: str, thread_id: str, ordinal: int, title: str
+    ) -> None:
+        """Record ``thread_id`` as parallel thread ``ordinal`` of this chat
+        (upserting the row, leaving its conversation and agent untouched)."""
+        ...
+
+    async def list_parallel(
+        self, resource_id: int, chat_id: str
+    ) -> list[ChannelThreadConversation]:
+        """The chat's parallel threads, newest (highest ordinal) first."""
         ...
