@@ -530,9 +530,13 @@
       "editTitle": "编辑模型提供商",
       "empty": "暂无模型提供商。",
       "active": "使用中",
-      "activeHint": "该提供商驱动 Coffer 自用模型（设置 → Coffer 自用模型）。",
-      "transcribe": "语音转文字",
-      "transcribeHint": "Coffer 在该提供商上把语音消息转成文字（设置 → 语音转文字）。全局只有一个提供商承担这件事，也不会回退到别的提供商。",
+      "activeHint": "当前有 Agent 切换到了这个提供商（通过「切换」操作）。",
+      "cofferUse": {
+        "engine": "Coffer 自用 · 后台模型",
+        "engineHint": "Coffer 自己在这个提供商上跑后台任务（比如整理记忆），不是给你的 Agent 用的（设置 → Coffer 自用模型）。全局只有一个提供商承担这件事。",
+        "transcribe": "Coffer 自用 · 语音转写",
+        "transcribeHint": "Coffer 自己在这个提供商上把语音消息转成文字，再交给 Agent（设置 → Coffer 自用模型 → 语音转文字）。全局只有一个提供商承担这件事，也不会回退到别的提供商。"
+      },
       "reachHint": "此提供商对哪些 Agent 生效，由「生效范围」控件设置——在列表中该提供商所在行，或在它自己的详情页。",
       "protocols": {
         "anthropic": "Anthropic",

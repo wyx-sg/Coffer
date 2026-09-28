@@ -1,9 +1,10 @@
 // frontend/src/components/settings/ActiveProviderBadge.tsx
 // The one "Active" pill for a model provider, rendered identically on the list
-// row and the detail header. "Active" is a fact about Coffer's own engine
-// (which connection its internal model runs on), not about the provider's
-// reach, so the pill carries a tooltip saying exactly that — the word alone
-// invites the reading "this one is switched on".
+// row and the detail header. "Active" means an agent is switched to this
+// connection (its native config was written from it), not that the provider is
+// enabled or reachable, so the pill carries a tooltip saying exactly that — the
+// word alone invites the reading "this one is switched on". What Coffer ITSELF
+// uses a connection for is CofferUseBadge's job.
 import { useTranslation } from "react-i18next";
 import { Check } from "lucide-react";
 
