@@ -976,6 +976,14 @@
       "managedHint": "这些技能由 Coffer 投递。哪些技能能到达该 Agent，由技能页面上每个技能的启用状态及其生效范围决定。",
       "openSkillsPage": "打开技能页面",
       "unmanagedTitle": "非托管技能",
+      "unmanagedBadge": "未托管",
+      "unmanagedDetail": {
+        "invalidTitle": "不是有效的技能——该文件夹目前无法纳入托管",
+        "path": "路径",
+        "location": "位置",
+        "readOnlyHint": "Coffer 未托管该文件夹，此处仅供只读预览。纳入托管后即可在 Coffer 中管理，或打开文件夹自行修改。",
+        "notFound": "该非托管技能已不在 Agent 的技能目录中。"
+      },
       "adopt": "纳入托管",
       "adoptDisabledInvalid": "SKILL.md 无效，无法纳入",
       "adoptDisabledForeign": "外部符号链接，无法纳入",

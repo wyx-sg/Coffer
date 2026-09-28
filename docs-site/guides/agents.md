@@ -307,7 +307,7 @@ Transcript text is secret-scrubbed before it is shown, long turns are cut and fl
 
 ## Skills on an agent
 
-The **Skills** tab shows the skills Coffer delivers to the agent (**Managed by Coffer**) and any **Unmanaged skills** sitting in the agent's skill folders, which you can adopt into Coffer's library. Which skills reach the agent is decided per skill; see [Skills](/guides/skills).
+The **Skills** tab shows the skills Coffer delivers to the agent (**Managed by Coffer**) and any **Unmanaged skills** sitting in the agent's skill folders, which you can open to preview, adopt into Coffer's library or delete. Which skills reach the agent is decided per skill; see [Skills](/guides/skills).
 
 ## Troubleshooting
 
