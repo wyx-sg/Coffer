@@ -108,6 +108,10 @@ class PartitionSummary:
     repository_path: str
     note_count: int
     unresolvable: bool
+    #: The display title a person chose (spec resource-framework "Carry an optional
+    #: editable title on every resource"); ``None`` when unset, and a surface shows
+    #: the name in its place.
+    title: str | None = None
 
 
 #: The two readers this layer supports (spec memory "Reintroduce no retired mechanism" — a third
@@ -370,6 +374,7 @@ def _summary_of(row: Resource, placement: Placement) -> PartitionSummary:
     return PartitionSummary(
         uid=row.uid,
         name=row.name,
+        title=row.title,
         repository_key=placement.repository_key,
         repository_path=placement.repository_path,
         note_count=len(store.list_notes(row.name)),

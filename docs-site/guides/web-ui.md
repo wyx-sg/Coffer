@@ -24,7 +24,7 @@ opened http://127.0.0.1:8000/ in your browser
 | `--no-browser` | Print the URL instead of launching a browser. |
 | `--json` | Print `{"url": …, "port": …}`. |
 
-The daemon listens on port 8000 by default, so `http://127.0.0.1:8000/` is stable enough to bookmark. If something else needs 8000, move Coffer with `coffer daemon port set <port>`; see [Running the daemon](/guides/daemon).
+The daemon listens on port 8000 by default, so `http://127.0.0.1:8000/` is stable enough to bookmark. If something else needs 8000, move Coffer with `coffer config set daemon.port <port>`; see [Running the daemon](/guides/daemon).
 
 ## How the UI is served
 

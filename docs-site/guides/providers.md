@@ -55,9 +55,9 @@ A new provider with a key reaches every agent, including agents you register lat
 **CLI:**
 
 ```sh
-coffer scope set provider deepseek --agents codex
-coffer scope show provider deepseek
-coffer scope clear provider deepseek
+coffer provider scope deepseek --agents codex
+coffer provider scope deepseek               # show the current reach
+coffer provider scope deepseek --all         # back to every agent
 ```
 
 The file Coffer writes is chosen by the **agent**, not by the protocol. Reaching `claude-code` writes Claude Code's `settings.json` in its shape; reaching `codex` writes Codex's `config.toml`. That is how an OpenAI-compatible gateway can drive Claude Code — as long as the gateway really accepts what Claude Code sends. Coffer does not translate between protocols.
@@ -81,11 +81,11 @@ coffer agent edit claude-code --model sonnet --fast-model haiku
 coffer provider switch deepseek
 # switched to deepseek [openai] → claude_code, codex
 
-coffer provider use-builtin anthropic   # Claude Code back on its own login
-coffer provider use-builtin openai      # Codex back on its own login
+coffer provider builtin anthropic   # Claude Code back on its own login
+coffer provider builtin openai      # Codex back on its own login
 ```
 
-`use-builtin` takes the wire of the agent to revert: `anthropic` for Claude Code, `openai` for Codex. It is idempotent. Because a provider's active flag covers every agent it was switched into, reverting one wire reverts the provider as a unit.
+`builtin` takes the wire of the agent to revert: `anthropic` for Claude Code, `openai` for Codex. It is idempotent. Because a provider's active flag covers every agent it was switched into, reverting one wire reverts the provider as a unit.
 
 At most one provider is active per agent type. Switching to a new one takes the agents it reaches over from the previous one and removes the previous projection from any agent the new one does not cover. If no agent the provider reaches is registered, the switch still marks it active and reports the skipped types.
 
@@ -162,12 +162,15 @@ Non-text models are never offered as chat models. A provider that curates only n
 ```sh
 coffer provider edit deepseek --base-url https://api.deepseek.com/v1
 coffer provider edit deepseek --secret "$NEW_KEY"      # rotates the key in place
-coffer resource rename provider deepseek deepseek-eu
+coffer provider edit deepseek --title "DeepSeek (EU account)"
+coffer provider edit deepseek --name deepseek-eu
 coffer provider rm deepseek
 ```
 
+- **Title** is an optional display name (up to 80 characters) that Coffer's pages and the CLI show in place of the name; an empty `--title` clears it.
+
 - **Rotating** the key overwrites the stored secret at the same ref; nothing that cites it changes.
-- **Changing the protocol** is refused with `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` while the provider is switched on. Run `coffer provider use-builtin <wire>`, edit, then switch again.
+- **Changing the protocol** is refused with `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` while the provider is switched on. Run `coffer provider builtin <wire>`, edit, then switch again.
 - **Renaming** changes only the label. The uid, the credential ref and the projected `apiKeyHelper` stay as they are; Codex's `name = "Coffer (<name>)"` label updates on the next switch.
 - **Deleting** removes the provider and deletes its credential if nothing else cites it.
 
@@ -186,17 +189,17 @@ Some of Coffer's work runs on a model of its own: memory organisation, knowledge
 **CLI:**
 
 ```sh
-coffer provider internal-default deepseek      # the endpoint and key
-coffer engine model set deepseek-flash         # the model
-coffer engine model show
+coffer config set engine.provider deepseek        # the endpoint and key
+coffer config set engine.model deepseek-flash     # the model
+coffer config list engine.
 
-coffer provider transcribe-default openai-direct
-coffer engine transcribe-model set whisper-1
+coffer config set transcribe.provider openai-direct
+coffer config set transcribe.model whisper-1
 ```
 
 At most one provider is the internal-engine default, and at most one carries speech to text; setting either moves the flag from wherever it was. A provider can be switched into agents and be the engine's default at the same time. An `ollama` provider can only ever serve the engine. When the engine's provider changes, the engine model is cleared unless the new provider's curated list includes it.
 
-`coffer engine` also controls the unattended passes (`coffer engine upkeep list|set|runs`), the per-call time limit (`coffer engine timeout`), and which machine may run knowledge curation (`coffer engine curate-owner`). See the [CLI reference](/reference/cli).
+The other `engine.*` keys control the unattended passes (`engine.upkeep.<pass>.enabled` and `engine.upkeep.<pass>.interval`), the per-call time limit (`engine.timeout`), and which machine may run knowledge curation (`engine.curate_owner`); `coffer config list engine.` prints each with its current value, default and help. `engine.provider` and `transcribe.provider` have no default, so `config unset` refuses them: move the flag by naming another connection. `coffer daemon status` shows the passes running right now. See the [CLI reference](/reference/cli).
 
 ## Troubleshooting
 

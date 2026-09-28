@@ -223,13 +223,13 @@ A shim can live for hours, and the daemon may restart underneath it. When a POST
 The daemon binds one port and never moves off it. With nothing configured that port is `8000`. You can pin another port between 1024 and 65535:
 
 ```sh
-coffer daemon port show     # the port the next start will bind, and the one in use now
-coffer daemon port set 8765 # write it to daemon-config.json
-coffer daemon restart       # a running daemon owns its socket; restart to move
-coffer daemon port clear    # back to 8000
+coffer config get daemon.port      # the port the next start will bind
+coffer config set daemon.port 8765 # write it to daemon-config.json
+coffer daemon restart              # a running daemon owns its socket; restart to move
+coffer config unset daemon.port    # back to 8000
 ```
 
-The `port` group works with no daemon running, because you change the port precisely when the daemon cannot start. For that reason the setting has no REST route.
+The `daemon.port` key works with no daemon running, because you change the port precisely when the daemon cannot start. For that reason it is the one `coffer config` key stored in the pre-bind settings file rather than behind a route, and the setting has no REST route.
 
 A daemon that scans for a free port breaks two things without saying so: your bookmark to the web UI, and everything the browser has stored against that origin. Refusing to start and naming the process that holds the port is the better failure. When the holder is itself a Coffer daemon, the message says it is most likely your own daemon still warming up rather than telling you to kill it.
 

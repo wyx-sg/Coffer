@@ -27,14 +27,11 @@ daemon-to-daemon protocol; the daemon spawns children but does not install runti
 managers for them, and the `.dmg` and the shell inside it belong to the desktop-app spec, which
 wraps the same three binaries this spec builds.
 
-Not every daemon operation is reachable from both REST and the CLI. Three gaps are deliberate and
-one is not. The pre-bind port setting is CLI-only by design, because it must work with no daemon
+Not every daemon operation is reachable from both REST and the CLI. Three gaps are deliberate. The pre-bind port setting is CLI-only by design, because it must work with no daemon
 running. The `/api/v1/fs/*` routes are REST-only because their only caller is a web page that
 cannot reach the OS by itself, while a terminal user already has `cd`, `$EDITOR` and their
 platform's own open command. `POST /daemon/shutdown` has no dedicated CLI verb because
-`coffer daemon stop` reaches the same exit through a signal. The gap with no reason behind it is
-`GET /api/v1/daemon/logs`, which has no `coffer daemon logs` counterpart — a terminal user reads
-the file directly, which works but is not the same contract. `COFFER_PORT_RANGE_START` /
+`coffer daemon stop` reaches the same exit through a signal. `COFFER_PORT_RANGE_START` /
 `COFFER_PORT_RANGE_END` are test-harness machinery, not product behaviour: they are the one
 surviving path on which a start scans for a free port, they deliberately outrank the user's
 setting so a test run is hermetic on a machine whose vault has a port pinned, and no user-facing

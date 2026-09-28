@@ -1,6 +1,6 @@
 ---
 title: Observability
-description: How Coffer records what it did — one JSON daemon log with trace ids, an audit log of changes, an invocation log of proxied MCP calls, retention for all three, coffer__diagnose, and opt-in eval capture.
+description: How Coffer records what it did — one JSON daemon log with trace ids, an audit log of changes, an invocation log of proxied MCP calls, retention for all three, how agents and people read them, and opt-in eval capture.
 ---
 
 # Observability
@@ -20,12 +20,12 @@ Coffer is a background process that other programs talk to. When something goes 
 
 | Decision | Reason |
 | --- | --- |
-| One log file, `daemon.log`, one JSON object per line | Every reader (the Activity page, `coffer__diagnose`, a human with `grep`) parses the same fields. |
+| One log file, `daemon.log`, one JSON object per line | Every reader (the Activity page, `coffer log daemon`, an agent or a human with `grep`) parses the same fields. |
 | A trace id on every HTTP request, echoed as `X-Coffer-Trace` | A failed response can be tied to the exact log lines it produced. |
 | A separate, structured audit log in SQLite | "What changed, and who changed it" needs filtering by resource, kind and event type, and has to survive a rename. |
 | An invocation log for proxied MCP calls, with no payloads | Latency and outcome per call are useful; arguments and results can carry secrets and stay out. |
 | One retention mechanism for every log-like table and log file | Bounded growth without a separate cleanup job per feature. |
-| The main reader is an MCP tool, `coffer__diagnose` | The realistic reader at the moment of failure is an agent that already has Coffer's tools in hand. |
+| Records are read through the CLI (`coffer log`) and the log file (`coffer path logs`), not through an MCP tool | The realistic reader at the moment of failure is an agent with a shell and its own file tools; finding a record needs no extra tool in every session's tool list. |
 | Eval capture is a separate, opt-in sink | Curating eval cases needs request text, which the shared database deliberately never stores. |
 
 ## The daemon log
@@ -78,7 +78,7 @@ Upstream MCP servers get their own files because they are far chattier than Coff
 
 ### The tolerant reader
 
-Because `daemon.log` is also the stdio of the daemon's children, it is never guaranteed to be pure JSON. `application/log_reader.py` is the one reader both the Activity page and `coffer__diagnose` use. It:
+Because `daemon.log` is also the stdio of the daemon's children, it is never guaranteed to be pure JSON. `application/log_reader.py` is the one reader both the Activity page and `coffer log daemon` use. It:
 
 - reads only the last 512 KiB of the file, so a 10 MB log is never pulled into memory;
 - strips ANSI colour and cursor sequences;
@@ -163,7 +163,7 @@ The vocabulary is a closed enumeration, `AuditEventType` in `backend/coffer/doma
 
 `credential_read` is recorded when a secret value is read out through the management API (`GET /api/v1/credentials/{ref}`), with the reference only — never the value. Decrypting a secret to spawn an upstream is not an audit event.
 
-You read the audit log from the **Changes** tab of the Activity page, with `coffer audit list` (`--kind`, `--name`, `--event-type`, `--since`, `--limit`, `--json`), or through `GET /api/v1/audit`. See [Activity and audit](/guides/activity).
+You read the audit log from the **Changes** tab of the Activity page, with `coffer log audit` (`--kind`, `--name`, `--event-type`, `--since`, `--limit`, `--json`), or through `GET /api/v1/audit`. See [Activity and audit](/guides/activity).
 
 ## The MCP invocation log
 
@@ -188,11 +188,11 @@ What `status` means:
 
 Resource reads and prompt gets have no in-band error flag, so for them only a raised error counts as `error`.
 
-Rows are keyed by uid rather than name so a server's history survives a rename, and a deleted server's rows stay readable. The table is not a foreign key for the same reason.
+Rows are keyed by uid rather than name, so a server's history belongs to that registration and not to a later server registered under the same name, and a deleted server's rows stay readable. The table is not a foreign key for the same reason.
 
 Writes are buffered: an in-memory queue (up to 5,000 rows) is flushed by a writer task every 50 ms or every 50 rows, whichever comes first, so a tool-heavy session does not pay an SQLite commit per call. When the queue is full, callers wait rather than drop rows.
 
-You read it on the **MCP calls** tab of the Activity page, per server on the server's detail page, with `coffer mcp invocations`, or through `GET /api/v1/mcp/invocations` and `GET /api/v1/resources/mcp_server/{uid}/invocations`.
+You read it on the **MCP calls** tab of the Activity page, per server on the server's detail page, with `coffer log mcp [--server <name>]`, or through `GET /api/v1/mcp/invocations` and `GET /api/v1/resources/mcp_server/{uid}/invocations`.
 
 ## Retention
 
@@ -226,27 +226,22 @@ flowchart LR
 - A full prune also sweeps the channel media directory, and the worker prunes old shim and upstream log files on the same cadence. `daemon.log` itself is bounded by its own rotation and is never deleted.
 - A window of "none" disables pruning for that table. Changing a window records `retention_updated` in the audit log.
 
-You manage policies with `coffer retention list`, `coffer retention set` and `coffer retention prune-now`, or through `/api/v1/retention/policies` and `POST /api/v1/retention/prune`.
+You manage policies with `coffer config list retention.`, `coffer config set retention.<table> <days|forever>` and `coffer log prune`, or through `/api/v1/retention/policies` and `POST /api/v1/retention/prune`.
 
-## `coffer__diagnose`
+## Reading the records: `coffer log` and `coffer path logs`
 
-`coffer__diagnose` is a builtin MCP tool that returns Coffer's recent history as two correlated, newest-first timelines:
+The realistic reader of these records is often an agent at the moment something broke, working in a shell. It reads them the way a person does, with the CLI and its own file tools:
 
-- `changes` — the audit log (what changed, who changed it);
-- `log` — the daemon log, through the same tolerant reader as the Activity page.
+| Command | Reads |
+| --- | --- |
+| `coffer log audit [--kind] [--name] [--event-type] [--since] [--limit] [--json]` | the audit log, newest first |
+| `coffer log mcp [--server] [--status ok\|error] [--since] [--limit] [--json]` | the MCP invocation log, newest first |
+| `coffer log daemon [--errors] [--since] [--limit] [--json]` | the tail of `daemon.log`, through the same tolerant reader as the Activity page |
+| `coffer path logs` | the log directory and the `daemon.log` in it, for `grep` or `tail` |
 
-It exists because the realistic reader of these records is an agent at the moment something broke. An agent that hits a `CREDENTIAL_MISSING` error does not know whether it needs "what changed" or "what failed", so the tool answers both at once.
+`--since` takes an ISO 8601 instant or an age such as `30m`, `1h` or `2d`. A filter that cannot be resolved — a name without a kind, or a name that no resource of that kind has — is an error rather than being silently ignored, because an unfiltered answer would look like "nothing happened to this resource". Every command is read-only and prints no secret values: audit details are redacted before storage, and log records carry none by construction.
 
-| Argument | Default | Limits | Effect |
-| --- | --- | --- | --- |
-| `since_minutes` | 60 | 1–10080 (7 days) | how far back to look |
-| `errors_only` | `false` | | keep only error-level log records (and unreadable lines); the audit side is unaffected |
-| `event_type` | | | filter the audit side to one event type |
-| `resource_kind` | | | filter the audit side to one kind |
-| `resource_name` | | requires `resource_kind` | filter the audit side to one resource by its current name; its whole trail comes back, including rows written under older names |
-| `limit` | 40 | 1–200 | maximum entries per timeline |
-
-A filter that cannot be resolved — a name without a kind, or a name that no resource of that kind has — is an error rather than being silently ignored, because an unfiltered answer would look like "nothing happened to this resource". The tool is read-only and returns no secret values: audit details are redacted before storage, and log records carry none by construction. Its full schema is in [MCP tools](/reference/mcp-tools).
+An agent that hits a `CREDENTIAL_MISSING` error does not know whether it needs "what changed" or "what failed", so it runs `coffer log audit --since 1h` and `coffer log daemon --errors --since 1h`, or greps the file `coffer path logs` names for the response's trace id.
 
 ## Eval capture
 
@@ -269,7 +264,7 @@ The invocation log's honest `error` status for in-band tool errors is what makes
 
 ## Trade-offs and alternatives
 
-**Payloads in the invocation log.** Recording arguments and results would make debugging a single call easier. Coffer does not, because both routinely carry credentials, personal data and file contents, and the log is retained for a month and read by any agent with `coffer__diagnose`. The fixed error marker for in-band tool errors follows the same rule.
+**Payloads in the invocation log.** Recording arguments and results would make debugging a single call easier. Coffer does not, because both routinely carry credentials, personal data and file contents, and the log is retained for a month and readable by any agent through `coffer log mcp`. The fixed error marker for in-band tool errors follows the same rule.
 
 **A log file per writer.** Giving the desktop shell or a detached daemon's stdio their own files would keep `daemon.log` pure JSON. Coffer keeps one file and a tolerant reader instead, because every "check the log" message points at one path and a second file is a place nobody is told to look. Upstream MCP servers are the exception, because their volume would evict Coffer's own records.
 
@@ -277,7 +272,7 @@ The invocation log's honest `error` status for in-band tool errors is what makes
 
 **Audit events in the daemon log only.** A log line cannot be filtered by resource id or survive rotation for a year. The table is the record; the log line is a convenience for whoever is tailing the file.
 
-**A metrics or tracing backend.** Coffer runs on one machine for one person. Exporting OpenTelemetry spans or Prometheus metrics would add a dependency and a second process for a question `coffer__diagnose` already answers locally.
+**A metrics or tracing backend.** Coffer runs on one machine for one person. Exporting OpenTelemetry spans or Prometheus metrics would add a dependency and a second process for a question `coffer log` already answers locally.
 
 ## Where it lives in the code
 
@@ -285,7 +280,7 @@ The invocation log's honest `error` status for in-band tool errors is what makes
 | --- | --- |
 | [`backend/coffer/infrastructure/logging/setup.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/setup.py) | JSON formatter, rotating file handler, stderr rule, trace id context |
 | [`backend/coffer/infrastructure/logging/files.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/files.py) | log directory, per-upstream stderr files, log-file pruning |
-| [`backend/coffer/application/log_reader.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/log_reader.py) | tolerant tail reader shared by the Activity page and `coffer__diagnose` |
+| [`backend/coffer/application/log_reader.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/log_reader.py) | tolerant tail reader shared by the Activity page and `coffer log daemon` |
 | [`backend/coffer/surfaces/http/trace.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/trace.py) | trace id middleware |
 | [`backend/coffer/surfaces/http/middleware.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/middleware.py) | middleware order |
 | [`backend/coffer/domain/audit.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/audit.py) | audit entry and event vocabulary |
@@ -296,7 +291,7 @@ The invocation log's honest `error` status for in-band tool errors is what makes
 | [`backend/coffer/application/retention_registry.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/retention_registry.py) | `PrunableTable` and `PrunableRegistry` |
 | [`backend/coffer/application/retention_service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/retention_service.py), [`retention_worker.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/retention_worker.py) | prune logic and cadence |
 | [`backend/coffer/surfaces/http/app_mcp_composition.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/app_mcp_composition.py) | the registered prunable tables |
-| [`backend/coffer/application/diagnostics.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/diagnostics.py) | `coffer__diagnose` |
+| [`backend/coffer/surfaces/cli/log_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/log_cmd.py), [`path_cmd.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/path_cmd.py) | `coffer log` and `coffer path` |
 | [`backend/coffer/application/eval_capture.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/eval_capture.py), [`infrastructure/logging/eval_capture.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/logging/eval_capture.py) | eval capture emit and sink |
 | [`evals/`](https://github.com/wyx-sg/Coffer/tree/main/evals) | eval harness, datasets, baselines, curate CLI |
 

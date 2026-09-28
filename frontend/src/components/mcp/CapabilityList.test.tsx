@@ -292,4 +292,32 @@ describe("CapabilityList", () => {
     // The switch stops propagation, so the row detail must NOT open.
     expect(screen.queryByText(/"type": "object"/)).not.toBeInTheDocument();
   });
+
+  test("flags a tool whose client-visible name is over 64 characters, and only that one", () => {
+    const long = "t".repeat(70 - "mcp__coffer__fs__".length);
+    const tools = [
+      {
+        ...sampleTools[0],
+        original_name: long,
+        prefixed_name: `fs__${long}`,
+        client_name_length: 70,
+      },
+      {
+        ...sampleTools[1],
+        original_name: "short_tool",
+        prefixed_name: "fs__short_tool",
+        client_name_length: 40,
+      },
+    ];
+    render(wrap(<CapabilityList serverUid="u-filesystem" kind="tool" tools={tools} />));
+
+    const flags = screen.getAllByRole("note");
+    expect(flags).toHaveLength(1);
+    expect(flags[0]).toHaveTextContent("70 characters");
+    expect(flags[0]).toHaveTextContent("above 60");
+    const longRow = screen.getByText(long).closest("tr") as HTMLElement;
+    expect(within(longRow).getByRole("note")).toBe(flags[0]);
+    // Flagging only: the long tool keeps its switch and its state.
+    expect(within(longRow).getByRole("switch")).toBeChecked();
+  });
 });

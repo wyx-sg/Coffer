@@ -81,6 +81,10 @@ class ChannelStatus:
     # and the CLI prints the id.
     runs_on: str | None = None
     runs_here: bool = False
+    #: The display title a person chose (spec resource-framework "Carry an optional
+    #: editable title on every resource"); ``None`` when unset, and a surface shows
+    #: the name in its place.
+    title: str | None = None
 
 
 class ChannelService:
@@ -231,6 +235,7 @@ class ChannelService:
             diagnostics=self._diagnostics(resource, runs_on=runs_on, runs_here=runs_here),
             uid=resource.uid,
             name=name,
+            title=resource.title,
             channel_type=channel_type,
             enabled=resource.enabled,
             running=self._runtime.is_running(name),

@@ -36,7 +36,7 @@ export function describeActivity(t: TFunction, entry: AuditEntry): string {
  * The lowercased free-text haystack for one change — everything a user might
  * type into the Changes search box: the rendered sentence (so anything visible
  * is searchable by construction), the resource name, the raw event code a
- * reader may know from `coffer__diagnose`, and the humanised actor.
+ * reader may know from `coffer log audit`, and the humanised actor.
  */
 export function auditSearchHaystack(t: TFunction, entry: AuditEntry): string {
   return [

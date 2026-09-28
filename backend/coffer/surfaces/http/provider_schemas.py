@@ -112,6 +112,10 @@ class ProviderOut(BaseModel):
 
     uid: str
     name: str
+    #: The display title a person chose (spec resource-framework "Carry an optional
+    #: editable title on every resource"); ``None`` when unset, and a surface shows
+    #: the name in its place.
+    title: str | None = None
     protocol: Protocol
     base_url: str
     credential_ref: str | None

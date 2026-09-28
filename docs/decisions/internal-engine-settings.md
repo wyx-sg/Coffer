@@ -169,9 +169,10 @@ separate flags with no fallback between them. The shape carries these rules:
 ## Consequences
 
 - Surfaces: `/api/v1/internal-engine-config` (plus `/upkeep`, `/timeout`,
-  `/transcribe-model`, `/curation-owner`), `coffer engine model|upkeep|timeout|transcribe-model|curate-owner`,
-  and Settings → Coffer's model (`/settings/engine`). The connection flags are
-  set on the provider kind's own routes and CLI.
+  `/transcribe-model`, `/curation-owner`), the `engine.*` and `transcribe.*`
+  keys of `coffer config`, and Settings → Coffer's model (`/settings/engine`).
+  The connection flags are set on the provider kind's own routes and, from the
+  CLI, as `coffer config set engine.provider|transcribe.provider <name>`.
 - Every write to the row records `internal_engine_model_set` with the values
   after the write (spec internal-engine "Audit every write to the engine
   settings"). The event name is narrower than what it records, and renaming it

@@ -37,6 +37,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
 import { agentTypeLabel } from "@/lib/agents/display";
 import { useAgent } from "@/lib/hooks/useAgents";
+import { displayName } from "@/lib/resourceTitle";
+import { ResourceLabel } from "@/components/resource/ResourceLabel";
 
 const TABS = ["overview", "skills", "mcpServers", "plugins", "memory", "conversations", "config"];
 const DEFAULT_TAB = "overview";
@@ -103,7 +105,7 @@ export function AgentDetailPage() {
     <div className="space-y-6">
       <PageHeader
         back={{ to: "/agents", label: t("agents.detail.back") }}
-        title={agent.name}
+        title={<ResourceLabel resource={agent} heading />}
         badges={<Badge variant="secondary">{agentTypeLabel(agent.type)}</Badge>}
         subtitle={agent.description ?? undefined}
         actions={
@@ -183,7 +185,7 @@ export function AgentDetailPage() {
 
       <AgentDeleteDialog
         uid={uid}
-        name={agent.name}
+        name={displayName(agent)}
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         onDeleted={() => navigate("/agents")}

@@ -45,7 +45,7 @@ Most of the time you do not create refs by hand. The dialogs that ask for a secr
 | --- | --- |
 | stdio MCP server | `coffer mcp add … --credential ENV_VAR=<ref>` — becomes an environment variable of the server process |
 | HTTP MCP server | `coffer mcp add … --credential Header-Name=<ref>` — becomes a request header; the secret is the header's whole value |
-| Adopting an agent's MCP entry | `coffer agent mcp adopt … --secret KEY=<ref>` — Coffer stores the entry's current value under `<ref>` |
+| Adopting an agent's MCP entry | `coffer adopt mcp <agent>:<entry> --secret KEY=<ref>` — Coffer stores the entry's current value under `<ref>` |
 | Model provider | `coffer provider add … --credential-ref <ref>` |
 | Channel | the channel's token fields (see [Channels](/guides/channels)) |
 | Sync remote | `coffer sync remote set … --credential-ref <ref>` |
@@ -88,7 +88,7 @@ The row is re-encrypted in place and keeps its creation time. Everything that ci
 ## Delete a credential
 
 ```sh
-coffer credentials delete github/token       # asks first; --force skips the prompt
+coffer credentials rm github/token           # asks first; --force skips the prompt
 ```
 
 Deletion is refused while any resource still cites the ref, and the message names each one by kind and current name:
@@ -112,9 +112,9 @@ You rarely need this command: deleting a resource releases the refs nothing else
 **CLI:**
 
 ```sh
-coffer credentials storage                  # master key storage: file
-coffer credentials storage --set keychain
-coffer credentials storage --set file
+coffer config get credentials.storage       # file
+coffer config set credentials.storage keychain
+coffer config set credentials.storage file
 ```
 
 A move writes the key to its destination and reads it back before removing the source, so an interruption leaves the key where it was. Every stored secret stays readable in both directions, and the move is audited as `master_key_relocated`. The key can be moved but not rotated: Coffer does not re-encrypt the store under a new key.
@@ -128,7 +128,7 @@ Without the master key, every stored secret is unrecoverable. If ciphertext exis
 ## Back up the key
 
 - **File storage:** copy `~/.coffer/master.key` somewhere safe, such as your password manager. Copying all of `~/.coffer/` with the daemon stopped also captures it.
-- **Keychain storage:** the key is in your keychain under service `coffer`, entry `master-key`. Move it to the file first (`coffer credentials storage --set file`) if you want a file to back up.
+- **Keychain storage:** the key is in your keychain under service `coffer`, entry `master-key`. Move it to the file first (`coffer config set credentials.storage file`) if you want a file to back up.
 - **With vault sync on:** `coffer sync key export <path>` writes the key to a file (mode `0600`) wherever it is stored.
 
 ## Carry the key to another machine
@@ -151,7 +151,7 @@ rm ~/coffer-master.key
 The **Sync** page offers the same as **Export key** and **Import key**, and its machine list shows whether each machine holds the **Same key**. Importing a different key keeps the previous one as a timestamped `master.key.bak-*` beside it.
 
 ::: info Vault sync is an experimental feature
-The `coffer sync key` commands and the Sync page need the `vault_sync` feature, which is off by default in stable releases. Turn it on with `coffer daemon features enable vault_sync` (see [Experimental features](/guides/experimental-features)).
+The `coffer sync key` commands and the Sync page need the `vault_sync` feature, which is off by default in stable releases. Turn it on with `coffer config set feature.vault_sync on` (see [Experimental features](/guides/experimental-features)).
 :::
 
 ## What never gets logged

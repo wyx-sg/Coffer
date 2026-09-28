@@ -55,7 +55,7 @@ http://127.0.0.1:8000/api/v1
 ```
 
 The daemon binds `127.0.0.1` only. The port is `8000` unless you set another one with
-`coffer daemon port set <port>`; the port of the running daemon is always in
+`coffer config set daemon.port <port>`; the port of the running daemon is always in
 `~/.coffer/daemon.json`. See [Running the daemon](/guides/daemon).
 
 The daemon also serves its live OpenAPI document at `/api/v1/openapi.json`, and the MCP

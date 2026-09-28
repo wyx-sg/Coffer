@@ -14,7 +14,7 @@ from the terminal with no daemon restart, which is what lets setup on a new mach
 a password manager.
 
 The capability ships no web page of its own and still satisfies the End-to-End Deliverable Rule: it
-delivers a complete CLI (`coffer credentials set|get|list|delete|storage`) and a complete route
+delivers a complete CLI (`coffer credentials set|get|list|rm`, plus the `credentials.storage` key of `coffer config`) and a complete route
 family (`/api/v1/credentials/*` plus `/api/v1/settings/credentials`) over its own table. Its only
 visual surface is Settings → Security, the master key's card; the secret fields themselves live in
 other capabilities' dialogs, because a secret is entered where the thing that needs it is

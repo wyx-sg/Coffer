@@ -50,6 +50,8 @@ import { useKindReach } from "@/lib/hooks/useResources";
 import { knowledgeCollectionsKey, resourcesKey } from "@/lib/api/queryKeys";
 import type { CollectionOut } from "@/lib/api/knowledgeTypes";
 import { reachFilter } from "@/lib/reachFilter";
+import { displayName, searchableName } from "@/lib/resourceTitle";
+import { ResourceLabel } from "@/components/resource/ResourceLabel";
 
 const KIND = "knowledge";
 
@@ -89,7 +91,7 @@ export function KnowledgeTable({
       key: "name",
       header: t("knowledge.cols.name"),
       className: "whitespace-nowrap",
-      cell: (r) => <span className="font-medium">{r.name}</span>,
+      cell: (r) => <ResourceLabel resource={r} />,
     },
     {
       // A CJK header in an unsized column wraps one character per line. The
@@ -136,7 +138,7 @@ export function KnowledgeTable({
       className: "whitespace-nowrap text-right",
       cell: (r) => (
         <RowDeleteButton
-          ariaLabel={`${t("common.delete")}: ${r.name}`}
+          ariaLabel={`${t("common.delete")}: ${displayName(r)}`}
           onDelete={() => setDeleting(r)}
         />
       ),
@@ -152,13 +154,13 @@ export function KnowledgeTable({
         rowKey={(r) => r.uid}
         onRowClick={(r) => navigate(`/knowledge/${encodeURIComponent(r.uid)}`)}
         search={{
-          accessor: (r) => `${r.name} ${r.description ?? ""}`,
+          accessor: (r) => `${searchableName(r)} ${r.description ?? ""}`,
           placeholder: t("knowledge.searchPlaceholder"),
         }}
         filters={[reachFilter(t, reachOf, false)]}
         selection={{
           ariaSelectAll: t("common.bulk.selectAll"),
-          ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.name}`,
+          ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${displayName(r)}`,
           bulkLabel: (count) => t("common.bulk.selected", { count }),
           clearLabel: t("common.clear"),
           renderBulkActions: ({ selectedRows, clear }) => (
@@ -195,7 +197,9 @@ export function KnowledgeTable({
           if (!open) setDeleting(null);
         }}
         title={t("knowledge.delete.title")}
-        description={t("knowledge.delete.description", { name: deleting?.name ?? "" })}
+        description={t("knowledge.delete.description", {
+          name: deleting ? displayName(deleting) : "",
+        })}
         confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
         variant="destructive"
         pending={del.isPending}

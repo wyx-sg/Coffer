@@ -186,7 +186,7 @@ The raw identifier never leaves the machine. What travels is `sha256("coffer-mac
 
 Each machine writes exactly one file, `machines/<machine_id>.yaml`, and never another machine's, so descriptors cannot conflict and git merges them trivially. The registry is whatever `machines/*.yaml` holds. A descriptor carries `name`, `os`, `hostname`, `coffer_version`, `last_converged_on`, `last_converged_commit`, `key_fingerprint` (a 12-character SHA-256 prefix of the master key, so another machine can say its credentials will not decrypt here) and the registered `agents`.
 
-`last_converged_on` is a day, restamped at most once per calendar day, so an idle machine does not commit a heartbeat every interval. The one exception: a descriptor that has no commit yet is filled in as soon as there is one, so a machine reinstalled on the day it first converged can still be recognised as returning. Retiring a gone machine's descriptor (`coffer sync machine remove`) is the one deliberate write to another machine's path.
+`last_converged_on` is a day, restamped at most once per calendar day, so an idle machine does not commit a heartbeat every interval. The one exception: a descriptor that has no commit yet is filled in as soon as there is one, so a machine reinstalled on the day it first converged can still be recognised as returning. Retiring a gone machine's descriptor (`coffer sync machine rm`) is the one deliberate write to another machine's path.
 
 ## Applying a diff
 
@@ -280,7 +280,7 @@ The history on the remote is the backup, and recovery reuses the round's own mac
 
 | Command | What it does | Pointer |
 | --- | --- | --- |
-| `coffer sync rollback` | Applies the diff from the current state back to the newest `coffer/pre-apply/*` snapshot. | Unchanged, so the next round publishes the undo as a local change. |
+| `coffer sync restore` (no `--at`) | Applies the diff from the current state back to the newest `coffer/pre-apply/*` snapshot. | Unchanged, so the next round publishes the undo as a local change. |
 | `coffer sync restore --at <sha, ref or YYYY-MM-DD>` | Brings back documents from an earlier revision, dropping that diff's deletions so later work survives. | Unchanged, so the recovered documents publish as additions. |
 | `coffer sync rebuild` | Makes this vault the remote's tip, discarding what only this machine holds. Offered where the publish guard holds a wiped vault. | Set to the tip. |
 

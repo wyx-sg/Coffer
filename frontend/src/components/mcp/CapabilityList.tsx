@@ -4,7 +4,8 @@
 // (unified with the MCP-servers, Agents, and audit surfaces): a search box, a
 // status filter (all/enabled/disabled), pagination, and a per-row enable
 // switch. Tools additionally expose their input_schema as an expandable row
-// detail. The enable/disable mutations keep per-row in-flight state so toggling
+// detail, and a tool whose client-visible name is over 64 characters is flagged
+// under its name. The enable/disable mutations keep per-row in-flight state so toggling
 // one capability never disables the switches on the others.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -12,6 +13,8 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
 import { CodeView } from "@/components/preview/CodeView";
+import { toneClass } from "@/lib/statusColors";
+import { cn } from "@/lib/utils";
 import type { components } from "@/lib/api/types";
 import { useDisableCapability, useEnableCapability } from "@/lib/hooks/useMcpCapabilityMutations";
 import { CapabilityBulkActions } from "./CapabilityBulkActions";
@@ -40,6 +43,23 @@ interface RowDescriptor {
   description: string | null | undefined;
   enabled: boolean;
   schema?: Record<string, unknown>;
+  /** Length of `mcp__coffer__<prefixed>` — the name a client shows. Tools and
+   *  prompts only; a resource is addressed by URI, not by a tool name. */
+  clientNameLength?: number;
+}
+
+/** The limit model provider APIs place on a tool name (spec mcp-gateway "Flag
+ *  tools whose client-visible name is too long"). Flagging only: the tool stays
+ *  enabled and listed under its usual name. */
+const CLIENT_NAME_LIMIT = 64;
+
+function ClientNameFlag({ length }: { length: number }) {
+  const { t } = useTranslation();
+  return (
+    <p className={cn("mt-1 w-fit rounded-sm px-1.5 py-0.5 text-xs", toneClass("warn"))} role="note">
+      {t("mcp.capabilities.nameTooLong", { length, limit: CLIENT_NAME_LIMIT })}
+    </p>
+  );
 }
 
 function ToggleSwitch({
@@ -117,6 +137,9 @@ export function CapabilityList(props: Props) {
               {row.prefixed}
             </Badge>
           </div>
+          {row.clientNameLength !== undefined && row.clientNameLength > CLIENT_NAME_LIMIT ? (
+            <ClientNameFlag length={row.clientNameLength} />
+          ) : null}
           {row.description ? (
             <p className="mt-1 text-sm text-muted-foreground">{row.description}</p>
           ) : null}
@@ -209,6 +232,7 @@ function toRows(props: Props): RowDescriptor[] {
       description: t.description,
       enabled: t.enabled,
       schema: t.input_schema as Record<string, unknown> | undefined,
+      clientNameLength: t.client_name_length,
     }));
   }
   if (props.kind === "resource" && props.resources) {
@@ -225,6 +249,7 @@ function toRows(props: Props): RowDescriptor[] {
       prefixed: p.prefixed_name,
       description: p.description,
       enabled: p.enabled,
+      clientNameLength: p.client_name_length,
     }));
   }
   return [];

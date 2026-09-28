@@ -64,7 +64,7 @@ Gates act at request time, on every surface:
 - **Workers**: sync convergence, knowledge curation, memory aggregation and
   distillation read the switch at the top of each round and skip it.
 - **CLI**: groups stay registered; a `FEATURE_DISABLED` answer becomes one line
-  naming `coffer daemon features enable <key>`.
+  naming `coffer config set feature.<key> on`.
 - **Web and desktop**: `/api/v1/daemon/status` carries `features`; the sidebar
   filters on it, a gated page links to Settings → General, and the desktop tray
   drops its Sync entry (`desktop/src/sync_gate.rs`).
@@ -128,8 +128,8 @@ exposes. It loses; three boolean keys per machine need none of it.
 **`main` keeps every feature. Features that are not ready are registered as
 experimental, and are off by default on a `stable` build and on by default on
 every other build. Each machine can switch each one at runtime, from Settings →
-General or `coffer daemon features`, and the switch applies at request time on
-every surface.** Rules a change must respect:
+General or `coffer config set feature.<key> on|off`, and the switch applies at
+request time on every surface.** Rules a change must respect:
 
 - The channel is a constant stamped before the freeze, never inferred from
   `sys.frozen`.

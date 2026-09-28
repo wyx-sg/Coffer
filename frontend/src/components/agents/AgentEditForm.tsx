@@ -1,5 +1,5 @@
 // frontend/src/components/agents/AgentEditForm.tsx — spec agent-registry
-// "Manage the agent lifecycle": edit an existing agent's name, config_dir
+// "Manage the agent lifecycle": edit an existing agent's name, title, config_dir
 // override and description. Rendered as a modal dialog (mirrors AgentAddDialog); the agent's
 // TYPE is immutable post-registration and shows read-only.
 //
@@ -29,7 +29,9 @@ import type { AgentOut, AgentPatch } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
 import { agentTypeLabel } from "@/lib/agents/display";
 import { usePatchAgent } from "@/lib/hooks/useAgents";
-import { useRenameResource } from "@/lib/hooks/useResourceMutations";
+import { useRenameResource, useSetResourceTitle } from "@/lib/hooks/useResourceMutations";
+import { titlePatchValue } from "@/lib/resourceTitle";
+import { ResourceTitleField } from "@/components/resource/ResourceTitleField";
 
 export function AgentEditForm(props: {
   agent: AgentOut;
@@ -39,9 +41,11 @@ export function AgentEditForm(props: {
   const { t } = useTranslation();
   const patch = usePatchAgent();
   const rename = useRenameResource();
+  const setTitleMutation = useSetResourceTitle();
   // Initialise inputs from the existing record so the user sees what is
   // currently set; the folder the user picks IS the config dir.
   const [name, setName] = useState<string>(props.agent.name);
+  const [title, setTitle] = useState<string>(props.agent.title ?? "");
   const [configDir, setConfigDir] = useState<string>(props.agent.config_dir ?? "");
   const [description, setDescription] = useState<string>(props.agent.description ?? "");
 
@@ -61,7 +65,9 @@ export function AgentEditForm(props: {
     }
     const newName = name.trim();
     const renamed = newName !== "" && newName !== props.agent.name;
-    if (!renamed && Object.keys(body).length === 0) {
+    const nextTitle = titlePatchValue(title);
+    const retitled = nextTitle !== (props.agent.title ?? null);
+    if (!renamed && !retitled && Object.keys(body).length === 0) {
       props.onClose();
       return;
     }
@@ -72,6 +78,13 @@ export function AgentEditForm(props: {
       if (renamed) {
         await rename.mutateAsync({ kind: "agent", uid: props.agent.uid, name: newName });
       }
+      if (retitled) {
+        await setTitleMutation.mutateAsync({
+          kind: "agent",
+          uid: props.agent.uid,
+          title: nextTitle,
+        });
+      }
       if (Object.keys(body).length > 0) {
         await patch.mutateAsync({ uid: props.agent.uid, body });
       }
@@ -80,6 +93,8 @@ export function AgentEditForm(props: {
       // Error surfaced via `patch.error` / `rename.error` below.
     }
   };
+
+  const pending = patch.isPending || rename.isPending || setTitleMutation.isPending;
 
   return (
     <Dialog
@@ -103,6 +118,12 @@ export function AgentEditForm(props: {
               placeholder={t("agents.namePlaceholder")}
             />
           </div>
+          <ResourceTitleField
+            id="agent-edit-title"
+            value={title}
+            onChange={setTitle}
+            name={props.agent.name}
+          />
           <div className="space-y-1.5">
             <Label htmlFor="agent-edit-type">{t("agents.type")}</Label>
             <Input
@@ -131,17 +152,17 @@ export function AgentEditForm(props: {
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
-          {rename.error || patch.error ? (
+          {rename.error || setTitleMutation.error || patch.error ? (
             <p role="alert" className="text-sm text-destructive">
-              {translateApiError(t, rename.error ?? patch.error)}
+              {translateApiError(t, rename.error ?? setTitleMutation.error ?? patch.error)}
             </p>
           ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={props.onClose}>
               {t("common.cancel")}
             </Button>
-            <Button type="submit" disabled={patch.isPending || rename.isPending}>
-              {patch.isPending || rename.isPending ? t("common.saving") : t("agents.save")}
+            <Button type="submit" disabled={pending}>
+              {pending ? t("common.saving") : t("agents.save")}
             </Button>
           </DialogFooter>
         </form>

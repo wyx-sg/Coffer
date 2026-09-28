@@ -374,3 +374,19 @@ def test_curating_with_no_model_promotes_what_the_inbox_holds(  # type: ignore[n
 def test_the_knowledge_routes_require_the_daemon_token(client) -> None:  # type: ignore[no-untyped-def]
     resp = client.get("/api/v1/knowledge/collections", headers={"X-Coffer-Token": "wrong"})
     assert resp.status_code == 401
+
+
+def test_collection_list_carries_the_resource_title(client) -> None:  # type: ignore[no-untyped-def]
+    """spec resource-framework "Carry an optional editable title on every resource":
+    the collection list carries the title set through the kind-agnostic update,
+    while ``name`` stays the directory name the file routes take."""
+    _create_collection(client, "team")
+    rows = client.get("/api/v1/knowledge/collections").json()["collections"]
+    row = next(r for r in rows if r["name"] == "team")
+    assert row["title"] is None
+
+    resp = client.patch(f"/api/v1/resources/{row['uid']}", json={"title": "Team notes"})
+    assert resp.status_code == 200, resp.text
+    rows = client.get("/api/v1/knowledge/collections").json()["collections"]
+    row = next(r for r in rows if r["uid"] == row["uid"])
+    assert (row["name"], row["title"]) == ("team", "Team notes")

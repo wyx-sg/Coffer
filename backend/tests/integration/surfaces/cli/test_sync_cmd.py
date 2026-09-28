@@ -829,6 +829,9 @@ def test_machine_list_marks_this_machine_and_shows_its_peers(fleet: Fleet) -> No
     # Two machines that never exchanged a key cannot read each other's ciphertext.
     assert "different" in result.output
 
+    listed = json.loads(fleet.ok("sync", "machine", "list", "--json").output)["machines"]
+    assert {m["machine_id"] for m in listed} == {MACHINE_A, MACHINE_B}
+
 
 def test_machine_rename_renames_this_machine(fleet: Fleet) -> None:
     fleet.ok("sync", "remote", "set", fleet.a.remote_url)
@@ -997,7 +1000,7 @@ def test_the_sync_group_offers_every_command_and_option_it_owes() -> None:
         ("sync", "remote", "clear"): set(),
         ("sync", "remote", "pause"): set(),
         ("sync", "remote", "resume"): set(),
-        ("sync", "machine", "list"): set(),
+        ("sync", "machine", "list"): {"--json"},
         ("sync", "machine", "rename"): set(),
         ("sync", "machine", "rm"): set(),
         ("sync", "key", "export"): set(),

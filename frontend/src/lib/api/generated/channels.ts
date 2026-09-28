@@ -75,6 +75,8 @@ export interface components {
             uid: string;
             /** @description A mutable label, unique among channels. For display only; anything that must keep pointing at this channel holds the uid. */
             name: string;
+            /** @description Optional display text a person chose, shown in place of the name wherever this resource is listed or shown; null when none is set. Edited through `PATCH /api/v1/resources/{uid}` (resource-framework "Carry an optional editable title on every resource"). */
+            title?: string | null;
             /** @enum {string} */
             channel_type: "telegram" | "seatalk";
             enabled: boolean;

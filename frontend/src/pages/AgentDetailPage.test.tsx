@@ -28,6 +28,13 @@ vi.mock("@/lib/hooks/useAgents", () => ({
 // module is stubbed too. All four writes are declared, not just the rename:
 // a factory that omitted one would fail any render that reached for it.
 vi.mock("@/lib/hooks/useResourceMutations", () => ({
+  useSetResourceTitle: vi.fn(() => ({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn().mockResolvedValue({}),
+    reset: vi.fn(),
+    isPending: false,
+    error: null,
+  })),
   useEnableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useDisableResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useDeleteResource: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),

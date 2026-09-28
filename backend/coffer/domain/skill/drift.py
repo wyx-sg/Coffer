@@ -35,11 +35,11 @@ _REMEDIES: dict[DriftKind, str] = {
     ),
     DriftKind.MISSING_MASTER: (
         "The master folder is gone; remove the record with `coffer skill rm <name>` "
-        "and re-import the skill with `coffer skill import <path>`."
+        "and add the skill again with `coffer skill add <folder>`."
     ),
     DriftKind.ORPHAN_MASTER: (
         "A folder in Coffer's skill store has no Coffer record; move it out of the store "
-        "and adopt it with `coffer skill import <path>`, or delete it."
+        "and add it with `coffer skill add <folder>`, or delete it."
     ),
 }
 

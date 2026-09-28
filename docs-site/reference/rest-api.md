@@ -22,7 +22,7 @@ http://127.0.0.1:8000/api/v1
 ```
 
 The daemon binds `127.0.0.1` only. The port is `8000` unless you set another one with
-`coffer daemon port set <port>`; the port of the running daemon is always in
+`coffer config set daemon.port <port>`; the port of the running daemon is always in
 `~/.coffer/daemon.json`. See [Running the daemon](/guides/daemon).
 
 The daemon also serves its live OpenAPI document at `/api/v1/openapi.json`, and the MCP
@@ -90,11 +90,11 @@ machine, exactly like a route the build does not have. The tables below mark tho
 
 ## Routes
 
-The daemon mounts 162 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 163 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
-| [daemon](#daemon) | 8 |
+| [daemon](#daemon) | 9 |
 | [resources](#resources) | 9 |
 | [audit](#audit) | 1 |
 | [retention](#retention) | 3 |
@@ -124,9 +124,10 @@ The daemon mounts 162 operations in 20 groups. Groups follow the order the daemo
 | `GET` | `/api/v1/daemon/residency` | Get Residency |
 | `PUT` | `/api/v1/daemon/residency` | Install or remove the login service, and say what is true afterwards. |
 | `POST` | `/api/v1/daemon/shutdown` | Shutdown Daemon |
-| `GET` | `/api/v1/daemon/logs` | The tail of ``daemon.log``, newest-first — the same record ``coffer__diagnose`` reads, for the human looking at the Activity page instead of an agent. |
+| `GET` | `/api/v1/daemon/logs` | The tail of ``daemon.log``, newest-first — the same record ``coffer log daemon`` reads, for the human looking at the Activity page. |
 | `GET` | `/api/v1/daemon/features` | List Features |
 | `PUT` | `/api/v1/daemon/features/{key}` | Switch one feature on this machine, at once and without a restart. |
+| `DELETE` | `/api/v1/daemon/features/{key}` | Remove this machine's setting, so the feature follows the channel default. |
 
 ### resources
 
@@ -135,7 +136,7 @@ The daemon mounts 162 operations in 20 groups. Groups follow the order the daemo
 | `GET` | `/api/v1/resources` | List Resources |
 | `POST` | `/api/v1/resources` | Register Resource |
 | `GET` | `/api/v1/resources/{uid}` | Get Resource |
-| `PATCH` | `/api/v1/resources/{uid}` | Edit a resource's label, description or config. |
+| `PATCH` | `/api/v1/resources/{uid}` | Edit a resource's label, title, description or config. |
 | `DELETE` | `/api/v1/resources/{uid}` | Delete Resource |
 | `POST` | `/api/v1/resources/{uid}/enable` | Enable Resource |
 | `POST` | `/api/v1/resources/{uid}/disable` | Disable Resource |

@@ -279,6 +279,18 @@ def test_show_edit_disable_enable_and_rm_a_collection(knowledge_cli_daemon, tmp_
     assert json.loads(_extract_json(listed.output))["collections"] == []
 
 
+def test_edit_takes_no_description_because_the_readme_holds_it(knowledge_cli_daemon, tmp_path):
+    """A collection's description is its README's opening paragraph (spec
+    knowledge "Read a collection's description from its README"), so `edit`
+    offers no `--description` that would store one nobody reads."""
+    _make_collection("shopee")
+    refused = _runner.invoke(
+        cli_app, [KIND_KNOWLEDGE, "edit", "shopee", "--description", "ignored"]
+    )
+    assert refused.exit_code == 2, refused.output
+    assert "--description" in refused.output
+
+
 def test_add_sets_a_title_when_asked(knowledge_cli_daemon):
     added = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "add", "shopee", "--title", "Shopee"])
     assert added.exit_code == 0, added.output

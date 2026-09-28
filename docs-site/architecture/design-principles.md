@@ -63,7 +63,7 @@ Convergence is bidirectional but only under the sync spec's safety rules: git's 
 
 **Statement.** Every entity you manage — an MCP server, an agent, a skill, a knowledge collection, a memory partition, a channel, a model provider — is a **Resource** of some **kind**. The framework unifies identity, lifecycle, audit, schema validation and reach. It does not unify behaviour: how an MCP server is invoked and how a skill is delivered stay entirely inside their kinds.
 
-**Rationale.** Every kind needs the same things: to be named, listed, enabled, disabled, renamed, deleted, audited and scoped. Building those seven times is more code and seven chances to drift. But a framework that tried to own behaviour too — one `invoke()` for everything — would be a leaky abstraction over things that have nothing in common.
+**Rationale.** Every kind needs the same things: to be named, listed, edited, enabled, disabled, deleted, audited and scoped. Building those seven times is more code and seven chances to drift. But a framework that tried to own behaviour too — one `invoke()` for everything — would be a leaky abstraction over things that have nothing in common.
 
 **In the code.** One frozen [`Kind`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/domain/resource.py) descriptor per kind, one kind-agnostic `ResourceService`, one `resources` table, one `/api/v1/resources` router, one `audit_log`. The kind-agnostic core is tested against a fake kind and an import contract forbids it from importing any real one. See [Resource framework](/architecture/resource-framework).
 
@@ -75,11 +75,11 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 ## Identity is an immutable uid
 
-**Statement.** A resource's identity is its `uid`: an opaque `uuid4().hex` minted once at creation, never reused, and the same value on every machine that holds the resource. The `name` is a mutable label, unique within its kind. The integer `id` is an internal surrogate key that never leaves the process.
+**Statement.** A resource's identity is its `uid`: an opaque `uuid4().hex` minted once at creation, never reused, and the same value on every machine that holds the resource. The `name` is a label, unique within its kind, and mutable unless agents quote it: an MCP server's name (the prefix of every tool name) and a skill's name (the folder an agent loads it from) are fixed once registered. Every resource also has an optional `title` for display. The integer `id` is an internal surrogate key that never leaves the process.
 
 **Rationale.** Once a vault converges across machines, the question an identifier must answer is "is the thing on that machine the same thing as the thing on this one?" A name cannot answer it, because a name is exactly what you are allowed to change: a rename would cross the sync remote as a deletion plus a creation, cascading away everything attached to the old row. An autoincrement row number cannot answer it either, because two machines allocate the same number to different resources.
 
-**In the code.** `/api/v1/resources/{uid}` addresses every resource; a resource `scope` and a channel's `default_agent` hold agent uids; the sync bundle is laid out as `resources/<kind>/<uid>.yaml`; rename is an ordinary field on `PATCH`, available to every kind. The CLI still takes names and resolves them to uids itself, so nobody types a UUID.
+**In the code.** `/api/v1/resources/{uid}` addresses every resource; a resource `scope` and a channel's `default_agent` hold agent uids; the sync bundle is laid out as `resources/<kind>/<uid>.yaml`; rename is an ordinary field on `PATCH`, refused with `409 NAME_IMMUTABLE` for a kind that declares `name_fixed`, and `title` is editable on every kind. The CLI still takes names and resolves them to uids itself, so nobody types a UUID.
 
 **Rules out.** `<kind>:<name>` identifiers; cross-resource references by name; per-kind rename endpoints; exposing `resources.id` on any surface.
 
@@ -119,7 +119,7 @@ Coffer's general rule is to extract shared code only on second use. The Resource
 
 **Rationale.** A synced reach would be set from wherever you happen to sit, about machines you cannot see, and two machines editing it would put a permission through a text merge where whichever round ran last silently decides what the other machine exposes. A machine-local reach has nothing to merge and can always be verified where it takes effect. The cost is honest: a resource arriving on a machine for the first time starts at that kind's default reach there.
 
-**In the code.** `domain/sync/serialization.py` leaves `enabled` and `scope` out of the resource document, and the applier leaves local reach untouched. The experimental-feature switches live in `~/.coffer/daemon-config.json` rather than the database for the same reason. Surfaces say so where reach is set: `coffer scope set --help` states that the scope applies to this machine only.
+**In the code.** `domain/sync/serialization.py` leaves `enabled` and `scope` out of the resource document, and the applier leaves local reach untouched. The experimental-feature switches live in `~/.coffer/daemon-config.json` rather than the database for the same reason. Surfaces say so where reach is set: each kind's `scope` command (`coffer skill scope --help`, for example) states that the scope applies to this machine only.
 
 **Rules out.** Machine ids inside a scope; a "newest write wins" reach; any permission that changes because another machine's round ran.
 

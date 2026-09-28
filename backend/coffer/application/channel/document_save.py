@@ -32,7 +32,7 @@ _logger = logging.getLogger(__name__)
 KNOWLEDGE_OFF = (
     "⚠️ Knowledge is switched off on this machine, so nothing was saved. "
     "Switch it on in Coffer's Settings → General, or run: "
-    "coffer daemon features enable knowledge"
+    "coffer config set feature.knowledge on"
 )
 
 

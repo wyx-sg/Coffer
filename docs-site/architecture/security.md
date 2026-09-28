@@ -141,7 +141,7 @@ The one secret outside the database is the Fernet master key, managed by [`Maste
 | `file` (default) | `~/.coffer/master.key`, mode `0600` | No — the key sits beside the ciphertext. | None. |
 | `keychain` | OS keychain, service `coffer`, ref `master-key` | Yes. | At most once per daemon start on macOS. |
 
-Switch with **Settings → Security** or `coffer credentials storage --set keychain`. Switching **moves the key, never re-encrypts the data**; the old copy is deleted last, and resolution is file-first, so an interrupted move always resolves to a working key.
+Switch with **Settings → Security** or `coffer config set credentials.storage keychain`. Switching **moves the key, never re-encrypts the data**; the old copy is deleted last, and resolution is file-first, so an interrupted move always resolves to a working key.
 
 Startup is fail-closed. The daemon counts `credentials` rows *before* resolving the key, and creates a new key only when the table is empty. Ciphertext with no resolvable key stops the daemon with `MASTER_KEY_MISSING`, naming the path; a locked keychain that might hold the key stops it with `CREDENTIAL_LOCKED` rather than creating a second key that would shadow it.
 

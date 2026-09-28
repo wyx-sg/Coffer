@@ -71,6 +71,8 @@ export interface ChannelPlan {
  */
 export interface ChannelEditPlan extends ChannelPlan {
   uid: string;
+  /** The title to set (`null` clears it); absent when the title is unchanged. */
+  title?: string | null;
 }
 
 /** The secrets a channel can hold, and the logical key each one's ref ends in. */

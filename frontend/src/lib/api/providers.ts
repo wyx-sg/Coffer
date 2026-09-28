@@ -88,6 +88,9 @@ export interface Provider {
    *  route go — renaming is now the kind-agnostic
    *  `PATCH /resources/{uid}` (`resourcesApi.rename`). */
   name: string;
+  /** The display title a person chose, shown in place of the name; null when
+   *  none is set. Edited through `PATCH /resources/{uid}` (`resourcesApi.setTitle`). */
+  title?: string | null;
   protocol: Protocol;
   base_url: string;
   /** Null for ollama (no key) and any connection created without a credential. */

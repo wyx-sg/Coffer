@@ -110,6 +110,6 @@ def test_curate_owner_names_an_outdated_daemon(monkeypatch: pytest.MonkeyPatch) 
             "/daemon/status": _OLD_STATUS,
         },
     )
-    res = runner.invoke(app, ["engine", "curate-owner", "show"])
+    res = runner.invoke(app, ["config", "get", "engine.curate_owner"])
     assert res.exit_code == 1, res.output
     assert _RESTART in res.output

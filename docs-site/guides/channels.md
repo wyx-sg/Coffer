@@ -35,7 +35,7 @@ Both ways store the secret first and register the channel with a reference to it
 coffer credentials set channel/tg/bot-token
 
 # Register the channel; --agent is the agent's name as the Agents page shows it
-coffer channel register my-telegram --type telegram \
+coffer channel add my-telegram --type telegram \
   --bot-token-ref channel/tg/bot-token --agent claude-code
 ```
 
@@ -132,9 +132,10 @@ Two settings decide which agent answers.
 **The scope** is the channel's reach — the list of agents it **may drive**. For every other resource kind, scope names the agents a resource is delivered *to*; a channel is used by no agent, so its scope is read the other way round. Set it with the **Reach** button on the channel's row or page, or:
 
 ```sh
-coffer scope set channel my-telegram --agents claude-code   # may drive only Claude Code
-coffer scope clear channel my-telegram                       # may drive every agent
-coffer scope set channel my-telegram --no-agents             # dormant: drives nothing
+coffer channel scope my-telegram                        # show the current scope
+coffer channel scope my-telegram --agents claude-code   # may drive only Claude Code
+coffer channel scope my-telegram --all                  # may drive every agent
+coffer channel scope my-telegram --none                 # dormant: drives nothing
 ```
 
 - An unrestricted scope means every registered agent.
@@ -189,10 +190,10 @@ Two channel settings tune when the bot answers in a group. They change when the 
 
 **Web UI:** on the channel's page choose **Edit**, and use the switches under **In group chats**: **Answer only when @mentioned** (Telegram channels only) and **Ignore messages that @mention someone else**. Then **Save changes**.
 
-**CLI:** pass the switches to `coffer channel register`, or change them later with `coffer channel set`. An option you leave out keeps its current value.
+**CLI:** pass the switches to `coffer channel add`, or change them later with `coffer channel edit`. An option you leave out keeps its current value.
 
 ```sh
-coffer channel set my-telegram --no-require-mention --ignore-other-mentions
+coffer channel edit my-telegram --no-require-mention --ignore-other-mentions
 ```
 
 ```text
@@ -256,15 +257,19 @@ From the CLI:
 
 ```sh
 coffer channel list
-coffer channel status my-telegram
-coffer resource disable channel my-telegram   # stop the adapter
-coffer resource enable channel my-telegram    # start it again
-coffer resource delete channel my-telegram    # stop it and remove the pairing
+coffer channel show my-telegram
+coffer channel disable my-telegram   # stop the adapter
+coffer channel enable my-telegram    # start it again
+coffer channel rm my-telegram        # stop it and remove the pairing
 printf %s "$NEW_TOKEN" | coffer credentials set channel/tg/bot-token   # rotate
 ```
 
 ```text
 channel:  my-telegram (telegram)
+uid:      9b2e…
+agent:    claude-code
+gating:   require_mention=on  ignore_other_mentions=off
+secret:   bot_token_ref = channel/tg/bot-token
 enabled:  True    running: True
 runs on:  3f9c… (this machine)
 pairing:  no pending code
@@ -272,7 +277,7 @@ peer:     Ada (chat 123456789)
 conv:     01J8Z…
 ```
 
-`coffer channel status` also prints a `warning:` line for a setting on the platform that defeats the channel's configuration, such as Telegram privacy mode.
+`coffer channel show` also prints a `warning:` line for a setting on the platform that defeats the channel's configuration, such as Telegram privacy mode.
 
 ## Security
 

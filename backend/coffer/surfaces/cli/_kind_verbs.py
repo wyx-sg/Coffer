@@ -74,12 +74,18 @@ class KindVerbs:
     tells the user to delete and register again, and what that resets (spec
     resource-framework "Treat a resource's name as a mutable label"), which a
     missing option could not.
+
+    ``edit_description`` is ``False`` for a kind whose description is not a
+    field of the resource — a knowledge collection's comes from its README
+    (spec knowledge "Read a collection's description from its README") — so
+    ``edit`` offers no ``--description`` that would write one nobody reads.
     """
 
     kind: str
     noun: str
     verbs: frozenset[str] = DEFAULT_VERBS
     name_fixed: bool = False
+    edit_description: bool = True
     columns: tuple[Column, ...] = ()
     edit_flags: EditFlags | None = None
     help: dict[str, str] = field(default_factory=dict)
@@ -262,8 +268,9 @@ def _edit(spec: KindVerbs) -> Callable[..., None]:
             str | None,
             typer.Option(None, "--title", help="Display title (≤80 chars); empty clears it"),
         ),
-        _param("description", str | None, typer.Option(None, "--description")),
     ]
+    if spec.edit_description:
+        base.append(_param("description", str | None, typer.Option(None, "--description")))
     edit.__signature__ = inspect.Signature([*base, *extra])  # type: ignore[attr-defined]
     edit.__doc__ = spec.help.get("edit", f"Change a {spec.noun}'s title, description or settings.")
     return edit

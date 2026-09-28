@@ -283,6 +283,16 @@ def write_feature_setting(key: str, enabled: bool) -> None:
     _merge(features=features)
 
 
+def clear_feature_setting(key: str) -> None:
+    """Remove one feature from the ``features`` object, keeping every other key
+    in it, so the feature falls back to the channel default."""
+    payload = _read_raw() or {}
+    current = payload.get("features")
+    features = dict(current) if isinstance(current, dict) else {}
+    features.pop(key, None)
+    _merge(features=features)
+
+
 def parse_feature_pins(raw: str | None, known: tuple[str, ...]) -> dict[str, bool]:
     """Parse ``COFFER_FEATURES`` (``key=on|off``, comma-separated).
 

@@ -70,7 +70,11 @@ vi.mock("@/lib/hooks/useScope", () => ({
 vi.mock("@/lib/hooks/useAgents", () => ({ useAgents: vi.fn(() => ({ data: [] })) }));
 vi.mock("@/lib/hooks/useResourceMutations", () => {
   const stub = () => ({ mutate: vi.fn(), isPending: false });
-  return { useEnableResource: vi.fn(stub), useDisableResource: vi.fn(stub) };
+  return {
+    useEnableResource: vi.fn(stub),
+    useDisableResource: vi.fn(stub),
+    useSetResourceTitle: vi.fn(() => ({ ...stub(), reset: vi.fn(), error: null })),
+  };
 });
 
 function renderPage() {

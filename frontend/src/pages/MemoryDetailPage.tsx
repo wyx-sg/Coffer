@@ -31,6 +31,8 @@ import { RefreshCw } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { ScopeControl } from "@/components/ScopeControl";
+import { EditTitleDialog } from "@/components/resource/EditTitleDialog";
+import { ResourceLabel } from "@/components/resource/ResourceLabel";
 import { UnresolvableBadge } from "@/components/memory/UnresolvableBadge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -71,7 +73,7 @@ export function MemoryDetailPage() {
     <div className="space-y-6">
       <PageHeader
         back={{ to: "/memory", label: t("common.backTo", { label: t("nav.memory") }) }}
-        title={partition}
+        title={resource.data ? <ResourceLabel resource={resource.data} heading /> : partition}
         badges={row?.unresolvable ? <UnresolvableBadge /> : null}
         subtitle={
           row?.repository_path ? (
@@ -98,6 +100,7 @@ export function MemoryDetailPage() {
               </TooltipTrigger>
               <TooltipContent className="max-w-xs">{t("memory.detail.distilHint")}</TooltipContent>
             </Tooltip>
+            {resource.data ? <EditTitleDialog kind="memory" resource={resource.data} /> : null}
           </div>
         }
       />

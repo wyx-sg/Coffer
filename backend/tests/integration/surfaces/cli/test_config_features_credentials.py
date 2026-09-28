@@ -67,11 +67,6 @@ def test_a_feature_is_listed_and_switched_through_the_daemon(
     assert unknown.exit_code == 4 and "feature.nope" in unknown.output
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="needs DELETE /api/v1/daemon/features/{key} (clear this machine's setting); "
-    "no route or FeatureService method removes a setting yet",
-)
 @pytest.mark.acceptance(
     spec="experimental-features", scenario="unsetting a feature returns it to the channel default"
 )
@@ -88,7 +83,11 @@ def test_unsetting_a_feature_returns_it_to_the_channel_default(
             _runner.invoke(cli_app, ["config", "list", "feature.", "--json"]).output
         )["settings"]
     }
+    registered = {r["key"] for r in daemon.get("/daemon/features").json()["features"]}
+    assert set(rows) == {f"feature.{key}" for key in registered}
     assert rows["feature.memory"]["note"] == "channel default"
+    channel = daemon.get("/daemon/features").json()["channel"]
+    assert rows["feature.memory"]["value"] is (channel == "dev")
 
 
 # --- credentials.storage --------------------------------------------------------------

@@ -194,7 +194,7 @@ def test_a_switched_off_features_command_says_how_to_switch_it_on(
     assert res.exit_code == 1, res.output
     lines = [line for line in res.output.splitlines() if line.strip()]
     assert len(lines) == 1, res.output
-    assert "coffer daemon features enable vault_sync" in lines[0]
+    assert "coffer config set feature.vault_sync on" in lines[0]
 
 
 # --- MCP ----------------------------------------------------------------------
@@ -476,5 +476,5 @@ def test_curate_owner_show_answers_while_sync_is_off(
     daemon_config.write_feature_setting("vault_sync", False)
     with _client() as c:
         _patch_cli(monkeypatch, c)
-        res = runner.invoke(cli_app, ["engine", "curate-owner", "show", "--json"])
+        res = runner.invoke(cli_app, ["config", "get", "engine.curate_owner", "--json"])
     assert res.exit_code == 0, res.output

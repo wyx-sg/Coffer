@@ -42,6 +42,8 @@ import { ScopeControl } from "@/components/ScopeControl";
 import { memoryKey } from "@/lib/api/queryKeys";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
 import { reachFilter } from "@/lib/reachFilter";
+import { displayName, searchableName } from "@/lib/resourceTitle";
+import { ResourceLabel } from "@/components/resource/ResourceLabel";
 
 export interface MemoryPartitionRow extends PartitionOut {
   /** The only Resource field this row needs: the kind declares no scope, so
@@ -64,7 +66,7 @@ export function MemoryPartitionsTable({
     {
       key: "name",
       header: t("memory.cols.name"),
-      cell: (r) => <span className="font-medium">{r.name}</span>,
+      cell: (r) => <ResourceLabel resource={r} />,
     },
     {
       key: "repository",
@@ -117,7 +119,7 @@ export function MemoryPartitionsTable({
       rowKey={(r) => r.uid}
       onRowClick={(r) => navigate(`/memory/${encodeURIComponent(r.uid)}`)}
       search={{
-        accessor: (r) => `${r.name} ${r.repository_path}`,
+        accessor: (r) => `${searchableName(r)} ${r.repository_path}`,
         placeholder: t("memory.searchPlaceholder"),
       }}
       filters={[reachFilter(t, (r: MemoryPartitionRow) => ({ ...r, scope: null }), false)]}
@@ -126,7 +128,7 @@ export function MemoryPartitionsTable({
       // selection bar carries the enable/disable choice alone.
       selection={{
         ariaSelectAll: t("common.bulk.selectAll"),
-        ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.name}`,
+        ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${displayName(r)}`,
         bulkLabel: (count) => t("common.bulk.selected", { count }),
         clearLabel: t("common.clear"),
         renderBulkActions: ({ selectedRows, clear }) => (

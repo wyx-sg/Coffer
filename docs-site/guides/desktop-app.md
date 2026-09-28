@@ -147,7 +147,7 @@ grep coffer.desktop ~/.coffer/logs/daemon.log | tail
 
 **The app says it can't find its daemon.** The bundle's binaries are missing, which happens with a development build made without them. Install the CLI, or reinstall the app from a release `.dmg`.
 
-**The banner says the daemon is not running and never clears.** Choose **Restart daemon**. If that fails, look for `coffer.desktop` lines in `~/.coffer/logs/daemon.log`. A daemon that refuses to start because port 8000 is taken names the process holding it; move Coffer with `coffer daemon port set <port>`.
+**The banner says the daemon is not running and never clears.** Choose **Restart daemon**. If that fails, look for `coffer.desktop` lines in `~/.coffer/logs/daemon.log`. A daemon that refuses to start because port 8000 is taken names the process holding it; move Coffer with `coffer config set daemon.port <port>`.
 
 **MCP servers that work in a terminal fail when the app started the daemon.** The login-shell `PATH` probe timed out or failed, so the daemon got the minimal GUI `PATH`. Start the daemon from a terminal (`coffer daemon start`) or turn on **Start at login**, then reopen the app; it attaches to that daemon.
 

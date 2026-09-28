@@ -245,6 +245,11 @@ export async function readMatchingReply(
 
 /**
  * Generate a collision-resistant name for a test resource.
+ *
+ * A new MCP server's name is capped at 24 characters (spec mcp-gateway
+ * "Manage MCP servers as resources"): the suffix is 14 characters (an
+ * 8-character base-36 timestamp and 4 random ones, each after a dash), so a
+ * server's prefix must stay at 10 characters or fewer.
  */
 export function uniqueName(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;

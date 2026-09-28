@@ -48,6 +48,8 @@ import { reachFilter } from "@/lib/reachFilter";
 import type { ResourceOut } from "@/lib/api/resources";
 import { agentDisplayName } from "./agentLabels";
 import { HealthCell, MachineCell, PairedCell } from "./ChannelRowCells";
+import { displayName, searchableName } from "@/lib/resourceTitle";
+import { ResourceLabel } from "@/components/resource/ResourceLabel";
 
 /** The row's platform. Defaults to telegram: a channel config without a type
  *  cannot exist on the wire, and guessing beats rendering an empty cell. */
@@ -85,7 +87,7 @@ export function ChannelsTable({
       key: "name",
       header: t("channels.cols.name"),
       className: "whitespace-nowrap",
-      cell: (r) => <span className="font-medium">{r.name}</span>,
+      cell: (r) => <ResourceLabel resource={r} />,
     },
     {
       key: "type",
@@ -154,7 +156,7 @@ export function ChannelsTable({
       className: "whitespace-nowrap text-right",
       cell: (r) => (
         <RowDeleteButton
-          ariaLabel={`${t("channels.deleteTitle")}: ${r.name}`}
+          ariaLabel={`${t("channels.deleteTitle")}: ${displayName(r)}`}
           onDelete={() => setDeleting(r)}
         />
       ),
@@ -169,14 +171,14 @@ export function ChannelsTable({
         columns={columns}
         rowKey={(r) => r.uid}
         search={{
-          accessor: (r) => `${r.name} ${channelTypeOf(r)}`,
+          accessor: (r) => `${searchableName(r)} ${channelTypeOf(r)}`,
           placeholder: t("channels.searchPlaceholder"),
         }}
         filters={[reachFilter<ResourceOut>(t, (r) => ({ enabled: r.enabled, scope: r.scope }))]}
         onRowClick={(r) => navigate(`/channels/${encodeURIComponent(r.uid)}`)}
         selection={{
           ariaSelectAll: t("common.bulk.selectAll"),
-          ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${r.name}`,
+          ariaSelectRow: (r) => `${t("common.bulk.selectRow")}: ${displayName(r)}`,
           bulkLabel: (count) => t("common.bulk.selected", { count }),
           clearLabel: t("common.clear"),
           renderBulkActions: ({ selectedRows, clear }) => (
@@ -206,7 +208,7 @@ export function ChannelsTable({
           if (!open) setDeleting(null);
         }}
         title={t("channels.deleteTitle")}
-        description={t("channels.deleteConfirm", { name: deleting?.name ?? "" })}
+        description={t("channels.deleteConfirm", { name: deleting ? displayName(deleting) : "" })}
         confirmLabel={t("common.delete")}
         pending={del.isPending}
         onConfirm={() => {

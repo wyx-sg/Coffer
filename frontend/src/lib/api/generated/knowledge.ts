@@ -305,6 +305,8 @@ export interface components {
              *     has to keep pointing at this collection.
              */
             name: string;
+            /** @description Optional display text a person chose, shown in place of the name wherever this resource is listed or shown; null when none is set. Edited through `PATCH /api/v1/resources/{uid}` (resource-framework "Carry an optional editable title on every resource"). */
+            title?: string | null;
             /**
              * @description The first paragraph of the collection's `README.md`, empty when
              *     there is none. Never stored in the database (see "Read a

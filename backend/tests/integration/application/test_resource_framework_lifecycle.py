@@ -25,7 +25,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
-from coffer.surfaces.cli.resource_cmd import app as resource_cli
+from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_resource_service
@@ -97,9 +97,14 @@ async def test_generic_create_refuses_a_kind_that_owns_its_creation(tmp_path):
     finally:
         await engine.dispose()
 
-    commands = set(get_command(resource_cli).commands)  # type: ignore[attr-defined]
-    assert "create" not in commands
-    assert {"list", "show", "enable", "disable", "delete"} <= commands
+    # The command line has no kind-agnostic create either: `add` exists only
+    # on a kind group whose kind supplies its own, and memory — whose
+    # partitions only aggregation provisions — has none at all.
+    tree = get_command(cli_app).commands  # type: ignore[attr-defined]
+    memory = set(tree["memory"].commands)
+    assert "add" not in memory
+    assert {"list", "show", "edit", "rm", "enable", "disable"} <= memory
+    assert "add" in set(tree["mcp"].commands)
 
 
 class _FailingReleaseStore:

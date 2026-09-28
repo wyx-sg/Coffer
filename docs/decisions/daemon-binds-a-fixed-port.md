@@ -36,13 +36,13 @@ Two further constraints decide *where* a port setting can live:
 
 With nothing configured the daemon binds exactly `127.0.0.1:8000`
 (`DEFAULT_PORT` in `infrastructure/daemon/config.py`). A user who needs another
-port sets it with `coffer daemon port set <n>`, which writes it into
+port sets it with `coffer config set daemon.port <n>`, which writes it into
 `~/.coffer/daemon-config.json` — mode `0600`, merged rather than replaced, read
 with nothing but the standard library before the bind. If the port cannot be
 bound the daemon refuses to start and prints one message naming the process
 that holds it and each way out (`port_alloc.fixed_port_conflict_message`):
-stop that process, `coffer daemon port set <other>`, or — only when the failing
-port is not the default — `coffer daemon port clear`.
+stop that process, `coffer config set daemon.port <other>`, or — only when the
+failing port is not the default — `coffer config unset daemon.port`.
 
 Pros: the origin never moves, so bookmarks and browser-stored preferences
 survive restarts; a conflict is visible and named instead of silent; the setting
@@ -123,8 +123,8 @@ one that nothing read, and it is kept as an unknown key where it still exists.
 An unreadable file warns and falls back to the default rather than stopping the
 boot, since a daemon that cannot boot cannot be repaired from the UI it serves.
 
-The setting is changed from the CLI only (`coffer daemon port show|set|clear`),
-which works with no daemon running. It has no REST route or settings panel: a
+The setting is changed from the CLI only
+(`coffer config get|set|unset daemon.port`), which works with no daemon running. It has no REST route or settings panel: a
 port that is correct by default does not earn one, and the escape hatch belongs
 where a squatted port is diagnosed. A change takes effect at the next start;
 `coffer daemon restart` applies it.

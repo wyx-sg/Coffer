@@ -42,8 +42,8 @@ of the wire, escape sequences stripped, a traceback riding with the record that
 raised it, and a line no format fits kept whole rather than dropped. The page
 renders what it is given and must not invent: a row shows a dash where its line
 stated no time, no level or no logger, and each record is one row.
-Correlating the three records for an agent is `coffer__diagnose`'s job, not this
-page's: the page deliberately never joins them — a single merged timeline could
+An agent reads each record on its own with `coffer log audit`, `coffer log mcp` and
+`coffer log daemon`, and correlates them itself; the page deliberately never joins them — a single merged timeline could
 only carry the three records' lowest common denominator, so a call's duration
 and a record's level had nowhere to live.
 

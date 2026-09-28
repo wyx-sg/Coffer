@@ -51,7 +51,7 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
     └── ...
 ```
 
-- **A collection** is a top-level directory and one row of kind `knowledge` in the kind-agnostic `resources` table. You create it deliberately, with `coffer knowledge create`, `POST /api/v1/knowledge/collections` or the web UI. Reads, writes and working directories never provision one, and nothing derives a boundary from an agent's cwd. The knowledge layer adds no table to `coffer.db`.
+- **A collection** is a top-level directory and one row of kind `knowledge` in the kind-agnostic `resources` table. You create it deliberately, with `coffer knowledge add`, `POST /api/v1/knowledge/collections` or the web UI. Reads, writes and working directories never provision one, and nothing derives a boundary from an agent's cwd. The knowledge layer adds no table to `coffer.db`.
 - **The README** sits at the collection root. Its first paragraph is the collection's description. It is read from disk on every listing and is never stored in the database, because a copy in a row would be wrong the first time a person edited the file. The README is never listed as a document, counted or curated.
 - **Nesting** is chosen by whoever files a document, a person or curation. Coffer assigns folders no meaning.
 - **Hidden entries** (dot-prefixed) are excluded from every listing, count and catalogue. Coffer writes exactly one: `.inbox/`.
@@ -141,11 +141,11 @@ Neither the original bytes nor the extracted text is kept as a file. The upload 
 
 ### Direct edits
 
-Writing, editing or deleting a document directly, in your editor or with an agent's own file tools, is a complete way to change knowledge. No import or registration step is needed, and the change is live on the next read. The sweep notices the edit by modification time and carries it into the rest of the collection. Deleting a document is a person's action on the REST, CLI and web surfaces. No agent-facing tool deletes anything. There is also no route that writes a document: a person edits documents in their own editor.
+Writing, editing or deleting a document directly, in your editor or with an agent's own file tools, is a complete way to change knowledge; `coffer path knowledge [<collection>]` prints the directory, and the CLI has no command of its own for reading or deleting a document. No import or registration step is needed, and the change is live on the next read. The sweep notices the edit by modification time and carries it into the rest of the collection. Deleting a document is a person's action on the REST, CLI and web surfaces. No agent-facing tool deletes anything. There is also no route that writes a document: a person edits documents in their own editor.
 
 ## The curation pass
 
-Curation turns material into knowledge and carries an edit in one document through to the rest. It is a bounded agentic loop that runs on Coffer's internal model connection (see `coffer engine model`). It is implemented in `application/knowledge/curate.py` and driven by a LangGraph ReAct loop in `infrastructure/llm/agentic_reorg.py`. The knowledge package reaches the loop only through the `AgenticCurationPort` protocol, so it never imports LangChain.
+Curation turns material into knowledge and carries an edit in one document through to the rest. It is a bounded agentic loop that runs on Coffer's internal model connection (see `coffer config set engine.model`). It is implemented in `application/knowledge/curate.py` and driven by a LangGraph ReAct loop in `infrastructure/llm/agentic_reorg.py`. The knowledge package reaches the loop only through the `AgenticCurationPort` protocol, so it never imports LangChain.
 
 ### What a pass sees
 
@@ -280,7 +280,7 @@ On each tick the worker does the following:
 2. **Checks the gate** (`curation_may_run`). The `knowledge` feature must be on, `auto_curate_enabled` must be on (the default), and `curate_owner_machine_id` must name this machine or be unset. With the `vault_sync` feature on, the pass also does not run while a converge round is waiting on the user for a held deletion or an unresolved conflict. With `vault_sync` off, only the pass's own switch is read, because a single-machine vault has nobody to duplicate its work.
 3. **Takes the vault-write lock**, the same `asyncio.Lock` a converge round holds. See [Locking with sync](#locking-with-sync).
 4. **Drains each enabled collection**, identified by uid. Pending items are all inbox material, oldest first, then edited documents, oldest first. The worker claims the collection in the in-process upkeep-run registry and skips it if a manual pass holds it. It re-reads the pending list inside the claim, pushes items cut off last time behind the rest, and runs at most five passes (`MAX_PASSES_PER_SWEEP`). `no_model` or `failed` ends that collection's sweep. `truncated` does not, so one stubborn item cannot starve the rest.
-5. **Waits for the next tick.** The interval defaults to 60 seconds. It is re-read while the wait runs, so a change made with `coffer engine upkeep` or in Settings applies within a slice rather than after a wait committed at boot.
+5. **Waits for the next tick.** The interval defaults to 60 seconds. It is re-read while the wait runs, so a change made with `coffer config set engine.upkeep.curate.interval` or in Settings applies within a slice rather than after a wait committed at boot.
 
 A failed sweep is logged and never ends the loop. Shutdown cancels the task without waiting on a pass. The watermark makes a sweep idempotent, so the next boot picks up whatever was left.
 
@@ -288,7 +288,7 @@ A failed sweep is logged and never ends the loop. Shutdown cancels the task with
 
 A pass rewrites synced content unattended. If two machines curated the same corpus, each would merge the same material into a *different* document. Git would merge both additions cleanly, and the vault would hold the same knowledge twice with no conflict reported. So curation runs on one machine only.
 
-`auto_curate_enabled` and `curate_owner_machine_id` live in `internal_engine_config`, and the sweep reads both on every tick. No owner means a single-machine vault, where "here" is the only answer. An owner naming a machine the registry does not know stops curation everywhere. That is the safe direction: no curation costs waiting material, while curation everywhere costs silent duplication. You can inspect and change the owner with `coffer engine curate-owner show|set|clear`.
+`auto_curate_enabled` and `curate_owner_machine_id` live in `internal_engine_config`, and the sweep reads both on every tick. No owner means a single-machine vault, where "here" is the only answer. An owner naming a machine the registry does not know stops curation everywhere. That is the safe direction: no curation costs waiting material, while curation everywhere costs silent duplication. You can inspect and change the owner with `coffer config get|set|unset engine.curate_owner`.
 
 ### Manual passes
 

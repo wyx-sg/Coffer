@@ -39,6 +39,8 @@ import {
 } from "@/lib/hooks/useChannels";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { useResource } from "@/lib/hooks/useResources";
+import { displayName } from "@/lib/resourceTitle";
+import { ResourceLabel } from "@/components/resource/ResourceLabel";
 
 export function ChannelDetailPage() {
   const { t } = useTranslation();
@@ -97,7 +99,7 @@ export function ChannelDetailPage() {
     <div className="space-y-6">
       <PageHeader
         back={back}
-        title={resource.name}
+        title={<ResourceLabel resource={resource} heading />}
         badges={
           <Badge variant="secondary">{t(`channels.types.${channelType}`, channelType)}</Badge>
         }
@@ -131,7 +133,7 @@ export function ChannelDetailPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <ChannelStatusCard
           uid={uid}
-          name={resource.name}
+          name={displayName(resource)}
           config={resource.config}
           status={status}
         />
@@ -156,7 +158,7 @@ export function ChannelDetailPage() {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title={t("channels.deleteTitle")}
-        description={t("channels.deleteConfirm", { name: resource.name })}
+        description={t("channels.deleteConfirm", { name: displayName(resource) })}
         confirmLabel={t("common.delete")}
         pending={del.isPending}
         onConfirm={() => {

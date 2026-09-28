@@ -209,7 +209,8 @@ make format              # ruff format + ruff --fix + prettier (frontend)
 (`Makefile`): `scripts/check_file_sizes.py`, `scripts/check_response_models.py`,
 `scripts/check_doc_numbering.py`, `scripts/check_spec_citations.py`,
 `scripts/check_architecture_doc.py`,
-`scripts/check_pyinstaller_specs.py`, `ruff check`, `ruff format --check`,
+`scripts/check_pyinstaller_specs.py`, `scripts/check_cli_reference.py`,
+`scripts/check_removed_commands.py`, `ruff check`, `ruff format --check`,
 `mypy --strict`, `lint-imports` (the layering + cross-kind fence), and — when
 `frontend/node_modules` is present — `scripts/dump_i18n_backend_keys.py --check`
 plus `npm run lint`, `npm run typecheck` and `npm run knip` in `frontend/`.
@@ -226,7 +227,10 @@ Two consequences worth internalising:
   citation of the old title follows;
   `check_architecture_doc.py` holds the code-layout tree in
   `docs-site/architecture/layering.md` and the builtin-tool roster in
-  `docs-site/architecture/` to the code. Run `make lint` after touching markdown, not just after touching code.
+  `docs-site/architecture/` to the code; `check_removed_commands.py` rejects any
+  `coffer` command or `coffer__` tool the CLI/MCP reshape removed wherever it is
+  quoted under `docs-site/`, the shipped skill bodies (`backend/coffer/**/skill_assets/`)
+  or `e2e/`. Run `make lint` after touching markdown, not just after touching code.
 - **`lint-imports` is invoked with `PYTHONPATH=$(BACKEND)`, and that is
   load-bearing in a worktree** — a bare invocation resolves `coffer` through
   the editable install (which points at the main checkout) and reports contract

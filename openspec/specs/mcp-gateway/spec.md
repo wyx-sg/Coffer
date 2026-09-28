@@ -11,7 +11,7 @@ catalogue grows past what a model can reason over, and records which capability 
 long and with what outcome — never what was said. `mcp_server` was Coffer's first resource kind.
 
 This spec owns the gateway, capability curation, the invocation record and the `coffer mcp` / shim surfaces
-over them. The kind-agnostic lifecycle an `mcp_server` is managed through (immutable `uid`, rename, per-agent
+over them. The kind-agnostic lifecycle an `mcp_server` is managed through (immutable `uid`, fixed name and editable title, per-agent
 reach, audit log, retention) is [resource-framework](../resource-framework/spec.md)'s, and this spec
 contributes one `Kind` descriptor to it; the daemon that hosts the gateway — port, discovery file, token,
 loopback posture — is [daemon](../daemon/spec.md)'s; the encrypted store behind an upstream's credential

@@ -11,9 +11,9 @@ Coffer keeps three records of itself: an audit log of what changed in the vault,
 
 | Record | Answers | Stored in | Where to read it |
 | --- | --- | --- | --- |
-| Audit log | What changed, and who changed it? | `audit_log` table in `coffer.db` | **Activity → Changes**, `coffer audit list`, `coffer__diagnose` |
-| MCP invocations | What did an agent call, and how did it go? | `mcp_invocations` table | **Activity → MCP calls**, `coffer mcp invocations` |
-| Daemon log | What happened inside Coffer, including what broke? | `~/.coffer/logs/daemon.log` | **Activity → Daemon**, `coffer__diagnose` |
+| Audit log | What changed, and who changed it? | `audit_log` table in `coffer.db` | **Activity → Changes**, `coffer log audit` |
+| MCP invocations | What did an agent call, and how did it go? | `mcp_invocations` table | **Activity → MCP calls**, `coffer log mcp` |
+| Daemon log | What happened inside Coffer, including what broke? | `~/.coffer/logs/daemon.log` | **Activity → Daemon**, `coffer log daemon`, `coffer path logs` |
 
 All three stay on the machine that wrote them. [Vault sync](/guides/vault-sync) never publishes them, and Coffer sends them nowhere.
 
@@ -63,19 +63,19 @@ Not every event is audited. The log keeps changes that land outside Coffer (a fi
 ## Query the audit log from the CLI
 
 ```sh
-coffer audit list                                   # newest 50
-coffer audit list --kind mcp_server --name filesystem
-coffer audit list --event-type credential_read --since 2026-09-01T00:00:00Z
-coffer audit list --event-type memory_delivery_fired --limit 20
-coffer audit list --json
+coffer log audit                                   # newest 50
+coffer log audit --kind mcp_server --name filesystem
+coffer log audit --event-type credential_read --since 2026-09-01T00:00:00Z
+coffer log audit --event-type memory_delivery_fired --limit 20
+coffer log audit --json
 ```
 
 | Option | Meaning |
 | --- | --- |
 | `--kind` | Resource kind, such as `mcp_server`, `agent`, `skill`. |
-| `--name` | Resource name. |
+| `--name` | Resource name. Needs `--kind`. |
 | `--event-type` | One event type. |
-| `--since` | ISO 8601 lower bound. |
+| `--since` | ISO 8601 lower bound, or an age such as `30m`, `1h`, `2d`. |
 | `--limit` | 1–500, default 50. |
 | `--json` | Machine-readable output. |
 
@@ -84,12 +84,12 @@ Over REST the same query is `GET /api/v1/audit`, which also accepts `event_prefi
 ## Query MCP invocations from the CLI
 
 ```sh
-coffer mcp invocations                      # every server, newest 20
-coffer mcp invocations filesystem           # one server
-coffer mcp invocations --status error --since 2026-09-20T00:00:00Z --json
+coffer log mcp                              # every server, newest 20
+coffer log mcp --server filesystem          # one server
+coffer log mcp --status error --since 1d --json
 ```
 
-Without a server name the output includes Coffer's own built-in tool calls (server `coffer`) and rows of deleted servers (`deleted:<name>`). `--limit` accepts 1–500.
+Without `--server` the output includes Coffer's own built-in tool calls (server `coffer`) and rows of deleted servers (`deleted:<name>`). `--limit` accepts 1–500.
 
 An invocation has one of four statuses:
 
@@ -104,20 +104,20 @@ An invocation has one of four statuses:
 The invocation log records who called what, when, for how long and with what outcome. It has no column for call arguments or return values. For a tool that reported `isError`, the stored message is Coffer's fixed text `upstream tool returned an error result (isError)`, not the upstream's own message, which may echo the arguments. To see why a tool failed, look at the server's stderr in `~/.coffer/logs/upstream/<server>.log`.
 :::
 
-## Let an agent diagnose Coffer: `coffer__diagnose`
+## Read the daemon log from the CLI
 
-When something goes wrong in a session, the agent can read Coffer's history itself. `coffer__diagnose` is one of Coffer's built-in MCP tools. It returns two newest-first timelines in one answer: `changes` from the audit log and `log` from the daemon log. It is read-only and returns no secret values.
+```sh
+coffer log daemon                           # newest 100 records
+coffer log daemon --errors --since 1h
+coffer log daemon --json
+coffer path logs                            # the log directory and its daemon.log
+```
 
-| Argument | Default | Meaning |
-| --- | --- | --- |
-| `since_minutes` | 60 | How far back to look, up to 10080 (seven days). |
-| `limit` | 40 | Maximum entries per timeline, up to 200. |
-| `errors_only` | false | Keep only error-level log records. The audit side is unaffected. |
-| `event_type` | none | Filter the audit side to one event type. |
-| `resource_kind` | none | Filter the audit side to one kind. |
-| `resource_name` | none | Filter the audit side to one resource by its current name. Requires `resource_kind`. |
+`coffer log daemon` reads the tail of `daemon.log` normalised the way the **Daemon** tab shows it. `--limit` accepts 1–500. `coffer path logs` prints where the file is (`COFFER_LOG_DIR` moves it), so you can `grep` it directly.
 
-A prompt such as "my Jira tool keeps failing, check Coffer's logs" is enough: the agent calls the tool rather than asking you to find a file.
+## Let an agent look into Coffer
+
+When something goes wrong in a session, the agent can read Coffer's history itself, with the same commands: `coffer log audit`, `coffer log mcp` and `coffer log daemon --errors --since 1h` from its shell, or a `grep` over the daemon log that `coffer path logs` names. None of them returns a secret value. A prompt such as "my Jira tool keeps failing, check Coffer's logs" is enough: the `coffer-guide` skill tells the agent where to look, so it does not ask you to find a file.
 
 ## Correlate a failed request with the log: `X-Coffer-Trace`
 
@@ -148,11 +148,11 @@ A background worker prunes on daemon start and every six hours after. Each recor
 ::: code-group
 
 ```sh [CLI]
-coffer retention list
-coffer retention set audit_log --days 730
-coffer retention set mcp_invocations --forever     # never prune this table
-coffer retention prune-now                         # apply every policy now
-coffer retention prune-now --table mcp_invocations
+coffer config list retention.
+coffer config set retention.audit_log 730
+coffer config set retention.mcp_invocations forever   # never prune this table
+coffer log prune                                      # apply every policy now
+coffer log prune --table mcp_invocations
 ```
 
 ```text [Web UI]
@@ -161,7 +161,7 @@ Settings → Data → Data retention
 
 :::
 
-`--days` must be at least 1. In the web UI, shortening a window asks for confirmation first, because the next prune deletes the older rows; **Clear expired data now** applies every policy immediately. A policy change is itself audited as `retention_updated`.
+A number of days must be at least 1. In the web UI, shortening a window asks for confirmation first, because the next prune deletes the older rows; **Clear expired data now** applies every policy immediately. A policy change is itself audited as `retention_updated`.
 
 The daemon log is a file, not a table, so it has no policy: `daemon.log` rotates at 10 MB and keeps three rotations. Per-process shim logs and rolled-aside upstream logs in `~/.coffer/logs/` are deleted after seven days.
 

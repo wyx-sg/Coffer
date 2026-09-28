@@ -5,8 +5,9 @@
 The resource framework is the kind-agnostic half of Coffer's resource model: the kind
 registry and the immutable `uid` identity, the lifecycle surface every kind is managed
 through, per-agent reach, the audit log, per-table retention and its background prune,
-the cross-kind read of the passes in flight, and the test that every management
-operation is reachable from both REST and the CLI. A user relies on it for one place
+the cross-kind read of the passes in flight, and the test that every mutation and
+every read of state that is not a plain file is reachable from both REST and the CLI,
+with a plain file answered on the CLI by naming it with `coffer path`. A user relies on it for one place
 that lists everything Coffer holds, one way to turn a thing on or off, one way to say
 which agents it reaches where that question applies to the kind at all, one way to
 delete it, and one record of what happened — instead of a near-identical surface per
@@ -33,8 +34,8 @@ Whether the passes this spec reports run on a timer is internal-engine's, and wh
 pass does is memory's and knowledge's. `GET /api/v1/upkeep/runs`, the read of the passes
 in flight, is a live, read-only status the web UI polls so a Knowledge or Memory page's
 run-now button shows a pass the timer or the CLI started as already running; a terminal
-reads the same list with `coffer engine upkeep runs`. The passes themselves are managed
-from the CLI through `coffer engine upkeep`.
+reads the same list in `coffer daemon status`. The passes' switches and timers are
+changed from the CLI through the `engine.upkeep.*` keys of `coffer config`.
 
 It is a spec, not a rule in the principles, because it owns state and operable surfaces.
 `audit_log` and `retention_policies` are its tables: every kind writes the first, and
@@ -49,10 +50,11 @@ fences the core off from every kind; and it has ADRs of its own
 [Per-Agent Resource Scope](../../../docs/decisions/per-agent-resource-scope.md)). It is one
 behaviour — what happens to a managed thing between the moment a kind creates it and the
 moment it is deleted, recorded while it happens — and it is independently operable:
-`coffer resource`, `coffer scope`, `coffer audit` and `coffer retention` against a
-running daemon, with the Activity page's audit tab and the Data settings section's
+each kind's lifecycle verbs (`coffer <kind> list|show|edit|rm|enable|disable|scope`),
+`coffer log audit`, `coffer log prune`, the `retention.*` keys of `coffer config` and
+`coffer path` against a running daemon, with the Activity page's audit tab and the Data settings section's
 retention table (web-ui's pages) over the same records. An earlier audit rejected it
-when it owned only a dispatch seam; that `coffer resource` has no create command and
+when it owned only a dispatch seam; that the kind-agnostic surface has no create verb and
 that an empty registry answers every lifecycle route with a refusal are still true (see
 "Keep creation a per-kind seam"). The daemon it is mounted in — port, discovery file,
 token, loopback posture, `Host` guard — is daemon's; the encrypted store behind a

@@ -2,7 +2,7 @@
 command-line record readers").
 
 Gathering the audit log and the MCP invocation log onto one web page must not
-withdraw the scripts' way in: ``coffer audit`` and ``coffer log mcp``
+withdraw the scripts' way in: ``coffer log audit`` and ``coffer log mcp``
 still read each record through a running (in-process) daemon.
 """
 
@@ -27,7 +27,7 @@ _runner = CliRunner()
 
 
 @pytest.mark.acceptance(spec="web-ui", scenario="the command-line readers still read the records")
-def test_coffer_audit_still_reads_the_audit_log(in_proc_daemon: Any) -> None:
+def test_coffer_log_audit_still_reads_the_audit_log(in_proc_daemon: Any) -> None:
     from coffer.surfaces.cli import _client as _cli_client
 
     client, _info = _cli_client.client_or_exit()
@@ -36,7 +36,7 @@ def test_coffer_audit_still_reads_the_audit_log(in_proc_daemon: Any) -> None:
     )
     assert created.status_code == 201, created.text
 
-    result = _runner.invoke(app, ["audit", "list", "--json"])
+    result = _runner.invoke(app, ["log", "audit", "--json"])
     assert result.exit_code == 0, result.output
     entries = json.loads(result.output)["audit_events"]
     assert any(e.get("resource_name") == "reader-probe" for e in entries), entries

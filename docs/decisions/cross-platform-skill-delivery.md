@@ -3,13 +3,14 @@
 **Status**: Accepted
 **Date**: 2026-05-29
 **Deciders**: Yuxing Wu
-**Related**: spec skill-manager; spec agent-registry; [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Per-Agent Resource Scope](per-agent-resource-scope.md); [Resource Reach Is Machine-Local](resource-reach-is-machine-local.md); [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md); research note [agent skills](../research/agent-skills.md)
+**Related**: spec skill-manager; spec agent-registry; [Coffer Ships Its Own Manual as a Skill Resource](coffer-ships-its-own-skill.md); [Per-Agent Resource Scope](per-agent-resource-scope.md); [Resource Reach Is Machine-Local](resource-reach-is-machine-local.md); [Writing Agent-Native Config Safely](writing-agent-native-config-safely.md); [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md); research note [agent skills](../research/agent-skills.md)
 
 ## Context
 
 Coffer keeps one master folder per skill under `~/.coffer/skills/<name>/`, and
 that folder is the single editable copy (spec skill-manager "Keep one master
-folder per skill and carry it through a rename"). Each registered agent must
+folder per skill"); the name in that path is fixed once the skill is
+registered ([Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md)). Each registered agent must
 nevertheless see the skill in its own skills directory, under its own layout:
 `AgentConfig.resolved_skill_dir()` is `<config_dir>/skills` for both Claude
 Code and Codex (`backend/coffer/domain/agent/config.py`), so a skill named

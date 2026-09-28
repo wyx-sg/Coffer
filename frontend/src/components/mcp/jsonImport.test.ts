@@ -1,7 +1,7 @@
 // frontend/src/components/mcp/jsonImport.test.ts
 import { describe, expect, test } from "vitest";
 import { acceptance } from "@/test/acceptance";
-import { parseMcpJson } from "./jsonImport";
+import { MCP_SERVER_NAME_MAX, parseMcpJson, serverNameTooLong } from "./jsonImport";
 
 describe("parseMcpJson", () => {
   test("parses the standard mcpServers wrapper", () => {
@@ -174,5 +174,13 @@ describe("parseMcpJson", () => {
     if (badValue.ok) return;
     expect(badValue.errorKey).toBe("errBadHeaderValue");
     expect(badValue.errorParams).toEqual({ name: "api", key: "X-N" });
+  });
+});
+
+describe("serverNameTooLong", () => {
+  test("allows the 24-character cap and flags anything longer", () => {
+    expect(MCP_SERVER_NAME_MAX).toBe(24);
+    expect(serverNameTooLong("x".repeat(24))).toBe(false);
+    expect(serverNameTooLong("x".repeat(25))).toBe(true);
   });
 });

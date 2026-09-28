@@ -115,6 +115,8 @@ export const endpointModelsKey = (uid: string) => ["endpointModels", uid] as con
 // channels — channel resources ride `resourcesKey`; only live status is here
 // ---------------------------------------------------------------------------
 
+/** Prefix of every channel status key: a title or rename refreshes them all. */
+const channelsKey = ["channels"] as const;
 export const channelStatusKey = (uid: string) => ["channels", uid, "status"] as const;
 
 // ---------------------------------------------------------------------------
@@ -242,6 +244,12 @@ export function ownListKeyForKind(kind: string): QueryKey | undefined {
       return providersKey;
     case "agent":
       return agentsKey;
+    case "knowledge":
+      return knowledgeCollectionsKey;
+    case "memory":
+      return memoryPartitionsKey;
+    case "channel":
+      return channelsKey;
     default:
       return undefined;
   }

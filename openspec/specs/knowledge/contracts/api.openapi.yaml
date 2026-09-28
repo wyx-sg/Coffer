@@ -709,6 +709,15 @@ components:
             `path` and `collection` arguments of the file, material and upload
             routes, which are filesystem values; use `uid` for anything that
             has to keep pointing at this collection.
+        title:
+          type: string
+          nullable: true
+          maxLength: 80
+          description: >-
+            Optional display text a person chose, shown in place of the name
+            wherever this resource is listed or shown; null when none is set.
+            Edited through `PATCH /api/v1/resources/{uid}` (resource-framework
+            "Carry an optional editable title on every resource").
         description:
           type: string
           description: |

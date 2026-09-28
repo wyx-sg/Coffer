@@ -15,6 +15,8 @@ export function providerFormSchema(t: TFunction, opts: { isEdit: boolean }) {
   return z
     .object({
       name: z.string().trim().min(1, t("settings.connections.errors.nameRequired")),
+      // Edit only; blank clears the title. The input caps its length itself.
+      title: z.string(),
       presetId: z.string(),
       protocol: z.enum(PROTOCOLS),
       baseUrl: z.string().trim().url(t("settings.connections.errors.baseUrl")),

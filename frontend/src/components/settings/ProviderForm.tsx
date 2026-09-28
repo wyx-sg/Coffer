@@ -40,6 +40,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { translateApiError } from "@/lib/api/errors";
+import { titlePatchValue } from "@/lib/resourceTitle";
+import { ResourceTitleField } from "@/components/resource/ResourceTitleField";
 import {
   wireNeedsCredential,
   type Protocol,
@@ -59,8 +61,13 @@ interface Props {
   onSubmit: (values: ProviderCreate) => Promise<void> | void;
   /** Required when `initial` is set. Receives the PATCH body plus, when the user
    *  changed it, the new NAME — which is a separate rename call, not a patch
-   *  field. `null` means the name is unchanged. */
-  onUpdate?: (patch: ProviderPatch, newName: string | null) => Promise<void> | void;
+   *  field. `null` means the name is unchanged. `newTitle` is the title to set
+   *  (`null` clears it), or `undefined` when the title is unchanged. */
+  onUpdate?: (
+    patch: ProviderPatch,
+    newName: string | null,
+    newTitle?: string | null,
+  ) => Promise<void> | void;
   onCancel: () => void;
 }
 
@@ -91,6 +98,7 @@ export function ProviderForm({
     resolver: zodResolver(providerFormSchema(t, { isEdit })),
     defaultValues: {
       name: initial?.name ?? "",
+      title: initial?.title ?? "",
       presetId: "openai",
       protocol: initial?.protocol ?? "openai",
       baseUrl: initial?.base_url ?? "https://api.openai.com/v1",
@@ -121,7 +129,12 @@ export function ProviderForm({
       if (values.protocol !== initial.protocol) patch.protocol = values.protocol;
       if (needsCredential && values.secret) patch.secret_value = values.secret;
       const renamed = values.name.trim();
-      await onUpdate?.(patch, renamed && renamed !== initial.name ? renamed : null);
+      const nextTitle = titlePatchValue(values.title);
+      await onUpdate?.(
+        patch,
+        renamed && renamed !== initial.name ? renamed : null,
+        nextTitle !== (initial.title ?? null) ? nextTitle : undefined,
+      );
       return;
     }
     const body: ProviderCreate = {
@@ -171,6 +184,21 @@ export function ProviderForm({
           <p className="text-xs text-muted-foreground">{t("settings.connections.renameHint")}</p>
         ) : null}
       </div>
+
+      {isEdit ? (
+        <Controller
+          control={control}
+          name="title"
+          render={({ field }) => (
+            <ResourceTitleField
+              id="p-title"
+              value={field.value}
+              onChange={field.onChange}
+              name={initial.name}
+            />
+          )}
+        />
+      ) : null}
 
       {/* Provider preset (create only). In edit mode the wire itself is
           editable instead: a wrong guess is corrected here rather than

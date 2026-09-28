@@ -80,7 +80,7 @@ coffer mcp add brave \
 # 3. Check it starts and lists tools
 coffer mcp test brave
 # OK  (1840 ms)
-coffer mcp tool list brave
+coffer mcp cap list brave
 ```
 
 The stored config holds only the reference:
@@ -147,22 +147,26 @@ A static `env` or `headers` value that looks like a secret — starting with `Be
 The **Add MCP server** paste dialog reads an HTTP server's (`"url": …`) `headers` object and reviews each value for secrets exactly as it does `env`: a value whose name or content looks like a secret (an `Authorization` header, for example) is pre-marked **Secret**, stored in the credential store and cited from `credential_refs`; the rest stay in the transport's `headers`. An `env` object on an HTTP server is sent as headers too; when both name the same key, the `headers` value wins.
 :::
 
-## Server names
+## Server names and titles
 
 A server name is a label of letters, digits, `.`, `_` and `-`, at most 24 characters, unique among MCP servers. The cap keeps the name a client shows for each tool, `mcp__coffer__<server>__<tool>`, within the 64 characters model provider APIs accept; a server registered before the cap keeps its longer name. It may not contain `__`, because the gateway splits `<server>__<tool>` on the first `__`. Avoid `coffer`, the prefix of Coffer's own tools.
 
-The name is fixed once the server is registered, because it prefixes every tool name an agent sees and agents' permission rules and skills quote those names. A request to change it is refused with `NAME_IMMUTABLE`. To change what Coffer's own pages show, set the server's title instead. To use a different name, delete the server and register it again, which resets its capability toggles and its reach.
+The name is fixed once the server is registered, because it is the prefix of every tool name `<server>__<tool>` an agent sees, and agents' permission rules and skills quote those names. A request to change it is refused with `NAME_IMMUTABLE`. To use a different name, delete the server and register it again, which resets its capability toggles and its reach. The decision is recorded in the ADR "names-visible-to-agents-are-fixed".
+
+A **title** is the optional display name for everything Coffer shows you: up to 80 characters of free text, shown in the web UI and the CLI in place of the name when it is set. Agents never see it. Set it at registration with `coffer mcp add … --title`, change it later with `coffer mcp edit <name> --title "…"` (an empty value clears it), or edit it in the web UI.
+
+After each discovery, Coffer measures the name a client like Claude Code shows for every tool, `mcp__coffer__<server>__<tool>`. The server's **Tools** tab and `coffer mcp cap list` flag a tool whose name is over 64 characters, the limit model provider APIs accept; Cursor already drops tools above 60. A flagged tool stays enabled and listed. The fix is on the upstream side (a shorter tool name) or a shorter server name for a new registration.
 
 ## Edit, test, refresh and delete
 
 | Task | Web UI | CLI |
 | --- | --- | --- |
 | Inspect | **MCP servers** → the server → **Overview** | `coffer mcp show <name>` |
+| Change the title or description | **Edit** | `coffer mcp edit <name> --title … --description …` |
 | Change config, timeouts, credentials | **Edit** | `PATCH /api/v1/resources/{uid}` |
-| Check the server answers | **Test connection** | `coffer mcp test <name>` (exit 7 on failure) |
-| Re-query its tools, resources and prompts | **Refresh capabilities** | `coffer mcp refresh <name>` |
-| Enable or disable the whole server | **Reach** control → **Disabled** | `coffer resource disable mcp_server <name>` (and `enable`) |
-| Delete | **Delete server** | `coffer mcp remove <name>` |
+| Re-query its tools, resources and prompts, then check the server answers | **Refresh capabilities**, **Test connection** | `coffer mcp test <name>` (exit 7 on failure) |
+| Enable or disable the whole server | **Reach** control → **Disabled** | `coffer mcp disable <name>` (and `enable`) |
+| Delete | **Delete server** | `coffer mcp rm <name>` |
 
 The **Edit** dialog shows the configuration JSON without secrets; credentials are listed below it and can be added, replaced or removed there. Removing a credential deletes its stored entry. Saving an edit closes every live connection to the server, so the next call from any agent starts it with the new configuration.
 
@@ -187,14 +191,14 @@ Every capability a server exposes can be switched on or off individually. A newl
 **CLI:**
 
 ```sh
-coffer mcp tool list github
-coffer mcp tool disable github delete_repository
-coffer mcp tool enable github delete_repository
-coffer mcp resource list filesystem
-coffer mcp prompt disable github triage
+coffer mcp cap list github --type tool
+coffer mcp cap disable github tool:delete_repository
+coffer mcp cap enable github tool:delete_repository
+coffer mcp cap list filesystem --type resource
+coffer mcp cap disable github prompt:triage
 ```
 
-The key is the capability's original, unprefixed name (`delete_repository`, not `github__delete_repository`).
+Each capability is named by a typed ref, `tool:<name>`, `prompt:<name>` or `resource:<uri>`, using its original, unprefixed name (`tool:delete_repository`, not `github__delete_repository`). `cap list` prints the ref for every row, and `cap enable`/`cap disable` take several refs at once.
 
 A disabled tool disappears from every client's next `tools/list`, and a call to it fails with `TOOL_DISABLED` (JSON-RPC `-32000`). Your choices survive daemon restarts, server upgrades and servers that briefly disappear: Coffer stores only the preference and when the capability was last seen, and discovers the capability itself live from the server.
 
@@ -207,10 +211,10 @@ By default a server reaches every agent. You can narrow that to specific agents 
 **CLI:**
 
 ```sh
-coffer scope show mcp_server postgres
-coffer scope set mcp_server postgres --agents claude-code
-coffer scope set mcp_server postgres --no-agents     # dormant: reaches nobody
-coffer scope clear mcp_server postgres               # back to every agent
+coffer mcp scope postgres                        # show the current reach
+coffer mcp scope postgres --agents claude-code
+coffer mcp scope postgres --none                 # dormant: reaches nobody
+coffer mcp scope postgres --all                  # back to every agent
 ```
 
 The gateway enforces reach per session, using the agent identity the shim reports (see [Connect a client](/guides/connect-a-client#agent-identity)). An agent outside a server's reach does not see its tools, resources or prompts, and a call is rejected as `TOOL_DISABLED` and logged as `denied` — while another agent connected at the same moment uses it normally. A session with no identity sees only servers that reach every agent.
@@ -262,12 +266,12 @@ Every tool call, resource read and prompt fetch is recorded with its time, serve
 **CLI:**
 
 ```sh
-coffer mcp invocations github --limit 50
-coffer mcp invocations --status error --since 2026-09-20T00:00:00Z
-coffer mcp invocations --json
+coffer log mcp --server github --limit 50
+coffer log mcp --status error --since 2026-09-20T00:00:00Z
+coffer log mcp --json
 ```
 
-Without a server name the command reads every server, including Coffer's own tool calls (shown as `coffer`) and servers you have since deleted (`deleted:<name>`).
+Without `--server` the command reads every server, including Coffer's own tool calls (shown as `coffer`) and servers you have since deleted (`deleted:<name>`).
 
 ## How it works
 

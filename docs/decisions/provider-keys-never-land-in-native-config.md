@@ -62,8 +62,8 @@ credential-ref pattern as MCP servers; removing the connection makes the helper
 fail closed. Cons: Claude Code depends on the daemon being reachable when it
 fetches a key (the CLI can spawn it, per detect-or-spawn); a Codex started from
 the user's shell has an extra setup step; the helper line names a Coffer command,
-so uninstalling Coffer without `use-builtin` leaves Claude Code with a helper
-that fails. It wins because it is the only option that keeps both files free of
+so uninstalling Coffer without `coffer provider builtin` leaves Claude Code with
+a helper that fails. It wins because it is the only option that keeps both files free of
 plaintext while still working for agents the user starts.
 
 ### Option B — Write the key into the native file (the cc-switch shape)

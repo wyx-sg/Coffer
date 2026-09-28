@@ -72,7 +72,7 @@ operation with nothing changed:
 | `validate_name(name)` | register and rename | `mcp_server` (reserves `__`), `skill` (frontmatter name rule) |
 | `validate_config(config)` | register only, so an unrelated edit never re-probes the filesystem | `channel`, `provider` |
 | `on_update_config(resource, config)` | update config | `channel`, `provider` |
-| `on_rename(resource, new_name)` | rename — moves whatever is keyed by the name; a failure aborts, and on a lost race the service calls it again to move back | `skill`, `knowledge`, `memory`, `mcp_server` |
+| `on_rename(resource, new_name)` | rename — moves whatever is keyed by the name; a failure aborts, and on a lost race the service calls it again to move back | `knowledge`, `memory` (`skill` and `mcp_server` declare `name_fixed`, so a rename of either is refused before any hook runs) |
 | `validate_scope_for(resource, scope)` | update scope | `channel` |
 | `validate_delete(resource)` | delete, before any cleanup | `skill` (refuses builtin skills with `RESOURCE_PROTECTED`) |
 
@@ -179,7 +179,7 @@ new hook must be declared in one of the groups:
   a document with no row behind it yet.
 - **Creation is the one operation a kind may keep.** A kind with an invariant
   beyond config validation sets `generic_create_allowed=False` and creates
-  through its own service; there is no generic `coffer resource create` for
+  through its own service; there is no generic create route or command for
   it. Everything after creation — enable, scope, rename, delete — is generic
   (config update stays with the owning service too, for the same reason).
 
@@ -189,9 +189,9 @@ new hook must be declared in one of the groups:
   `application/resource_service.py`, with scope and rename in
   `resource_scope_ops.py` and `resource_rename_ops.py`. For example, delete is
   `validate_delete` → `on_delete` → row removed → orphaned credentials released
-  → audited; rename is name rules → collision check → `on_rename` → column
-  write (with `on_rename` called again to move back if a racing writer took the
-  name) → audited.
+  → audited; rename is the `name_fixed` refusal → name rules → collision check
+  → `on_rename` → column write (with `on_rename` called again to move back if a
+  racing writer took the name) → audited.
 - A guard declared on the `Kind` holds on every surface at once — the kind's own
   route, the generic route and the CLI — rather than one guard per route.
 - Adding a hook is a change to `domain/resource.py` and to the service method

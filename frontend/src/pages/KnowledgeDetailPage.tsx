@@ -18,6 +18,9 @@
 // the user's own editor; with no index behind the files, that edit is live on
 // the very next read with nothing to reconcile.
 //
+// The header names the collection by its title (the directory name beside it)
+// and carries the Edit dialog that sets or clears that title.
+//
 // Whether the collection is served at all (ScopeControl) lives in the header,
 // where every other kind's detail page carries it: it is a property of the
 // collection, not of the file open in the pane.
@@ -46,6 +49,8 @@ import { KnowledgeCurateButton } from "@/components/knowledge/KnowledgeCurateBut
 import { KnowledgeUploadButton } from "@/components/knowledge/KnowledgeUploadButton";
 import { PageHeader } from "@/components/PageHeader";
 import { ScopeControl } from "@/components/ScopeControl";
+import { EditTitleDialog } from "@/components/resource/EditTitleDialog";
+import { ResourceLabel } from "@/components/resource/ResourceLabel";
 import { useKnowledgeCollections } from "@/lib/hooks/useKnowledge";
 import { useResource } from "@/lib/hooks/useResources";
 
@@ -84,7 +89,7 @@ export function KnowledgeDetailPage() {
     <div className="space-y-6">
       <PageHeader
         back={{ to: "/knowledge", label: t("common.backTo", { label: t("nav.knowledge") }) }}
-        title={collection}
+        title={resource.data ? <ResourceLabel resource={resource.data} heading /> : collection}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {/* Passing no `scope` is what lets the control ask the server —
@@ -92,6 +97,7 @@ export function KnowledgeDetailPage() {
             <ScopeControl kind="knowledge" uid={uid} enabled={resource.data?.enabled ?? true} />
             <KnowledgeCurateButton collectionUid={uid} collectionName={collection} />
             <KnowledgeUploadButton collection={collection} />
+            {resource.data ? <EditTitleDialog kind="knowledge" resource={resource.data} /> : null}
           </div>
         }
       />

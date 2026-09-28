@@ -8,7 +8,7 @@ The fixture builds a tiny in-process FastAPI app wired to a real
 ``AgentService`` over an in-tree SQLite DB, then monkeypatches
 ``_client.client_or_exit`` to return a ``starlette.testclient.TestClient``
 wrapping that app. This mirrors the strategy used by
-``test_resource_cmd.py`` and keeps the CLI verbs talking to the same HTTP
+``conftest.py``'s ``in_proc_daemon`` and keeps the CLI verbs talking to the same HTTP
 routes the desktop UI consumes — which is the spec scenario "CLI surface
 mirrors REST operations".
 

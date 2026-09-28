@@ -131,10 +131,9 @@ and the knowledge catalogue is one section of it.**
   — the tools and when to reach for each, the tiering contract, that knowledge
   is files read with the agent's own tools, that Coffer never writes an agent's
   memory, that nothing waits on an approval — followed by the catalogue.
-- **The tool count is conditional.** `coffer__diagnose` and
-  `coffer__search_tools` are always present; `coffer__write` exists only while
-  the `knowledge` experimental feature is on and `coffer__recall` only while
-  `memory` is. The rendered manual drops the span belonging to a switched-off
+- **The tool count is conditional.** `coffer__search_tools` is always
+  present; `coffer__write` exists only while the `knowledge` experimental
+  feature is on. The rendered manual drops the span belonging to a switched-off
   feature and states the tool count that remains
   (`backend/coffer/application/knowledge/guide_render.py`); the handshake names
   only the tools actually listed. Neither ever documents a tool the gateway

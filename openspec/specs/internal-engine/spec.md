@@ -8,7 +8,7 @@ switch and timer of every pass Coffer runs when nobody asked it to, the one
 machine allowed to run curation, the bound on one call to that model, and the
 speech-to-text model. It owns one global
 settings row, the surfaces that show and change it (`/api/v1/internal-engine-config`,
-`coffer engine …`, Settings → Coffer's model), its convergence between machines, and the
+the `engine.*` and `transcribe.*` keys of `coffer config`, Settings → Coffer's model), its convergence between machines, and the
 rule that a pass with nothing configured is a clean no-op rather than an error.
 
 Coffer does work on its own behalf: it aggregates the agents' memory, lets a
@@ -36,7 +36,7 @@ Out of scope: creating, editing, activating or flagging a connection (both
 `internal_default` and `transcribe_default` are provider-switching's fields and
 routes, `POST /api/v1/providers/{uid}/internal-default` and
 `POST /api/v1/providers/{uid}/transcribe-default`, and
-`coffer provider internal-default|transcribe-default <name>`); what each pass
+`coffer config set engine.provider|transcribe.provider <name>`); what each pass
 does (memory and knowledge); `GET /api/v1/upkeep/runs`, a cross-kind read of
 what is in flight; any model registry; and per-collection or per-partition
 timers. Coffer runs as a single-user tool behind the existing `X-Coffer-Token`

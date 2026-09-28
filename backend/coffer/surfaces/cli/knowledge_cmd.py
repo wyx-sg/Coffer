@@ -117,6 +117,9 @@ register_kind_verbs(
         kind=KIND,
         noun="collection",
         verbs=frozenset({"edit", "rm", "enable", "disable"}),
+        # A collection's description is the opening paragraph of its README,
+        # edited in the README itself.
+        edit_description=False,
         help={
             "edit": "Rename a collection (its directory moves with it) or set its title.",
             "rm": "Remove a collection and its directory.",

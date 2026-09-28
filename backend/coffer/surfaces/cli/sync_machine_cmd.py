@@ -7,6 +7,7 @@ commands are what the user reaches for the moment it does.
 
 from __future__ import annotations
 
+import json as _json
 import pathlib
 
 import typer
@@ -29,7 +30,10 @@ def _verbose(ctx: typer.Context) -> bool:
 
 
 @machine_app.command("list")
-def machine_list(ctx: typer.Context) -> None:
+def machine_list(
+    ctx: typer.Context,
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
+) -> None:
     """Every machine sharing this vault."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
@@ -38,6 +42,9 @@ def machine_list(ctx: typer.Context) -> None:
         _cli_client.check(r, verbose=verbose)
         payload = r.json()
         machines = payload.get("machines") or []
+        if output_json:
+            typer.echo(_json.dumps({"machines": machines}, indent=2))
+            return
         if not machines:
             s = c.get("/sync/status")
             _cli_client.check(s, verbose=verbose)

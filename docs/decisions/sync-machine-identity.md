@@ -52,7 +52,7 @@ coordination needed to mint it.
 Cons: a new motherboard or an OS reinstall on Linux changes the id, and a
 container or unusual host falls back to a stored id with the weaker guarantee.
 Both are reported rather than hidden, and a stale descriptor is retired in one
-action (`coffer sync machine remove`).
+action (`coffer sync machine rm`).
 
 It wins because it is the only option under which a machine that lost
 everything Coffer stored can still be recognised as itself.

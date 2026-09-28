@@ -198,11 +198,11 @@ class KnowledgeService:
         them here — once, over rows already being read for the enabled filter —
         is what lets a caller act on a row it just rendered.
         """
-        uid_by_name = {r.name: r.uid for r in await self._enabled_rows()}
+        row_by_name = {r.name: r for r in await self._enabled_rows()}
         return [
-            dataclasses.replace(c, uid=uid_by_name[c.name])
+            dataclasses.replace(c, uid=row_by_name[c.name].uid, title=row_by_name[c.name].title)
             for c in catalogue.list_collections()
-            if c.name in uid_by_name
+            if c.name in row_by_name
         ]
 
     # ----- reading, for the human surfaces -----------------------------

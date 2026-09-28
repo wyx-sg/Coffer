@@ -22,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
 import { useDeleteProvider, useProvider } from "@/lib/hooks/useProviders";
+import { displayName } from "@/lib/resourceTitle";
 
 const TABS = ["overview", "models"] as const;
 type Tab = (typeof TABS)[number];
@@ -99,7 +100,7 @@ export function ProviderDetailPage() {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title={t("settings.connections.deleteTitle")}
-        description={t("settings.connections.deleteConfirm", { name: provider.name })}
+        description={t("settings.connections.deleteConfirm", { name: displayName(provider) })}
         confirmLabel={del.isPending ? t("common.deleting") : t("common.delete")}
         pending={del.isPending}
         onConfirm={() =>

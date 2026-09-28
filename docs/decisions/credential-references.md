@@ -20,8 +20,9 @@ per surface.
 Two further forces:
 
 - **Rename.** Since [resources got an immutable uid](resource-identity-is-an-immutable-uid.md)
-  (PR #406) every kind can be renamed, so anything keyed on a resource's name
-  breaks on rename.
+  (PR #406) a resource can be renamed on every kind except the two whose name
+  agents see ([MCP servers and skills](names-visible-to-agents-are-fixed.md)),
+  so anything keyed on a resource's name breaks on rename.
 - **Sync has no handshake.** Ciphertext travels at `credentials/<ref>.enc`, so
   a ref is also a file path two machines must agree on without talking
   ([Credentials Across Machines](credentials-across-machines.md)); and deleting

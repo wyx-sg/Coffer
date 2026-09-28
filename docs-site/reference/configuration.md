@@ -124,10 +124,10 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
 
 | Key | Type | Default | Effect | Changed with |
 | --- | --- | --- | --- | --- |
-| `port` | integer 1024–65535, or `null` | `8000` | The one port the daemon binds. The daemon refuses to start rather than move to another port. Takes effect at the next start. | `coffer daemon port set <port>`, `coffer daemon port clear` |
+| `port` | integer 1024–65535, or `null` | `8000` | The one port the daemon binds. The daemon refuses to start rather than move to another port. Takes effect at the next start. | `coffer config set daemon.port <port>`, `coffer config unset daemon.port` |
 | `machine_name` | string | host name without `.local` | This machine's display label in vault sync. Free to change; nothing references it. | **Sync** page, `coffer sync machine rename` |
 | `machine_id` | string | derived from the host | Cache of the host-derived machine id that names this machine in a synced vault. Deleting it recomputes the same value. | written by the daemon |
-| `features` | object of booleans | `{}` | This machine's experimental-feature switches. Takes effect at once. | **Settings → General → Experimental features**, `coffer daemon features enable/disable` |
+| `features` | object of booleans | `{}` | This machine's experimental-feature switches. Takes effect at once. | **Settings → General → Experimental features**, `coffer config set feature.<key> on\|off` |
 | `memory_delivery_withdrawn` | array of agent uids | absent | The agents whose memory delivery hook Coffer removed when `memory` was switched off, so switching it back on restores exactly those. | written by the daemon |
 
 The daemon's runtime state — its pid, port and API token — lives in a different file, `~/.coffer/daemon.json`, which is created on start and removed on exit. See [Files and directories](/reference/filesystem#daemon-files).
@@ -165,9 +165,10 @@ COFFER_FEATURES="vault_sync=on,memory=off" coffer daemon restart
 ### Commands
 
 ```sh
-coffer daemon features list             # every feature, its state, and what decided it
-coffer daemon features enable memory    # switch on, at once
-coffer daemon features disable knowledge
+coffer config list feature.             # every feature, its state, and what decided it
+coffer config set feature.memory on     # switch on, at once
+coffer config set feature.knowledge off
+coffer config unset feature.knowledge   # back to the channel default
 ```
 
 See [Experimental features](/guides/experimental-features) for the task-oriented guide.
@@ -183,23 +184,23 @@ These live in the database (or, where noted, elsewhere on disk) and are changed 
 | **Default rows per page** | `20` (choices 10, 20, 50, 100) | The initial page size of every table. | — | browser `localStorage` (`coffer.pageSize`) |
 | **Preferred editor** | System default | The app or command Coffer opens managed files with. | — | browser `localStorage` (`coffer.preferredEditor`) |
 | **Start at login** | off | Installs a launchd agent (`~/Library/LaunchAgents/dev.coffer.daemon.plist`) that starts the daemon at login and restarts it after a crash. macOS only. | `coffer daemon service install`, `uninstall`, `status` | the plist file |
-| **Experimental features** | channel default | See [Experimental features](#experimental-features). | `coffer daemon features` | `daemon-config.json` |
+| **Experimental features** | channel default | See [Experimental features](#experimental-features). | `coffer config set feature.<key>` | `daemon-config.json` |
 
 ### Settings → Coffer's model
 
-The internal engine settings are one record, and all of them are *synced*.
+The internal engine settings are one record, and all of them are *synced*. Each one is a `coffer config` key; `coffer config list engine.` prints them with their current values and defaults.
 
 | Setting | Default | Effect | CLI |
 | --- | --- | --- | --- |
-| **Model provider** / **Model** | none | The connection and model Coffer's own passes (memory distil, knowledge curation, descriptions) run on. With no model, those passes do not call a model. | `coffer engine model show`, `set`, `clear` |
-| **Time limit per call** | `60` s | How long one call to Coffer's own model may take. | `coffer engine timeout show`, `set`, `default` |
-| **Transcription provider** / **Transcription model** | off | The connection and model voice messages are transcribed with before an agent sees them. While either is unset, Coffer transcribes nothing. | `coffer engine transcribe-model show`, `set`, `clear` |
-| **Automatic upkeep** — aggregate | on, every 1 h | Reads the agents' own memory files into the derived memory tree. | `coffer engine upkeep set aggregate --on/--off --interval <s>` |
-| **Automatic upkeep** — distil | on, every 6 h | On its own interval, not after each aggregation: turns each partition's new raw entries into notes with Coffer's model and rewrites its `MEMORY.md`. A partition with nothing new costs no call. | `coffer engine upkeep set distil …` |
-| **Automatic upkeep** — curate | on, every 60 s | Folds new material from each knowledge collection's inbox into its documents. | `coffer engine upkeep set curate …` |
-| Curation owner (**Runs on:**) | every machine | The one machine allowed to run curation in a synced vault. | `coffer engine curate-owner show`, `set`, `clear` |
+| **Model provider** / **Model** | none | The connection and model Coffer's own passes (memory distil, knowledge curation, descriptions) run on. With no model, those passes do not call a model. | `coffer config set engine.provider <connection>`, `coffer config set engine.model <model>`, `coffer config unset engine.model` |
+| **Time limit per call** | `60` s | How long one call to Coffer's own model may take. | `coffer config set engine.timeout <s>`, `coffer config unset engine.timeout` |
+| **Transcription provider** / **Transcription model** | off | The connection and model voice messages are transcribed with before an agent sees them. While either is unset, Coffer transcribes nothing. | `coffer config set transcribe.provider <connection>`, `coffer config set transcribe.model <model>`, `coffer config unset transcribe.model` |
+| **Automatic upkeep** — aggregate | on, every 1 h | Reads the agents' own memory files into the derived memory tree. | `coffer config set engine.upkeep.aggregate.enabled on\|off`, `coffer config set engine.upkeep.aggregate.interval <s>` |
+| **Automatic upkeep** — distil | on, every 6 h | On its own interval, not after each aggregation: turns each partition's new raw entries into notes with Coffer's model and rewrites its `MEMORY.md`. A partition with nothing new costs no call. | `coffer config set engine.upkeep.distil.…` |
+| **Automatic upkeep** — curate | on, every 60 s | Folds new material from each knowledge collection's inbox into its documents. | `coffer config set engine.upkeep.curate.…` |
+| Curation owner (**Runs on:**) | every machine | The one machine allowed to run curation in a synced vault. | `coffer config set engine.curate_owner this\|<machine id>`, `coffer config unset engine.curate_owner` |
 
-Upkeep intervals have a floor of 60 seconds; `--default-interval` returns a pass to its default. `coffer engine upkeep list` shows the current values and `coffer engine upkeep runs` shows passes in flight.
+Upkeep intervals have a floor of 60 seconds; `coffer config unset engine.upkeep.<pass>.interval` returns a pass to its default. `coffer daemon status` shows the passes in flight.
 
 ### Sync remote
 
@@ -222,20 +223,20 @@ Retention policies decide how long rows are kept. The retention worker prunes on
 | **Auto-archive idle chats** | `conversations_archive` | 7 days | Archives conversations with no new message for this long. |
 | **Delete archived chats** | `conversations` | 30 days | Deletes archived conversations, with their messages, this long after archival. |
 
-The key is what `coffer retention set` takes; both chat policies act on the `conversations` table. A policy can be set to **Keep forever**. The same run also deletes files in `~/.coffer/channel-media` and `~/.coffer/chat-media` older than 30 days and aged shim and upstream logs older than 7 days.
+The key is the suffix of the `coffer config` key `retention.<key>`; both chat policies act on the `conversations` table. A policy can be set to **Keep forever** (the value `forever`). The same run also deletes files in `~/.coffer/channel-media` and `~/.coffer/chat-media` older than 30 days and aged shim and upstream logs older than 7 days.
 
 ```sh
-coffer retention list
-coffer retention set audit_log --days 90
-coffer retention set mcp_invocations --forever
-coffer retention prune-now
+coffer config list retention.
+coffer config set retention.audit_log 90
+coffer config set retention.mcp_invocations forever
+coffer log prune
 ```
 
 ### Settings → Security
 
 | Setting | Default | Effect | CLI |
 | --- | --- | --- | --- |
-| **Store master key in OS keychain** | off (file) | Moves the credential master key between `~/.coffer/master.key` and the OS keychain (service `coffer`, entry `master-key`). The key itself never changes, so stored secrets stay readable. The move is audited. | `coffer credentials storage` |
+| **Store master key in OS keychain** | off (file) | Moves the credential master key between `~/.coffer/master.key` and the OS keychain (service `coffer`, entry `master-key`). The key itself never changes, so stored secrets stay readable. The move is audited. | `coffer config set credentials.storage file\|keychain` |
 
 ## Related
 

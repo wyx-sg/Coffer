@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Routes, Route, useParams } from "react-router-dom";
+import { acceptance } from "@/test/acceptance";
 import { AddMcpServerDialog } from "./AddMcpServerDialog";
 
 vi.mock("@/lib/api/client", () => ({
@@ -263,4 +264,45 @@ describe("AddMcpServerDialog", () => {
     const credentialCall = postMock.mock.calls.find((c) => c[0] === "/credentials");
     expect(credentialCall?.[1].body).toEqual({ ref, value: "Bearer abc" });
   });
+});
+
+acceptance("web-ui", "the import review shows each server's fixed name", async () => {
+  const postMock = vi.fn().mockResolvedValue({ data: { uid: "u-new" }, error: undefined });
+  getApiClientMock.mockReturnValue({
+    POST: postMock,
+    DELETE: vi.fn().mockResolvedValue({ data: undefined, error: undefined }),
+  } as unknown as ReturnType<typeof getApiClient>);
+  const SHORT = "github-tools"; // 12 characters
+  const LONG = "a-very-long-server-name-thirty"; // 30 characters
+  expect([SHORT.length, LONG.length]).toEqual([12, 30]);
+
+  render(wrap());
+  openJsonTab();
+  fireEvent.change(screen.getByLabelText("MCP server JSON"), {
+    target: {
+      value: JSON.stringify({
+        mcpServers: { [SHORT]: { command: "npx" }, [LONG]: { command: "npx" } },
+      }),
+    },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /continue/i }));
+
+  // Each server's name is shown as the one it keeps, with the note.
+  expect(screen.getByText(SHORT)).toBeInTheDocument();
+  expect(screen.getByText(LONG)).toBeInTheDocument();
+  expect(screen.getAllByText(/cannot be changed after registration/i)).toHaveLength(2);
+
+  // Only the 30-character name is flagged, and the flag names the limit.
+  const flags = screen.getAllByRole("alert");
+  expect(flags).toHaveLength(1);
+  expect(flags[0]).toHaveTextContent(LONG);
+  expect(flags[0]).toHaveTextContent("30 characters");
+  expect(flags[0]).toHaveTextContent("limited to 24");
+
+  // The import cannot be sent while that name is over the limit.
+  const importButton = screen.getByRole("button", { name: /import 2/i });
+  expect(importButton).toBeDisabled();
+  fireEvent.click(importButton);
+  await new Promise((r) => setTimeout(r, 0));
+  expect(postMock.mock.calls.filter((c) => c[0] === "/resources")).toHaveLength(0);
 });

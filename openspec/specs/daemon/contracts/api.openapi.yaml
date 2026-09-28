@@ -113,6 +113,33 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [daemon]
+      operationId: unsetDaemonFeature
+      summary: Remove this machine's setting so the feature follows the channel default
+      description: |
+        Removes the key from the `features` object of
+        `~/.coffer/daemon-config.json` before the response, and the feature
+        takes the build channel's default at once, with no restart (spec
+        experimental-features "Switch a feature from the settings page or the
+        command line"). Answers with the state after the removal; a feature
+        with no setting is answered unchanged. A key the registry does not
+        declare answers 404 `FEATURE_UNKNOWN`; a feature pinned by
+        `COFFER_FEATURES` answers 409 `FEATURE_PINNED`.
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: The feature after its setting was removed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FeatureOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 
   /daemon/residency:
     get:

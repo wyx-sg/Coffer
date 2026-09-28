@@ -1,10 +1,19 @@
-"""Acceptance tests for US4 — CLI parity with the UI.
+"""REST/CLI parity (spec resource-framework "Reach every management operation
+from both REST and the CLI").
 
-Scenario 1: every UI-visible operation has a CLI subcommand.
-Scenario 2: the CLI surfaces errors in the same human-readable form as the UI.
+- The live command tree is exactly the reviewed table below, in both directions.
+- Every ``coffer config`` key is paired with the route (or pre-bind file) that
+  stores it, and every settings route is claimed by a key.
+- Every REST route that serves a plain file to the web UI is listed, paired with
+  the ``coffer path`` target that names the same files.
+- The CLI surfaces errors in the same human-readable form as the UI.
 """
 
 from __future__ import annotations
+
+import re
+from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -14,10 +23,15 @@ from typer.testing import CliRunner
 
 import coffer.surfaces.cli._client as _cli_client
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
+from coffer.surfaces.cli._config_keys import FAMILIES, static_settings
 from coffer.surfaces.cli.main import app
 from coffer.surfaces.http.auth import set_active_token
 
 runner = CliRunner()
+
+#: The lifecycle verbs one factory builds for every kind group from its
+#: ``Kind`` descriptor (design D1). A kind that cannot support a verb omits it.
+_LIFECYCLE = {"list", "show", "edit", "rm", "enable", "disable"}
 
 
 #: Every command group the CLI composition root registers, and every
@@ -25,148 +39,87 @@ runner = CliRunner()
 #: EXACT equality against the live command tree, in both directions: a UI
 #: operation that ships without a CLI counterpart goes red here, and so does a
 #: CLI command that appears without anyone deciding on it. Nested groups are
-#: keyed by their full path ("mcp tool"), so a group's own subcommands are
+#: keyed by their full path ("mcp cap"), so a group's own subcommands are
 #: covered too.
 _EXPECTED_GROUPS: dict[str, set[str]] = {
-    # "port" has no UI counterpart to be at parity with, and deliberately so:
-    # the daemon binds 8000 and refuses to start when it cannot, so the state
-    # the setting most needs changing from is one where no page the daemon
-    # serves can be reached. It is listed here because it must not be dropped,
-    # not because a card mirrors it. "restart" is how a change takes effect,
-    # for the same reason a running daemon cannot move.
-    "daemon": {
-        "start",
-        "stop",
-        "restart",
-        "status",
-        "rotate-token",
-        "port",
-        # What starts the daemon (spec daemon "Run as a login service"). It is
-        # reachable with no daemon running, which is the state "it was not
-        # running" is most often diagnosed from.
-        "service",
-        # The experimental features (spec experimental-features "Switch a
-        # feature from the settings page or the command line"), mirrored by the
-        # card on Settings → General.
-        "features",
-    },
-    "daemon port": {"show", "set", "clear"},
-    "daemon features": {"list", "enable", "disable"},
+    # The daemon's own lifecycle. Its port is the key `daemon.port`, changed
+    # through `config` with no daemon running; the passes in flight are a
+    # section of `status` (spec daemon "Manage the daemon from the command line").
+    "daemon": {"start", "stop", "restart", "status", "rotate-token", "service"},
+    # What starts the daemon at login (spec daemon "Run as a login service"),
+    # reachable with no daemon running — the state "it was not running" is most
+    # often diagnosed from. It also carries PUT /daemon/residency.
     "daemon service": {"install", "uninstall", "status"},
-    # `coffer open` is the one group with NO subcommands: it is a single action
-    # (open the UI at the running daemon's origin), expressed as an
-    # invoke_without_command callback. Its surface is its two options, which
-    # _OPTION_ONLY_GROUPS asserts instead — so the empty set here is a
-    # narrowed claim, not an unchecked hole.
+    # `coffer open` is the one group with NO subcommands: a single action
+    # (open the UI at the running daemon's origin) expressed as an
+    # invoke_without_command callback. Its surface is its options, which
+    # _OPTION_ONLY_GROUPS asserts instead — a narrowed claim, not a hole.
     "open": set(),
-    # ``rename`` is here, on the KIND-AGNOSTIC group, because that is where
-    # renaming now lives: the name is a label on every resource, so moving
-    # it is one command for every kind rather than a per-kind route
-    # only ``provider`` ever grew (ADR resource-identity-is-an-immutable-uid).
-    "resource": {"list", "show", "rename", "enable", "disable", "delete"},
-    "scope": {"show", "set", "clear"},
-    "audit": {"list"},
-    "retention": {"list", "set", "prune-now"},
-    "mcp": {
-        "add",
-        "remove",
-        "list",
-        "show",
-        "refresh",
-        "test",
-        "tool",
-        "resource",
-        "prompt",
-        "invocations",
-    },
-    "mcp tool": {"list", "enable", "disable"},
-    "mcp resource": {"list", "enable", "disable"},
-    "mcp prompt": {"list", "enable", "disable"},
-    "credentials": {"set", "get", "list", "delete", "storage"},
+    # Every setting through one key registry (spec resource-framework "Change
+    # every setting through one key-value command"); the keys themselves are
+    # the _CONFIG_KEYS table below.
+    "config": {"list", "get", "set", "unset"},
+    # The three records the Activity page shows, from the same routes, plus
+    # the on-demand prune (spec resource-framework "Read the audit log from
+    # the command line").
+    "log": {"audit", "mcp", "daemon", "prune"},
+    # Plain files are read and edited with the caller's own tools; this names
+    # them (spec resource-framework "Locate file-backed state with coffer
+    # path"). Its targets answer the _FILE_BACKED_ROUTES below.
+    "path": {"knowledge", "memory", "skill", "agent", "logs", "vault"},
+    # What an agent holds that Coffer does not manage yet (spec
+    # resource-framework "Scan, adopt and discard what Coffer does not
+    # manage"): `scan` is a single command; adopt/discard take the row's kind.
+    "scan": set(),
+    "adopt": {"agent", "skill", "mcp"},
+    # `discard agent` exists only to refuse: a detected agent was put there
+    # by nobody Coffer knows, so nothing of Coffer's can remove it.
+    "discard": {"agent", "skill", "mcp"},
+    # `test` re-queries capabilities, then reports health; `cap` toggles one
+    # tool, prompt or resource (spec mcp-gateway).
+    "mcp": {*_LIFECYCLE, "add", "scope", "test", "cap"},
+    "mcp cap": {"list", "enable", "disable"},
+    "credentials": {"set", "get", "list", "rm"},
+    # No `scope`: an agent is not reached by agents. `connect`/`disconnect`
+    # install and remove Coffer's own MCP entry; `transcript [<id>]` reads
+    # the agent's history; `models` is the web model picker's list
+    # (GET /agent-providers/{agent_key}/models).
     "agent": {
+        *_LIFECYCLE,
         "add",
-        "edit",
-        "rm",
-        "list",
-        "show",
-        "detect",
-        # The web model picker's list (GET /agent-providers/{agent_key}/models).
+        "connect",
+        "disconnect",
+        "transcript",
         "models",
         "config",
-        "mcp",
         "plugin",
-        "native-memory",
-        "native-memory-files",
-        "transcript",
-        "transcripts",
     },
-    "agent config": {"files", "ls", "cat", "write", "edit", "rm"},
-    "agent mcp": {"status", "install", "uninstall", "adopt", "entries", "remove-entry"},
-    "agent plugin": {"list", "enable", "disable", "uninstall"},
-    "channel": {"register", "list", "status", "pair", "bind", "set", "notify"},
-    # `files`, `cat` and `write` are the skill-file tree the web editor browses
-    # and saves (spec skill-manager "Offer every skill operation on REST, CLI
-    # and web"): GET/PUT /api/v1/skills/{uid}/files[/{path}].
-    "skill": {
-        "list",
-        "show",
-        "import",
-        "adopt",
-        "rm",
-        "unmanaged",
-        "rm-unmanaged",
-        "verify",
-        "files",
-        "cat",
-        "write",
-    },
-    # Exactly the list in spec knowledge "Cover collection management on REST and the
-    # CLI" and nothing beyond it. `grep` and `search` are gone with the retrieval
-    # surface (spec knowledge "Expose exactly one knowledge tool") — the corpus is
-    # plain Markdown under ~/.coffer/knowledge/, so a person's own grep beats
-    # anything this group could wrap — and `organize` went with the tidy pass
-    # `curate` replaces.
-    "knowledge": {
-        "collections",
-        "create",
-        "curate",
-        "delete",
-        "ls",
-        "read",
-        "upload",
-        "write",
-    },
-    "memory": {
-        "context",
-        "delivery",
-        "delivery-install",
-        "delivery-remove",
-        "distil",
-        "ls",
-        "note",
-        "notes",
-        "partitions",
-        "read",
-        "retired",
-        "sync",
-    },
-    "provider": {
-        "add",
-        "edit",
-        # No "rename": it moved to the kind-agnostic group, where it covers
-        # every kind instead of this one.
-        "rm",
-        "list",
-        "show",
-        "key",
-        "switch",
-        "use-builtin",
-        "internal-default",
-        # The transcription flag is its OWN command for the reason it is its
-        # own flag: a chat gateway commonly serves no transcription endpoint,
-        # so there is no fallback from `internal-default` to fold it into.
-        "transcribe-default",
-    },
+    # Writes to the agent's own config files; reading them is `path agent
+    # <name> config` (see _FILE_BACKED_ROUTES).
+    "agent config": {"edit", "rm"},
+    "agent plugin": {"list", "enable", "disable", "rm"},
+    # `edit` carries the group-gating switches; `pair`, `bind` and `notify`
+    # are the channel's own acts (spec channels).
+    "channel": {*_LIFECYCLE, "add", "scope", "pair", "bind", "notify"},
+    # Exactly spec skill-manager "Cover skill management on REST, the CLI and
+    # the web": `add <folder>` is the import, and the master folder is named
+    # by `path skill <name>` rather than listed, printed or written here.
+    "skill": {*_LIFECYCLE, "add", "scope", "verify"},
+    # Exactly spec knowledge "Cover collection management on REST and the
+    # CLI". Documents are listed, read and deleted on disk under `path
+    # knowledge`, and a collection has no `scope` — its one switch is enabled.
+    "knowledge": {*_LIFECYCLE, "add", "write", "upload", "curate"},
+    # No `add`: partitions are provisioned only by aggregation. `context` is
+    # what the installed session-start hook runs and must not move (spec
+    # memory "Cover memory management on REST and the CLI").
+    "memory": {*_LIFECYCLE, "sync", "distil", "context", "delivery"},
+    "memory delivery": {"on", "off"},
+    # `builtin` reverts a wire to the agent's own login; the two flags a
+    # connection can carry are the keys `engine.provider` and
+    # `transcribe.provider`, not commands here.
+    "provider": {*_LIFECYCLE, "add", "scope", "switch", "builtin", "key"},
+    # `restore` with no `--at` undoes the last applied round; `status`
+    # includes the remote (spec vault-sync).
     "sync": {
         "adopt",
         "confirm",
@@ -178,35 +131,11 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "reject",
         "remote",
         "restore",
-        "rollback",
         "status",
     },
     "sync key": {"export", "import", "fingerprint"},
-    "sync machine": {"list", "rename", "remove"},
-    "sync remote": {"show", "set", "clear", "pause", "resume"},
-    # Coffer's own operating settings (spec internal-engine "Show, set and clear the
-    # engine model from the CLI", "List and change each unattended pass from the CLI"):
-    # the model its passes think with, and the switch and timer of each pass
-    # it runs unattended. Listed here because `.agents/openspec.md` requires every
-    # management operation to be reachable from a terminal, and one of these
-    # passes rewrites the user's own knowledge files on a timer.
-    "engine": {"model", "upkeep", "curate-owner", "timeout", "transcribe-model"},
-    "engine model": {"show", "set", "clear"},
-    # `runs` is GET /api/v1/upkeep/runs — which passes are running right now.
-    "engine upkeep": {"list", "set", "runs"},
-    # Which MACHINE runs the one pass that may only run on one of them. Shaped
-    # like `channel bind` — show, set (defaulting to this machine), clear —
-    # because it is the same fact: one machine named in a document every
-    # machine holds. Without `set` a retired owner stops curation on every
-    # machine with no way back short of editing SQLite.
-    "engine curate-owner": {"show", "set", "clear"},
-    # The other two settings on the same singleton (spec internal-engine "Change the
-    # bound and the speech-to-text model one value at a time"). `timeout default`
-    # and `transcribe-model clear` are named verbs rather than a null argument
-    # because a terminal has no way to spell a JSON null, and the way back to the
-    # default is the half of each setting an operator most needs.
-    "engine timeout": {"show", "set", "default"},
-    "engine transcribe-model": {"show", "set", "clear"},
+    "sync machine": {"list", "rename", "rm"},
+    "sync remote": {"set", "clear", "pause", "resume"},
 }
 
 #: The groups whose surface is options rather than subcommands. Each is
@@ -214,42 +143,105 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
 #: set would otherwise assert nothing about them.
 _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
     "open": {"--json", "--no-browser"},
-    # The model an agent answers with is a FIELD of the agent, so it is bound
-    # by the verb that edits the agent rather than by a command of its own —
-    # which means the subcommand oracle above cannot see it and this is the
-    # only place that claims it. It mirrors PATCH /api/v1/agents/{uid}, whose
+    "scan": {"--agent", "--json"},
+    # A name, a title and a description are edited on every kind (design D1).
+    "knowledge edit": {"--name", "--title"},
+    # The model an agent answers with is a FIELD of the agent, bound by the
+    # verb that edits the agent. It mirrors PATCH /api/v1/agents/{uid}, whose
     # `model` / `fast_model` / `wire_api` the projector reads.
-    "agent edit": {"--model", "--fast-model", "--clear-fast-model", "--wire-api"},
-    # Same shape, one kind over: a connection's wire is a FIELD of the
-    # connection, corrected on the verb that edits it. `PATCH
-    # /api/v1/providers/{uid}` carries `protocol`, and the CLI could not send
-    # it while its own help called the field immutable.
-    "provider edit": {"--protocol", "--base-url", "--secret"},
+    "agent edit": {"--model", "--fast-model", "--clear-fast-model", "--wire-api", "--title"},
+    # A connection's wire is a FIELD of the connection, corrected on the verb
+    # that edits it: PATCH /api/v1/providers/{uid} carries `protocol`.
+    "provider edit": {"--protocol", "--base-url", "--secret", "--title"},
+    # The group-gating switches of a channel (spec channels).
+    "channel edit": {"--require-mention", "--ignore-other-mentions", "--title"},
 }
 
-#: There are NO exempted UI operations today. `_KNOWN_PARITY_GAPS` used to
-#: live here, naming three: the per-agent model binding (now
-#: `coffer agent edit --model`, claimed in `_OPTION_ONLY_GROUPS`), reverting a
-#: wire to the agent's built-in login (now `coffer provider use-builtin`), and
-#: browsing a memory partition's files (now `coffer memory ls` / `read`). Each
-#: was asserted from the absent side, so closing it reddened this module and
-#: forced the exemption out — which is exactly what happened.
-#:
-#: Two more were found the way the table could not find them — by reading a
-#: route's callers rather than the CLI's tree — and closed rather than listed:
-#: `coffer provider rename` and `coffer provider edit --protocol`. That is the
-#: standing limitation of this module: it can prove the tree matches the table,
-#: and it cannot see an operation the CLI never grew.
-#:
-#: `coffer provider rename` has since been REMOVED again, and its absence is
-#: not a gap: renaming became a field on the kind-agnostic update, so
-#: `coffer resource rename provider <name> <new>` serves it — and serves the
-#: other kinds, which never had a rename at all.
-#:
-#: If a UI operation ever ships without a CLI counterpart again, write the
-#: exemption back the same way: a name, the reason, and an assertion that the
-#: command is STILL missing, so that filling the gap cannot leave a stale
-#: exemption telling readers the CLI cannot do something it can.
+#: Every `coffer config` key, paired with where the setting is stored: the
+#: route the key writes through, or the pre-bind settings file for the one key
+#: read before the daemon binds. `<key>` and `<table>` stand for a family the
+#: daemon enumerates (the registered features, the prunable tables).
+_CONFIG_KEYS: dict[str, str] = {
+    "daemon.port": "~/.coffer/daemon-config.json",
+    "engine.provider": "POST /providers/{uid}/internal-default",
+    "engine.model": "PUT /internal-engine-config",
+    "engine.timeout": "PUT /internal-engine-config/timeout",
+    "engine.curate_owner": "PUT /internal-engine-config/curation-owner",
+    **{
+        f"engine.upkeep.{name}.{field}": "PUT /internal-engine-config/upkeep"
+        for name in ("aggregate", "distil", "curate")
+        for field in ("enabled", "interval")
+    },
+    "transcribe.provider": "POST /providers/{uid}/transcribe-default",
+    "transcribe.model": "PUT /internal-engine-config/transcribe-model",
+    "credentials.storage": "PUT /settings/credentials",
+    "feature.<key>": "PUT /daemon/features/{key}",
+    "retention.<table>": "PATCH /retention/policies/{table_name}",
+}
+
+#: Settings routes a key reaches without naming them as its store — the
+#: `unset` of a family whose default lives on the daemon — and the one
+#: settings route that is not a key at all.
+_SETTINGS_ROUTES_ELSEWHERE: dict[str, str] = {
+    "DELETE /daemon/features/{key}": "config unset feature.<key>",
+    "PUT /daemon/residency": "daemon service install|uninstall",
+}
+
+#: Where a write to Coffer's settings lives in the management API. A write
+#: route under one of these that no key or entry above claims fails the test.
+_SETTINGS_ROUTE = re.compile(
+    r"^(PUT|PATCH|POST|DELETE) /(internal-engine-config|settings/|daemon/features|"
+    r"daemon/residency|retention/policies|providers/\{uid\}/[a-z-]+-default)"
+)
+
+#: Every REST route that serves or writes a plain file for the web UI,
+#: paired with the `coffer path` target that names the same files. The CLI
+#: answers these by naming the file — a person or agent then reads and edits
+#: it with their own tools — rather than by a command that prints it.
+_FILE_BACKED_ROUTES: dict[str, str] = {
+    "GET /knowledge/tree": "path knowledge [<collection>]",
+    "GET /knowledge/file": "path knowledge <collection>",
+    "DELETE /knowledge/file": "path knowledge <collection>",
+    "GET /memory/partitions/{uid}/files": "path memory <partition>",
+    "GET /memory/partitions/{uid}/files/content": "path memory <partition>",
+    "GET /memory/partitions/{uid}/notes": "path memory <partition>",
+    "GET /memory/partitions/{uid}/notes/{slug}": "path memory <partition>",
+    "GET /memory/partitions/{uid}/retired": "path memory <partition>",
+    "GET /skills/{uid}/files": "path skill <name>",
+    "GET /skills/{uid}/files/content": "path skill <name>",
+    "PUT /skills/{uid}/files/content": "path skill <name>",
+    "GET /agents/{uid}/config-files": "path agent <name> config",
+    "GET /agents/{uid}/config-files/{key}": "path agent <name> config",
+    "GET /agents/{uid}/config-files/{key}/files/{relpath}": "path agent <name> config",
+    "GET /agents/{uid}/native-memory": "path agent <name> memory",
+    "GET /agents/{uid}/native-memory/files": "path agent <name> memory",
+    "GET /agents/{uid}/native-memory/files/content": "path agent <name> memory",
+}
+
+#: File-shaped routes that are NOT answered by `coffer path`, because they
+#: change an agent's own config file through validation and a fingerprint
+#: check a text editor would skip (spec agent-registry "Reject stale
+#: config-file writes by fingerprint").
+_FILE_ROUTES_WITH_A_COMMAND: dict[str, str] = {
+    "PUT /agents/{uid}/config-files/{key}": "agent config edit",
+    "PUT /agents/{uid}/config-files/{key}/files/{relpath}": "agent config edit",
+    "DELETE /agents/{uid}/config-files/{key}/files/{relpath}": "agent config rm",
+}
+
+#: What makes a route file-backed: a path segment naming a file, a tree of
+#: files, or the Markdown files a memory partition is made of.
+_FILE_SHAPED = re.compile(r"/(files?|tree|notes|retired|native-memory|config-files)(/|$)")
+
+
+def _node(path: str) -> Any:
+    from typer.main import get_command
+
+    node: Any = get_command(app)
+    for part in path.split():
+        commands = getattr(node, "commands", {})
+        assert part in commands, f"no command '{part}' under '{path}'"
+        node = commands[part]
+    return node
 
 
 def _subcommands(path: str) -> set[str]:
@@ -260,29 +252,42 @@ def _subcommands(path: str) -> set[str]:
     elided and a substring check would then pass or fail for reasons that have
     nothing to do with parity.
     """
-    from typer.main import get_command
-
-    node: object = get_command(app)
-    for part in path.split():
-        commands = getattr(node, "commands", {})
-        assert part in commands, f"no command group '{part}' under '{path}'"
-        node = commands[part]
-    return set(getattr(node, "commands", {}))
+    return set(getattr(_node(path), "commands", {}))
 
 
 def _long_options(path: str) -> set[str]:
     """Every long option flag declared on the command at `path`."""
-    from typer.main import get_command
-
-    node: object = get_command(app)
-    for part in path.split():
-        node = getattr(node, "commands", {})[part]
     return {
         opt
-        for param in getattr(node, "params", [])
-        for opt in getattr(param, "opts", [])
+        for param in getattr(_node(path), "params", [])
+        for opt in (*getattr(param, "opts", []), *getattr(param, "secondary_opts", []))
         if opt.startswith("--")
     }
+
+
+def _api_routes() -> set[str]:
+    """Every `METHOD /path` the management API serves, relative to /api/v1."""
+    from coffer.surfaces.http.app import create_app
+
+    paths = create_app().openapi()["paths"]
+    return {
+        f"{method.upper()} {path.removeprefix('/api/v1')}"
+        for path, ops in paths.items()
+        if path.startswith("/api/v1/")
+        for method in ops
+    }
+
+
+@pytest.fixture(scope="module")
+def api_routes(tmp_path_factory: pytest.TempPathFactory) -> Iterator[set[str]]:
+    mp = pytest.MonkeyPatch()
+    home = tmp_path_factory.mktemp("parity-home")
+    mp.setenv("HOME", str(home))
+    mp.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{home / 'c.db'}")
+    try:
+        yield _api_routes()
+    finally:
+        mp.undo()
 
 
 @pytest.mark.acceptance(
@@ -292,22 +297,21 @@ def _long_options(path: str) -> set[str]:
 def test_cli_covers_every_visual_operation():
     """The CLI's command tree is exactly the reviewed table above.
 
-    The oracle names all sixteen command groups the composition root registers
-    plus their nested groups, and this asserts exact equality against the live
-    tree — in both directions. A new UI operation cannot ship a CLI
-    counterpart without it appearing here for a reviewer to see, and a CLI
-    command cannot appear without someone deciding it belongs.
+    The oracle names all seventeen top-level commands the composition root
+    registers plus their nested groups, and this asserts exact equality
+    against the live tree — in both directions. A new UI operation cannot
+    ship a CLI counterpart without it appearing here for a reviewer to see,
+    and a CLI command cannot appear without someone deciding it belongs.
 
-    It used to name five groups of the sixteen, which is why this could not
-    fail on the ones it never mentioned. What it still cannot see on its own is
-    a UI operation the CLI simply never grew: that was carried as a table of
-    named exemptions, each asserted from the absent side, and all three are now
-    closed — see the note above ``_subcommands`` for how to write one back.
+    What it cannot see on its own is a UI operation the CLI simply never
+    grew. If one ever ships without a CLI counterpart, write the exemption
+    down here: a name, the reason, and an assertion that the command is STILL
+    missing, so filling the gap cannot leave a stale exemption behind.
     """
     root = _subcommands("")
     top_level = {path for path in _EXPECTED_GROUPS if " " not in path}
     assert root == top_level, (
-        f"top-level command groups drifted: "
+        f"top-level commands drifted: "
         f"registered-but-untabled={sorted(root - top_level)}, "
         f"tabled-but-missing={sorted(top_level - root)}"
     )
@@ -325,6 +329,86 @@ def test_cli_covers_every_visual_operation():
             f"'{path}' is missing options {sorted(expected_opts - _long_options(path))}"
         )
 
+    # Machine-readable output for scripting: every list and show verb, every
+    # kind group's alike.
+    for path in _EXPECTED_GROUPS:
+        for verb in {"list", "show"} & _subcommands(path):
+            assert "--json" in _long_options(f"{path} {verb}"), f"'{path} {verb}' has no --json"
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework",
+    scenario="command line covers every visual operation",
+)
+def test_every_config_key_is_paired_with_the_route_that_stores_it(api_routes: set[str]):
+    """The key registry is exactly `_CONFIG_KEYS`, each key stored where the
+    table says; and every settings route the API serves is some key's store
+    (or is named in `_SETTINGS_ROUTES_ELSEWHERE`), so a settings route with no
+    key fails here."""
+
+    class _Stub:
+        """Answers a family's enumeration with one member each."""
+
+        def get(self, path: str) -> dict[str, Any]:
+            return {
+                "/daemon/features": {
+                    "features": [{"key": "<key>", "enabled": True, "source": "channel"}]
+                },
+                "/retention/policies": {
+                    "policies": [
+                        {
+                            "table_name": "<table>",
+                            "display_name": "T",
+                            "retention_days": 1,
+                            "default_retention_days": 1,
+                        }
+                    ]
+                },
+            }[path]
+
+    live = {s.key: s.store for s in static_settings()}
+    for family in FAMILIES:
+        live |= {m.key: m.store for m in family.members(_Stub())}  # type: ignore[arg-type]
+    live = {
+        k: v.replace("/<key>", "/{key}").replace("/<table>", "/{table_name}")
+        for k, v in live.items()
+    }
+    assert live == _CONFIG_KEYS
+
+    stores = {v for v in _CONFIG_KEYS.values() if not v.startswith("~")}
+    assert stores <= api_routes, f"stores the API no longer serves: {sorted(stores - api_routes)}"
+    elsewhere = set(_SETTINGS_ROUTES_ELSEWHERE)
+    assert elsewhere <= api_routes, f"stale entries: {sorted(elsewhere - api_routes)}"
+
+    settings_routes = {r for r in api_routes if _SETTINGS_ROUTE.match(r)}
+    unclaimed = settings_routes - stores - elsewhere
+    assert not unclaimed, f"settings routes no config key claims: {sorted(unclaimed)}"
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework",
+    scenario="file-backed reads are answered by coffer path",
+)
+def test_file_backed_routes_are_answered_by_coffer_path(api_routes: set[str]):
+    """Every file-shaped route the API serves is either listed in
+    `_FILE_BACKED_ROUTES` with a live `coffer path` target, or has a command
+    of its own in `_FILE_ROUTES_WITH_A_COMMAND` — in both directions, so a new
+    file route and a listed route the API dropped both fail here."""
+    file_shaped = {r for r in api_routes if _FILE_SHAPED.search(r.split(" ", 1)[1])}
+    listed = set(_FILE_BACKED_ROUTES) | set(_FILE_ROUTES_WITH_A_COMMAND)
+    assert file_shaped == listed, (
+        f"file-backed routes drifted: "
+        f"served-but-unlisted={sorted(file_shaped - listed)}, "
+        f"listed-but-not-served={sorted(listed - file_shaped)}"
+    )
+
+    for route, target in _FILE_BACKED_ROUTES.items():
+        words = target.split()
+        assert words[0] == "path" and words[1] in _subcommands("path"), (route, target)
+    for route, command in _FILE_ROUTES_WITH_A_COMMAND.items():
+        group, verb = command.rsplit(" ", 1)
+        assert verb in _subcommands(group), (route, command)
+
 
 @pytest.mark.acceptance(
     spec="resource-framework",
@@ -334,7 +418,7 @@ def test_every_command_group_renders_its_help():
     """`--help` must succeed for every group — an import-time or annotation
     error in one command module otherwise only surfaces when a user reaches
     for it."""
-    for path in _EXPECTED_GROUPS:
+    for path in ["", *_EXPECTED_GROUPS]:
         result = runner.invoke(app, [*path.split(), "--help"])
         assert result.exit_code == 0, f"{path} --help exited {result.exit_code}:\n{result.output}"
 
