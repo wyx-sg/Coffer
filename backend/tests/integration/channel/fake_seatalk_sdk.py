@@ -116,6 +116,16 @@ def drop(reason: str = "read failed") -> Callable[[Any], None]:
     return _run
 
 
+def close_after(seconds: float) -> Callable[[Any], None]:
+    """SeaTalk closes a healthy connection: the real SDK's ``listen()`` swallows
+    the close frame's ``WebSocketClosedError`` and returns normally."""
+
+    def _run(client: Any) -> None:
+        client._closed.wait(timeout=seconds)
+
+    return _run
+
+
 def kick(message: str = "another connection registered") -> Callable[[Any], None]:
     """Another process took the app's single connection over."""
 

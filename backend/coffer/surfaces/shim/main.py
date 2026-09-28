@@ -33,6 +33,7 @@ from coffer.surfaces.shim.bootstrap import (
     _setup_shim_log,
     _wait_for_daemon,
 )
+from coffer.surfaces.shim.wire import emit_error, forward_response
 
 _logger = logging.getLogger("coffer.shim")
 # How long to wait for a live daemon when re-resolving after a connect failure
@@ -184,7 +185,7 @@ class _Bridge:
         except Exception as e:
             _logger.warning("shim.post_failed", extra={"error": type(e).__name__})
             if not await self._recover(client):
-                self._emit_error(envelope.get("id"), code=-32603, message=f"shim: {e}")
+                emit_error(envelope.get("id"), code=-32603, message=f"shim: {e}")
                 return
             try:
                 response = await client.post("/mcp", json=envelope, headers=self._request_headers())
@@ -195,8 +196,34 @@ class _Bridge:
                 )
             except Exception as e2:
                 _logger.exception("shim.post_failed_after_recover")
-                self._emit_error(envelope.get("id"), code=-32603, message=f"shim: {e2}")
+                emit_error(envelope.get("id"), code=-32603, message=f"shim: {e2}")
                 return
+
+        # A restart on the same port rotates the token: the old one is answered
+        # with 401, not a connect error, so recover here too. A concurrent call
+        # may already have rebound us, in which case just retry with the new
+        # token rather than re-resolving.
+        if response.status_code == 401:
+            sent_token = response.request.headers.get("X-Coffer-Token")
+            rebound = sent_token != self._headers.get("X-Coffer-Token")
+            if not rebound:
+                try:
+                    rebound = await self._recover(client)
+                except Exception:
+                    _logger.exception("shim.recover_failed")
+            if rebound:
+                try:
+                    response = await client.post(
+                        "/mcp", json=envelope, headers=self._request_headers()
+                    )
+                    _logger.info(
+                        "shim.out_after_recover status=%s len=%s",
+                        response.status_code,
+                        len(response.text or ""),
+                    )
+                except Exception:
+                    # Fall through and forward the original 401 as the error.
+                    _logger.exception("shim.post_failed_after_recover")
 
         if "Mcp-Session-Id" in response.headers:
             self._session_id = response.headers["Mcp-Session-Id"]
@@ -206,7 +233,7 @@ class _Bridge:
         # validate the gateway's response before forwarding. On status / parse
         # failure, synthesize a JSON-RPC error envelope tied to the request id
         # so the client sees a structured reply rather than plain text.
-        self._forward_response(envelope, response)
+        forward_response(envelope, response)
 
     async def _recover(self, client: httpx.AsyncClient) -> bool:
         """Re-resolve ``daemon.json`` after a transport failure.
@@ -249,54 +276,6 @@ class _Bridge:
         if "Mcp-Session-Id" in response.headers:
             self._session_id = response.headers["Mcp-Session-Id"]
 
-    def _forward_response(
-        self,
-        envelope: dict[str, Any],
-        response: httpx.Response,
-    ) -> None:
-        req_id = envelope.get("id")
-        raw_body = (response.text or "").strip()
-        if response.status_code >= 400:
-            _logger.warning(
-                "shim.gateway_error_status",
-                extra={"status": response.status_code, "body_head": raw_body[:200]},
-            )
-            body_excerpt = raw_body[:200] or "(empty body)"
-            self._emit_error(
-                req_id,
-                code=-32603,
-                message=f"coffer gateway HTTP {response.status_code}: {body_excerpt}",
-            )
-            return
-        if not raw_body:
-            # 2xx with empty body is allowed by /mcp for matched-response acks;
-            # nothing to forward.
-            return
-        try:
-            _json.loads(raw_body)
-        except _json.JSONDecodeError as e:
-            _logger.warning(
-                "shim.non_json_2xx",
-                extra={"error": str(e), "body_head": raw_body[:200]},
-            )
-            self._emit_error(
-                req_id,
-                code=-32603,
-                message=f"coffer gateway returned non-JSON 2xx: {raw_body[:200]}",
-            )
-            return
-        sys.stdout.write(raw_body + "\n")
-        sys.stdout.flush()
-
-    def _emit_error(self, req_id: Any, code: int, message: str) -> None:
-        err = {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "error": {"code": code, "message": message},
-        }
-        sys.stdout.write(_json.dumps(err) + "\n")
-        sys.stdout.flush()
-
     async def _drain_sse(self, client: httpx.AsyncClient) -> None:
         """After the first session id is known, stream notifications, reconnecting.
 
@@ -331,9 +310,14 @@ class _Bridge:
             async with client.stream("GET", "/mcp", headers=headers) as response:
                 if response.status_code != 200:
                     _logger.warning(
-                        "shim.sse_unexpected_status",
-                        extra={"status": response.status_code},
+                        "shim.sse_unexpected_status status=%s",
+                        response.status_code,
                     )
+                    if response.status_code == 401:
+                        # The daemon restarted with a new token (see
+                        # _handle_envelope). Without this the stream was
+                        # retried every 5 s forever with the dead token.
+                        await self._recover(client)
                     return False
                 async for raw in response.aiter_lines():
                     if self._stop.is_set():

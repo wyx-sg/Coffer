@@ -26,6 +26,7 @@ from .conftest import wait_until
 from .fake_seatalk_sdk import (
     FakeSeaTalkSdk,
     build_fake_sdk,
+    close_after,
     deliver,
     drop,
     envelope,
@@ -277,6 +278,51 @@ async def test_a_recovered_socket_reports_connected_again(sdk: FakeSeaTalkSdk) -
     try:
         await wait_until(lambda: connector.state()[0] == "connected", message="never recovered")
         assert connector.state() == ("connected", None)
+    finally:
+        await connector.stop()
+
+
+async def test_a_connection_that_stayed_up_resets_the_backoff(sdk: FakeSeaTalkSdk) -> None:
+    """Regression: the ladder only ever grew, so once a few DNS failures had
+    pushed it to the cap, every later routine close by SeaTalk waited the full
+    30 s before reconnecting — half a minute of inbound events held back each
+    time."""
+    sdk.plan[:] = [drop(), drop(), drop(), close_after(0.08), drop()]
+    connector = _connector(sdk, _Recorder(), healthy_after=0.05)
+    await connector.start()
+    try:
+        await wait_until(lambda: len(connector.backoffs) >= 5, message="did not retry five times")
+        assert connector.backoffs[:5] == [0.01, 0.02, 0.04, 0.01, 0.02]
+    finally:
+        await connector.stop()
+
+
+async def test_a_routine_close_of_a_healthy_connection_is_not_an_error(
+    sdk: FakeSeaTalkSdk, caplog: pytest.LogCaptureFixture
+) -> None:
+    sdk.plan[:] = [close_after(0.08), hold()]
+    connector = _connector(sdk, _Recorder(), healthy_after=0.05)
+    with caplog.at_level(logging.INFO, logger="coffer.infrastructure.channel.seatalk_ws"):
+        await connector.start()
+        try:
+            await wait_until(lambda: sdk.connections >= 2, message="did not reconnect")
+            await wait_until(lambda: connector.state()[0] == "connected", message="not back up")
+        finally:
+            await connector.stop()
+    states = [r.__dict__.get("state") for r in caplog.records if r.msg == "channel.websocket.state"]
+    assert "error" not in states
+
+
+async def test_a_connection_that_closes_straight_away_is_still_an_error(
+    sdk: FakeSeaTalkSdk,
+) -> None:
+    sdk.plan[:] = [close_after(0.0)]
+    connector = _connector(sdk, _Recorder(), healthy_after=60.0)
+    await connector.start()
+    try:
+        await wait_until(lambda: len(connector.backoffs) >= 2, message="did not retry")
+        assert connector.state() == ("error", "the SeaTalk connection closed")
+        assert connector.backoffs[:2] == [0.01, 0.02]
     finally:
         await connector.stop()
 

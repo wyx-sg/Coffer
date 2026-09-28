@@ -1282,3 +1282,120 @@ def test_shim_is_quiet_on_an_unparsable_status_body(capsys: pytest.CaptureFixtur
 
     shim_main._warn_if_version_skew(httpx.Response(200, content=b"not json"))
     assert capsys.readouterr().err == ""
+
+
+# --------------------------------------------------------------------------- #
+# token rotation: a restart on the SAME port answers the old token with 401    #
+# --------------------------------------------------------------------------- #
+
+
+def _rotated_daemon(port: int, token: str) -> Any:
+    async def _fake_wait_for_daemon(timeout: float) -> DaemonInfo:
+        return DaemonInfo(
+            version=1,
+            pid=999,
+            port=port,
+            token=token,
+            started_at=_dt.datetime.now(tz=_dt.UTC),
+            binary_path="/usr/bin/python3",
+        )
+
+    return _fake_wait_for_daemon
+
+
+@pytest.mark.asyncio
+async def test_handle_envelope_recovers_when_daemon_restarts_on_same_port_with_new_token(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regression: a daemon restart kept port 8000 but rotated the token, so
+    every POST got a 401 rather than a connect error and recovery never ran —
+    every tool call failed until the editor restarted the shim."""
+    port = 18765
+    bridge = _make_bridge(port=port)
+    bridge._session_id = "old-sess"
+    bridge._init_envelope = {"jsonrpc": "2.0", "id": 0, "method": "initialize"}
+    monkeypatch.setattr(
+        "coffer.surfaces.shim.main._wait_for_daemon", _rotated_daemon(port, "t-new")
+    )
+
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.headers.get("X-Coffer-Token") != "t-new":
+            return httpx.Response(401, json={"error": {"code": "UNAUTHENTICATED"}})
+        body = json.loads(request.content.decode("utf-8"))
+        seen.append(body["method"])
+        if body["method"] == "initialize":
+            return httpx.Response(
+                200,
+                text=json.dumps({"jsonrpc": "2.0", "id": 0, "result": {}}),
+                headers={"Mcp-Session-Id": "new-sess"},
+            )
+        return httpx.Response(
+            200, text=json.dumps({"jsonrpc": "2.0", "id": body["id"], "result": {"ok": 1}})
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(
+        transport=transport, base_url=f"http://127.0.0.1:{port}"
+    ) as client:
+        await bridge._handle_envelope(
+            client, {"jsonrpc": "2.0", "id": 7, "method": "tools/call", "params": {}}
+        )
+
+    assert bridge._headers["X-Coffer-Token"] == "t-new"
+    assert bridge._session_id == "new-sess"
+    assert seen == ["initialize", "tools/call"]
+    forwarded = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert forwarded == {"jsonrpc": "2.0", "id": 7, "result": {"ok": 1}}
+
+
+@pytest.mark.asyncio
+async def test_drain_sse_rebinds_when_the_token_was_rotated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: the notification stream answered 401 after a same-port
+    restart and the shim retried it every 5 s forever with the dead token."""
+    port = 18765
+    bridge = _make_bridge(port=port)
+    bridge._session_id = "old-sess"
+    bridge._init_envelope = {"jsonrpc": "2.0", "id": 0, "method": "initialize"}
+    monkeypatch.setattr(
+        "coffer.surfaces.shim.main._wait_for_daemon", _rotated_daemon(port, "t-new")
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.headers.get("X-Coffer-Token") != "t-new":
+            return httpx.Response(401)
+        if request.method == "POST":
+            return httpx.Response(
+                200,
+                text=json.dumps({"jsonrpc": "2.0", "id": 0, "result": {}}),
+                headers={"Mcp-Session-Id": "new-sess"},
+            )
+        return httpx.Response(200, text="", headers={"Content-Type": "text/event-stream"})
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(
+        transport=transport, base_url=f"http://127.0.0.1:{port}"
+    ) as client:
+        assert await bridge._drain_sse_once(client) is False
+        assert bridge._headers["X-Coffer-Token"] == "t-new"
+        assert bridge._session_id == "new-sess"
+        assert await bridge._drain_sse_once(client) is True
+
+
+@pytest.mark.asyncio
+async def test_drain_sse_does_not_re_resolve_on_other_error_statuses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bridge = _make_bridge()
+    bridge._session_id = "sess-1"
+
+    async def _must_not_run(timeout: float) -> None:
+        raise AssertionError("only a 401 means the daemon may have rotated its token")
+
+    monkeypatch.setattr("coffer.surfaces.shim.main._wait_for_daemon", _must_not_run)
+    transport = httpx.MockTransport(lambda request: httpx.Response(503))
+    async with httpx.AsyncClient(transport=transport, base_url="http://127.0.0.1:18765") as client:
+        assert await bridge._drain_sse_once(client) is False
