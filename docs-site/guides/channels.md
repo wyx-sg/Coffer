@@ -59,7 +59,7 @@ A new channel is bound to the machine you register it from and may drive every r
 
 Pairing makes you the channel's owner. Until a channel is paired, it answers nobody.
 
-1. Issue a code: on the channel's page, **Pairing → Generate pairing code**, or
+1. Issue a code: on the channel's page, **Generate pairing code** in the account section (**Re-pair** once a channel is paired), or
 
    ```sh
    coffer channel pair my-telegram
@@ -99,7 +99,7 @@ A direct chat is one conversation. To run a second task beside it without mixing
 
 How the thread appears depends on the platform. On SeaTalk it is a message from the bot that you reply under. On Telegram it is a private-chat topic, which needs the bot's Threaded Mode turned on in BotFather. In a group, every thread is already its own conversation, so `/thread` is not needed there.
 
-Each turn tells the agent it is on a chat channel: keep replies concise, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. While the `memory` feature is on, the turn's system prompt also carries the [memory](/guides/memory#in-channel-turns) index, since a channel turn runs no session-start hook.
+Each turn tells the agent it is on a chat channel: keep replies concise but quote the key log lines, errors and IDs behind a finding verbatim, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. While the `memory` feature is on, the turn's system prompt also carries the [memory](/guides/memory#in-channel-turns) index, since a channel turn runs no session-start hook.
 
 ## Commands
 
@@ -169,7 +169,7 @@ A bot tolerates exactly one consumer: two machines polling one Telegram bot, or 
 - Only the named machine starts the adapter. A channel bound to another machine is shown as running elsewhere, not as stopped.
 - A channel with no binding, or bound to a machine the registry does not know, runs nowhere and says so on its page.
 
-To move a channel, change **Runs on** on its page, or:
+To move a channel, change **Runs on** on its page (the **?** beside it repeats the handover notes below), or:
 
 ```sh
 coffer channel bind my-telegram              # bind to this machine
@@ -251,18 +251,19 @@ coffer channel notify my-telegram "build finished"
 coffer channel notify my-telegram "deploy done" --chat -1001234567890
 ```
 
-Without `--chat` the message goes to the owner's direct chat. `--chat` names another paired chat, such as a group; a chat the channel is not paired to is refused. On the channel's page, **Test delivery** does the same. Notifying a channel with no paired owner fails and sends nothing. The REST equivalent is `POST /api/v1/channels/{uid}/notify`.
+Without `--chat` the message goes to the owner's direct chat. `--chat` names another paired chat, such as a group; a chat the channel is not paired to is refused. On the channel's page, **Send test message** sends a fixed test message to the owner's direct chat. Notifying a channel with no paired owner fails and sends nothing. The REST equivalent is `POST /api/v1/channels/{uid}/notify`.
 
 ## Manage channels
 
-The **Channels** page lists every channel with **Name**, **Type**, **Default agent**, **Health** (Running or Stopped), **Runs on**, **Paired** and its reach. A channel's page shows:
+The **Channels** page lists every channel with **Name**, **Type**, **Default agent**, **Health** (Running or Stopped), **Runs on**, **Paired** and its reach. A channel's page is one card in three sections, under a header carrying its reach, **Edit** and **Delete**:
 
-- **Status** — the adapter, the paired peer and its chat ID, when it was paired, and the active conversation.
-- **Runs on** — the machine binding, with the handover notes above.
-- **Pairing** — generate a code.
-- **SeaTalk connection** — for SeaTalk, the websocket connection state and its last error.
-- **Test delivery** — send a one-off message to the owner.
-- **Edit** — change the default agent, the SeaTalk App ID, the group switches under **In group chats**, or rotate a secret. A blank secret field keeps the current value; a new one is written under the reference the channel already uses, so rotating a secret changes neither pairing nor binding.
+- **Status** — one line with the adapter's state (Running or Stopped), for SeaTalk the **SeaTalk connection** state, and **Runs on**, the machine binding. Problems appear directly under it, and only when there are any: a binding that runs nowhere, the connection's last error, or a platform setting that defeats the channel's configuration. A note also appears there while a pairing code is outstanding.
+- **Account** — the paired owner's name, with its chat ID, when it was paired and the active conversation. **Re-pair** issues a new code; an unpaired channel shows **Generate pairing code** instead. The code appears here, with a copy button and, on Telegram, a one-tap link.
+- **Test delivery** — **Send test message** sends a fixed test message to the owner. It is disabled until the channel is paired.
+
+Longer explanations, such as what a rebind costs or what re-pairing replaces, sit behind the **?** beside a label.
+
+**Edit** changes the default agent, the SeaTalk App ID and the group switches under **In group chats**, or rotates a secret. A blank secret field keeps the current value; a new one is written under the reference the channel already uses, so rotating a secret changes neither pairing nor binding.
 
 From the CLI:
 

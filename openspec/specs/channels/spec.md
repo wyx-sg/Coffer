@@ -577,10 +577,12 @@ that is refused too.
 ### Requirement: Tell a channel-driven agent it is on a chat channel
 A channel-originated turn MUST tell the agent it is bridged to a chat channel,
 not a terminal: the agent receives a short system-prompt note carrying the
-channel name and mobile-chat guidance — keep replies concise, and it cannot
-click permission or confirmation dialogs on the user's computer (they may be
-away from it). This prevents terminal-sized replies and silent waits on
-un-clickable dialogs. Web-UI turns are unaffected — the note rides only on a
+channel name and mobile-chat guidance — keep replies concise without dropping
+evidence (an investigation's key log lines, error messages and IDs are quoted
+verbatim, not summarised away), and it cannot click permission or confirmation
+dialogs on the user's computer (they may be away from it). This prevents
+terminal-sized replies, findings the user has to ask a second time to see the
+evidence for, and silent waits on un-clickable dialogs. Web-UI turns are unaffected — the note rides only on a
 conversation whose `channel_uid` is set, and names the channel by its current
 label.
 
@@ -588,8 +590,9 @@ label.
 - **GIVEN** a channel-originated conversation
 - **WHEN** a turn is driven from the channel
 - **THEN** the agent receives a system-prompt note naming the channel and telling
-  it to keep replies concise and that it cannot click the user's OS dialogs,
-  while a web-UI conversation gets no such note
+  it to keep replies concise, to quote an investigation's key evidence
+  verbatim, and that it cannot click the user's OS dialogs, while a web-UI
+  conversation gets no such note
 
 ### Requirement: Hand inbound photos and files to the agent
 Inbound photos and files MUST drive a turn. The transport downloads each

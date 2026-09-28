@@ -7,9 +7,10 @@
 import { useTranslation } from "react-i18next";
 
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import type { ChannelType } from "@/lib/api/channels";
-import { FieldError, RequiredLabel } from "./RequiredLabel";
+import { FieldError } from "./FieldError";
 
 /** Every credential input the add form can show, across both channel types. */
 export interface ChannelSecretDraft {
@@ -37,7 +38,9 @@ export function AddChannelSecretFields({
   if (channelType === "telegram") {
     return (
       <div className="space-y-2">
-        <RequiredLabel htmlFor="channel-bot-token">{t("channels.dialog.botToken")}</RequiredLabel>
+        <Label required htmlFor="channel-bot-token">
+          {t("channels.dialog.botToken")}
+        </Label>
         <PasswordInput
           id="channel-bot-token"
           value={draft.botToken}
@@ -56,7 +59,9 @@ export function AddChannelSecretFields({
   return (
     <>
       <div className="space-y-2">
-        <RequiredLabel htmlFor="channel-app-id">{t("channels.dialog.appId")}</RequiredLabel>
+        <Label required htmlFor="channel-app-id">
+          {t("channels.dialog.appId")}
+        </Label>
         <Input
           id="channel-app-id"
           value={draft.appId}
@@ -69,7 +74,9 @@ export function AddChannelSecretFields({
         <FieldError id="channel-app-id-error" message={errors.appId} />
       </div>
       <div className="space-y-2">
-        <RequiredLabel htmlFor="channel-app-secret">{t("channels.dialog.appSecret")}</RequiredLabel>
+        <Label required htmlFor="channel-app-secret">
+          {t("channels.dialog.appSecret")}
+        </Label>
         <PasswordInput
           id="channel-app-secret"
           value={draft.appSecret}
@@ -81,11 +88,7 @@ export function AddChannelSecretFields({
         />
         <FieldError id="channel-app-secret-error" message={errors.appSecret} />
       </div>
-      <div className="space-y-1 rounded-md border border-border bg-muted/30 p-3">
-        <p className="text-xs text-muted-foreground">{t("channels.dialog.seatalkHint")}</p>
-        <p className="text-xs text-muted-foreground">{t("channels.dialog.seatalkSdkNote")}</p>
-        <p className="text-xs text-muted-foreground">{t("channels.dialog.seatalkPortalNote")}</p>
-      </div>
+      <p className="text-xs text-muted-foreground">{t("channels.dialog.seatalkHint")}</p>
     </>
   );
 }

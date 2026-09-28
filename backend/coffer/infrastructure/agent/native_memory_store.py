@@ -16,6 +16,7 @@ from coffer.domain.agent.native_memory import (
     MemoryFileContent,
     MemoryFileNode,
     ScannedStore,
+    encode_slug,
 )
 from coffer.infrastructure.agent import native_memory_files
 from coffer.infrastructure.agent.codex_memory_store import codex_stores
@@ -61,7 +62,7 @@ def _resolve_project_path(memory_dir: pathlib.Path) -> str | None:
     ``AgentNativeMemoryService._to_store``, the one place in this feature a
     guess belongs.
     """
-    return cwd_from_transcripts(memory_dir.parent)
+    return cwd_from_transcripts(memory_dir.parent, encode_slug)
 
 
 class FileNativeMemoryScanner:

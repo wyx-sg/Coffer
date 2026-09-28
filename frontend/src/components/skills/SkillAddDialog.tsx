@@ -1,5 +1,7 @@
 // frontend/src/components/skills/SkillAddDialog.tsx
 // "Add skill" dialog: imports a local AgentSkills-standard folder from disk.
+// The path is picked with Browse or typed/pasted; a pasted path is trimmed of
+// surrounding whitespace and quotes before it is sent.
 // On success the skills query is invalidated and the dialog closes.
 // On 409 (RESOURCE_ALREADY_EXISTS) the UI surfaces an inline confirm to
 // retry with overwrite: true — the explicit confirm IS the flag.
@@ -18,6 +20,13 @@ import {
 } from "@/components/ui/dialog";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 import { useImportSkill } from "@/lib/hooks/useSkills";
+
+/** A pasted path often carries quotes (a shell's "Copy as path") or a trailing newline. */
+function cleanPath(raw: string): string {
+  const trimmed = raw.trim();
+  const m = /^(["'])(.*)\1$/.exec(trimmed);
+  return (m ? m[2] : trimmed).trim();
+}
 
 export function SkillAddDialog({
   open,
@@ -51,18 +60,20 @@ export function SkillAddDialog({
 function LocalImportTab({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
   const { t } = useTranslation();
   const importSkill = useImportSkill();
-  const [path, setPath] = useState("");
+  const [rawPath, setRawPath] = useState("");
   // When a 409 conflict is returned, we store the conflicting skill name here
   // to surface the replace-confirm UI. Cleared whenever the path changes.
   const [conflictName, setConflictName] = useState<string | null>(null);
 
   const handlePathChange = (value: string) => {
-    setPath(value);
+    setRawPath(value);
     setConflictName(null);
     importSkill.reset();
   };
 
   const runImport = async (overwrite?: boolean) => {
+    const path = cleanPath(rawPath);
+    if (!path) return;
     try {
       await importSkill.mutateAsync({ path, ...(overwrite ? { overwrite: true } : {}) });
       onSuccess();
@@ -85,13 +96,16 @@ function LocalImportTab({ onSuccess, onCancel }: { onSuccess: () => void; onCanc
       className="space-y-3"
     >
       <div className="space-y-1">
-        <Label htmlFor="skill-import-path">{t("skills.path")}</Label>
+        <Label htmlFor="skill-import-path" required>
+          {t("skills.path")}
+        </Label>
         <FolderPickerField
           inputId="skill-import-path"
           ariaLabel={t("skills.path")}
-          value={path || null}
+          value={rawPath || null}
           onChange={(p) => handlePathChange(p ?? "")}
           placeholder="/Users/me/.claude/skills/my-skill"
+          typeable
         />
       </div>
       {conflictName ? (
@@ -135,7 +149,7 @@ function LocalImportTab({ onSuccess, onCancel }: { onSuccess: () => void; onCanc
           <Button type="button" variant="outline" onClick={onCancel}>
             {t("common.cancel")}
           </Button>
-          <Button type="submit" disabled={importSkill.isPending || !path}>
+          <Button type="submit" disabled={importSkill.isPending || !cleanPath(rawPath)}>
             {importSkill.isPending ? t("common.saving") : t("skills.import")}
           </Button>
         </div>

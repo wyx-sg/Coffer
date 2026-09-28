@@ -9,6 +9,7 @@ from coffer.application.fs import pick_service
 from coffer.application.fs.pick_service import (
     FsPickService,
     _folder_cmd,
+    _usable_start,
 )
 
 
@@ -80,3 +81,34 @@ def test_pick_folder_unavailable_when_spawn_errors(monkeypatch):
     monkeypatch.setattr(pick_service.subprocess, "run", _boom)
     result = FsPickService().pick_folder(None)
     assert result.available is False and result.path is None
+
+
+# --- the start folder ---------------------------------------------------------
+
+
+def test_usable_start_keeps_an_existing_directory(monkeypatch):
+    monkeypatch.setattr(pick_service.os.path, "isdir", lambda p: p == "/Users/xing/skills")
+    assert _usable_start(" /Users/xing/skills ") == "/Users/xing/skills"
+
+
+def test_usable_start_drops_a_half_typed_path(monkeypatch):
+    monkeypatch.setattr(pick_service.os.path, "isdir", lambda _p: False)
+    assert _usable_start("/Users/xing/ski") is None
+    assert _usable_start("   ") is None
+    assert _usable_start(None) is None
+
+
+def test_pick_folder_opens_without_a_start_it_cannot_use(monkeypatch):
+    # macOS exits non-zero, without a dialog, on a default location that does not
+    # exist; that must not be passed, or Browse would read as a silent cancel.
+    monkeypatch.setattr(pick_service.sys, "platform", "darwin")
+    monkeypatch.setattr(pick_service.os.path, "isdir", lambda _p: False)
+    seen: list[list[str]] = []
+
+    def run(cmd, **_):
+        seen.append(cmd)
+        return SimpleNamespace(returncode=0, stdout="/Users/xing/skills\n", stderr="")
+
+    monkeypatch.setattr(pick_service.subprocess, "run", run)
+    assert FsPickService().pick_folder("/Users/xing/ski").path == "/Users/xing/skills"
+    assert "default location" not in seen[0][2]

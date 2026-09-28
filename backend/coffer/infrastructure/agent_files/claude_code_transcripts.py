@@ -24,37 +24,45 @@ from __future__ import annotations
 
 import json
 import pathlib
+from collections.abc import Callable
 
 
-def cwd_from_transcripts(project_dir: pathlib.Path) -> str | None:
-    """First ``"cwd"`` string found in the first readable sibling ``*.jsonl``.
+def cwd_from_transcripts(
+    project_dir: pathlib.Path, encode_slug: Callable[[str], str]
+) -> str | None:
+    """The recorded ``"cwd"`` that IS this project, from its sibling ``*.jsonl``.
 
-    Returns ``None`` when ``project_dir`` is not a directory, holds no
-    ``*.jsonl`` transcript, or that transcript's lines never mention a
-    string ``"cwd"`` field — never raises, since a missing or malformed
+    A transcript's first ``cwd`` is not the project's: a desktop session
+    starts in a scratch workspace and only then moves into the project, and
+    its transcript is filed under the project it ended up in. So a ``cwd``
+    counts only when Claude Code's own encoding of it (``encode_slug``,
+    passed in by the caller, which owns the slug format) is exactly
+    ``project_dir``'s name — the slug says which path it is, the transcript
+    says how that path is really spelled. Every transcript is tried, line by
+    line, until one matches.
+
+    Returns ``None`` when ``project_dir`` is not a directory or no transcript
+    records a matching ``cwd`` — never raises, since a missing or malformed
     transcript is not a reason to fail the caller's own lookup.
     """
     if not project_dir.is_dir():
         return None
+    slug = project_dir.name
     for jsonl in sorted(project_dir.glob("*.jsonl")):
         try:
-            text = jsonl.read_text(encoding="utf-8")
+            with jsonl.open(encoding="utf-8", errors="replace") as lines:
+                for line in lines:
+                    if '"cwd"' not in line:
+                        continue
+                    try:
+                        record = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    cwd = record.get("cwd") if isinstance(record, dict) else None
+                    if isinstance(cwd, str) and encode_slug(cwd) == slug:
+                        return cwd
         except OSError:
             continue
-        for line in text.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                record = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(record, dict):
-                cwd = record.get("cwd")
-                if isinstance(cwd, str):
-                    return cwd
-        # First readable transcript only (per the contract): stop after it.
-        return None
     return None
 
 

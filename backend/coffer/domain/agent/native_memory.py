@@ -142,7 +142,7 @@ def decode_project_slug(slug: str) -> tuple[str, str | None]:
     return (segments[-1], path)
 
 
-def _encode(name: str) -> str:
+def encode_slug(name: str) -> str:
     """Claude Code's own path-component encoding, applied to one real name.
 
     Every character that is not an ASCII letter or digit becomes ``-`` — not
@@ -160,7 +160,7 @@ def _walk(current: str, remaining: str, list_dirs: Callable[[str], list[str]]) -
     """Consume ``remaining`` one real subdirectory at a time, or fail.
 
     What recovers the original path is the filesystem: a real directory's
-    name, run through :func:`_encode`, either is or is not a prefix of what
+    name, run through :func:`encode_slug`, either is or is not a prefix of what
     is left of the slug. So this walks down from ``current`` (an absolute
     path, ``""`` standing for ``/``) and, at each level, asks every real
     subdirectory ``list_dirs`` reports that question, rather than guessing
@@ -176,7 +176,7 @@ def _walk(current: str, remaining: str, list_dirs: Callable[[str], list[str]]) -
         return current or "/"
     candidates: list[tuple[int, str]] = []
     for name in list_dirs(current or "/"):
-        encoded = _encode(name)
+        encoded = encode_slug(name)
         if not encoded:
             continue
         if remaining == encoded or remaining.startswith(encoded + "-"):
@@ -197,7 +197,7 @@ def resolve_project_slug(
 ) -> tuple[str, str | None]:
     """FS-aware decode of a project slug into ``(label, path)``.
 
-    Claude Code's encoding (:func:`_encode`) collapses every non-alphanumeric
+    Claude Code's encoding (:func:`encode_slug`) collapses every non-alphanumeric
     character to ``-``, so a slug's dashes are not reliably separators, dots,
     underscores, or literal dashes already in a name — the naive
     :func:`decode_project_slug` gets this wrong whenever a real path segment
@@ -225,11 +225,45 @@ def resolve_project_slug(
     body = slug[1:]
     if not body:
         return decode_project_slug(slug)
-    resolved = _walk("", body, list_dirs)
+    resolved = _walk("", body, list_dirs) or _walk_to_gone(body, list_dirs)
     if resolved is None:
         return decode_project_slug(slug)
     label = resolved.rsplit("/", 1)[-1] or resolved
     return (label, resolved)
+
+
+def _walk_to_gone(remaining: str, list_dirs: Callable[[str], list[str]]) -> str | None:
+    """The deepest real directory the slug reaches, plus what is left as ONE name.
+
+    A project that has since been deleted cannot be walked to its end, but
+    its parent usually still exists — a desktop scratch workspace sits
+    beside its siblings long after it is gone. Splitting the unreadable rest
+    at every dash (what :func:`decode_project_slug` does) turns
+    ``scratch-2026-09-17-15dc3d`` into five directories and ``yuxing.wu``
+    above it into two, so the rest is kept whole instead: the last segment
+    is the one a project is named by, and a deleted leaf's own dashes are far
+    likelier than not to be its own. ``None`` when not even the first
+    segment matches a real directory.
+    """
+    current = ""
+    while remaining:
+        best = max(
+            (
+                name
+                for name in list_dirs(current or "/")
+                if (encoded := encode_slug(name))
+                and (remaining == encoded or remaining.startswith(encoded + "-"))
+            ),
+            key=lambda name: len(encode_slug(name)),
+            default=None,
+        )
+        if best is None:
+            break
+        remaining = remaining[len(encode_slug(best)) :].removeprefix("-")
+        current = f"{current}/{best}"
+    if not current:
+        return None
+    return f"{current}/{remaining}" if remaining else current
 
 
 @dataclass

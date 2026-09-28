@@ -70,3 +70,11 @@ async def test_detect_protocol_classifies_loopback_without_probing() -> None:
     assert await intro.detect_protocol(base_url="http://localhost:11434", api_key=None) == "ollama"
     assert await intro.detect_protocol(base_url="127.0.0.1:1234", api_key=None) == "ollama"
     assert await intro.detect_protocol(base_url="", api_key=None) == "unknown"
+
+
+def test_the_openai_client_answers_once_without_retrying() -> None:
+    # A probe is waited on with a spinner: the SDK's default retries turned one
+    # slow model into three timeouts back to back.
+    client = ProviderIntrospector()._openai_client("https://api.example.com/v1", "k")
+    assert client.max_retries == 0
+    assert client.timeout == 30.0
