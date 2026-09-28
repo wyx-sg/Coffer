@@ -67,7 +67,6 @@ class ConfigFileContentOut(BaseModel):
     exists: bool
     content: str
     fingerprint: str
-    memory_block: bool
 
 
 class ConfigFileWrite(BaseModel):
@@ -111,7 +110,6 @@ def _content_out(c: ConfigFileContent) -> ConfigFileContentOut:
         exists=c.exists,
         content=c.content,
         fingerprint=c.fingerprint,
-        memory_block=c.memory_block,
     )
 
 

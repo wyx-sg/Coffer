@@ -45,12 +45,6 @@ from coffer.domain.errors import ConfigFileNotAllowed
 from coffer.domain.resource import Resource
 from coffer.domain.workspace_errors import ConfigFileStale
 
-# Prefix of a LEGACY memory-projection block marker. Native projection was
-# removed (ADR memory-via-mcp-not-native-projection) so Coffer no longer
-# writes this block; the flag only lets the editor annotate a leftover block
-# as safe-to-delete, never parses it.
-MEMORY_BLOCK_MARKER = "<!-- coffer:memory"
-
 
 class ConfigFileStorePort(Protocol):
     """Filesystem operations for config files. Implemented in infrastructure."""
@@ -139,7 +133,6 @@ class ConfigFileContent:
     exists: bool
     content: str
     fingerprint: str
-    memory_block: bool
 
 
 # Structural type for the agent-lookup dependency — avoids a hard import of
@@ -237,7 +230,6 @@ class AgentConfigFileService:
             exists=text is not None,
             content=text or "",
             fingerprint=self._store.fingerprint(text),
-            memory_block=MEMORY_BLOCK_MARKER in (text or ""),
         )
 
     async def write_file(
@@ -298,7 +290,6 @@ class AgentConfigFileService:
             exists=text is not None,
             content=text or "",
             fingerprint=self._store.fingerprint(text),
-            memory_block=MEMORY_BLOCK_MARKER in (text or ""),
         )
 
     async def write_child(

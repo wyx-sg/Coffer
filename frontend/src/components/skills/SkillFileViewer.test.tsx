@@ -5,7 +5,7 @@
 // edits that want a real editor. Files the read could not load whole stay
 // read-only: saving a partial read would truncate the file on disk.
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren, ReactNode } from "react";
 import { SkillFileViewer } from "./SkillFileViewer";
@@ -81,6 +81,16 @@ describe("SkillFileViewer", () => {
     // FileActions offers real open/reveal on both surfaces (daemon-backed on web).
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
+  });
+
+  test("open, reveal and Edit share one action row", () => {
+    stubContent({ path: "SKILL.md", content: "old" });
+    renderViewer(<SkillFileViewer uid={SKILL_UID} path="SKILL.md" />);
+
+    const row = screen.getByTestId("file-editor-actions");
+    expect(within(row).getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: /reveal/i })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: /^edit$/i })).toBeInTheDocument();
   });
 
   test("editing and saving sends the content with the fingerprint it read", async () => {

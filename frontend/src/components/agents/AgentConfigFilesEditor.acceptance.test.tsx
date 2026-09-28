@@ -1,7 +1,6 @@
 // frontend/src/components/agents/AgentConfigFilesEditor.acceptance.test.tsx
 // Acceptance scenarios for the Config files tab of spec agent-registry: the
-// daemon-backed open / reveal pair beside a selected file, and the annotation
-// on an instructions file that still carries the retired memory block.
+// daemon-backed open / reveal pair beside a selected file.
 import { afterEach, describe, expect, vi, type Mock } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -32,7 +31,7 @@ const INSTRUCTIONS = {
   modified_at: "2026-06-01T00:00:00Z",
 };
 
-function stub(memoryBlock: boolean) {
+function stub() {
   vi.mocked(useAgentConfigFiles).mockReturnValue({
     data: [INSTRUCTIONS],
     isPending: false,
@@ -46,7 +45,6 @@ function stub(memoryBlock: boolean) {
       content: "# Rules\n",
       path: INSTRUCTIONS.path,
       folder_path: INSTRUCTIONS.folder_path,
-      memory_block: memoryBlock,
     },
     isPending: false,
   } as unknown as ReturnType<typeof useAgentConfigFile>);
@@ -73,7 +71,7 @@ describe("Config files tab — acceptance", () => {
   acceptance("agent-registry", "open a config file and reveal it through the daemon", async () => {
     (fsApi.open as Mock).mockResolvedValue(undefined);
     (fsApi.reveal as Mock).mockResolvedValue(undefined);
-    stub(false);
+    stub();
     renderEditor(<AgentConfigFilesEditor uid="u-cc" />);
     fireEvent.click(screen.getByText("Instructions"));
 
@@ -83,22 +81,5 @@ describe("Config files tab — acceptance", () => {
     await waitFor(() => expect(fsApi.reveal).toHaveBeenCalledWith(INSTRUCTIONS.path));
 
     expect(screen.queryByRole("button", { name: /copy/i })).toBeNull();
-  });
-
-  acceptance("agent-registry", "annotate a leftover memory block in the instructions file", () => {
-    stub(true);
-    renderEditor(<AgentConfigFilesEditor uid="u-cc" />);
-    fireEvent.click(screen.getByText("Instructions"));
-
-    expect(screen.getByText(/legacy Coffer memory block/i)).toBeInTheDocument();
-  });
-
-  acceptance("agent-registry", "annotate a leftover memory block in the instructions file", () => {
-    // The annotation follows the read's flag — a clean file carries none.
-    stub(false);
-    renderEditor(<AgentConfigFilesEditor uid="u-cc" />);
-    fireEvent.click(screen.getByText("Instructions"));
-
-    expect(screen.queryByText(/legacy Coffer memory block/i)).toBeNull();
   });
 });
