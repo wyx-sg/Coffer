@@ -1,13 +1,18 @@
 // frontend/src/components/channel/ChannelMachineSelect.tsx
 // The control that says — and changes — which machine runs a channel's
 // adapter (spec channels, "Bind each channel to the one machine that runs it"). One component for both
-// surfaces: the list row's cell and the detail page's machine card, so the
+// surfaces: the list row's cell and the detail page's status strip, so the
 // two can never offer different machines or write the binding differently.
 //
 // It is deliberately NOT the reach control next to it. Reach asks which agents
 // this channel may drive; this asks which machine answers the bot at all, and
 // a channel needs both answers to be live. They sit in different columns, use
 // different vocabulary, and share no field.
+//
+// What a rebind costs, and that this is not reach, is owed to the reader by
+// the spec but is not something to read on every visit, so it lives in
+// MachineBindingHelp — a "?" beside whichever label names the picker — rather
+// than in prose under it.
 //
 // Colour comes from the shared statusColors vocabulary rather than a local
 // choice, because two of the four states are faults and must read as faults
@@ -17,6 +22,7 @@
 // not a problem and is not tinted.
 import { useTranslation } from "react-i18next";
 
+import { HelpTip } from "@/components/HelpTip";
 import {
   Select,
   SelectContent,
@@ -108,21 +114,26 @@ export function ChannelMachineSelect({
             {labelFor(option)}
           </SelectItem>
         ))}
-        {/* "Bind each channel to the one machine that runs it" requires the
-            surface offering the rebind to say what a rebind actually costs:
-            binding a channel to the machine you are sitting at, while another
-            still holds it, leaves both live until that machine's next round.
-            It belongs in the menu rather than beside it — this is the moment
-            the choice is made. */}
-        <div className="max-w-[18rem] space-y-1.5 border-t px-2 pb-1 pt-2">
-          <p className="text-xs text-muted-foreground">{t("channels.machine.handover")}</p>
-          {/* Reach and the binding must never be merged (spec channels "Limit
-              the agents a channel may drive to its scope"), and this menu is
-              where they are most easily confused: the reach control sits one
-              row away in the same card. */}
-          <p className="text-xs text-muted-foreground">{t("channels.machine.notReach")}</p>
-        </div>
       </SelectContent>
     </Select>
+  );
+}
+
+/**
+ * The explanation every surface that offers a rebind owes (spec channels,
+ * "Bind each channel to the one machine that runs it"): a rebind needs no
+ * restart but is not instant on the far side — binding a channel to this
+ * machine while another still holds it leaves both answering until that
+ * machine's next round — and this control is not reach, which the header
+ * sets a row away. Placed beside the picker's label rather than in its menu,
+ * so it can be read before the choice rather than only while making it.
+ */
+export function MachineBindingHelp() {
+  const { t } = useTranslation();
+  return (
+    <HelpTip label={t("channels.machine.helpLabel")}>
+      <p>{t("channels.machine.handover")}</p>
+      <p>{t("channels.machine.notReach")}</p>
+    </HelpTip>
   );
 }

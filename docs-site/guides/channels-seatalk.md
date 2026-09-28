@@ -88,7 +88,7 @@ peer:     not paired
 inbound:  websocket (connected)
 ```
 
-Wait for `connected` before the next step. The channel's page shows the same state on its **SeaTalk connection** card.
+Wait for `connected` before the next step. The channel's page shows the same state as the **SeaTalk connection** badge on its status line.
 
 ## 4. Switch the app to WebSocket delivery
 
@@ -97,7 +97,7 @@ Wait for `connected` before the next step. The channel's page shows the same sta
 
 ## 5. Pair your account
 
-1. On the channel's page choose **Pairing → Generate pairing code**, or run `coffer channel pair my-seatalk`.
+1. On the channel's page choose **Generate pairing code** in the account section, or run `coffer channel pair my-seatalk`.
 2. In SeaTalk, open a direct chat with the bot and send the eight-character code.
 3. The bot confirms. You are the channel's owner.
 
@@ -107,9 +107,9 @@ Send the bot a message. A typing indicator appears at once, the reply streams in
 
 ## Connection states
 
-`coffer channel status` and the **SeaTalk connection** card report the connection as the channel's inbound state. With `--json`, the fields are `inbound.websocket_state` and `inbound.websocket_error`.
+`coffer channel status` and the **SeaTalk connection** badge on the channel's page report the connection as the channel's inbound state. With `--json`, the fields are `inbound.websocket_state` and `inbound.websocket_error`.
 
-| State | Card label | Meaning |
+| State | Badge label | Meaning |
 | --- | --- | --- |
 | `connecting` | Connecting… | Registering with SeaTalk. |
 | `connected` | Connected | Events are flowing. |

@@ -284,7 +284,7 @@ describe("AddChannelDialog", () => {
     },
   );
 
-  test("seatalk asks for its app credentials only, and says what Coffer cannot do for the owner", () => {
+  test("seatalk asks for its app credentials only, with one line saying where they come from", () => {
     installApi(mockApiClient());
     renderDialog();
     fireEvent.click(screen.getByRole("button", { name: /seatalk/i }));
@@ -298,9 +298,12 @@ describe("AddChannelDialog", () => {
     expect(screen.queryByLabelText(/signing secret/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/public callback url/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/tunnel token/i)).not.toBeInTheDocument();
-    // The SDK and the portal setting are stated on the spot.
-    expect(screen.getByText(/~\/\.coffer\/vendor/)).toBeInTheDocument();
-    expect(screen.getByText(/Developer Portal/)).toBeInTheDocument();
+    // Where the credentials come from, and nothing else: installing the SDK
+    // and the portal's delivery setting are setup steps the SeaTalk guide
+    // walks through, not copy to read on every registration.
+    expect(screen.getByText(/SeaTalk Open Platform app/)).toBeInTheDocument();
+    expect(screen.queryByText(/~\/\.coffer\/vendor/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Developer Portal/)).not.toBeInTheDocument();
   });
 
   test("writes nothing at all while this machine's id is unknown", async () => {
