@@ -258,8 +258,8 @@ SNAPSHOTS_KEPT = 10
 
 
 async def snapshot(mirror: GitMirrorPort, commit: str) -> None:
-    """Step 4. Tag the vault's state as it stands just before the apply."""
-    stamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%SZ")
+    """Step 4. Tag the pre-apply state; the microsecond name is its only age."""
+    stamp = datetime.now(tz=UTC).strftime("%Y%m%dT%H%M%S%fZ")
     await mirror.tag(f"{SNAPSHOT_PREFIX}{stamp}", commit)
     for stale in (await mirror.tags(SNAPSHOT_PREFIX))[SNAPSHOTS_KEPT:]:
         await mirror.delete_tag(stale)

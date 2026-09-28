@@ -93,7 +93,8 @@ class GitMirrorPort(Protocol):
         """Create (or move) a lightweight tag — the pre-apply snapshot."""
 
     async def tags(self, prefix: str) -> list[str]:
-        """Tags under ``prefix``, newest first, so old snapshots can be pruned."""
+        """Tags under ``prefix``, newest first by name — the names carry a
+        fixed-width UTC stamp — so old snapshots can be pruned."""
 
     async def delete_tag(self, name: str) -> None: ...
 
