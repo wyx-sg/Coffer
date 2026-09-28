@@ -15,8 +15,8 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Trash2 } from "lucide-react";
 
+import { TableActionButton } from "@/components/table/TableActionButton";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { TableCell, TableRow } from "@/components/ui/table";
@@ -116,14 +116,12 @@ export function SyncMachineRow({ machine }: { machine: Machine }) {
       </TableCell>
       <TableCell className="text-right">
         {machine.is_self ? null : (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+          <TableActionButton
+            icon={Trash2}
+            label={t("sync.machines.retire")}
+            destructive
             onClick={() => setConfirming(true)}
-          >
-            <Trash2 className="mr-1.5 size-3.5" /> {t("sync.machines.retire")}
-          </Button>
+          />
         )}
         <ConfirmDialog
           open={confirming}

@@ -22,12 +22,13 @@
 // hooks; only the adopt success is confirmed here.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FolderOpen } from "lucide-react";
+import { FolderOpen, Import } from "lucide-react";
 
 import { AgentUnmanagedSkillsBulkActions } from "@/components/agents/AgentUnmanagedSkillsBulkActions";
 import { DataTable, type Column } from "@/components/DataTable";
+import { RowDeleteButton } from "@/components/table/RowDeleteButton";
+import { TableActionButton } from "@/components/table/TableActionButton";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
@@ -100,24 +101,21 @@ export function UnmanagedSkillsSection({ agentUid }: { agentUid: string }) {
             : undefined;
         return (
           <span className="flex justify-end gap-2">
-            <Button
-              size="sm"
-              variant="outline"
+            <TableActionButton
+              icon={FolderOpen}
+              label={t("agents.skillsTab.openFolder")}
               onClick={() =>
                 void open(s.path, "").catch(() =>
                   toast.error(t("agents.skillsTab.openFolderFailed")),
                 )
               }
-            >
-              <FolderOpen className="size-3.5" />
-              {t("agents.skillsTab.openFolder")}
-            </Button>
+            />
             {/* Wrapper span carries the disabled-reason tooltip — the disabled
                 button itself has pointer-events:none so it can't show one. */}
             <span title={adoptHint}>
-              <Button
-                size="sm"
-                variant="outline"
+              <TableActionButton
+                icon={Import}
+                label={t("agents.skillsTab.adopt")}
                 disabled={!s.valid || s.foreign_link || adopt.isPending}
                 onClick={() =>
                   adopt.mutate(
@@ -128,18 +126,12 @@ export function UnmanagedSkillsSection({ agentUid }: { agentUid: string }) {
                     },
                   )
                 }
-              >
-                {t("agents.skillsTab.adopt")}
-              </Button>
+              />
             </span>
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => setDeleteTarget(s)}
-            >
-              {t("common.delete")}
-            </Button>
+            <RowDeleteButton
+              ariaLabel={`${t("common.delete")}: ${s.name}`}
+              onDelete={() => setDeleteTarget(s)}
+            />
           </span>
         );
       },

@@ -6,9 +6,9 @@
 // dialog. Kept in its own file to bound AgentPluginsTab.tsx.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Power, PowerOff } from "lucide-react";
+import { PackageMinus, Power, PowerOff } from "lucide-react";
 
-import { DESTRUCTIVE_ACTION_CLASS } from "@/components/table/BulkDeleteButton";
+import { TableActionButton } from "@/components/table/TableActionButton";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -51,34 +51,26 @@ export function AgentPluginsBulkActions({
 
   return (
     <>
-      <Button
-        size="sm"
-        variant="outline"
+      <TableActionButton
+        icon={Power}
+        label={t("common.bulk.enable")}
         disabled={toggle.isPending}
         onClick={() => void setAll(true)}
-      >
-        <Power className="mr-1.5 size-3.5" />
-        {t("common.bulk.enable")}
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
+      />
+      <TableActionButton
+        icon={PowerOff}
+        label={t("common.bulk.disable")}
         disabled={toggle.isPending}
         onClick={() => void setAll(false)}
-      >
-        <PowerOff className="mr-1.5 size-3.5" />
-        {t("common.bulk.disable")}
-      </Button>
+      />
       {canUninstall ? (
-        <Button
-          size="sm"
-          variant="outline"
-          className={DESTRUCTIVE_ACTION_CLASS}
+        <TableActionButton
+          icon={PackageMinus}
+          label={t("agents.workspace.pluginsTab.uninstall")}
+          destructive
           disabled={uninstall.isPending}
           onClick={() => setConfirmUninstall(true)}
-        >
-          {t("agents.workspace.pluginsTab.uninstall")}
-        </Button>
+        />
       ) : null}
 
       <Dialog open={confirmUninstall} onOpenChange={setConfirmUninstall}>

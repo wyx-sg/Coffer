@@ -254,7 +254,9 @@ describe("AgentSkillsTab", () => {
       renderTab();
 
       const section = await screen.findByTestId("unmanaged-skills");
-      fireEvent.click(within(section).getByRole("button", { name: en.common.delete }));
+      fireEvent.click(
+        within(section).getByRole("button", { name: new RegExp(`^${en.common.delete}: `) }),
+      );
 
       const dialog = await screen.findByRole("dialog");
       expect(within(dialog).getByText(en.agents.skillsTab.deleteConfirm)).toBeInTheDocument();

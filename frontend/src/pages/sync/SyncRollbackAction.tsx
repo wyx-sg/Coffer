@@ -21,7 +21,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Undo2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { TableActionButton } from "@/components/table/TableActionButton";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { RunRecord } from "@/lib/api/sync";
 import { useRollbackRound } from "@/lib/hooks/useSync";
@@ -46,16 +46,12 @@ export function SyncRollbackAction({ run }: { run: RunRecord }) {
     // The row opens its own detail on click; without this the click that
     // raises the dialog would also expand the row behind it.
     <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
+      <TableActionButton
+        icon={Undo2}
+        label={t("sync.rollback.action")}
         onClick={() => setOpen(true)}
         disabled={rollback.isPending}
-      >
-        <Undo2 className="mr-1.5 size-3.5" aria-hidden />
-        {t("sync.rollback.action")}
-      </Button>
+      />
 
       <ConfirmDialog
         open={open}

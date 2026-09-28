@@ -11,7 +11,7 @@
 import { useTranslation } from "react-i18next";
 import { Power, PowerOff } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { TableActionButton } from "@/components/table/TableActionButton";
 import { capabilitiesApi, type CapabilityType } from "@/lib/hooks/useMcpCapabilityMutations";
 import { mcpCapabilitiesKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
@@ -44,22 +44,18 @@ export function CapabilityBulkActions({ serverUid, kind, rows, onDone }: Props) 
 
   return (
     <>
-      <Button
-        size="sm"
-        variant="outline"
+      <TableActionButton
+        icon={Power}
+        label={t("common.bulk.enable")}
         disabled={bulk.isPending}
         onClick={() => void runAll("enable")}
-      >
-        <Power className="mr-1.5 size-3.5" /> {t("common.bulk.enable")}
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
+      />
+      <TableActionButton
+        icon={PowerOff}
+        label={t("common.bulk.disable")}
         disabled={bulk.isPending}
         onClick={() => void runAll("disable")}
-      >
-        <PowerOff className="mr-1.5 size-3.5" /> {t("common.bulk.disable")}
-      </Button>
+      />
     </>
   );
 }

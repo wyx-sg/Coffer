@@ -9,9 +9,10 @@
 // .bak per touched file) and owns its own confirm dialog. Kept separate to
 // bound the tab file.
 import { useTranslation } from "react-i18next";
+import { Import } from "lucide-react";
 
 import { BulkDeleteButton } from "@/components/table/BulkDeleteButton";
-import { Button } from "@/components/ui/button";
+import { TableActionButton } from "@/components/table/TableActionButton";
 import { agentsApi, type McpEntryOut } from "@/lib/api/agents";
 import { agentMcpEntriesKey, resourcesByKindKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
@@ -62,14 +63,12 @@ export function AgentMcpServersBulkActions({
 
   return (
     <>
-      <Button
-        size="sm"
-        variant="outline"
+      <TableActionButton
+        icon={Import}
+        label={t("agents.workspace.mcp.adopt")}
         disabled={adopt.isPending}
         onClick={() => void adoptAll()}
-      >
-        {t("agents.workspace.mcp.adopt")}
-      </Button>
+      />
       <BulkDeleteButton
         title={t("common.delete")}
         description={t("agents.workspace.mcp.bulkDeleteConfirm", { count: rows.length })}

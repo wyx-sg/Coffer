@@ -7,13 +7,14 @@
 // `claude plugin` CLI to uninstall).
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { PackageMinus } from "lucide-react";
 
 import { PluginDetailRow } from "@/components/agents/AgentPluginDetail";
 import { AgentPluginsBulkActions } from "@/components/agents/AgentPluginsBulkActions";
 import { DataTable, type Column } from "@/components/DataTable";
+import { TableActionButton } from "@/components/table/TableActionButton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Switch } from "@/components/ui/switch";
@@ -90,17 +91,15 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
       className: "text-right",
       cell: (p) =>
         canUninstall ? (
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+          <TableActionButton
+            icon={PackageMinus}
+            label={t("agents.workspace.pluginsTab.uninstall")}
+            destructive
             onClick={(e) => {
               e.stopPropagation();
               setUninstallTarget(p);
             }}
-          >
-            {t("agents.workspace.pluginsTab.uninstall")}
-          </Button>
+          />
         ) : (
           <span className="text-xs text-muted-foreground">
             {t("agents.workspace.pluginsTab.claudeUninstallHint")}

@@ -21,8 +21,9 @@
 // sense.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Check, CloudDownload, X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { TableActionButton } from "@/components/table/TableActionButton";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { PendingConfirmation } from "@/lib/api/sync";
 import { useConfirmRound, useRebuildFromRemote, useRejectRound } from "@/lib/hooks/useSync";
@@ -48,16 +49,26 @@ export function SyncHeldRoundActions({ pending }: { pending: PendingConfirmation
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      <Button variant="destructive" size="sm" disabled={busy} onClick={() => setConfirming(true)}>
-        {confirm.isPending ? t("sync.pending.confirming") : t("sync.pending.confirm")}
-      </Button>
-      <Button variant="secondary" size="sm" disabled={busy} onClick={() => reject.mutate()}>
-        {reject.isPending ? t("sync.pending.rejecting") : t("sync.pending.reject")}
-      </Button>
+      <TableActionButton
+        icon={Check}
+        label={confirm.isPending ? t("sync.pending.confirming") : t("sync.pending.confirm")}
+        destructive
+        disabled={busy}
+        onClick={() => setConfirming(true)}
+      />
+      <TableActionButton
+        icon={X}
+        label={reject.isPending ? t("sync.pending.rejecting") : t("sync.pending.reject")}
+        disabled={busy}
+        onClick={() => reject.mutate()}
+      />
       {publishes ? (
-        <Button variant="ghost" size="sm" disabled={busy} onClick={() => setRebuilding(true)}>
-          {rebuild.isPending ? t("sync.pending.rebuilding") : t("sync.pending.rebuild")}
-        </Button>
+        <TableActionButton
+          icon={CloudDownload}
+          label={rebuild.isPending ? t("sync.pending.rebuilding") : t("sync.pending.rebuild")}
+          disabled={busy}
+          onClick={() => setRebuilding(true)}
+        />
       ) : null}
 
       <ConfirmDialog

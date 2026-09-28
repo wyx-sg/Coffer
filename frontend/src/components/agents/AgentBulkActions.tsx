@@ -9,7 +9,7 @@
 import { useTranslation } from "react-i18next";
 import { Plug, Unplug } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { TableActionButton } from "@/components/table/TableActionButton";
 import { agentsApi, type AgentOut } from "@/lib/api/agents";
 import { agentMcpInstallKey, agentsKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
@@ -28,22 +28,18 @@ export function AgentBulkActions({ agents, onDone }: { agents: AgentOut[]; onDon
 
   return (
     <>
-      <Button
-        size="sm"
-        variant="outline"
+      <TableActionButton
+        icon={Plug}
+        label={t("agents.bulkInstallMcp")}
         disabled={bulk.isPending}
         onClick={() => void run(agentsApi.mcpInstall)}
-      >
-        <Plug className="mr-1.5 size-3.5" /> {t("agents.bulkInstallMcp")}
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
+      />
+      <TableActionButton
+        icon={Unplug}
+        label={t("agents.mcp.uninstall")}
         disabled={bulk.isPending}
         onClick={() => void run(agentsApi.mcpUninstall)}
-      >
-        <Unplug className="mr-1.5 size-3.5" /> {t("agents.mcp.uninstall")}
-      </Button>
+      />
     </>
   );
 }

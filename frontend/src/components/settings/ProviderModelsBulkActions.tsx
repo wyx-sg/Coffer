@@ -5,7 +5,7 @@
 import { useTranslation } from "react-i18next";
 import { Power, PowerOff } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { TableActionButton } from "@/components/table/TableActionButton";
 import type { ProviderModel } from "@/lib/api/providers";
 
 export function ProviderModelsBulkActions({
@@ -27,12 +27,12 @@ export function ProviderModelsBulkActions({
   // on/off is the whole of what it can be.
   return (
     <>
-      <Button size="sm" variant="outline" onClick={() => apply(true)}>
-        <Power className="mr-1.5 size-3.5" /> {t("common.bulk.enable")}
-      </Button>
-      <Button size="sm" variant="outline" onClick={() => apply(false)}>
-        <PowerOff className="mr-1.5 size-3.5" /> {t("common.bulk.disable")}
-      </Button>
+      <TableActionButton icon={Power} label={t("common.bulk.enable")} onClick={() => apply(true)} />
+      <TableActionButton
+        icon={PowerOff}
+        label={t("common.bulk.disable")}
+        onClick={() => apply(false)}
+      />
     </>
   );
 }
