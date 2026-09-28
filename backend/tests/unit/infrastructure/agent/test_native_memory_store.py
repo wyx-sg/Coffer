@@ -121,3 +121,39 @@ def test_scan_index_with_facts_counts_only_facts(tmp_path: pathlib.Path) -> None
 
     out = FileNativeMemoryScanner().scan(projects, "memory")
     assert out[0].item_count == 2
+
+
+def test_scan_skips_a_cwd_that_is_not_this_project(tmp_path: pathlib.Path) -> None:
+    """A desktop session starts in a scratch workspace and then moves into the
+    project, so a transcript's first ``cwd`` is somewhere else; only a ``cwd``
+    that encodes to the slug names the project."""
+    import json
+
+    projects = tmp_path / "projects"
+    slug = "-Users-yuxing-wu-WorkEnv-AI-Coffer"
+    _write(projects / slug / "memory" / "a.md")
+    scratch = "/Users/yuxing.wu/Library/Application Support/Claude/scratch-2026-09-28-533a6b"
+    (projects / slug / "0a.jsonl").write_text(json.dumps({"cwd": scratch}) + "\n", encoding="utf-8")
+    (projects / slug / "0b.jsonl").write_text(
+        json.dumps({"cwd": scratch})
+        + "\n"
+        + json.dumps({"cwd": "/Users/yuxing.wu/WorkEnv/AI/Coffer"})
+        + "\n",
+        encoding="utf-8",
+    )
+
+    out = FileNativeMemoryScanner().scan(projects, "memory")
+    assert out[0].project_path == "/Users/yuxing.wu/WorkEnv/AI/Coffer"
+
+
+def test_scan_reports_no_path_when_no_cwd_matches(tmp_path: pathlib.Path) -> None:
+    import json
+
+    projects = tmp_path / "projects"
+    slug = "-Users-dev-proj"
+    _write(projects / slug / "memory" / "a.md")
+    (projects / slug / "s.jsonl").write_text(
+        json.dumps({"cwd": "/Users/dev/elsewhere"}) + "\n", encoding="utf-8"
+    )
+
+    assert FileNativeMemoryScanner().scan(projects, "memory")[0].project_path is None

@@ -60,7 +60,7 @@ from typing import Any
 
 import yaml
 
-from coffer.domain.agent.native_memory import resolve_project_slug
+from coffer.domain.agent.native_memory import encode_slug, resolve_project_slug
 from coffer.domain.memory.errors import UnreadableMemory
 from coffer.domain.memory.note import TYPE_FEEDBACK, TYPE_PROJECT, TYPE_USER
 from coffer.domain.memory.reader import RawEntry, SourceFile
@@ -137,7 +137,7 @@ class ClaudeCodeMemoryReader:
 
         entry_type = _TYPE_MAP.get(raw_type, TYPE_PROJECT)
         project_dir = path.parent.parent
-        project_root = cwd_from_transcripts(project_dir)
+        project_root = cwd_from_transcripts(project_dir, encode_slug)
         if project_root is None:
             _, project_root = resolve_project_slug(project_dir.name, _list_dirs)
         return (
