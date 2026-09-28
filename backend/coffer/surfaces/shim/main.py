@@ -198,6 +198,29 @@ class _Bridge:
                 self._emit_error(envelope.get("id"), code=-32603, message=f"shim: {e2}")
                 return
 
+        # A restart on the same port rotates the token: the old one is answered
+        # with 401, not a connect error, so recover here too. A concurrent call
+        # may already have rebound us, in which case just retry with the new
+        # token rather than re-resolving.
+        if response.status_code == 401:
+            sent_token = response.request.headers.get("X-Coffer-Token")
+            rebound = sent_token != self._headers.get("X-Coffer-Token")
+            if not rebound:
+                try:
+                    rebound = await self._recover(client)
+                except Exception:
+                    _logger.exception("shim.recover_failed")
+            if rebound:
+                with contextlib.suppress(Exception):
+                    response = await client.post(
+                        "/mcp", json=envelope, headers=self._request_headers()
+                    )
+                    _logger.info(
+                        "shim.out_after_recover status=%s len=%s",
+                        response.status_code,
+                        len(response.text or ""),
+                    )
+
         if "Mcp-Session-Id" in response.headers:
             self._session_id = response.headers["Mcp-Session-Id"]
 
@@ -331,9 +354,14 @@ class _Bridge:
             async with client.stream("GET", "/mcp", headers=headers) as response:
                 if response.status_code != 200:
                     _logger.warning(
-                        "shim.sse_unexpected_status",
-                        extra={"status": response.status_code},
+                        "shim.sse_unexpected_status status=%s",
+                        response.status_code,
                     )
+                    if response.status_code == 401:
+                        # The daemon restarted with a new token (see
+                        # _handle_envelope). Without this the stream was
+                        # retried every 5 s forever with the dead token.
+                        await self._recover(client)
                     return False
                 async for raw in response.aiter_lines():
                     if self._stop.is_set():

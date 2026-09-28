@@ -37,6 +37,7 @@ import asyncio
 import contextlib
 import logging
 import threading
+import time
 from collections.abc import Awaitable, Callable
 from types import ModuleType
 from typing import Any
@@ -51,6 +52,10 @@ _BACKOFF_MAX_SECONDS = 30.0
 # app's single connection. Back off long enough not to fight it.
 _KICK_BACKOFF_SECONDS = 60.0
 _JOIN_TIMEOUT_SECONDS = 5.0
+# A connection that stayed up this long was healthy: its end is SeaTalk's
+# routine close, not a fault, so the ladder starts again from the bottom. One
+# that dies sooner is flapping and keeps climbing.
+_HEALTHY_AFTER_SECONDS = 30.0
 
 # ``(channel_uid, envelope) -> None`` — ChannelService.ingest_event in
 # production, which does the unknown-channel and adapter-down checks and hands
@@ -85,6 +90,7 @@ class SeaTalkWebSocketConnector:
         backoff_max: float = _BACKOFF_MAX_SECONDS,
         kick_backoff: float = _KICK_BACKOFF_SECONDS,
         join_timeout: float = _JOIN_TIMEOUT_SECONDS,
+        healthy_after: float = _HEALTHY_AFTER_SECONDS,
     ) -> None:
         self._name = name
         self._app_id = app_id
@@ -95,6 +101,9 @@ class SeaTalkWebSocketConnector:
         self._backoff_max = backoff_max
         self._kick_backoff = kick_backoff
         self._join_timeout = join_timeout
+        self._healthy_after = healthy_after
+        # Monotonic time the current connection registered; None until it does.
+        self._connected_since: float | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._task: asyncio.Task[None] | None = None
         self._thread: threading.Thread | None = None
@@ -206,6 +215,11 @@ class SeaTalkWebSocketConnector:
                     self._set_state("error", f"{type(e).__name__}: {e}")
             if self._stopping.is_set():
                 return
+            if self._was_healthy():
+                # Without this the ladder only ever grew: a few DNS failures
+                # pushed it to the cap and every later routine close waited
+                # the full 30 s before reconnecting.
+                delay = self._backoff_initial
             wait = self._kick_backoff if kicked else delay
             # A kick is a standing condition, not a fault ladder: it keeps its
             # flat wait and leaves the exponential one where it was.
@@ -216,6 +230,7 @@ class SeaTalkWebSocketConnector:
 
     async def _one_connection(self) -> bool:
         """Hold one connection until it ends. Returns True when it was kicked."""
+        self._connected_since = None
         sdk = await asyncio.to_thread(self._loader)
         dispatcher = _require(sdk, "EventDispatcher")()
         dispatcher.on_event(self._on_event)
@@ -233,6 +248,7 @@ class SeaTalkWebSocketConnector:
         client = _require(sdk, "Client")(self._app_id, self._app_secret, dispatcher=dispatcher)
         await asyncio.to_thread(client.connect)
         self._client = client
+        self._connected_since = time.monotonic()
         self._set_state("connected", None)
         error = await self._listen(client)
         self._client = None
@@ -244,9 +260,22 @@ class SeaTalkWebSocketConnector:
         kicked = self._was_kicked()
         if kicked:
             self._set_state("kicked", self._kick_detail(None))
-        elif not self._stopping.is_set():
+        elif self._stopping.is_set():
+            pass
+        elif self._was_healthy():
+            # SeaTalk closes long-lived connections on its own every few
+            # minutes; reconnecting is the whole of the response, so this is
+            # not reported as an error.
+            _logger.info("channel.websocket.closed_by_peer", extra={"channel": self._name})
+            self._set_state("connecting", None)
+        else:
             self._set_state("error", "the SeaTalk connection closed")
         return kicked
+
+    def _was_healthy(self) -> bool:
+        """Whether the connection that just ended stayed up past the threshold."""
+        since = self._connected_since
+        return since is not None and time.monotonic() - since >= self._healthy_after
 
     # -- kick bookkeeping ----------------------------------------------------
     #
