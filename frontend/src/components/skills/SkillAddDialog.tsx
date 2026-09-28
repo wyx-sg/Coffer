@@ -85,7 +85,9 @@ function LocalImportTab({ onSuccess, onCancel }: { onSuccess: () => void; onCanc
       className="space-y-3"
     >
       <div className="space-y-1">
-        <Label htmlFor="skill-import-path">{t("skills.path")}</Label>
+        <Label htmlFor="skill-import-path" required>
+          {t("skills.path")}
+        </Label>
         <FolderPickerField
           inputId="skill-import-path"
           ariaLabel={t("skills.path")}

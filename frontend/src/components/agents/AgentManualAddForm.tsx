@@ -73,7 +73,9 @@ export function AgentManualAddForm({ open, onToggle, formId, onSubmit }: Props) 
       {open ? (
         <form id={formId} onSubmit={submit} className="space-y-3 pt-1">
           <div className="space-y-1.5">
-            <Label htmlFor={`${formId}-type`}>{t("agents.type")}</Label>
+            <Label htmlFor={`${formId}-type`} required>
+              {t("agents.type")}
+            </Label>
             <Select
               value={form.type}
               onValueChange={(v) => setForm({ ...form, type: v as AgentType })}
