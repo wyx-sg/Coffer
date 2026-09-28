@@ -99,7 +99,7 @@ A direct chat is one conversation. To run a second task beside it without mixing
 
 How the thread appears depends on the platform. On SeaTalk it is a message from the bot that you reply under. On Telegram it is a private-chat topic, which needs the bot's Threaded Mode turned on in BotFather. In a group, every thread is already its own conversation, so `/thread` is not needed there.
 
-Each turn tells the agent it is on a chat channel: keep replies concise, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. While the `memory` feature is on, the turn's system prompt also carries the [memory](/guides/memory#in-channel-turns) index, since a channel turn runs no session-start hook.
+Each turn tells the agent it is on a chat channel: keep replies concise but quote the key log lines, errors and IDs behind a finding verbatim, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. While the `memory` feature is on, the turn's system prompt also carries the [memory](/guides/memory#in-channel-turns) index, since a channel turn runs no session-start hook.
 
 ## Commands
 
