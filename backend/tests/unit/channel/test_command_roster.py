@@ -48,6 +48,8 @@ def test_names_returns_typed_forms() -> None:
         "/stop",
         "/status",
         "/save",
+        "/thread",
+        "/threads",
         "/help",
     }
 
@@ -63,6 +65,10 @@ def test_names_returns_typed_forms() -> None:
         ("/effort", True),
         ("/new", False),
         ("/stop", False),
+        # Opening a thread posts into the chat either way; the list is the
+        # asker's own business.
+        ("/thread", False),
+        ("/threads", True),
     ],
 )
 def test_group_private_marks_the_asker_only_commands(command: str, private: bool) -> None:

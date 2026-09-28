@@ -47,6 +47,8 @@ COMMAND_ROSTER: tuple[ChannelCommand, ...] = (
     ChannelCommand("stop", "", "Interrupt the running turn"),
     ChannelCommand("status", "", "Conversation, agent, and turn state", True),
     ChannelCommand("save", "[collection]", "Save the document you just sent into a collection"),
+    ChannelCommand("thread", "[title]", "Open a parallel conversation in its own thread"),
+    ChannelCommand("threads", "", "List this chat's parallel conversations", True),
     ChannelCommand("help", "", "List the commands", True),
 )
 

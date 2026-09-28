@@ -16,8 +16,10 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     delete,
+    func,
     select,
 )
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -62,6 +64,11 @@ class ChannelThreadConversationModel(Base):
     active_conversation_id: Mapped[str | None] = mapped_column(String, nullable=True)
     preferred_agent: Mapped[str | None] = mapped_column(String, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    # A parallel thread `/thread` opened carries its number within the chat and
+    # its title (see "Open parallel conversations in a direct chat"); NULL on
+    # every other row.
+    parallel_ordinal: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    parallel_title: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         UniqueConstraint(
@@ -211,6 +218,8 @@ def _thread_to_domain(row: ChannelThreadConversationModel) -> ChannelThreadConve
         active_conversation_id=row.active_conversation_id,
         preferred_agent=row.preferred_agent,
         updated_at=_tz(row.updated_at),
+        parallel_ordinal=row.parallel_ordinal,
+        parallel_title=row.parallel_title,
     )
 
 
@@ -285,6 +294,56 @@ class ChannelThreadConversationRepo:
                 row.preferred_agent = preferred_agent
                 row.updated_at = datetime.now(tz=UTC)
             await session.commit()
+
+    async def next_parallel_ordinal(self, resource_id: int, chat_id: str) -> int:
+        # Over every row of the chat, not only live ones: a number stays taken
+        # after its conversation is replaced, so a mark never names two threads.
+        async with self._sm() as session:
+            highest = (
+                await session.execute(
+                    select(func.max(ChannelThreadConversationModel.parallel_ordinal)).where(
+                        ChannelThreadConversationModel.resource_id == resource_id,
+                        ChannelThreadConversationModel.chat_id == chat_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            return int(highest or 0) + 1
+
+    async def open_parallel(
+        self, resource_id: int, chat_id: str, thread_id: str, ordinal: int, title: str
+    ) -> None:
+        async with self._sm() as session:
+            row = await self._row_for_update(session, resource_id, chat_id, thread_id)
+            if row is None:
+                row = ChannelThreadConversationModel(
+                    resource_id=resource_id,
+                    chat_id=chat_id,
+                    thread_id=thread_id,
+                    active_conversation_id=None,
+                    preferred_agent=None,
+                )
+                session.add(row)
+            row.parallel_ordinal = ordinal
+            row.parallel_title = title
+            row.updated_at = datetime.now(tz=UTC)
+            await session.commit()
+
+    async def list_parallel(
+        self, resource_id: int, chat_id: str
+    ) -> list[ChannelThreadConversation]:
+        async with self._sm() as session:
+            rows = (
+                await session.execute(
+                    select(ChannelThreadConversationModel)
+                    .where(
+                        ChannelThreadConversationModel.resource_id == resource_id,
+                        ChannelThreadConversationModel.chat_id == chat_id,
+                        ChannelThreadConversationModel.parallel_ordinal.is_not(None),
+                    )
+                    .order_by(ChannelThreadConversationModel.parallel_ordinal.desc())
+                )
+            ).scalars()
+            return [_thread_to_domain(row) for row in rows]
 
     @staticmethod
     async def _row_for_update(

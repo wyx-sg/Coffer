@@ -303,17 +303,20 @@ flowchart TD
     E -- no --> P["Try pairing code"]
     E -- yes --> F["Fold quoted message and thread context"]
     F --> G{"Slash command?"}
-    G -- yes --> H["ChannelCommands"]
-    G -- no --> I["Prefix message origin"]
-    I --> J["TurnDriver.submit"]
+    H0 --> H["ChannelCommands"]
+    G -- yes --> H0["Release (or, for /stop, drop) the held burst first"]
+    G -- no --> I["Acknowledge, hold in InboundBurst"]
+    I --> I2["Quiet window closes: one origin + every body"]
+    I2 --> J["TurnDriver.submit"]
     J --> K["TurnOrchestrator.enqueue_message"]
     K --> L["on_start: render events to IM"]
 ```
 
 - **Owner gate and pairing.** A direct chat must match the paired peer. An unpaired chat can only present a pairing code: an 8-character single-use code, one-hour TTL, bounded wrong guesses, held in memory only. Strangers are ignored silently: no reply and no turn, so the bot never reveals it is alive. In a group, a message must be addressed to the bot and come from the owner's sender id. An unprovable sender is refused, never assumed to be the owner.
-- **Conversation mapping.** Conversation identity is `(channel, chat, thread)`, stored in `channel_thread_conversations`. A direct chat and each group thread are independent conversations, so concurrent turns in different threads never contend. On first use, `open_conversation` creates an ordinary conversation through `ChatService`, with the thread's sticky `/agent` choice if it is still in scope, otherwise the channel's default agent. If the conversation has been deleted, the next message creates a fresh one.
+- **Conversation mapping.** Conversation identity is `(channel, chat, thread)`, stored in `channel_thread_conversations`. A direct chat and each group thread are independent conversations, so concurrent turns in different threads never contend. Each inbound entry resolves a `conversation_thread_id` apart from the reply `thread_id` (`parallel_threads.py`): a direct-chat thread keys to the direct chat's `""` conversation unless `/thread` opened it (its row has a `parallel_ordinal`) or the transport says direct-chat threads are deliberate (`direct_threads_are_replies` is false, as on Telegram). Keying uses `conversation_thread_id`; sending uses `thread_id`, so a casual reply-in-thread keeps the direct chat's context and is still answered in its thread. On first use, `open_conversation` creates an ordinary conversation through `ChatService`, with the thread's sticky `/agent` choice if it is still in scope, otherwise the channel's default agent. If the conversation has been deleted, the next message creates a fresh one.
 - **Commands** (`/new`, `/stop`, `/status`, `/help`, plus agent, model and effort switching, and `/save` into a [knowledge](/architecture/knowledge) collection) are handled by `ChannelCommands` and never become turns. Control commands bypass the queue.
-- **Turns.** The message text is prefixed with its origin (platform, chat kind and title, thread, sender), so the agent knows where it is answering even after `/agent` swaps it mid-conversation. When the conversation already has `QUEUE_MAX = 10` messages pending, `TurnDriver` drops the new one and replies `⚠️ Busy — message dropped, try again.`, so a flood cannot pile up forever. Otherwise it reacts with a receipt acknowledgement where the transport supports reactions, then calls `enqueue_message` with an `on_start` sink.
+- **Bursts.** `InboundBurst` (`inbound_burst.py`) holds each `(channel, chat, thread)`'s messages until a quiet window passes (1.5 s after text, 5 s after a forwarded record or bare files) and releases them as one `QueuedInbound`: the last message's origin, every body in order, every attachment. `TurnDriver.acknowledge` sends the receipt (a 👀 reaction, else typing) at arrival. A command awaits the release of its key first, and `/stop` drops what is held. Releases of one key are chained, so they reach the queue in order. Ordering before that is the transport's job: SeaTalk chains each chat's websocket ingests, and Telegram's poller already awaits updates one at a time.
+- **Turns.** The message text is prefixed with its origin (platform, chat kind and title, thread, sender), so the agent knows where it is answering even after `/agent` swaps it mid-conversation. When the conversation already has `QUEUE_MAX = 10` messages pending, `TurnDriver` drops the new one and replies `⚠️ Busy — message dropped, try again.`, so a flood cannot pile up forever. Otherwise it calls `enqueue_message` with an `on_start` sink.
 
 ### Rendering
 

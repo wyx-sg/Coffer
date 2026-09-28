@@ -16,6 +16,8 @@ ChannelConfig (discriminator: channel_type)
 │   ├── default_agent_config: dict | None
 │   ├── require_mention: bool = True        # group gating
 │   ├── ignore_other_mentions: bool = False # group gating
+│   ├── wait_after_text_seconds: float = 1.5     # burst quiet window after text (0–60)
+│   ├── wait_after_forward_seconds: float = 5.0  # …after a forward or bare files (0–60)
 │   └── runs_on: str | None = None          # machine_id that runs the adapter
 ├── TelegramChannelConfig
 │   ├── channel_type: "telegram"
@@ -160,10 +162,12 @@ already running".
 | `id`                     | INTEGER PK                                   |                                                                                                              |
 | `resource_id`            | INTEGER, FK `resources.id` ON DELETE CASCADE | the channel                                                                                                  |
 | `chat_id`                | TEXT                                         | the DM, or the group                                                                                         |
-| `thread_id`              | TEXT                                         | `""` is the DM or a group's main chat; each group thread is its own row                                       |
+| `thread_id`              | TEXT                                         | `""` is the DM or a group's main chat; each group thread and each parallel thread is its own row             |
 | `active_conversation_id` | TEXT NULL                                    | this thread's current conversation; cleared when the conversation disappears                                  |
 | `preferred_agent`        | TEXT NULL                                    | this thread's sticky `/agent` choice; NULL → the channel's `default_agent`                                    |
 | `updated_at`             | DATETIME (UTC)                               |                                                                                                              |
+| `parallel_ordinal`       | INTEGER NULL                                 | set on a parallel thread `/thread` opened: its number within the chat; NULL on every other row                |
+| `parallel_title`         | TEXT NULL                                    | that thread's title; its mark `🧵#N title` is built from the two                                              |
 
 Constraints: `UNIQUE (resource_id, chat_id, thread_id)`; index on `resource_id`.
 
@@ -176,10 +180,22 @@ admits it ("Limit the agents a channel may drive to its scope"), so narrowing a 
 This table is machine-local and does **not** sync — it names conversations, and
 conversations do not travel.
 
+A row is only keyed by a direct-chat thread when that thread is a conversation
+of its own ("Key conversation identity by channel, chat and thread"): a
+parallel thread (a row with a `parallel_ordinal`), or any private-chat topic on
+a transport whose direct-chat threads are deliberate (Telegram). A casual
+reply-in-thread in a SeaTalk direct chat keys to the chat's `""` row. The
+ordinal is `max + 1` over the chat's rows, so a number is never reused after
+its conversation is replaced ("Open parallel conversations in a direct chat").
+
 Migration: `20260708_0041_channel_thread_conversations.py` creates it and
 backfills every existing peer's conversation and sticky agent as that peer's
 `thread_id=""` row, so no live DM conversation is lost. Idempotent on a database
 that already holds the table; reversible by dropping it.
+`20260928_0104_channel_parallel_threads.py` adds `parallel_ordinal` and
+`parallel_title`, nullable, with no backfill: the direct-chat thread rows that
+exist were casual replies, and leaving them without an ordinal is what folds
+them into the direct chat's conversation. Reversible by dropping both columns.
 
 ## Migrations that touch a channel's config
 

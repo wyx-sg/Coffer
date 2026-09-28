@@ -242,6 +242,7 @@ def build_inbound_message(
         addressed=addressed,
         mentions_others=mentions_other,
         thread_id=str(message.get("message_thread_id") or ""),
+        forwarded=_is_forwarded(message),
         attachments=attachments,
         # Present when the user sent an ephemeral command, and the
         # handle that lets the bot answer them privately in the group.

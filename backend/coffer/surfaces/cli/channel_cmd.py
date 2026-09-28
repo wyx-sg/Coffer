@@ -84,14 +84,38 @@ _IGNORE_OTHER_MENTIONS = typer.Option(
 )
 
 
-def _gating(require_mention: bool | None, ignore_other_mentions: bool | None) -> dict[str, bool]:
-    """The group-gating config keys the user actually passed."""
-    out: dict[str, bool] = {}
-    if require_mention is not None:
-        out["require_mention"] = require_mention
-    if ignore_other_mentions is not None:
-        out["ignore_other_mentions"] = ignore_other_mentions
-    return out
+_WAIT_AFTER_TEXT = typer.Option(
+    None,
+    "--wait-after-text",
+    min=0,
+    max=60,
+    help="Seconds to wait after a text message for more before answering (default: 1.5; 0 = none)",
+)
+_WAIT_AFTER_FORWARD = typer.Option(
+    None,
+    "--wait-after-forward",
+    min=0,
+    max=60,
+    help="Seconds to wait after a forwarded record or files with no text (default: 5; 0 = none)",
+)
+
+
+def _settings(
+    require_mention: bool | None,
+    ignore_other_mentions: bool | None,
+    wait_after_text: float | None = None,
+    wait_after_forward: float | None = None,
+) -> dict[str, bool | float]:
+    """The config keys the user actually passed: group gating ("Configure when the
+    bot answers in a group") and the quiet windows ("Take a burst of messages as
+    one turn")."""
+    passed: dict[str, bool | float | None] = {
+        "require_mention": require_mention,
+        "ignore_other_mentions": ignore_other_mentions,
+        "wait_after_text_seconds": wait_after_text,
+        "wait_after_forward_seconds": wait_after_forward,
+    }
+    return {key: value for key, value in passed.items() if value is not None}
 
 
 @app.command("register")
@@ -125,6 +149,8 @@ def register(
     ),
     require_mention: bool | None = _REQUIRE_MENTION,
     ignore_other_mentions: bool | None = _IGNORE_OTHER_MENTIONS,
+    wait_after_text: float | None = _WAIT_AFTER_TEXT,
+    wait_after_forward: float | None = _WAIT_AFTER_FORWARD,
 ) -> None:
     """Register a channel.
 
@@ -145,7 +171,9 @@ def register(
     # and the old ``claude_code`` default was a fiction — there was never an
     # agent behind it, so a channel created with it simply routed nowhere.
     config: dict[str, Any] = {"channel_type": channel_type}
-    config.update(_gating(require_mention, ignore_other_mentions))
+    config.update(
+        _settings(require_mention, ignore_other_mentions, wait_after_text, wait_after_forward)
+    )
     if agent_config is not None:
         try:
             config["default_agent_config"] = _json.loads(agent_config)
@@ -303,13 +331,15 @@ def set_cmd(
     name: str = typer.Argument(..., help="Channel name"),
     require_mention: bool | None = _REQUIRE_MENTION,
     ignore_other_mentions: bool | None = _IGNORE_OTHER_MENTIONS,
+    wait_after_text: float | None = _WAIT_AFTER_TEXT,
+    wait_after_forward: float | None = _WAIT_AFTER_FORWARD,
 ) -> None:
-    """Change when the bot answers in a group.
+    """Change when the bot answers in a group, and how long it waits for more.
 
     Options left out keep their current value.
     """
     verbose = (ctx.obj or {}).get("verbose", False)
-    changes = _gating(require_mention, ignore_other_mentions)
+    changes = _settings(require_mention, ignore_other_mentions, wait_after_text, wait_after_forward)
     if not changes:
         typer.echo("nothing to change — pass at least one option", err=True)
         raise typer.Exit(int(ExitCode.INVALID_USAGE))
@@ -322,7 +352,8 @@ def set_cmd(
         r = c.patch(f"/resources/{uid}", json={"config": config})
         _cli_client.check(r, verbose=verbose)
     for key, value in changes.items():
-        typer.echo(f"{key}: {'on' if value else 'off'}")
+        shown = ("on" if value else "off") if isinstance(value, bool) else f"{value:g}s"
+        typer.echo(f"{key}: {shown}")
 
 
 @app.command("notify")

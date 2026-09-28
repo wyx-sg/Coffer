@@ -68,6 +68,9 @@ class InboundMessage:
     # body itself when the turn is built (spec channels "Ground a turn in the
     # message it quotes").
     quoted_message_id: str = ""
+    # A forwarded chat record — rarely the whole ask, so the burst buffer waits
+    # longer for the words that follow it ("Take a burst of messages as one turn").
+    forwarded: bool = False
     attachments: tuple[InboundAttachment, ...] = ()  # photos/files/voice, if any
     ephemeral_id: str = ""  # set when the message itself was ephemeral (only the
     # sender and the bot can see it); it is the handle that lets the bot answer
@@ -138,6 +141,13 @@ class ChannelCapabilities:
     # member's EMAIL address (SeaTalk does). Used only when no id is available:
     # ``{user_id}`` stands in for the address, so one literal replace serves both.
     mention_email_template: str = ""
+    # A reply-in-thread inside a direct chat is a casual reply, not a request
+    # for a second conversation (SeaTalk: any message can root a thread). Such a
+    # thread keys to the direct chat's own conversation unless ``/thread`` opened
+    # it (see "Key conversation identity by channel, chat and thread"). False
+    # where a direct-chat thread only exists because someone created it
+    # (Telegram's private-chat topics), so every one is its own conversation.
+    direct_threads_are_replies: bool = False
 
 
 @dataclass(frozen=True)

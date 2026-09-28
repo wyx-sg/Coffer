@@ -36,10 +36,7 @@ from coffer.infrastructure.channel.telegram_media import (
     download_attachments,
     upload_media,
 )
-from coffer.infrastructure.channel.telegram_parse import (
-    build_inbound_message,
-    thread_target,
-)
+from coffer.infrastructure.channel.telegram_parse import build_inbound_message, thread_target
 from coffer.infrastructure.channel.telegram_poll import poll_updates
 from coffer.infrastructure.channel.telegram_profile import (
     BotIdentity,
@@ -48,6 +45,7 @@ from coffer.infrastructure.channel.telegram_profile import (
 )
 from coffer.infrastructure.channel.telegram_rich import RICH_MESSAGE_LIMIT
 from coffer.infrastructure.channel.telegram_send import send_text_chunks
+from coffer.infrastructure.channel.telegram_topics import open_private_topic
 from coffer.infrastructure.channel.telegram_transport import call
 from coffer.infrastructure.channel.telegram_updates import (
     callback_from_query,
@@ -283,6 +281,9 @@ class TelegramAdapter:
             ephemeral_feature=self._features.ephemeral_messages,
         )
 
+    async def open_thread(self, chat_id: str, mark: str, body: str) -> str:
+        return await open_private_topic(self._call, self.send_text, chat_id, mark, body)
+
     async def update_card(
         self,
         chat_id: str,
@@ -394,5 +395,5 @@ class TelegramAdapter:
 
     # -- transport -------------------------------------------------------------
 
-    async def _call(self, method: str, **params: Any) -> Any:
+    async def _call(self, method: str, /, **params: Any) -> Any:
         return await call(self._client, self._base, self._name, method, **params)

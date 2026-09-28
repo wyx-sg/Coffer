@@ -17,7 +17,12 @@
 // the chat provider key `claude_code`), so the values below are opaque too.
 import { describe, expect, test } from "vitest";
 
-import { honoursRequireMention, planChannelEdit } from "./editChannel";
+import {
+  honoursRequireMention,
+  parseBurstWait,
+  planChannelEdit,
+  storedBurstWait,
+} from "./editChannel";
 
 /** The two channels every case below edits: a uid to address, a name to read. */
 const TG = { uid: "u-3d9a1f77", name: "tg" };
@@ -168,6 +173,65 @@ describe("planChannelEdit", () => {
 
       expect("require_mention" in plan.config).toBe(false);
       expect(plan.config.ignore_other_mentions).toBe(true);
+    });
+  });
+
+  describe("message batching", () => {
+    // spec channels "Take a burst of messages as one turn": two per-channel
+    // quiet windows, written only when they differ from what the config says
+    // (an absent key reads as the backend default, 1.5s / 5s).
+    const tgConfig = { channel_type: "telegram", bot_token_ref: "channel/tg/bot-token" };
+
+    test("an absent key reads as the backend default", () => {
+      expect(storedBurstWait(tgConfig, "wait_after_text_seconds")).toBe(1.5);
+      expect(storedBurstWait(tgConfig, "wait_after_forward_seconds")).toBe(5);
+      expect(storedBurstWait({ wait_after_text_seconds: 0 }, "wait_after_text_seconds")).toBe(0);
+    });
+
+    test("values at the defaults write nothing", () => {
+      const plan = planChannelEdit({
+        ...TG,
+        config: tgConfig,
+        values: {
+          default_agent: AGENT_A,
+          wait_after_text_seconds: 1.5,
+          wait_after_forward_seconds: 5,
+        },
+      });
+
+      expect("wait_after_text_seconds" in plan.config).toBe(false);
+      expect("wait_after_forward_seconds" in plan.config).toBe(false);
+    });
+
+    test("a changed window writes its key, an unchanged stored one is kept as-is", () => {
+      const plan = planChannelEdit({
+        ...ST,
+        config: {
+          channel_type: "seatalk",
+          app_id: "a",
+          app_secret_ref: "channel/st/app-secret",
+          wait_after_forward_seconds: 8,
+        },
+        values: {
+          default_agent: AGENT_A,
+          wait_after_text_seconds: 0,
+          wait_after_forward_seconds: 8,
+        },
+      });
+
+      expect(plan.config.wait_after_text_seconds).toBe(0);
+      expect(plan.config.wait_after_forward_seconds).toBe(8);
+    });
+
+    test("parseBurstWait accepts 0..60 seconds and rejects the rest", () => {
+      expect(parseBurstWait("0")).toBe(0);
+      expect(parseBurstWait("2.5")).toBe(2.5);
+      expect(parseBurstWait("60")).toBe(60);
+      expect(parseBurstWait("")).toBeNull();
+      expect(parseBurstWait("  ")).toBeNull();
+      expect(parseBurstWait("-1")).toBeNull();
+      expect(parseBurstWait("60.5")).toBeNull();
+      expect(parseBurstWait("abc")).toBeNull();
     });
   });
 });

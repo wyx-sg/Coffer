@@ -54,10 +54,11 @@ async def cmd_effort(
     *,
     chat_kind: str = "direct",
     thread_id: str = "",
+    conversation_thread_id: str,
 ) -> None:
     try:
         conversation_id = await ensure_conversation(
-            commands._conversations, commands._threads, binding, peer, thread_id
+            commands._conversations, commands._threads, binding, peer, conversation_thread_id
         )
     except CofferError as e:
         await send(
@@ -71,14 +72,21 @@ async def cmd_effort(
     parts = text.split()
     if len(parts) >= 2:
         await apply_effort(
-            commands, binding, peer, parts[1], send, chat_kind=chat_kind, thread_id=thread_id
+            commands,
+            binding,
+            peer,
+            parts[1],
+            send,
+            chat_kind=chat_kind,
+            thread_id=thread_id,
+            conversation_thread_id=conversation_thread_id,
         )
         return
     # Report what is in effect. The levels are asked for against the model this
     # conversation is actually on, so the answer describes the choice the user
     # would be making rather than the agent in the abstract.
     cfg = await commands._conversations.get_agent_config(conversation_id)
-    row = await commands._threads.get(binding.resource.id, peer.chat_id, thread_id)
+    row = await commands._threads.get(binding.resource.id, peer.chat_id, conversation_thread_id)
     key = effective_agent(binding, row.preferred_agent if row is not None else None)
     levels = await commands._model_suggestions.efforts(key, cfg.model)
     # Deferred to break the module cycle: ``card_delivery`` calls
@@ -113,6 +121,7 @@ async def apply_effort(
     *,
     chat_kind: str = "direct",
     thread_id: str = "",
+    conversation_thread_id: str,
 ) -> None:
     """Set the next-turn reasoning level on the peer's conversation. Shared by
     the text ``/effort <level>`` path and a card tap.
@@ -123,7 +132,7 @@ async def apply_effort(
     """
     try:
         conversation_id = await ensure_conversation(
-            commands._conversations, commands._threads, binding, peer, thread_id
+            commands._conversations, commands._threads, binding, peer, conversation_thread_id
         )
     except CofferError as e:
         await send(

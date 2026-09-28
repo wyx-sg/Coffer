@@ -129,6 +129,24 @@ def test_group_gating_flags_are_configurable():
     assert cfg.ignore_other_mentions is True
 
 
+@pytest.mark.acceptance(
+    spec="channels", scenario="a channel's quiet windows come from its settings"
+)
+def test_quiet_windows_default_and_are_configurable():
+    """spec channels "Take a burst of messages as one turn": 1.5 s after text and
+    5 s after a forward by default, each settable from 0 to 60 seconds."""
+    cfg = parse_channel_config(SEATALK_CONFIG)
+    assert (cfg.wait_after_text_seconds, cfg.wait_after_forward_seconds) == (1.5, 5.0)
+    cfg = parse_channel_config(
+        {**TELEGRAM_CONFIG, "wait_after_text_seconds": 0, "wait_after_forward_seconds": 12}
+    )
+    assert (cfg.wait_after_text_seconds, cfg.wait_after_forward_seconds) == (0, 12)
+    with pytest.raises(ValidationError):
+        parse_channel_config({**TELEGRAM_CONFIG, "wait_after_text_seconds": -1})
+    with pytest.raises(ValidationError):
+        parse_channel_config({**TELEGRAM_CONFIG, "wait_after_forward_seconds": 61})
+
+
 def test_raw_telegram_token_in_bot_token_ref_rejected():
     raw_token = "123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
     with pytest.raises(ValidationError, match="looks like a raw secret"):
@@ -196,6 +214,8 @@ def test_root_model_round_trips_flat_dict():
         "default_agent_config": None,
         "require_mention": True,
         "ignore_other_mentions": False,
+        "wait_after_text_seconds": 1.5,
+        "wait_after_forward_seconds": 5.0,
         "runs_on": None,
     }
 
@@ -209,6 +229,8 @@ def test_root_model_round_trips_seatalk_dict():
         "default_agent_config": None,
         "require_mention": True,
         "ignore_other_mentions": False,
+        "wait_after_text_seconds": 1.5,
+        "wait_after_forward_seconds": 5.0,
         "runs_on": None,
     }
 

@@ -10,7 +10,6 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from coffer.application.channel.agent_routing import effective_agent
-from coffer.application.channel.card_delivery import deliver_card
 from coffer.application.channel.conversation_ops import (
     ensure_conversation,
     explain_conversation_error,
@@ -33,10 +32,11 @@ async def cmd_model(
     *,
     chat_kind: str = "direct",
     thread_id: str = "",
+    conversation_thread_id: str,
 ) -> None:
     try:
         conversation_id = await ensure_conversation(
-            commands._conversations, commands._threads, binding, peer, thread_id
+            commands._conversations, commands._threads, binding, peer, conversation_thread_id
         )
     except CofferError as e:
         await send(
@@ -55,7 +55,13 @@ async def cmd_model(
         cfg = await commands._conversations.get_agent_config(conversation_id)
         current = cfg.model or "(CLI default)"
         if binding.adapter.capabilities.supports_buttons:
-            row = await commands._threads.get(binding.resource.id, peer.chat_id, thread_id)
+            # Deferred to break the module cycle: ``card_delivery`` calls
+            # ``apply_model`` below — same shape as ``effort_switch``.
+            from coffer.application.channel.card_delivery import deliver_card
+
+            row = await commands._threads.get(
+                binding.resource.id, peer.chat_id, conversation_thread_id
+            )
             key = effective_agent(binding, row.preferred_agent if row is not None else None)
             labels = await commands._model_suggestions.model_labels(key)
             card = model_card(current=cfg.model, picks=list(labels), labels=labels)
@@ -71,7 +77,14 @@ async def cmd_model(
         )
         return
     await apply_model(
-        commands, binding, peer, parts[1], send, chat_kind=chat_kind, thread_id=thread_id
+        commands,
+        binding,
+        peer,
+        parts[1],
+        send,
+        chat_kind=chat_kind,
+        thread_id=thread_id,
+        conversation_thread_id=conversation_thread_id,
     )
 
 
@@ -84,6 +97,7 @@ async def apply_model(
     *,
     chat_kind: str = "direct",
     thread_id: str = "",
+    conversation_thread_id: str,
 ) -> None:
     """The parametric switch: set the next-turn model on the peer's
     conversation. Shared by the text ``/model <name>`` path and a card tap.
@@ -93,7 +107,7 @@ async def apply_model(
     refused here — a channel curates no models."""
     try:
         conversation_id = await ensure_conversation(
-            commands._conversations, commands._threads, binding, peer, thread_id
+            commands._conversations, commands._threads, binding, peer, conversation_thread_id
         )
     except CofferError as e:
         await send(

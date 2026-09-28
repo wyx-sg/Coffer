@@ -205,6 +205,15 @@ class ChannelAdapter(Protocol):
         chat_kind + thread, not the group main chat."""
         ...
 
+    async def open_thread(self, chat_id: str, mark: str, body: str) -> str:
+        """Open a new thread in direct chat ``chat_id`` for a parallel conversation
+        and return its thread id (see "Open parallel conversations in a direct
+        chat"). ``mark`` (``🧵#N title``) heads the thread — its root message, or
+        its topic's name — and ``body`` follows it. How a thread is created is the
+        transport's own fact. Raises ``ParallelThreadUnavailable`` with the
+        sentence to answer when this chat cannot have one."""
+        ...
+
 
 @dataclass(frozen=True)
 class ChannelBinding:
@@ -226,6 +235,9 @@ class ChannelBinding:
     # from the channel config.
     require_mention: bool = True
     ignore_other_mentions: bool = False
+    # Quiet windows of "Take a burst of messages as one turn", from the channel config.
+    wait_after_text_seconds: float = 1.5
+    wait_after_forward_seconds: float = 5.0
     # The channel's framework-level ``scope`` off the row (ADR
     # per-agent-resource-scope), rewritten into agent KEYS by the gate
     # (``wanted.Routing``) — the row names agent UIDS, every reader below here
