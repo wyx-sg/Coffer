@@ -57,7 +57,9 @@ export function KnowledgeCreateDialog({ open, onOpenChange, onCreated }: Props) 
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="knowledge-collection-name">{t("knowledge.create.name")}</Label>
+            <Label htmlFor="knowledge-collection-name" required>
+              {t("knowledge.create.name")}
+            </Label>
             <Input
               id="knowledge-collection-name"
               value={name}
