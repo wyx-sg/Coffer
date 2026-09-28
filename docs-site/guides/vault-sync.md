@@ -233,7 +233,7 @@ coffer sync machine rename "Work desktop"
 coffer sync machine remove <machine_id>     # retire a machine you no longer use
 ```
 
-A machine's id is derived from the host (`IOPlatformUUID` on macOS, `/etc/machine-id` on Linux), hashed before it is published, and survives reinstalling Coffer. Where no host identifier is readable, Coffer stores a generated id in `~/.coffer/machine-id`; that one does not survive deleting `~/.coffer`, and both `coffer sync status` and the machine table say so. Renaming changes only a label. Retiring removes the machine's descriptor and rewrites nothing else; a channel still bound to it runs nowhere until you bind it elsewhere.
+A machine's id is derived from the host (`IOPlatformUUID` on macOS, `/etc/machine-id` on Linux), hashed before it is published, and survives reinstalling Coffer. Where no host identifier is readable, Coffer stores a generated id in `~/.coffer/machine-id`; that one does not survive deleting `~/.coffer`, and both `coffer sync status` and the machine table (the **Machines** tab on the **Sync** page) say so. Renaming changes only a label. Retiring removes the machine's descriptor and rewrites nothing else; a channel still bound to it runs nowhere until you bind it elsewhere.
 
 ## Pause or stop syncing
 

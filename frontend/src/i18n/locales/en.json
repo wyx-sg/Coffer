@@ -107,6 +107,8 @@
     "chat": "Chat",
     "modelProviders": "Model providers",
     "sync": "Sync",
+    "experimental": "Experimental",
+    "experimentalLabel": "{{label}} (experimental)",
     "needsAttention": "Needs your attention"
   },
   "resources": {
@@ -514,8 +516,7 @@
           "title": "Move the master key to a file beside the database?",
           "body": "Coffer re-stores the key in a file next to its database; keychain prompts stop."
         },
-        "confirmMove": "Move key",
-        "syncLink": "Export or import the key on the Sync page"
+        "confirmMove": "Move key"
       }
     },
     "models": {
@@ -1692,7 +1693,8 @@
     "subtitle": "Converge this vault with a git repository you own, so every machine you work on holds the same knowledge, skills and configuration.",
     "tabs": {
       "runs": "Runs",
-      "setup": "Setup"
+      "setup": "Setup",
+      "machines": "Machines"
     },
     "title": "Sync",
     "toast": {
