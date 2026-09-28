@@ -11,13 +11,21 @@ its configuration. ``pair``, ``bind`` and ``notify`` are channel-specific.
 from __future__ import annotations
 
 import dataclasses
-import inspect
 import json as _json
 from typing import Any
 
 import typer
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._channel_options import (
+    _IGNORE_OTHER_MENTIONS,
+    _REQUIRE_MENTION,
+    _WAIT_AFTER_FORWARD,
+    _WAIT_AFTER_TEXT,
+    _settings,
+    edit_option,
+    settings_config,
+)
 from coffer.surfaces.cli._kind_verbs import (
     Column,
     EditFlags,
@@ -48,55 +56,6 @@ def _this_machine_id(client: Any, *, verbose: bool) -> str:
         typer.echo("the daemon has not derived this machine's id yet — try again", err=True)
         raise typer.Exit(1)
     return str(machine_id)
-
-
-# Group gating (spec channels "Configure when the bot answers in a group"):
-# tri-state, so an option left out keeps the stored value (or, at register,
-# the config's own default) instead of overwriting it.
-_REQUIRE_MENTION = typer.Option(
-    None,
-    "--require-mention/--no-require-mention",
-    help="In groups, answer only when @mentioned or replied to (default: on)",
-)
-_IGNORE_OTHER_MENTIONS = typer.Option(
-    None,
-    "--ignore-other-mentions/--no-ignore-other-mentions",
-    help="In groups, drop a message that @mentions anyone else (default: off)",
-)
-
-
-_WAIT_AFTER_TEXT = typer.Option(
-    None,
-    "--wait-after-text",
-    min=0,
-    max=60,
-    help="Seconds to wait after a text message for more before answering (default: 1.5; 0 = none)",
-)
-_WAIT_AFTER_FORWARD = typer.Option(
-    None,
-    "--wait-after-forward",
-    min=0,
-    max=60,
-    help="Seconds to wait after a forwarded record or files with no text (default: 5; 0 = none)",
-)
-
-
-def _settings(
-    require_mention: bool | None,
-    ignore_other_mentions: bool | None,
-    wait_after_text: float | None = None,
-    wait_after_forward: float | None = None,
-) -> dict[str, bool | float]:
-    """The config keys the user actually passed: group gating ("Configure when the
-    bot answers in a group") and the quiet windows ("Take a burst of messages as
-    one turn")."""
-    passed: dict[str, bool | float | None] = {
-        "require_mention": require_mention,
-        "ignore_other_mentions": ignore_other_mentions,
-        "wait_after_text_seconds": wait_after_text,
-        "wait_after_forward_seconds": wait_after_forward,
-    }
-    return {key: value for key, value in passed.items() if value is not None}
 
 
 def add(
@@ -354,25 +313,6 @@ def notify(
     typer.echo("sent")
 
 
-def _settings_config(resource: dict[str, Any], values: dict[str, Any]) -> dict[str, Any] | None:
-    """The stored config with only the settings given changed (``edit``)."""
-    changes = _settings(
-        values.get("require_mention"),
-        values.get("ignore_other_mentions"),
-        values.get("wait_after_text"),
-        values.get("wait_after_forward"),
-    )
-    if not changes:
-        return None
-    return {**(resource.get("config") or {}), **changes}
-
-
-def _option(name: str, default: Any, annotation: Any = bool | None) -> inspect.Parameter:
-    return inspect.Parameter(
-        name, inspect.Parameter.POSITIONAL_OR_KEYWORD, default=default, annotation=annotation
-    )
-
-
 _CHANNEL = KindVerbs(
     kind="channel",
     noun="channel",
@@ -387,16 +327,16 @@ _CHANNEL = KindVerbs(
     ),
     edit_flags=EditFlags(
         params=(
-            _option("require_mention", _REQUIRE_MENTION),
-            _option("ignore_other_mentions", _IGNORE_OTHER_MENTIONS),
-            _option("wait_after_text", _WAIT_AFTER_TEXT, float | None),
-            _option("wait_after_forward", _WAIT_AFTER_FORWARD, float | None),
+            edit_option("require_mention", _REQUIRE_MENTION),
+            edit_option("ignore_other_mentions", _IGNORE_OTHER_MENTIONS),
+            edit_option("wait_after_text", _WAIT_AFTER_TEXT, float | None),
+            edit_option("wait_after_forward", _WAIT_AFTER_FORWARD, float | None),
         ),
-        to_config=_settings_config,
+        to_config=settings_config,
     ),
     help={
         "list": "List registered channels.",
-        "edit": "Change a channel's name, title, description, group-gating switches or quiet windows.",
+        "edit": "Change a channel's name, title, description, group gating or quiet windows.",
         "rm": "Remove a channel and its pairings.",
         "enable": "Enable a channel (its adapter starts on the machine it is bound to).",
         "disable": "Disable a channel (its adapter stops).",

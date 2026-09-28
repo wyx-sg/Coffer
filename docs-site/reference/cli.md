@@ -1085,7 +1085,7 @@ Its secrets are credential refs: store each secret first with `coffer credential
 coffer channel edit [OPTIONS] NAME
 ```
 
-Change a channel's name, title, description, group-gating switches or quiet windows.
+Change a channel's name, title, description, group gating or quiet windows.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
