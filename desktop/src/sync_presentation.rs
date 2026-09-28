@@ -5,7 +5,10 @@
 //! and the seam is an honest one: that module decides *whether* a human is
 //! needed and whether they have already been told, which is a state machine
 //! with no opinion about wording or pixels. This is the other half, and it has
-//! none about when it is used.
+//! none about when it is used. Every line comes in each interface language
+//! the web UI ships; `tray_locale.rs` says which one is current.
+
+use crate::tray_locale::Lang;
 
 /// The alert dot: a red disc inside a white ring, so it reads against both a
 /// light and a dark menu bar.
@@ -51,12 +54,37 @@ pub fn badge_rgba(rgba: &[u8], width: u32, height: u32) -> Vec<u8> {
 
 /// One line, naming the product: it arrives in Notification Centre beside
 /// everything else on the machine.
-pub const NOTIFICATION_TITLE: &str = "Coffer sync needs you";
+pub fn notification_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::En => "Coffer sync needs you",
+        Lang::Zh => "Coffer 同步需要你处理",
+    }
+}
 
 /// What went wrong, in the terms the user has to act in. Each says what has
 /// stopped as well as what happened — "held" means nothing else will converge,
 /// and that is the part that cost four days.
-pub fn notification_body(status: &str) -> &'static str {
+pub fn notification_body(status: &str, lang: Lang) -> &'static str {
+    match lang {
+        Lang::En => english_body(status),
+        Lang::Zh => match status {
+            "awaiting_confirmation" => {
+                "有一轮同步已暂停，等待你确认。在你答复之前，金库不会再收敛。"
+            }
+            "conflict" => {
+                "有一轮同步遇到了无法自动解决的冲突。金库未被改动，同步已停止，直到你解决它。"
+            }
+            "push_failed" => "有一轮同步已在本地应用，但推送失败。本机的变更还不在远端。",
+            "failed" => "上一轮同步运行失败。金库已停止收敛。",
+            "awaiting_join" => {
+                "这台机器尚未加入同步远端。在你查看并确认加入之前，不会收敛任何内容。"
+            }
+            _ => "上一轮同步需要你处理后才能继续。",
+        },
+    }
+}
+
+fn english_body(status: &str) -> &'static str {
     match status {
         "awaiting_confirmation" => {
             "A round is held for your confirmation. The vault will not converge \
@@ -85,16 +113,24 @@ pub fn notification_body(status: &str) -> &'static str {
 /// The tray entry's label while a condition is outstanding. Short — it sits in
 /// a menu — and it names the condition, so the tray answers "which problem"
 /// without the window being opened.
-pub fn tray_label(status: &str) -> String {
-    let reason = match status {
-        "awaiting_confirmation" => "held for confirmation",
-        "conflict" => "conflict",
-        "push_failed" => "push failed",
-        "failed" => "run failed",
-        "awaiting_join" => "not joined yet",
+pub fn tray_label(status: &str, lang: Lang) -> String {
+    let reason = match (lang, status) {
+        (Lang::En, "awaiting_confirmation") => "held for confirmation",
+        (Lang::En, "conflict") => "conflict",
+        (Lang::En, "push_failed") => "push failed",
+        (Lang::En, "failed") => "run failed",
+        (Lang::En, "awaiting_join") => "not joined yet",
+        (Lang::Zh, "awaiting_confirmation") => "已暂停，等你确认",
+        (Lang::Zh, "conflict") => "冲突",
+        (Lang::Zh, "push_failed") => "推送失败",
+        (Lang::Zh, "failed") => "运行失败",
+        (Lang::Zh, "awaiting_join") => "尚未加入",
         _ => status,
     };
-    format!("Sync needs attention — {reason}")
+    match lang {
+        Lang::En => format!("Sync needs attention — {reason}"),
+        Lang::Zh => format!("同步需要处理 — {reason}"),
+    }
 }
 
 #[cfg(test)]
@@ -106,25 +142,31 @@ mod tests {
 
     #[test]
     fn every_attention_status_has_its_own_body_and_label() {
-        let mut bodies: Vec<&str> = ATTENTION_STATUSES
-            .iter()
-            .map(|s| notification_body(s))
-            .collect();
-        assert!(bodies.iter().all(|b| !b.is_empty()));
-        bodies.sort_unstable();
-        bodies.dedup();
-        assert_eq!(
-            bodies.len(),
-            ATTENTION_STATUSES.len(),
-            "two statuses share a body"
-        );
+        for (lang, prefix) in [
+            (Lang::En, "Sync needs attention — "),
+            (Lang::Zh, "同步需要处理 — "),
+        ] {
+            let mut bodies: Vec<&str> = ATTENTION_STATUSES
+                .iter()
+                .map(|s| notification_body(s, lang))
+                .collect();
+            assert!(bodies.iter().all(|b| !b.is_empty()));
+            bodies.sort_unstable();
+            bodies.dedup();
+            assert_eq!(
+                bodies.len(),
+                ATTENTION_STATUSES.len(),
+                "two statuses share a body in {lang:?}"
+            );
 
-        for status in ATTENTION_STATUSES {
-            let label = tray_label(status);
-            assert!(label.starts_with("Sync needs attention — "), "{label}");
-            // The raw enum name never reaches the menu.
-            assert!(!label.contains('_'), "{label}");
+            for status in ATTENTION_STATUSES {
+                let label = tray_label(status, lang);
+                assert!(label.starts_with(prefix), "{label}");
+                // The raw enum name never reaches the menu.
+                assert!(!label.contains('_'), "{label}");
+            }
         }
+        assert_ne!(notification_title(Lang::En), notification_title(Lang::Zh));
     }
 
     #[test]

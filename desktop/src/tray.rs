@@ -10,7 +10,11 @@ use tauri::{
     AppHandle, Manager, Wry,
 };
 
-use crate::sync_watch::{SYNC_MENU_IDLE_LABEL, SYNC_MENU_ITEM_ID};
+use std::sync::Mutex;
+
+use crate::sync_presentation::tray_label;
+use crate::sync_watch::SYNC_MENU_ITEM_ID;
+use crate::tray_locale::{self, tray_text, Lang};
 
 /// The tray's id, so `sync_watch.rs` can find it again to repaint its icon.
 pub const TRAY_ID: &str = "coffer-tray";
@@ -47,26 +51,30 @@ pub struct TrayMenu {
 /// feature put in front of agents"), so the two have to be introduced somewhere and the
 /// composition root is the honest place.
 pub fn build_tray(app: &AppHandle) -> tauri::Result<TrayMenu> {
-    let open = MenuItem::with_id(app, "open", "Open Coffer", true, None::<&str>)?;
+    // Labelled in the language the tray knows at launch — the OS language,
+    // until the page says which one the user chose (`set_ui_language`).
+    let text = tray_text(tray_locale::current());
+    let open = MenuItem::with_id(app, "open", text.open, true, None::<&str>)?;
     // A route to the `/sync` page. Its label is where a held, conflicted or
     // unpushed vault says so in the one place a user who has closed the window
     // still looks. It starts OUT of the menu: the watcher inserts it at
     // `SYNC_MENU_POSITION` once the daemon reports `vault_sync` on, so a build
     // whose feature is off never shows it, not even for the first tick.
-    let sync = MenuItem::with_id(
-        app,
-        SYNC_MENU_ITEM_ID,
-        SYNC_MENU_IDLE_LABEL,
-        true,
-        None::<&str>,
-    )?;
+    let sync = MenuItem::with_id(app, SYNC_MENU_ITEM_ID, text.sync_idle, true, None::<&str>)?;
     // The tray must offer "Restart daemon" (spec desktop-app "Find or start a
     // daemon by a fixed resolution order"). It is one
     // of the two places that action lives; the other is the offline banner.
-    let restart = MenuItem::with_id(app, "restart_daemon", "Restart daemon", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Coffer", true, None::<&str>)?;
+    let restart = MenuItem::with_id(app, "restart_daemon", text.restart, true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", text.quit, true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(app, &[&open, &restart, &sep, &quit])?;
+    app.manage(TrayItems {
+        open,
+        restart,
+        quit,
+        sync: sync.clone(),
+        attention: Mutex::new(None),
+    });
 
     let icon = base_tray_icon(app);
 
@@ -74,7 +82,7 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<TrayMenu> {
         .menu(&menu)
         .show_menu_on_left_click(true)
         .icon(icon)
-        .tooltip("Coffer")
+        .tooltip(text.tooltip)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => {
                 if let Some(window) = app.get_webview_window("main") {
@@ -115,6 +123,69 @@ pub fn build_tray(app: &AppHandle) -> tauri::Result<TrayMenu> {
         })
         .build(app)?;
     Ok(TrayMenu { menu, sync })
+}
+
+/// Every labelled thing in the tray, kept so a language switch can relabel
+/// them, plus the sync condition the Sync entry is currently naming (`None`
+/// when idle) — the one label that depends on more than the language.
+pub struct TrayItems {
+    open: MenuItem<Wry>,
+    restart: MenuItem<Wry>,
+    quit: MenuItem<Wry>,
+    sync: MenuItem<Wry>,
+    attention: Mutex<Option<String>>,
+}
+
+/// Record the sync condition the Sync entry names (`None` for idle) and
+/// relabel. `sync_watch.rs` calls this whenever an alert is raised or cleared.
+pub fn set_sync_attention(app: &AppHandle, status: Option<&str>) {
+    if let Some(items) = app.try_state::<TrayItems>() {
+        *items.attention.lock().unwrap_or_else(|e| e.into_inner()) = status.map(str::to_owned);
+    }
+    relabel(app);
+}
+
+/// Write every tray label, and the tooltip, in the current language. Menu
+/// calls from off the main thread are dispatched to it by Tauri's wrappers;
+/// a failed one is dropped — a stale label is not worth a panicked thread.
+pub fn relabel(app: &AppHandle) {
+    let Some(items) = app.try_state::<TrayItems>() else {
+        return;
+    };
+    let lang = tray_locale::current();
+    let text = tray_text(lang);
+    let attention = items
+        .attention
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let _ = items.open.set_text(text.open);
+    let _ = items.restart.set_text(text.restart);
+    let _ = items.quit.set_text(text.quit);
+    let _ = items.sync.set_text(match attention.as_deref() {
+        Some(status) => tray_label(status, lang),
+        None => text.sync_idle.to_owned(),
+    });
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let tooltip = if attention.is_some() {
+            text.tooltip_attention
+        } else {
+            text.tooltip
+        };
+        let _ = tray.set_tooltip(Some(tooltip));
+    }
+}
+
+/// The page tells the shell its interface language — once when it starts,
+/// and again on every switch — and the tray relabels at once (spec
+/// desktop-app "Host the UI locally in an application window"). `async` so
+/// it runs off the main thread, which the menu wrappers dispatch back to.
+#[tauri::command(async)]
+pub fn set_ui_language(app: AppHandle, language: String) {
+    if tray_locale::choose(Lang::from_tag(&language)) {
+        log::info!("tray.language {language}");
+        relabel(&app);
+    }
 }
 
 /// Return `true` when the close event should actually exit the application.
