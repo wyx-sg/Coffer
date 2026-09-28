@@ -22,6 +22,7 @@ literals.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -45,7 +46,21 @@ class FsPickService:
     """
 
     def pick_folder(self, start: str | None = None) -> PickResult:
-        return _run_dialog(_folder_cmd(start))
+        return _run_dialog(_folder_cmd(_usable_start(start)))
+
+
+def _usable_start(start: str | None) -> str | None:
+    """The start folder if it is an existing directory, else None.
+
+    The start comes from a field the user may be typing into, so it can be half a
+    path. macOS refuses a default location that does not exist — ``osascript``
+    exits non-zero without opening the dialog, which reads as a cancel — so an
+    unusable start is dropped and the dialog opens at its own default instead.
+    """
+    if not start or not start.strip():
+        return None
+    path = os.path.expanduser(start.strip())
+    return path if os.path.isdir(path) else None
 
 
 def _run_dialog(cmd: list[str] | None) -> PickResult:

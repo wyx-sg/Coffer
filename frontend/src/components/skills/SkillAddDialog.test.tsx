@@ -1,8 +1,8 @@
 // frontend/src/components/skills/SkillAddDialog.test.tsx
 //
 // The "Add skill" dialog: a single local-folder import form with its own
-// mutation. The folder is PICKED via the FolderPicker (read-only display), not
-// typed; submitting calls the mutation and, on resolve, fires onCreated +
+// mutation. The folder is picked via the FolderPicker or typed/pasted into the
+// path field; submitting calls the mutation and, on resolve, fires onCreated +
 // closes the dialog.
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -89,6 +89,34 @@ describe("SkillAddDialog", () => {
     await waitFor(() => expect(importAsync).toHaveBeenCalledWith({ path: "/tmp/my-skill" }));
     expect(onCreated).toHaveBeenCalled();
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  test("imports a pasted path, trimmed of whitespace and quotes", async () => {
+    const importAsync = vi.fn().mockResolvedValue({});
+    stub({ importAsync });
+    render(<SkillAddDialog open onOpenChange={() => {}} onCreated={() => {}} />, {
+      wrapper: wrap(null),
+    });
+
+    const field = screen.getByPlaceholderText(/\.claude\/skills/i);
+    expect(field).not.toHaveAttribute("readonly");
+    fireEvent.change(field, { target: { value: '  "/Users/me/skills/my skill"\n' } });
+    fireEvent.click(screen.getByRole("button", { name: /^import$/i }));
+
+    await waitFor(() =>
+      expect(importAsync).toHaveBeenCalledWith({ path: "/Users/me/skills/my skill" }),
+    );
+  });
+
+  test("Import stays disabled for a whitespace-only path", () => {
+    stub({});
+    render(<SkillAddDialog open onOpenChange={() => {}} onCreated={() => {}} />, {
+      wrapper: wrap(null),
+    });
+    fireEvent.change(screen.getByPlaceholderText(/\.claude\/skills/i), {
+      target: { value: "   " },
+    });
+    expect(screen.getByRole("button", { name: /^import$/i })).toBeDisabled();
   });
 
   test("Import is disabled until a folder is picked", () => {
