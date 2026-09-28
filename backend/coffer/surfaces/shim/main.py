@@ -211,7 +211,7 @@ class _Bridge:
                 except Exception:
                     _logger.exception("shim.recover_failed")
             if rebound:
-                with contextlib.suppress(Exception):
+                try:
                     response = await client.post(
                         "/mcp", json=envelope, headers=self._request_headers()
                     )
@@ -220,6 +220,9 @@ class _Bridge:
                         response.status_code,
                         len(response.text or ""),
                     )
+                except Exception:
+                    # Fall through and forward the original 401 as the error.
+                    _logger.exception("shim.post_failed_after_recover")
 
         if "Mcp-Session-Id" in response.headers:
             self._session_id = response.headers["Mcp-Session-Id"]
