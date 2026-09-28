@@ -64,7 +64,8 @@
     "emptyValue": "—",
     "copy": "复制",
     "copied": "已复制",
-    "search": "搜索"
+    "search": "搜索",
+    "moreInfo": "详细说明"
   },
   "picker": {
     "browse": "浏览…"
@@ -1380,8 +1381,6 @@
       "seatalkHint": "来自 SeaTalk 开放平台应用的 App ID 和 App Secret。",
       "created": "消息渠道 {{name}} 已注册",
       "machineUnknown": "Coffer 暂时读不到本机的机器 id，这个消息渠道就没有可运行的机器。请稍后重试。",
-      "seatalkSdkNote": "Coffer 通过 SeaTalk 官方 Python SDK 接收 SeaTalk 事件，SDK 需放在 ~/.coffer/vendor（或 $COFFER_SEATALK_SDK_DIR）。它不在 PyPI 上，Coffer 无法随包分发——SDK 到位前该消息渠道不会启动。",
-      "seatalkPortalNote": "在 SeaTalk 开发者后台把该机器人的事件投递方式设为 WebSocket。先在这里启用消息渠道：后台的 Re-verify 只有在 Coffer 正持有连接时才能通过。",
       "agent": "默认 Agent",
       "agentHint": "此渠道中的新会话都会在该 Agent 上开始。"
     },
@@ -1413,21 +1412,18 @@
       }
     },
     "test": {
-      "send": "发送",
+      "send": "发送测试消息",
       "sending": "发送中…",
       "title": "测试投递",
-      "messageLabel": "消息",
-      "subtitle": "向已配对的对端推送一条临时消息，确认投递正常。",
-      "placeholder": "来自 Coffer 的测试消息",
+      "subtitle": "向已配对的账号发送一条固定消息，确认投递正常。",
       "sent": "测试消息已发送",
-      "needsPeer": "请先完成配对——当前还没有可通知的对端。"
+      "needsPeer": "请先完成配对——当前还没有可通知的对端。",
+      "fixedMessage": "来自 Coffer 的测试消息——投递正常。"
     },
     "status": {
-      "title": "状态",
       "adapter": "适配器",
       "running": "运行中",
       "stopped": "已停止",
-      "peer": "已配对账号",
       "chatId": "Chat ID",
       "pairedAt": "配对时间",
       "conversation": "活跃会话",
@@ -1445,21 +1441,23 @@
       "unknownBody": "这个消息渠道绑定在 {{id}} 上，而注册表里没有任何机器认领这个 id——在重新绑定到一台真实存在的机器之前，它不会在任何地方运行。",
       "handover": "重新绑定不需要重启。失去该渠道的机器会在一两秒内停掉适配器；获得它的机器会在下一轮同步把变更带过去之后启动。从你当前所在的这台机器上「绑出去」交接得最干净——反过来，在另一台机器仍然持有该渠道时把它绑到本机，可能会出现两边同时应答，直到那台机器完成下一轮同步。",
       "notReach": "这里决定的是「哪台机器运行适配器」。页头的生效范围决定的是「这个渠道可以驱动哪些 agent」。",
-      "rebound": "{{name}} 现在运行在 {{machine}} 上"
+      "rebound": "{{name}} 现在运行在 {{machine}} 上",
+      "helpLabel": "关于运行机器"
     },
     "pairing": {
-      "title": "配对",
       "instruction": "生成配对码后，用你自己的账号把它发给机器人。发送者将成为该消息渠道唯一的所有者——重新配对会替换之前的绑定。",
       "generate": "生成配对码",
       "generating": "生成中…",
       "copy": "复制",
       "copied": "已复制",
       "openLink": "打开配对链接",
-      "expires": "{{time}} 过期（仅可使用一次）。"
+      "expires": "{{time}} 过期（仅可使用一次）。",
+      "hint": "生成配对码，然后用应当拥有该消息渠道的账号把它发给机器人。",
+      "repair": "重新配对",
+      "helpLabel": "关于配对"
     },
     "inbound": {
       "title": "SeaTalk 连接",
-      "connection": "连接",
       "state": {
         "connecting": "连接中…",
         "connected": "已连接",
@@ -1467,12 +1465,14 @@
         "sdk_missing": "未找到 SDK",
         "error": "错误",
         "unknown": "未知"
-      },
-      "hint": "Coffer 通过一条 WebSocket 连接主动连向 SeaTalk，不向网络暴露任何东西。一个机器人只能有一条连接：另一个 Coffer 注册同一个应用会把这条挤下线。连接断开期间事件会暂停投递。"
+      }
     },
     "deleteTitle": "删除消息渠道",
     "deleteConfirm": "确定删除消息渠道「{{name}}」？其适配器将停止，配对关系也会被移除。",
-    "bulkDeleteConfirm": "确定删除 {{count}} 个消息渠道？它们的适配器将停止，配对关系也会被移除。"
+    "bulkDeleteConfirm": "确定删除 {{count}} 个消息渠道？它们的适配器将停止，配对关系也会被移除。",
+    "account": {
+      "title": "账号"
+    }
   },
   "scope": {
     "subtitle": "这项资源对哪些 Agent 生效。不在生效范围内时它依然保持注册，只是不会被暴露或分发。",

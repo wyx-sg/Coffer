@@ -64,7 +64,8 @@
     "copied": "Copied",
     "backTo": "Back to {{label}}",
     "emptyValue": "—",
-    "search": "Search"
+    "search": "Search",
+    "moreInfo": "More info"
   },
   "picker": {
     "browse": "Browse…"
@@ -1380,8 +1381,6 @@
       "seatalkHint": "App ID and App secret from the SeaTalk Open Platform app.",
       "created": "Channel {{name}} registered",
       "machineUnknown": "Coffer could not read this machine's id, so the channel has no machine to run on. Try again in a moment.",
-      "seatalkSdkNote": "Coffer receives SeaTalk events through SeaTalk's official Python SDK, which must be in ~/.coffer/vendor (or $COFFER_SEATALK_SDK_DIR). It is not on PyPI, so Coffer cannot ship it — the channel stays stopped until it is there.",
-      "seatalkPortalNote": "Set this bot's event delivery to WebSocket in SeaTalk's Developer Portal. Enable the channel here first: the portal's Re-verify only passes while Coffer is holding the connection.",
       "agent": "Default agent",
       "agentHint": "New conversations on this channel start on this agent."
     },
@@ -1413,21 +1412,18 @@
       }
     },
     "test": {
-      "send": "Send",
+      "send": "Send test message",
       "sending": "Sending…",
       "title": "Test delivery",
-      "messageLabel": "Message",
-      "subtitle": "Push a one-off message to the paired peer to confirm delivery works.",
-      "placeholder": "Test message from Coffer",
+      "subtitle": "Sends a fixed message to the paired account to confirm delivery works.",
       "sent": "Test message sent",
-      "needsPeer": "Pair the channel first — there is no peer to notify yet."
+      "needsPeer": "Pair the channel first — there is no peer to notify yet.",
+      "fixedMessage": "Test message from Coffer — delivery works."
     },
     "status": {
-      "title": "Status",
       "adapter": "Adapter",
       "running": "Running",
       "stopped": "Stopped",
-      "peer": "Paired peer",
       "chatId": "Chat ID",
       "pairedAt": "Paired at",
       "conversation": "Active conversation",
@@ -1445,21 +1441,23 @@
       "unknownBody": "This channel is bound to {{id}}, which no machine in the registry claims — it runs nowhere until it is bound to one that does.",
       "handover": "Rebinding needs no restart. The machine losing the channel stops within a couple of seconds; the machine gaining it starts after the next sync round brings the change over. Rebinding away from the machine you are on hands over cleanly — binding a channel to this machine while another still holds it can leave both answering until that machine's next round.",
       "notReach": "This is which machine runs the adapter. Reach, in the header, is which agents this channel may drive.",
-      "rebound": "{{name}} now runs on {{machine}}"
+      "rebound": "{{name}} now runs on {{machine}}",
+      "helpLabel": "About the machine binding"
     },
     "pairing": {
-      "title": "Pairing",
       "instruction": "Generate a code, then send it to the bot from your own account. The sender becomes this channel's sole owner — re-pairing replaces the previous one.",
       "generate": "Generate pairing code",
       "generating": "Generating…",
       "copy": "Copy",
       "copied": "Copied",
       "openLink": "Open the pairing link",
-      "expires": "Expires at {{time}} (single use)."
+      "expires": "Expires at {{time}} (single use).",
+      "hint": "Generate a code, then send it to the bot from the account that should own this channel.",
+      "repair": "Re-pair",
+      "helpLabel": "About pairing"
     },
     "inbound": {
       "title": "SeaTalk connection",
-      "connection": "Connection",
       "state": {
         "connecting": "Connecting…",
         "connected": "Connected",
@@ -1467,12 +1465,14 @@
         "sdk_missing": "SDK not found",
         "error": "Error",
         "unknown": "Unknown"
-      },
-      "hint": "Coffer dials out to SeaTalk over one WebSocket connection, so there is nothing to expose to the network. One connection per bot: a second Coffer registering the same app kicks this one off. Events pause while the connection is down."
+      }
     },
     "deleteTitle": "Delete channel",
     "deleteConfirm": "Delete channel “{{name}}”? Its adapter stops and the pairing is removed.",
-    "bulkDeleteConfirm": "Delete {{count}} channels? Their adapters stop and their pairings are removed."
+    "bulkDeleteConfirm": "Delete {{count}} channels? Their adapters stop and their pairings are removed.",
+    "account": {
+      "title": "Account"
+    }
   },
   "scope": {
     "subtitle": "Where this is active: which agents can reach it. Out of reach it stays registered, just not exposed or delivered.",
