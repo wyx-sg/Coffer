@@ -5,12 +5,9 @@
 // rhythm as DataSettings.tsx: explanation on the left, action on the right.
 //
 // Moving the key re-stores it and changes what the OS asks on every daemon
-// start, so the switch confirms before it writes. Carrying the key to another
-// machine is the Sync page's job, and the card links there rather than
-// growing a second export/import surface.
+// start, so the switch confirms before it writes.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -21,7 +18,6 @@ import {
   useCredentialSettings,
   useUpdateCredentialSettings,
 } from "@/lib/hooks/useCredentialSettings";
-import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 
 type Storage = "file" | "keychain";
 
@@ -29,9 +25,6 @@ export function SecuritySettings() {
   const { t } = useTranslation();
   const { data, isPending, error } = useCredentialSettings();
   const update = useUpdateCredentialSettings();
-  // The link points at the Sync page, which is not there while `vault_sync`
-  // is switched off.
-  const syncOn = useFeatureEnabled("vault_sync") === true;
   // The storage the user asked to move to, while the confirmation is open.
   const [target, setTarget] = useState<Storage | null>(null);
 
@@ -85,14 +78,6 @@ export function SecuritySettings() {
             onCheckedChange={(checked) => setTarget(checked ? "keychain" : "file")}
           />
         </div>
-
-        {syncOn ? (
-          <p className="text-sm">
-            <Link to="/sync" className="text-primary hover:underline">
-              {t("settings.security.masterKey.syncLink")}
-            </Link>
-          </p>
-        ) : null}
 
         {update.isError ? (
           <p className="text-sm text-destructive" role="alert">

@@ -12,12 +12,6 @@ vi.mock("@/lib/hooks/useCredentialSettings", () => ({
 }));
 const hooks = await import("@/lib/hooks/useCredentialSettings");
 
-// Whether `vault_sync` is on decides whether the Sync link is there at all.
-const syncOn = vi.fn((): boolean | undefined => true);
-vi.mock("@/lib/hooks/useFeatures", () => ({
-  useFeatureEnabled: () => syncOn(),
-}));
-
 function wrap({ children }: PropsWithChildren) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
@@ -31,7 +25,6 @@ const mutate = vi.fn();
 
 afterEach(() => {
   vi.clearAllMocks();
-  syncOn.mockReturnValue(true);
 });
 
 function seed(storage: "file" | "keychain" = "file", mutationError: Error | null = null) {
@@ -97,22 +90,6 @@ describe("SecuritySettings", () => {
     expect(
       screen.getByText("Master key: OS keychain (may prompt once per daemon start)."),
     ).toBeInTheDocument();
-  });
-
-  test("links to the Sync page for carrying the key to another machine", () => {
-    seed("file");
-    render(<SecuritySettings />, { wrapper: wrap });
-    expect(screen.getByRole("link", { name: /export or import the key/i })).toHaveAttribute(
-      "href",
-      "/sync",
-    );
-  });
-
-  test("leaves out the Sync link while vault sync is switched off", () => {
-    syncOn.mockReturnValue(false);
-    seed("file");
-    render(<SecuritySettings />, { wrapper: wrap });
-    expect(screen.queryByRole("link", { name: /export or import the key/i })).toBeNull();
   });
 
   test("mutation error shows role=alert", () => {

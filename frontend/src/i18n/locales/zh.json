@@ -107,6 +107,8 @@
     "chat": "聊天",
     "modelProviders": "模型提供商",
     "sync": "同步",
+    "experimental": "实验",
+    "experimentalLabel": "{{label}}（实验）",
     "needsAttention": "有待处理的事项"
   },
   "resources": {
@@ -530,8 +532,7 @@
           "title": "把主密钥移到数据库旁的文件？",
           "body": "Coffer 会把主密钥重新保存到数据库旁的文件中，之后不再有钥匙串授权弹窗。"
         },
-        "confirmMove": "移动主密钥",
-        "syncLink": "在同步页面导出或导入主密钥"
+        "confirmMove": "移动主密钥"
       }
     },
     "models": {
@@ -1710,7 +1711,8 @@
     "subtitle": "把本机金库与一个你自己的 git 仓库收敛到一致，让你用的每一台机器都持有同样的知识、技能与配置。",
     "tabs": {
       "runs": "记录",
-      "setup": "配置"
+      "setup": "配置",
+      "machines": "机器"
     },
     "title": "同步",
     "toast": {

@@ -143,7 +143,10 @@ case in the code.
 Ten pre-apply snapshots are kept as git tags in the working tree
 (`coffer/pre-apply/<timestamp>`), not as rows: the tag's tree *is* the vault's
 state immediately before an apply, so a rollback is the same applier run
-backwards over that diff.
+backwards over that diff. The timestamp is UTC to the microsecond and is the
+snapshot's only age: "newest" is decided by the name, never by the tagged
+commit's date, which says when the vault last changed rather than when the
+round ran.
 
 ## Working tree — `~/.coffer/sync`
 
