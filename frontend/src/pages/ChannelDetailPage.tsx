@@ -1,16 +1,15 @@
 // frontend/src/pages/ChannelDetailPage.tsx — one channel's operating surface
 // (spec channels, User Stories 2 + 8): the shared PageHeader with the platform
 // chip beside the name and reach / edit / delete as its actions (mirrors
-// McpServerDetailPage), a live status card (adapter, paired peer), the machine
-// card (which machine runs this channel's adapter), the pairing-code
-// generator, a test-delivery card wired to the notify capability, and — for
-// SeaTalk — the inbound card: the state of the websocket connection Coffer
-// holds to the platform. Status auto-refreshes while the page is open.
+// McpServerDetailPage), and under it ONE card — ChannelOverviewCard — holding
+// the status strip (adapter, SeaTalk connection, machine), the account
+// (paired owner and pairing) and test delivery. Status auto-refreshes while
+// the page is open.
 //
-// The header's reach control and the machine card look adjacent and are not:
-// reach is which AGENTS this channel may drive, the machine card is which
-// MACHINE runs its adapter. The card says so, because a page carrying both is
-// exactly where the two get confused.
+// The header's reach control and the strip's machine picker look adjacent and
+// are not: reach is which AGENTS this channel may drive, the picker is which
+// MACHINE runs its adapter. The picker's "?" says so, because a page carrying
+// both is exactly where the two get confused.
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -23,20 +22,10 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScopeControl } from "@/components/ScopeControl";
-import {
-  ChannelPairingCard,
-  ChannelTestMessageCard,
-} from "@/components/channel/ChannelDetailCards";
-import { ChannelInboundCard } from "@/components/channel/ChannelInboundCard";
-import { ChannelStatusCard } from "@/components/channel/ChannelStatusCard";
+import { ChannelOverviewCard } from "@/components/channel/ChannelOverviewCard";
 import { EditChannelDialog } from "@/components/channel/EditChannelDialog";
 import { translateApiError } from "@/lib/api/errors";
-import {
-  useChannelStatus,
-  useIssuePairingCode,
-  useNotifyChannel,
-  CHANNEL_KIND,
-} from "@/lib/hooks/useChannels";
+import { useChannelStatus, CHANNEL_KIND } from "@/lib/hooks/useChannels";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { useResource } from "@/lib/hooks/useResources";
 
@@ -48,8 +37,6 @@ export function ChannelDetailPage() {
   // Poll while the detail page is open so a pairing completed from the IM app
   // (or an adapter restart) shows up without a manual refresh.
   const { data: status } = useChannelStatus(uid, { poll: true });
-  const pairing = useIssuePairingCode(uid);
-  const notify = useNotifyChannel(uid);
   const del = useDeleteResource();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -60,10 +47,7 @@ export function ChannelDetailPage() {
     return (
       <div className="space-y-6">
         <PageHeader back={back} title={<Skeleton className="h-8 w-48" />} />
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Skeleton className="h-40 w-full" />
-          <Skeleton className="h-40 w-full" />
-        </div>
+        <Skeleton className="h-72 w-full" />
       </div>
     );
   }
@@ -128,26 +112,11 @@ export function ChannelDetailPage() {
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ChannelStatusCard
-          uid={uid}
-          name={resource.name}
-          config={resource.config}
-          status={status}
-        />
-        <ChannelPairingCard
-          code={pairing.data}
-          isPending={pairing.isPending}
-          onGenerate={() => pairing.mutate()}
-        />
-      </div>
-
-      {status?.inbound ? <ChannelInboundCard inbound={status.inbound} /> : null}
-
-      <ChannelTestMessageCard
-        hasPeer={status?.peer != null}
-        isPending={notify.isPending}
-        onSend={(text) => notify.mutate(text)}
+      <ChannelOverviewCard
+        uid={uid}
+        name={resource.name}
+        config={resource.config}
+        status={status}
       />
 
       <EditChannelDialog open={editOpen} onOpenChange={setEditOpen} resource={resource} />
