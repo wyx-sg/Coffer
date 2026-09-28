@@ -153,6 +153,18 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
     # A connection's wire is a FIELD of the connection, corrected on the verb
     # that edits it: PATCH /api/v1/providers/{uid} carries `protocol`.
     "provider edit": {"--protocol", "--base-url", "--secret", "--title"},
+    # An MCP server's config as the web UI's edit dialog changes it, spelled
+    # the way `mcp add` spells it (spec mcp-gateway).
+    "mcp edit": {
+        "--title",
+        "--stdio",
+        "--http",
+        "--env",
+        "--header",
+        "--credential",
+        "--spawn-timeout-seconds",
+        "--request-timeout-seconds",
+    },
     # The group-gating switches of a channel (spec channels).
     "channel edit": {"--require-mention", "--ignore-other-mentions", "--title"},
 }

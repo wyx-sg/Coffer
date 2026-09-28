@@ -537,6 +537,114 @@ def test_mcp_edit_title_keeps_the_name(mcp_daemon: Any) -> None:
     assert (shown["name"], shown["title"]) == ("fs", "Files")
 
 
+def _config_of(uid: str) -> dict[str, Any]:
+    shown = json.loads(_runner.invoke(app, ["mcp", "show", uid, "--json"]).output)
+    return dict(shown["config"])
+
+
+def _edit(*args: str) -> Any:
+    return _runner.invoke(app, ["mcp", "edit", "fs", *args])
+
+
+def test_mcp_edit_stdio_replaces_the_command_line_only(mcp_daemon: Any) -> None:
+    uid = _register_server()
+    assert _edit("--env", "LOG=debug", "--credential", "TOKEN=mcp_server/x/TOKEN").exit_code == 0
+    result = _edit("--stdio", "npx -y my-server --flag")
+    assert result.exit_code == 0, result.output
+    transport = _config_of(uid)["transport"]
+    assert (transport["command"], transport["args"]) == ("npx", ["-y", "my-server", "--flag"])
+    assert transport["env"] == {"LOG": "debug"}
+    assert transport["credential_refs"] == {"TOKEN": "mcp_server/x/TOKEN"}
+
+
+def test_mcp_edit_env_merges_and_clear_env_drops_the_rest(mcp_daemon: Any) -> None:
+    uid = _register_server()
+    assert _edit("--env", "A=1", "--env", "B=2").exit_code == 0
+    assert _edit("--env", "B=3").exit_code == 0
+    assert _config_of(uid)["transport"]["env"] == {"A": "1", "B": "3"}
+    assert _edit("--clear-env", "--env", "C=4").exit_code == 0
+    assert _config_of(uid)["transport"]["env"] == {"C": "4"}
+
+
+def test_mcp_edit_credentials_merge_and_clear(mcp_daemon: Any) -> None:
+    uid = _register_server()
+    assert _edit("--credential", "A=ref/a", "--credential", "B=ref/b").exit_code == 0
+    assert _config_of(uid)["transport"]["credential_refs"] == {"A": "ref/a", "B": "ref/b"}
+    assert _edit("--clear-credentials").exit_code == 0
+    assert _config_of(uid)["transport"]["credential_refs"] == {}
+
+
+def test_mcp_edit_cwd_sets_and_empty_clears(mcp_daemon: Any) -> None:
+    uid = _register_server()
+    assert _edit("--cwd", "/tmp/work").exit_code == 0
+    assert _config_of(uid)["transport"]["cwd"] == "/tmp/work"
+    assert _edit("--cwd", "").exit_code == 0
+    assert _config_of(uid)["transport"]["cwd"] is None
+
+
+def test_mcp_edit_timeouts_keep_the_transport(mcp_daemon: Any) -> None:
+    uid = _register_server()
+    before = _config_of(uid)["transport"]
+    result = _edit("--spawn-timeout-seconds", "60", "--request-timeout-seconds", "600")
+    assert result.exit_code == 0, result.output
+    config = _config_of(uid)
+    assert (config["spawn_timeout_seconds"], config["request_timeout_seconds"]) == (60, 600)
+    assert config["transport"] == before
+
+
+def test_mcp_edit_timeout_out_of_bounds_is_refused(mcp_daemon: Any) -> None:
+    uid = _register_server()
+    result = _edit("--spawn-timeout-seconds", "1")
+    assert result.exit_code != 0
+    assert _config_of(uid).get("spawn_timeout_seconds", 30) == 30
+
+
+def test_mcp_edit_http_url_and_headers(mcp_daemon: Any) -> None:
+    uid = _register_server(transport="http")
+    result = _edit("--http", "https://example.com/mcp", "--header", "X-Team=core")
+    assert result.exit_code == 0, result.output
+    transport = _config_of(uid)["transport"]
+    assert transport["url"].rstrip("/") == "https://example.com/mcp"
+    assert transport["headers"] == {"X-Team": "core"}
+    assert _edit("--clear-headers").exit_code == 0
+    assert _config_of(uid)["transport"]["headers"] == {}
+
+
+def test_mcp_edit_switches_transport_keeping_credentials(mcp_daemon: Any) -> None:
+    uid = _register_server()
+    assert _edit("--env", "A=1", "--credential", "TOKEN=ref/t").exit_code == 0
+    result = _edit("--http", "https://example.com/mcp")
+    assert result.exit_code == 0, result.output
+    transport = _config_of(uid)["transport"]
+    assert transport["type"] == "http"
+    assert transport["credential_refs"] == {"TOKEN": "ref/t"}
+    assert "env" not in transport and "command" not in transport
+    assert _edit("--stdio", "cat").exit_code == 0
+    assert _config_of(uid)["transport"]["type"] == "stdio"
+
+
+def test_mcp_edit_refuses_a_flag_of_the_other_transport(mcp_daemon: Any) -> None:
+    uid = _register_server()
+    result = _edit("--header", "X=1")
+    assert result.exit_code == 2
+    assert "applies to a http server" in result.output
+    assert _config_of(uid)["transport"].get("headers") is None
+
+
+def test_mcp_edit_refuses_both_transports_and_bad_pairs(mcp_daemon: Any) -> None:
+    _register_server()
+    assert _edit("--stdio", "cat", "--http", "https://x.test").exit_code == 2
+    assert _edit("--env", "NOVALUE").exit_code == 2
+    assert _edit("--stdio", "").exit_code == 2
+
+
+def test_mcp_edit_secret_looking_env_is_refused(mcp_daemon: Any) -> None:
+    uid = _register_server()
+    result = _edit("--env", "TOKEN=sk-live-123")
+    assert result.exit_code != 0
+    assert _config_of(uid)["transport"].get("env") in (None, {})
+
+
 # ---------------------------------------------------------------------------
 # coffer mcp rm
 # ---------------------------------------------------------------------------

@@ -28,11 +28,7 @@ and ``context.py`` states it as the promise it relies on.
 
 from __future__ import annotations
 
-import pathlib
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
-
-from pydantic import BaseModel, ConfigDict
 
 from coffer.application.audit_service import AuditService
 from coffer.application.engine_ports import LlmCompletionPort, ModelSelectorPort
@@ -45,73 +41,21 @@ from coffer.application.memory.aggregate import (
     run_aggregation,
 )
 from coffer.application.memory.distil import DistilResult, distil_partition
+from coffer.application.memory.partition_row import (
+    MemoryPartitionConfig,
+    PartitionSummary,
+    config_of,
+    placement_of,
+    summary_of,
+)
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.memory.note import Note
-from coffer.domain.memory.partition import GLOBAL_PARTITION
 from coffer.domain.memory.reader import MemoryReader
-from coffer.domain.resource import Resource
 from coffer.infrastructure.memory import store
 from coffer.infrastructure.memory.readers import ClaudeCodeMemoryReader, CodexMemoryReader
 
 KIND_MEMORY = "memory"
-
-
-class MemoryPartitionConfig(BaseModel):
-    """``Resource.config`` payload when ``kind == 'memory'``.
-
-    Two fields, because a partition is keyed on a **repository** and a
-    repository is two things: an identity that two clones agree on, and a place
-    on this disk.
-
-    ``repository_key`` is what a working directory is resolved to —
-    ``remote:<host>/<path>`` when the repository has an ``origin``, so the main
-    checkout, a worktree and a second clone all land here, and ``path:<abs>``
-    when it has none. ``repository_path`` is the absolute root, which "Identify a partition by
-    its repository" requires be recorded on the Resource and which ``context.py`` matches a
-    session's ``cwd`` against. Both are empty for ``global``, which is not a
-    repository.
-
-    This replaces a single ``project_root``, whose value was the raw working
-    directory an entry happened to be learned in — the key that split a
-    worktree from its own checkout and made six dated scratch folders into six
-    permanent partitions (see "Create no partition for a non-repository directory").
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    repository_key: str = ""
-    repository_path: str = ""
-
-
-@dataclass(frozen=True)
-class PartitionSummary:
-    """One partition as the management surface lists it (see "Present partitions as a
-    table and a file tree").
-
-    ``unresolvable`` is computed here rather than stored, and it is the whole of "Report
-    unresolvable partitions": a partition whose repository is no longer on this disk can
-    never be resolved from any working directory again, so it is delivered to nobody. It
-    is **surfaced rather than hidden**, because only the developer can decide whether
-    that repository is coming back — an orphaned partition on the maintainer's live
-    vault simply sat there, undeliverable and unmentioned. A partition that carries no
-    ``repository_path`` at all is unresolvable for the same reason, and for one more: it
-    predates repository identity, so nothing will ever match it either.
-    """
-
-    #: The partition's identity — what a surface addresses it by, and what the
-    #: distil sweep and the Distil button both claim, so neither can be aimed
-    #: at a different partition by a label that moved in between.
-    uid: str
-    name: str
-    repository_key: str
-    repository_path: str
-    note_count: int
-    unresolvable: bool
-    #: The display title a person chose (spec resource-framework "Carry an optional
-    #: editable title on every resource"); ``None`` when unset, and a surface shows
-    #: the name in its place.
-    title: str | None = None
 
 
 #: The two readers this layer supports (spec memory "Reintroduce no retired mechanism" — a third
@@ -182,14 +126,14 @@ class MemoryService:
         outcome = run_aggregation(
             agents=[self._resolve_agent_source(row) for row in agent_rows],
             readers=self._readers,
-            known=[_placement_of(row) for row in memory_rows],
+            known=[placement_of(row) for row in memory_rows],
         )
 
         for touch in outcome.touched:
             row = known.get(touch.placement.name)
             if row is None:
                 await self._register_partition(touch, actor=actor)
-            elif _placement_of(row) != touch.placement:
+            elif placement_of(row) != touch.placement:
                 await self._record_repository(row.uid, touch.placement, actor=actor)
 
         result = outcome.result
@@ -223,7 +167,7 @@ class MemoryService:
         await self._resources.register(
             kind=KIND_MEMORY,
             name=touch.placement.name,
-            config=_config_of(touch.placement),
+            config=config_of(touch.placement),
             actor=actor,
             allow_lifecycle_kind=True,
         )
@@ -238,7 +182,7 @@ class MemoryService:
         """
         await self._resources.update_config(
             uid,
-            _config_of(placement),
+            config_of(placement),
             actor=actor,
             allow_lifecycle_kind=True,
         )
@@ -272,7 +216,7 @@ class MemoryService:
             row.name,
             completion=self._completion,
             model_selector=self._models,
-            repository_path=_placement_of(row).repository_path,
+            repository_path=placement_of(row).repository_path,
             credential_resolver=self._credential_resolver,
             read_timeout=self._read_timeout,
         )
@@ -299,7 +243,7 @@ class MemoryService:
         partitions as a table and a file tree"), which includes the disabled ones the
         read path below skips."""
         rows = await self._resources.list(kind=KIND_MEMORY)
-        return [_summary_of(row, _placement_of(row)) for row in sorted(rows, key=lambda r: r.name)]
+        return [summary_of(row, placement_of(row)) for row in sorted(rows, key=lambda r: r.name)]
 
     async def list_notes(self, partition: str) -> tuple[Note, ...]:
         """Every note in ``partition``, read from its ``notes/`` directory now.
@@ -352,48 +296,6 @@ class MemoryService:
         unreferenced. A move that cannot happen aborts the rename (``kind.py``).
         """
         store.rename_partition(old_name, new_name)
-
-
-def _placement_of(row: Resource) -> Placement:
-    """One ``memory`` Resource row as the pass's own value object."""
-    return Placement(
-        name=row.name,
-        repository_key=str(row.config.get("repository_key", "") or ""),
-        repository_path=str(row.config.get("repository_path", "") or ""),
-    )
-
-
-def _config_of(placement: Placement) -> dict[str, str]:
-    return {
-        "repository_key": placement.repository_key,
-        "repository_path": placement.repository_path,
-    }
-
-
-def _summary_of(row: Resource, placement: Placement) -> PartitionSummary:
-    return PartitionSummary(
-        uid=row.uid,
-        name=row.name,
-        title=row.title,
-        repository_key=placement.repository_key,
-        repository_path=placement.repository_path,
-        note_count=len(store.list_notes(row.name)),
-        unresolvable=_is_unresolvable(placement),
-    )
-
-
-def _is_unresolvable(placement: Placement) -> bool:
-    """Can any working directory still resolve to this partition?
-
-    ``global`` always can — it is delivered wherever the developer is working,
-    which is what it is for. Every other partition needs a repository path that
-    is still a directory on this disk.
-    """
-    if placement.name == GLOBAL_PARTITION:
-        return False
-    if not placement.repository_path:
-        return True
-    return not pathlib.Path(placement.repository_path).is_dir()
 
 
 __all__ = [

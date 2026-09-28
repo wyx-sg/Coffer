@@ -540,7 +540,7 @@ Show one MCP server, by name or uid.
 coffer mcp edit [OPTIONS] NAME
 ```
 
-Change an MCP server's title or description (its name is fixed).
+Change an MCP server's title, description, transport, env, headers, credential refs or timeouts (its name is fixed). Only the options given change.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -548,6 +548,17 @@ Change an MCP server's title or description (its name is fixed).
 | `--name` | option | text |  | Refused: this kind's name is fixed once registered (use --title) |
 | `--title` | option | text |  | Display title (≤80 chars); empty clears it |
 | `--description` | option | text |  |  |
+| `--stdio` | option | text |  | New command line, quoted as one string (stdio transport) |
+| `--http` | option | text |  | New URL (http transport) |
+| `--env` | option | text (repeatable) |  | Plain env var KEY=VALUE for a stdio server (repeatable) |
+| `--clear-env` | option | flag |  | Drop every plain env var first |
+| `--header` | option | text (repeatable) |  | Plain header KEY=VALUE for an http server (repeatable) |
+| `--clear-headers` | option | flag |  | Drop every plain header first |
+| `--cwd` | option | text |  | Working directory (stdio); empty clears it |
+| `--credential` | option | text (repeatable) |  | ENV_OR_HEADER=CREDENTIAL_REF (repeatable) |
+| `--clear-credentials` | option | flag |  | Drop every credential ref first |
+| `--spawn-timeout-seconds` | option | integer |  | Start-up timeout (5-120) |
+| `--request-timeout-seconds` | option | integer |  | Per-request timeout (5-1800) |
 
 ### mcp rm
 

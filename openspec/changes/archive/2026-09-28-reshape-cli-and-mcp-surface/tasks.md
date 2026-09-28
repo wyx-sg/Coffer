@@ -36,7 +36,7 @@
 
 - [x] 4.7 Sweep user-facing messages that still name removed commands (e.g. `domain/skill/drift.py` → `coffer skill add` / `coffer adopt skill`), and drop `--description` from `coffer knowledge edit` because a collection's description comes from its README — verify `grep -rn` over `backend/coffer` for every removed command name finds nothing user-facing
 
-- [ ] 4.8 Give `coffer mcp edit` the config and timeout flags the web UI's edit form sets (transport command/args/url, env and header credential refs, timeouts) so an MCP server's config is changeable from the CLI — verify a CLI test round-trips each flag through `PATCH /resources/{uid}`
+- [x] 4.8 Give `coffer mcp edit` the config and timeout flags the web UI's edit form sets (transport command/args/url, env and header credential refs, timeouts) so an MCP server's config is changeable from the CLI — verify a CLI test round-trips each flag through `PATCH /resources/{uid}`
 
 ## 5. Web UI
 
@@ -47,7 +47,7 @@
 ## 6. Tests and acceptance markers
 
 - [x] 6.1 Rewrite the reviewed command table in the REST/CLI parity test to the new tree and add the reviewed list of file-backed REST reads answered by `coffer path` — verify it passes in both directions
-- [ ] 6.2 For each spec below, add a test carrying `acceptance(<spec>, <scenario>)` for every NEW scenario the delta introduces, and rewrite the test behind every existing marker whose scenario text the delta changed — verify `scripts/audit_acceptance.py` reports no uncovered scenario:
+- [x] 6.2 For each spec below, add a test carrying `acceptance(<spec>, <scenario>)` for every NEW scenario the delta introduces, and rewrite the test behind every existing marker whose scenario text the delta changed — verify `scripts/audit_acceptance.py` reports no uncovered scenario:
   - resource-framework: 13 new (title, `log audit`, `config`, `path`, `scan/adopt/discard`, lifecycle verbs, `scope`, fixed name, retention, file-backed parity), 10 changed
   - mcp-gateway: 6 new (two built-ins, 24-char cap, long client name flag, `test`, `cap`, `log mcp`), 13 changed
   - skill-manager: 6 new (fixed name ×2, title, `scan` rows, `adopt/discard`, group verbs), 13 changed
@@ -59,7 +59,7 @@
   - vault-sync: 5 new (title ×3, `restore` without `--at`, `status` remote), 6 changed
   - web-ui: 4 new (titles ×2, Activity route, import review), 4 changed
   - experimental-features: 1 new, 11 changed; credentials: 2 new, 3 changed; channels: 1 new, 4 changed
-- [ ] 6.3 Delete or move the markers of removed scenarios — skill-manager "renaming a skill carries its master folder, links and frontmatter name", "manage unmanaged skills from the skill command group", "an empty or interactive `skill write` saves nothing", "a truncated `skill cat` does not pass for the whole file"; memory "advertise recall as a locator and no remember tool", "recall answers with locations, and never with a retired note", "compose context and recall without creating a partition", "compose context and recall without calling any model"; web-ui "an agent reads recent changes and failures in one call" — verify `scripts/audit_acceptance.py` passes
+- [x] 6.3 Delete or move the markers of removed scenarios — skill-manager "renaming a skill carries its master folder, links and frontmatter name", "manage unmanaged skills from the skill command group", "an empty or interactive `skill write` saves nothing", "a truncated `skill cat` does not pass for the whole file"; memory "advertise recall as a locator and no remember tool", "recall answers with locations, and never with a retired note", "compose context and recall without creating a partition", "compose context and recall without calling any model"; web-ui "an agent reads recent changes and failures in one call" — verify `scripts/audit_acceptance.py` passes
 - [x] 6.4 Update e2e specs that drive removed commands — verify `make e2e` (spare-port run with `COFFER_CORS_ORIGINS`)
 
 ## 7. Contracts, docs and conventions
@@ -73,7 +73,7 @@
 - [x] 7.7 Update the main specs' `## Purpose` text that names removed commands or tools: resource-framework (`coffer engine upkeep runs`, `coffer resource|scope|audit|retention`, the parity sentence), mcp-gateway ("rename" in the framework list), web-ui (the `coffer__diagnose` sentence), internal-engine (`coffer engine …`, `provider internal-default|transcribe-default`), daemon (the "gap with no reason" sentence about the daemon log), credentials (`delete|storage`), skill-manager (`coffer skill files|cat|write`) — verify by grepping the main specs for every removed command name
 - [x] 7.8 Move requirement citations off removed titles — `.agents/openspec.md` example ("Keep one master folder per skill and carry it through a rename" → "Keep one master folder per skill"), `docs/decisions/cross-platform-skill-delivery.md`, `backend/coffer/application/mcp/gateway.py` and other code/test comments citing "Create partitions only by aggregation" or "Send content out only for distil" (→ "Provision partitions only from aggregation", "Send file content out only for distil"), `agent_unmanaged_skill_routes.py` ("Expose unmanaged-skill operations on REST, CLI and web"), `test_cli_parity.py` ("Cover skill management on REST, the CLI and the web") — verify `python3 scripts/check_spec_citations.py` prints no "removed or renamed" note
 
-- [ ] 7.9 Replace the illustrative `coffer scan` and `coffer mcp cap list` output in `docs-site/start/quickstart.md` with output captured from a real run in an isolated home; drop the `coffer__recall` mention from `openspec/specs/memory/contracts/api.openapi.yaml`
+- [x] 7.9 Replace the illustrative `coffer scan` and `coffer mcp cap list` output in `docs-site/start/quickstart.md` with output captured from a real run in an isolated home; drop the `coffer__recall` mention from `openspec/specs/memory/contracts/api.openapi.yaml`
 
 ## 8. Verify and archive
 

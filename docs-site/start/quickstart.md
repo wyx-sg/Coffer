@@ -114,17 +114,17 @@ coffer mcp cap list filesystem --type tool
 ```
 
 ```text
-OK  (2907 ms)
-
-                      filesystem capabilities
-┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
-┃ Ref                 ┃ Enabled ┃ Name length ┃ Description     ┃
-┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
-│ tool:read_text_file │ yes     │ 39          │ Read the …      │
-│ tool:write_file     │ yes     │ 35          │ Create a new …  │
-│ tool:list_directory │ yes     │ 39          │ Get a detailed… │
-│ …                   │ …       │ …           │ …               │
-└─────────────────────┴─────────┴─────────────┴─────────────────┘
+capabilities: 14 tools, 0 prompts, 0 resources (re-queried)
+OK  (993 ms)
+                          filesystem capabilities
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Ref                 ┃ Enabled ┃ Name length ┃ Description                ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ tool:read_file      │ yes     │ 34          │ Read the complete contents │
+│ tool:read_text_file │ yes     │ 39          │ Read the complete contents │
+│ tool:write_file     │ yes     │ 35          │ Create a new file or …     │
+│ …                   │ …       │ …           │ …                          │
+└─────────────────────┴─────────┴─────────────┴────────────────────────────┘
 ```
 
 The first test can take a few seconds while `npx` downloads the package. An agent sees each tool as `filesystem__<tool>`. **Name length** counts the full name a client such as Claude Code sees, `mcp__coffer__filesystem__<tool>`; a name over 64 characters is flagged with `!`, because model provider APIs refuse it.

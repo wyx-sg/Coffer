@@ -41,7 +41,7 @@ info:
 
     A partition carries no per-agent reach ("Serve every enabled partition to
     every agent"): every **enabled** partition is served to every agent, on
-    `POST /context` and on `coffer__recall` alike — so the owner's own view
+    `POST /context` and in the memory root it names alike — so the owner's own view
     through `list_partitions` / `list_notes` / `get_note` / `list_retired` / the
     file family is the same corpus an agent's session reaches, not a wider one.
 

@@ -7,98 +7,26 @@
 // detail, and a tool whose client-visible name is over 64 characters is flagged
 // under its name. The enable/disable mutations keep per-row in-flight state so toggling
 // one capability never disables the switches on the others.
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type Column, type FilterDef } from "@/components/DataTable";
 import { CodeView } from "@/components/preview/CodeView";
-import { toneClass } from "@/lib/statusColors";
-import { cn } from "@/lib/utils";
-import type { components } from "@/lib/api/types";
-import { useDisableCapability, useEnableCapability } from "@/lib/hooks/useMcpCapabilityMutations";
 import { CapabilityBulkActions } from "./CapabilityBulkActions";
+import { ClientNameFlag, ToggleSwitch } from "./CapabilityRowCells";
+import {
+  CLIENT_NAME_LIMIT,
+  toRows,
+  type CapabilityLists,
+  type RowDescriptor,
+} from "./capabilityRows";
 
-type ToolView = components["schemas"]["MCPToolView"];
-type ResourceView = components["schemas"]["MCPResourceView"];
-type PromptView = components["schemas"]["MCPPromptView"];
-type CapabilityKind = "tool" | "resource" | "prompt";
-
-interface Props {
+interface Props extends CapabilityLists {
   serverUid: string;
-  kind: CapabilityKind;
-  tools?: ToolView[];
-  resources?: ResourceView[];
-  prompts?: PromptView[];
   // Set when the /capabilities fetch failed. An errored fetch yields an
   // undefined list — the same shape as a genuinely empty upstream — so we must
   // distinguish them: a failure shows a load-error message, not "nothing
   // discovered" (which would wrongly imply the upstream has no such capability).
   error?: unknown;
-}
-
-interface RowDescriptor {
-  key: string;
-  prefixed: string;
-  description: string | null | undefined;
-  enabled: boolean;
-  schema?: Record<string, unknown>;
-  /** Length of `mcp__coffer__<prefixed>` — the name a client shows. Tools and
-   *  prompts only; a resource is addressed by URI, not by a tool name. */
-  clientNameLength?: number;
-}
-
-/** The limit model provider APIs place on a tool name (spec mcp-gateway "Flag
- *  tools whose client-visible name is too long"). Flagging only: the tool stays
- *  enabled and listed under its usual name. */
-const CLIENT_NAME_LIMIT = 64;
-
-function ClientNameFlag({ length }: { length: number }) {
-  const { t } = useTranslation();
-  return (
-    <p className={cn("mt-1 w-fit rounded-sm px-1.5 py-0.5 text-xs", toneClass("warn"))} role="note">
-      {t("mcp.capabilities.nameTooLong", { length, limit: CLIENT_NAME_LIMIT })}
-    </p>
-  );
-}
-
-function ToggleSwitch({
-  serverUid,
-  kind,
-  row,
-}: {
-  serverUid: string;
-  kind: CapabilityKind;
-  row: RowDescriptor;
-}) {
-  const { t } = useTranslation();
-  const enable = useEnableCapability();
-  const disable = useDisableCapability();
-  // Per-row in-flight state: this switch is the only one toggling, so a single
-  // boolean suffices (the per-row scope is naturally enforced by component
-  // instance rather than a shared key set).
-  const [pending, setPending] = useState(false);
-
-  return (
-    <Switch
-      checked={row.enabled}
-      disabled={pending}
-      aria-label={t("mcp.capabilities.toggleAria", { kind, key: row.key })}
-      onClick={(e) => e.stopPropagation()}
-      onCheckedChange={(checked) => {
-        const m = checked ? enable : disable;
-        setPending(true);
-        m.mutate(
-          {
-            serverUid,
-            capabilityType: kind,
-            capabilityKey: row.key,
-          },
-          { onSettled: () => setPending(false) },
-        );
-      }}
-    />
-  );
 }
 
 export function CapabilityList(props: Props) {
@@ -222,35 +150,4 @@ export function CapabilityList(props: Props) {
       emptyMessage={emptyMessage}
     />
   );
-}
-
-function toRows(props: Props): RowDescriptor[] {
-  if (props.kind === "tool" && props.tools) {
-    return props.tools.map((t) => ({
-      key: t.original_name,
-      prefixed: t.prefixed_name,
-      description: t.description,
-      enabled: t.enabled,
-      schema: t.input_schema as Record<string, unknown> | undefined,
-      clientNameLength: t.client_name_length,
-    }));
-  }
-  if (props.kind === "resource" && props.resources) {
-    return props.resources.map((r) => ({
-      key: r.original_uri,
-      prefixed: r.prefixed_uri,
-      description: r.description,
-      enabled: r.enabled,
-    }));
-  }
-  if (props.kind === "prompt" && props.prompts) {
-    return props.prompts.map((p) => ({
-      key: p.original_name,
-      prefixed: p.prefixed_name,
-      description: p.description,
-      enabled: p.enabled,
-      clientNameLength: p.client_name_length,
-    }));
-  }
-  return [];
 }
