@@ -38,6 +38,15 @@ The web UI MUST present partitions **as a table** once any exists; with none, it
 - **THEN** the partitions page shows the first-run welcome with none and the table with one, and the partition's page shows a file tree holding `MEMORY.md` and `notes/` and no `.raw/`, beside a read-only preview of the chosen note whose frontmatter is not in the rendered body
 - **AND** the preview offers open-in-editor and reveal-in-file-manager and no per-note edit or delete action
 
+### Requirement: Recall locations by literal match
+`coffer__recall` MUST take a word or phrase, span every partition (see "Serve every partition to every agent"), exclude retired notes and `.raw/`, and return each match's **absolute path**, title and description — not its body, which the caller reads for itself (see "Keep notes readable as plain files"). Matching MUST be a case-insensitive literal scan with no score, no mode and no reason in the answer, and MUST need no internal connection. Its job is to answer "where is the note about X" for a partition the session was not opened in; for the partition it *was* opened in, the index is already in front of the caller and recall should not be needed at all.
+
+#### Scenario: recall answers with locations, and never with a retired note
+- **GIVEN** a partition holding notes, one of them retired, both matching a distinctive phrase
+- **WHEN** `coffer__recall` is called with that phrase
+- **THEN** the active note comes back with its **absolute path**, title and description, and the retired one does not
+- **AND** the answer spans every partition, whichever agent is asking, and carries no score, no mode and no ranking (see "Serve every partition to every agent", "Recall locations by literal match")
+
 ## REMOVED Requirements
 
 ### Requirement: Serve every enabled partition to every agent

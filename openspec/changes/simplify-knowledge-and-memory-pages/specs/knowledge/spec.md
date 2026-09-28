@@ -18,6 +18,15 @@ Every collection MUST be named, catalogued and served to **every** agent, and a 
 - **THEN** the first save rewrites the body, keeps the frontmatter's title and description, and answers with the new fingerprint
 - **AND** the second is refused with 409 `KNOWLEDGE_FILE_CONFLICT` and the file still holds the first save's body
 
+### Requirement: Cover knowledge management on REST and the CLI
+The REST API under `/api/v1/knowledge` and the `coffer knowledge` CLI group MUST cover: create a collection, list one level of a collection at a path, read a document, save an edited document's body (`PUT /file`; `coffer knowledge save`, see "Save a document edited in the web UI"), submit material (`POST /material`; `coffer knowledge write`), upload a document, delete a document, and trigger curation. A person may equally edit a document in their own editor, reached from the page's open-in-editor action, and that edit is live on the next read (see "Keep direct file edits a complete way to change knowledge"). Collection deletion goes through the Resource framework (`DELETE /api/v1/resources/{uid}`). There MUST be no index, reindex, check-sources, update-source or embedding-configuration endpoint, no settings endpoint for the cwd-derived scope axis "Derive no boundary from the working directory" forbids, no per-agent reach endpoint for this kind and no enabled switch (see "Serve every collection to every agent"). These surfaces serve the human and the UI; they are not an agent's retrieval path.
+
+#### Scenario: expose every knowledge operation on both surfaces
+- **GIVEN** the daemon's route table and the `coffer knowledge` command group
+- **WHEN** both are enumerated
+- **THEN** each offers create, list a level, read, save an edited body, submit material, upload, delete a document and trigger curation
+- **AND** none is an index, reindex, source, embedding, scope or reach endpoint
+
 ## MODIFIED Requirements
 
 ### Requirement: Hide dot-prefixed entries except the inbox
@@ -43,8 +52,21 @@ The web UI MUST present a collection as **one tree** of its documents — no lan
 - **WHEN** the user chooses Edit, changes the text and saves
 - **THEN** the save is sent with the fingerprint the pane loaded, and the pane renders the saved body
 
+### Requirement: Deliver the guide as the shared-master link
+The skill MUST reach each agent as the **ordinary shared-master link** of [skill-manager](../skill-manager/spec.md) "Deliver a skill as a directory link" — one master folder, one link per agent — and MUST NOT be written into an agent's directory as real bytes. **This too reverses what this requirement used to say.** The rule was that each agent's copy be independent bytes, because a link into a shared master was "a copy this layer cannot re-render, stale or reclaim". Neither half of that is true any more: the master is re-rendered in place at every boot and whenever the catalogue changes, which re-renders every agent's view of it at once; and reclaiming is the skill kind's own per-agent reconciliation against the delivery predicate ([skill-manager](../skill-manager/spec.md) "Reconcile deliveries per agent on every trigger"), which removes one agent's link without touching another's or the master. The text is the same for every agent (see "Serve every collection to every agent"), so per-agent bytes were buying independence nothing asked for while paying for it with a delivery path of this layer's own. Re-rendering MUST happen whenever the catalogue changes — after a curation pass or a promotion, or a collection's creation, rename or deletion, and on every sweep tick so a document a person added by hand is catalogued too — and MUST never raise: a failed render leaves the previous master exactly where it was, and the corpus stays readable at paths a person can still give an agent.
+
+#### Scenario: every agent reaches the guide through the one master folder
+- **GIVEN** two registered agents and the `coffer-guide` skill seeded
+- **WHEN** each agent's `<config_dir>/skills/coffer-guide` is inspected
+- **THEN** each is the ordinary Coffer-managed link into `~/.coffer/skills/coffer-guide/`, not a directory of real bytes
+- **AND** a re-render that changes the catalogue changes what both agents read in one write, while narrowing the skill's scope to one agent reclaims only the other agent's link and leaves the master untouched
+
 ## REMOVED Requirements
 
 ### Requirement: Gate collections with enabled alone
 **Reason**: Nobody disables a collection; the layer as a whole is already switched by the experimental-features toggle.
 **Migration**: Replaced by "Serve every collection to every agent"; a migration enables every collection stored disabled.
+
+### Requirement: Cover collection management on REST and the CLI
+**Reason**: It forbade any route that writes a document; the web UI now saves edited documents.
+**Migration**: Replaced by "Cover knowledge management on REST and the CLI", which adds the save operation on REST and the CLI.

@@ -9,7 +9,8 @@
 - [ ] 2.1 Serve every collection: the service's enabled filter goes; `coffer__write` refuses only an unknown collection
 - [ ] 2.2 Tree route lists a collection root's `.inbox/` and its items; read route reads an inbox item; nothing else hidden
 - [ ] 2.3 Read carries `fingerprint`; `PUT /api/v1/knowledge/file` saves a body, keeps frontmatter, 409 `KNOWLEDGE_FILE_CONFLICT` on a stale fingerprint, refuses inbox items
-- [ ] 2.4 Tests acceptance(knowledge, "every collection is in every agent's skill"), (knowledge, "leave hidden entries out of every listing"), (knowledge, "save an edited body and refuse a stale one")
+- [ ] 2.4 `coffer knowledge save <path> <body-file>` reads the fingerprint and saves through `PUT /file`
+- [ ] 2.5 Tests acceptance(knowledge, "expose every knowledge operation on both surfaces"), (knowledge, "every collection is in every agent's skill"), (knowledge, "leave hidden entries out of every listing"), (knowledge, "save an edited body and refuse a stale one")
 
 ## 3. Backend — memory
 
