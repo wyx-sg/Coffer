@@ -31,8 +31,9 @@ use tauri_plugin_notification::NotificationExt;
 use crate::discovery::read_daemon_info;
 use crate::sync_alert::{next_action, parse_sync_status, AlertAction};
 use crate::sync_gate::{parse_vault_sync, plan_tick, MenuChange};
-use crate::sync_presentation::{badge_rgba, notification_body, tray_label, NOTIFICATION_TITLE};
-use crate::tray::{base_tray_icon, TrayMenu, SYNC_MENU_POSITION, TRAY_ID};
+use crate::sync_presentation::{badge_rgba, notification_body, notification_title};
+use crate::tray::{base_tray_icon, set_sync_attention, TrayMenu, SYNC_MENU_POSITION, TRAY_ID};
+use crate::tray_locale;
 
 /// The tray entry this module owns: a permanent route to the `/sync` page whose
 /// label becomes the alert when a round needs a human. It is the click target
@@ -40,10 +41,6 @@ use crate::tray::{base_tray_icon, TrayMenu, SYNC_MENU_POSITION, TRAY_ID};
 /// no click handler on macOS, so the thing the user reaches for after reading
 /// the notification is the tray, not the banner.
 pub const SYNC_MENU_ITEM_ID: &str = "sync_status";
-/// What that entry says when there is nothing outstanding. It claims nothing
-/// about the vault's state, so an unconfigured machine — where this module does
-/// nothing at all — is not shown a reassurance it has not earned.
-pub const SYNC_MENU_IDLE_LABEL: &str = "Sync status";
 
 /// A short pause before the first tick, so it does not race the launch
 /// handshake's detect-or-spawn. A tick that finds no daemon simply tries again.
@@ -83,7 +80,7 @@ pub fn start(app: AppHandle, tray: TrayMenu) {
                 );
                 if plan.clear_marks {
                     notified = None;
-                    apply(&app, &item, &AlertAction::Clear);
+                    apply(&app, &AlertAction::Clear);
                 }
                 if !vault_sync {
                     last_sync_poll = None;
@@ -104,7 +101,7 @@ pub fn start(app: AppHandle, tray: TrayMenu) {
                             AlertAction::Clear => notified = None,
                             AlertAction::Nothing => {}
                         }
-                        apply(&app, &item, &action);
+                        apply(&app, &action);
                     }
                 }
             }
@@ -236,18 +233,21 @@ fn dechunk(body: &str) -> Option<String> {
 
 /// Perform one decision. Every failure here is logged and swallowed: a tray
 /// that could not be repainted must not take the poll thread down with it.
-fn apply(app: &AppHandle, item: &MenuItem<Wry>, action: &AlertAction) {
+fn apply(app: &AppHandle, action: &AlertAction) {
     match action {
         AlertAction::Raise(status) => {
             log::warn!("sync.attention raised status={status}");
             mark_icon(app, true);
-            let _ = item.set_text(tray_label(status));
+            // Names the condition on the Sync entry and the tooltip, in the
+            // interface language (`tray.rs`), and keeps it for a relabel.
+            set_sync_attention(app, Some(status));
             set_dock_badge(app, Some(DOCK_BADGE));
+            let lang = tray_locale::current();
             if let Err(e) = app
                 .notification()
                 .builder()
-                .title(NOTIFICATION_TITLE)
-                .body(notification_body(status))
+                .title(notification_title(lang))
+                .body(notification_body(status, lang))
                 .show()
             {
                 log::warn!("sync.attention notification failed: {e}");
@@ -256,7 +256,7 @@ fn apply(app: &AppHandle, item: &MenuItem<Wry>, action: &AlertAction) {
         AlertAction::Clear => {
             log::info!("sync.attention cleared");
             mark_icon(app, false);
-            let _ = item.set_text(SYNC_MENU_IDLE_LABEL);
+            set_sync_attention(app, None);
             set_dock_badge(app, None);
         }
         AlertAction::Nothing => {}
@@ -278,12 +278,6 @@ fn mark_icon(app: &AppHandle, marked: bool) {
     if let Err(e) = tray.set_icon(Some(icon)) {
         log::warn!("sync.attention tray icon: {e}");
     }
-    let tooltip = if marked {
-        "Coffer — sync needs attention"
-    } else {
-        "Coffer"
-    };
-    let _ = tray.set_tooltip(Some(tooltip));
 }
 
 /// The Dock badge. macOS is the only platform the shell ships on (spec

@@ -18,6 +18,8 @@ import {
   HANDSHAKE_RETRY_DELAYS_MS,
   restartDaemon,
   daemonVersionMatches,
+  followLanguageInShell,
+  setShellLanguage,
 } from "./tauri";
 import { getCofferBaseUrl, getCofferToken } from "./auth";
 import { getApiClient, resetApiClient } from "./api/client";
@@ -230,5 +232,59 @@ describe("handshakeRetryDelay", () => {
     // There is no attempt after which the app gives up, so there is no
     // attempt number without a delay.
     expect(handshakeRetryDelay(999)).toBe(last);
+  });
+});
+
+describe("followLanguageInShell", () => {
+  beforeEach(() => invokeMock.mockReset());
+  afterEach(() => leaveTauri());
+
+  function fakeI18n(language: string) {
+    let listener: ((lng: string) => void) | undefined;
+    return {
+      language,
+      on: (_event: "languageChanged", cb: (lng: string) => void) => {
+        listener = cb;
+      },
+      switchTo: (lng: string) => listener?.(lng),
+    };
+  }
+
+  test("does nothing in a browser, which has no tray", async () => {
+    leaveTauri();
+    await setShellLanguage("zh");
+    const report = vi.fn().mockResolvedValue(undefined);
+    followLanguageInShell(fakeI18n("zh"), report);
+    expect(report).not.toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  test("setShellLanguage invokes set_ui_language inside Tauri", async () => {
+    enterTauri();
+    invokeMock.mockResolvedValue(undefined);
+    await setShellLanguage("zh");
+    expect(invokeMock).toHaveBeenCalledWith("set_ui_language", { language: "zh" });
+  });
+
+  acceptance("desktop-app", "the tray speaks the interface language", () => {
+    enterTauri();
+    const report = vi.fn().mockResolvedValue(undefined);
+    const i18n = fakeI18n("zh");
+    followLanguageInShell(i18n, report);
+    // Reported at start, so the tray matches the page from launch…
+    expect(report).toHaveBeenLastCalledWith("zh");
+    // …and again on a switch, so it relabels without a restart.
+    i18n.switchTo("en");
+    expect(report).toHaveBeenLastCalledWith("en");
+    expect(report).toHaveBeenCalledTimes(2);
+  });
+
+  test("a failed report is logged, not thrown", async () => {
+    enterTauri();
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const report = vi.fn().mockRejectedValue(new Error("no shell"));
+    followLanguageInShell(fakeI18n("en"), report);
+    await vi.waitFor(() => expect(err).toHaveBeenCalled());
+    err.mockRestore();
   });
 });

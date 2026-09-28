@@ -20,6 +20,7 @@
 //   * `daemon`    — the IPC commands and the detect-or-spawn policy
 //   * `sync_gate` — whether the sync surfaces exist (`vault_sync` feature)
 //   * `tray`      — system tray icon + close-to-tray logic
+//   * `tray_locale` — the interface language the tray labels itself in
 
 mod daemon;
 mod discovery;
@@ -35,6 +36,7 @@ mod sync_gate;
 mod sync_presentation;
 mod sync_watch;
 mod tray;
+mod tray_locale;
 
 use tauri::{Manager, RunEvent, WindowEvent};
 
@@ -80,6 +82,7 @@ pub fn run() {
             daemon::restart_daemon,
             daemon::get_daemon_info,
             daemon::daemon_version_matches,
+            tray::set_ui_language,
         ])
         .setup(|app| {
             // The window is configured hidden and revealed by the handshake
