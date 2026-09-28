@@ -1,15 +1,15 @@
 // frontend/src/pages/sync/SyncPage.tsx — the top-level Sync surface
-// (spec vault-sync "Present a Sync page with Runs and Setup tabs").
+// (spec vault-sync "Present a Sync page with Runs, Setup and Machines tabs").
 //
 // Sync is cross-cutting rather than a resource kind, and convergence is
 // something a person opens deliberately rather than a setting they tweak once,
 // so it is a page under System, not a Settings tab. `/settings/sync` redirects
 // here.
 //
-// Two tabs: **Runs** (every round this machine has run, and anything one of
-// them is waiting on) and **Setup** (the remote, the master key, the machine
-// registry). Runs is the landing tab, because what a person opens Sync to find
-// out is whether it is working.
+// Three tabs: **Runs** (every round this machine has run, and anything one of
+// them is waiting on), **Setup** (the remote and the master key) and
+// **Machines** (the registry). Runs is the landing tab, because what a person
+// opens Sync to find out is whether it is working.
 //
 // There were three. **Status** is gone, and its two banners with it: a conflict
 // and a held round are not states beside the history, they are the newest row
@@ -18,9 +18,9 @@
 // that is waiting (`SyncHeldRoundActions`), gated on the vault actually
 // waiting rather than on a row that merely ended held.
 //
-// **Machines** folded into Setup for the opposite reason: pointing at a
-// remote, carrying the key over and watching the second machine appear are one
-// errand, and the last step is how you know the first two worked.
+// **Machines** is a tab of its own: the registry is something you come back to
+// — rename this machine, retire one that is gone — long after the remote and
+// the key were set once, so it is not buried under them.
 //
 // Only the tab in front queries: Radix unmounts the other, and Runs is handed
 // `enabled` besides, so nothing is fetched and thrown away.
@@ -34,9 +34,10 @@ import { RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SyncRunsTab } from "./SyncRunsTab";
+import { SyncMachinesTab } from "./SyncMachinesTab";
 import { SyncSetupTab } from "./SyncSetupTab";
 
-const TABS = ["runs", "setup"] as const;
+const TABS = ["runs", "setup", "machines"] as const;
 type SyncTab = (typeof TABS)[number];
 
 function isSyncTab(value: string | null): value is SyncTab {
@@ -65,12 +66,16 @@ export function SyncPage() {
         <TabsList>
           <TabsTrigger value="runs">{t("sync.tabs.runs")}</TabsTrigger>
           <TabsTrigger value="setup">{t("sync.tabs.setup")}</TabsTrigger>
+          <TabsTrigger value="machines">{t("sync.tabs.machines")}</TabsTrigger>
         </TabsList>
         <TabsContent value="runs" className="pt-6">
           <SyncRunsTab enabled={tab === "runs"} />
         </TabsContent>
         <TabsContent value="setup" className="pt-6">
           <SyncSetupTab />
+        </TabsContent>
+        <TabsContent value="machines" className="pt-6">
+          <SyncMachinesTab />
         </TabsContent>
       </Tabs>
     </div>
