@@ -76,6 +76,8 @@ Click the tray icon for its menu:
 | **Restart daemon** | Stops the running daemon and starts a fresh one. |
 | **Quit Coffer** | Quits the app. The daemon keeps running. |
 
+The tray, its tooltip and the sync notification use the interface language you pick in the sidebar (English or 中文). Switching language relabels the tray at once. Until the window has loaded, the tray uses your macOS language.
+
 Closing the window hides the app to the tray instead of quitting it. Clicking Coffer in the Dock brings the window back.
 
 When a sync round needs a human — held for confirmation, a conflict, a failed push, a failed run, or a machine that has not joined yet — the app badges the tray icon and the Dock icon and posts one macOS notification titled **Coffer sync needs you**. Choosing **Sync status** takes you to the page that resolves it.
