@@ -15,6 +15,7 @@ import { CodeView } from "@/components/preview/CodeView";
 import type { components } from "@/lib/api/types";
 import { useDisableCapability, useEnableCapability } from "@/lib/hooks/useMcpCapabilityMutations";
 import { CapabilityBulkActions } from "./CapabilityBulkActions";
+import { declaresParameters } from "./declaresParameters";
 
 type ToolView = components["schemas"]["MCPToolView"];
 type ResourceView = components["schemas"]["MCPResourceView"];
@@ -209,16 +210,6 @@ export function CapabilityList(props: Props) {
       />
     </div>
   );
-}
-
-// A schema that declares no parameters (`{}`, or an object schema whose
-// `properties` is missing or empty) carries nothing worth showing; treat it as
-// absent so the row detail reads "no parameters" instead of a bare `{}`.
-function declaresParameters(schema: Record<string, unknown> | undefined): boolean {
-  if (!schema) return false;
-  const props = schema.properties;
-  if (props === undefined) return Object.keys(schema).some((k) => k !== "type");
-  return typeof props === "object" && props !== null && Object.keys(props).length > 0;
 }
 
 function toRows(props: Props): RowDescriptor[] {
