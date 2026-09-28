@@ -118,6 +118,8 @@ export type {
   McpEntriesResponse,
   McpEntryDetailOut,
   McpEntryOut,
+  PluginComponentOut,
+  PluginDetailOut,
   PluginOut,
   PluginsResponse,
   SkillRefOut,
@@ -130,6 +132,7 @@ import type {
   AdoptMcpEntryBody,
   McpEntriesResponse,
   McpEntryDetailOut,
+  PluginDetailOut,
   PluginsResponse,
   SkillRefOut,
   UnmanagedSkillDetailOut,
@@ -197,6 +200,8 @@ export const agentsApi = {
   // writes the agent's documented config surface; uninstall drops the entry
   // (Codex) or delegates to the agent's own CLI (Claude Code).
   plugins: (uid: string) => call<PluginsResponse>(`/agents/${enc(uid)}/plugins`),
+  plugin: (uid: string, id: string) =>
+    call<PluginDetailOut>(`/agents/${enc(uid)}/plugins/${enc(id)}`),
   togglePlugin: (uid: string, id: string, enabled: boolean) =>
     call<void>(`/agents/${enc(uid)}/plugins/${enc(id)}`, { method: "PATCH", body: { enabled } }),
   uninstallPlugin: (uid: string, id: string) =>

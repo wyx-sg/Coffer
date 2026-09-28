@@ -32,6 +32,7 @@ from coffer.application.agent.plugin_uninstall import uninstall_codex, uninstall
 from coffer.application.agent.plugin_views import (
     PluginCliRunner,
     PluginDetailReader,
+    PluginDetailView,
     PluginsOut,
     PluginView,
 )
@@ -127,6 +128,29 @@ class AgentPluginService:
         # Surface whether in-app uninstall can run now so the UI shows the
         # button on capability, not on agent type.
         return replace(out, can_uninstall=self._uninstall_available(cap))
+
+    async def get_plugin(self, uid: str, plugin_id: str) -> PluginDetailView:
+        """One plugin's detail — its listing row, its marketplace's source, its
+        install dir and everything its package contributes. Read-only; an id the
+        listing does not report is ``PluginNotFound``."""
+        out = await self.list_plugins(uid)
+        view = next((p for p in out.items if p.id == plugin_id), None)
+        if view is None:
+            raise PluginNotFound(plugin_id)
+        market = next((m for m in out.marketplaces if m.name == view.marketplace), None)
+        contents = (
+            self._detail_reader.read_contents(view.install_path)
+            if self._detail_reader is not None and view.install_path and view.cache_present
+            else None
+        )
+        return PluginDetailView(
+            plugin=view,
+            marketplace_source_type=market.source_type if market else None,
+            marketplace_source=market.source if market else None,
+            install_path=contents.root if contents else None,
+            can_uninstall=out.can_uninstall,
+            contents=contents,
+        )
 
     def _uninstall_available(self, cap: PluginCapability) -> bool:
         """In-app uninstall is possible when the capability allows it AND, for
@@ -243,6 +267,7 @@ class AgentPluginService:
             skills=detail.skills if detail else (),
             commands=detail.commands if detail else (),
             mcp_servers=detail.mcp_servers if detail else (),
+            install_path=install_path,
         )
 
     # ------------------------------------------------------------------

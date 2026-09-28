@@ -901,10 +901,6 @@
         "searchPlaceholder": "搜索插件",
         "version": "版本",
         "author": "作者",
-        "bundledSkills": "附带技能",
-        "bundledCommands": "附带命令",
-        "bundledMcp": "附带 MCP 服务器",
-        "noDetail": "该插件暂无更多信息。",
         "uninstallConfirmTitle": "卸载 {{name}}？"
       }
     },
@@ -1048,6 +1044,19 @@
       "truncated": "内容已截断——只显示文件开头。",
       "readOnlyHint": "这些文件归 Agent 所有，它会自行改写；要修改请在编辑器中打开。",
       "missingDir": "没有指定记忆存储——请从该 Agent 的「记忆」标签页进入。"
+    },
+    "pluginDetail": {
+      "loadFailed": "无法加载此插件",
+      "homepage": "主页",
+      "installPath": "安装位置",
+      "notOnDisk": "不在磁盘上——插件的缓存目录缺失",
+      "contents": "内容",
+      "skills": "技能",
+      "commands": "命令",
+      "agents": "子代理",
+      "hooks": "钩子",
+      "mcpServers": "MCP 服务器",
+      "noContents": "此插件未提供任何技能、命令、子代理、钩子或 MCP 服务器。"
     }
   },
   "skills": {

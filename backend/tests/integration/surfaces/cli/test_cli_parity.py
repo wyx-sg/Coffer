@@ -110,7 +110,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "show-entry",
         "remove-entry",
     },
-    "agent plugin": {"list", "enable", "disable", "uninstall"},
+    "agent plugin": {"list", "show", "enable", "disable", "uninstall"},
     "channel": {"register", "list", "status", "pair", "bind", "set", "notify"},
     # `files`, `cat` and `write` are the skill-file tree the web editor browses
     # and saves (spec skill-manager "Offer every skill operation on REST, CLI

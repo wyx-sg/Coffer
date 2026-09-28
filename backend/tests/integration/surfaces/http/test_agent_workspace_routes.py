@@ -596,3 +596,96 @@ def test_codex_listing_reports_uninstall_available(tmp_path, monkeypatch):
     with _client(app) as c:
         uid = _register_codex(c, tmp_path)
         assert c.get(f"/api/v1/agents/{uid}/plugins").json()["can_uninstall"] is True
+
+
+# ---------------------------------------------------------------------------
+# One plugin's detail
+# ---------------------------------------------------------------------------
+
+
+def _snapshot(root: pathlib.Path) -> dict[str, bytes]:
+    return {str(p): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+@pytest.mark.acceptance(spec="agent-registry", scenario="read one plugin's detail and contents")
+def test_get_plugin_detail_reads_package_contents(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 58960)
+    with _client(app) as c:
+        uid = _register_claude(c, tmp_path)
+        claude_dir = tmp_path / ".claude"
+        pkg = claude_dir / "plugins" / "cache" / "mk" / "q1" / "1.2.0"
+        (pkg / ".claude-plugin").mkdir(parents=True)
+        (pkg / ".claude-plugin" / "plugin.json").write_text(
+            json.dumps({"name": "q1", "description": "Quality tools", "author": "Ada"}),
+            encoding="utf-8",
+        )
+        (pkg / "skills" / "tdd").mkdir(parents=True)
+        (pkg / "skills" / "tdd" / "SKILL.md").write_text(
+            "---\nname: tdd\ndescription: Write the test first\n---\n", encoding="utf-8"
+        )
+        (pkg / "commands").mkdir()
+        (pkg / "commands" / "lint.md").write_text(
+            "---\ndescription: Lint the tree\n---\n", encoding="utf-8"
+        )
+        (pkg / "agents").mkdir()
+        (pkg / "agents" / "rev.md").write_text(
+            "---\nname: reviewer\ndescription: Reviews diffs\n---\n", encoding="utf-8"
+        )
+        (pkg / "hooks").mkdir()
+        (pkg / "hooks" / "hooks.json").write_text(
+            json.dumps({"hooks": {"PostToolUse": []}}), encoding="utf-8"
+        )
+        (pkg / ".mcp.json").write_text(
+            json.dumps({"mcpServers": {"q1-srv": {"command": "q1"}}}), encoding="utf-8"
+        )
+        (claude_dir / "plugins" / "installed_plugins.json").write_text(
+            json.dumps(
+                {
+                    "version": 2,
+                    "plugins": {
+                        "q1@mk": [{"version": "1.2.0", "installPath": str(pkg)}],
+                        "q2@mk": [],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        before = _snapshot(claude_dir)
+
+        r = c.get(f"/api/v1/agents/{uid}/plugins/q1@mk")
+
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["plugin"]["id"] == "q1@mk"
+        assert body["plugin"]["enabled"] is True
+        assert body["plugin"]["version"] == "1.2.0"
+        assert body["plugin"]["description"] == "Quality tools"
+        assert body["plugin"]["author"] == "Ada"
+        assert body["marketplace_source"] == "owner/mk"
+        assert body["install_path"] == str(pkg)
+        assert body["skills"] == [{"name": "tdd", "description": "Write the test first"}]
+        assert body["commands"] == [{"name": "lint", "description": "Lint the tree"}]
+        assert body["agents"] == [{"name": "reviewer", "description": "Reviews diffs"}]
+        assert body["hooks"] == ["PostToolUse"]
+        assert body["mcp_servers"] == ["q1-srv"]
+        # Read-only: nothing under the agent's config dir changed.
+        assert _snapshot(claude_dir) == before
+
+        # A plugin with no recorded install dir reads with empty contents.
+        r = c.get(f"/api/v1/agents/{uid}/plugins/q2@mk")
+        assert r.status_code == 200, r.text
+        empty = r.json()
+        assert empty["install_path"] is None
+        assert empty["skills"] == [] and empty["hooks"] == [] and empty["mcp_servers"] == []
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="reject a plugin id the agent does not have"
+)
+def test_get_plugin_detail_unknown_id_404(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 58962)
+    with _client(app) as c:
+        uid = _register_codex(c, tmp_path)
+        r = c.get(f"/api/v1/agents/{uid}/plugins/ghost@m1")
+        assert r.status_code == 404, r.text
+        assert r.json()["error"]["code"] == "PLUGIN_NOT_FOUND"

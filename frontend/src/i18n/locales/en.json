@@ -901,10 +901,6 @@
         "searchPlaceholder": "Search plugins",
         "version": "Version",
         "author": "Author",
-        "bundledSkills": "Bundled skills",
-        "bundledCommands": "Bundled commands",
-        "bundledMcp": "Bundled MCP servers",
-        "noDetail": "No additional detail for this plugin.",
         "uninstallConfirmTitle": "Uninstall {{name}}?"
       }
     },
@@ -1048,6 +1044,19 @@
       "truncated": "Content truncated — showing the start of the file.",
       "readOnlyHint": "The agent owns these files and rewrites them; open one in your editor to change it.",
       "missingDir": "No memory store was named — open one from the agent's Memory tab."
+    },
+    "pluginDetail": {
+      "loadFailed": "Couldn't load this plugin",
+      "homepage": "Homepage",
+      "installPath": "Installed at",
+      "notOnDisk": "Not on disk — the plugin's cache directory is missing",
+      "contents": "Contents",
+      "skills": "Skills",
+      "commands": "Commands",
+      "agents": "Subagents",
+      "hooks": "Hooks",
+      "mcpServers": "MCP servers",
+      "noContents": "This plugin contributes no skills, commands, subagents, hooks or MCP servers."
     }
   },
   "skills": {

@@ -702,6 +702,39 @@ def test_plugin_list_enable_disable(workspace_cli):
     assert by_id["p2@m1"]["enabled"] is True
 
 
+def test_plugin_show_prints_contents_and_json(workspace_cli):
+    """`agent plugin show` reads the detail route: metadata and contents as
+    text, the route's body unchanged with --json, exit 4 for an unknown id."""
+    tmp_path, _keyring = workspace_cli
+    pkg = tmp_path / ".codex" / "plugins" / "cache" / "m1" / "p1" / "0.3.0"
+    (pkg / ".codex-plugin").mkdir(parents=True)
+    (pkg / ".codex-plugin" / "plugin.json").write_text(
+        json.dumps({"version": "0.3.0", "author": "Ada"}), encoding="utf-8"
+    )
+    (pkg / "commands").mkdir()
+    (pkg / "commands" / "fix.md").write_text("---\ndescription: Fix it\n---\n", encoding="utf-8")
+    (pkg / ".mcp.json").write_text(json.dumps({"mcpServers": {"srv": {}}}), encoding="utf-8")
+
+    r = _runner.invoke(cli_app, ["agent", "plugin", "show", "cx", "p1@m1"])
+    assert r.exit_code == 0, r.output
+    assert "p1@m1  enabled" in r.output
+    assert "author: Ada" in r.output
+    assert "marketplace: m1 (https://example.com/m1.git)" in r.output
+    assert f"installed at: {pkg}" in r.output
+    assert "command: fix — Fix it" in r.output
+    assert "mcp server: srv" in r.output
+
+    r = _runner.invoke(cli_app, ["agent", "plugin", "show", "cx", "p1@m1", "--json"])
+    assert r.exit_code == 0, r.output
+    body = json.loads(_extract_json(r.output))
+    assert body["commands"] == [{"name": "fix", "description": "Fix it"}]
+    assert body["install_path"] == str(pkg)
+
+    r = _runner.invoke(cli_app, ["agent", "plugin", "show", "cx", "ghost@m1"])
+    assert r.exit_code == 4, r.output
+    assert "plugin not found" in r.output
+
+
 def test_plugin_enable_unknown_id_exit4(workspace_cli):
     r = _runner.invoke(cli_app, ["agent", "plugin", "enable", "cx", "ghost@m1"])
     assert r.exit_code == 4, r.output

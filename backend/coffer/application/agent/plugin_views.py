@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from coffer.application.agent.mcp_entry_service import ParseErrorInfo
-from coffer.domain.agent.plugin_bundle import PluginDetail
+from coffer.domain.agent.plugin_bundle import PluginContents, PluginDetail
 from coffer.domain.agent.plugin_state import MarketplaceInfo
 
 
@@ -26,6 +26,8 @@ class PluginDetailReader(Protocol):
     """
 
     def read(self, install_path: str) -> PluginDetail | None: ...
+
+    def read_contents(self, install_path: str) -> PluginContents | None: ...
 
 
 class PluginCliRunner(Protocol):
@@ -63,6 +65,26 @@ class PluginView:
     skills: tuple[str, ...] = ()
     commands: tuple[str, ...] = ()
     mcp_servers: tuple[str, ...] = ()
+    #: Where the detail was read from — Claude's recorded install dir, Codex's
+    #: ``<marketplace>/<name>`` cache dir. Not on the listing's wire shape; the
+    #: per-plugin detail read resolves it to the directory it actually read.
+    install_path: str | None = None
+
+
+@dataclass(frozen=True)
+class PluginDetailView:
+    """One plugin's detail page: its listing row plus where it came from and
+    everything its package contributes (spec agent-registry "Read one installed
+    plugin's detail read-only")."""
+
+    plugin: PluginView
+    marketplace_source_type: str | None
+    marketplace_source: str | None
+    #: The directory the package was read from; ``None`` when no install dir is
+    #: known or it is gone from disk.
+    install_path: str | None
+    can_uninstall: bool
+    contents: PluginContents | None
 
 
 @dataclass(frozen=True)
