@@ -64,10 +64,6 @@ interface Props {
   onCancel: () => void;
 }
 
-/** Required fields carry a mark after the label; the label text itself stays
- *  clean so its accessible name is just the word. */
-const REQUIRED = "after:ml-0.5 after:text-destructive after:content-['*']";
-
 function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) return null;
   return (
@@ -135,7 +131,7 @@ export function ProviderForm({
 
   const protocolPicker = (id: string) => (
     <div className="space-y-1.5">
-      <Label htmlFor={id} className={REQUIRED}>
+      <Label htmlFor={id} required>
         {t("settings.connections.wireFormat")}
       </Label>
       <Controller
@@ -162,7 +158,7 @@ export function ProviderForm({
   return (
     <form className="space-y-3" onSubmit={submit} noValidate>
       <div className="space-y-1.5">
-        <Label htmlFor="p-name" className={REQUIRED}>
+        <Label htmlFor="p-name" required>
           {t("settings.connections.name")}
         </Label>
         <Input id="p-name" aria-describedby="p-name-error" {...register("name")} />
@@ -202,7 +198,7 @@ export function ProviderForm({
       {!isEdit && isCustom ? protocolPicker("p-wire") : null}
 
       <div className="space-y-1.5">
-        <Label htmlFor="p-base" className={REQUIRED}>
+        <Label htmlFor="p-base" required>
           {t("settings.connections.baseUrl")}
         </Label>
         <Input
@@ -216,7 +212,7 @@ export function ProviderForm({
 
       {needsCredential && (
         <div className="space-y-1.5">
-          <Label htmlFor="p-secret" className={isEdit ? undefined : REQUIRED}>
+          <Label htmlFor="p-secret" required={!isEdit}>
             {t("settings.connections.secret")}
           </Label>
           <PasswordInput

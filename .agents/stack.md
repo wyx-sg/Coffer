@@ -114,7 +114,9 @@ Returns](../docs/decisions/desktop-shell-over-a-shared-frontend.md)).
   a daemon comes from), `discovery` (reading `daemon.json`, probing a port),
   `spawn` (starting one), `daemon` (the three IPC commands the webview calls
   and the detect-or-spawn policy behind them — rate limiting, stop-then-start,
-  the credential handshake), `env_path`, `sidecar`, `tray`, and `logging` (the
+  the credential handshake), `env_path`, `sidecar`, `tray` (the menu, and the
+  `set_ui_language` command the page reports its interface language through),
+  `tray_locale` (which language the tray speaks, and its words), and `logging` (the
   shell's own records, appended to `~/.coffer/logs/daemon.log`, so a failed
   tray restart does not fail in silence).
 - Pure decision functions — the resolution chain, the rate limit, `daemon.json`
