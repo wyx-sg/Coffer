@@ -867,7 +867,25 @@
         "adoptSuccess": "Adopted {{name}} — now served to all agents via the gateway",
         "deleteConfirm": "Delete this entry from the agent's config file? A .bak backup will be written.",
         "bulkDeleteConfirm": "Delete the {{count}} selected server(s)? A .bak backup is written for each.",
-        "searchPlaceholder": "Search servers"
+        "searchPlaceholder": "Search servers",
+        "directBadge": "Direct server of {{agent}}",
+        "detail": {
+          "hint": "Configured directly in this agent's own config file, not managed by Coffer. Shown read-only — Coffer does not start it or list its tools.",
+          "file": "Config file",
+          "source": "Source",
+          "args": "Arguments",
+          "cwd": "Working directory",
+          "enabled": "Enabled",
+          "env": "Environment variables",
+          "headers": "HTTP headers",
+          "other": "Other fields",
+          "set": "set",
+          "secret": "secret · hidden",
+          "hidden": "hidden",
+          "yes": "Yes",
+          "no": "No",
+          "loadFailed": "Couldn't load this MCP server"
+        }
       },
       "pluginsTab": {
         "enabled": "Enabled",

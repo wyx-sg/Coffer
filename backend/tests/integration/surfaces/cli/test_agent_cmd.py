@@ -606,6 +606,29 @@ def test_mcp_entries_list_json_and_table(workspace_cli):
     assert "fetcher" in r.output
 
 
+def test_mcp_show_entry_prints_the_entry_without_secret_values(workspace_cli):
+    """`agent mcp show-entry` reads one entry in full: file, command, key names."""
+    tmp_path, _keyring = workspace_cli
+    r = _runner.invoke(cli_app, ["agent", "mcp", "show-entry", "cx", "fetcher", "--json"])
+    assert r.exit_code == 0, r.output
+    body = json.loads(_extract_json(r.output))
+    assert body["path"] == str(tmp_path / ".codex" / "config.toml")
+    assert body["command"] == "uvx"
+    assert body["args"] == ["mcp-fetch"]
+    assert body["secret_keys"] == ["API_TOKEN"]
+    assert _SECRET_VALUE not in r.output
+
+    r = _runner.invoke(cli_app, ["agent", "mcp", "show-entry", "cx", "fetcher"])
+    assert r.exit_code == 0, r.output
+    assert f"file: {tmp_path / '.codex' / 'config.toml'}" in r.output
+    assert "command: uvx mcp-fetch" in r.output
+    assert "env API_TOKEN: (secret)" in r.output
+    assert _SECRET_VALUE not in r.output
+
+    r = _runner.invoke(cli_app, ["agent", "mcp", "show-entry", "cx", "missing"])
+    assert r.exit_code == 4, r.output
+
+
 def test_mcp_remove_entry_force_and_prompt(workspace_cli):
     # Without --force the prompt aborts and the entry survives.
     r = _runner.invoke(cli_app, ["agent", "mcp", "remove-entry", "cx", "fetcher"], input="n\n")

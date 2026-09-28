@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import MutableMapping
+from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -70,6 +70,31 @@ class McpEntry:
     enabled: bool | None = None  # None = format has no per-entry flag (Claude Code)
     is_coffer: bool = False
     matches_resource: str | None = None  # filled by the application layer
+    cwd: str | None = None  # working directory a stdio server is started in
+    # Every other key the entry carries (``type``, ``timeout``, ``env_vars``…),
+    # as plain Python values. repr=False for the same reason as env: a format
+    # may keep a token here (Codex ``bearer_token``). compare=False: equality
+    # is about the server, not about incidental keys a hand-edited file adds.
+    extra: dict[str, Any] = field(default_factory=dict, repr=False, compare=False)
+
+
+#: The keys ``parse_entries`` reads into typed fields; anything else an entry
+#: carries lands in ``McpEntry.extra``.
+_CONSUMED_KEYS = frozenset(
+    {"command", "args", "env", "environment", "url", "headers", "http_headers", "enabled", "cwd"}
+)
+
+
+def _plain(value: Any) -> Any:
+    """A tomlkit item (or a JSON value) as plain Python — dict/list/scalars."""
+    unwrap = getattr(value, "unwrap", None)
+    if callable(unwrap):
+        value = unwrap()
+    if isinstance(value, MutableMapping):
+        return {str(k): _plain(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(v) for v in value]
+    return value
 
 
 def _json_container(data: MutableMapping[str, Any], dotted_key: str) -> Any:
@@ -151,6 +176,7 @@ def parse_entries(
         env_map = raw_env if isinstance(raw_env, MutableMapping) else {}
         headers_raw = headers if isinstance(headers, MutableMapping) else {}
         explicit_remote = str(raw.get("type", "")).lower() in {"sse", "http", "remote"}
+        cwd = raw.get("cwd")
         out.append(
             McpEntry(
                 name=str(name),
@@ -163,6 +189,8 @@ def parse_entries(
                 headers={str(k): str(v) for k, v in headers_raw.items()},
                 enabled=enabled,
                 is_coffer=str(name) == COFFER_SERVER_KEY,
+                cwd=str(cwd) if cwd is not None else None,
+                extra={str(k): _plain(v) for k, v in raw.items() if str(k) not in _CONSUMED_KEYS},
             )
         )
     return out
@@ -211,6 +239,64 @@ def secret_env_keys(env: dict[str, str]) -> list[str]:
     TOKEN|SECRET|PASSWORD|PASSWD|API_?KEY|CREDENTIAL|AUTHORIZATION (case-insensitive).
     """
     return sorted(k for k, v in env.items() if v and _SECRET_KEY_RE.search(k))
+
+
+def matches_transport(entry: McpEntry, transport: Mapping[str, Any]) -> bool:
+    """Equivalence between a config-file entry and a registered resource's transport.
+
+    stdio: same command AND same args; http: same url. Tolerates missing keys.
+    """
+    if entry.transport == "stdio":
+        raw_args = transport.get("args") or []
+        args = [str(a) for a in raw_args] if isinstance(raw_args, (list, tuple)) else []
+        return (
+            transport.get("type") == "stdio"
+            and transport.get("command") == entry.command
+            and args == list(entry.args)
+        )
+    return bool(transport.get("type") == "http" and transport.get("url") == entry.url)
+
+
+def looks_secret(key: str) -> bool:
+    """Whether a key NAME looks like it holds a secret (the adopt-time pattern)."""
+    return bool(_SECRET_KEY_RE.search(key))
+
+
+def _holds_secret(value: Any) -> bool:
+    """Whether a nested mapping/list carries a secret-looking key anywhere in it."""
+    if isinstance(value, dict):
+        return any(looks_secret(k) or _holds_secret(v) for k, v in value.items())
+    if isinstance(value, list):
+        return any(_holds_secret(v) for v in value)
+    return False
+
+
+@dataclass(frozen=True)
+class ExtraField:
+    """One of an entry's other keys, ready to show: ``value`` is ``None`` when masked."""
+
+    key: str
+    value: str | None
+    masked: bool
+
+
+def masked_extra(extra: dict[str, Any]) -> list[ExtraField]:
+    """The entry's other keys, sorted, with anything secret-looking withheld.
+
+    A key whose own name looks secret (and whose value is non-empty), or whose
+    value nests a secret-looking key at any depth, is masked whole: its value
+    never leaves this function. Everything else is rendered as text — strings
+    as themselves, other values as compact JSON.
+    """
+    out: list[ExtraField] = []
+    for key in sorted(extra):
+        value = extra[key]
+        if (looks_secret(key) and value not in (None, "")) or _holds_secret(value):
+            out.append(ExtraField(key=key, value=None, masked=True))
+            continue
+        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        out.append(ExtraField(key=key, value=text, masked=False))
+    return out
 
 
 def to_transport_config(entry: McpEntry, secret_refs: dict[str, str]) -> dict[str, Any]:

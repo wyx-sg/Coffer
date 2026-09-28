@@ -48,6 +48,10 @@ export const agentConfigChildKey = (uid: string, key: string, relpath: string) =
   ["agents", uid, "config-files", key, relpath] as const;
 export const agentMcpInstallKey = (uid: string) => ["agents", uid, "mcp-install"] as const;
 export const agentMcpEntriesKey = (uid: string) => ["agents", uid, "mcp-entries"] as const;
+/** One entry's detail — under the listing's key, so whatever refreshes the
+ *  listing (a remove, an adopt) refreshes the detail too. */
+export const agentMcpEntryKey = (uid: string, entry: string, source: string) =>
+  ["agents", uid, "mcp-entries", entry, source] as const;
 export const agentPluginsKey = (uid: string) => ["agents", uid, "plugins"] as const;
 export const agentUnmanagedSkillsKey = (uid: string) =>
   ["agents", uid, "unmanaged-skills"] as const;

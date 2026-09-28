@@ -101,7 +101,15 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "transcripts",
     },
     "agent config": {"files", "ls", "cat", "write", "edit", "rm"},
-    "agent mcp": {"status", "install", "uninstall", "adopt", "entries", "remove-entry"},
+    "agent mcp": {
+        "status",
+        "install",
+        "uninstall",
+        "adopt",
+        "entries",
+        "show-entry",
+        "remove-entry",
+    },
     "agent plugin": {"list", "enable", "disable", "uninstall"},
     "channel": {"register", "list", "status", "pair", "bind", "set", "notify"},
     # `files`, `cat` and `write` are the skill-file tree the web editor browses

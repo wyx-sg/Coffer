@@ -867,7 +867,25 @@
         "adoptSuccess": "已收编 {{name}}，现经网关服务于所有 Agent",
         "deleteConfirm": "确认从该 Agent 的配置文件中删除该条目？将写入 .bak 副本。",
         "bulkDeleteConfirm": "确认删除选中的 {{count}} 个服务器？每个都会写入 .bak 副本。",
-        "searchPlaceholder": "搜索服务器"
+        "searchPlaceholder": "搜索服务器",
+        "directBadge": "{{agent}} 的直连服务器",
+        "detail": {
+          "hint": "直接配置在该 Agent 自己的配置文件里，不由 Coffer 管理。此处只读展示——Coffer 不会启动它，也不列出它的工具。",
+          "file": "配置文件",
+          "source": "来源",
+          "args": "参数",
+          "cwd": "工作目录",
+          "enabled": "启用",
+          "env": "环境变量",
+          "headers": "HTTP 请求头",
+          "other": "其他字段",
+          "set": "已设置",
+          "secret": "密钥 · 已隐藏",
+          "hidden": "已隐藏",
+          "yes": "是",
+          "no": "否",
+          "loadFailed": "无法加载该 MCP 服务器"
+        }
       },
       "pluginsTab": {
         "enabled": "启用",
