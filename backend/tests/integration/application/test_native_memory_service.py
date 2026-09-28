@@ -56,10 +56,12 @@ def _write(p: pathlib.Path) -> None:
 
 
 async def test_list_stores_for_claude_code(tmp_path: pathlib.Path) -> None:
+    # A root no machine has, so the slug walk finds nothing on disk here or
+    # on CI and the lossy decode is what is left to show.
     cfg_dir = tmp_path / ".claude"
-    _write(cfg_dir / "projects" / "-Users-x-Proj" / "memory" / "a.md")
-    _write(cfg_dir / "projects" / "-Users-x-Proj" / "memory" / "b.md")
-    _write(cfg_dir / "projects" / "-Users-x-Proj" / "memory" / "MEMORY.md")
+    _write(cfg_dir / "projects" / "-Nowhere-x-Proj" / "memory" / "a.md")
+    _write(cfg_dir / "projects" / "-Nowhere-x-Proj" / "memory" / "b.md")
+    _write(cfg_dir / "projects" / "-Nowhere-x-Proj" / "memory" / "MEMORY.md")
 
     svc = AgentNativeMemoryService(
         agent_service=_FakeAgents(
@@ -73,9 +75,9 @@ async def test_list_stores_for_claude_code(tmp_path: pathlib.Path) -> None:
     assert len(stores) == 1
     store = stores[0]
     assert store.project_label == "Proj"
-    assert store.project_path == "/Users/x/Proj"
-    assert store.slug == "-Users-x-Proj"
-    assert store.memory_dir == str(cfg_dir / "projects" / "-Users-x-Proj" / "memory")
+    assert store.project_path == "/Nowhere/x/Proj"
+    assert store.slug == "-Nowhere-x-Proj"
+    assert store.memory_dir == str(cfg_dir / "projects" / "-Nowhere-x-Proj" / "memory")
     assert store.item_count == 2
 
 
