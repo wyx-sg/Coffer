@@ -173,3 +173,23 @@ def test_is_native_memory_dir_for_codex_is_the_single_global_store() -> None:
 def test_an_agent_type_with_no_layout_contains_no_store() -> None:
     """No layout is not "everything is a store"; it is "there are none"."""
     assert is_native_memory_dir(None, pathlib.Path("/home/u"), pathlib.Path("/home/u/x")) is False
+
+
+def test_resolve_keeps_a_deleted_leaf_whole_under_its_real_parent() -> None:
+    # A desktop scratch workspace that has since been deleted: its parent is
+    # still on disk, so the path is real up to there and the rest is one name,
+    # not five directories split at every dash.
+    tree = {
+        "/": ["Users"],
+        "/Users": ["yuxing.wu"],
+        "/Users/yuxing.wu": ["Library"],
+        "/Users/yuxing.wu/Library": ["Application Support"],
+        "/Users/yuxing.wu/Library/Application Support": ["scratch-workspaces"],
+    }
+    slug = (
+        "-Users-yuxing-wu-Library-Application-Support-scratch-workspaces-scratch-2026-09-17-15dc3d"
+    )
+    assert resolve_project_slug(slug, _fake_tree(tree)) == (
+        "scratch-2026-09-17-15dc3d",
+        "/Users/yuxing.wu/Library/Application Support/scratch-workspaces/scratch-2026-09-17-15dc3d",
+    )

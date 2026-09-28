@@ -88,11 +88,7 @@ export function AddChannelSecretFields({
         />
         <FieldError id="channel-app-secret-error" message={errors.appSecret} />
       </div>
-      <div className="space-y-1 rounded-md border border-border bg-muted/30 p-3">
-        <p className="text-xs text-muted-foreground">{t("channels.dialog.seatalkHint")}</p>
-        <p className="text-xs text-muted-foreground">{t("channels.dialog.seatalkSdkNote")}</p>
-        <p className="text-xs text-muted-foreground">{t("channels.dialog.seatalkPortalNote")}</p>
-      </div>
+      <p className="text-xs text-muted-foreground">{t("channels.dialog.seatalkHint")}</p>
     </>
   );
 }
