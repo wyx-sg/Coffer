@@ -413,7 +413,7 @@ export interface components {
             editors: components["schemas"]["EditorOption"][];
         };
         FsPickFolderRequest: {
-            /** @description Absolute path to seed the dialog's starting directory. */
+            /** @description Path to seed the dialog's starting directory (`~` expanded). A start that is not an existing directory is ignored and the dialog opens at its own default. */
             start?: string | null;
         };
         FsPickFolderOut: {

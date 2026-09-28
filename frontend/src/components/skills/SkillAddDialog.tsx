@@ -60,13 +60,13 @@ export function SkillAddDialog({
 function LocalImportTab({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
   const { t } = useTranslation();
   const importSkill = useImportSkill();
-  const [rawPath, setPath] = useState("");
+  const [rawPath, setRawPath] = useState("");
   // When a 409 conflict is returned, we store the conflicting skill name here
   // to surface the replace-confirm UI. Cleared whenever the path changes.
   const [conflictName, setConflictName] = useState<string | null>(null);
 
   const handlePathChange = (value: string) => {
-    setPath(value);
+    setRawPath(value);
     setConflictName(null);
     importSkill.reset();
   };

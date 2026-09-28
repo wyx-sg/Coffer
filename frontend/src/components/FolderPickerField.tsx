@@ -3,9 +3,10 @@
 // reading files" and "Open the host's native folder picker".
 // A folder is picked — the native dialog on desktop, the daemon's native dialog
 // then an in-app browser on web — and, with `typeable`, may also be typed or
-// pasted (the skill import path, where the user often has the path at hand). The row it sits in — read-only
-// display, Browse, optional Clear — is `PickerField`, shared with the file
-// picker so the two do not look like they came from different programs.
+// pasted (the skill import path, where the user often has the path at hand).
+// The row it sits in — display, Browse, optional Clear — is `PickerField`,
+// shared with the file picker so the two do not look like they came from
+// different programs.
 import { FolderPicker } from "@/components/FolderPicker";
 import { PickerField } from "@/components/PickerField";
 
