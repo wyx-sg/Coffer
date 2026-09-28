@@ -72,7 +72,7 @@ peer:     not paired
 
 ## 3. Pair your account
 
-1. Issue a code, on the channel's page with **Pairing → Generate pairing code**, or:
+1. Issue a code, on the channel's page with **Generate pairing code** in the account section, or:
 
    ```sh
    coffer channel pair my-telegram

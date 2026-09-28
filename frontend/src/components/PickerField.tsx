@@ -1,6 +1,8 @@
 // frontend/src/components/PickerField.tsx
 // The one shape for "something you pick, never type": a read-only display of
-// what is chosen, a Browse button, and an optional Clear.
+// what is chosen, a Browse button, and an optional Clear. A caller that also
+// accepts a typed or pasted value (the skill import path) passes `onType`, and
+// the display becomes an ordinary text input beside the same Browse button.
 //
 // It exists because the two pickers had drifted apart. A folder was picked
 // through a styled field with a translated button; a file was a bare
@@ -24,19 +26,34 @@ interface Props {
   action: React.ReactNode;
   /** When given, a Clear button appears once something is chosen. */
   onClear?: () => void;
+  /** When given, the display is editable and reports each typed or pasted value. */
+  onType?: (value: string) => void;
 }
 
-export function PickerField({ value, placeholder, ariaLabel, inputId, action, onClear }: Props) {
+export function PickerField({
+  value,
+  placeholder,
+  ariaLabel,
+  inputId,
+  action,
+  onClear,
+  onType,
+}: Props) {
   const { t } = useTranslation();
   return (
     <div className="flex items-center gap-2">
       <input
         id={inputId}
         aria-label={ariaLabel}
-        className="block w-full rounded-md border bg-muted px-2 py-1 font-mono text-xs"
+        className={`block w-full rounded-md border px-2 py-1 font-mono text-xs ${
+          onType ? "bg-background" : "bg-muted"
+        }`}
         placeholder={placeholder}
         value={value ?? ""}
-        readOnly
+        readOnly={!onType}
+        onChange={onType ? (e) => onType(e.target.value) : undefined}
+        spellCheck={onType ? false : undefined}
+        autoComplete={onType ? "off" : undefined}
       />
       {action}
       {onClear && value ? (

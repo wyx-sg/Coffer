@@ -71,7 +71,7 @@ coffer skill add ~/src/team-skills/release-checklist
 ```
 
 ```text [Web UI]
-Skills → Add skill → choose the folder under "Local path" → Import
+Skills → Add skill → paste the path, or Browse… to choose the folder, under "Local path" → Import
 ```
 
 :::
