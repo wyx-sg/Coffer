@@ -33,6 +33,7 @@ from coffer.surfaces.shim.bootstrap import (
     _setup_shim_log,
     _wait_for_daemon,
 )
+from coffer.surfaces.shim.wire import emit_error, forward_response
 
 _logger = logging.getLogger("coffer.shim")
 # How long to wait for a live daemon when re-resolving after a connect failure
@@ -184,7 +185,7 @@ class _Bridge:
         except Exception as e:
             _logger.warning("shim.post_failed", extra={"error": type(e).__name__})
             if not await self._recover(client):
-                self._emit_error(envelope.get("id"), code=-32603, message=f"shim: {e}")
+                emit_error(envelope.get("id"), code=-32603, message=f"shim: {e}")
                 return
             try:
                 response = await client.post("/mcp", json=envelope, headers=self._request_headers())
@@ -195,7 +196,7 @@ class _Bridge:
                 )
             except Exception as e2:
                 _logger.exception("shim.post_failed_after_recover")
-                self._emit_error(envelope.get("id"), code=-32603, message=f"shim: {e2}")
+                emit_error(envelope.get("id"), code=-32603, message=f"shim: {e2}")
                 return
 
         # A restart on the same port rotates the token: the old one is answered
@@ -232,7 +233,7 @@ class _Bridge:
         # validate the gateway's response before forwarding. On status / parse
         # failure, synthesize a JSON-RPC error envelope tied to the request id
         # so the client sees a structured reply rather than plain text.
-        self._forward_response(envelope, response)
+        forward_response(envelope, response)
 
     async def _recover(self, client: httpx.AsyncClient) -> bool:
         """Re-resolve ``daemon.json`` after a transport failure.
@@ -274,54 +275,6 @@ class _Bridge:
         response = await client.post("/mcp", json=self._init_envelope, headers=dict(self._headers))
         if "Mcp-Session-Id" in response.headers:
             self._session_id = response.headers["Mcp-Session-Id"]
-
-    def _forward_response(
-        self,
-        envelope: dict[str, Any],
-        response: httpx.Response,
-    ) -> None:
-        req_id = envelope.get("id")
-        raw_body = (response.text or "").strip()
-        if response.status_code >= 400:
-            _logger.warning(
-                "shim.gateway_error_status",
-                extra={"status": response.status_code, "body_head": raw_body[:200]},
-            )
-            body_excerpt = raw_body[:200] or "(empty body)"
-            self._emit_error(
-                req_id,
-                code=-32603,
-                message=f"coffer gateway HTTP {response.status_code}: {body_excerpt}",
-            )
-            return
-        if not raw_body:
-            # 2xx with empty body is allowed by /mcp for matched-response acks;
-            # nothing to forward.
-            return
-        try:
-            _json.loads(raw_body)
-        except _json.JSONDecodeError as e:
-            _logger.warning(
-                "shim.non_json_2xx",
-                extra={"error": str(e), "body_head": raw_body[:200]},
-            )
-            self._emit_error(
-                req_id,
-                code=-32603,
-                message=f"coffer gateway returned non-JSON 2xx: {raw_body[:200]}",
-            )
-            return
-        sys.stdout.write(raw_body + "\n")
-        sys.stdout.flush()
-
-    def _emit_error(self, req_id: Any, code: int, message: str) -> None:
-        err = {
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "error": {"code": code, "message": message},
-        }
-        sys.stdout.write(_json.dumps(err) + "\n")
-        sys.stdout.flush()
 
     async def _drain_sse(self, client: httpx.AsyncClient) -> None:
         """After the first session id is known, stream notifications, reconnecting.

@@ -43,6 +43,7 @@ from types import ModuleType
 from typing import Any
 
 from coffer.infrastructure.channel.seatalk_sdk import SeaTalkSdkMissingError, load_sdk
+from coffer.infrastructure.channel.seatalk_ws_thread import listen_on_thread, require
 
 _logger = logging.getLogger(__name__)
 
@@ -232,7 +233,7 @@ class SeaTalkWebSocketConnector:
         """Hold one connection until it ends. Returns True when it was kicked."""
         self._connected_since = None
         sdk = await asyncio.to_thread(self._loader)
-        dispatcher = _require(sdk, "EventDispatcher")()
+        dispatcher = require(sdk, "EventDispatcher")()
         dispatcher.on_event(self._on_event)
         dispatcher.on_kick(self._on_kick)
         # The SDK ships both of these defaulted to handlers that ``print()``:
@@ -245,7 +246,7 @@ class SeaTalkWebSocketConnector:
         dispatcher.on_invalid_frame(self._on_invalid_frame)
         self._clear_kick()
         self._set_state("connecting", None)
-        client = _require(sdk, "Client")(self._app_id, self._app_secret, dispatcher=dispatcher)
+        client = require(sdk, "Client")(self._app_id, self._app_secret, dispatcher=dispatcher)
         await asyncio.to_thread(client.connect)
         self._client = client
         self._connected_since = time.monotonic()
@@ -307,38 +308,12 @@ class SeaTalkWebSocketConnector:
         )
 
     async def _listen(self, client: Any) -> BaseException | None:
-        """Run the SDK's blocking ``listen()`` on a thread we own and join.
+        def _started(thread: threading.Thread) -> None:
+            self._thread = thread
 
-        The thread hands its outcome back through a future resolved with
-        ``call_soon_threadsafe``, so the supervisor awaits the connection's whole
-        lifetime without a thread parked on ``join``.
-        """
-        loop = asyncio.get_running_loop()
-        finished: asyncio.Future[BaseException | None] = loop.create_future()
-
-        def _resolve(error: BaseException | None) -> None:
-            if not finished.done():
-                finished.set_result(error)
-
-        def _run() -> None:
-            outcome: BaseException | None = None
-            try:
-                client.listen()
-            except BaseException as e:
-                outcome = e
-            finally:
-                with contextlib.suppress(RuntimeError):  # loop already closed
-                    loop.call_soon_threadsafe(_resolve, outcome)
-
-        thread = threading.Thread(target=_run, name=f"seatalk-ws-listen:{self._name}", daemon=True)
-        self._thread = thread
-        thread.start()
-        try:
-            return await finished
-        finally:
-            # ``_run`` resolves the future in its ``finally``, so the thread is
-            # on its way out; joining makes that observable instead of assumed.
-            await asyncio.to_thread(thread.join, self._join_timeout)
+        return await listen_on_thread(
+            client, name=self._name, join_timeout=self._join_timeout, started=_started
+        )
 
     # -- inbound bridge (called on the SDK's thread) ------------------------
 
@@ -408,13 +383,3 @@ class SeaTalkWebSocketConnector:
                 exc_info=task.exception(),
                 extra={"channel": self._name},
             )
-
-
-def _require(sdk: ModuleType, attribute: str) -> Any:
-    value = getattr(sdk, attribute, None)
-    if value is None:
-        raise RuntimeError(
-            f"the SeaTalk SDK at {sdk.__file__} exposes no {attribute!r}; "
-            f"this is not the seatalk_oapi_sdk package Coffer expects"
-        )
-    return value
