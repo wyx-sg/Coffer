@@ -1,4 +1,4 @@
-"""Revision 0104: every resource may carry a display title.
+"""Revision 0105: every resource may carry a display title.
 
 A nullable column with no backfill: an existing row keeps everything it had and
 has no title, and the downgrade takes the column away without touching a row.
@@ -25,11 +25,11 @@ def _columns(db_path) -> dict[str, str]:
         return {row[1]: row[2] for row in conn.execute("PRAGMA table_info(resources)")}
 
 
-def test_0104_adds_a_nullable_title_and_keeps_every_row(tmp_path, monkeypatch):
+def test_0105_adds_a_nullable_title_and_keeps_every_row(tmp_path, monkeypatch):
     db_path = tmp_path / "title.db"
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{db_path}")
     cfg = _alembic_config()
-    command.upgrade(cfg, "0103")
+    command.upgrade(cfg, "0104")
     uid = uuid.uuid4().hex
     with sqlite3.connect(db_path) as conn:
         conn.execute(
@@ -40,9 +40,9 @@ def test_0104_adds_a_nullable_title_and_keeps_every_row(tmp_path, monkeypatch):
         )
     assert "title" not in _columns(db_path)
 
-    command.upgrade(cfg, "0104")
+    command.upgrade(cfg, "0105")
 
-    assert _alembic_version(db_path) == "0104"
+    assert _alembic_version(db_path) == "0105"
     assert _columns(db_path)["title"] == "VARCHAR(80)"
     with sqlite3.connect(db_path) as conn:
         row = conn.execute(
@@ -52,7 +52,7 @@ def test_0104_adds_a_nullable_title_and_keeps_every_row(tmp_path, monkeypatch):
     # NEW server — is exactly as it was, with no title.
     assert row == (uid, "a-server-name-thirty-chars-xx", "desc", None)
 
-    command.downgrade(cfg, "0103")
+    command.downgrade(cfg, "0104")
     assert "title" not in _columns(db_path)
     with sqlite3.connect(db_path) as conn:
         assert conn.execute("SELECT name FROM resources WHERE uid = ?", (uid,)).fetchone() == (

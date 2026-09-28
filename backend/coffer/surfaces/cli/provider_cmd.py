@@ -28,6 +28,7 @@ from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._kind_verbs import (
     Column,
     KindVerbs,
+    check_title_arg,
     register_kind_verbs,
     verbose_of,
 )
@@ -71,6 +72,7 @@ def add(
     if description is not None:
         body["description"] = description
 
+    check_title_arg(title)
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post("/providers", json=body)

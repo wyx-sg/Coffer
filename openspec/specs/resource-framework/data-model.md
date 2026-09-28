@@ -15,7 +15,7 @@ is whatever the newest file under
 than a number written down here. Three later revisions add columns the DDL below
 shows in place: `scope_json` on `resources` (migration `0046`),
 `resource_id` on `audit_log` (migration `0067`) and `title` on `resources`
-(migration `0104`).
+(migration `0105`).
 
 ## Domain entities (`backend/coffer/domain/`)
 
@@ -202,7 +202,7 @@ CREATE TABLE resources (
     created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     scope_json    TEXT,              -- per-agent scope, agent UIDS; NULL = unscoped (0046, rewritten by 0096)
-    title         VARCHAR(80),       -- display text shown in place of the name; NULL = none (0104)
+    title         VARCHAR(80),       -- display text shown in place of the name; NULL = none (0105)
     UNIQUE (kind, name)              -- the LABEL is unique within its kind; that is a constraint, not identity
 );
 CREATE UNIQUE INDEX uq_resources_uid      ON resources(uid);

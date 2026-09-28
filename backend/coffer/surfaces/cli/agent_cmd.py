@@ -32,7 +32,13 @@ from coffer.surfaces.cli import agent_config_cmd as _config
 from coffer.surfaces.cli import agent_models_cmd as _models
 from coffer.surfaces.cli import agent_transcript_cmd as _transcripts
 from coffer.surfaces.cli import agent_workspace_cmd as _workspace
-from coffer.surfaces.cli._kind_verbs import KindVerbs, label, register_kind_verbs, verbose_of
+from coffer.surfaces.cli._kind_verbs import (
+    KindVerbs,
+    check_title_arg,
+    label,
+    register_kind_verbs,
+    verbose_of,
+)
 from coffer.surfaces.cli._resolve import resolve_ref
 
 app = typer.Typer(help="Manage registered AI agents")
@@ -103,6 +109,7 @@ def add(
     # Only send `name` when provided so the server applies its per-type default.
     if name is not None:
         body["name"] = name
+    check_title_arg(title)
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post("/agents", json=body)

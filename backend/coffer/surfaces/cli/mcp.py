@@ -31,6 +31,7 @@ from coffer.surfaces.cli._kind_verbs import (
     DEFAULT_VERBS,
     Column,
     KindVerbs,
+    check_title_arg,
     register_kind_verbs,
     verbose_of,
 )
@@ -93,6 +94,7 @@ def add(
         "config": {"transport": transport},
     }
 
+    check_title_arg(title)
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post("/resources", json=payload)

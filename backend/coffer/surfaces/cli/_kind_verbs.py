@@ -28,7 +28,9 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from coffer.domain.resource import TITLE_MAX_LEN
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli._resolve import resolve_ref, resolve_uid
 
 #: Every lifecycle verb, in the order a group's ``--help`` lists them.
@@ -96,6 +98,17 @@ def label(resource: dict[str, Any]) -> str:
     resource-framework "Carry an optional editable title on every resource").
     A daemon that predates ``title`` sends none, which reads as unset."""
     return str(resource.get("title") or resource["name"])
+
+
+def check_title_arg(title: str | None) -> None:
+    """Refuse an over-long ``--title`` before anything is registered.
+
+    Every ``add`` registers first and sets the title in a second call; checking
+    here keeps a refused title from leaving a registered resource behind.
+    """
+    if title is not None and len(title.strip()) > TITLE_MAX_LEN:
+        typer.echo(f"--title is at most {TITLE_MAX_LEN} characters", err=True)
+        raise typer.Exit(int(ExitCode.INVALID_INPUT))
 
 
 def verbose_of(ctx: typer.Context) -> bool:
@@ -210,6 +223,7 @@ def _add(spec: KindVerbs) -> Callable[..., None]:
         if not isinstance(parsed, dict):
             typer.echo("--config must be a JSON object", err=True)
             raise typer.Exit(2)
+        check_title_arg(title)
         body = {"kind": spec.kind, "name": name, "config": parsed, "description": description}
         c, _info = _cli_client.client_or_exit()
         with c:

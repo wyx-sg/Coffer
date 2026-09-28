@@ -30,6 +30,7 @@ from coffer.surfaces.cli._kind_verbs import (
     Column,
     EditFlags,
     KindVerbs,
+    check_title_arg,
     label,
     register_kind_verbs,
     verbose_of,
@@ -140,6 +141,7 @@ def add(
     else:
         typer.echo("--type must be telegram or seatalk", err=True)
         raise typer.Exit(int(ExitCode.INVALID_INPUT))
+    check_title_arg(title)
     c, _info = _cli_client.client_or_exit()
     with c:
         config["runs_on"] = runs_on if runs_on else _this_machine_id(c, verbose=verbose)

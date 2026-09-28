@@ -31,7 +31,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli._kind_verbs import KindVerbs, label, register_kind_verbs
+from coffer.surfaces.cli._kind_verbs import KindVerbs, check_title_arg, label, register_kind_verbs
 from coffer.surfaces.cli._resolve import resolve_uid
 
 #: The registry kind. Spelled here rather than imported from the application
@@ -98,6 +98,7 @@ def add_collection(
     title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
 ) -> None:
     """Create a collection. Nothing else creates one."""
+    check_title_arg(title)
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post(

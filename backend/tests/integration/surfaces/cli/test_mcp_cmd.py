@@ -363,6 +363,15 @@ def test_mcp_add_neither_flag_exits_2(mcp_daemon: Any) -> None:
     assert result.exit_code == 2
 
 
+def test_mcp_add_over_long_title_registers_nothing(mcp_daemon: Any) -> None:
+    """A refused --title is refused before the server is registered, so the
+    corrected command can simply be run again."""
+    result = _runner.invoke(app, ["mcp", "add", "fs", "--stdio", "cat", "--title", "x" * 81])
+    assert result.exit_code == 6
+    assert "at most 80 characters" in result.output
+    assert _runner.invoke(app, ["mcp", "add", "fs", "--stdio", "cat"]).exit_code == 0
+
+
 def test_mcp_add_duplicate_exits_5(mcp_daemon: Any) -> None:
     _runner.invoke(app, ["mcp", "add", "fs", "--stdio", "cat"])
     result = _runner.invoke(app, ["mcp", "add", "fs", "--stdio", "cat"])

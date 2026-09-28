@@ -32,7 +32,13 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli._kind_verbs import KindVerbs, label, register_kind_verbs, verbose_of
+from coffer.surfaces.cli._kind_verbs import (
+    KindVerbs,
+    check_title_arg,
+    label,
+    register_kind_verbs,
+    verbose_of,
+)
 from coffer.surfaces.cli._resolve import resolve_ref
 
 app = typer.Typer(help="Manage skills (AgentSkills standard)")
@@ -147,6 +153,7 @@ def add(
 ) -> None:
     """Import a skill from a local folder; its name comes from SKILL.md."""
     verbose = verbose_of(ctx)
+    check_title_arg(title)
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post("/skills/import", json={"path": folder, "overwrite": force})
