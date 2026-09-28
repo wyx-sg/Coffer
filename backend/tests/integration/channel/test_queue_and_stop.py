@@ -186,14 +186,14 @@ async def test_eleventh_queued_message_is_dropped_with_a_busy_notice(env: Channe
     env.provider.adapter = gated
     _resource, adapter = await env.paired_channel()
 
-    await env.processor.on_message(inbound("tg", "owner", "m0"))
+    await env.send(inbound("tg", "owner", "m0"))
     await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
     queued = [f"q{i}" for i in range(1, 11)]
     for text in queued:  # fill the queue to its bound of 10
-        await env.processor.on_message(inbound("tg", "owner", text))
+        await env.send(inbound("tg", "owner", text))
     assert "⚠️ Busy — message dropped, try again." not in adapter.texts()
 
-    await env.processor.on_message(inbound("tg", "owner", "overflow"))
+    await env.send(inbound("tg", "owner", "overflow"))
     assert "⚠️ Busy — message dropped, try again." in adapter.texts()
 
     gated.release.set()
@@ -219,14 +219,14 @@ async def test_channel_messages_queued_mid_turn_ride_the_conversation_queue(
     env.provider.adapter = gated
     resource, adapter = await env.paired_channel()
 
-    await env.processor.on_message(inbound("tg", "owner", "A"))
+    await env.send(inbound("tg", "owner", "A"))
     await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
     conversation_id = await env.active_conversation(resource)
     assert conversation_id is not None
     observer = env.orchestrator.subscribe(conversation_id)  # a web tab
-    await env.processor.on_message(inbound("tg", "owner", "B"))
+    await env.send(inbound("tg", "owner", "B"))
     await env.orchestrator.enqueue_message(conversation_id, "C from the web")
-    await env.processor.on_message(inbound("tg", "owner", "D"))
+    await env.send(inbound("tg", "owner", "D"))
 
     pending = env.orchestrator.pending(conversation_id)
     assert [turn_body(t) for t in pending] == ["B", "C from the web", "D"]
@@ -251,13 +251,13 @@ async def test_stop_holds_the_queued_messages_until_the_next_message(env: Channe
     env.provider.adapter = gated
     resource, adapter = await env.paired_channel()
 
-    await env.processor.on_message(inbound("tg", "owner", "A"))
+    await env.send(inbound("tg", "owner", "A"))
     await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
     conversation_id = await env.active_conversation(resource)
     assert conversation_id is not None
-    await env.processor.on_message(inbound("tg", "owner", "B"))
+    await env.send(inbound("tg", "owner", "B"))
 
-    await env.processor.on_message(inbound("tg", "owner", "/stop"))
+    await env.send(inbound("tg", "owner", "/stop"))
     await wait_until(lambda: "⏹ Stopped." in adapter.texts())
     await wait_until(lambda: conversation_id not in active_turns())
     await asyncio.sleep(0.05)
@@ -265,7 +265,7 @@ async def test_stop_holds_the_queued_messages_until_the_next_message(env: Channe
     assert gated.runs == ["A"]  # B is held, not run
 
     gated.release.set()
-    await env.processor.on_message(inbound("tg", "owner", "C"))
+    await env.send(inbound("tg", "owner", "C"))
     await wait_until(lambda: "echo:C" in adapter.texts())
     assert gated.runs == ["A", "B", "C"]
 

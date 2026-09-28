@@ -266,6 +266,7 @@ class FakeChannelAdapter:
         set_reaction_fails: bool = False,
         mention_template: str = "",
         mention_email_template: str = "",
+        direct_threads_are_replies: bool = False,
     ) -> None:
         self._caps = ChannelCapabilities(
             supports_edit=supports_edit,
@@ -292,6 +293,9 @@ class FakeChannelAdapter:
             # Typing is two endpoints, not one (SeaTalk: single_chat_typing /
             # group_chat_typing): a fake may hold the DM one alone, exactly like
             # a transport that never gained the group call.
+            # SeaTalk-shaped when True: a DM reply-in-thread is a casual reply
+            # (see "Key conversation identity by channel, chat and thread").
+            direct_threads_are_replies=direct_threads_are_replies,
         )
         # When True, ``set_reaction`` raises — proves the best-effort suppression
         # at the call sites (a failed ack must never break the turn) (see
@@ -365,6 +369,11 @@ class FakeChannelAdapter:
         # When True the live surface IS the reply (SeaTalk's stream): closing it
         # finishes the message in place and leaves the caller nothing to send.
         self.live_text_finalizes = False
+        # (chat_id, mark, body, thread_id) for every ``open_thread`` the core
+        # asked for ("Open parallel conversations in a direct chat"), and the
+        # scripted refusal a transport with no threads available raises.
+        self.opened_threads: list[tuple[str, str, str, str]] = []
+        self.open_thread_fails_with: Exception | None = None
         self._next_id = 0
 
     @property
@@ -412,6 +421,13 @@ class FakeChannelAdapter:
             self.cards.append((chat_id, markdown, list(buttons)))
             self.card_titles.append(title)
         return SentMessage(message_id=self._new_id())
+
+    async def open_thread(self, chat_id: str, mark: str, body: str) -> str:
+        if self.open_thread_fails_with is not None:
+            raise self.open_thread_fails_with
+        thread_id = f"t{len(self.opened_threads) + 1}"
+        self.opened_threads.append((chat_id, mark, body, thread_id))
+        return thread_id
 
     async def update_card(
         self,
@@ -744,6 +760,13 @@ class ChannelEnv:
     #: resource table and only one of them starts anything.
     adapter_factory: Any
     created_adapters: list[FakeChannelAdapter] = field(default_factory=list)
+
+    async def send(self, msg: InboundMessage) -> None:
+        """Deliver ``msg`` and wait until its burst has been released into the
+        conversation (spec channels "Take a burst of messages as one turn"), for a
+        test that inspects the queue right after sending."""
+        await self.processor.on_message(msg)
+        await self.processor._burst.settled()
 
     def runtime_for(self, machine_id: str) -> ChannelRuntime:
         """A runtime that believes it is running on ``machine_id``.

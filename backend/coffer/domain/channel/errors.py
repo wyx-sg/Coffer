@@ -50,3 +50,13 @@ class ChannelSendFailed(CofferError):  # noqa: N818
         super().__init__(f"send via channel {channel!r} failed: {detail}")
         self.api_rejected = api_rejected
         self.status = status
+
+
+class ParallelThreadUnavailable(Exception):  # noqa: N818
+    """The transport cannot open a parallel thread in this chat right now (see
+    "Open parallel conversations in a direct chat").
+
+    Not a ``CofferError``: it never crosses the HTTP surface. It carries the one
+    sentence ``/thread`` answers with, written for the chat's owner — what to
+    change so the next ``/thread`` works (Telegram: turn on Threaded Mode in
+    BotFather)."""

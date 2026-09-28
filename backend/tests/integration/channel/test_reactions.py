@@ -90,7 +90,7 @@ async def test_no_reaction_on_a_non_reacting_transport(env: ChannelEnv) -> None:
     await wait_until(lambda: "42" in adapter.texts())
 
     assert adapter.reactions == []
-    assert adapter.typing == ["owner"]  # the typing signal still fires
+    assert set(adapter.typing) == {"owner"}  # the typing signal still fires
 
 
 @pytest.mark.acceptance(spec="channels", scenario="a failed reaction never breaks the turn")

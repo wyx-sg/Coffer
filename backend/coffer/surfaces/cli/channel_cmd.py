@@ -65,14 +65,38 @@ _IGNORE_OTHER_MENTIONS = typer.Option(
 )
 
 
-def _gating(require_mention: bool | None, ignore_other_mentions: bool | None) -> dict[str, bool]:
-    """The group-gating config keys the user actually passed."""
-    out: dict[str, bool] = {}
-    if require_mention is not None:
-        out["require_mention"] = require_mention
-    if ignore_other_mentions is not None:
-        out["ignore_other_mentions"] = ignore_other_mentions
-    return out
+_WAIT_AFTER_TEXT = typer.Option(
+    None,
+    "--wait-after-text",
+    min=0,
+    max=60,
+    help="Seconds to wait after a text message for more before answering (default: 1.5; 0 = none)",
+)
+_WAIT_AFTER_FORWARD = typer.Option(
+    None,
+    "--wait-after-forward",
+    min=0,
+    max=60,
+    help="Seconds to wait after a forwarded record or files with no text (default: 5; 0 = none)",
+)
+
+
+def _settings(
+    require_mention: bool | None,
+    ignore_other_mentions: bool | None,
+    wait_after_text: float | None = None,
+    wait_after_forward: float | None = None,
+) -> dict[str, bool | float]:
+    """The config keys the user actually passed: group gating ("Configure when the
+    bot answers in a group") and the quiet windows ("Take a burst of messages as
+    one turn")."""
+    passed: dict[str, bool | float | None] = {
+        "require_mention": require_mention,
+        "ignore_other_mentions": ignore_other_mentions,
+        "wait_after_text_seconds": wait_after_text,
+        "wait_after_forward_seconds": wait_after_forward,
+    }
+    return {key: value for key, value in passed.items() if value is not None}
 
 
 def add(
@@ -105,6 +129,8 @@ def add(
     ),
     require_mention: bool | None = _REQUIRE_MENTION,
     ignore_other_mentions: bool | None = _IGNORE_OTHER_MENTIONS,
+    wait_after_text: float | None = _WAIT_AFTER_TEXT,
+    wait_after_forward: float | None = _WAIT_AFTER_FORWARD,
     title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
     description: str | None = typer.Option(None, "--description"),
 ) -> None:
@@ -127,7 +153,9 @@ def add(
     # and the old ``claude_code`` default was a fiction — there was never an
     # agent behind it, so a channel created with it simply routed nowhere.
     config: dict[str, Any] = {"channel_type": channel_type}
-    config.update(_gating(require_mention, ignore_other_mentions))
+    config.update(
+        _settings(require_mention, ignore_other_mentions, wait_after_text, wait_after_forward)
+    )
     if agent_config is not None:
         try:
             config["default_agent_config"] = _json.loads(agent_config)
@@ -326,17 +354,22 @@ def notify(
     typer.echo("sent")
 
 
-def _gating_config(resource: dict[str, Any], values: dict[str, Any]) -> dict[str, Any] | None:
-    """The stored config with only the switches given changed (``edit``)."""
-    changes = _gating(values.get("require_mention"), values.get("ignore_other_mentions"))
+def _settings_config(resource: dict[str, Any], values: dict[str, Any]) -> dict[str, Any] | None:
+    """The stored config with only the settings given changed (``edit``)."""
+    changes = _settings(
+        values.get("require_mention"),
+        values.get("ignore_other_mentions"),
+        values.get("wait_after_text"),
+        values.get("wait_after_forward"),
+    )
     if not changes:
         return None
     return {**(resource.get("config") or {}), **changes}
 
 
-def _option(name: str, default: Any) -> inspect.Parameter:
+def _option(name: str, default: Any, annotation: Any = bool | None) -> inspect.Parameter:
     return inspect.Parameter(
-        name, inspect.Parameter.POSITIONAL_OR_KEYWORD, default=default, annotation=bool | None
+        name, inspect.Parameter.POSITIONAL_OR_KEYWORD, default=default, annotation=annotation
     )
 
 
@@ -356,12 +389,14 @@ _CHANNEL = KindVerbs(
         params=(
             _option("require_mention", _REQUIRE_MENTION),
             _option("ignore_other_mentions", _IGNORE_OTHER_MENTIONS),
+            _option("wait_after_text", _WAIT_AFTER_TEXT, float | None),
+            _option("wait_after_forward", _WAIT_AFTER_FORWARD, float | None),
         ),
-        to_config=_gating_config,
+        to_config=_settings_config,
     ),
     help={
         "list": "List registered channels.",
-        "edit": "Change a channel's name, title, description or group-gating switches.",
+        "edit": "Change a channel's name, title, description, group-gating switches or quiet windows.",
         "rm": "Remove a channel and its pairings.",
         "enable": "Enable a channel (its adapter starts on the machine it is bound to).",
         "disable": "Disable a channel (its adapter stops).",

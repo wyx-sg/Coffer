@@ -27,8 +27,10 @@ from coffer.application.channel.ephemeral import (
     safe_send,
     target_for_command,
 )
+from coffer.application.channel.inbound_burst import BurstPart, InboundBurst, window_for
 from coffer.application.channel.inbound_events import InboundEvents
 from coffer.application.channel.pairing import PairingManager, claim_pairing
+from coffer.application.channel.parallel_threads import resolve_conversation_thread_id
 from coffer.application.channel.ports import (
     AgentCatalogPort,
     ChannelBinding,
@@ -90,8 +92,9 @@ class InboundProcessor:
         self._turns = turns
         self._audit = audit
         self._bindings: dict[str, ChannelBinding] = {}
-        # Keyed by (channel, chat_id, thread_id): one peer's DM, one group's
-        # main chat, and each of that group's threads each render their own turn.
+        # Keyed by (channel, chat_id, conversation thread): one peer's DM, one
+        # group's main chat, each of that group's threads and each parallel
+        # thread render their own turn.
         self._sessions: dict[tuple[str, str, str], _Session] = {}
         self._commands = ChannelCommands(
             threads=threads,
@@ -102,6 +105,7 @@ class InboundProcessor:
             collections=collections,
             ingest=ingest,
             knowledge_enabled=knowledge_enabled,
+            running_in=self._running_in,
         )
         self._turn_driver = TurnDriver(
             peers=peers,
@@ -111,6 +115,8 @@ class InboundProcessor:
             safe_send=safe_send,
             session=self._session,
         )
+        # Each chat/thread's burst, held until quiet ("Take a burst of messages as one turn").
+        self._burst = InboundBurst(lambda ctx, item: self._turn_driver.submit(ctx[0], ctx[1], item))
         self._events = InboundEvents(
             peers=peers,
             commands=self._commands,
@@ -126,6 +132,7 @@ class InboundProcessor:
 
     def unbind(self, name: str) -> None:
         self._bindings.pop(name, None)
+        self._burst.drop_channel(name)
         # A channel can have many live sessions (its DM, each group, each
         # thread within a group) — unbinding it must stop every one of them,
         # not just a single legacy session.
@@ -231,6 +238,11 @@ class InboundProcessor:
                 # falls back to the chat-id match already passed, so a quirk in one
                 # update shape never locks the owner out of their own channel.
                 return
+        # Which conversation this message joins; ``msg.thread_id`` stays where the
+        # reply goes (see "Key conversation identity by channel, chat and thread").
+        conv_thread = await resolve_conversation_thread_id(
+            self._threads, binding, msg.chat_id, chat_kind=msg.chat_kind, thread_id=msg.thread_id
+        )
         text = msg.text.strip()
         attachments = tuple(
             Attachment(path=a.path, mime=a.mime, filename=a.filename) for a in msg.attachments
@@ -240,18 +252,14 @@ class InboundProcessor:
         # in, and from this message's own files.
         title_hint = conversation_title_hint(text, attachments)
         if attachments:
-            # Remember it (owner-gated already) for a `/save` that follows (spec
-            # channels "Save a sent document into a collection") — never the
-            # thread-history attachments folded in below. The turn below still runs
-            # unchanged; `/save` only ALSO makes this saveable. One slot, first file
-            # only: the ingest service takes one file per call (spec knowledge "Bound
-            # uploads and leave nothing behind on failure").
-            session = self._session(binding.resource.name, peer.chat_id, msg.thread_id)
+            # Remember it (owner-gated already) for a `/save` that follows (spec channels
+            # "Save a sent document into a collection") — never the thread-history files
+            # folded in below. One slot, first file only: the ingest service takes one
+            # file per call (spec knowledge "Bound uploads and leave nothing behind on failure").
+            session = self._session(binding.resource.name, peer.chat_id, conv_thread)
             session.pending_document = attachments[0]
-        # A slash command is text-only; a caption starting with "/" alongside an
-        # attachment is a normal message, not a command. Decide on the message's
-        # OWN text/attachments, before any thread history is folded in (a
-        # command never fetches thread context).
+        # A slash command is text-only (a "/" caption on a file is a message), decided on
+        # the message's OWN text before any thread history is folded in.
         is_command = text.startswith("/") and not attachments
         if not is_command:
             # The thread it landed in and the message it quotes ground the turn
@@ -270,44 +278,50 @@ class InboundProcessor:
             )
             return
         if is_command:
+            # Whatever this chat/thread holds runs first; `/stop` drops it instead.
+            key = (binding.resource.name, peer.chat_id, msg.thread_id)
+            if text.split()[0].lower() == "/stop":
+                await self._burst.drop(key)
+            else:
+                await self._burst.flush(key)
             await self._commands.handle(
                 binding,
                 peer,
                 text,
-                self._session(binding.resource.name, peer.chat_id, msg.thread_id),
+                self._session(binding.resource.name, peer.chat_id, conv_thread),
                 # A command answer is the asker's business, not the room's (see
                 # "Keep non-answer chatter private in a group").
                 private_send(safe_send, target_for_command(msg, text)),
                 chat_kind=msg.chat_kind,
                 thread_id=msg.thread_id,
+                conversation_thread_id=conv_thread,
             )
             return
-        # A media message with no caption still needs non-blank text to persist. "Open
-        # every turn with its message origin": the turn opens with its own provenance
-        # (platform, chat kind + title + id, thread, sender) so the agent knows which
-        # group/thread it is answering in instead of inferring it from the bot's group
-        # list. Folded in AFTER command detection (a prefixed "/help" would stop being a
-        # command) and after the empty-envelope check (a header is not content). It
-        # rides on EVERY turn, not just the first: ``/agent`` can swap the agent
-        # mid-conversation and a resumed session would otherwise lose it. The inbound
-        # platform_message_id rides along so the turn can react on it (the
-        # receipt/completion ack of "Acknowledge receipt and completion by capability")
-        # where the transport supports reactions, and the sender's mention id so a group
-        # reply opens by @mentioning whoever asked (see "Mention the asker in a group
-        # answer").
-        origin = format_origin(msg, platform=binding.channel_type)
-        await self._turn_driver.submit(
-            binding,
-            peer,
-            QueuedInbound(
-                text=f"{origin}\n\n{text or attachment_note(attachments)}",
-                attachments=attachments,
-                thread_id=msg.thread_id,
-                chat_kind=msg.chat_kind,
-                reply_to_message_id=msg.platform_message_id,
-                mention_user_id=msg.sender_mention_id,
-                mention_user_email=msg.sender_mention_email,
-                title_hint=title_hint,
+        # "Open every turn with its message origin": provenance (platform, chat, thread,
+        # sender) rides on every turn, added after command detection and the empty
+        # check; the message id is what the receipt/completion reactions target and
+        # the mention id what a group answer opens with ("Mention the asker in a group
+        # answer"). A media message with no caption still needs non-blank text.
+        item = QueuedInbound(
+            text="",
+            attachments=attachments,
+            thread_id=msg.thread_id,
+            chat_kind=msg.chat_kind,
+            reply_to_message_id=msg.platform_message_id,
+            mention_user_id=msg.sender_mention_id,
+            mention_user_email=msg.sender_mention_email,
+            title_hint=title_hint,
+            conversation_thread_id=conv_thread,
+        )
+        await self._turn_driver.acknowledge(binding, peer, item)
+        self._burst.add(
+            (binding.resource.name, peer.chat_id, msg.thread_id),
+            (binding, peer),
+            BurstPart(
+                origin=format_origin(msg, platform=binding.channel_type),
+                body=text or attachment_note(attachments),
+                item=item,
+                window=window_for(binding, msg),
             ),
         )
 
@@ -316,7 +330,10 @@ class InboundProcessor:
         binding = self._bindings.get(cb.channel)
         if binding is None:
             return
-        await self._events.on_callback(binding, cb)
+        conv_thread = await resolve_conversation_thread_id(
+            self._threads, binding, cb.chat_id, chat_kind=cb.chat_kind, thread_id=cb.thread_id
+        )
+        await self._events.on_callback(binding, cb, conversation_thread_id=conv_thread)
 
     async def on_lifecycle(self, event: InboundLifecycle) -> None:
         """The bot's standing in a chat changed — removed from a group, or the
@@ -332,8 +349,19 @@ class InboundProcessor:
         binding = self._bindings.get(event.channel)
         if binding is None:
             return
+        conv_thread = await resolve_conversation_thread_id(
+            self._threads,
+            binding,
+            event.chat_id,
+            chat_kind=event.chat_kind,
+            thread_id=event.thread_id,
+        )
+        await self._burst.drop((event.channel, event.chat_id, event.thread_id))
         await self._events.on_stop(
-            binding, event, session=self._session(event.channel, event.chat_id, event.thread_id)
+            binding,
+            event,
+            session=self._session(event.channel, event.chat_id, conv_thread),
+            conversation_thread_id=conv_thread,
         )
 
     # -- pairing -----------------------------------------------------------
@@ -359,6 +387,10 @@ class InboundProcessor:
         )
 
     # -- helpers ---------------------------------------------------------------
+
+    def _running_in(self, channel: str, chat_id: str, thread_id: str) -> str | None:
+        session = self._sessions.get((channel, chat_id, thread_id))
+        return session.running_conversation_id if session is not None else None
 
     def _session(self, channel: str, chat_id: str, thread_id: str) -> _Session:
         key = (channel, chat_id, thread_id)

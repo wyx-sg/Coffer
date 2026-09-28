@@ -4,8 +4,9 @@
 // Vite dev server — none of this applies and every helper here returns a safe
 // fallback or throws, so the browser path never depends on a shell being
 // there. Inside the Tauri WebView the same build gets a native host, and these
-// are the three things it can ask that host for: where the daemon is, spawn one,
-// and whether the one answering is the version this build pairs with.
+// are the four things it can ask that host for: where the daemon is, spawn one,
+// whether the one answering is the version this build pairs with, and to label
+// its tray in the interface language the user chose.
 //
 // Keep this list short. The shell owns only what a browser cannot do for
 // itself; native file dialogs and "reveal in Finder" deliberately do NOT live
@@ -171,4 +172,41 @@ export async function daemonVersionMatches(daemonVersion: string): Promise<boole
   }
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke<boolean>("daemon_version_matches", { daemonVersion });
+}
+
+/** The slice of an i18next instance `followLanguageInShell` uses. */
+export interface LanguageSource {
+  language: string | undefined;
+  on(event: "languageChanged", callback: (lng: string) => void): void;
+}
+
+/**
+ * Tell the shell which interface language to label its tray in.
+ *
+ * The choice lives in the webview's storage, where the shell cannot read it,
+ * so the page reports it. A no-op outside Tauri: a browser has no tray.
+ */
+export async function setShellLanguage(language: string): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("set_ui_language", { language });
+}
+
+/**
+ * Keep the tray in the interface language: report it now, and again on every
+ * switch, so the tray relabels without a restart. A failed report leaves the
+ * tray in its previous language, which is not worth an error on the page.
+ */
+export function followLanguageInShell(
+  i18n: LanguageSource,
+  report: (language: string) => Promise<void> = setShellLanguage,
+): void {
+  if (!isTauri()) return;
+  const tell = (language: string) => {
+    report(language).catch((e: unknown) => {
+      console.error("Coffer: could not tell the desktop shell the interface language", e);
+    });
+  };
+  if (i18n.language) tell(i18n.language);
+  i18n.on("languageChanged", tell);
 }

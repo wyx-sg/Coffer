@@ -14,8 +14,13 @@ import httpx
 from coffer.domain.channel.errors import ChannelSendFailed
 
 
-async def call(client: httpx.AsyncClient, base: str, name: str, method: str, **params: Any) -> Any:
+async def call(
+    client: httpx.AsyncClient, base: str, name: str, method: str, /, **params: Any
+) -> Any:
     """POST ``method`` and unwrap the Bot API envelope.
+
+    The leading arguments are positional-only so a Bot API parameter may share a
+    name with one of them (``createForumTopic`` takes a ``name``).
 
     Every failure surfaces as ``ChannelSendFailed``. A response that parsed and
     said no is marked ``api_rejected``: it is a decision by the platform, not a

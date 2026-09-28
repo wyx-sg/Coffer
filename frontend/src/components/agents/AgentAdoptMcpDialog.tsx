@@ -130,7 +130,9 @@ export function AgentAdoptMcpDialog({
             </p>
             {entry.secret_keys.map((key) => (
               <div key={key} className="space-y-1.5">
-                <Label htmlFor={`adopt-secret-${key}`}>{key}</Label>
+                <Label htmlFor={`adopt-secret-${key}`} required>
+                  {key}
+                </Label>
                 <Input
                   id={`adopt-secret-${key}`}
                   value={secrets[key] ?? ""}
@@ -144,7 +146,9 @@ export function AgentAdoptMcpDialog({
 
         {showRename && (
           <div className="space-y-1.5">
-            <Label htmlFor="adopt-new-name">{t("agents.name")}</Label>
+            <Label htmlFor="adopt-new-name" required>
+              {t("agents.name")}
+            </Label>
             <Input
               id="adopt-new-name"
               value={newName}

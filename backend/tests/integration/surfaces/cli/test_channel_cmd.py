@@ -417,6 +417,23 @@ def test_edit_changes_only_the_gating_flags_it_is_given(channel_daemon: _Daemon)
     assert config["ignore_other_mentions"] is True
 
 
+@pytest.mark.acceptance(
+    spec="channels", scenario="the quiet windows are edited from the command line"
+)
+def test_edit_changes_the_quiet_windows(channel_daemon: _Daemon) -> None:
+    assert _register_tg().exit_code == 0
+    r = runner.invoke(
+        app, ["channel", "edit", "tg", "--wait-after-text", "0", "--wait-after-forward", "8"]
+    )
+    assert r.exit_code == 0, r.output
+    config = channel_daemon.channel("tg").config
+    assert config["wait_after_text_seconds"] == 0
+    assert config["wait_after_forward_seconds"] == 8
+    assert config["require_mention"] is True  # untouched
+    r = runner.invoke(app, ["channel", "edit", "tg", "--wait-after-text", "61"])
+    assert r.exit_code == 2
+
+
 def test_edit_with_no_option_exits_2(channel_daemon: _Daemon) -> None:
     assert _register_tg().exit_code == 0
     r = runner.invoke(app, ["channel", "edit", "tg"])

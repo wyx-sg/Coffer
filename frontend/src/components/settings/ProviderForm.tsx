@@ -43,7 +43,7 @@ import {
 } from "@/lib/api/providers";
 import { PRESETS } from "./connectionPresets";
 import { providerFormSchema, type ProviderFormValues } from "./providerFormSchema";
-import { PresetPicker, ProtocolPicker, REQUIRED } from "./ProviderWireFields";
+import { PresetPicker, ProtocolPicker } from "./ProviderWireFields";
 
 interface Props {
   /** Present → edit an existing connection (the wire IS editable — see the
@@ -138,7 +138,7 @@ export function ProviderForm({
   return (
     <form className="space-y-3" onSubmit={submit} noValidate>
       <div className="space-y-1.5">
-        <Label htmlFor="p-name" className={REQUIRED}>
+        <Label htmlFor="p-name" required>
           {t("settings.connections.name")}
         </Label>
         <Input id="p-name" aria-describedby="p-name-error" {...register("name")} />
@@ -179,7 +179,7 @@ export function ProviderForm({
       {!isEdit && isCustom ? <ProtocolPicker id="p-wire" control={control} /> : null}
 
       <div className="space-y-1.5">
-        <Label htmlFor="p-base" className={REQUIRED}>
+        <Label htmlFor="p-base" required>
           {t("settings.connections.baseUrl")}
         </Label>
         <Input
@@ -193,7 +193,7 @@ export function ProviderForm({
 
       {needsCredential && (
         <div className="space-y-1.5">
-          <Label htmlFor="p-secret" className={isEdit ? undefined : REQUIRED}>
+          <Label htmlFor="p-secret" required={!isEdit}>
             {t("settings.connections.secret")}
           </Label>
           <PasswordInput

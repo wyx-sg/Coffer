@@ -1,17 +1,14 @@
 """Slash-command handling for channels: /help /new /agent /model /effort /stop
-/status /save.
+/status /save /thread /threads.
 
 The router owns the structural switch (/agent → a fresh conversation, sticky on the
 peer) and the parametric switch (/model → next turn, same conversation). Conversation
 creation is delegated to ``conversation_ops`` so the inbound turn-driver and this router
 agree on how a channel conversation is born. ``/save`` (spec channels "Save a sent
-document into a collection"), ``/model`` and ``/effort`` each live in their own sibling
-module (``document_save``/``model_switch``/``effort_switch``) for this file's size
-budget — ``handle`` below still dispatches every command from one place.
-
-``/effort`` is the second half of ``/model``: a model's reasoning level, taken
-by the agents as their own field rather than as part of the model name, so it
-gets its own command exactly as the web gives it its own picker.
+document into a collection"), ``/model``, ``/effort`` and ``/status``/``/thread``/
+``/threads`` each live in a sibling module (``document_save``/``model_switch``/
+``effort_switch``/``parallel_threads``) for this file's size budget — ``handle``
+below still dispatches every command from one place.
 """
 
 from __future__ import annotations
@@ -19,7 +16,12 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any, Protocol
 
-from coffer.application.channel import document_save, effort_switch, model_switch
+from coffer.application.channel import (
+    document_save,
+    effort_switch,
+    model_switch,
+    parallel_threads,
+)
 from coffer.application.channel.agent_routing import (
     effective_agent,
     routable_choices,
@@ -89,7 +91,11 @@ class ChannelCommands:
         collections: CollectionCatalogPort,
         ingest: IngestPort,
         knowledge_enabled: Callable[[], bool] = lambda: True,
+        running_in: Callable[[str, str, str], str | None] = lambda *_: None,
     ) -> None:
+        #: ``(channel, chat, thread) → the conversation rendering a turn there``,
+        #: read without creating a session; `/threads` asks it per thread.
+        self.running_in = running_in
         self._threads = threads
         self._conversations = conversations
         self._turns = turns
@@ -110,7 +116,11 @@ class ChannelCommands:
         *,
         chat_kind: str = "direct",
         thread_id: str = "",
+        conversation_thread_id: str,
     ) -> None:
+        """Dispatch one command. ``thread_id`` is where the answer goes;
+        ``conversation_thread_id`` is which conversation it is about (see "Key
+        conversation identity by channel, chat and thread")."""
         command = text.split()[0].lower()
         if command in ("/help", "/start"):
             await send(binding, peer.chat_id, HELP_TEXT, chat_kind=chat_kind, thread_id=thread_id)
@@ -122,46 +132,72 @@ class ChannelCommands:
                 "🆕 Started a fresh conversation.",
                 chat_kind=chat_kind,
                 thread_id=thread_id,
+                conversation_thread_id=conversation_thread_id,
             )
         elif command == "/agent":
             await self._cmd_agent(
-                binding, peer, text, send, chat_kind=chat_kind, thread_id=thread_id
+                binding,
+                peer,
+                text,
+                send,
+                chat_kind=chat_kind,
+                thread_id=thread_id,
+                conversation_thread_id=conversation_thread_id,
             )
         elif command == "/model":
-            await self._cmd_model(
-                binding, peer, text, send, chat_kind=chat_kind, thread_id=thread_id
+            await model_switch.cmd_model(
+                self,
+                binding,
+                peer,
+                text,
+                send,
+                chat_kind=chat_kind,
+                thread_id=thread_id,
+                conversation_thread_id=conversation_thread_id,
             )
         elif command == "/effort":
             # Dispatched straight into its module (like ``/save``) rather than
             # through a method here: this file's size budget, and nothing in
             # between would do anything but forward.
             await effort_switch.cmd_effort(
-                self, binding, peer, text, send, chat_kind=chat_kind, thread_id=thread_id
+                self,
+                binding,
+                peer,
+                text,
+                send,
+                chat_kind=chat_kind,
+                thread_id=thread_id,
+                conversation_thread_id=conversation_thread_id,
             )
         elif command == "/stop":
             await self.interrupt(
-                binding, peer, session, send, chat_kind=chat_kind, thread_id=thread_id
+                binding,
+                peer,
+                session,
+                send,
+                chat_kind=chat_kind,
+                thread_id=thread_id,
+                conversation_thread_id=conversation_thread_id,
             )
         elif command == "/save":
             await document_save.cmd_save(
                 self, binding, peer, text, session, send, chat_kind=chat_kind, thread_id=thread_id
             )
-        elif command == "/status":
-            running = session.running_conversation_id is not None
-            row = await self._threads.get(binding.resource.id, peer.chat_id, thread_id)
-            bound = row.active_conversation_id if row is not None else None
-            conv = bound or "none yet"
-            agent = effective_agent(binding, row.preferred_agent if row is not None else None)
-            # The queue is the conversation's own (spec chat "Queue messages sent during
-            # a turn") — the same one the web's pending chips show.
-            queued = len(self._turns.pending(bound)) if bound is not None else 0
-            await send(
+        elif command in ("/status", "/thread", "/threads"):
+            # `/status` names a parallel thread's mark, so it lives beside
+            # `/thread` and `/threads` (see "Open parallel conversations in a
+            # direct chat").
+            await parallel_threads.dispatch(
+                self,
+                command,
                 binding,
-                peer.chat_id,
-                f"Conversation: {conv}\nAgent: {agent}\n"
-                f"Turn running: {'yes' if running else 'no'}\nQueued: {queued}",
+                peer,
+                text,
+                session,
+                send,
                 chat_kind=chat_kind,
                 thread_id=thread_id,
+                conversation_thread_id=conversation_thread_id,
             )
         else:
             await send(
@@ -181,6 +217,7 @@ class ChannelCommands:
         *,
         chat_kind: str = "direct",
         thread_id: str = "",
+        conversation_thread_id: str,
     ) -> None:
         """Stop the turn running for this ``(chat, thread)``.
 
@@ -194,26 +231,13 @@ class ChannelCommands:
         running on the previous conversation, and stopping the bound (idle) one
         would claim "Stopping…" while the real turn ran on.
         """
-        row = await self._threads.get(binding.resource.id, peer.chat_id, thread_id)
+        row = await self._threads.get(binding.resource.id, peer.chat_id, conversation_thread_id)
         bound = row.active_conversation_id if row is not None else None
         target = session.running_conversation_id or bound
         if target is not None:
             self._turns.interrupt_turn(target)
-            await send(
-                binding, peer.chat_id, "⏹ Stopping…", chat_kind=chat_kind, thread_id=thread_id
-            )
-        else:
-            await send(
-                binding,
-                peer.chat_id,
-                "Nothing is running.",
-                chat_kind=chat_kind,
-                thread_id=thread_id,
-            )
-
-    # `/save` (spec channels "Save a sent document into a collection") lives in
-    # ``document_save`` (this file's size budget): ``handle`` and a collection-card tap
-    # call it directly.
+        answer = "⏹ Stopping…" if target is not None else "Nothing is running."
+        await send(binding, peer.chat_id, answer, chat_kind=chat_kind, thread_id=thread_id)
 
     # -- structural switches (open a fresh conversation, sticky on the peer) ------
 
@@ -226,6 +250,7 @@ class ChannelCommands:
         *,
         chat_kind: str = "direct",
         thread_id: str = "",
+        conversation_thread_id: str,
     ) -> None:
         parts = text.split()
         # Narrowed to the agents THIS channel may drive (ADR per-agent-resource-scope). The
@@ -233,7 +258,7 @@ class ChannelCommands:
         # narrowed set, so a card can never offer a key the check rejects.
         keys = routable_keys(binding, self._agents)
         if len(parts) < 2:
-            row = await self._threads.get(binding.resource.id, peer.chat_id, thread_id)
+            row = await self._threads.get(binding.resource.id, peer.chat_id, conversation_thread_id)
             current = effective_agent(binding, row.preferred_agent if row is not None else None)
             if keys and binding.adapter.capabilities.supports_buttons:
                 # A card the platform refuses must not end the command in
@@ -251,76 +276,60 @@ class ChannelCommands:
                 thread_id=thread_id,
             )
             return
-        key = parts[1]
-        if key not in keys:
+        agent = parts[1]
+        if agent not in keys:
             await send(
                 binding,
                 peer.chat_id,
-                f"Unknown agent '{key}'. Available: {', '.join(keys)}"
+                f"Unknown agent '{agent}'. Available: {', '.join(keys)}"
                 if keys
                 else NO_AGENT_IN_SCOPE,
                 chat_kind=chat_kind,
                 thread_id=thread_id,
             )
             return
-        await self.apply_agent(binding, peer, key, send, chat_kind=chat_kind, thread_id=thread_id)
+        await self.apply_agent(
+            binding,
+            peer,
+            agent,
+            send,
+            chat_kind=chat_kind,
+            thread_id=thread_id,
+            conversation_thread_id=conversation_thread_id,
+        )
 
     async def apply_agent(
         self,
         binding: ChannelBinding,
         peer: ChannelPeer,
-        key: str,
+        agent: str,
         send: SafeSend,
         *,
         chat_kind: str = "direct",
         thread_id: str = "",
+        conversation_thread_id: str,
     ) -> None:
-        """The structural switch to ``key`` (assumes ``key`` already validated): stick
+        """The structural switch to ``agent`` (assumes ``agent`` already validated): stick
         it on THIS thread and open a fresh conversation for it (see "Key conversation
         identity by channel, chat and thread" and "Drive every managed agent from one
         bot" — a different thread of the same group can run a different agent). Shared
         by the text ``/agent <key>`` path and a card tap."""
-        await self._threads.set_preferred_agent(binding.resource.id, peer.chat_id, thread_id, key)
+        await self._threads.set_preferred_agent(
+            binding.resource.id, peer.chat_id, conversation_thread_id, agent
+        )
         await self._open_and_report(
             binding,
             peer,
             send,
-            f"🔀 Switched to agent '{key}'.",
+            f"🔀 Switched to agent '{agent}'.",
             chat_kind=chat_kind,
             thread_id=thread_id,
+            conversation_thread_id=conversation_thread_id,
         )
 
-    # -- parametric switch (/model: same conversation, next turn) — split into
-    # ``model_switch`` for this file's size budget, exactly like /save. -------
-
-    async def _cmd_model(
-        self,
-        binding: ChannelBinding,
-        peer: ChannelPeer,
-        text: str,
-        send: SafeSend,
-        *,
-        chat_kind: str = "direct",
-        thread_id: str = "",
-    ) -> None:
-        await model_switch.cmd_model(
-            self, binding, peer, text, send, chat_kind=chat_kind, thread_id=thread_id
-        )
-
-    async def apply_model(
-        self,
-        binding: ChannelBinding,
-        peer: ChannelPeer,
-        name: str,
-        send: SafeSend,
-        *,
-        chat_kind: str = "direct",
-        thread_id: str = "",
-    ) -> None:
-        """The parametric switch, shared by the text path and a card tap."""
-        await model_switch.apply_model(
-            self, binding, peer, name, send, chat_kind=chat_kind, thread_id=thread_id
-        )
+    # `/model` (the parametric switch: same conversation, next turn) lives in
+    # ``model_switch`` for this file's size budget, exactly like /save; a card tap
+    # calls it directly.
 
     async def dispatch_callback(
         self,
@@ -332,6 +341,7 @@ class ChannelCommands:
         session: Any,
         chat_kind: str = "direct",
         thread_id: str = "",
+        conversation_thread_id: str,
         card_message_id: str = "",
     ) -> None:
         """Route a selection-card tap (``data`` = the tapped ``ChoiceButton.value``)
@@ -354,6 +364,7 @@ class ChannelCommands:
             send,
             chat_kind=chat_kind,
             thread_id=thread_id,
+            conversation_thread_id=conversation_thread_id,
             card_message_id=card_message_id,
             session=session,
         )
@@ -367,9 +378,12 @@ class ChannelCommands:
         *,
         chat_kind: str = "direct",
         thread_id: str = "",
+        conversation_thread_id: str,
     ) -> None:
         try:
-            await open_conversation(self._conversations, self._threads, binding, peer, thread_id)
+            await open_conversation(
+                self._conversations, self._threads, binding, peer, conversation_thread_id
+            )
         except CofferError as e:
             await send(
                 binding,

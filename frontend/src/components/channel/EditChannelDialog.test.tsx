@@ -185,6 +185,67 @@ describe("EditChannelDialog", () => {
     expect(config.ignore_other_mentions).toBe(true);
   });
 
+  describe("message batching", () => {
+    // spec channels "Take a burst of messages as one turn".
+    const textField = () => screen.getByLabelText(/wait after a text message/i);
+    const forwardField = () => screen.getByLabelText(/wait after a forward or files/i);
+
+    test("absent keys show the backend defaults, and an unchanged save writes neither", async () => {
+      const api = installApi(mockApiClient());
+      renderDialog();
+
+      expect(textField()).toHaveValue(1.5);
+      expect(forwardField()).toHaveValue(5);
+      save();
+
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      const config = (api.PATCH.mock.calls[0][1] as { body: { config: Record<string, unknown> } })
+        .body.config;
+      expect("wait_after_text_seconds" in config).toBe(false);
+      expect("wait_after_forward_seconds" in config).toBe(false);
+    });
+
+    acceptance("channels", "the quiet windows are edited on the Channels page", async () => {
+      const api = installApi(mockApiClient());
+      renderDialog({
+        ...telegramResource,
+        config: {
+          ...telegramResource.config,
+          wait_after_text_seconds: 3,
+          wait_after_forward_seconds: 10,
+        },
+      } as unknown as typeof telegramResource);
+
+      expect(textField()).toHaveValue(3);
+      expect(forwardField()).toHaveValue(10);
+      fireEvent.change(textField(), { target: { value: "0" } });
+      save();
+
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      const config = (api.PATCH.mock.calls[0][1] as { body: { config: Record<string, unknown> } })
+        .body.config;
+      expect(config.wait_after_text_seconds).toBe(0);
+      expect(config.wait_after_forward_seconds).toBe(10);
+    });
+
+    test("an out-of-range or blank value blocks Save with an inline error", () => {
+      const api = installApi(mockApiClient());
+      renderDialog();
+
+      fireEvent.change(forwardField(), { target: { value: "61" } });
+      expect(screen.getByRole("alert")).toHaveTextContent(/0 to 60/);
+      expect(screen.getByRole("button", { name: /save changes/i })).toBeDisabled();
+
+      fireEvent.change(forwardField(), { target: { value: "" } });
+      expect(screen.getByRole("button", { name: /save changes/i })).toBeDisabled();
+
+      fireEvent.change(forwardField(), { target: { value: "7.5" } });
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.getByRole("button", { name: /save changes/i })).toBeEnabled();
+      expect(api.PATCH).not.toHaveBeenCalled();
+    });
+  });
+
   describe("seatalk", () => {
     const seatalkChannel = {
       uid: ST_UID,

@@ -175,6 +175,92 @@ async def test_an_ingest_failure_is_logged_and_does_not_drop_the_connection(
             await connector.stop()
 
 
+def _message(chat: str, text: str, *, group: bool = False) -> dict[str, Any]:
+    body = {"message": {"tag": "text", "text": {"content": text}}}
+    if group:
+        return envelope("new_mentioned_message_received_from_group_chat", group_id=chat, **body)
+    return envelope(employee_code=chat, **body)
+
+
+def _burst(*events: dict[str, Any]) -> Any:
+    """Dispatch several events back to back on one connection, then hold it."""
+
+    def _run(client: Any) -> None:
+        for number, data in enumerate(events):
+            client.dispatch_event(data, callback_id=f"cb-{number}")
+        client.block_until_closed()
+
+    return _run
+
+
+class _SlowFirst:
+    """An ingest whose first call is slow — a forwarded record's file download."""
+
+    def __init__(self, *, slow: str, fail_slow: bool = False) -> None:
+        self.order: list[str] = []
+        self._slow = slow
+        self._fail_slow = fail_slow
+
+    async def __call__(self, name: str, payload: dict[str, Any]) -> None:
+        text = payload["event"]["message"]["text"]["content"]
+        if text == self._slow:
+            await asyncio.sleep(0.2)
+            if self._fail_slow:
+                raise RuntimeError("download failed")
+        self.order.append(text)
+
+
+@pytest.mark.acceptance(
+    spec="channels/seatalk",
+    scenario="a slow forwarded record still precedes the text sent after it",
+)
+@pytest.mark.parametrize("group", [False, True])
+async def test_one_chats_events_reach_ingest_in_arrival_order(
+    sdk: FakeSeaTalkSdk, group: bool
+) -> None:
+    sdk.plan[:] = [
+        _burst(_message("c-1", "record", group=group), _message("c-1", "text", group=group)),
+        hold(),
+    ]
+    ingest = _SlowFirst(slow="record")
+    connector = _connector(sdk, ingest)
+    await connector.start()
+    try:
+        await wait_until(lambda: len(ingest.order) == 2, message="events never reached ingest")
+        assert ingest.order == ["record", "text"]
+        await wait_until(lambda: not connector._chat_tails, message="an idle chat kept its tail")
+    finally:
+        await connector.stop()
+
+
+async def test_different_chats_are_not_serialised(sdk: FakeSeaTalkSdk) -> None:
+    sdk.plan[:] = [_burst(_message("c-1", "record"), _message("c-2", "other")), hold()]
+    ingest = _SlowFirst(slow="record")
+    connector = _connector(sdk, ingest)
+    await connector.start()
+    try:
+        await wait_until(lambda: len(ingest.order) == 2, message="events never reached ingest")
+        # The other chat's fast event overtook the slow one: no cross-chat queue.
+        assert ingest.order == ["other", "record"]
+    finally:
+        await connector.stop()
+
+
+async def test_a_failed_ingest_does_not_block_the_next_event_in_its_chat(
+    sdk: FakeSeaTalkSdk, caplog: pytest.LogCaptureFixture
+) -> None:
+    sdk.plan[:] = [_burst(_message("c-1", "record"), _message("c-1", "text")), hold()]
+    ingest = _SlowFirst(slow="record", fail_slow=True)
+    connector = _connector(sdk, ingest)
+    with caplog.at_level(logging.ERROR):
+        await connector.start()
+        try:
+            await wait_until(lambda: ingest.order == ["text"], message="the successor was lost")
+            assert any("ingest_failed" in r.message for r in caplog.records)
+        finally:
+            await connector.stop()
+
+
 async def test_an_event_without_a_data_dict_is_ignored(sdk: FakeSeaTalkSdk) -> None:
     def _bad(client: Any) -> None:
         client.dispatcher.event_handler(object())  # no .data at all

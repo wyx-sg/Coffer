@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from coffer.application.channel import document_save, effort_switch
+from coffer.application.channel import document_save, effort_switch, model_switch
 from coffer.application.channel.agent_routing import (
     effective_agent,
     routable_choices,
@@ -102,6 +102,7 @@ async def dispatch_card_tap(
     *,
     chat_kind: str,
     thread_id: str,
+    conversation_thread_id: str,
     card_message_id: str,
     session: Any,
 ) -> None:
@@ -117,7 +118,9 @@ async def dispatch_card_tap(
     ``session`` is only read by the ``collection:`` branch (spec channels "Save a sent
     document into a collection"): the pending document a `/save` card tap saves lives
     there, keyed by this same ``(channel, chat, thread)``, exactly like the queue and
-    the running-turn bookkeeping every other tap ignores.
+    the running-turn bookkeeping every other tap ignores. ``thread_id`` routes
+    every answer; ``conversation_thread_id`` keys the conversation the choice
+    applies to (see "Key conversation identity by channel, chat and thread").
     """
     turn = parse_page_turn(data)
     if turn is not None:
@@ -131,6 +134,7 @@ async def dispatch_card_tap(
             send,
             chat_kind=chat_kind,
             thread_id=thread_id,
+            conversation_thread_id=conversation_thread_id,
             card_message_id=card_message_id,
         )
         return
@@ -146,18 +150,38 @@ async def dispatch_card_tap(
             )
             return
         await commands.apply_agent(
-            binding, peer, value, send, chat_kind=chat_kind, thread_id=thread_id
+            binding,
+            peer,
+            value,
+            send,
+            chat_kind=chat_kind,
+            thread_id=thread_id,
+            conversation_thread_id=conversation_thread_id,
         )
     elif kind == "model" and value:
-        await commands.apply_model(
-            binding, peer, value, send, chat_kind=chat_kind, thread_id=thread_id
+        await model_switch.apply_model(
+            commands,
+            binding,
+            peer,
+            value,
+            send,
+            chat_kind=chat_kind,
+            thread_id=thread_id,
+            conversation_thread_id=conversation_thread_id,
         )
     elif kind == "effort" and value:
         # Straight into ``effort_switch`` (no forwarding method on
         # ``commands``, unlike apply_agent/apply_model) — that file's size
         # budget, exactly as the ``collection`` branch below does.
         await effort_switch.apply_effort(
-            commands, binding, peer, value, send, chat_kind=chat_kind, thread_id=thread_id
+            commands,
+            binding,
+            peer,
+            value,
+            send,
+            chat_kind=chat_kind,
+            thread_id=thread_id,
+            conversation_thread_id=conversation_thread_id,
         )
     elif kind == "collection" and value:
         # A save is one-shot, not a toggle: nothing to re-tick, so skip the
@@ -172,7 +196,13 @@ async def dispatch_card_tap(
     else:
         return
     await refresh_selection_card(
-        commands, binding, peer, card_message_id, kind, chat_kind=chat_kind, thread_id=thread_id
+        commands,
+        binding,
+        peer,
+        card_message_id,
+        kind,
+        chat_kind=chat_kind,
+        conversation_thread_id=conversation_thread_id,
     )
 
 
@@ -184,7 +214,7 @@ async def refresh_selection_card(
     kind: str,
     *,
     chat_kind: str,
-    thread_id: str,
+    conversation_thread_id: str,
 ) -> None:
     """Rewrite the tapped card so its tick sits on the new choice.
 
@@ -202,7 +232,7 @@ async def refresh_selection_card(
     if not (card_message_id and caps.supports_buttons and caps.supports_card_update):
         return
     try:
-        card = await _current_card(commands, binding, peer, kind, thread_id)
+        card = await _current_card(commands, binding, peer, kind, conversation_thread_id)
         if card is None or not card.buttons:
             return
         await binding.adapter.update_card(
@@ -229,6 +259,7 @@ async def turn_card_page(
     *,
     chat_kind: str,
     thread_id: str,
+    conversation_thread_id: str,
     card_message_id: str,
 ) -> None:
     """Show another page of the same card, changing nothing else.
@@ -248,7 +279,7 @@ async def turn_card_page(
     * That fresh card is refused too → the page goes out as plain text.
     """
     try:
-        card = await _current_card(commands, binding, peer, kind, thread_id, page=page)
+        card = await _current_card(commands, binding, peer, kind, conversation_thread_id, page=page)
     except Exception:
         _logger.warning(
             "channel.card.page_failed", extra={"channel": binding.resource.name}, exc_info=True
@@ -313,7 +344,7 @@ async def _current_card(
     binding: ChannelBinding,
     peer: ChannelPeer,
     kind: str,
-    thread_id: str,
+    conversation_thread_id: str,
     *,
     page: int | None = None,
 ) -> SelectionCard | None:
@@ -323,7 +354,7 @@ async def _current_card(
     is what the card must reflect, and only the store knows whether it landed.
     ``page`` is ``None`` for "the page holding the current choice".
     """
-    row = await commands._threads.get(binding.resource.id, peer.chat_id, thread_id)
+    row = await commands._threads.get(binding.resource.id, peer.chat_id, conversation_thread_id)
     agent_key = effective_agent(binding, row.preferred_agent if row is not None else None)
     if kind == "agent":
         return agent_card(
@@ -339,7 +370,7 @@ async def _current_card(
     if kind not in ("model", "effort"):
         return None
     conversation_id = await ensure_conversation(
-        commands._conversations, commands._threads, binding, peer, thread_id
+        commands._conversations, commands._threads, binding, peer, conversation_thread_id
     )
     cfg = await commands._conversations.get_agent_config(conversation_id)
     if kind == "effort":

@@ -116,6 +116,8 @@ class SeaTalkWebSocketConnector:
         self._state = "connecting"
         self._error: str | None = None
         self._ingest_tasks: set[asyncio.Task[None]] = set()
+        # The latest ingest per chat (group_id or DM employee_code); see _schedule_ingest.
+        self._chat_tails: dict[str, asyncio.Task[None]] = {}
         # Observable by tests and by the backoff assertions: how long the
         # supervisor actually slept before each retry.
         self.backoffs: list[float] = []
@@ -366,15 +368,28 @@ class SeaTalkWebSocketConnector:
         self._mark_kicked(message or "no reason given")
 
     def _schedule_ingest(self, envelope: dict[str, Any]) -> None:
-        task = asyncio.create_task(self._deliver(envelope))
+        # spec channels/seatalk "Hand a chat's events to the channel in arrival
+        # order": ingest awaits vary (a forwarded record downloads files), so each
+        # event waits for its chat's previous one. Different chats stay concurrent.
+        event = envelope["event"] if isinstance(envelope.get("event"), dict) else {}
+        key = str(event.get("group_id") or event.get("employee_code") or "")
+        task = asyncio.create_task(self._deliver(envelope, self._chat_tails.get(key)))
         self._ingest_tasks.add(task)
         task.add_done_callback(self._reap_ingest)
+        if key:
+            self._chat_tails[key] = task
 
-    async def _deliver(self, envelope: dict[str, Any]) -> None:
+    async def _deliver(self, envelope: dict[str, Any], after: asyncio.Task[None] | None) -> None:
+        if after is not None:
+            # ``wait`` rather than ``await``: the predecessor's failure is its own
+            # reaper's to log, and cancelling us must not cancel it.
+            await asyncio.wait({after})
         await self._ingest(self._name, envelope)
 
     def _reap_ingest(self, task: asyncio.Task[None]) -> None:
         self._ingest_tasks.discard(task)
+        for key in [k for k, tail in self._chat_tails.items() if tail is task]:
+            del self._chat_tails[key]  # the chat has gone idle
         if not task.cancelled() and task.exception() is not None:
             # Never silent: an ingest that failed means a message the owner sent
             # went nowhere.

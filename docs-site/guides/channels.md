@@ -87,9 +87,19 @@ Send the bot a message. The first message opens a conversation on the channel's 
 - The reply grows in place while the agent works, with one progress line per tool call, such as `⏳ Bash · list the desktop` and `✅ Read · wedding.json`.
 - A turn that fails, is stopped, or hits the tool-iteration limit ends with a one-line summary: the outcome, tool count, duration and tokens. A turn that succeeds sends no summary; the reply is the signal.
 
-Messages you send while a turn is running wait in the conversation's queue and run in order — the same queue the Chat page shows. The channel accepts up to 10 waiting messages; past that it tells you the channel is busy and drops the message.
+Messages sent in quick succession are one question. The channel waits for a short pause after each message before it starts the turn: 1.5 seconds after text, 5 seconds after a forwarded chat record or files with no text. Anything you send inside that pause joins the same turn. So you can forward a record and then type "look into this", and the agent answers once, having seen both. Each message is still acknowledged the moment it arrives.
 
-Each turn tells the agent it is on a chat channel: keep replies concise, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. While the `memory` feature is on, the turn's system prompt also carries the [memory](/guides/memory#in-channel-turns) index, since a channel turn runs no session-start hook.
+Both pauses are per-channel settings: on the Channels page under **Edit** → **Message batching**, or with `coffer channel edit <name> --wait-after-text <seconds> --wait-after-forward <seconds>`. Each takes 0 to 60 seconds; 0 answers every such message on its own.
+
+Messages you send while a turn is running wait in the conversation's queue and run in order — the same queue the Chat page shows. A burst sent during a turn joins the queue as one entry. The channel accepts up to 10 waiting messages; past that it tells you the channel is busy and drops the message.
+
+### Parallel conversations
+
+A direct chat is one conversation. To run a second task beside it without mixing contexts, send `/thread [title]`. The bot opens a thread marked `🧵#N title`, and whatever you send inside that thread runs in a conversation of its own. The mark is the thread's name in the chat, the conversation's title on the Chat page, and the first line of `/status` inside it. `/threads` tells you how many parallel conversations the chat has and whether each one is running, has messages waiting, or is idle.
+
+How the thread appears depends on the platform. On SeaTalk it is a message from the bot that you reply under. On Telegram it is a private-chat topic, which needs the bot's Threaded Mode turned on in BotFather. In a group, every thread is already its own conversation, so `/thread` is not needed there.
+
+Each turn tells the agent it is on a chat channel: keep replies concise but quote the key log lines, errors and IDs behind a finding verbatim, and it cannot click dialogs on your computer. Each turn also opens with a `[Message origin]` block naming the platform, the chat, the thread and the sender, so the agent can answer "which group is this?" and aim a platform tool call at the right chat. While the `memory` feature is on, the turn's system prompt also carries the [memory](/guides/memory#in-channel-turns) index, since a channel turn runs no session-start hook.
 
 ## Commands
 
@@ -104,9 +114,11 @@ Commands work from any paired chat — a direct chat, a group or a thread. `/hel
 | `/stop` | Interrupt the running turn and pause the queue. |
 | `/status` | Show the active conversation, agent and turn state, including how many messages are waiting. |
 | `/save [collection]` | Save the document you just sent into a [knowledge](/guides/knowledge) collection. Without a collection, it asks which. |
+| `/thread [title]` | In a direct chat, open a parallel conversation in its own thread, marked `🧵#N title`. See [Parallel conversations](#parallel-conversations). |
+| `/threads` | List this chat's parallel conversations with their agent and state. |
 | `/help` | List the commands. |
 
-`/new` and `/stop` take effect even while a turn is running. `/start`, which a Telegram start link sends, answers with the help text.
+`/new` and `/stop` take effect even while a turn is running. A command first releases any messages still waiting out their pause, so they run before it; `/stop` discards them instead. `/start`, which a Telegram start link sends, answers with the help text.
 
 Notes on the switches:
 
@@ -115,7 +127,7 @@ Notes on the switches:
 - There is no command to clear a model or effort override. `/new` starts a conversation with no overrides.
 - `/save` needs the Knowledge feature switched on. See [Experimental features](/guides/experimental-features).
 
-In a group, the answers to `/agent`, `/model`, `/effort`, `/status` and `/help` are delivered privately to you where the platform supports it; `/new`, `/stop` and `/save` stay visible to the room.
+In a group, the answers to `/agent`, `/model`, `/effort`, `/status`, `/threads` and `/help` are delivered privately to you where the platform supports it; `/new`, `/stop` and `/save` stay visible to the room.
 
 ### Selection cards
 

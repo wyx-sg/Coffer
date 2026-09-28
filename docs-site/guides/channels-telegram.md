@@ -129,6 +129,10 @@ The agent sends a file back with a `MEDIA:/absolute/path` line; images arrive as
 A Telegram file URL contains the bot token, so download failures are logged by error class or HTTP status only, never by URL.
 :::
 
+## Parallel conversations in a private chat
+
+`/thread [title]` opens a private-chat topic named `🧵#N title`, and messages in it run in a conversation of their own ([Parallel conversations](/guides/channels#parallel-conversations)). Telegram creates private-chat topics only for a bot with **Threaded Mode** on: in BotFather, open the bot's settings and turn it on. Without it, `/thread` answers with that instruction and opens nothing. Any topic you create yourself in the private chat is also its own conversation.
+
 ## Groups and forum topics
 
 1. Add the bot to the group.

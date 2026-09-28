@@ -3,7 +3,8 @@
 // platform secret(s) — the new value is written to the SAME credential ref the
 // channel already points at, so a rotation never re-pairs or re-registers —
 // re-bind the default agent (SeaTalk also exposes its app id), and set when
-// the bot answers in a group (EditChannelGroupFields). The bound
+// the bot answers in a group (EditChannelGroupFields), and how long a burst of
+// messages is held before it runs as one turn (EditChannelBurstFields). The bound
 // agent's models all stay available; the model is switched in chat with
 // /model. Apply plumbing (secrets-first write, then config PATCH) lives in
 // editChannel.ts.
@@ -26,7 +27,14 @@ import { ResourceTitleField } from "@/components/resource/ResourceTitleField";
 import type { ResourceOut } from "@/lib/api/resources";
 import { EditChannelSecretFields, type ChannelEditDraft } from "./EditChannelSecretFields";
 import { EditChannelGroupFields, type ChannelGroupDraft } from "./EditChannelGroupFields";
-import { honoursRequireMention, planChannelEdit } from "./editChannel";
+import { EditChannelBurstFields, type ChannelBurstDraft } from "./EditChannelBurstFields";
+import {
+  burstDraftValid,
+  honoursRequireMention,
+  parseBurstWait,
+  planChannelEdit,
+  storedBurstWait,
+} from "./editChannel";
 
 function strField(config: Record<string, unknown>, key: string): string {
   const v = config[key];
@@ -77,17 +85,27 @@ export function EditChannelDialog({
   });
   const [group, setGroup] = useState<ChannelGroupDraft>(storedGroup);
   const patchGroup = (patch: Partial<ChannelGroupDraft>) => setGroup((g) => ({ ...g, ...patch }));
+  // Message batching; an absent key shows the backend default (1.5s / 5s).
+  const storedBurst = (): ChannelBurstDraft => ({
+    waitAfterText: String(storedBurstWait(config, "wait_after_text_seconds")),
+    waitAfterForward: String(storedBurstWait(config, "wait_after_forward_seconds")),
+  });
+  const [burst, setBurst] = useState<ChannelBurstDraft>(storedBurst);
+  const patchBurst = (patch: Partial<ChannelBurstDraft>) => setBurst((b) => ({ ...b, ...patch }));
+  const burstValid = burstDraftValid(burst);
 
   const reset = () => {
     setDefaultAgent(strField(config, "default_agent"));
     setTitle(resource.title ?? "");
     setSecrets(storedSecrets());
     setGroup(storedGroup());
+    setBurst(storedBurst());
   };
 
   const seatalk = channelType === "seatalk";
 
   const submit = () => {
+    if (!burstValid) return;
     const nextTitle = titlePatchValue(title);
     const plan = planChannelEdit({
       uid: resource.uid,
@@ -101,6 +119,8 @@ export function EditChannelDialog({
         app_secret: secrets.appSecret,
         require_mention: honoursRequireMention(channelType) ? group.requireMention : undefined,
         ignore_other_mentions: group.ignoreOtherMentions,
+        wait_after_text_seconds: parseBurstWait(burst.waitAfterText) ?? undefined,
+        wait_after_forward_seconds: parseBurstWait(burst.waitAfterForward) ?? undefined,
       },
     });
     update.mutate(plan, {
@@ -162,11 +182,13 @@ export function EditChannelDialog({
 
           <EditChannelGroupFields channelType={channelType} draft={group} onChange={patchGroup} />
 
+          <EditChannelBurstFields draft={burst} onChange={patchBurst} />
+
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t("common.cancel")}
             </Button>
-            <Button type="submit" disabled={update.isPending}>
+            <Button type="submit" disabled={update.isPending || !burstValid}>
               {update.isPending ? t("common.saving") : t("channels.edit.save")}
             </Button>
           </div>

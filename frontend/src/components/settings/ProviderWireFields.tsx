@@ -15,10 +15,6 @@ import type { Protocol } from "@/lib/api/providers";
 import { PRESETS, PROTOCOL_LABEL_KEY, SELECTABLE_PROTOCOLS } from "./connectionPresets";
 import type { ProviderFormValues } from "./providerFormSchema";
 
-/** Required fields carry a mark after the label; the label text itself stays
- *  clean so its accessible name is just the word. */
-export const REQUIRED = "after:ml-0.5 after:text-destructive after:content-['*']";
-
 export function ProtocolPicker({
   id,
   control,
@@ -29,7 +25,7 @@ export function ProtocolPicker({
   const { t } = useTranslation();
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id} className={REQUIRED}>
+      <Label htmlFor={id} required>
         {t("settings.connections.wireFormat")}
       </Label>
       <Controller

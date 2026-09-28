@@ -82,6 +82,17 @@ def _isolated_agent_state_root(tmp_path, monkeypatch):
     monkeypatch.setenv("COFFER_AGENT_STATE_ROOT", str(tmp_path / "agent-state"))
 
 
+@pytest.fixture(autouse=True)
+def _no_channel_burst_window(monkeypatch):
+    """Release a channel message as soon as the loop turns instead of after the
+    channel's quiet window (spec channels "Take a burst of messages as one turn"),
+    so the suite does not sleep through it on every turn. A test about the window
+    itself raises the cap again."""
+    from coffer.application.channel import inbound_burst
+
+    monkeypatch.setattr(inbound_burst, "MAX_WINDOW_SECONDS", 0.0)
+
+
 # Accept any Host header across the suite. The loopback-Host guard
 # (``coffer.surfaces.http.host_guard``) exists to stop a DNS-rebound *browser*
 # page from reading the daemon's responses; these tests drive the ASGI app
