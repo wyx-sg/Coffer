@@ -12,15 +12,19 @@ from coffer.surfaces.cli import (
     agent_cmd,
     audit_cmd,
     channel_cmd,
+    config_cmd,
     credentials_cmd,
     daemon_cmd,
     engine_cmd,
     knowledge_cmd,
+    log_cmd,
     memory_cmd,
     open_cmd,
+    path_cmd,
     provider_cmd,
     resource_cmd,
     retention_cmd,
+    scan_cmd,
     scope_cmd,
     skill_cmd,
     sync_cmd,
@@ -47,6 +51,12 @@ def root(
 
 app.add_typer(daemon_cmd.app, name="daemon")
 app.add_typer(open_cmd.app, name="open")
+app.add_typer(config_cmd.app, name="config")
+app.add_typer(log_cmd.app, name="log")
+app.add_typer(path_cmd.app, name="path")
+app.command("scan")(scan_cmd.scan)
+app.add_typer(scan_cmd.adopt_app, name="adopt")
+app.add_typer(scan_cmd.discard_app, name="discard")
 app.add_typer(resource_cmd.app, name="resource")
 app.add_typer(scope_cmd.app, name="scope")
 app.add_typer(audit_cmd.app, name="audit")

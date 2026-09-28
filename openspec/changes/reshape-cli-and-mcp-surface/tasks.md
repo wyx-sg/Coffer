@@ -16,11 +16,14 @@
 
 ## 3. CLI framework
 
-- [ ] 3.1 Build the lifecycle-verb factory (`surfaces/cli/_kind_verbs.py`): `list|show|add|edit|rm|enable|disable|scope` from a `Kind`, omitting unsupported verbs, `--json` on reads, `--title`/`--description` on `edit`, name-or-uid resolution — verify unit tests per verb against a fake daemon client
-- [ ] 3.2 Build `coffer config` over a setting-key registry (`surfaces/cli/config_cmd.py`) with every key in design.md D2, typed validation, `unset` → default, `list [prefix]` with type/default/help — verify a test per key family (daemon, feature, engine, transcribe, retention, credentials)
-- [ ] 3.3 Build `coffer log audit|mcp|daemon|prune` (`surfaces/cli/log_cmd.py`) over the existing routes with `--since --errors --status --kind --name --server --limit --json` — verify against a daemon fixture holding one row of each record
-- [ ] 3.4 Build `coffer path` (`surfaces/cli/path_cmd.py`) for knowledge, memory, skill, agent config/memory/transcripts, logs and vault — verify each target prints an existing absolute path in an isolated `COFFER_HOME`
-- [ ] 3.5 Build `coffer scan|adopt|discard` (`surfaces/cli/scan_cmd.py`) over agent discovery, unmanaged skills and direct MCP entries — verify one row of each kind is listed, adopted and (skill, mcp) discarded
+- [x] 3.1 Build the lifecycle-verb factory (`surfaces/cli/_kind_verbs.py`): `list|show|add|edit|rm|enable|disable|scope` from a `Kind`, omitting unsupported verbs, `--json` on reads, `--title`/`--description` on `edit`, name-or-uid resolution — verify unit tests per verb against a fake daemon client
+- [x] 3.2 Build `coffer config` over a setting-key registry (`surfaces/cli/config_cmd.py`) with every key in design.md D2, typed validation, `unset` → default, `list [prefix]` with type/default/help — verify a test per key family (daemon, feature, engine, transcribe, retention, credentials)
+- [x] 3.3 Build `coffer log audit|mcp|daemon|prune` (`surfaces/cli/log_cmd.py`) over the existing routes with `--since --errors --status --kind --name --server --limit --json` — verify against a daemon fixture holding one row of each record
+- [x] 3.4 Build `coffer path` (`surfaces/cli/path_cmd.py`) for knowledge, memory, skill, agent config/memory/transcripts, logs and vault — verify each target prints an existing absolute path in an isolated `COFFER_HOME`
+- [x] 3.5 Build `coffer scan|adopt|discard` (`surfaces/cli/scan_cmd.py`) over agent discovery, unmanaged skills and direct MCP entries — verify one row of each kind is listed, adopted and (skill, mcp) discarded
+
+- [ ] 3.6 Add `DELETE /api/v1/daemon/features/{key}` clearing this machine's setting so the feature returns to the channel default (service method + route + contract), and turn the strict xfail on experimental-features "unsetting a feature returns it to the channel default" into a pass
+- [ ] 3.7 Change the switched-off-feature hint everywhere (`_client.py`, `domain/features.py`, `channel/document_save.py`, their tests) from `coffer daemon features enable` to `coffer config set feature.<key> on`
 
 ## 4. CLI per-kind groups
 
