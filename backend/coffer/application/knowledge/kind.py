@@ -1,8 +1,7 @@
 """The ``knowledge`` Kind for the composition root.
 
 A collection carries no config and no lifecycle beyond existing, so the kind is
-almost all default. The two fields that are not, and both for the same reason —
-a collection is a **directory** as much as it is a row:
+almost all default. The fields that are not:
 
 - ``generic_create_allowed`` is False, because the generic ``POST /resources``
   path would create the row with no folder behind it.
@@ -14,23 +13,28 @@ a collection is a **directory** as much as it is a row:
   pointing at nothing (ADR resource-identity-is-an-immutable-uid: "the three
   file-backed kinds get an ``on_rename`` hook ... that hook is the whole of
   what rename costs anywhere").
+- ``toggleable`` is False: every collection is served to every agent, and the
+  kind-agnostic enable/disable route refuses one with
+  ``RESOURCE_NOT_TOGGLEABLE`` (see "Serve every collection to every agent").
+  Nobody switched one collection off — the layer as a whole is already
+  switched by its experimental feature — and a collection kept out of the
+  catalogue was still a directory under the root the skill tells an agent to
+  grep. A collection leaves every agent's catalogue only by being deleted.
 
 Two defaults are worth naming, because an earlier design set them otherwise:
 
-- ``supports_scope`` stays False: this kind carries **no per-agent reach**.
-  Every enabled collection is served to every agent, and ``enabled`` is the
-  only gate there is. A scope here would have been fiction rather than a
-  narrowing — the skill Coffer delivers hands the agent the absolute knowledge
-  root and tells it to grep the whole thing, so a collection kept out of one
+- ``supports_scope`` stays False: this kind carries **no per-agent reach**,
+  for the same reason it carries no switch — the skill Coffer delivers hands
+  the agent the absolute knowledge root, so a collection kept out of one
   agent's catalogue was still a directory that agent could read. It was never
   used either: every ``knowledge`` row in the real vault had an empty scope.
 - There is no ``on_update_config`` — nothing in the config can change, because
   there is nothing in the config.
 
-``on_delete`` and ``on_enabled_changed`` both end by telling the service its catalogue
-moved. The catalogue is carried by Coffer's own skill (see "Deliver the catalogue
-through the coffer-guide skill"), and that skill is a file: switching a collection off
-changes nothing an agent can see until the file is rewritten, so a re-render that waited
+``on_delete`` ends by telling the service its catalogue moved. The catalogue is
+carried by Coffer's own skill (see "Deliver the catalogue through the
+coffer-guide skill"), and that skill is a file: a deleted collection changes
+nothing an agent can see until the file is rewritten, so a re-render that waited
 for the next boot would leave the agent reading a catalogue the owner had already
 changed.
 """
@@ -59,9 +63,6 @@ def make_knowledge_kind(service: KnowledgeService) -> Kind:
                 extra={"collection": resource.name},
                 exc_info=True,
             )
-        await service.catalogue_changed()
-
-    async def _on_enabled_changed(resource: Resource) -> None:
         await service.catalogue_changed()
 
     async def _on_rename(resource: Resource, new_name: str) -> None:
@@ -93,8 +94,8 @@ def make_knowledge_kind(service: KnowledgeService) -> Kind:
         config_schema=KnowledgeConfig,
         on_delete=_on_delete,
         on_rename=_on_rename,
-        # ``enabled`` is this kind's only switch, and it decides what the
-        # delivered catalogue names — so it has to reach the file.
-        on_enabled_changed=_on_enabled_changed,
+        # No switch: every collection is served (see "Serve every collection
+        # to every agent"), so there is no ``on_enabled_changed`` either.
+        toggleable=False,
         generic_create_allowed=False,
     )

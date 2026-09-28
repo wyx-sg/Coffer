@@ -6,18 +6,23 @@
 // collection directory itself — there is one tree, and every document in it is
 // one people and curation write together.
 //
-// The input above the tree is a FILTER, not a query. It narrows the names
-// already on screen as the user types — no request, no debounce, no ranking —
-// because this layer exposes no retrieval anywhere (see "Expose exactly one
-// knowledge tool" and "Present a collection as one tree in the web UI"). An agent
-// reads the files with its own tools; a person reads them through this tree.
-import { useState } from "react";
+// There is no input above the tree: the layer exposes no retrieval anywhere
+// (see "Expose exactly one knowledge tool"), and a name filter over a tree that
+// loads one level at a time could only ever narrow what was already open. An
+// agent reads the files with its own tools; a person reads them through this
+// tree. Both panes reach the bottom of the window and scroll inside
+// (components/filePane.ts).
 import { useTranslation } from "react-i18next";
 
 import { KnowledgeFilePreview } from "@/components/knowledge/KnowledgeFilePreview";
 import { KnowledgeTreeLevel } from "@/components/knowledge/KnowledgeTreeLevel";
-import { FILE_PANE_MAX_HEIGHT } from "@/components/filePane";
-import { Input } from "@/components/ui/input";
+import {
+  FILE_PANE_COLUMN,
+  FILE_PANE_GRID,
+  FILE_PANE_SCROLL,
+  useFillToBottom,
+} from "@/components/filePane";
+import { cn } from "@/lib/utils";
 
 interface Props {
   /** The collection's NAME — its directory, and so the tree's root path. `""`
@@ -31,28 +36,22 @@ interface Props {
 
 export function KnowledgeBrowser({ collection, selected, onSelect }: Props) {
   const { t } = useTranslation();
-  // Deliberately NOT in the URL: a half-typed filter is draft input, not
-  // addressable state (agents/frontend.md §3).
-  const [filter, setFilter] = useState("");
-  const treeLabel = t("knowledge.detail.treeLabel");
+  const fill = useFillToBottom();
 
   return (
     // The skill Files tab's proportions, so the two browsers sit the same way
     // on the page.
-    <div className="grid gap-4 md:grid-cols-[18rem_1fr]">
-      <div className="space-y-2">
-        <Input
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder={t("knowledge.detail.filterPlaceholder")}
-          aria-label={t("knowledge.detail.filterPlaceholder")}
-        />
-        <nav aria-label={treeLabel} className={FILE_PANE_MAX_HEIGHT}>
+    <div
+      ref={fill.ref}
+      style={fill.style}
+      className={cn(FILE_PANE_GRID, "md:grid-cols-[18rem_minmax(0,1fr)]")}
+    >
+      <div className={FILE_PANE_COLUMN}>
+        <nav aria-label={t("knowledge.detail.treeLabel")} className={FILE_PANE_SCROLL}>
           <KnowledgeTreeLevel
             path={collection}
             depth={0}
             selectedPath={selected}
-            filter={filter}
             onSelect={onSelect}
             emptyLabel={t("knowledge.detail.empty")}
           />

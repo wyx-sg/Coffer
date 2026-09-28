@@ -21,10 +21,12 @@ import { useTranslation } from "react-i18next";
 
 import { ConfigEditorPane } from "@/components/agents/ConfigEditorPane";
 import { ConfigFileTree } from "@/components/agents/ConfigFileTree";
+import { FILE_PANE_COLUMN, FILE_PANE_GRID, useFillToBottom } from "@/components/filePane";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { translateApiError } from "@/lib/api/errors";
 import { useBeforeUnload } from "@/lib/hooks/useBeforeUnload";
 import { useConfigEditorState } from "@/lib/hooks/useConfigEditorState";
+import { cn } from "@/lib/utils";
 
 // Keys that have a human description under `agents.config.desc.<key>`. Listing
 // them explicitly keeps an unknown/new key from rendering a raw i18n string.
@@ -51,6 +53,7 @@ interface Props {
 export function AgentConfigFilesEditor({ uid, onDirtyChange }: Props) {
   const { t } = useTranslation();
   const s = useConfigEditorState(uid);
+  const fill = useFillToBottom();
   const dirty = s.draft.dirty;
 
   useBeforeUnload(dirty);
@@ -72,10 +75,14 @@ export function AgentConfigFilesEditor({ uid, onDirtyChange }: Props) {
   const filePath = s.activeContent?.path ?? (s.selectedChild ? undefined : s.selectedInfo?.path);
 
   return (
-    <div className="grid gap-4 md:grid-cols-[16rem_1fr]">
+    <div
+      ref={fill.ref}
+      style={fill.style}
+      className={cn(FILE_PANE_GRID, "md:grid-cols-[16rem_minmax(0,1fr)]")}
+    >
       {/* Left: the config-file tree (allowlisted files + directory nodes). */}
-      <div className="space-y-1">
-        <p className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <div className={FILE_PANE_COLUMN}>
+        <p className="shrink-0 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {t("agents.config.files")}
         </p>
         {s.files.isPending ? (
@@ -98,9 +105,9 @@ export function AgentConfigFilesEditor({ uid, onDirtyChange }: Props) {
       </div>
 
       {/* Right: the selected file (or directory hint). */}
-      <div className="min-w-0">
+      <div className={FILE_PANE_COLUMN}>
         {s.selectedKey && s.isDirSelected ? (
-          <div className="flex h-80 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+          <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
             {t("agents.config.directoryHint")}
           </div>
         ) : s.selectedKey ? (
@@ -121,7 +128,7 @@ export function AgentConfigFilesEditor({ uid, onDirtyChange }: Props) {
             readOnlyMissing={s.readOnlyMissing}
           />
         ) : (
-          <div className="flex h-80 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+          <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
             {t("agents.config.selectFile")}
           </div>
         )}

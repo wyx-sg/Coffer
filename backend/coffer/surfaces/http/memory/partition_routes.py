@@ -1,9 +1,10 @@
 """``/api/v1/memory/partitions`` and the two passes that rewrite the tree.
 
-The list a management surface starts from, ``POST /sync`` (aggregation, which
-is corpus-wide) and ``POST /partitions/{uid}/distil`` (one partition at a
-time). Grouped together because they are the family's *write* half: everything
-else under this prefix reads.
+The list a management surface starts from, ``POST /sync`` (Update memory:
+aggregation, which is corpus-wide, then distil over every partition it left
+new) and ``POST /partitions/{uid}/distil`` (one partition at a time). Grouped
+together because they are the family's *write* half: everything else under
+this prefix reads.
 
 Partition deletion is deliberately absent — it goes through the kind-agnostic
 ``DELETE /api/v1/resources/{uid}``, exactly like knowledge's collections, since
@@ -15,6 +16,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
+from coffer.application.memory.update import update_memory
 from coffer.application.resource_service import ResourceService
 from coffer.application.upkeep_runs import UPKEEP_RUNS
 from coffer.surfaces.http.auth import require_token
@@ -64,18 +66,24 @@ async def sync(
     svc: MemoryService = Depends(get_memory_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> AggregationResultOut:
-    """Run aggregation over every registered, enabled agent's native memory.
+    """Update memory: aggregate every registered, enabled agent's native
+    memory, then distil every partition it left with undistilled raw entries
+    ("Update memory in one action"; see ``application/memory/update.py``).
 
-    The actor travels in so the ``memory_aggregated`` event the service records
-    distinguishes this requested pass from the worker's scheduled one.
+    The actor travels in so the ``memory_aggregated`` and ``memory_distilled``
+    events the service records distinguish this requested update from the
+    workers' scheduled passes.
     """
-    result = await svc.aggregate(actor=actor)
+    outcome = await update_memory(svc, actor=actor)
+    result = outcome.aggregation
     return AggregationResultOut(
         partitions=list(result.partitions),
         entries_written=result.entries_written,
         sources_read=result.sources_read,
         sources_skipped=result.sources_skipped,
         failures=[f.path for f in result.failures],
+        distilled=list(outcome.distilled),
+        skipped=list(outcome.skipped),
     )
 
 

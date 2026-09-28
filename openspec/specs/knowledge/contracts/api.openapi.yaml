@@ -54,13 +54,23 @@ info:
     `GET /file` returns a whole document. There is no chunking, no passage
     granularity and no `top_k`.
 
-    ## New knowledge is submitted, never written
+    Both also reach a collection's `.inbox`, read-only, so a person can see
+    what waits to be merged: `GET /tree` lists it at a collection's root and
+    lists its items at `<collection>/.inbox`, and `GET /file` reads an item.
+    Each such entry carries `inbox: true`. No other hidden entry is listed or
+    readable (see "Hide dot-prefixed entries except the inbox").
 
-    There is no route that writes a document. A person edits one in their own
-    editor — the page's open-in-editor action hands them the file — and the edit
-    is live on the next read (see "Keep direct file edits a complete way to
-    change knowledge", "Cover collection management on REST and the CLI"). What
-    this surface accepts is **material**: `POST /material` and `POST /upload`
+    ## New knowledge is submitted; an edited body is saved
+
+    `PUT /file` is the one route that writes a document, and only its body: a
+    person's edit from the page's editor replaces the body, keeps the
+    frontmatter as it is on disk, and must hand back the `fingerprint` its read
+    carried — a file changed since is refused with `KNOWLEDGE_FILE_CONFLICT`
+    (see "Save a document edited in the web UI"). A person may equally edit in
+    their own editor, from the page's open-in-editor action, and that edit is
+    live on the next read (see "Keep direct file edits a complete way to change
+    knowledge", "Cover knowledge management on REST and the CLI"). New knowledge
+    is different: what this surface accepts is **material**: `POST /material` and `POST /upload`
     both submit into the collection's inbox, and a curation pass merges what is
     new into the documents (see "Submit every entrance's input as material").
     With no internal model configured, material is promoted to a document of its
@@ -127,7 +137,7 @@ info:
     There is deliberately **no** `DELETE /api/v1/knowledge/collections/{uid}`. A
     collection's lifecycle is a Resource's lifecycle, so deletion goes through
     the kind-agnostic resource route, `DELETE /api/v1/resources/{uid}` (see
-    "Cover collection management on REST and the CLI"). That way unregistering a
+    "Cover knowledge management on REST and the CLI"). That way unregistering a
     collection runs the same lifecycle, audit and cascade as unregistering any
     other resource, instead of a second path that would have to be kept in step
     with it. Creation gets its own route only because it returns the collection
@@ -141,10 +151,9 @@ info:
     uses the app-wide envelope `{ "error": { code, message, details } }`.
 
     Nothing here is filtered per agent, and neither is what an agent reaches: a
-    collection carries no per-agent reach, so every **enabled** collection is
-    catalogued into every agent's delivered skill and a **disabled** one into
-    none (see "Gate collections with enabled alone"). `enabled` gates delivery,
-    not readability (see "Present knowledge as files on disk").
+    collection carries no per-agent reach and no enabled switch, so every
+    collection is catalogued into every agent's delivered skill (see "Serve
+    every collection to every agent").
 
     ## Reading this file against the code
 
@@ -165,8 +174,9 @@ tags:
   - name: knowledge
     description: |
       The single `knowledge` kind: collections, one level of one collection,
-      reading one document, submitting material, uploading a document,
-      deleting a document, and the manual curation trigger. No retrieval of
+      reading one document, saving an edited body, submitting material,
+      uploading a document, deleting a document, and the manual curation
+      trigger. No retrieval of
       any kind.
       Mounted by `coffer.surfaces.http.knowledge` as one router with the prefix
       `/api/v1/knowledge`.
@@ -207,7 +217,8 @@ paths:
       description: |
         Creates one collection: a directory under the knowledge root, and one
         `knowledge` Resource for it — which is what gives the collection a
-        lifecycle, an audit trail and its one `enabled` switch.
+        lifecycle and an audit trail. The kind has no `enabled` switch (see
+        "Serve every collection to every agent").
         Nothing else creates one — not a read, not a write, not an agent's
         working directory (see "Create collections only deliberately").
 
@@ -254,8 +265,12 @@ paths:
         top level, `shopee/account` for a folder inside it. The listing is
         generated at call time by walking the directory and reading frontmatter,
         never materialized (see "Store each collection as one tree of Markdown
-        files"). Hidden entries — the inbox included — are absent, and so is the
-        collection's `README.md`.
+        files"). The collection's `README.md` is absent, and so is every hidden
+        entry but one: at a collection's root, a non-empty `.inbox` is listed
+        as a directory (`inbox: true`, `file_count` its items), and `path`
+        `<collection>/.inbox` lists those items as files, each titled from its
+        frontmatter or by its file name (see "Hide dot-prefixed entries except
+        the inbox").
       operationId: readKnowledgeTree
       tags: [knowledge]
       parameters:
@@ -284,7 +299,12 @@ paths:
         absolute on-disk paths the UI needs to offer open-in-editor and
         reveal-in-file-manager on the file and on its folder (see "Return
         absolute paths on reads"). `curated_at` says when curation last had it
-        in front of it.
+        in front of it. `fingerprint` is the sha256 of the file's bytes, which a
+        save hands back (see "Save a document edited in the web UI").
+
+        `path` may also name an item in a collection's `.inbox`; it is read the
+        same way and carries `inbox: true` — it can be looked at, never saved
+        or deleted.
 
         Whole file, always: no chunking, no passage granularity, no `top_k`.
         Bytes come off disk at call time, so an edit made in the person's own
@@ -304,6 +324,48 @@ paths:
           $ref: "#/components/responses/UnsafePath"
         "404":
           $ref: "#/components/responses/FileNotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+    put:
+      summary: Save an edited document's body
+      description: |
+        Replaces the document's body with `body` and keeps its frontmatter
+        exactly as it is on disk — title, description, actor, the curation
+        stamp and any key a person added (see "Save a document edited in the
+        web UI"). `expected_fingerprint` is the `fingerprint` the editor's read
+        carried; a file whose bytes changed since is refused with 409
+        `KNOWLEDGE_FILE_CONFLICT` and left untouched. The write is atomic, and
+        it moves the file's modification time past its curation stamp, so the
+        sweep treats it as a person's edit (see "Let newer statements win and a
+        person's edit stand"). Recorded in the audit log as `knowledge_edited`.
+
+        Only a Markdown document: the collection itself, its `README.md`, an
+        inbox item or anything else hidden, and a file that is not Markdown are
+        refused as `KNOWLEDGE_PATH_UNSAFE`.
+      operationId: saveKnowledgeFile
+      tags: [knowledge]
+      parameters:
+        - $ref: "#/components/parameters/ActorHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileSave"
+      responses:
+        "200":
+          description: Saved; the document as it now is, with its new fingerprint
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileOut"
+        "400":
+          $ref: "#/components/responses/UnsafePath"
+        "404":
+          $ref: "#/components/responses/FileNotFound"
+        "409":
+          $ref: "#/components/responses/FileConflict"
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
@@ -436,8 +498,7 @@ paths:
                 collection:
                   type: string
                   description: |
-                    The collection's directory name. Must already exist and be
-                    enabled.
+                    The collection's directory name. Must already exist.
       responses:
         "201":
           description: Converted and submitted
@@ -532,8 +593,7 @@ paths:
           description: |
             `RESOURCE_NOT_FOUND` for a uid no resource answers to, the same as
             every other uid-addressed route; `KNOWLEDGE_COLLECTION_NOT_FOUND`
-            for a disabled collection, or a uid naming a resource that is not
-            a collection. An unknown uid is always an error — nothing is
+            for a uid naming a resource that is not a collection. An unknown uid is always an error — nothing is
             conjured into existence by being asked for (see "Create
             collections only deliberately").
           content:
@@ -606,8 +666,9 @@ components:
   responses:
     UnsafePath:
       description: |
-        A path that escapes the knowledge root, names a hidden entry — the inbox
-        included — or cannot name a document because it is the collection itself
+        A path that escapes the knowledge root, names a hidden entry — for a
+        write or a delete, the inbox included; a read or a listing may name the
+        inbox — or cannot name a document because it is the collection itself
         or its `README.md` (`KNOWLEDGE_PATH_UNSAFE`). The rule lives in path
         construction rather than in a check each handler remembers to make,
         which is why it is reported here (see "Guard every path through one
@@ -643,6 +704,15 @@ components:
             $ref: "#/components/schemas/ErrorEnvelope"
     FileNotFound:
       description: No file at that path (`KNOWLEDGE_FILE_NOT_FOUND`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    FileConflict:
+      description: |
+        The file changed on disk since the editor read it
+        (`KNOWLEDGE_FILE_CONFLICT`); nothing was written (see "Save a document
+        edited in the web UI").
       content:
         application/json:
           schema:
@@ -768,7 +838,7 @@ components:
     DirectoryOut:
       type: object
       description: A subdirectory at the level being listed.
-      required: [path, name, file_count]
+      required: [path, name, file_count, inbox]
       properties:
         path:
           type: string
@@ -778,14 +848,20 @@ components:
           description: The directory's own name.
         file_count:
           type: integer
-          description: Files beneath it, counted recursively.
+          description: Files beneath it, counted recursively; for the inbox, its items.
+        inbox:
+          type: boolean
+          description: |
+            True for a collection's `.inbox` and the items waiting in it —
+            material a person may read but not edit or delete (see "Hide
+            dot-prefixed entries except the inbox").
 
     FileSummaryOut:
       type: object
       description: |
         One file as a tree row shows it — enough to judge relevance without
         reading the body.
-      required: [path, title, description, actor, updated_at]
+      required: [path, title, description, actor, updated_at, inbox]
       properties:
         path:
           type: string
@@ -802,6 +878,12 @@ components:
         updated_at:
           type: string
           description: ISO-8601 timestamp from frontmatter.
+        inbox:
+          type: boolean
+          description: |
+            True for a collection's `.inbox` and the items waiting in it —
+            material a person may read but not edit or delete (see "Hide
+            dot-prefixed entries except the inbox").
 
     TreeOut:
       type: object
@@ -837,6 +919,8 @@ components:
           file_path,
           folder_path,
           curated_at,
+          fingerprint,
+          inbox,
         ]
       properties:
         path:
@@ -870,6 +954,38 @@ components:
             only after its pass completes"). A document modified since is what
             the sweep comes back for (see "Run curation on a sweep and on
             demand").
+        fingerprint:
+          type: string
+          description: |
+            sha256 hex of the file's bytes as read. Hand it back as
+            `expected_fingerprint` on `PUT /file`; a file changed since is
+            refused (see "Save a document edited in the web UI").
+        inbox:
+          type: boolean
+          description: |
+            True for a collection's `.inbox` and the items waiting in it —
+            material a person may read but not edit or delete (see "Hide
+            dot-prefixed entries except the inbox").
+
+    FileSave:
+      type: object
+      description: |
+        A document's new body from the web UI's editor (see "Save a document
+        edited in the web UI"). The frontmatter is kept as it is on disk, so
+        none of it is sent.
+      required: [path, body, expected_fingerprint]
+      properties:
+        path:
+          type: string
+          minLength: 1
+          description: Document path relative to the knowledge root.
+        body:
+          type: string
+          description: The new Markdown body, without frontmatter.
+        expected_fingerprint:
+          type: string
+          minLength: 1
+          description: The `fingerprint` the editor's `GET /file` carried.
 
     MaterialIn:
       type: object
@@ -884,7 +1000,7 @@ components:
           minLength: 1
           description: |
             The collection's directory name — a filesystem value, like every
-            path on this family. Must exist and be enabled.
+            path on this family. Must name a registered collection.
         title:
           type: string
           minLength: 1

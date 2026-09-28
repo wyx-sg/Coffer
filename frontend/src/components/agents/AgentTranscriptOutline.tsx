@@ -14,7 +14,7 @@
 // say what is in it without scrolling through it.
 import { useTranslation } from "react-i18next";
 
-import { FILE_PANE_MAX_HEIGHT } from "@/components/filePane";
+import { FILE_PANE_COLUMN, FILE_PANE_SCROLL } from "@/components/filePane";
 import type { TranscriptMessage } from "@/lib/api/agentTranscripts";
 import { firstHumanLine } from "@/lib/transcriptText";
 import { cn } from "@/lib/utils";
@@ -66,8 +66,8 @@ export function AgentTranscriptOutline({
   const entries = outlineOf(messages);
 
   return (
-    <div className={cn("space-y-1", className)}>
-      <p className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+    <div className={cn(FILE_PANE_COLUMN, className)}>
+      <p className="shrink-0 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {t("agents.conversationDetail.outline")}
       </p>
       {entries.length === 0 ? (
@@ -75,7 +75,7 @@ export function AgentTranscriptOutline({
           {t("agents.conversationDetail.outlineEmpty")}
         </p>
       ) : (
-        <ul className={cn("space-y-0.5", FILE_PANE_MAX_HEIGHT)} data-testid="transcript-outline">
+        <ul className={cn("space-y-0.5", FILE_PANE_SCROLL)} data-testid="transcript-outline">
           {entries.map((entry) => (
             <li key={entry.index}>
               <button

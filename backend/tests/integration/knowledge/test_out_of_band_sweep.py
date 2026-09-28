@@ -35,13 +35,13 @@ from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeServic
 from coffer.application.upkeep_runs import UpkeepRunRegistry
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.resource import Resource
-from coffer.infrastructure.knowledge import fs, paths
+from coffer.infrastructure.knowledge import fs, inbox, paths
 
 _DROPPED = "The account gateway owns the session cache.\n"
 
 
 class _Resources:
-    """Just enough ``ResourceService`` for ``enabled_collections``."""
+    """Just enough ``ResourceService`` for ``collection_names``."""
 
     def __init__(self, names: list[str]) -> None:
         now = datetime.now(tz=UTC)
@@ -226,7 +226,7 @@ async def test_the_inbox_is_drained_before_edited_documents(corpus) -> None:  # 
     """Material first: until it is merged it is knowledge no agent can read,
     while an edited document is readable as it stands."""
     _drop("dropped-by-hand.md", _DROPPED)
-    fs.submit_material(
+    inbox.submit_material(
         "shopee",
         title="Gateway notes",
         description="What the gateway caches",
@@ -242,7 +242,7 @@ async def test_the_inbox_is_drained_before_edited_documents(corpus) -> None:  # 
     assert "The gateway also caches tokens." in loop.briefs[0]
     assert f"The document a person edited: {_DROPPED_RELPATH}" in loop.briefs[1]
     # Material a pass folded in leaves the inbox; nothing is owed any more.
-    assert fs.inbox_items("shopee") == ()
+    assert inbox.inbox_items("shopee") == ()
     assert fs.edited_documents("shopee") == ()
 
 

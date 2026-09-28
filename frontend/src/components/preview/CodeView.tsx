@@ -29,6 +29,10 @@ interface CodeViewProps {
   height?: string;
   /** Max height before scrolling; the editor grows to content up to this. */
   maxHeight?: string;
+  /** Take the remaining height of a flex column and scroll inside it — how a
+   *  file pane's preview fills the window (components/filePane.ts). Overrides
+   *  `height` / `maxHeight`. */
+  fill?: boolean;
   /** Show the line-number gutter (default true). */
   lineNumbers?: boolean;
   /** Accessible label for the editor region. */
@@ -80,6 +84,7 @@ export function CodeView({
   language,
   height,
   maxHeight,
+  fill = false,
   lineNumbers = true,
   ariaLabel,
   className,
@@ -124,7 +129,11 @@ export function CodeView({
 
   return (
     <div
-      className={cn("relative overflow-hidden rounded-md border", className)}
+      className={cn(
+        "relative overflow-hidden rounded-md border",
+        fill && "flex min-h-0 flex-1 flex-col",
+        className,
+      )}
       onKeyDown={(e) => {
         if ((e.metaKey || e.ctrlKey) && (e.key === "f" || e.key === "F")) {
           e.preventDefault();
@@ -141,8 +150,11 @@ export function CodeView({
         editable={false}
         readOnly
         theme="none"
-        height={height}
-        maxHeight={maxHeight}
+        // Filling: the wrapper flexes to the space left and the editor takes
+        // all of it, scrolling inside CodeMirror's own scroller.
+        className={fill ? "min-h-0 flex-1" : undefined}
+        height={fill ? "100%" : height}
+        maxHeight={fill ? undefined : maxHeight}
         extensions={extensions}
         aria-label={ariaLabel}
         basicSetup={{

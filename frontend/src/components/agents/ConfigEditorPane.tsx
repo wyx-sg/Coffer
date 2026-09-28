@@ -11,6 +11,7 @@ import { Info } from "lucide-react";
 
 import { FileActions } from "@/components/FileActions";
 import { FileEditor } from "@/components/FileEditor";
+import { FILE_PANE_BODY } from "@/components/filePane";
 import { CodeView } from "@/components/preview/CodeView";
 import type { useFileDraft } from "@/lib/hooks/useFileDraft";
 
@@ -39,8 +40,8 @@ export interface ConfigEditorPaneProps {
 export function ConfigEditorPane(props: ConfigEditorPaneProps) {
   const { t } = useTranslation();
   return (
-    <div className="space-y-2">
-      <div className="flex items-start justify-between gap-2">
+    <div className={FILE_PANE_BODY}>
+      <div className="flex shrink-0 items-start justify-between gap-2">
         <span className="min-w-0 flex-1">
           <span className="block truncate font-mono text-xs text-muted-foreground">
             {props.pathLabel}
@@ -52,10 +53,14 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
         <span className="shrink-0 text-xs text-muted-foreground">{props.formatLabel}</span>
       </div>
 
-      {props.filePath ? <FileActions filePath={props.filePath} /> : null}
+      {props.filePath ? (
+        <div className="shrink-0">
+          <FileActions filePath={props.filePath} />
+        </div>
+      ) : null}
 
       {props.memoryBlock ? (
-        <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1.5 text-xs text-muted-foreground">
+        <div className="flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1.5 text-xs text-muted-foreground">
           <Info className="size-3.5 shrink-0" />
           {t("agents.config.memoryBlockNotice")}
         </div>
@@ -75,14 +80,14 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
         onDiscardAndReload={() => void props.draft.discardAndReload()}
         readOnlyReason={props.readOnlyMissing ? t("files.readOnlyMissing") : null}
         ariaLabel={t("agents.config.editorLabel", { key: props.editorKey })}
+        fill
       >
-        {/* Preview grows with content but is capped at 60vh and scrolls inside
-            (both axes) — same as the knowledge-base doc viewer, so it never
-            exceeds the window and adapts to the window size. */}
+        {/* The preview takes the rest of the pane, down to the bottom of the
+            window, and scrolls inside (components/filePane.ts). */}
         <CodeView
           value={props.loading ? "" : props.content}
           filename={props.filePath}
-          maxHeight="60vh"
+          fill
           ariaLabel={t("agents.config.editorLabel", { key: props.editorKey })}
           className="bg-muted/30"
         />

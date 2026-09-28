@@ -963,6 +963,7 @@ type = "forbidden"
 source_modules = [
     "coffer.application.resource_service",
     "coffer.application.resource_scope_ops",
+    "coffer.application.resource_enable_ops",
     "coffer.application.resource_delete_ops",
     "coffer.application.audit_service",
     "coffer.application.retention_service",

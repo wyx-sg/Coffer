@@ -54,7 +54,7 @@ def _agent(args: dict[str, Any]) -> str | None:
 
     Set by the gateway, never by the caller: it is absent from the tool's input schema
     and overwritten on every call (spec mcp-gateway "Take the agent identity from the
-    handshake"). It narrows nothing — every enabled collection is writable by every
+    handshake"). It narrows nothing — every collection is writable by every
     agent — and is read for exactly one reason: the audit entry naming who wrote the
     file. ``None`` becomes :data:`_ANONYMOUS_ACTOR` there, because an unattributed write
     is still worth recording.
@@ -115,14 +115,15 @@ def register_knowledge_builtin_tools(
                 actor=agent or _ANONYMOUS_ACTOR,
             )
         except CollectionNotFound as exc:
-            # Name the enabled collections. It is not a second retrieval
+            # Name the collections that exist (see "Serve every collection to every
+            # agent"). It is not a second retrieval
             # surface: it discloses exactly what the delivered skill already
             # lists, and it turns a dead end into a correction for a model that
             # reached for the tool without having opened the skill.
-            enabled = await svc.enabled_collections()
+            available = await svc.collection_names()
             raise ValueError(
-                f"no collection named {exc.name!r} is available to you. "
-                + (f"You may write to: {', '.join(enabled)}." if enabled else "You have none.")
+                f"no collection named {exc.name!r} exists. "
+                + (f"You may write to: {', '.join(available)}." if available else "There are none.")
             ) from exc
         return _submitted(submitted)
 

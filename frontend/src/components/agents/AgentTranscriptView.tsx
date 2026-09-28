@@ -23,7 +23,7 @@
 import { useTranslation } from "react-i18next";
 
 import { turnDomId } from "@/components/agents/AgentTranscriptOutline";
-import { FILE_PANE_MAX_HEIGHT } from "@/components/filePane";
+import { FILE_PANE_SCROLL } from "@/components/filePane";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import type { TranscriptMessage } from "@/lib/api/agentTranscripts";
 import { splitTurnText } from "@/lib/transcriptText";
@@ -90,7 +90,8 @@ function Turn({ message, index }: { message: TranscriptMessage; index: number })
         {isUser ? (
           <UserTurnText text={message.text} />
         ) : (
-          <FindableMarkdown>{message.text}</FindableMarkdown>
+          // A reply opening with `---` is prose, not a file's frontmatter.
+          <FindableMarkdown frontmatter={false}>{message.text}</FindableMarkdown>
         )}
         {message.truncated ? (
           <p className="mt-2 text-xs text-muted-foreground">
@@ -117,12 +118,13 @@ export function AgentTranscriptView({ messages }: { messages: TranscriptMessage[
   // A transcript runs to hundreds of turns; letting it set the page's height
   // pushes the header, the actions and the pager off-screen and leaves the
   // reader scrolling a document rather than reading a conversation. The frame
-  // is the same height every file pane on this surface uses, so the page is
-  // the same size whichever row was opened.
+  // reaches the bottom of the window like every file pane
+  // (components/filePane.ts), so the page is the same size whichever row was
+  // opened.
   return (
     <ul
       data-testid="transcript-turns"
-      className={cn("space-y-4 rounded-md border bg-background p-4", FILE_PANE_MAX_HEIGHT)}
+      className={cn("space-y-4 rounded-md border bg-background p-4", FILE_PANE_SCROLL)}
     >
       {messages.map((message, index) => (
         // Index-keyed on purpose: a turn has no id of its own, and its position

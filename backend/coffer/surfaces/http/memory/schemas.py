@@ -141,7 +141,8 @@ class RetiredListOut(BaseModel):
 
 
 class AggregationResultOut(BaseModel):
-    """What one aggregation pass did.
+    """What one Update memory action did: its aggregation pass, then which
+    partitions it distilled.
 
     ``entries_written`` counts raw entries put under the partitions' ``.raw/``,
     and never notes: aggregation may not write one, and only aggregation may
@@ -159,6 +160,12 @@ class AggregationResultOut(BaseModel):
     #: loudly and in isolation") — left standing
     #: rather than deleted, so a later sync keeps retrying them.
     failures: list[str]
+    #: Partitions the distil pass after the aggregation ran over — each one
+    #: that held undistilled raw entries ("Update memory in one action").
+    distilled: list[str]
+    #: Partitions that needed a distil pass but already had one running
+    #: ("Run one distil pass per partition at a time"); that pass covers them.
+    skipped: list[str]
 
 
 class DistilResultOut(BaseModel):
@@ -217,11 +224,6 @@ class FileNodeOut(BaseModel):
     abs_path: str
     folder_abs_path: str
     type: str
-    #: True for ``.raw/`` and everything under it: the verbatim entries
-    #: aggregation read out of the agents. Flagged rather than hidden so the
-    #: surface can show it as the distil pass's input rather than as Coffer's
-    #: own writing ("Keep raw entries verbatim and hidden").
-    derived: bool
     size: int | None = None
     #: True on a directory whose descendants were clipped at the walk bound.
     truncated: bool = False
@@ -291,7 +293,7 @@ class ContextQuery(BaseModel):
 
     cwd: str = Field(default="")
     #: The calling agent's uid — who fired, for ``record_fired`` below. It does
-    #: not shape the payload: every enabled partition is composed for every
+    #: not shape the payload: every partition is composed for every
     #: agent.
     #:
     #: A uid rather than a name because of who sends it: the hook command

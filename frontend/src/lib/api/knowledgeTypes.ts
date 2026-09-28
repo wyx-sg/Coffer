@@ -4,8 +4,9 @@
 // the knowledge root holding ONE tree of Markdown documents that people and
 // curation write together (`shopee/account-gateway.md`,
 // `shopee/apis/login.md`). New material waits in a hidden inbox until a
-// curation pass merges it into those documents, so nothing on the wire names
-// the inbox — only the collection's `pending_count` says it is there.
+// curation pass merges it into those documents. The tree lists that inbox as a
+// `.inbox` folder at the collection root and every row and read inside it
+// carries `inbox: true` — material a person may read but not edit or delete.
 //
 // Every `path` here is RELATIVE to the knowledge root. The two ABSOLUTE paths —
 // `file_path` and `folder_path` on a read — exist only so the viewer can hand
@@ -17,14 +18,20 @@
 //
 // There is no search or grep type in this file because the layer exposes no
 // retrieval at all (see "Expose exactly one knowledge tool"): an agent reads the files with its own
-// tools at the paths its delivered skill carries, and the filter box over the tree is
-// client-side and name-only (`lib/knowledge/filter.ts`).
+// tools at the paths its delivered skill carries, and a person reads them
+// through the collection's tree.
 import type { components } from "@/lib/api/generated/knowledge";
 
 type Schemas = components["schemas"];
 
-/** One file's frontmatter + body, plus the absolute paths for file actions. */
+/** One file's frontmatter + body, plus the absolute paths for file actions,
+ *  the `fingerprint` a save hands back, and `inbox` for an item still waiting
+ *  to be merged (readable, never saved or deleted). */
 export type FileOut = Schemas["FileOut"];
+
+/** A document's new body from the web UI's editor; the frontmatter stays as
+ *  it is on disk, so none of it is sent. */
+export type FileSave = Schemas["FileSave"];
 
 /**
  * One collection: a top-level folder, described by its own `README.md`.

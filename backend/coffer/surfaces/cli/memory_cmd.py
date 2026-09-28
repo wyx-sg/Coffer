@@ -203,10 +203,9 @@ def list_files(
     """List a partition's own directory as a tree.
 
     The whole tree rather than one level, unlike `coffer knowledge ls`: a
-    partition is two levels deep by construction (`MEMORY.md`, `RETIRED.md`, a
-    `notes/` folder and a hidden `.raw/`), so stopping at the root would never
-    show a note. `.raw/` is marked `derived` — it is what was read out of the
-    agents, verbatim, and it is the distil pass's input rather than its output.
+    partition is two levels deep by construction (`MEMORY.md`, `RETIRED.md` and
+    a `notes/` folder), so stopping at the root would never show a note. The
+    hidden `.raw/` of verbatim agent input is not listed.
     """
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -223,7 +222,7 @@ def list_files(
             size = node.get("size")
             path = node["path"] + ("/" if node["type"] == "dir" else "")
             table.add_row(
-                f"{path} (derived)" if node["derived"] else path,
+                path,
                 node["type"],
                 "" if size is None else str(size),
             )
@@ -281,7 +280,11 @@ def read_file(
 
 @app.command("sync")
 def sync(ctx: typer.Context, output_json: bool = typer.Option(False, "--json")) -> None:
-    """Run aggregation: read every registered agent's native memory."""
+    """Update memory: read every registered agent's native memory, then distil.
+
+    Every partition left holding undistilled entries is distilled in the same
+    call; one whose distil pass is already running is reported as skipped.
+    """
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post("/memory/sync")

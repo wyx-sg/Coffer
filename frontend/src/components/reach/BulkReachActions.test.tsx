@@ -163,19 +163,6 @@ describe("BulkReachActions", () => {
     ]);
   });
 
-  test("a kind with no scope gets two choices, and Enabled writes only the flag", async () => {
-    resources.enable.mockResolvedValue(undefined);
-    const TG_UID = "u-channel-1b77"; // named "tg"
-    mount({ rows: [{ kind: "channel", uid: TG_UID }], supportsScope: false });
-
-    openPanel();
-    expect(screen.queryByRole("radio", { name: /every agent/i })).toBeNull();
-    fireEvent.click(choice(/^enabled$/i));
-
-    await waitFor(() => expect(resources.enable).toHaveBeenCalledWith(TG_UID));
-    expect(scope.put).not.toHaveBeenCalled();
-  });
-
   test("one failed row does not abort the rest, and the partial is reported", async () => {
     resources.disable.mockImplementation((uid: string) =>
       uid === WRITING_UID

@@ -18,7 +18,6 @@ import type {
   AggregationResultOut,
   DeliveryStatusListOut,
   DeliveryStatusOut,
-  DistilResultOut,
   MemoryFileContentOut,
   MemoryFileTreeOut,
   PartitionListOut,
@@ -35,23 +34,15 @@ export function listPartitions(): Promise<PartitionListOut> {
   return call<PartitionListOut>(`${ROOT}/partitions`);
 }
 
-// --- aggregation + distil ----------------------------------------------------
+// --- update (aggregation, then distil) ---------------------------------------
 
-/** Run aggregation now — the manual trigger for the background worker that
- * otherwise reads every registered agent's native memory on an interval. It
- * writes verbatim entries under each partition's `.raw/` and nothing else;
- * turning them into notes is the distil pass's job. */
+/** Update memory now (spec memory "Update memory in one action"): run
+ * aggregation — the manual trigger for the background worker that otherwise
+ * reads every registered agent's native memory on an interval — and then a
+ * distil pass over every partition that gained raw entries. The per-partition
+ * distil route exists for the CLI; the UI only ever asks for both at once. */
 export function sync(): Promise<AggregationResultOut> {
   return call<AggregationResultOut>(`${ROOT}/sync`, { method: "POST" });
-}
-
-/** Run the distil pass over one partition: route this round's raw entries onto
- * Coffer's own notes — merging into a note, opening a new one, retiring one
- * into `RETIRED.md`, or keeping nothing — and rewrite `MEMORY.md`. */
-export function distil(partitionUid: string): Promise<DistilResultOut> {
-  return call<DistilResultOut>(`${ROOT}/partitions/${enc(partitionUid)}/distil`, {
-    method: "POST",
-  });
 }
 
 // --- a partition's own files ("Present partitions as a table and a file tree") ---

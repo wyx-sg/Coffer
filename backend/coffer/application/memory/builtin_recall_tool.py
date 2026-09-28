@@ -53,7 +53,7 @@ def register_recall_tool(registry: BuiltinToolRegistry, *, recall_service: Recal
         # per-agent scope on the partitions, which nobody had chosen: the
         # scope defaulted to whichever agents a partition was aggregated
         # from, so an agent could be refused every note about the repository
-        # it was working in. Recall spans every enabled partition now.
+        # it was working in. Recall spans every partition now.
         outcome = await recall_service.recall(query.strip())
         return {
             "notes": [

@@ -88,13 +88,13 @@ Switch between **English** and **中文** with the language switcher at the bott
 
 **Lists look and behave alike.** Every list page uses one table with search, filters, pagination and bulk selection, and clicking a row opens its detail page. Every row action is labelled.
 
-**Reach is one control.** Resources that agents consume carry a **Reach** button on their row and their detail page: **Every agent**, **Only selected agents**, or none selected (dormant). The choice is written once, when the panel closes, and applies to this machine only. Select several rows to set reach for all of them at once. For a channel, reach means the agents it may drive; see [Channels](/guides/channels#default-agent-and-scope).
+**Reach is one control.** Resources that agents consume carry a **Reach** button on their row and their detail page: **Every agent**, **Only selected agents**, or none selected (dormant). The choice is written once, when the panel closes, and applies to this machine only. Select several rows to set reach for all of them at once. For a channel, reach means the agents it may drive; see [Channels](/guides/channels#default-agent-and-scope). Knowledge collections and memory partitions carry no reach or status control at all: each is always served to every agent.
 
 **Empty, loading and error states are explicit.** An empty list shows a welcome card with one next step, such as **Add MCP server**. A loading list keeps its header over skeleton rows. A failed request shows a readable message, never a generic error code.
 
 **Some paths redirect.** `/resources` opens **MCP servers**; `/audit` and `/observability` open **Activity**; `/knowledge-bases` opens **Knowledge**; `/settings/providers` opens **Model providers**. Any other unknown path shows a page-not-found view with the sidebar intact.
 
-Inside a file viewer, **Cmd+F** (**Ctrl+F**) searches the file.
+File trees and previews — on the skill, knowledge, memory and agent pages — fill the window to the bottom and scroll inside. Inside a file viewer, **Cmd+F** (**Ctrl+F**) searches the file.
 
 ## When the daemon is not reachable
 

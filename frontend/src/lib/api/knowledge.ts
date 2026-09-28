@@ -7,7 +7,7 @@
 // is what the very next call returns and there is nothing to reindex.
 //
 // There is no `search` and no `grep` here because the daemon serves neither
-// (see "Cover collection management on REST and the CLI"). New knowledge goes in as MATERIAL — an
+// (see "Cover knowledge management on REST and the CLI"). New knowledge goes in as MATERIAL — an
 // upload here, an agent's `coffer__write`, the CLI — which waits in the collection's hidden inbox
 // until a curation pass merges it into the documents; with no internal model
 // configured it becomes a document as it is.
@@ -31,6 +31,7 @@ import type {
   CollectionOut,
   CurationOut,
   FileOut,
+  FileSave,
   IngestedDocumentOut,
   TreeOut,
 } from "./knowledgeTypes";
@@ -65,15 +66,31 @@ export function createCollection(payload: {
  * List ONE level of a collection: the immediate subdirectories and documents
  * under `path`, relative to the knowledge root — `shopee` for the collection
  * itself, `shopee/account` for a folder inside it. The tree descends a level
- * per request. The collection's own `README.md` and the hidden inbox never
- * appear: neither is a document.
+ * per request. The collection's own `README.md` never appears. A non-empty
+ * inbox is listed first at the collection root as a directory with
+ * `inbox: true`, and `<collection>/.inbox` lists its items (see "Hide
+ * dot-prefixed entries except the inbox").
  */
 export function getTree(path: string): Promise<TreeOut> {
   return call<TreeOut>(`${ROOT}/tree?path=${enc(path)}`);
 }
 
+/** One file, whole — a document or an inbox item (`inbox: true`). Carries the
+ *  `fingerprint` a save hands back. */
 export function getFile(path: string): Promise<FileOut> {
   return call<FileOut>(`${ROOT}/file?path=${enc(path)}`);
+}
+
+/**
+ * Save an edited document's body; its frontmatter is kept as it is on disk
+ * (see "Save a document edited in the web UI"). `expected_fingerprint` is the
+ * `fingerprint` the read carried: a file changed since is refused with 409
+ * `KNOWLEDGE_FILE_CONFLICT` and left untouched. An inbox item is refused as
+ * `KNOWLEDGE_PATH_UNSAFE`. Resolves with the file as saved, new fingerprint
+ * included.
+ */
+export function saveFile(payload: FileSave): Promise<FileOut> {
+  return call<FileOut>(`${ROOT}/file`, { method: "PUT", body: payload });
 }
 
 /**

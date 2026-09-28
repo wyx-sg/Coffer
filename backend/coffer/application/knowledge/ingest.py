@@ -155,7 +155,7 @@ class IngestService:
         # The same check `submit` itself makes, run here and up front so
         # a name that is not a collection is refused without first paying for
         # the conversion.
-        await self._knowledge.require_enabled(collection)
+        await self._knowledge.require_collection(collection)
 
         conversion = await self._registry.convert(data, filename)
         # "Bound uploads and leave nothing behind on failure": a converter that succeeds

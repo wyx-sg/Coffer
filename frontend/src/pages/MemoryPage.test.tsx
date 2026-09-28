@@ -8,7 +8,7 @@
 // per-agent delivery now lives on the agent's own detail page (it writes that
 // agent's settings file), and the audit log is the Activity page's Changes
 // tab, which reads the whole vault's trail rather than one kind's slice.
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -23,24 +23,8 @@ vi.mock("@/lib/hooks/useMemory", () => ({
   useMemoryPartitions: vi.fn(),
   useSyncMemory: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
-vi.mock("@/lib/hooks/useResources", () => ({ useResources: vi.fn(() => ({ data: [] })) }));
-// ScopeControl's own network hooks — only reached once a row renders.
-vi.mock("@/lib/hooks/useScope", () => ({
-  useResourceScope: vi.fn(() => ({ data: undefined })),
-  useUpdateResourceScope: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-}));
-vi.mock("@/lib/hooks/useAgents", () => ({
-  useAgents: vi.fn(() => ({ data: [{ uid: "u-cc", name: "claude_code" }] })),
-}));
-vi.mock("@/lib/hooks/useResourceMutations", () => {
-  const stub = () => ({ mutate: vi.fn(), isPending: false });
-  return { useEnableResource: vi.fn(stub), useDisableResource: vi.fn(stub) };
-});
-
 const { useMemoryPartitions } = await import("@/lib/hooks/useMemory");
-const { useResources } = await import("@/lib/hooks/useResources");
 const partitionsMock = vi.mocked(useMemoryPartitions);
-const resourcesMock = vi.mocked(useResources);
 
 function stubPartitions(partitions: PartitionOut[]) {
   partitionsMock.mockReturnValue({
@@ -84,12 +68,6 @@ const GONE: PartitionOut = {
 };
 
 describe("MemoryPage", () => {
-  // One test replaces the resource list wholesale; put the inert default back
-  // afterwards so the order tests run in cannot change what they assert.
-  afterEach(() => {
-    resourcesMock.mockReturnValue({ data: [] } as unknown as ReturnType<typeof useResources>);
-  });
-
   test("an empty vault gets the welcome every other first-run surface gives", () => {
     // Skills, knowledge, agents, channels and providers all greet a developer
     // who has nothing yet; Memory showing a bare table instead made it the one
@@ -99,9 +77,9 @@ describe("MemoryPage", () => {
 
     expect(screen.getByText("Nothing distilled yet")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
-    // The one next step is READ, not Add — nothing here is user-created — and
-    // it is offered once, not twice.
-    expect(screen.getAllByRole("button", { name: /Read from agents/i })).toHaveLength(1);
+    // The one next step is UPDATE, not Add — nothing here is user-created —
+    // and it is offered once, not twice.
+    expect(screen.getAllByRole("button", { name: /update memory/i })).toHaveLength(1);
   });
 
   test("once a partition exists the page is the table", () => {
@@ -112,20 +90,28 @@ describe("MemoryPage", () => {
     const headers = within(table)
       .getAllByRole("columnheader")
       .map((h) => h.textContent);
-    // "Status", not "Reach": the `memory` kind declares no per-agent scope, so
-    // the last column reports whether the partition is served and nothing else.
-    expect(headers).toEqual(expect.arrayContaining(["Partition", "Repository", "Notes", "Status"]));
+    // No Status or Reach column: every partition is served to every agent.
+    expect(headers).toEqual(expect.arrayContaining(["Partition", "Repository", "Notes"]));
+    expect(headers).not.toContain("Status");
     expect(headers).not.toContain("Reach");
   });
 
-  test("the read-from-agents affordance stays reachable from the empty state", () => {
-    // Reading the agents' memory is the only way to populate the page, so
-    // losing it with the empty-state card would have been a dead end. It is
-    // not called Sync — that name is the vault-sync page's.
+  test("the update affordance stays reachable from the empty state", () => {
+    // Updating memory is the only way to populate the page, so losing it with
+    // the empty-state card would have been a dead end. It is not called Sync —
+    // that name is the vault-sync page's.
     stubPartitions([]);
     renderPage();
-    expect(screen.getByRole("button", { name: /read from agents/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /update memory/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^sync$/i })).toBeNull();
+  });
+
+  test("the populated page carries the same one Update memory button", () => {
+    stubPartitions([COFFER]);
+    renderPage();
+    expect(screen.getAllByRole("button", { name: /update memory/i })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /read from agents/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /distil/i })).toBeNull();
   });
 
   test("partitions render as rows of that same table", () => {
@@ -148,27 +134,6 @@ describe("MemoryPage", () => {
     const table = screen.getByRole("table");
     expect(within(table).getByText("old-api")).toBeInTheDocument();
     expect(within(table).getByTestId("partition-unresolvable-badge")).toBeInTheDocument();
-  });
-
-  test("the reach merge is keyed on the uid, not on the partition's label", () => {
-    // The page reads the partitions off disk and their `enabled` flag off
-    // `GET /resources?kind=memory`, and joins the two. On the NAME the join
-    // would hold only for as long as nothing was renamed between the two
-    // requests — so the fixture gives the resource a STALE label under the
-    // right uid, and a decoy carrying the label the partition currently has.
-    resourcesMock.mockReturnValue({
-      data: [
-        { uid: COFFER.uid, kind: "memory", name: "coffer-old-label", enabled: false, scope: null },
-        { uid: "mp-decoy", kind: "memory", name: "coffer", enabled: true, scope: null },
-      ],
-    } as unknown as ReturnType<typeof useResources>);
-    stubPartitions([COFFER]);
-    renderPage();
-
-    const row = within(screen.getByText("coffer").closest("tr") as HTMLElement);
-    expect(within(row.getByTestId("scope-control")).getByRole("button")).toHaveTextContent(
-      /^disabled$/i,
-    );
   });
 
   test("no audit-log section — the Activity page holds the vault's whole trail", () => {

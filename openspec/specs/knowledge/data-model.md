@@ -26,9 +26,9 @@ with the disk.
 
 The only database presence a collection has is the same one every Resource has:
 a row in the kind-agnostic `resources` table. That row carries the collection's
-name and its `enabled` flag, and nothing about its contents. There is no
-per-agent reach column in play for this kind (see "Gate collections with enabled
-alone"): the row's one switch is `enabled`.
+name, and nothing about its contents. There is no per-agent reach and no
+`enabled` switch in play for this kind (see "Serve every collection to every
+agent"): the kind is non-toggleable, and its `enabled` column is always true.
 
 ## On-disk layout
 
@@ -67,11 +67,13 @@ alone"): the row's one switch is `enabled`.
   the inbox"), and Coffer writes exactly one of its own: `.inbox/`, where
   submitted material waits until a pass folds it in, and from which each item is
   deleted the moment it has been. It is hidden because it is not knowledge yet —
-  no listing, catalogue or count of documents includes it; the collection list
-  reports it separately as `pending_count`. `.history/` and `.raw/` stay gone.
-  Hidden segments are still *refused* by the path guard rather than merely
-  skipped, so neither the inbox nor anything the user hides for their own
-  reasons is addressable through a surface.
+  no catalogue or count of documents includes it; the collection list reports
+  it separately as `pending_count`. `.history/` and `.raw/` stay gone. It is
+  the one hidden entry a surface shows, read-only: the tree lists a
+  collection root's non-empty `.inbox` as a directory and its items as files,
+  and the read route reads an item, each marked `inbox: true`. Every other
+  hidden segment is still *refused* by the path guard rather than merely
+  skipped, and no write or delete reaches the inbox.
 
 ### `README.md`
 
@@ -188,7 +190,11 @@ Every segment that becomes a path component passes `paths.check_segment` (see
 dot-prefixed, and matching `[A-Za-z0-9._\- ]` or CJK. A path that must name a
 document additionally passes `paths.require_document`, which refuses the
 collection itself and its `README.md`; the inbox is out of reach already,
-because it is dot-prefixed. A violation is `UnsafeKnowledgePath`
+because it is dot-prefixed. The one allowance is `paths.inbox_parts`, which
+recognises `<collection>/.inbox` and `<collection>/.inbox/<item>` for the tree
+and read routes alone — spelled out beside the guard rather than made by
+loosening it, so every write, delete and stamp still refuses the inbox. A
+violation is `UnsafeKnowledgePath`
 (`KNOWLEDGE_PATH_UNSAFE`, HTTP 400). The resolved path is checked against the
 root too, on its nearest existing ancestor, so a symlink inside the root cannot
 carry a read or a write out of it. Writes are atomic — same-directory temp file
@@ -203,10 +209,10 @@ of them is persisted and none of them can be stale.
 | Type | Fields | What it is |
 | --- | --- | --- |
 | `CollectionEntry` | `uid`, `name`, `description`, `document_count`, `pending_count` | One collection. `document_count` is what an agent can read today; `pending_count` is material still in the inbox — counted apart because it is exactly what an agent cannot see yet. |
-| `DirectoryEntry` | `path`, `name`, `file_count` | A subdirectory at the level being listed. `path` is relative to the root — pass it back to descend. |
-| `FileEntry` | `path`, `title`, `description`, `actor`, `updated_at` | One file as a listing or a catalogue shows it: enough to judge relevance without reading the body. |
+| `DirectoryEntry` | `path`, `name`, `file_count`, `inbox` | A subdirectory at the level being listed. `path` is relative to the root — pass it back to descend. `inbox` marks a collection's `.inbox`. |
+| `FileEntry` | `path`, `title`, `description`, `actor`, `updated_at`, `inbox` | One file as a listing or a catalogue shows it: enough to judge relevance without reading the body. `inbox` marks an item waiting in the inbox. |
 | `CatalogueLevel` | `path`, `directories`, `files` | **One level of one collection**, never the whole tree. |
-| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `curated_at` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); `curated_at` is empty for a document curation has never seen. |
+| `KnowledgeFile` | the frontmatter fields + `path`, `body`, `file_path`, `folder_path`, `curated_at`, `fingerprint`, `inbox` | A file in full. The two absolute paths are what the UI needs to offer open-in-editor and reveal-in-file-manager (see "Return absolute paths on reads"); `curated_at` is empty for a document curation has never seen; `fingerprint` is the sha256 of the file's bytes, which a save hands back (see "Save a document edited in the web UI"); `inbox` marks an inbox item, which is read-only. |
 | `Pending` | `material` \| `document` | One item a pass can take — exactly one field set. `material` is an inbox item's file name, never a path a caller could aim elsewhere; `document` is a knowledge-root-relative document path. |
 | `GrepMatch` | `path`, `line_number`, `line` | One literal hit. |
 | `GrepOutcome` | `matches`, `truncated` | A bounded run of them. |
@@ -242,8 +248,11 @@ and `SubmissionOut` (`status` `pending` | `written`, `collection`, `title`, and
 `refused`, `documents_before`, `documents_after`, `limit`, `promoted`,
 `gave_up`); and
 `IngestedDocumentOut` (`path` or null, `title`, `description`, `converter`,
-`pending`). There is no write-a-document model: a person edits a document in
-their own editor, and every other entrance submits material. The mirroring is
+`pending`). The one write-a-document model is `FileSave` (`path`, `body`,
+`expected_fingerprint`): a person's edited body, saved over a document whose
+frontmatter is kept verbatim, refused with `KNOWLEDGE_FILE_CONFLICT` when the
+file's fingerprint moved since the read (see "Save a document edited in the web
+UI"). Every other entrance submits material. The mirroring is
 deliberate rather than redundant: the domain types describe what is on disk and
 the wire models describe what a client is promised, so removing a field from the
 wire never means hiding one from the layer.
@@ -254,17 +263,18 @@ wire never means hiding one from the layer.
 and declares `generic_create_allowed=False`, because a collection is a directory
 as much as a row and the generic `POST /resources` path would create the row with
 no folder behind it. Being a Resource buys the collection a lifecycle, an audit
-trail and one switch — not a reach.
+trail — not a switch and not a reach.
 
-**`enabled` is that switch, and it bites in two places.** At **delivery**: a
-disabled collection's name, description, catalogue and paths appear nowhere in
-the rendered `coffer-guide` skill every agent reads, while an enabled one appears
-in all of it. And at
-`coffer__write`, which refuses a write naming a collection that does not exist or
-is disabled, answering with the ones that are available.
+**Every collection is served to every agent** (see "Serve every collection to
+every agent"). The kind declares itself non-toggleable, so the generic
+enable/disable route refuses it and a migration enabled every row an earlier
+version stored disabled; the layer does not read `enabled` at all. Every
+registered collection's name, description, catalogue and paths appear in the
+rendered `coffer-guide` skill every agent reads, and `coffer__write` refuses only
+a write naming a collection that does not exist, answering with the ones that
+do.
 
-The per-agent reach that used to sit here is withdrawn (see "Gate collections
-with enabled alone"). It was never set — every collection's scope was null in
+The per-agent reach that used to sit here is withdrawn too. It was never set — every collection's scope was null in
 the live vault — and it could not have withheld anything it was asked to: the
 skill it narrows hands the agent the absolute knowledge root and tells it to
 grep. `PUT .../scope` on this kind is now refused with `SCOPE_INVALID`, and
@@ -276,15 +286,11 @@ no entry-length cap, no embedding fields, no auto-update flag, no display label
 (see "Add no table and no directory outside the knowledge root"). Anything that
 used to be configured per scope was configuring machinery that no longer exists.
 
-What the layer serves is **files on disk**, and `enabled` gates their
-**delivery** rather than their readability (see "Present knowledge as files on
+What the layer serves is **files on disk** (see "Present knowledge as files on
 disk"). An agent that also holds shell or file-read tools can read anything
-under `~/.coffer/knowledge/`, so a collection left out of a skill is one no
-agent is told about, not one no process can open — and the system says so rather
-than implying an isolation it does not provide. The per-agent reach this row
-used to carry is withdrawn for the same reason taken one step further: an
-allow-list that withholds a path from a reader already holding the root withheld
-nothing at all (see "Gate collections with enabled alone").
+under `~/.coffer/knowledge/`, which is why neither a per-agent reach nor an
+enabled switch is offered: an allow-list that withholds a path from a reader
+already holding the root withholds nothing at all.
 
 ## Errors
 
@@ -297,16 +303,16 @@ holds the first group:
 | `CollectionNotFound` | `KNOWLEDGE_COLLECTION_NOT_FOUND` | 404 |
 | `CollectionExists` | `KNOWLEDGE_COLLECTION_EXISTS` | 409 |
 | `KnowledgeFileNotFound` | `KNOWLEDGE_FILE_NOT_FOUND` | 404 |
+| `KnowledgeFileConflict` | `KNOWLEDGE_FILE_CONFLICT` | 409 |
 | `UnsafeKnowledgePath` | `KNOWLEDGE_PATH_UNSAFE` | 400 |
 | `UploadTooLarge` | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 |
 | `TopicReferencesFile` | `KNOWLEDGE_TOPIC_REFERENCES_FILE` | 400 |
 | `CurationBoundExceeded` | `KNOWLEDGE_CURATION_BOUND` | 400 |
 | `KnowledgeError` (base) | `KNOWLEDGE_ERROR` | 400 |
 
-A disabled collection answers `KNOWLEDGE_COLLECTION_NOT_FOUND`, the same as an
-absent one: collections carry no per-agent reach (see "Gate collections with
-enabled alone"), and to this layer disabled and not-a-collection are one state.
-A uid-addressed route given a uid no resource answers to gives the generic
+`KNOWLEDGE_COLLECTION_NOT_FOUND` answers a name no registered collection holds.
+`KNOWLEDGE_FILE_CONFLICT` answers a save whose `expected_fingerprint` no longer
+matches the file's bytes; the file is left untouched. A uid-addressed route given a uid no resource answers to gives the generic
 `RESOURCE_NOT_FOUND` (404) instead.
 
 `UnsafeKnowledgePath` carries the document rule as well as the traversal one,
@@ -354,7 +360,8 @@ row (tool, actor, duration, outcome — never arguments, never content) and ever
 submission — from the tool, the CLI, the REST route, an upload or a channel —
 records one `KNOWLEDGE_WRITTEN` `audit_log` event naming the caller, with the
 document path when it was promoted and `pending` when it waits (see "Submit
-material through coffer__write"); a delete records `KNOWLEDGE_DELETED`. A
+material through coffer__write"); a save from the web UI records
+`KNOWLEDGE_EDITED` with the path; a delete records `KNOWLEDGE_DELETED`. A
 completed curation pass records `KNOWLEDGE_CURATED` with the item, the model and
 its counts.
 

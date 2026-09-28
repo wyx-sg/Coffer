@@ -56,6 +56,7 @@ give the status each code is actually sent with.
 | `GENERIC_CREATE_NOT_ALLOWED` | 409 | This kind cannot be created or updated through the generic `/resources` endpoints. | Use the kind's own endpoint or command (for example `coffer agent add`, `coffer provider add`). |
 | `SCOPE_INVALID` | 422 | A reach (activation scope) payload is invalid, or the kind has no reach. | Send an agent allow-list, or use `coffer scope set` on a kind that supports it. See [reach](/architecture/resource-framework#reach). |
 | `RESOURCE_PROTECTED` | 409 | The resource is managed by Coffer itself (for example a skill Coffer generates) and cannot be taken over or deleted. | Leave it; Coffer maintains it. |
+| `RESOURCE_NOT_TOGGLEABLE` | 409 | The resource's kind cannot be enabled or disabled: every knowledge collection and memory partition is always served. | Delete the resource if it should no longer be served. |
 | `UPKEEP_ALREADY_RUNNING` | 409 | An upkeep pass (memory organising, knowledge curation) is already running for this target. | Wait for the running pass; the UI shows it. |
 | `UNKNOWN_PRUNABLE_TABLE` | 404 | A retention request named a table that has no retention policy. | List valid tables with `coffer retention list`. |
 
@@ -122,6 +123,7 @@ give the status each code is actually sent with.
 | `KNOWLEDGE_COLLECTION_NOT_FOUND` | 404 | No collection by that name is visible to the caller. | List collections with `coffer knowledge collections`. |
 | `KNOWLEDGE_COLLECTION_EXISTS` | 409 | A collection with that name already exists. | Choose another name. |
 | `KNOWLEDGE_FILE_NOT_FOUND` | 404 | No document at that path. | Browse the collection with `coffer knowledge ls <collection>`. |
+| `KNOWLEDGE_FILE_CONFLICT` | 409 | The document changed on disk after you read it, so your save was refused. | Reload the document and reapply your edit. |
 | `KNOWLEDGE_PATH_UNSAFE` | 400 | The path escapes the knowledge root, names a hidden entry, or cannot name a document. | Use a relative path to a Markdown document inside the collection. |
 | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 | The upload exceeds the size limit named in the message. | Split the document or upload a smaller file. |
 | `INGEST_REJECTED` | 400 | The upload cannot be converted. `details.reason` is `unsupported_type`, `scanned_pdf` (a PDF with no text layer) or `empty_conversion`; `details.doc_type` names the type. | Convert to a supported format; run OCR on a scanned PDF. |

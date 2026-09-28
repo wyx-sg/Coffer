@@ -14,6 +14,7 @@
 import { useTranslation } from "react-i18next";
 
 import { FileActions } from "@/components/FileActions";
+import { FILE_PANE_BODY } from "@/components/filePane";
 import { CodeView } from "@/components/preview/CodeView";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import { translateApiError } from "@/lib/api/errors";
@@ -52,7 +53,7 @@ export function AgentMemoryStoreFileViewer({
   // mirrors the skill and partition file viewers so every file preview in the
   // app reads the same.
   const header = (
-    <div className="space-y-2">
+    <div className="shrink-0 space-y-2">
       <span className="block truncate font-mono text-xs text-muted-foreground">{path}</span>
       {absPath ? <FileActions filePath={absPath} /> : null}
     </div>
@@ -60,9 +61,9 @@ export function AgentMemoryStoreFileViewer({
 
   if (content.data?.binary) {
     return (
-      <div className="space-y-2">
+      <div className={FILE_PANE_BODY}>
         {header}
-        <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
+        <div className="flex min-h-0 flex-1 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
           {t("agents.memoryStore.binary", { size: content.data.size })}
         </div>
       </div>
@@ -73,21 +74,23 @@ export function AgentMemoryStoreFileViewer({
   const truncated = content.data?.truncated ?? false;
 
   return (
-    <div className="space-y-2">
+    <div className={FILE_PANE_BODY}>
       {header}
 
-      {/* Preview grows with content but is capped at 60vh and scrolls inside
-          (both axes), so it never exceeds the window and adapts to its size. */}
+      {/* The preview takes the rest of the pane, down to the bottom of the
+          window, and scrolls inside (components/filePane.ts). */}
       {isMarkdown(path) ? (
-        <FindableMarkdown className="max-h-[60vh] overflow-auto rounded border bg-background p-3">
+        <FindableMarkdown fill className="rounded border bg-background p-3">
           {text}
         </FindableMarkdown>
       ) : (
-        <CodeView value={text} filename={path} maxHeight="60vh" className="bg-background" />
+        <CodeView value={text} filename={path} fill className="bg-background" />
       )}
 
       {truncated ? (
-        <p className="text-xs text-muted-foreground">{t("agents.memoryStore.truncated")}</p>
+        <p className="shrink-0 text-xs text-muted-foreground">
+          {t("agents.memoryStore.truncated")}
+        </p>
       ) : null}
     </div>
   );

@@ -13,12 +13,12 @@ class CollectionCatalogPort(Protocol):
     """The collections a `/save` may confirm against (spec knowledge "Ingest documents
     sent to a channel"), reached through this seam rather than an import — the channel
     kind may not reach into the knowledge kind (import-linter contract 5f). Satisfied
-    structurally by ``KnowledgeService.enabled_collections``.
+    structurally by ``KnowledgeService.collection_names``.
 
     It takes no agent: a collection carries no per-agent reach, so the answer
     is the same whichever agent a thread happens to be routed to."""
 
-    async def enabled_collections(self) -> list[str]: ...
+    async def collection_names(self) -> list[str]: ...
 
 
 class IngestPort(Protocol):

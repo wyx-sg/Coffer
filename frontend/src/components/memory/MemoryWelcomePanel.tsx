@@ -4,22 +4,17 @@
 // providers), so arriving at an empty Memory reads like arriving at an empty
 // anything else.
 //
-// The one next step is READ, not Add: nothing here is user-created. Coffer
+// The one next step is UPDATE, not Add: nothing here is user-created. Coffer
 // distils what the agents already learned out of their own native memories and
 // never writes back to them, so the only thing a developer can do on an empty
-// Memory is tell it to go and look.
+// Memory is tell it to go and look — the same Update memory button the
+// populated page carries.
 import { useTranslation } from "react-i18next";
-import { RefreshCw } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { MemoryUpdateButton } from "@/components/memory/MemoryUpdateButton";
 import { Card, CardContent } from "@/components/ui/card";
 
-interface Props {
-  onRead: () => void;
-  reading: boolean;
-}
-
-export function MemoryWelcomePanel({ onRead, reading }: Props) {
+export function MemoryWelcomePanel() {
   const { t } = useTranslation();
   return (
     <Card className="paper-card border-primary/20 bg-gradient-to-br from-card to-accent/40">
@@ -31,10 +26,7 @@ export function MemoryWelcomePanel({ onRead, reading }: Props) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={onRead} disabled={reading}>
-            <RefreshCw className={reading ? "mr-1 size-4 animate-spin" : "mr-1 size-4"} />
-            {reading ? t("memory.reading") : t("memory.readFromAgents")}
-          </Button>
+          <MemoryUpdateButton />
         </div>
         <ul className="grid gap-3 pt-2 text-sm text-foreground/70 sm:grid-cols-3">
           <WelcomeFeature

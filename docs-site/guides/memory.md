@@ -69,7 +69,7 @@ Partitions are created by aggregation only; you do not create them.
 | `MEMORY.md` | The index. Each line gives a note's title, its file, a one-line description written to stand on its own, and the search terms the source supplied, newest first. This is what a session receives. |
 | `notes/<slug>.md` | One note. Frontmatter carries `title`, `description`, `type` (`user`, `feedback` or `project`), `origins` (every agent file the note was built from), `created_at` and `updated_at`, and sometimes `search_terms`. The body is Coffer's own wording. |
 | `RETIRED.md` | Each retired note's title, the reason, and the note that replaced it. The next pass reads this file so a retired subject is not brought back from the same unchanged source. A note is also retired here, with the reason "its sources are gone", when every raw entry it was built from has left `.raw/` — the agent deleted the fact, or it is now filed into another partition — and that kind of record does not stop the subject coming back. |
-| `.raw/` | Every entry exactly as it was read, with the agent, source path and read time. It is the distil pass's input and lets you check a note against the words it came from. |
+| `.raw/` | Every entry exactly as it was read, with the agent, source path and read time. It is the distil pass's input and lets you check a note against the words it came from. It is not shown in the web UI and not readable through the partition's file routes; open it on disk, or use `coffer memory note` to see the entries behind a note. |
 
 Everything under `~/.coffer/memory/` is derived. It can be deleted and rebuilt at any time, and it is not carried by [vault sync](/guides/vault-sync): each machine builds its own from the agents installed on it. To move the memory root, set `COFFER_MEMORY_ROOT` in the daemon's environment.
 
@@ -82,7 +82,7 @@ Two background passes keep the partitions current. Both are on by default.
 | **Read from agents** (aggregation) | Reads every enabled agent's memory files and writes new entries into `.raw/`. A source file whose content has not changed since the last pass is skipped. | At daemon start, then hourly | No |
 | **Distil memory** | For each partition, routes new entries against the index — merge into a note, open a new note, retire a note, or keep nothing — then rewrites only the notes that changed, and rewrites `MEMORY.md`. | About a minute after start, then every 6 hours | Yes, when configured |
 
-The two passes run on separate timers: distil does not wait for an aggregation, and a partition with no new entries since its last distil costs no model call. Distil is incremental: the routing request carries the new entries and the index lines, never the note bodies, and each touched note is rewritten in its own small request. Two agents' entries about the same lesson, however differently worded, end up in one note whose `origins` name both.
+The two passes run on separate timers: distil does not wait for an aggregation (to run both at once, use [Update memory](#run-a-pass-now)), and a partition with no new entries since its last distil costs no model call. Distil is incremental: the routing request carries the new entries and the index lines, never the note bodies, and each touched note is rewritten in its own small request. Two agents' entries about the same lesson, however differently worded, end up in one note whose `origins` name both.
 
 **Without an internal model.** If Coffer's model is not configured (see [Model providers](/guides/providers)), distil still runs, mechanically: each entry becomes a note of its own and `MEMORY.md` is written from their frontmatter. You get a thinner index, not an empty one, and no model is called.
 
@@ -108,18 +108,18 @@ A change applies without a restart. The shortest interval is 60 seconds.
 ::: code-group
 
 ```sh [CLI]
-coffer memory sync                    # read from every agent
+coffer memory sync                    # update memory: read every agent, then distil
 coffer memory distil payments-api     # distil one partition
 ```
 
 ```text [Web UI]
-Memory → Read from agents
-Memory → choose the partition → Distil
+Memory → Update memory
+Memory → choose the partition → Update memory
 ```
 
 :::
 
-`coffer memory sync` reports how many entries it read across how many partitions, and any sources that failed to parse. Only one distil pass runs per partition at a time; a request while one is running is refused with `UPKEEP_ALREADY_RUNNING`. `coffer engine upkeep runs` shows what is running now.
+**Update memory** (`coffer memory sync`, `POST /api/v1/memory/sync`) runs both passes in one action: it reads every registered agent's latest memory, then distils every partition that gained new entries. It reports how many entries it read across how many partitions, any sources that failed to parse, and which partitions it distilled. A partition whose distil pass is already running is reported as skipped rather than failing the update. The button is the same on the partitions page and on a partition's page. Only one distil pass runs per partition at a time; a request while one is running is refused with `UPKEEP_ALREADY_RUNNING`. `coffer engine upkeep runs` shows what is running now.
 
 ## How agents receive memory
 
@@ -185,7 +185,7 @@ A turn you send from the [Chat](/guides/chat) page does not get this append: it 
 
 ### On demand: `coffer__recall`
 
-For a note from a different repository than the one the session is in, an agent calls `coffer__recall` with a word or phrase. It searches every enabled partition with a literal, case-insensitive match and returns each matching note's absolute path, title and one-line description — never the body, which the agent then reads as a file. Retired notes and `.raw/` are never returned. Recall calls no model.
+For a note from a different repository than the one the session is in, an agent calls `coffer__recall` with a word or phrase. It searches every partition with a literal, case-insensitive match and returns each matching note's absolute path, title and one-line description — never the body, which the agent then reads as a file. Retired notes and `.raw/` are never returned. Recall calls no model.
 
 There is no tool for an agent to write memory through Coffer. An agent records something the way it always does, in its own memory, and Coffer reads it on the next pass. The `coffer-guide` skill tells agents this.
 
@@ -210,9 +210,9 @@ Memory → choose the partition
 
 :::
 
-The **Memory** page lists partitions with their repository, number of notes and status. A partition whose repository no longer exists on disk is marked **Repository missing**; nothing is delivered from it, and it stays listed until you delete it.
+The **Memory** page lists partitions with their repository and number of notes. A partition whose repository no longer exists on disk is marked **Repository missing**; nothing is delivered from it, and it stays listed until you delete it.
 
-A partition's page shows its folder as a file tree — `MEMORY.md`, `notes/`, `RETIRED.md` and `.raw/` (marked **Derived input**) — beside a read-only preview with **Open in editor** and **Reveal in Finder**. There are no per-note edit or delete actions: the notes are derived, and the next distil pass would rewrite an edit.
+A partition's page shows its folder as a file tree — `MEMORY.md`, `notes/` and `RETIRED.md` — beside a read-only preview with **Open in editor** and **Reveal in Finder**; both fill the window. `.raw/` is not shown. A note's frontmatter is shown as metadata above its body. There are no per-note edit or delete actions: the notes are derived, and the next distil pass would rewrite an edit.
 
 `coffer memory note` prints a note together with the entries behind it and the absolute path of each native file they were read from, so you can trace a note that reads wrong back to what the agent actually recorded.
 
@@ -220,26 +220,13 @@ A partition's page shows its folder as a file tree — `MEMORY.md`, `notes/`, `R
 
 To see the memory an agent keeps for itself, open **Agents → choose the agent → Memory tab**. The **Agent's own (not via Coffer)** table lists each of the agent's native memory stores by project, path and number of items. Choose one to browse its files read-only. The agent owns and rewrites these files; open one in your editor if you want to change it. Changes you make there reach Coffer's notes on the next aggregation and distil.
 
-## Enable or disable a partition
+## Every partition reaches every agent
 
-A partition has one switch. Every enabled partition is served to every agent — including agents that contributed nothing to it, which is the point of aggregating. A disabled partition is left out of session-start delivery and out of `coffer__recall`.
+A partition has no on/off switch and no per-agent reach. Every partition is served to every agent — including agents that contributed nothing to it, which is the point of aggregating — through session-start delivery and `coffer__recall`. `coffer resource enable` and `disable` refuse a partition with `RESOURCE_NOT_TOGGLEABLE`.
 
-::: code-group
+This controls what Coffer hands to agents, not what they can open: the notes are ordinary files under `~/.coffer/memory/`.
 
-```sh [CLI]
-coffer resource disable memory payments-api
-coffer resource enable memory payments-api
-```
-
-```text [Web UI]
-Memory → the Status control on the partition's row
-```
-
-:::
-
-Disabling controls what Coffer hands to agents. It does not make the files unreadable: they are ordinary files under `~/.coffer/memory/`.
-
-To stop Coffer reading one agent's memory at all, disable that agent (see [Agents](/guides/agents)). To stop memory entirely, switch the `memory` feature off.
+To stop Coffer reading one agent's memory at all, disable that agent (see [Agents](/guides/agents)). To stop memory entirely, switch the `memory` [experimental feature](/guides/experimental-features) off.
 
 ## Rebuild a partition
 
@@ -248,7 +235,6 @@ Because everything under `~/.coffer/memory/` is derived, you can throw a partiti
 ```sh
 rm -rf ~/.coffer/memory/payments-api
 coffer memory sync
-coffer memory distil payments-api
 ```
 
 The rebuilt partition covers the same subjects from the same sources. Its wording will differ, because notes are a distillation, not a copy. Retirements recorded in the deleted `RETIRED.md` are lost with it, so a subject that was retired may come back.

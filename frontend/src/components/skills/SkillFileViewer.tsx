@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 
 import { FileActions } from "@/components/FileActions";
 import { FileEditor } from "@/components/FileEditor";
+import { FILE_PANE_BODY } from "@/components/filePane";
 import { CodeView } from "@/components/preview/CodeView";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import { skillsApi } from "@/lib/api/skills";
@@ -69,7 +70,7 @@ export function SkillFileViewer({
   // mirrors the agent config viewer (ConfigEditorPane) so the two file previews
   // read the same.
   const header = (
-    <div className="space-y-2">
+    <div className="shrink-0 space-y-2">
       <span className="block truncate font-mono text-xs text-muted-foreground">{path}</span>
       {absPath ? <FileActions filePath={absPath} /> : null}
     </div>
@@ -77,9 +78,9 @@ export function SkillFileViewer({
 
   if (content.data?.binary) {
     return (
-      <div className="space-y-2">
+      <div className={FILE_PANE_BODY}>
         {header}
-        <div className="flex h-80 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+        <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
           {t("skills.files.binary", { size: content.data.size })}
         </div>
       </div>
@@ -90,7 +91,7 @@ export function SkillFileViewer({
   const truncated = content.data?.truncated ?? false;
 
   return (
-    <div className="space-y-2">
+    <div className={FILE_PANE_BODY}>
       {header}
 
       <FileEditor
@@ -109,20 +110,20 @@ export function SkillFileViewer({
           builtin ? t("skills.builtinTooltip") : truncated ? t("files.readOnlyTruncated") : null
         }
         ariaLabel={t("skills.files.editorLabel", { path })}
+        fill
       >
-        {/* Preview grows with content but is capped at 60vh and scrolls inside
-            (both axes) — same as the knowledge-base doc viewer, so it never
-            exceeds the window and adapts to the window size. */}
+        {/* The preview takes the rest of the pane, down to the bottom of the
+            window, and scrolls inside (components/filePane.ts). */}
         {isMarkdown(path) ? (
-          <FindableMarkdown className="max-h-[60vh] overflow-auto rounded-md border bg-background p-3">
+          <FindableMarkdown fill className="rounded-md border bg-background p-3">
             {text}
           </FindableMarkdown>
         ) : (
-          <CodeView value={text} filename={path} maxHeight="60vh" className="bg-background" />
+          <CodeView value={text} filename={path} fill className="bg-background" />
         )}
       </FileEditor>
       {truncated ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="shrink-0 text-xs text-muted-foreground">
           {t("skills.files.truncated")} {t("skills.files.truncatedReadonly")}
         </p>
       ) : null}
