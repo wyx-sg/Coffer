@@ -8,16 +8,16 @@ collection in here exists because a test created it (spec knowledge "Create
 collections only deliberately").
 
 The group covers exactly the list in "Cover collection management on REST and
-the CLI" and nothing beyond it. There is no ``grep`` and no ``search`` command
-any more: the corpus is plain Markdown under ``~/.coffer/knowledge/``, so a
-person's own ``grep`` is better than anything this group could wrap — and the
-tests that drove those two commands are gone with them rather than softened into
-asserting a different command.
+the CLI" and nothing beyond it: the lifecycle verbs, ``write``, ``upload`` and
+``curate``. Documents are plain Markdown under ``~/.coffer/knowledge/``, so the
+group neither lists, prints nor deletes one — ``coffer path knowledge`` names
+the directory (test_path_cmd.py) and a person's own tools do the rest.
 """
 
 from __future__ import annotations
 
 import json
+import pathlib
 from datetime import UTC
 from datetime import datetime as dt
 
@@ -98,9 +98,7 @@ def knowledge_cli_daemon(tmp_path, monkeypatch):
 
 
 def _make_collection(name: str, description: str = "test collection") -> None:
-    created = _runner.invoke(
-        cli_app, [KIND_KNOWLEDGE, "create", name, "--description", description]
-    )
+    created = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "add", name, "--description", description])
     assert created.exit_code == 0, created.output
 
 
@@ -147,14 +145,14 @@ def _document(tmp_path, relpath: str, body: str) -> None:  # type: ignore[no-unt
 # ----- collections ---------------------------------------------------------
 
 
-def test_create_registers_a_collection_and_lists_it(knowledge_cli_daemon, tmp_path):
+def test_add_registers_a_collection_and_lists_it(knowledge_cli_daemon, tmp_path):
     _make_collection("shopee", "Internal systems")
 
     collection = tmp_path / "knowledge" / "shopee"
     assert collection.is_dir()
     assert not (collection / "sources").exists() and not (collection / "topics").exists()
 
-    listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "collections", "--json"])
+    listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "list", "--json"])
     assert listed.exit_code == 0, listed.output
     collections = json.loads(_extract_json(listed.output))["collections"]
     assert [c["name"] for c in collections] == ["shopee"]
@@ -173,7 +171,7 @@ def test_catalogue_description_comes_from_the_readme(knowledge_cli_daemon, tmp_p
     readme = tmp_path / "knowledge" / "shopee" / "README.md"
     readme.write_text("# shopee\n\nEdited by hand.\n", encoding="utf-8")
 
-    listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "collections", "--json"])
+    listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "list", "--json"])
     collections = json.loads(_extract_json(listed.output))["collections"]
     # Read off disk on every listing, never out of a row ("Read a collection's
     # description from its README") — so the
@@ -181,9 +179,9 @@ def test_catalogue_description_comes_from_the_readme(knowledge_cli_daemon, tmp_p
     assert collections[0]["description"] == "Edited by hand."
 
 
-def test_collections_renders_a_table_without_json(knowledge_cli_daemon):
+def test_list_renders_a_table_without_json(knowledge_cli_daemon):
     _make_collection("shopee", "Internal systems")
-    listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "collections"])
+    listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "list"])
     assert listed.exit_code == 0, listed.output
     assert "shopee" in listed.output
 
@@ -243,80 +241,58 @@ def test_write_takes_no_folder(knowledge_cli_daemon):
         assert result.exit_code == 2, result.output
 
 
-def test_read_returns_the_body_of_any_document(knowledge_cli_daemon, tmp_path):
-    _make_collection("shopee")
-    path = _write("shopee", "Session", body="account.session owns login state")
-
-    read = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "read", path])
-    assert read.exit_code == 0, read.output
-    assert "account.session owns login state" in read.output
-
-    # A document curation wrote, in a folder, reads exactly the same way.
-    _document(tmp_path, "shopee/apis/derived.md", "what curation concluded")
-    read_nested = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "read", "shopee/apis/derived.md"])
-    assert read_nested.exit_code == 0, read_nested.output
-    assert "what curation concluded" in read_nested.output
-
-
-def test_ls_lists_one_level_of_a_collection(knowledge_cli_daemon, tmp_path):
-    _make_collection("shopee")
-    path = _write("shopee", "Session")
-    _document(tmp_path, "shopee/apis/gateway.md", "b")
-
-    listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "ls", "shopee", "--json"])
-    assert listed.exit_code == 0, listed.output
-    data = json.loads(_extract_json(listed.output))
-    assert [f["path"] for f in data["files"]] == [path]
-    assert [d["path"] for d in data["directories"]] == ["shopee/apis"]
-
-    nested = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "ls", "shopee/apis", "--json"])
-    assert [f["path"] for f in json.loads(_extract_json(nested.output))["files"]] == [
-        "shopee/apis/gateway.md"
-    ]
-
-
 @pytest.mark.acceptance(
     spec="knowledge", scenario="an unknown collection is an error, never auto-created"
 )
 def test_unknown_collection_is_an_error(knowledge_cli_daemon, tmp_path):
-    result = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "ls", "typo", "--json"])
-    assert result.exit_code != 0
+    shown = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "show", "typo", "--json"])
+    assert shown.exit_code != 0
+    located = _runner.invoke(cli_app, ["path", "knowledge", "typo"])
+    assert located.exit_code != 0
     assert not (tmp_path / "knowledge" / "typo").exists()
 
 
-# ----- deleting ------------------------------------------------------------
+# ----- the lifecycle verbs ---------------------------------------------------
 
 
-def test_delete_removes_a_source_from_disk(knowledge_cli_daemon, tmp_path):
+def test_show_edit_disable_enable_and_rm_a_collection(knowledge_cli_daemon, tmp_path):
+    """The verbs every kind shares, on a collection: by name, and by uid."""
     _make_collection("shopee")
-    path = _write("shopee", "Stale")
-    on_disk = tmp_path / "knowledge" / path
-    assert on_disk.is_file()
 
-    removed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "delete", path])
+    shown = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "show", "shopee", "--json"])
+    assert shown.exit_code == 0, shown.output
+    uid = json.loads(_extract_json(shown.output))["uid"]
+
+    titled = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "edit", "shopee", "--title", "Shopee"])
+    assert titled.exit_code == 0, titled.output
+    by_uid = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "show", uid, "--json"])
+    assert json.loads(_extract_json(by_uid.output))["title"] == "Shopee"
+
+    assert _runner.invoke(cli_app, [KIND_KNOWLEDGE, "disable", "shopee"]).exit_code == 0
+    assert _daemon().get(f"/resources/{uid}").json()["enabled"] is False
+    assert _runner.invoke(cli_app, [KIND_KNOWLEDGE, "enable", "shopee"]).exit_code == 0
+    assert _daemon().get(f"/resources/{uid}").json()["enabled"] is True
+
+    removed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "rm", "shopee", "--yes"])
     assert removed.exit_code == 0, removed.output
-    assert not on_disk.exists()
+    listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "list", "--json"])
+    assert json.loads(_extract_json(listed.output))["collections"] == []
 
 
-def test_delete_removes_a_document_curation_wrote(knowledge_cli_daemon, tmp_path):
-    """The collection is the person's as much as curation's.
-
-    See "Let only a person delete a document".
-    """
-    _make_collection("shopee")
-    _document(tmp_path, "shopee/derived.md", "b")
-
-    removed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "delete", "shopee/derived.md"])
-    assert removed.exit_code == 0, removed.output
-    assert not (tmp_path / "knowledge" / "shopee" / "derived.md").exists()
+def test_add_sets_a_title_when_asked(knowledge_cli_daemon):
+    added = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "add", "shopee", "--title", "Shopee"])
+    assert added.exit_code == 0, added.output
+    assert "added: collection shopee" in added.output
+    shown = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "show", "shopee", "--json"])
+    assert json.loads(_extract_json(shown.output))["title"] == "Shopee"
 
 
-def test_delete_refuses_the_readme(knowledge_cli_daemon, tmp_path):
+def test_the_route_refuses_to_delete_the_readme(knowledge_cli_daemon, tmp_path):
     """The README describes the collection rather than being a document in it."""
     _make_collection("shopee")
 
-    removed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "delete", "shopee/README.md"])
-    assert removed.exit_code != 0
+    resp = _daemon().delete("/knowledge/file", params={"path": "shopee/README.md"})
+    assert resp.status_code >= 400, resp.text
     assert (tmp_path / "knowledge" / "shopee" / "README.md").is_file()
 
 
@@ -444,24 +420,32 @@ def test_cli_and_route_both_leave_material_in_the_inbox(
 
 
 @pytest.mark.acceptance(spec="knowledge", scenario="delete a document an agent wrote")
-def test_a_person_deletes_agent_written_documents_on_both_surfaces(knowledge_cli_daemon, tmp_path):
+def test_a_person_deletes_agent_written_documents_by_route_and_on_disk(
+    knowledge_cli_daemon, tmp_path
+):
     _make_collection("shopee")
     _document(tmp_path, "shopee/by-route.md", "b")
-    _document(tmp_path, "shopee/by-cli.md", "b")
-    for name in ("by-route.md", "by-cli.md"):
+    _document(tmp_path, "shopee/by-hand.md", "b")
+    for name in ("by-route.md", "by-hand.md"):
         assert "actor: agent" in (tmp_path / "knowledge" / "shopee" / name).read_text()
 
     resp = _daemon().delete("/knowledge/file", params={"path": "shopee/by-route.md"})
     assert resp.status_code == 204, resp.text
-    removed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "delete", "shopee/by-cli.md"])
-    assert removed.exit_code == 0, removed.output
+    located = _runner.invoke(cli_app, ["path", "knowledge", "shopee"])
+    assert located.exit_code == 0, located.output
+    directory = located.output.strip().splitlines()[-1]
+    (pathlib.Path(directory) / "by-hand.md").unlink()
 
     assert not (tmp_path / "knowledge" / "shopee" / "by-route.md").exists()
-    assert not (tmp_path / "knowledge" / "shopee" / "by-cli.md").exists()
+    assert not (tmp_path / "knowledge" / "shopee" / "by-hand.md").exists()
+    tree = _daemon().get("/knowledge/tree", params={"path": "shopee"}).json()
+    assert tree["files"] == []
+    listed = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "list", "--json"])
+    assert json.loads(_extract_json(listed.output))["collections"][0]["document_count"] == 0
     audit = _daemon().get("/audit", params={"event_type": "knowledge_deleted"})
     assert audit.status_code == 200, audit.text
     deleted = sorted(e["details"]["path"] for e in audit.json()["entries"])
-    assert deleted == ["shopee/by-cli.md", "shopee/by-route.md"]
+    assert deleted == ["shopee/by-route.md"]
 
 
 _KNOWLEDGE_OPERATIONS = {
@@ -473,7 +457,18 @@ _KNOWLEDGE_OPERATIONS = {
     ("DELETE", "/api/v1/knowledge/file"),
     ("POST", "/api/v1/knowledge/collections/{uid}/curate"),
 }
-_KNOWLEDGE_COMMANDS = {"create", "ls", "read", "write", "upload", "delete", "curate"}
+_KNOWLEDGE_COMMANDS = [
+    "list",
+    "show",
+    "add",
+    "edit",
+    "rm",
+    "enable",
+    "disable",
+    "write",
+    "upload",
+    "curate",
+]
 _FORBIDDEN_ROUTE_WORDS = ("index", "reindex", "source", "embedding", "scope", "reach")
 
 
@@ -481,7 +476,7 @@ _FORBIDDEN_ROUTE_WORDS = ("index", "reindex", "source", "embedding", "scope", "r
     spec="knowledge", scenario="expose every collection operation and no document write"
 )
 def test_rest_and_cli_cover_every_operation_and_write_no_document(knowledge_cli_daemon):
-    from coffer.surfaces.cli.knowledge_cmd import app as knowledge_app
+    import typer.main
 
     # Read from the OpenAPI schema: FastAPI 0.141 no longer flattens an included
     # router's routes into ``app.routes``, so walking that list finds nothing.
@@ -494,8 +489,8 @@ def test_rest_and_cli_cover_every_operation_and_write_no_document(knowledge_cli_
     }
     assert routes >= _KNOWLEDGE_OPERATIONS
 
-    commands = {command.name for command in knowledge_app.registered_commands}
-    assert commands >= _KNOWLEDGE_COMMANDS
+    group = typer.main.get_command(cli_app).commands[KIND_KNOWLEDGE]  # type: ignore[attr-defined]
+    assert list(group.commands) == _KNOWLEDGE_COMMANDS
 
     assert not any(method in {"PUT", "PATCH"} for method, _ in routes)
     for _, path in routes:

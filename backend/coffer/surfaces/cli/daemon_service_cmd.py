@@ -5,7 +5,7 @@ launchd is how macOS says that (see
 :mod:`coffer.infrastructure.daemon.login_service` for the plist and why each
 key in it is what it is). This is the surface for turning it on.
 
-Like ``coffer daemon port``, everything here reads and writes the user's own
+Like ``coffer config set daemon.port``, everything here reads and writes the user's own
 launchd agent directly, with no daemon involved and none required — which is
 the point, since the state it is most often reached from is "there is no
 daemon running and I would like that to stop happening".

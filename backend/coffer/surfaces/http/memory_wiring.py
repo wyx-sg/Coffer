@@ -1,8 +1,8 @@
 """Wiring for the one ``memory`` kind (spec memory).
 
 Mirrors ``knowledge_wiring.py`` + ``curation_wiring.py`` combined: one service for
-the derived tree and its two passes (``MemoryService``), the MCP locator
-(``RecallService`` / ``coffer__recall``), and the explicit-install delivery half
+the derived tree and its two passes (``MemoryService``), the memory root the
+gateway's handshake names, and the explicit-install delivery half
 (``DeliveryService``).
 
 **The three internal-engine arguments on ``MemoryService`` are the point of
@@ -23,16 +23,16 @@ internal connection is Coffer's own engine's job
 (``application.engine.resolve``) and not something each kind's wiring works out
 from the provider service for itself.
 
-The kind is wired before the MCP kind so the gateway advertises
-``coffer__recall``; the distil sweep it starts is on by default, because it only
+The kind exposes no MCP tool (spec memory "Expose no memory tool and name the
+memory root at session start"): it registers the memory root as an agent
+directory instead, which the handshake and the ``coffer-guide`` skill name while
+the ``memory`` feature is on. The distil sweep it starts is on by default, because it only
 ever rewrites a tree that can be rebuilt from the agents' own memories (see
 ``distil_worker.py``).
 
 Nothing here can fail to build: with no internal connection configured the
-selector just resolves to ``None`` per call, and ``RecallService`` /
-``MemoryService`` / ``DeliveryService`` need no internal connection at all —
-recall is a literal scan over notes on disk ("Recall locations by literal
-match").
+selector just resolves to ``None`` per call, and ``MemoryService`` /
+``DeliveryService`` need no internal connection at all.
 """
 
 from __future__ import annotations
@@ -44,13 +44,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from coffer.application.agent.service import AgentService
-from coffer.application.builtin_tools import BuiltinToolRegistry
+from coffer.application.builtin_tools import AgentDirectory, BuiltinToolRegistry
 from coffer.application.engine_ports import ModelSelectorPort
 from coffer.application.features import FeatureService
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.memory.aggregate import AgentSource
 from coffer.application.memory.aggregate_worker import AggregateWorker
-from coffer.application.memory.builtin_recall_tool import register_recall_tool
 from coffer.application.memory.context import MemoryPort, compose_context
 from coffer.application.memory.delivery import DeliveryService
 from coffer.application.memory.delivery_switch import (
@@ -60,13 +59,13 @@ from coffer.application.memory.delivery_switch import (
 from coffer.application.memory.distil import DistilResult
 from coffer.application.memory.distil_worker import WORKER_ACTOR, DistilWorker
 from coffer.application.memory.kind import make_memory_kind
-from coffer.application.memory.recall import RecallService
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.internal_engine_config import AGGREGATE, DISTIL
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.daemon.feature_settings import DaemonConfigWithdrawnDelivery
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
+from coffer.infrastructure.memory import paths as memory_paths
 from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
 from coffer.surfaces.http.memory.dependencies import (
     set_memory_delivery_service,
@@ -186,8 +185,15 @@ def wire_memory_kind(
     # is derived from the agents installed on THIS machine and is rebuilt per
     # machine (spec vault-sync "Keep reach machine-local").
 
-    recall_service = RecallService(memory=service)
-    register_recall_tool(builtin_tools, recall_service=recall_service)
+    # No tool: an agent finds a note by searching this directory with its own
+    # tools, and the handshake names it while the feature is on.
+    builtin_tools.register_directory(
+        AgentDirectory(
+            name="memory",
+            path=lambda: str(memory_paths.memory_root()),
+            feature="memory",
+        )
+    )
 
     delivery_service = DeliveryService(
         agent_service=agent_service, audit=audit, store=ConfigFileStore()

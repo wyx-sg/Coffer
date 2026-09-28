@@ -252,11 +252,6 @@ def wire_agent_and_skill_kinds(
     )
     skill_kind = make_skill_kind(
         skill_svc.cleanup_bindings_for_skill,
-        # A skill's name IS its master folder, so the rename hook is what moves
-        # it — and re-points every delivered link at the new one. Passed
-        # positionally and required, so this composition root cannot forget it
-        # and leave renames stranding folders.
-        skill_svc.move_master_folder,
         on_scope_changed=_skill_delivery_changed,
         on_enabled_changed=_skill_delivery_changed,
     )

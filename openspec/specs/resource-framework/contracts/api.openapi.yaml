@@ -146,7 +146,10 @@ paths:
           description: >-
             `RESOURCE_ALREADY_EXISTS` — a rename onto a name another resource
             of the same kind already carries (spec resource-framework "Treat a
-            resource's name as a mutable label").
+            resource's name as a mutable label"). `NAME_IMMUTABLE` — a changed
+            name on a kind whose name is fixed (`mcp_server`, `skill`), refused
+            before any field of the request is written; the message says to
+            delete and register the resource again and names what that resets.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorResponse" }
@@ -538,7 +541,16 @@ components:
         kind: { type: string }
         name:
           type: string
-          description: A mutable label, unique within its kind. Editable through PATCH.
+          description: >-
+            A label, unique within its kind. Editable through PATCH, except on
+            a kind whose name is fixed (`mcp_server`, `skill`).
+        title:
+          type: string
+          nullable: true
+          maxLength: 80
+          description: >-
+            Optional display text that surfaces show in place of the name;
+            null when none is set.
         description:
           type: string
           nullable: true
@@ -576,6 +588,10 @@ components:
             maxLength: 64,
             pattern: "^[a-zA-Z0-9_.-]+$",
           }
+        title:
+          type: string
+          nullable: true
+          maxLength: 80
         description:
           type: string
           nullable: true
@@ -593,8 +609,18 @@ components:
           pattern: "^[a-zA-Z0-9_.\\-]+$"
           description: >-
             Renaming is a field, not an operation — the same level as editing a
-            description, for every kind. Absent leaves the label alone; a label
-            another resource of this kind already holds answers 409.
+            description, for every kind whose name is not fixed. Absent leaves
+            the label alone; a label another resource of this kind already
+            holds answers 409, and so does any change on a kind whose name is
+            fixed (`NAME_IMMUTABLE`).
+        title:
+          type: string
+          nullable: true
+          maxLength: 80
+          description: >-
+            Display text, editable on every kind including one whose name is
+            fixed. Absent leaves it alone; an empty string or null clears it;
+            longer than 80 characters is refused as a validation error.
         description:
           type: string
           nullable: true

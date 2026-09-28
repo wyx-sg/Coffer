@@ -175,7 +175,7 @@ def test_conflict_message_names_a_coffer_daemon_squatter(monkeypatch):
     assert "still starting up" in message
     assert "coffer daemon status" in message
     assert "kill 4321" in message
-    assert "coffer daemon port set" in message
+    assert "coffer config set daemon.port" in message
 
     # Ordering is the whole point: the wait-and-see reading must reach the eye
     # before the kill does.
@@ -199,7 +199,7 @@ def test_conflict_message_survives_an_unidentifiable_holder():
     still be spelled out."""
     message = fixed_port_conflict_message(daemon_config.DEFAULT_PORT, None)
     assert "could not identify" in message
-    assert "coffer daemon port set" in message
+    assert "coffer config set daemon.port" in message
 
 
 def test_conflict_message_offers_clear_only_where_it_would_do_something():
@@ -210,8 +210,8 @@ def test_conflict_message_offers_clear_only_where_it_would_do_something():
     holder = PortHolder(pid=4321, command="node vite")
 
     on_a_chosen_port = fixed_port_conflict_message(9000, holder)
-    assert "coffer daemon port clear" in on_a_chosen_port
+    assert "coffer config unset daemon.port" in on_a_chosen_port
     assert str(daemon_config.DEFAULT_PORT) in on_a_chosen_port
 
     on_the_default = fixed_port_conflict_message(daemon_config.DEFAULT_PORT, holder)
-    assert "coffer daemon port clear" not in on_the_default
+    assert "coffer config unset daemon.port" not in on_the_default

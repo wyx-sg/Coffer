@@ -176,3 +176,42 @@ def test_parse_rejects_wrong_types() -> None:
         parse_resource_doc(
             {"uid": UID, "kind": "k", "name": "x", "description": None, "config": []}
         )
+
+
+# --- title (spec vault-sync "Converge resource definitions as serialized documents") ---
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a resource document carries the title when there is one"
+)
+def test_a_document_carries_the_title_when_there_is_one() -> None:
+    doc = resource_to_doc(
+        uid=UID,
+        kind="mcp_server",
+        name="confluence",
+        description="wiki",
+        config={"transport": {"kind": "stdio"}},
+        title="Team wiki",
+    )
+    assert set(doc) == {"uid", "kind", "name", "title", "description", "config"}
+    assert doc["title"] == "Team wiki"
+    assert "enabled" not in doc and "scope" not in doc
+    assert parse_resource_doc(doc).title == "Team wiki"
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="a document without a title leaves the title empty"
+)
+def test_a_resource_without_a_title_writes_no_title_key() -> None:
+    """No key rather than ``title: null``: every document written before titles
+    existed stays byte-identical, and a reader takes the missing key as none."""
+    doc = resource_to_doc(uid=UID, kind="mcp_server", name="x", description=None, config={})
+    assert "title" not in doc
+    assert parse_resource_doc(doc).title is None
+
+
+def test_a_title_that_is_not_a_string_is_refused() -> None:
+    doc = resource_to_doc(uid=UID, kind="mcp_server", name="x", description=None, config={})
+    doc["title"] = ["not", "text"]
+    with pytest.raises(SyncSerializationError, match="title"):
+        parse_resource_doc(doc)

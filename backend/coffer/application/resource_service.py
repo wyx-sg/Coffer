@@ -11,10 +11,11 @@ imports any kind-specific module. Each mutation is audited via
 AuditService. `delete` calls the kind's optional `on_delete` hook
 BEFORE persistence; a hook that raises aborts the deletion.
 
-Four sibling ops modules keep this file under the 400-LOC ceiling (mirroring
+Sibling ops modules keep this file under the 400-LOC ceiling (mirroring
 `skill/service.py` + its `*_ops.py` satellites): `update_scope`'s body lives in
-`resource_scope_ops`, `rename`'s in `resource_rename_ops`, `delete`'s
-credential-release step in `resource_delete_ops`, and every question about what
+`resource_scope_ops`, `rename`'s in `resource_rename_ops`, `set_title`'s in
+`resource_title_ops`, `delete`'s credential-release step in
+`resource_delete_ops`, and every question about what
 a kind *declares* — what converges, what redacts, what cites a credential, what
 it will accept as a name — in `resource_kind_ops`.
 """
@@ -137,6 +138,7 @@ class ResourceService:
         *,
         allow_lifecycle_kind: bool = False,
         uid: str | None = None,
+        title: str | None = None,
     ) -> Resource:
         """Create a resource and mint its identity.
 
@@ -148,31 +150,26 @@ class ResourceService:
         """
         kind_def = self._require_kind(kind)
         # spec resource-framework "Keep creation a per-kind seam": a kind that
-        # owns creation invariants beyond config validation (skill master
-        # folder, agent on-disk detection) sets
-        # ``generic_create_allowed=False``. The generic POST /resources path
-        # calls register() with the default ``allow_lifecycle_kind=False`` and
-        # is rejected here, so it can never create a row with no backing
-        # artifact; the kind's dedicated service opts in explicitly.
+        # owns creation invariants beyond config (skill master folder, agent
+        # on-disk detection) sets ``generic_create_allowed=False``, so the
+        # generic POST path cannot create a row with no backing artifact; the
+        # kind's dedicated service opts in with ``allow_lifecycle_kind``.
         if not kind_def.generic_create_allowed and not allow_lifecycle_kind:
             raise GenericCreateNotAllowed(kind)
         resource_kind_ops.check_name(kind_def, name)
+        if uid is None:
+            # A resource created HERE, not one arriving with the identity another
+            # machine gave it: only a new name meets a kind's rules for new names.
+            resource_kind_ops.check_new_name(kind_def, name)
+        title = resource_kind_ops.checked_title(title)
         validated = self._validate_config(kind_def, config)
         # Kind-supplied semantic validation beyond shape, at REGISTRATION only
-        # (e.g. a channel's workspace directories must exist on disk). Kept off
-        # update_config so editing an unrelated field never re-probes the
-        # filesystem and rejects the edit because a dir was since removed.
-        #
-        # Awaited if it returns an Awaitable, exactly as every other kind hook
-        # here is. It was synchronous until cross-resource references became
-        # uids: `channel` validates that its `default_agent` names a registered
-        # agent, and with a uid that is a question only the resource table can
-        # answer. Left synchronous, the kind had to drop the check at creation
-        # and keep it only on edit — so a channel could be CREATED bound to an
-        # agent that does not exist and would only fail later, at start time.
-        # The alternative — a kind returning a coroutine into a sync call — is
-        # worse than the gap it closes, because an unawaited coroutine is a
-        # validator that silently passes everything.
+        # (e.g. a channel's workspace directories must exist on disk), so
+        # editing an unrelated field never re-probes the filesystem. Awaited
+        # when it returns an Awaitable: `channel` checks that its
+        # `default_agent` uid names a registered agent, which only the resource
+        # table can answer — and an unawaited coroutine is a validator that
+        # silently passes everything.
         if kind_def.validate_config is not None:
             try:
                 check = kind_def.validate_config(validated)
@@ -199,6 +196,7 @@ class ResourceService:
                 enabled=True,
                 created_at=now,
                 updated_at=now,
+                title=title,
                 # A freshly registered resource is unscoped (ADR per-agent-resource-scope) —
                 # active for every agent until the user narrows it — UNLESS the
                 # kind supplies a starting scope. Only `provider` does: "every
@@ -340,27 +338,29 @@ class ResourceService:
         return await _update_scope(self, uid, scope, actor=actor)
 
     async def rename(self, uid: str, new_name: str, actor: str) -> Resource:
-        """Change a resource's LABEL.
-
-        All this does is write one column. Nothing else in the vault has to be
-        repointed, because nothing else holds the name: cross-resource
-        references, the synced document and the audit trail all hold the uid,
-        and each audit row goes on saying what the resource was called when
-        that event happened. That is the whole of what making the uid the
-        identity bought, and it is why this is a field on ``PATCH`` for every
-        kind rather than one kind's private route, and with no
-        ``supports_rename`` gate: that flag existed because a kind whose name
-        was written out somewhere this move could not reach would be left
-        pointing at nothing. Nothing writes the name out any more.
-
-        Delegates to ``resource_rename_ops`` to keep this module under the
-        file-size limit; see that module for the order of operations.
+        """Change a resource's LABEL — one column, since cross-resource
+        references, the synced document and the audit trail all hold the uid.
+        A kind whose name is quoted outside Coffer declares it fixed
+        (``Kind.name_fixed``) and is refused with ``NameImmutable``. See
+        ``resource_rename_ops`` for the order of operations.
         """
         from coffer.application.resource_rename_ops import rename as _rename
 
         return await _rename(self, uid, new_name, actor)
 
-        return await _rename(self, uid, new_name, actor)
+    def refuse_fixed_name(self, resource: Resource, new_name: str) -> None:
+        """``NameImmutable`` when ``new_name`` would change a fixed name — for a
+        caller that must refuse before writing anything else (the update route)."""
+        from coffer.application.resource_rename_ops import refuse_fixed_name
+
+        refuse_fixed_name(self._require_kind(resource.kind), resource, new_name)
+
+    async def set_title(self, uid: str, title: str | None, actor: str) -> Resource:
+        """Set a resource's display title; ``None`` or blank clears it. Every
+        kind, fixed name or not; see ``resource_title_ops``."""
+        from coffer.application.resource_title_ops import set_title as _set_title
+
+        return await _set_title(self, uid, title, actor)
 
     async def delete(self, uid: str, actor: str) -> None:
         # Credential release (on successful delete) delegates to

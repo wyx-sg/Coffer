@@ -1,13 +1,24 @@
-"""coffer skill ... commands (local-folder import only).
+"""``coffer skill …`` — managed skills (spec skill-manager "Cover skill
+management on REST, the CLI and the web").
 
-The master-folder file commands (``files``/``cat``/``write``) live in
-``skill_file_cmd.py`` and are attached to this group.
+``edit``, ``rm``, ``enable``, ``disable`` and ``scope`` are the lifecycle verbs
+every kind shares (``_kind_verbs``). ``list`` and ``show`` are the skill's own,
+because they read ``/skills``, which carries what the generic resource
+document does not — the source, the version hash, the master folder and the
+per-agent deliveries. ``add`` takes a folder, because importing one is how a
+skill comes to exist. ``verify`` reports drift.
 
-Takes NAMES — the skill's, and the agent's where a command names one — and
-resolves each to a uid through ``_resolve`` before it addresses a route
-(ADR resource-identity-is-an-immutable-uid). An UNMANAGED skill is the one
-exception: it is a folder on disk with no resource row, so there is no uid to
-resolve and its directory name is what the route takes.
+A skill's name is fixed once registered (spec skill-manager "Register each
+skill as a resource with a SKILL.md-safe name"): ``edit --name`` is kept so the
+daemon's ``NAME_IMMUTABLE`` refusal can say what a new name costs, and
+``--title`` is the label to change instead. A skill's master folder is plain
+files: ``coffer path skill <name>`` names it and it is edited on disk, so this
+group has no command that lists, prints or writes a file in it. Unmanaged
+skill folders are rows of ``coffer scan``, acted on by ``coffer adopt`` and
+``coffer discard``.
+
+Every command takes a name (or a uid) and resolves it once through
+``_resolve`` (ADR resource-identity-is-an-immutable-uid).
 """
 
 from __future__ import annotations
@@ -21,32 +32,29 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli import skill_file_cmd
-from coffer.surfaces.cli._resolve import resolve_uid
+from coffer.surfaces.cli._kind_verbs import KindVerbs, label, register_kind_verbs, verbose_of
+from coffer.surfaces.cli._resolve import resolve_ref
 
 app = typer.Typer(help="Manage skills (AgentSkills standard)")
 _console = Console()
-# `files`, `cat`, `write`: the master folder, in their own module (file-size cap).
-skill_file_cmd.attach(app)
 
 
-def _agent_names(c: httpx.Client) -> dict[str, str]:
+def _agent_names(c: httpx.Client, *, verbose: bool) -> dict[str, str]:
     """``agent uid -> agent name``, read once per command.
 
     A stored scope holds agent UIDS, and printing those would hand the reader a
     column of hex they cannot match to anything they typed. The listing is
-    fetched once and every scope on the page is rendered against it, the same
-    way ``coffer scope show`` does it.
+    fetched once and every scope on the page is rendered against it.
     """
     r = c.get("/resources", params={"kind": "agent"})
-    r.raise_for_status()
+    _cli_client.check(r, verbose=verbose)
     return {a["uid"]: a["name"] for a in r.json()["resources"]}
 
 
 def _scope_label(skill: dict[str, Any], agent_names: dict[str, str]) -> str:
     """Render the delivery rule: a skill reaches an agent iff it is enabled and
-    that agent is inside its scope. ``coffer scope set skill <name>`` edits the
-    scope; ``coffer resource enable/disable skill <name>`` flips the flag."""
+    that agent is inside its scope. ``coffer skill scope <name>`` edits the
+    scope; ``coffer skill enable|disable <name>`` flips the flag."""
     if not skill["enabled"]:
         return "disabled"
     scope: dict[str, list[str] | None] | None = skill["scope"]
@@ -65,10 +73,10 @@ def _scope_label(skill: dict[str, Any], agent_names: dict[str, str]) -> str:
 @app.command("list")
 def list_cmd(
     ctx: typer.Context,
-    output_json: bool = typer.Option(False, "--json"),
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
     """List managed skills."""
-    verbose = (ctx.obj or {}).get("verbose", False)
+    verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get("/skills")
@@ -76,7 +84,7 @@ def list_cmd(
         # Only the rendered table spells a scope out; `--json` hands the stored
         # uids over untouched, so the lookup is skipped rather than paid for a
         # caller that is not going to read it.
-        agent_names = {} if output_json else _agent_names(c)
+        agent_names = {} if output_json else _agent_names(c, verbose=verbose)
     items = r.json()["items"]
     if output_json:
         typer.echo(_json.dumps(items, indent=2))
@@ -87,7 +95,7 @@ def list_cmd(
     for it in items:
         delivered = ", ".join(b["agent_name"] for b in it["bindings"])
         table.add_row(
-            it["name"],
+            label(it),
             it["source"]["type"],
             _scope_label(it, agent_names),
             delivered or "—",
@@ -96,41 +104,27 @@ def list_cmd(
     _console.print(table)
 
 
-@app.command("import")
-def import_cmd(
-    path: str = typer.Argument(..., help="Local path to an existing skill folder."),
-    force: bool = typer.Option(
-        False, "--force", "-f", help="Replace an existing skill of the same name"
-    ),
-) -> None:
-    """Import a skill from a local folder."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post("/skills/import", json={"path": path, "overwrite": force})
-        if r.status_code >= 400:
-            typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
-            raise typer.Exit(2)
-    typer.echo(f"imported: skill {r.json()['name']}")
-
-
 @app.command("show")
 def show(
     ctx: typer.Context,
-    name: str = typer.Argument(...),
-    output_json: bool = typer.Option(False, "--json"),
+    ref: str = typer.Argument(..., metavar="NAME", help="Name or uid"),
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """Show one skill."""
-    verbose = (ctx.obj or {}).get("verbose", False)
+    """Show one skill, by name or uid."""
+    verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.get(f"/skills/{resolve_uid(c, 'skill', name, verbose=verbose)}")
+        uid = resolve_ref(c, "skill", ref, verbose=verbose)["uid"]
+        r = c.get(f"/skills/{uid}")
         _cli_client.check(r, verbose=verbose)
-        agent_names = {} if output_json else _agent_names(c)
+        agent_names = {} if output_json else _agent_names(c, verbose=verbose)
     data = r.json()
     if output_json:
         typer.echo(_json.dumps(data, indent=2))
         return
     typer.echo(f"name:        {data['name']}")
+    if data.get("title"):
+        typer.echo(f"title:       {data['title']}")
     typer.echo(f"description: {data['description']}")
     typer.echo(f"source:      {data['source']['type']}")
     typer.echo(f"master:      {data['master_path']}")
@@ -142,113 +136,65 @@ def show(
             typer.echo(f"  - {b['agent_name']} ({b['link_mode'] or 'unknown'})")
 
 
-@app.command("rm")
-def rm(
+@app.command("add")
+def add(
     ctx: typer.Context,
-    name: str = typer.Argument(...),
-    force: bool = typer.Option(False, "--force", "-f"),
+    folder: str = typer.Argument(..., help="Local path to an existing skill folder"),
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Replace an existing skill of the same name"
+    ),
+    title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
 ) -> None:
-    """Remove a skill and tear down all its agent bindings.
-
-    A skill Coffer generates itself is refused (exit 5).
-
-    \f
-    The refusal path matters as much as the success one: a skill Coffer
-    generates answers DELETE with 409 RESOURCE_PROTECTED, and a bare
-    ``raise_for_status()`` turned that into an httpx traceback. Routing
-    through ``_client.check`` gives this door the same rendered message and
-    exit code ``coffer resource delete skill <name>`` already gives.
-    """
-    verbose = (ctx.obj or {}).get("verbose", False)
-    if not force and not typer.confirm(f"Really remove skill {name}?"):
-        raise typer.Exit(1)
+    """Import a skill from a local folder; its name comes from SKILL.md."""
+    verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.delete(f"/skills/{resolve_uid(c, 'skill', name, verbose=verbose)}")
+        r = c.post("/skills/import", json={"path": folder, "overwrite": force})
         _cli_client.check(r, verbose=verbose)
-    typer.echo(f"removed: skill {name}")
+        if title:
+            t = c.patch(f"/resources/{r.json()['uid']}", json={"title": title})
+            _cli_client.check(t, verbose=verbose)
+    typer.echo(f"added: skill {r.json()['name']}")
 
 
-@app.command("unmanaged")
-def unmanaged(
-    ctx: typer.Context,
-    agent: str = typer.Argument(..., help="Agent name."),
-    output_json: bool = typer.Option(False, "--json"),
-) -> None:
-    """List skill-shaped folders in the agent's workspace that Coffer doesn't manage."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.get(f"/agents/{resolve_uid(c, 'agent', agent, verbose=verbose)}/unmanaged-skills")
-        _cli_client.check(r, verbose=verbose)
-    items = r.json()["items"]
-    if output_json:
-        typer.echo(_json.dumps(items, indent=2))
-        return
-    table = Table(title=f"Unmanaged skills — {agent}")
-    for col in ("Name", "Location", "Valid", "Reason"):
+register_kind_verbs(
+    app,
+    KindVerbs(
+        kind="skill",
+        noun="skill",
+        verbs=frozenset({"edit", "rm", "enable", "disable", "scope"}),
+        name_fixed=True,
+        help={
+            "rm": (
+                "Remove a skill and tear down all its agent deliveries. "
+                "A skill Coffer generates itself is refused (exit 5)."
+            ),
+            "enable": "Enable a skill: it is delivered to every agent in its scope.",
+            "disable": "Disable a skill: its delivered links are withdrawn.",
+        },
+    ),
+)
+
+
+def _drift_table(title: str, entries: list[dict[str, Any]]) -> Table:
+    table = Table(title=title)
+    for col in ("Skill", "Agent", "Kind", "Target", "Remedy"):
         table.add_column(col)
-    for it in items:
+    for e in entries:
         table.add_row(
-            it["name"],
-            it["location"],
-            "✓" if it["valid"] else "✗",
-            it["reason"] or "—",
+            e["skill_name"],
+            e["agent_name"] or "—",
+            e["kind"],
+            e["target_path"],
+            e["suggested_remedy"],
         )
-    _console.print(table)
-
-
-@app.command("adopt")
-def adopt(
-    agent: str = typer.Argument(..., help="Agent name."),
-    skill: str = typer.Argument(..., help="Unmanaged skill folder name."),
-    location: str = typer.Option(
-        "skills", "--location", help="Where the folder was discovered: skills | agents_dir."
-    ),
-) -> None:
-    """Adopt an unmanaged skill folder into the Coffer master store."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.post(
-            f"/agents/{resolve_uid(c, 'agent', agent)}/unmanaged-skills/{skill}/adopt",
-            json={"location": location},
-        )
-        if r.status_code >= 400:
-            typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
-            raise typer.Exit(2)
-    typer.echo(f"adopted: skill {r.json()['name']}")
-
-
-@app.command("rm-unmanaged")
-def rm_unmanaged(
-    agent: str = typer.Argument(..., help="Agent name."),
-    skill: str = typer.Argument(..., help="Unmanaged skill folder name."),
-    location: str = typer.Option(
-        "skills", "--location", help="Where the folder was discovered: skills | agents_dir."
-    ),
-    force: bool = typer.Option(False, "--force", "-f"),
-) -> None:
-    """Delete an unmanaged skill folder from the agent's workspace (from disk)."""
-    if not force and not typer.confirm(
-        f"Really delete unmanaged skill {skill!r} from agent {agent}?"
-    ):
-        raise typer.Exit(1)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.delete(
-            f"/agents/{resolve_uid(c, 'agent', agent)}/unmanaged-skills/{skill}",
-            params={"location": location},
-        )
-        if r.status_code >= 400:
-            typer.echo(r.json().get("error", {}).get("message", str(r.text)), err=True)
-            raise typer.Exit(2)
-    typer.echo(f"deleted: unmanaged skill {skill} (agent {agent})")
+    return table
 
 
 @app.command("verify")
 def verify(
     ctx: typer.Context,
-    output_json: bool = typer.Option(False, "--json"),
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
     fix: bool = typer.Option(
         False,
         "--fix",
@@ -259,7 +205,7 @@ def verify(
     ),
 ) -> None:
     """Report drift between bindings and on-disk symlinks."""
-    verbose = (ctx.obj or {}).get("verbose", False)
+    verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
     if fix:
         with c:
@@ -274,33 +220,11 @@ def verify(
         remediated = data["remediated"]
         remaining = data["remaining"]["entries"]
         if remediated:
-            table = Table(title="Repaired")
-            for col in ("Skill", "Agent", "Kind", "Target", "Remedy"):
-                table.add_column(col)
-            for e in remediated:
-                table.add_row(
-                    e["skill_name"],
-                    e["agent_name"] or "—",
-                    e["kind"],
-                    e["target_path"],
-                    e["suggested_remedy"],
-                )
-            _console.print(table)
+            _console.print(_drift_table("Repaired", remediated))
         else:
             typer.echo("nothing to repair")
         if remaining:
-            table2 = Table(title="Still drifted — manual action needed")
-            for col in ("Skill", "Agent", "Kind", "Target", "Remedy"):
-                table2.add_column(col)
-            for e in remaining:
-                table2.add_row(
-                    e["skill_name"],
-                    e["agent_name"] or "—",
-                    e["kind"],
-                    e["target_path"],
-                    e["suggested_remedy"],
-                )
-            _console.print(table2)
+            _console.print(_drift_table("Still drifted — manual action needed", remaining))
             raise typer.Exit(2)
         return
     with c:
@@ -315,16 +239,5 @@ def verify(
     if not entries:
         typer.echo("no drift")
         return
-    table = Table(title="Skill drift")
-    for col in ("Skill", "Agent", "Kind", "Target", "Remedy"):
-        table.add_column(col)
-    for e in entries:
-        table.add_row(
-            e["skill_name"],
-            e["agent_name"] or "—",
-            e["kind"],
-            e["target_path"],
-            e["suggested_remedy"],
-        )
-    _console.print(table)
+    _console.print(_drift_table("Skill drift", entries))
     raise typer.Exit(2)

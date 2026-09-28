@@ -54,6 +54,29 @@ def validate_resource_name(name: str) -> None:
         raise InvalidResourceNameError(f"invalid name {name!r}: must match ^[a-zA-Z0-9_.-]+$")
 
 
+#: The longest title a resource may carry (spec resource-framework "Carry an
+#: optional editable title on every resource"). Matches ``resources.title``.
+TITLE_MAX_LEN = 80
+
+
+def normalise_title(title: str | None) -> str | None:
+    """The title to store for ``title``: ``None`` for an empty one, which is
+    how a title is cleared; ``ValueError`` for one longer than the cap.
+
+    A title is free text a person chose for display, so nothing about its
+    characters is checked — only that it is short enough to show where a name
+    was shown, and surrounding whitespace, which no one means to keep.
+    """
+    if title is None:
+        return None
+    stripped = title.strip()
+    if not stripped:
+        return None
+    if len(stripped) > TITLE_MAX_LEN:
+        raise ValueError(f"title too long ({len(stripped)} chars, max {TITLE_MAX_LEN})")
+    return stripped
+
+
 @dataclass
 class Resource:
     """A user-managed entity inside Coffer.
@@ -83,6 +106,12 @@ class Resource:
     # machine-local"). Interpreted via coffer.domain.scope; only kinds whose
     # Kind.supports_scope is True may set it (validate_scope).
     scope: Scope | None = None
+    #: Optional display text (at most ``TITLE_MAX_LEN`` characters) that
+    #: surfaces show in place of ``name`` when it is set. Unlike the name it is
+    #: never quoted by an agent, so every kind may change it — including one
+    #: whose name is fixed (``Kind.name_fixed``). It travels with the synced
+    #: document; reach does not.
+    title: str | None = None
 
 
 @dataclass(frozen=True)
@@ -158,6 +187,19 @@ class Kind:
     # the exporter holds a ``Resource``, while the sync applier holds only a
     # document that has just arrived and has no row behind it yet.
     converges_row: Callable[[dict[str, Any]], bool] | None = None
+    # Whether a registered row's NAME may change (ADR
+    # names-visible-to-agents-are-fixed). True for a kind whose name is quoted
+    # outside Coffer, where a rename would break what quotes it: `mcp_server`,
+    # whose name prefixes every tool name an agent sees and that the agents'
+    # permission rules cite, and `skill`, whose name is the folder an agent
+    # loads it from. ``ResourceService.rename`` refuses a changed name on such a
+    # kind with ``NameImmutable`` before any hook or write, so there is no
+    # rename hook for it to supply. Its ``title`` stays editable.
+    name_fixed: bool = False
+    # What deleting and registering the resource again would reset, for the
+    # refusal message of a ``name_fixed`` kind: the user is told the only way
+    # to a new name and what it costs. Unused when ``name_fixed`` is False.
+    name_fixed_resets: str = ""
 
     # --- Pre-write validators: run BEFORE persistence; raising rejects the write ---
 
@@ -166,6 +208,15 @@ class Kind:
     # name. Used by `mcp_server` to reserve the `__` tool/prompt namespace
     # separator (spec mcp-gateway "Namespace every upstream capability").
     validate_name: Callable[[str], None] | None = None
+    # Optional validator for the name of a resource being CREATED here — run by
+    # ``ResourceService.register`` only when it mints the uid, after
+    # ``validate_name``. A rule that should hold for every name from now on
+    # without refusing the rows already registered goes here: a row that
+    # arrives from another machine carries its uid, so an older, longer name
+    # still converges, and nothing re-validates a row that is loaded. Used by
+    # `mcp_server` for its 24-character cap (spec mcp-gateway "Manage MCP
+    # servers as resources").
+    validate_new_name: Callable[[str], None] | None = None
     # Optional semantic config validation beyond ``config_schema`` shape,
     # applied at REGISTRATION only (already shape-validated). Given the validated
     # config dict; raises ``ValueError`` to reject the write (e.g. a channel's
@@ -204,9 +255,10 @@ class Kind:
     # and checked for collision, and BEFORE the row moves; raising aborts the
     # rename with nothing changed.
     #
-    # It exists because three kinds keep a directory named after the resource —
-    # `skill` (~/.coffer/skills/<name>), `knowledge` and `memory` — and the
-    # directory has to travel with the label. The four config-only kinds supply
+    # It exists because two renamable kinds keep a directory named after the
+    # resource — `knowledge` and `memory` — and the directory has to travel with
+    # the label. `skill` keeps one too, but its name is fixed (``name_fixed``),
+    # so it is never renamed and supplies no hook. The config-only kinds supply
     # nothing and rename by writing one column.
     #
     # Pre-write, like ``on_delete``, so a move that cannot happen stops the

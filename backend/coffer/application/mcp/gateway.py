@@ -124,7 +124,10 @@ class MCPGatewaySession:
         # (otherwise disposed-but-registered supervisors accumulate for the
         # daemon's lifetime and the on_delete hook walks dead ones).
         self._on_dispose = on_dispose
-        self._builtin = builtin_tools or BuiltinToolRegistry()
+        # ``is not None``, not ``or``: the registry has a ``__len__``, so one whose
+        # every tool is switched off is falsy, and ``or`` would swap it for an
+        # empty one that names no directory either.
+        self._builtin = builtin_tools if builtin_tools is not None else BuiltinToolRegistry()
         # Tool tiering: how much of the aggregated catalogue this session lists.
         # Resolved once per session; None means "read the environment".
         self._tiering = tiering or load_tiering_config()
@@ -134,11 +137,11 @@ class MCPGatewaySession:
         self.last_hidden_count = 0
         self._initialized = False
         # The agent's launch cwd, reported by the shim at the ``initialize`` handshake
-        # (params._meta["coffer/cwd"]). Threaded into memory built-in tool calls so
+        # (params._meta["coffer/cwd"]). Threaded into built-in tool calls so
         # project-scope resolution works. Falls back to the daemon's own cwd when the
         # client omits it. No spec states this handshake field: the requirement it was
         # written for was deleted with the per-project store that read the launch cwd,
-        # and spec memory "Create partitions only by aggregation" now says the opposite
+        # and spec memory "Provision partitions only from aggregation" now says the opposite
         # (a partition MUST NOT be created from an agent's cwd at read time). The shim
         # still stamps it and this still threads it, so the behaviour outlives its
         # requirement.
@@ -190,11 +193,13 @@ class MCPGatewaySession:
         # Tool tiering: the instructions field is the only channel into the client's
         # system prompt. On the first handshake nothing has been listed yet, so
         # hidden_count is 0 and the tiering paragraph is omitted. It names only
-        # the built-ins the tool list carries now: a switched-off feature's
-        # tools are neither listed nor advertised.
+        # the built-ins the tool list carries now, and the memory root only
+        # while the memory feature is on: a switched-off feature's tools and
+        # directories are neither listed nor advertised.
         return build_initialize_result(
             hidden_count=self.last_hidden_count,
             tools=[tool.name for tool in self._builtin.list()],
+            memory_root=self._builtin.directory("memory"),
         )
 
     # --- Request dispatch ---

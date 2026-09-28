@@ -19,10 +19,9 @@ silently — the exact drift this guard exists to prevent.
 
 Audit event types are dumped again because the Activity page renders them as
 plain-language lines: an untranslated event type would show a zh reader a raw
-``resource_enabled``. They were dropped while the only reader was
-``coffer__diagnose``, which wants the wire value rather than a translation —
-and that reader is still served, since the tool returns the wire value either
-way.
+``resource_enabled``. They were dropped while the only reader was an agent
+tool that wanted the wire value rather than a translation; ``coffer log audit``
+still prints the wire value either way.
 """
 
 from __future__ import annotations
@@ -48,7 +47,7 @@ def _error_codes() -> list[str]:
     for mod in pkgutil.walk_packages(coffer.__path__, "coffer."):
         try:
             module = importlib.import_module(mod.name)
-        except Exception:  # noqa: BLE001 - optional deps in some submodules
+        except Exception:
             continue
         for _name, obj in vars(module).items():
             if inspect.isclass(obj) and issubclass(obj, CofferError):

@@ -14,10 +14,10 @@ mechanisms:
   does not reinstate the subject from the same unchanged raw entry;
 * the **developer**, who opens the partition as a folder and wants to know
   what Coffer decided was no longer true, and on what grounds;
-* **delivery and recall**, which must not surface a retired note —
-  the previous design marked a fact superseded and then handed it back from
-  ``recall`` anyway, so 11 dead facts on the maintainer's live vault were
-  still answerable as if current.
+* **delivery**, which must not surface a retired note — the previous
+  design marked a fact superseded and then handed it back from a recall tool
+  anyway, so 11 dead facts on the maintainer's live vault were still
+  answerable as if current.
 """
 
 from __future__ import annotations

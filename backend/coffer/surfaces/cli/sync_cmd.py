@@ -12,6 +12,7 @@ a USB drive, and handing a copy to someone else is ``git clone ~/.coffer/sync``.
 
 from __future__ import annotations
 
+import json as _json
 from typing import Any
 
 import typer
@@ -215,15 +216,53 @@ def rebuild(
         _print_round(r.json())
 
 
-@app.command("rollback")
-def rollback(ctx: typer.Context) -> None:
-    """Undo the last applied round from its pre-apply snapshot."""
+#: Statuses that prove a round reached the apply step and tagged a pre-apply
+#: snapshot, and those that prove it stopped before one — the same walk the
+#: Runs tab makes to decide which single row carries Undo
+#: (``frontend/src/pages/sync/syncRowActions.ts``).
+_SNAPSHOTTED = frozenset({"ok", "no_change", "push_failed"})
+_PRE_SNAPSHOT = frozenset({"conflict", "awaiting_confirmation", "disabled", "awaiting_join"})
+
+
+def _last_round_applied_something(runs: list[dict[str, Any]]) -> bool:
+    """Whether the round a rollback would reverse changed anything here.
+
+    ``POST /sync/rollback`` reverses the NEWEST snapshot, and every round that
+    reaches the apply step tags one — a quiet round included — so after a quiet
+    round there is nothing to undo, and reaching past it is ``--at``.
+    """
+    for run in runs:
+        status = run.get("status")
+        if status in _SNAPSHOTTED:
+            applied = run.get("applied") or {}
+            return sum(int(applied.get(k) or 0) for k in ("added", "modified", "deleted")) > 0
+        if status not in _PRE_SNAPSHOT:
+            return False
+    return False
+
+
+def _undo_last_round(ctx: typer.Context) -> None:
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
+        r = c.get("/sync/runs", params={"limit": 50})
+        _cli_client.check(r, verbose=verbose)
+        if not _last_round_applied_something(r.json().get("runs") or []):
+            _console.print("nothing to undo — the last round applied nothing here")
+            return
         r = c.post("/sync/rollback", json={})
+        if r.status_code == 409 and _error_code(r) == "SYNC_NOTHING_TO_ROLL_BACK":
+            _console.print("nothing to undo — no pre-apply snapshot to return to")
+            return
         _cli_client.check(r, verbose=verbose)
         _print_round(r.json())
+
+
+def _error_code(r: Any) -> str | None:
+    try:
+        return str(r.json()["error"]["code"])
+    except (ValueError, KeyError, TypeError):
+        return None
 
 
 @app.command("restore")
@@ -233,7 +272,20 @@ def restore(
         None, "--at", help="A sha, a ref, or YYYY-MM-DD — the last commit at or before it"
     ),
 ) -> None:
-    """Bring the vault to an earlier point in the remote's history."""
+    """Undo the last applied round, or with --at go back to an earlier revision.
+
+    Without --at this returns the vault to the last round's pre-apply
+    snapshot; when that round applied nothing it changes nothing and says so.
+    With --at, documents deleted since come back and nothing gained since is
+    discarded.
+
+    \f
+    Spec vault-sync "Snapshot before applying and roll back from it" and
+    "Restore to a revision without discarding later work".
+    """
+    if at is None:
+        _undo_last_round(ctx)
+        return
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -243,8 +295,11 @@ def restore(
 
 
 @app.command("status")
-def status(ctx: typer.Context) -> None:
-    """What the remote is, and how the last round went.
+def status(
+    ctx: typer.Context,
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
+) -> None:
+    """The remote and every one of its settings, and how the last round went.
 
     Exits non-zero when the last round needs a human — held for
     confirmation, conflicted, or failed to push or run at all — so that a
@@ -262,8 +317,13 @@ def status(ctx: typer.Context) -> None:
         r = c.get("/sync/status")
         _cli_client.check(r, verbose=verbose)
         payload = r.json()
+    last = payload.get("last_run")
+    if output_json:
+        typer.echo(_json.dumps(payload, indent=2))
+        _exit_if_a_human_is_needed(payload, last)
+        return
     if not payload.get("configured"):
-        _console.print("no sync remote configured — 'coffer sync remote set <url>'")
+        _console.print("no sync remote configured — set one with: coffer sync remote set <url>")
     else:
         print_remote(payload["remote"])
     _console.print(f"this machine: {payload.get('machine_id')}")
@@ -272,7 +332,6 @@ def status(ctx: typer.Context) -> None:
             "  [yellow]note[/yellow]: this id is stored locally, not derived from the host, "
             "so deleting ~/.coffer makes this machine reappear as a new one"
         )
-    last = payload.get("last_run")
     # A recorded awaiting_join round says this itself, below.
     waiting = (last or {}).get("status") == "awaiting_join"
     if payload.get("configured") and not payload.get("joined") and not waiting:
@@ -283,12 +342,16 @@ def status(ctx: typer.Context) -> None:
         _console.print("no round yet")
         return
     _print_round(last, joined=bool(payload.get("joined", True)))
+    _exit_if_a_human_is_needed(payload, last)
+
+
+def _exit_if_a_human_is_needed(payload: dict[str, Any], last: dict[str, Any] | None) -> None:
     # Only while sync is actually on. A disabled remote makes a round return
     # DISABLED without recording it, so ``last_run`` keeps whatever it last
     # was; exiting non-zero on that would leave a vault whose sync the user
     # deliberately switched off failing every check that asks, for ever.
     remote = payload.get("remote") or {}
-    if remote.get("enabled") and last.get("status") in _NEEDS_ATTENTION:
+    if last and remote.get("enabled") and last.get("status") in _NEEDS_ATTENTION:
         raise typer.Exit(code=1)
 
 

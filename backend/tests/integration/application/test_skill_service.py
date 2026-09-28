@@ -102,10 +102,7 @@ async def _setup(tmp_path: pathlib.Path):
         await skill_svc.cleanup_bindings_for_agent(agent)
 
     placeholder_kinds["agent"] = make_agent_kind(on_delete=_agent_on_delete)
-    placeholder_kinds["skill"] = make_skill_kind(
-        skill_svc.cleanup_bindings_for_skill,
-        skill_svc.move_master_folder,
-    )
+    placeholder_kinds["skill"] = make_skill_kind(skill_svc.cleanup_bindings_for_skill)
 
     return skill_svc, agent_svc, audit, master_store, engine
 
@@ -881,259 +878,172 @@ async def test_boot_heal_repairs_missing_link_and_leaves_foreign_dir(tmp_path):
     await engine.dispose()
 
 
-# ----- rename (ADR resource-identity-is-an-immutable-uid) -----
+# ----- a fixed name, and a title (ADR names-visible-to-agents-are-fixed) -----
 
 
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="skill-manager",
-    scenario="renaming a skill carries its master folder, links and frontmatter name",
-)
-async def test_rename_moves_master_and_redelivers_under_the_new_name(tmp_path):
-    """A skill's name is a label, but it is also two directories on disk.
+def _resource_client(skill_svc: SkillService):
+    """The kind-agnostic resource routes, served by this test's ResourceService —
+    the same PATCH a person's edit reaches through the CLI or the web UI."""
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
 
-    Renaming must carry both: the master folder under ~/.coffer/skills/ and
-    the copy delivered into the agent's own skills dir. The binding row is
-    NOT carried, because it never held the name — it joins on
-    ``resources.id`` — and proving that is half the point of the change.
-    """
-    skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
-    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
-    src = tmp_path / "src"
-    _write_skill_folder(src, name="before", body="the body")
-    skill = await skill_svc.import_local(path=str(src), actor="cli")
+    from coffer.surfaces.http import errors as err_handlers
+    from coffer.surfaces.http.auth import set_active_token
+    from coffer.surfaces.http.dependencies import get_resource_service
+    from coffer.surfaces.http.resource_routes import router as resource_router
 
-    old_master = store.paths_for("before").folder
-    old_link = skill_dir / "before"
-    assert old_master.is_dir() and old_link.exists()
-    binding_before = (await skill_svc.bindings_for(skill.uid))[0]
-
-    renamed = await skill_svc._rs.rename(skill.uid, "after", actor="cli")
-
-    # The identity did not move; only the label did.
-    assert renamed.uid == skill.uid
-    assert renamed.id == skill.id
-    assert renamed.name == "after"
-
-    # Master folder followed the label, with its content.
-    assert not old_master.exists()
-    new_master = store.paths_for("after").folder
-    assert new_master.is_dir()
-    assert "the body" in (new_master / "SKILL.md").read_text(encoding="utf-8")
-
-    # So did the delivered copy.
-    new_link = skill_dir / "after"
-    assert not old_link.exists()
-    assert new_link.exists()
-    assert new_link.resolve() == new_master.resolve()
-    assert (new_link / "SKILL.md").is_file()
-
-    # The binding survived untouched apart from the path it records: same
-    # row, same two integer ids, still a live delivery.
-    bindings = await skill_svc.bindings_for(renamed.uid)
-    assert len(bindings) == 1
-    assert bindings[0].skill_resource_id == binding_before.skill_resource_id
-    assert bindings[0].agent_resource_id == agent.id
-    assert bindings[0].enabled
-    assert bindings[0].last_link_path == str(new_link)
-
-    # The SKILL.md the agent reads follows too, and the two config fields that
-    # describe that file follow it.
-    assert "name: after" in (new_master / "SKILL.md").read_text(encoding="utf-8")
-    assert renamed.config["version_hash"] != skill.config["version_hash"]
-    # The name is recorded in exactly one place on the row. A config field
-    # mirroring it is what migration 0098 removed.
-    assert "skill_md_name" not in renamed.config
-
-    # And nothing about the move reads as drift.
-    assert (await skill_svc.verify()).entries == []
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_rename_keeps_the_audit_trail_as_one_history(tmp_path):
-    """The trail is keyed on the resource, not on what it was called."""
-    skill_svc, _, audit, _, engine = await _setup(tmp_path)
-    src = tmp_path / "src"
-    _write_skill_folder(src, name="before")
-    skill = await skill_svc.import_local(path=str(src), actor="cli")
-
-    renamed = await skill_svc._rs.rename(skill.uid, "after", actor="cli")
-
-    trail = await audit.query(resource=renamed)
-    events = [e.event_type for e in trail]
-    assert AuditEventType.SKILL_IMPORTED.value in events, (
-        "the import happened under the old name and must still be in this resource's history"
+    app = FastAPI()
+    err_handlers.register(app)
+    app.include_router(resource_router)
+    app.dependency_overrides[get_resource_service] = lambda: skill_svc._rs
+    set_active_token("test-token")
+    return AsyncClient(
+        transport=ASGITransport(app),
+        base_url="http://t",
+        headers={"X-Coffer-Token": "test-token"},
     )
-    imported = next(e for e in trail if e.event_type == AuditEventType.SKILL_IMPORTED.value)
-    assert imported.resource_name == "before", "each row says what it was called at the time"
-    await engine.dispose()
 
 
-@pytest.mark.asyncio
-async def test_rename_onto_a_taken_name_moves_nothing(tmp_path):
-    """A collision is refused before the hook runs — nothing on disk moves."""
-    from coffer.domain.errors import ResourceAlreadyExists
-
-    skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
-    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
-    for name in ("mine", "theirs"):
-        src = tmp_path / f"src-{name}"
-        _write_skill_folder(src, name=name)
-        await skill_svc.import_local(path=str(src), actor="cli")
-    mine = await _by_name(skill_svc, "mine")
-
-    with pytest.raises(ResourceAlreadyExists):
-        await skill_svc._rs.rename(mine.uid, "theirs", actor="cli")
-
-    assert (await skill_svc.get_skill(mine.uid)).name == "mine"
-    assert store.paths_for("mine").folder.is_dir()
-    assert store.paths_for("theirs").folder.is_dir()
-    assert (skill_dir / "mine").exists() and (skill_dir / "theirs").exists()
-    assert (await skill_svc.verify()).entries == []
-    await engine.dispose()
+def _disk_state(store: MasterStore, skill_dir: pathlib.Path, name: str) -> dict[str, object]:
+    """Everything on disk a skill's name is written into, byte for byte."""
+    master = store.paths_for(name).folder
+    link = skill_dir / name
+    return {
+        "files": {
+            str(p.relative_to(master)): p.read_bytes()
+            for p in sorted(master.rglob("*"))
+            if p.is_file()
+        },
+        "link_is_symlink": link.is_symlink(),
+        "link_resolves_to": link.resolve(),
+    }
 
 
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="skill-manager",
-    scenario="renaming a skill carries its master folder, links and frontmatter name",
-)
-async def test_rename_aborts_when_the_master_folder_cannot_move(tmp_path):
-    """An orphan master folder occupies the destination: no row answers to
-    that name, so the framework's collision check passes and the hook is the
-    only thing standing between the rename and a clobbered directory.
-
-    Raising there must abort the rename with NOTHING moved — the row keeps
-    its old name and both folders are where they were.
-    """
-    skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
-    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
-    src = tmp_path / "src"
-    _write_skill_folder(src, name="mine")
-    skill = await skill_svc.import_local(path=str(src), actor="cli")
-
-    # A master folder on disk with no resource row behind it (the
-    # ORPHAN_MASTER drift kind), sitting exactly where the rename would land.
-    orphan_src = tmp_path / "orphan"
-    _write_skill_folder(orphan_src, name="squatter", body="not mine to delete")
-    store.copy_in(src=orphan_src, name="squatter", meta={"name": "squatter"})
-
-    with pytest.raises(FileExistsError):
-        await skill_svc._rs.rename(skill.uid, "squatter", actor="cli")
-
-    assert (await skill_svc.get_skill(skill.uid)).name == "mine"
-    assert store.paths_for("mine").folder.is_dir()
-    assert (skill_dir / "mine").exists()
-    assert "not mine to delete" in store.paths_for("squatter").skill_md.read_text(encoding="utf-8")
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_rename_does_not_clobber_foreign_content_at_the_new_link_path(tmp_path):
-    """Data-loss guard on the delivery half of a rename.
-
-    Something that is not Coffer's already occupies ``<skill_dir>/<new name>``.
-    The master folder still moves — the rename is about the row and its
-    canonical folder — but the delivered copy is dropped rather than written
-    over, and the drift is reported instead of hidden.
-    """
-    skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
-    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
-    src = tmp_path / "src"
-    _write_skill_folder(src, name="before")
-    skill = await skill_svc.import_local(path=str(src), actor="cli")
-
-    foreign = skill_dir / "after"
-    foreign.mkdir()
-    (foreign / "important.txt").write_text("precious user data")
-
-    renamed = await skill_svc._rs.rename(skill.uid, "after", actor="cli")
-
-    assert renamed.name == "after"
-    assert store.paths_for("after").folder.is_dir()
-    # The user's directory is exactly as they left it.
-    assert not foreign.is_symlink()
-    assert (foreign / "important.txt").read_text() == "precious user data"
-    # The binding admits it holds nothing, so verify names the real conflict
-    # at the real path rather than reporting a clean delivery.
-    bindings = await skill_svc.bindings_for(renamed.uid)
-    assert len(bindings) == 1
-    assert bindings[0].last_link_path is None
-    assert bindings[0].link_mode is None
-    report = await skill_svc.verify()
-    assert [e.kind for e in report.entries] == [DriftKind.REPLACED_WITH_REGULAR]
-    assert report.entries[0].target_path == str(foreign)
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="skill-manager",
-    scenario="renaming a skill carries its master folder, links and frontmatter name",
-)
-async def test_rename_rewrites_only_the_frontmatter_name(tmp_path):
-    """The agent product reads SKILL.md's ``name:``, so a rename must move it.
-
-    Exactly that one line: the rest of the file — the user's comments, their
-    key order, fields Coffer does not model, and the body — survives
-    byte-for-byte. Re-serialising the frontmatter would have been shorter and
-    would have quietly reflowed a document the user writes by hand.
-    """
-    skill_svc, _, _, store, engine = await _setup(tmp_path)
+async def _deliver_before(tmp_path: pathlib.Path):
+    """An imported skill ``before``, delivered to a registered agent, whose
+    SKILL.md carries a comment, another frontmatter field and a body."""
+    skill_svc, agent_svc, audit, store, engine = await _setup(tmp_path)
+    agent, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
     src = tmp_path / "src"
     src.mkdir()
     (src / "SKILL.md").write_text(
         "---\n"
-        "# why this skill exists\n"
-        "description: A test skill named before.\n"
+        "# a comment the user wrote\n"
         "name: before\n"
-        "allowed-tools: [Bash]\n"
+        "description: A test skill named before.\n"
         "license: MIT\n"
-        "---\n"
-        "\n"
-        "Body mentioning name: before, which is prose and must not move.\n",
+        "---\n\n"
+        "the body\n",
         encoding="utf-8",
     )
-    (src / "reference.md").write_text("untouched\n", encoding="utf-8")
     skill = await skill_svc.import_local(path=str(src), actor="cli")
-    before_bytes = store.paths_for("before").skill_md.read_bytes()
+    assert (skill_dir / "before").exists(), "precondition: the skill is delivered"
+    return skill_svc, audit, store, engine, agent, skill_dir, skill
 
-    renamed = await skill_svc._rs.rename(skill.uid, "after", actor="cli")
 
-    after_bytes = store.paths_for("after").skill_md.read_bytes()
-    assert after_bytes == before_bytes.replace(b"name: before\n", b"name: after\n")
-    assert b"Body mentioning name: before" in after_bytes  # prose untouched
-    assert (store.paths_for("after").folder / "reference.md").read_text() == "untouched\n"
+@pytest.mark.asyncio
+@pytest.mark.acceptance(spec="skill-manager", scenario="refuse changing a registered skill's name")
+@pytest.mark.acceptance(spec="resource-framework", scenario="a fixed name refuses a rename")
+async def test_a_skill_name_change_is_refused_and_moves_nothing(tmp_path):
+    skill_svc, audit, store, engine, _agent, skill_dir, skill = await _deliver_before(tmp_path)
+    disk_before = _disk_state(store, skill_dir, "before")
+    trail_before = await audit.query(resource=skill)
+    binding_before = (await skill_svc.bindings_for(skill.uid))[0]
 
-    # The one config field that describes that file moved with it.
-    assert "skill_md_name" not in renamed.config
-    import hashlib
+    async with _resource_client(skill_svc) as c:
+        r = await c.patch(f"/api/v1/resources/{skill.uid}", json={"name": "after"})
 
-    assert renamed.config["version_hash"] == hashlib.sha256(after_bytes).hexdigest()
+    assert r.status_code == 409, r.text
+    error = r.json()["error"]
+    assert error["code"] == "NAME_IMMUTABLE"
+    # The message names the way to a new name and what it costs.
+    assert "delete it and register it again" in error["message"]
+    for reset in ("enabled flag", "scope", "deliveries"):
+        assert reset in error["message"]
+
+    # The service refuses it too, whatever surface calls it.
+    from coffer.domain.errors import NameImmutable
+
+    with pytest.raises(NameImmutable):
+        await skill_svc._rs.rename(skill.uid, "after", actor="cli")
+
+    # Row, master folder, SKILL.md `name: before` and the delivered link are
+    # exactly as they were; nothing exists under the new name.
+    assert (await skill_svc.get_skill(skill.uid)).name == "before"
+    assert _disk_state(store, skill_dir, "before") == disk_before
+    assert "name: before" in store.paths_for("before").skill_md.read_text(encoding="utf-8")
+    assert not store.paths_for("after").folder.exists()
+    assert not (skill_dir / "after").exists()
+    binding_after = (await skill_svc.bindings_for(skill.uid))[0]
+    assert binding_after == binding_before
+    assert (await skill_svc.verify()).entries == []
+    # Nothing was audited.
+    assert await audit.query(resource=skill) == trail_before
     await engine.dispose()
 
 
 @pytest.mark.asyncio
-async def test_a_renamed_skill_still_validates_as_a_skill(tmp_path):
-    """The round trip that matters: what Coffer wrote, Coffer can re-import.
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="a skill's title is edited without touching disk"
+)
+async def test_a_skill_title_is_edited_without_touching_disk(tmp_path):
+    skill_svc, _audit, store, engine, _agent, skill_dir, skill = await _deliver_before(tmp_path)
+    disk_before = _disk_state(store, skill_dir, "before")
+    hash_before = skill.config["version_hash"]
 
-    A rename is the one path that makes Coffer the AUTHOR of a SKILL.md rather
-    than its reader, so the file it produces has to satisfy the same validator
-    the importer runs.
-    """
-    from coffer.domain.skill.validator import ValidationOk, validate_skill_folder
+    async with _resource_client(skill_svc) as c:
+        r = await c.patch(f"/api/v1/resources/{skill.uid}", json={"title": "Release checklist"})
+        assert r.status_code == 200, r.text
+        assert r.json()["name"] == "before"
+        assert r.json()["title"] == "Release checklist"
+        listed = (await c.get("/api/v1/resources", params={"kind": "skill"})).json()
+    assert [(row["name"], row["title"]) for row in listed["resources"]] == [
+        ("before", "Release checklist")
+    ]
 
-    skill_svc, _, _, store, engine = await _setup(tmp_path)
-    src = tmp_path / "src"
-    _write_skill_folder(src, name="before")
-    skill = await skill_svc.import_local(path=str(src), actor="cli")
+    # The skill's own read carries both, and the title went nowhere near disk.
+    row = await skill_svc.get_skill(skill.uid)
+    assert (row.name, row.title) == ("before", "Release checklist")
+    assert row.config["version_hash"] == hash_before
+    assert _disk_state(store, skill_dir, "before") == disk_before
+    assert "Release checklist" not in store.paths_for("before").skill_md.read_text(encoding="utf-8")
+    assert (await skill_svc.verify()).entries == []
+    await engine.dispose()
 
-    await skill_svc._rs.rename(skill.uid, "after", actor="cli")
 
-    result = validate_skill_folder(store.paths_for("after").folder)
-    assert isinstance(result, ValidationOk)
-    assert result.frontmatter.name == "after"
+@pytest.mark.asyncio
+@pytest.mark.acceptance(
+    spec="skill-manager",
+    scenario="a refused name change leaves the master folder where it is",
+)
+async def test_a_refused_name_change_then_a_title_leaves_the_master_folder(tmp_path):
+    skill_svc, _audit, store, engine, agent, skill_dir, skill = await _deliver_before(tmp_path)
+    skill_md_before = store.paths_for("before").skill_md.read_bytes()
+    binding_before = (await skill_svc.bindings_for(skill.uid))[0]
+
+    async with _resource_client(skill_svc) as c:
+        refused = await c.patch(f"/api/v1/resources/{skill.uid}", json={"name": "after"})
+        titled = await c.patch(f"/api/v1/resources/{skill.uid}", json={"title": "After"})
+    assert refused.status_code == 409
+    assert refused.json()["error"]["code"] == "NAME_IMMUTABLE"
+    assert titled.status_code == 200, titled.text
+
+    master = store.paths_for("before").folder
+    link = skill_dir / "before"
+    assert master.is_dir()
+    assert link.exists() and link.resolve() == master.resolve()
+    # The same binding row still records the delivery.
+    binding_after = (await skill_svc.bindings_for(skill.uid))[0]
+    assert binding_after.skill_resource_id == binding_before.skill_resource_id
+    assert binding_after.agent_resource_id == agent.id
+    assert binding_after.enabled
+    assert binding_after.last_link_path == binding_before.last_link_path
+    # SKILL.md — comments, other fields, body — and the hash are unchanged.
+    assert store.paths_for("before").skill_md.read_bytes() == skill_md_before
+    assert (await skill_svc.get_skill(skill.uid)).config["version_hash"] == skill.config[
+        "version_hash"
+    ]
+    assert not store.paths_for("after").folder.exists()
     await engine.dispose()
 
 
@@ -1142,92 +1052,23 @@ async def test_a_renamed_skill_still_validates_as_a_skill(tmp_path):
     spec="skill-manager",
     scenario="refuse a skill name its own SKILL.md could not carry",
 )
-async def test_rename_to_a_framework_legal_but_frontmatter_illegal_name_is_refused(tmp_path):
+async def test_import_refuses_a_frontmatter_name_its_own_skill_md_could_not_carry(tmp_path):
     """The framework's name rule is a superset of the frontmatter's.
 
     ``My.Skill`` matches ``^[a-zA-Z0-9_.-]{1,64}$`` and is a fine directory
     name, so nothing outside the kind would stop it — and Coffer would then
-    have written a SKILL.md its own importer rejects. The kind's
-    ``validate_name`` refuses it before anything moves.
+    hold a skill its own importer rejects.
     """
-    from coffer.domain.errors import ConfigValidationError
-
-    skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
-    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
-    src = tmp_path / "src"
-    _write_skill_folder(src, name="before")
-    skill = await skill_svc.import_local(path=str(src), actor="cli")
+    skill_svc, _agent_svc, _, store, engine = await _setup(tmp_path)
 
     for illegal in ("My.Skill", "MySkill", "-leading"):
-        with pytest.raises(ConfigValidationError):
-            await skill_svc._rs.rename(skill.uid, illegal, actor="cli")
-        assert not store.paths_for("before").folder.parent.joinpath(illegal).exists()
+        src = tmp_path / f"src-{illegal}"
+        _write_skill_folder(src, name=illegal)
+        with pytest.raises(SkillValidationError):
+            await skill_svc.import_local(path=str(src), actor="cli")
+        assert not store.paths_for("placeholder").folder.parent.joinpath(illegal).exists()
 
-    # Nothing moved: row, master folder, SKILL.md and the delivered copy.
-    assert (await skill_svc.get_skill(skill.uid)).name == "before"
-    assert store.paths_for("before").folder.is_dir()
-    assert "name: before" in store.paths_for("before").skill_md.read_text(encoding="utf-8")
-    assert (skill_dir / "before").exists()
-    assert (await skill_svc.verify()).entries == []
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_rename_is_refused_when_the_master_has_no_frontmatter_name(tmp_path):
-    """A master hand-edited into a shape the importer would reject.
-
-    There is no ``name:`` to carry, so the rename cannot leave the row and the
-    file agreeing. It refuses before anything moves rather than renaming the
-    folder and leaving the file naming the old skill.
-    """
-    from coffer.domain.errors import SkillValidationError
-
-    skill_svc, _, _, store, engine = await _setup(tmp_path)
-    src = tmp_path / "src"
-    _write_skill_folder(src, name="before")
-    skill = await skill_svc.import_local(path=str(src), actor="cli")
-
-    # Strip the frontmatter after import, the way a user editing the master
-    # folder in their own editor could.
-    store.paths_for("before").skill_md.write_text("no frontmatter here\n", encoding="utf-8")
-
-    with pytest.raises(SkillValidationError):
-        await skill_svc._rs.rename(skill.uid, "after", actor="cli")
-
-    assert (await skill_svc.get_skill(skill.uid)).name == "before"
-    assert store.paths_for("before").folder.is_dir()
-    assert not store.paths_for("after").folder.exists()
-    await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_rename_puts_the_master_back_when_the_config_write_fails(tmp_path):
-    """The folder moves before the config does, so the config write owns the undo.
-
-    If it fails, the rename must still mean "nothing moved" — otherwise the row
-    would keep a name no folder answers to.
-    """
-    skill_svc, agent_svc, _, store, engine = await _setup(tmp_path)
-    _, skill_dir = await _register_agent(agent_svc, tmp_path, name="cur")
-    src = tmp_path / "src"
-    _write_skill_folder(src, name="before")
-    skill = await skill_svc.import_local(path=str(src), actor="cli")
-    original_bytes = store.paths_for("before").skill_md.read_bytes()
-
-    async def _boom(*_args, **_kwargs):
-        raise RuntimeError("the database said no")
-
-    skill_svc._rs.update_config = _boom  # type: ignore[method-assign]
-
-    with pytest.raises(RuntimeError, match="the database said no"):
-        await skill_svc._rs.rename(skill.uid, "after", actor="cli")
-
-    # Folder back, file bytes back, row untouched, delivery intact.
-    assert store.paths_for("before").folder.is_dir()
-    assert not store.paths_for("after").folder.exists()
-    assert store.paths_for("before").skill_md.read_bytes() == original_bytes
-    assert (await skill_svc.get_skill(skill.uid)).name == "before"
-    assert (skill_dir / "before").exists()
+    assert await skill_svc._rs.list(kind="skill") == []
     await engine.dispose()
 
 

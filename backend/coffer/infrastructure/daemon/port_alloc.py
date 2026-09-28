@@ -94,7 +94,7 @@ def fixed_port_conflict_message(
     without being asked is not a decision a failed bind earns — but the user
     should not have to work out what that process is, so the message says.
 
-    ``coffer daemon port clear`` is offered only when the port that failed is
+    ``coffer config unset daemon.port`` is offered only when the port that failed is
     NOT the default, because that is the only case where clearing changes
     anything: it returns the daemon to :data:`DEFAULT_PORT`. Listing it against
     a failing 8000 would send the user to a command that does nothing.
@@ -128,11 +128,12 @@ def fixed_port_conflict_message(
     lines += [
         "  fix one of:",
         "    stop that process, then    coffer daemon start",
-        "    use a different port       coffer daemon port set <port>",
+        "    use a different port       coffer config set daemon.port <port>",
     ]
     if port != daemon_config.DEFAULT_PORT:
         lines.append(
-            f"    back to the default {daemon_config.DEFAULT_PORT}   coffer daemon port clear"
+            f"    back to the default {daemon_config.DEFAULT_PORT}   "
+            "coffer config unset daemon.port"
         )
     return "\n".join(lines)
 

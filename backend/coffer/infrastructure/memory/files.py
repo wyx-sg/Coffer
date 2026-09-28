@@ -30,8 +30,7 @@ readers also want different things — skill's serves an editor and must
 fingerprint bytes and follow its own 50 MB folder cap, this one serves a
 preview over a tree of small Markdown files — so what looks like duplication
 is two short readers with different jobs, which this codebase already prefers
-to one coupling (``application/memory/recall.py``'s own docstring makes the
-same call about knowledge's ripgrep).
+to one coupling.
 
 Containment is enforced the way ``paths.check_segment`` guards a partition name
 (see "Confine reads to registered agents' memory paths"): every candidate is

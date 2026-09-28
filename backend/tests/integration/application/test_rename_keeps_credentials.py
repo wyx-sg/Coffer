@@ -1,4 +1,4 @@
-"""Renaming an `mcp_server` or a `channel` does not disturb its secrets.
+"""Renaming a `channel` does not disturb its secrets; an `mcp_server` is not renamed.
 
 ``test_resource_rename.py`` proves this for the framework with a synthetic kind.
 This file proves it for the two kinds that used to mint a credential ref out of
@@ -6,7 +6,9 @@ the resource's NAME — ``channel/<name>/<secret>`` and ``<name>.<env key>`` —
 using their REAL ``Kind`` definitions and their real config schemas, because the
 name-derived ref was never a framework fact: it was two front-end files spelling
 an address, and the only reason it was survivable was that neither kind could be
-renamed at all.
+renamed at all. An `mcp_server` cannot be renamed again — its name prefixes every
+tool name an agent sees (ADR names-visible-to-agents-are-fixed) — so for it
+what is asserted is that the refused rename leaves the secret as it was.
 
 What is asserted after each rename is a round trip, not a string: the config
 still cites a ref, that ref is still in the store, and the value that comes back
@@ -104,7 +106,9 @@ async def _resolves(svc: ResourceService, store: _Store, uid: str) -> dict[str, 
     return {key: store.get(ref) for key, ref in refs.items() if store.get(ref) is not None}
 
 
-async def test_renaming_an_mcp_server_keeps_its_secret_reachable(tmp_path):
+async def test_a_refused_mcp_server_rename_keeps_its_secret_reachable(tmp_path):
+    from coffer.domain.errors import NameImmutable
+
     svc, store, engine = await _service(tmp_path)
     try:
         created = await svc.register(
@@ -123,13 +127,14 @@ async def test_renaming_an_mcp_server_keeps_its_secret_reachable(tmp_path):
             "SMART_PAT": "smart-personal-access-token"
         }
 
-        await svc.rename(created.uid, "shopee-smart", actor="test")
+        with pytest.raises(NameImmutable):
+            await svc.rename(created.uid, "shopee-smart", actor="test")
 
-        renamed = await svc.get(created.uid)
-        assert renamed.name == "shopee-smart"
+        unchanged = await svc.get(created.uid)
+        assert unchanged.name == "smart"
         # The citation did not move, the stored row did not move, and the value
         # still comes back.
-        assert renamed.config["transport"]["credential_refs"]["SMART_PAT"] == ENV_KEY_REF
+        assert unchanged.config["transport"]["credential_refs"]["SMART_PAT"] == ENV_KEY_REF
         assert await _resolves(svc, store, created.uid) == {
             "SMART_PAT": "smart-personal-access-token"
         }
@@ -167,14 +172,13 @@ async def test_renaming_a_channel_keeps_its_secret_reachable(tmp_path):
         await engine.dispose()
 
 
-async def test_deleting_a_renamed_server_releases_only_its_own_secret(tmp_path):
+async def test_deleting_a_server_releases_only_its_own_secret(tmp_path):
     """The hazard the opaque ref closes, stated as behaviour.
 
     ``release_orphaned_credentials`` decides ownership by CITATION. With one
-    address per secret that is exactly right — and it stays right across a
-    rename, which is what a name-derived ref could not promise: the deleted row
-    and the surviving one would have been arguing about which of them the string
-    ``smart.SMART_PAT`` described.
+    address per secret that is exactly right, which a name-derived ref could not
+    promise: the deleted row and the surviving one would have been arguing about
+    which of them the string ``smart.SMART_PAT`` described.
     """
     svc, store, engine = await _service(tmp_path)
     try:
@@ -204,7 +208,6 @@ async def test_deleting_a_renamed_server_releases_only_its_own_secret(tmp_path):
             },
             actor="test",
         )
-        await svc.rename(one.uid, "one-renamed", actor="test")
         await svc.delete(one.uid, actor="test")
 
         # Its own secret went; the one the other server still cites stayed.

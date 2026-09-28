@@ -1,10 +1,10 @@
-"""Reading the daemon's own log file — the shared half of two readers.
+"""Reading the daemon's own log file.
 
-The daemon log has two callers now: ``coffer__diagnose`` (an agent, at the
-moment something broke) and the web Activity page (a human, scanning the same
-timeline). Both need the same three decisions — read from the tail, keep an
-unparseable line rather than drop it, and treat "unparseable" as error-level —
-so they live here rather than being copied into a surface.
+The daemon's log route serves two readers: ``coffer log daemon`` (an agent or a
+person in a shell, at the moment something broke) and the web Activity page (a
+human, scanning the same timeline). Both need the same three decisions — read
+from the tail, keep an unparseable line rather than drop it, and treat
+"unparseable" as error-level — so they live here rather than in a surface.
 
 **The file is not one format**, and it never can be: ``daemon.log`` is also
 where a detached daemon's stdout and stderr are redirected, so every child

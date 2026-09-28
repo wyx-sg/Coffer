@@ -1,30 +1,24 @@
-"""``coffer knowledge …`` — the knowledge directory from the terminal.
+"""``coffer knowledge …`` — knowledge collections from the terminal (spec
+knowledge "Cover collection management on REST and the CLI").
 
-Thin HTTP shells over the daemon, matching the other CLI groups and their
-exit-code mapping (``_cli_client.check``).
+``show``, ``edit``, ``rm``, ``enable`` and ``disable`` are the lifecycle verbs
+every kind shares (``_kind_verbs``). ``list`` and ``add`` are the kind's own:
+``list`` reads ``/knowledge/collections``, which counts each collection's
+documents and its unmerged material and reads its description off its
+``README.md``; ``add`` creates the directory and the README, which the generic
+create route does not (the kind is not generic-creatable). ``write``,
+``upload`` and ``curate`` feed and run curation. There is no ``scope``: a
+collection's one switch is ``enabled`` ("Gate collections with enabled
+alone").
 
-This group serves the **human**, which is why it still browses and reads while
-the MCP gateway exposes nothing but ``coffer__write`` (spec knowledge "Expose
-exactly one knowledge tool").
-The two are not the same surface and do not answer to the same rule: an agent
-has ``Read`` and ``Grep`` of its own and is handed absolute paths by the
-delivered skill, so a retrieval tool for it would be a tool it never
-remembers to call; a person at a prompt has neither the paths nor the daemon's
-scope resolution in front of them. What this group must cover is the list in
-"Cover collection management on REST and the CLI" — create a collection, list
-a level, read a document, submit material, upload a document, delete a
-document, trigger curation — and nothing beyond it. There is
-deliberately no ``grep`` and no ``search`` command: the corpus is plain
-Markdown under ``~/.coffer/knowledge/``, so a person's own ``grep`` is already
-better than anything this group could wrap, and the group's help says where
-the files are so reaching for it is obvious.
+A collection's documents are plain Markdown, so this group has no command that
+lists, prints or deletes one: ``coffer path knowledge [<collection>]`` names
+the directory, and a person reads, greps, edits and deletes the files there
+with their own tools ("Keep direct file edits a complete way to change
+knowledge").
 
-Every command here takes a **name**, because that is what a person knows. Where
-a route is addressed by the collection's uid — only ``curate`` is — the name is
-resolved once through ``_resolve`` and never asked of the user (ADR
-resource-identity-is-an-immutable-uid). The rest take filesystem paths, whose
-first segment is the collection's directory, and those are names on both sides
-of the wire.
+Every command takes a collection **name** (or a uid) and resolves it once
+through ``_resolve`` (ADR resource-identity-is-an-immutable-uid).
 """
 
 from __future__ import annotations
@@ -37,16 +31,20 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._kind_verbs import KindVerbs, label, register_kind_verbs
 from coffer.surfaces.cli._resolve import resolve_uid
+
+#: The registry kind. Spelled here rather than imported from the application
+#: layer, so a CLI module depends on the daemon's HTTP surface and nothing deeper.
+KIND = "knowledge"
 
 app = typer.Typer(
     help=(
-        "Browse and edit Coffer's knowledge, the Markdown under "
-        "~/.coffer/knowledge/<collection>/. Each collection is one tree of "
-        "documents you and Coffer write together: edit them in your own editor, "
-        "and add new knowledge with `write` or `upload` — Coffer's curation pass "
-        "merges it into the documents. Grep the directory with your own tools; "
-        "there is no search command."
+        "Manage Coffer's knowledge collections, the Markdown under "
+        "~/.coffer/knowledge/<collection>/ (`coffer path knowledge` prints it). "
+        "Each collection is one tree of documents you and Coffer write together: "
+        "read, grep and edit them with your own tools, and add new knowledge with "
+        "`write` or `upload` — Coffer's curation pass merges it into the documents."
     )
 )
 _console = Console()
@@ -56,10 +54,10 @@ def _verbose(ctx: typer.Context) -> bool:
     return bool(ctx.obj and ctx.obj.get("verbose"))
 
 
-@app.command("collections")
+@app.command("list")
 def list_collections(
     ctx: typer.Context,
-    output_json: bool = typer.Option(False, "--json"),
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
     """List every collection, with its documents and unmerged material."""
     c, _info = _cli_client.client_or_exit()
@@ -79,7 +77,7 @@ def list_collections(
     table.add_column("description")
     for entry in data["collections"]:
         table.add_row(
-            entry["name"],
+            label(entry),
             str(entry["document_count"]),
             str(entry["pending_count"]),
             entry["description"],
@@ -87,11 +85,17 @@ def list_collections(
     _console.print(table)
 
 
-@app.command("create")
-def create_collection(
+register_kind_verbs(app, KindVerbs(kind=KIND, noun="collection", verbs=frozenset({"show"})))
+
+
+@app.command("add")
+def add_collection(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Collection name (one path segment)"),
-    description: str = typer.Option("", "--description", "-d"),
+    description: str = typer.Option(
+        "", "--description", "-d", help="Written as the opening paragraph of its README.md"
+    ),
+    title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
 ) -> None:
     """Create a collection. Nothing else creates one."""
     c, _info = _cli_client.client_or_exit()
@@ -101,53 +105,24 @@ def create_collection(
             json={"name": name, "description": description or None},
         )
         _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(f"created collection {name}")
+        if title:
+            t = c.patch(f"/resources/{r.json()['uid']}", json={"title": title})
+            _cli_client.check(t, verbose=_verbose(ctx))
+    typer.echo(f"added: collection {name}")
 
 
-@app.command("ls")
-def list_level(
-    ctx: typer.Context,
-    path: str = typer.Argument(
-        ..., help="A collection or a folder inside one, e.g. payments or payments/apis"
+register_kind_verbs(
+    app,
+    KindVerbs(
+        kind=KIND,
+        noun="collection",
+        verbs=frozenset({"edit", "rm", "enable", "disable"}),
+        help={
+            "edit": "Rename a collection (its directory moves with it) or set its title.",
+            "rm": "Remove a collection and its directory.",
+        },
     ),
-    output_json: bool = typer.Option(False, "--json"),
-) -> None:
-    """List one level of a collection — folders and files, not the whole tree."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.get("/knowledge/tree", params={"path": path})
-        _cli_client.check(r, verbose=_verbose(ctx))
-    data = r.json()
-    if output_json:
-        typer.echo(_json.dumps(data, indent=2))
-        return
-    table = Table(title=f"knowledge:{data['path']}")
-    table.add_column("path")
-    table.add_column("title")
-    table.add_column("description")
-    for directory in data["directories"]:
-        table.add_row(f"{directory['path']}/", "", f"{directory['file_count']} files")
-    for entry in data["files"]:
-        table.add_row(entry["path"], entry["title"], entry["description"])
-    _console.print(table)
-
-
-@app.command("read")
-def read_file(
-    ctx: typer.Context,
-    path: str = typer.Argument(..., help="File path under the knowledge root"),
-    output_json: bool = typer.Option(False, "--json"),
-) -> None:
-    """Print a document."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.get("/knowledge/file", params={"path": path})
-        _cli_client.check(r, verbose=_verbose(ctx))
-    data = r.json()
-    if output_json:
-        typer.echo(_json.dumps(data, indent=2))
-        return
-    typer.echo(data["body"])
+)
 
 
 @app.command("write")
@@ -177,19 +152,6 @@ def _submission(data: dict[str, object]) -> str:
     if data.get("path"):
         return str(data["path"])
     return f"queued in {data['collection']} — curation merges it into the documents"
-
-
-@app.command("delete")
-def delete_document(
-    ctx: typer.Context,
-    path: str = typer.Argument(..., help="Document path, e.g. payments/gateway.md"),
-) -> None:
-    """Delete a document."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.delete("/knowledge/file", params={"path": path})
-        _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(f"deleted {path}")
 
 
 @app.command("upload")
@@ -252,7 +214,7 @@ def curate(
         # path: a pass runs for minutes over a whole corpus, so it is aimed at
         # the collection's uid. The lookup happens here, once, so the person
         # still types the name they gave the collection.
-        uid = resolve_uid(c, "knowledge", collection, verbose=_verbose(ctx))
+        uid = resolve_uid(c, KIND, collection, verbose=_verbose(ctx))
         r = c.post(f"/knowledge/collections/{uid}/curate", json=body)
         _cli_client.check(r, verbose=_verbose(ctx))
     typer.echo(_json.dumps(r.json(), indent=2))

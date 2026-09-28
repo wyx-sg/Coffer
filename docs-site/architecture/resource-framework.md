@@ -68,9 +68,10 @@ Names are still constrained to `^[a-zA-Z0-9_.-]+$` and at most 64 characters (`v
 | Field | Called by | Meaning |
 | --- | --- | --- |
 | `validate_name` | register, rename | Kind-specific name rule on top of the framework's. |
+| `validate_new_name` | register, when it mints the uid | A rule for new names only, so rows registered before it keep loading and rows arriving from another machine with their uid still converge. |
 | `validate_config` | register only | Semantic validation beyond the schema (sync or async). Not run on update, so editing an unrelated field never re-probes the filesystem. |
 | `on_update_config` | update | Sees the resource as it stands plus the proposed config; may reject. |
-| `on_rename` | rename | Moves whatever the kind keeps under the old name. Runs before the row changes; if a racing writer then takes the name, the service calls it again to move things back. |
+| `on_rename` | rename | Moves whatever a renamable kind keeps under the old name. Runs before the row changes; if a racing writer then takes the name, the service calls it again to move things back. |
 | `validate_scope_for` | scope update | Sees the resource as it stands plus the proposed scope; may reject. |
 | `validate_delete` | delete | Refuses a deletion before anything is torn down. |
 
@@ -96,9 +97,9 @@ Import validation during a sync round is deliberately not a `Kind` field. It is 
 
 | Kind | Hooks and flags it supplies |
 | --- | --- |
-| `mcp_server` | `supports_scope`, `validate_name` (reserves `__`, the tool namespace separator), `audit_redactor` (strips `transport.env` and `transport.headers`), `credential_ref_extractor`, `on_update_config` (evicts live connections so the next call spawns with the new config), `on_rename` (releases live connections held under the old name), `on_delete`, `on_enabled_changed` (evicts live connections on disable) |
+| `mcp_server` | `name_fixed` (the name prefixes every tool name an agent sees), `supports_scope`, `validate_name` (reserves `__`, the tool namespace separator), `validate_new_name` (at most 24 characters), `audit_redactor` (strips `transport.env` and `transport.headers`), `credential_ref_extractor`, `on_update_config` (evicts live connections so the next call spawns with the new config), `on_delete`, `on_enabled_changed` (evicts live connections on disable) |
 | `agent` | `generic_create_allowed=False`, `on_delete`, `on_enabled_changed` |
-| `skill` | `generic_create_allowed=False`, `supports_scope`, `validate_name` (the `SKILL.md` frontmatter rule), `validate_delete` (refuses deleting the builtin `coffer-guide`), `converges_row` (withholds `coffer-guide`), `on_rename`, `on_delete`, `on_scope_changed`, `on_enabled_changed` |
+| `skill` | `generic_create_allowed=False`, `supports_scope`, `validate_name` (the `SKILL.md` frontmatter rule), `validate_delete` (refuses deleting the builtin `coffer-guide`), `converges_row` (withholds `coffer-guide`), `name_fixed` (the name is the folder an agent loads it from), `on_delete`, `on_scope_changed`, `on_enabled_changed` |
 | `knowledge` | `generic_create_allowed=False`, `on_rename` (moves the collection directory), `on_delete`, `on_enabled_changed` (re-renders the catalogue) |
 | `memory` | `generic_create_allowed=False`, `converges=False`, `on_rename`, `on_delete` |
 | `channel` | `supports_scope` (inverted, see below), `credential_ref_extractor`, `validate_config`, `on_update_config`, `validate_scope_for`, `on_delete` |
@@ -110,9 +111,10 @@ Import validation during a sync round is deliberately not a `Kind` field. It is 
 
 | Operation | Steps |
 | --- | --- |
-| `register` | Refuse if the kind disallows generic creation and the caller did not opt in → framework and kind name rules → schema validation → `validate_config` → probe cited credentials → mint `uid` (or accept the one a sync document carries) → insert with `default_scope` → audit `resource_created` with the redacted config. |
+| `register` | Refuse if the kind disallows generic creation and the caller did not opt in → framework and kind name rules (plus `validate_new_name` when minting the uid) → title rule (at most 80 characters) → schema validation → `validate_config` → probe cited credentials → mint `uid` (or accept the one a sync document carries) → insert with `default_scope` → audit `resource_created` with the redacted config. |
 | `update_config` | Same generic-create gate → schema → credential probe → `on_update_config` → write → audit `resource_updated` with redacted before and after. |
-| `rename` | No-op if unchanged → name rules → collision check (`RESOURCE_ALREADY_EXISTS`, 409) → `on_rename` → write → audit `resource_renamed` with `from` and `to`. |
+| `rename` | No-op if unchanged → refuse a kind with `name_fixed` (`NAME_IMMUTABLE`, 409, nothing audited) → name rules → collision check (`RESOURCE_ALREADY_EXISTS`, 409) → `on_rename` → write → audit `resource_renamed` with `from` and `to`. |
+| `set_title` | No-op if unchanged → title rule (blank clears; over 80 characters is `CONFIG_INVALID`) → write → audit `resource_updated` with the title's `before` and `after`. Not gated on generic creation, so every kind's title is editable. |
 | `set_enabled` | No-op (and no audit) if unchanged → write → audit `resource_enabled` or `resource_disabled` → `on_enabled_changed`. |
 | `update_scope` | `validate_scope` against `supports_scope` → `validate_scope_for` → write → audit `resource_scope_updated` → `on_scope_changed`. |
 | `delete` | Resolve → `validate_delete` → `on_delete` → remove the row → release credentials no remaining resource cites → audit `resource_deleted` with a redacted snapshot. |
@@ -162,11 +164,11 @@ The CLI mirrors the generic surface with names instead of uids:
 ```sh
 coffer resource list
 coffer resource show mcp_server github
-coffer resource rename mcp_server github gh
+coffer resource rename channel tg telegram
 coffer resource disable skill pdf-tools
-coffer scope set mcp_server gh --agents claude-code
+coffer scope set mcp_server github --agents claude-code
 coffer scope set skill pdf-tools --no-agents   # dormant
-coffer scope clear mcp_server gh               # every agent again
+coffer scope clear mcp_server github           # every agent again
 ```
 
 REST and CLI are parity surfaces answering through the same services, and a test over the whole CLI tree asserts that parity.

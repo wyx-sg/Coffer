@@ -9,9 +9,9 @@ ever *set* the contextvar — so the log field and the header both read the
 ``"-"`` sentinel, on every request, forever. The facility existed and answered
 nothing.
 
-This middleware is the missing writer. It is the seam that makes
-``coffer__diagnose`` work as intended: an agent handed a failed request's
-``X-Coffer-Trace`` value can grep the daemon log for that id and find the
+This middleware is the missing writer. It is the seam that makes the daemon
+log answer a question: an agent handed a failed request's ``X-Coffer-Trace``
+value can grep the daemon log (``coffer path logs``) for that id and find the
 records the request produced, instead of guessing from timestamps.
 
 The processor half took a second fix to become real. It ran only for records

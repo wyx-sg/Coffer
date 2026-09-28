@@ -13,11 +13,15 @@ read-it-yourself shape of the knowledge layer, and the catalogue of every
 document with its path — and a skill body costs a session nothing until a
 model reaches for it. So the handshake's job is narrower now: say what Coffer
 is, name its tools so they are recognisable when they appear in a tool list,
-and point at the skill for everything else.
+say in one line each where its memory notes and its own logs are read, and
+point at the skill for everything else (spec knowledge "Keep the handshake
+instructions to what a skill cannot carry").
 
-"Name its tools" means every one the session's tool list carries — all four
+"Name its tools" means every one the session's tool list carries — both
 while every experimental feature is on, never one a switched-off feature took
-out of the list. The escape hatch
+out of the list. Coffer has no tool for its memory notes or its own logs, so
+the text names where those are instead: the memory root to search (while the
+memory feature is on) and the ``coffer log`` readers. The escape hatch
 ``coffer__search_tools`` used to be named only in the tiering paragraph, so a
 session with nothing hidden was never told the hatch existed — and a later
 session, whose tool list had in fact been trimmed, had no earlier mention to
@@ -48,81 +52,88 @@ PROTOCOL_VERSION = "2025-06-18"
 # hold it against the tools actually registered — the instructions are the one
 # thing no caller ever validates, so a tool renamed or retired here goes
 # unnoticed until an agent calls a name that no longer exists.
-NAMED_TOOLS: frozenset[str] = frozenset(
-    {
-        "write",
-        "recall",
-        "diagnose",
-        "search_tools",
-    }
-)
+NAMED_TOOLS: frozenset[str] = frozenset({"write", "search_tools"})
 
 #: Each built-in tool's name as the handshake gives it, with its gloss, in the
 #: order the text names them. A tool is named only while it is in the tool list
-#: — ``coffer__write`` leaves with the ``knowledge`` feature, ``coffer__recall``
-#: with ``memory`` (spec experimental-features "Close every surface of a
-#: switched-off feature") — and a text naming a tool the gateway then answers
-#: as unknown is the one thing this text must never do.
+#: — ``coffer__write`` leaves with the ``knowledge`` feature (spec
+#: experimental-features "Close every surface of a switched-off feature") —
+#: and a text naming a tool the gateway then answers as unknown is the one
+#: thing this text must never do.
 _TOOL_GLOSSES: tuple[tuple[str, str], ...] = (
-    ("write", "file a durable fact about this environment"),
-    ("recall", "locate Coffer's distilled notes"),
-    ("diagnose", "Coffer's own logs"),
-    (
-        "search_tools",
-        "describe an upstream tool you want in plain language; whatever comes "
-        "back is callable by name",
-    ),
+    ("write", "file a durable fact"),
+    ("search_tools", "describe an upstream tool you need; results are callable by name"),
 )
 
 _INTRO = (
     "Coffer is this machine's local vault: it aggregates the user's MCP servers "
-    "behind one endpoint, holds what this developer has written down, and adds "
-    "its own tools — "
+    "behind one endpoint, holds what this developer wrote down, and adds "
 )
 
 _PLAIN_INTRO = (
     "Coffer is this machine's local vault: it aggregates the user's MCP servers "
-    "behind one endpoint and adds its own tools — "
+    "behind one endpoint and adds "
 )
 
-#: The knowledge sentences are said only while the knowledge layer is there
-#: (its tool ``coffer__write`` is listed): the skill then carries a catalogue
-#: with paths.
+#: Said only while the knowledge layer is there (its tool ``coffer__write`` is
+#: listed).
+_KNOWLEDGE = " Its knowledge is markdown you read with your own file tools."
+
+#: Said only while the memory feature is on: there is no memory tool, so the
+#: directory is the whole of what an agent needs (spec memory "Expose no memory
+#: tool and name the memory root at session start").
+_MEMORY = " Its memory notes are Markdown under {root}/*/notes/; grep them with your own tools."
+
+#: Coffer's own records have no tool either; the command line reads them.
+_LOGS = " Its own logs: coffer log audit|mcp|daemon (files: coffer path logs)."
+
 _KNOWLEDGE_OUTRO = (
-    ". Its knowledge is markdown you read with your own file tools. The "
-    "coffer-guide skill is the manual: load it for the catalogue of what is "
-    "there, with paths, before asking the developer something they may already "
-    "have written down."
+    " The coffer-guide skill is the manual: load it for the catalogue, with "
+    "paths, before asking the developer something they may have written down."
 )
 
-_PLAIN_OUTRO = ". The coffer-guide skill is the manual: load it before relying on these tools."
+_PLAIN_OUTRO = " The coffer-guide skill is the manual: load it before relying on these tools."
 
-_TIERED = (
-    " Your tool list is a budgeted slice: {n} further upstream tools are not "
-    "listed, and every one is still callable."
+_TIERED = " Your tool list is a budgeted slice: {n} more upstream tools are unlisted, all callable."
+
+#: The memory line for a root too long to fit the cap: it names where the root
+#: is printed instead of the root itself, so the cap is met by a shorter
+#: sentence rather than by truncating the tail of the text.
+_MEMORY_BY_COMMAND = (
+    " Its memory notes are Markdown under the directory coffer path memory prints; "
+    "grep it with your own tools."
 )
 
 
-def _base(tools: Collection[str]) -> str:
-    """The unconditional part, naming exactly ``tools`` (bare names)."""
-    named = ", ".join(f"coffer__{name} ({gloss})" for name, gloss in _TOOL_GLOSSES if name in tools)
-    if "write" in tools:
-        return f"{_INTRO}{named}{_KNOWLEDGE_OUTRO}"
-    return f"{_PLAIN_INTRO}{named}{_PLAIN_OUTRO}"
+def _base(tools: Collection[str], memory_line: str) -> str:
+    """The unconditional part, naming exactly ``tools`` (bare names), with
+    ``memory_line`` (empty while the memory feature is off)."""
+    glosses = [(name, gloss) for name, gloss in _TOOL_GLOSSES if name in tools]
+    named = ", ".join(f"coffer__{name} ({gloss})" for name, gloss in glosses)
+    own = "its own tools" if len(glosses) > 1 else "its own tool"
+    knowledge = "write" in tools
+    text = f"{_INTRO if knowledge else _PLAIN_INTRO}{own}: {named}."
+    if knowledge:
+        text += _KNOWLEDGE
+    text += memory_line
+    text += _LOGS
+    return text + (_KNOWLEDGE_OUTRO if knowledge else _PLAIN_OUTRO)
 
 
-#: The text with every built-in listed — what a session with every feature on
-#: is told.
-_BASE = _base(NAMED_TOOLS)
-
-
-def build_instructions(*, hidden_count: int, tools: Collection[str] | None = None) -> str:
+def build_instructions(
+    *,
+    hidden_count: int,
+    tools: Collection[str] | None = None,
+    memory_root: str | None = None,
+) -> str:
     """Build the per-session instructions text.
 
     ``tools`` is the bare names of the built-ins the session's tool list
     carries right now (``coffer__search_tools`` is always among them, being
     the gateway's own); ``None`` means all of them. The text names only those,
     so a tool whose experimental feature is switched off is never advertised.
+    ``memory_root`` is the absolute memory root while the memory feature is
+    on, and ``None`` while it is off — when the text does not name it.
 
     ``hidden_count`` is the number of upstream tools the last ``tools/list``
     left unlisted. At 0 nothing is hidden, so the tiering paragraph is omitted
@@ -134,23 +145,31 @@ def build_instructions(*, hidden_count: int, tools: Collection[str] | None = Non
     the cap is met: truncating here would drop the tail of a sentence into the
     client's system prompt and say nothing about it, so the text is written to
     fit and a contract test asserts that it does, at both a 0 and an
-    implausibly large ``hidden_count``.
+    implausibly large ``hidden_count``, with a long memory root.
     """
-    text = _BASE if tools is None else _base({*tools, "search_tools"})
-    if hidden_count > 0:
-        text += _TIERED.format(n=hidden_count)
+    named = NAMED_TOOLS if tools is None else {*tools, "search_tools"}
+    tiered = _TIERED.format(n=hidden_count) if hidden_count > 0 else ""
+    memory_line = _MEMORY.format(root=memory_root) if memory_root else ""
+    text = _base(named, memory_line) + tiered
+    if memory_root and len(text) > MAX_INSTRUCTIONS_CHARS:
+        text = _base(named, _MEMORY_BY_COMMAND) + tiered
     return text[:MAX_INSTRUCTIONS_CHARS]
 
 
 def build_initialize_result(
-    *, hidden_count: int, tools: Collection[str] | None = None
+    *,
+    hidden_count: int,
+    tools: Collection[str] | None = None,
+    memory_root: str | None = None,
 ) -> dict[str, Any]:
-    """The ``initialize`` response body. ``tools`` as for :func:`build_instructions`."""
+    """The ``initialize`` response body. Arguments as for :func:`build_instructions`."""
     return {
         "protocolVersion": PROTOCOL_VERSION,
         "capabilities": SERVER_CAPABILITIES,
         "serverInfo": {"name": "coffer", "version": "0.1.0"},
-        "instructions": build_instructions(hidden_count=hidden_count, tools=tools),
+        "instructions": build_instructions(
+            hidden_count=hidden_count, tools=tools, memory_root=memory_root
+        ),
     }
 
 

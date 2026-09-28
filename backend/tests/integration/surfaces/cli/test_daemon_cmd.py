@@ -1,10 +1,11 @@
-"""`coffer daemon port` + the port pre-flight in `coffer daemon start`.
+"""The `daemon.port` setting's restart hints, the port pre-flight in
+`coffer daemon start`, and `coffer daemon service`.
 
 Every test runs under a throwaway ``HOME`` so nothing here can read or write
 the developer's real ``~/.coffer``. These deliberately exercise the
 no-daemon-running path: that is the state a taken port causes, and — now that
-this CLI group is the only surface for the setting — the state the whole
-sub-group has to remain usable in.
+`coffer config`'s `daemon.port` is the only surface for the setting — the
+state that key has to remain usable in.
 
 The default port is stood in for by a monkeypatched ``DEFAULT_PORT`` wherever a
 test needs to hold it, because the developer's own daemon is usually on the
@@ -22,10 +23,10 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
+from coffer.infrastructure.daemon import bootstrap
 from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon import spawn as _spawn
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
-from coffer.surfaces.cli import daemon_port_cmd
 from coffer.surfaces.cli.main import app
 
 runner = CliRunner()
@@ -44,78 +45,23 @@ def _config(home: Path) -> dict[str, Any]:
     return json.loads((home / ".coffer" / "daemon-config.json").read_text())  # type: ignore[no-any-return]
 
 
-def test_port_set_then_show_round_trips_without_a_daemon(home: Path) -> None:
-    res = runner.invoke(app, ["daemon", "port", "set", "8123"])
-    assert res.exit_code == 0, res.output
-    assert "8123" in res.output
-    assert "daemon not running" in res.output
-    assert _config(home)["port"] == 8123
-
-    res = runner.invoke(app, ["daemon", "port", "show", "--json"])
-    assert res.exit_code == 0, res.output
-    payload = json.loads(res.stdout)
-    assert payload == {
-        "configured_port": 8123,
-        "effective_port": None,
-        "daemon_running": False,
-        "config_readable": True,
-    }
-
-    res = runner.invoke(app, ["daemon", "port", "show"])
-    assert res.exit_code == 0, res.output
-    assert "8123" in res.output
-    assert "not running" in res.output
-
-
-def test_port_clear_returns_to_the_default(home: Path) -> None:
-    """Clearing names the port it goes back to.
-
-    "cleared" on its own used to mean "automatic", and saying only that now
-    would leave the user with no idea which address to open.
-    """
-    assert runner.invoke(app, ["daemon", "port", "set", "8123"]).exit_code == 0
-
-    res = runner.invoke(app, ["daemon", "port", "clear"])
-    assert res.exit_code == 0, res.output
-    assert str(daemon_config.DEFAULT_PORT) in res.output
-    assert "automatic" not in res.output
-    assert _config(home)["port"] is None
-
-    payload = json.loads(runner.invoke(app, ["daemon", "port", "show", "--json"]).stdout)
-    assert payload["configured_port"] is None
-
-
-def test_port_show_reports_the_default_when_nothing_is_configured(home: Path) -> None:
-    """An unconfigured vault has an address, and `show` is where it is read."""
-    res = runner.invoke(app, ["daemon", "port", "show"])
-    assert res.exit_code == 0, res.output
-    assert f"default ({daemon_config.DEFAULT_PORT})" in res.output
-    assert "automatic" not in res.output
-    assert not (home / ".coffer" / "daemon-config.json").exists()
-
-
-def test_port_show_flags_a_config_file_it_cannot_read(home: Path) -> None:
+def test_an_unreadable_config_file_is_reported_where_the_user_can_act(home: Path) -> None:
     """A hand-mangled config is reported where the user can act on it — the
     daemon itself only warns into a log and falls back to the default port."""
     (home / ".coffer" / "daemon-config.json").write_text("{not json")
 
-    res = runner.invoke(app, ["daemon", "port", "show"])
+    res = runner.invoke(app, ["config", "get", "daemon.port"])
     assert res.exit_code == 0, res.output
+    assert str(daemon_config.DEFAULT_PORT) in res.output
     assert "could not be read" in res.output
-    assert json.loads(runner.invoke(app, ["daemon", "port", "show", "--json"]).stdout) == {
-        "configured_port": None,
-        "effective_port": None,
-        "daemon_running": False,
-        "config_readable": False,
-    }
 
 
-@pytest.mark.parametrize("bad", ["80", "70000", "0"])
-def test_port_set_rejects_an_unbindable_port_and_writes_nothing(home: Path, bad: str) -> None:
-    res = runner.invoke(app, ["daemon", "port", "set", bad])
-    assert res.exit_code != 0
-    assert "1024" in res.output and "65535" in res.output
-    assert not (home / ".coffer" / "daemon-config.json").exists()
+def test_daemon_port_and_features_are_not_daemon_subcommands(home: Path) -> None:
+    """The port and the feature switches are `coffer config` keys now."""
+    for group in ("port", "features"):
+        res = runner.invoke(app, ["daemon", group, "--help"])
+        assert res.exit_code != 0
+        assert "No such command" in res.output
 
 
 def _squat_a_port() -> socket.socket:
@@ -134,7 +80,7 @@ def test_start_refuses_when_the_configured_port_is_held(
     squatter = _squat_a_port()
     port = squatter.getsockname()[1]
     try:
-        assert runner.invoke(app, ["daemon", "port", "set", str(port)]).exit_code == 0
+        assert runner.invoke(app, ["config", "set", "daemon.port", str(port)]).exit_code == 0
 
         def _must_not_spawn(*args: Any, **kwargs: Any) -> None:
             raise AssertionError("start must not spawn a daemon onto a held port")
@@ -147,7 +93,7 @@ def test_start_refuses_when_the_configured_port_is_held(
 
     assert res.exit_code != 0
     assert str(port) in res.output
-    assert "coffer daemon port set" in res.output
+    assert "coffer config set daemon.port" in res.output
     assert not (home / ".coffer" / "daemon.json").exists()
 
 
@@ -178,10 +124,10 @@ def test_start_refuses_when_the_default_port_is_held_and_nothing_is_configured(
 
     assert res.exit_code != 0
     assert str(daemon_config.DEFAULT_PORT) in res.output
-    # Nothing is configured, so `clear` would change nothing and must not be
+    # Nothing is configured, so `unset` would change nothing and must not be
     # offered; moving off the default is the way out this user has.
-    assert "coffer daemon port set" in res.output
-    assert "coffer daemon port clear" not in res.output
+    assert "coffer config set daemon.port" in res.output
+    assert "coffer config unset daemon.port" not in res.output
     assert not (home / ".coffer" / "daemon.json").exists()
 
 
@@ -224,7 +170,7 @@ def _live(monkeypatch: pytest.MonkeyPatch, port: int) -> DaemonInfo:
         started_at=datetime.now(tz=UTC),
         binary_path="/test",
     )
-    monkeypatch.setattr(daemon_port_cmd.bootstrap, "live_daemon", lambda: info)
+    monkeypatch.setattr(bootstrap, "live_daemon", lambda: info)
     return info
 
 
@@ -240,7 +186,7 @@ def test_port_set_writes_the_file_even_with_a_daemon_running(
     """
     _live(monkeypatch, 8000)
 
-    res = runner.invoke(app, ["daemon", "port", "set", "8123"])
+    res = runner.invoke(app, ["config", "set", "daemon.port", "8123"])
     assert res.exit_code == 0, res.output
     assert _config(home)["port"] == 8123
     # The daemon owns its bound socket and cannot move, so the user is told
@@ -259,7 +205,7 @@ def test_port_set_to_the_port_already_served_asks_for_no_restart(
     """
     _live(monkeypatch, 8123)
 
-    res = runner.invoke(app, ["daemon", "port", "set", "8123"])
+    res = runner.invoke(app, ["config", "set", "daemon.port", "8123"])
     assert res.exit_code == 0, res.output
     assert _config(home)["port"] == 8123
     assert "coffer daemon restart" not in res.output
@@ -274,10 +220,10 @@ def test_port_clear_with_a_daemon_on_the_default_asks_for_no_restart(
     configured?" rather than "will the next start bind what this one did", so
     clearing always read as a no-op even when it moved the daemon.
     """
-    assert runner.invoke(app, ["daemon", "port", "set", "8123"]).exit_code == 0
+    assert runner.invoke(app, ["config", "set", "daemon.port", "8123"]).exit_code == 0
     _live(monkeypatch, daemon_config.DEFAULT_PORT)
 
-    res = runner.invoke(app, ["daemon", "port", "clear"])
+    res = runner.invoke(app, ["config", "unset", "daemon.port"])
     assert res.exit_code == 0, res.output
     assert _config(home)["port"] is None
     assert "coffer daemon restart" not in res.output
@@ -288,28 +234,12 @@ def test_port_clear_away_from_a_daemon_on_a_chosen_port_asks_for_a_restart(
 ) -> None:
     """The mirror image: the running daemon is on the port being cleared, so
     the next start moves it back to the default and the user must be told."""
-    assert runner.invoke(app, ["daemon", "port", "set", "8123"]).exit_code == 0
+    assert runner.invoke(app, ["config", "set", "daemon.port", "8123"]).exit_code == 0
     _live(monkeypatch, 8123)
 
-    res = runner.invoke(app, ["daemon", "port", "clear"])
+    res = runner.invoke(app, ["config", "unset", "daemon.port"])
     assert res.exit_code == 0, res.output
     assert _config(home)["port"] is None
-    assert "coffer daemon restart" in res.output
-
-
-def test_port_show_reports_the_port_the_daemon_is_actually_on(
-    home: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    assert runner.invoke(app, ["daemon", "port", "set", "8123"]).exit_code == 0
-    _live(monkeypatch, 8000)
-
-    payload = json.loads(runner.invoke(app, ["daemon", "port", "show", "--json"]).stdout)
-    assert payload["configured_port"] == 8123
-    assert payload["effective_port"] == 8000
-    assert payload["daemon_running"] is True
-
-    res = runner.invoke(app, ["daemon", "port", "show"])
-    assert "running on 8000" in res.output
     assert "coffer daemon restart" in res.output
 
 
@@ -407,7 +337,7 @@ def test_an_idle_window_left_in_the_config_is_ignored_and_dropped(
     assert "daemon-orphan-evictor" in watchers
     assert not any("idle" in name for name in watchers), watchers
 
-    res = runner.invoke(app, ["daemon", "port", "set", "8200"])
+    res = runner.invoke(app, ["config", "set", "daemon.port", "8200"])
     assert res.exit_code == 0, res.output
 
     written = _config(home)

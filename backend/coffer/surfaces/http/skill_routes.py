@@ -60,7 +60,12 @@ class SkillOut(BaseModel):
     # Identity first, label second — ``/api/v1/skills/{uid}`` is what every
     # other route here takes (ADR resource-identity-is-an-immutable-uid).
     uid: str
+    #: Fixed once registered: the master folder, the delivered links and the
+    #: SKILL.md ``name:`` all carry it (409 NAME_IMMUTABLE on a change).
     name: str
+    #: Display text shown in place of ``name``; set through
+    #: ``PATCH /api/v1/resources/{uid}``. Null = none.
+    title: str | None = None
     description: str
     source: dict[str, Any]
     # Coffer's own: the folder is rewritten from the running build at every
@@ -177,6 +182,7 @@ async def _to_skill_out(
     return SkillOut(
         uid=r.uid,
         name=r.name,
+        title=r.title,
         description=cfg.skill_md_description,
         source=cfg.source.model_dump(mode="json"),
         builtin=is_builtin(r.config),

@@ -42,9 +42,9 @@ def test_no_built_in_tool_declares_an_agent_property(tmp_path, monkeypatch) -> N
         assert r.status_code == 200
         builtins = [t for t in r.json()["result"]["tools"] if t["name"].startswith("coffer__")]
 
-    # The composition root wires several kinds' tools; an empty list would
+    # Both built-ins are listed (every feature is on); an empty list would
     # assert nothing.
-    assert len(builtins) >= 3, [t["name"] for t in builtins]
+    assert {t["name"] for t in builtins} == {"coffer__search_tools", "coffer__write"}
     offenders = [
         t["name"]
         for t in builtins

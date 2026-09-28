@@ -25,9 +25,9 @@ The registry is assembled here exactly as ``test_initialize_instructions``
 assembles it, deliberately by hand rather than through the composition root:
 the root needs a database, a daemon and real services, and a gate that cannot
 run without them is a gate that gets skipped. The cost is that a registrar
-added to the root must be added here too — which is precisely the omission
-that let ``coffer__recall`` go unadvertised, so the assembly is spelled out
-below rather than hidden behind a helper.
+added to the root must be added here too — an omission once let a tool go
+unadvertised, so the assembly is spelled out below rather than hidden behind a
+helper.
 """
 
 from __future__ import annotations
@@ -47,23 +47,12 @@ _TOOL_TOKEN = re.compile(r"coffer__[a-z_]+")
 def _registered_tool_names() -> set[str]:
     """The bare names the gateway will actually answer."""
     from coffer.application.builtin_tools import BuiltinToolRegistry
-    from coffer.application.diagnostics import register_diagnostics_builtin_tools
     from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
-    from coffer.application.memory.builtin_recall_tool import register_recall_tool
 
     registry = BuiltinToolRegistry()
     register_knowledge_builtin_tools(
         registry,
         knowledge_service=None,  # type: ignore[arg-type]
-    )
-    register_diagnostics_builtin_tools(
-        registry,
-        audit_repo=None,  # type: ignore[arg-type]
-        log_path=lambda: pathlib.Path("daemon.log"),
-    )
-    register_recall_tool(
-        registry,
-        recall_service=None,  # type: ignore[arg-type]
     )
     # ``search_tools`` is answered by the gateway itself rather than out of the
     # registry, so it is the one name legitimately absent from it.
@@ -148,10 +137,9 @@ def test_static_asset_names_only_tools_that_exist() -> None:
 def test_rendered_skill_names_every_tool_that_exists() -> None:
     """And the other direction: a tool nobody is told about may as well not exist.
 
-    Coffer has exactly four built-ins and the skill is the one manual every
+    Coffer has exactly two built-ins and the skill is the one manual every
     agent gets, so "some subset" is not good enough — a tool added to the
-    registry and left out of the manual is invisible in practice, which is the
-    state ``coffer__recall`` was in.
+    registry and left out of the manual is invisible in practice.
     """
     rendered = guide_render.render("~/.coffer/knowledge", _catalogue())
     named = set(_TOOL_TOKEN.findall(rendered))

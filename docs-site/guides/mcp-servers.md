@@ -149,9 +149,9 @@ The **Add MCP server** paste dialog reads an HTTP server's (`"url": …`) `heade
 
 ## Server names
 
-A server name is a label of letters, digits, `.`, `_` and `-`, at most 64 characters, unique among MCP servers. It may not contain `__`, because the gateway splits `<server>__<tool>` on the first `__`. Avoid `coffer`, the prefix of Coffer's own tools.
+A server name is a label of letters, digits, `.`, `_` and `-`, at most 24 characters, unique among MCP servers. The cap keeps the name a client shows for each tool, `mcp__coffer__<server>__<tool>`, within the 64 characters model provider APIs accept; a server registered before the cap keeps its longer name. It may not contain `__`, because the gateway splits `<server>__<tool>` on the first `__`. Avoid `coffer`, the prefix of Coffer's own tools.
 
-The name can be changed later (`coffer resource rename mcp_server <old> <new>`); the server keeps its `uid`, reach, capability preferences and credentials. Agents see the new prefix on their next tool listing.
+The name is fixed once the server is registered, because it prefixes every tool name an agent sees and agents' permission rules and skills quote those names. A request to change it is refused with `NAME_IMMUTABLE`. To change what Coffer's own pages show, set the server's title instead. To use a different name, delete the server and register it again, which resets its capability toggles and its reach.
 
 ## Edit, test, refresh and delete
 

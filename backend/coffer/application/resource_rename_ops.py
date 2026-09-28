@@ -6,8 +6,9 @@ takes the ``ResourceService`` instance and reaches into its (private)
 attributes, conceptually private to the service.
 
 A rename is one column. What lives here is not the write but everything that
-has to be true around it — the two name rules, the collision check, and the one
-hook a kind gets when its name is also a directory.
+has to be true around it — the refusal for a kind whose name is fixed, the two
+name rules, the collision check, and the one hook a kind gets when its name is
+also a directory.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from coffer.application.resource_kind_ops import check_name
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import ResourceAlreadyExists
+from coffer.domain.errors import NameImmutable, ResourceAlreadyExists
 from coffer.domain.resource import Kind, Resource
 
 if TYPE_CHECKING:
@@ -31,6 +32,19 @@ async def _fire(kind_def: Kind, resource: Resource, new_name: str) -> None:
     result = kind_def.on_rename(resource, new_name)
     if inspect.isawaitable(result):
         await result
+
+
+def refuse_fixed_name(kind_def: Kind, resource: Resource, new_name: str) -> None:
+    """Raise ``NameImmutable`` when ``new_name`` would change a fixed name.
+
+    Public so the update route can ask it BEFORE any other field of the same
+    request is written: a PATCH that carried a config edit beside a refused
+    rename must leave the config alone too, or the refusal would not be the
+    "nothing moved" the conflict promises. The same name, or a kind whose name
+    is not fixed, passes.
+    """
+    if kind_def.name_fixed and new_name != resource.name:
+        raise NameImmutable(resource.kind, resource.name, kind_def.name_fixed_resets)
 
 
 async def rename(
@@ -46,6 +60,10 @@ async def rename(
         # litter the trail with renames that renamed nothing.
         return before
     kind_def = service._require_kind(before.kind)
+    # First, before the name rules and the collision check: a fixed name is
+    # refused whatever it would have been changed to, and before any hook runs
+    # or anything is written or audited.
+    refuse_fixed_name(kind_def, before, new_name)
     check_name(kind_def, new_name)
     # Checked explicitly, before any write, so a collision is a clean 409 that
     # has moved nothing — neither the row nor a kind's directory. The

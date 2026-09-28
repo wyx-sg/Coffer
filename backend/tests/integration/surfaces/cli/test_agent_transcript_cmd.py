@@ -1,10 +1,14 @@
-"""Integration tests for `coffer agent transcripts`.
+"""Integration tests for `coffer agent transcript <name> [<id>]`.
 
 Spec agent-registry "Expose every agent operation through REST, CLI and the Agents page"
 requires every agent-workspace op to exist on BOTH REST and CLI;
-this verb wraps the one read-only route:
+this verb wraps the two read-only routes:
 
-  ``GET /agents/{uid}/transcripts`` → ``transcripts``
+  ``GET /agents/{uid}/transcripts``          → ``transcript <name>``
+  ``GET /agents/{uid}/transcripts/session``  → ``transcript <name> <id>``
+
+The listing tests stub the HTTP layer (below); the one-session read runs
+against the real app, over transcript files written into ``tmp_path``.
 
 The verb still TAKES a name; the route is addressed by uid
 (ADR resource-identity-is-an-immutable-uid). So every invocation is now two
@@ -23,15 +27,24 @@ developer's real ``~/.claude`` / ``~/.codex`` transcripts.
 from __future__ import annotations
 
 import json
+import pathlib
+from collections.abc import Iterator
 from datetime import UTC
 from datetime import datetime as dt
 from typing import Any
 
+import pytest
+from starlette.testclient import TestClient
 from typer.testing import CliRunner
 
 import coffer.surfaces.cli._client as _cli_client
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.surfaces.cli.main import app as cli_app
+from tests.integration.surfaces.http.test_agent_transcript_routes import (
+    _write_codex_session as write_codex_session,
+)
+
+from ._real_app import boot, extract_json
 
 _runner = CliRunner()
 
@@ -98,7 +111,7 @@ class _FakeClient:
         self.calls.append(("GET", path, kw))
         if path == "/resources":
             return self._resolve(kw.get("params") or {})
-        return self._get_map[path]
+        return self._get_map.get(path, _FakeResponse(404, {"error": {"message": "not found"}}))
 
     def _resolve(self, params: dict[str, Any]) -> _FakeResponse:
         """The name → uid lookup, shaped exactly like the real list route."""
@@ -136,11 +149,11 @@ def _page(sessions: list[dict[str, Any]], total: int | None = None) -> _FakeResp
     )
 
 
-def test_transcripts_json(monkeypatch):
+def test_transcript_list_json(monkeypatch):
     """`transcripts <name> --json` prints the raw response verbatim."""
     _install(monkeypatch, get_map={f"/agents/{CX_UID}/transcripts": _page([SESSION], total=3)})
 
-    result = _runner.invoke(cli_app, ["agent", "transcripts", "cx", "--json"])
+    result = _runner.invoke(cli_app, ["agent", "transcript", "cx", "--json"])
     assert result.exit_code == 0, result.output
     assert json.loads(result.output) == {
         "sessions": [SESSION],
@@ -150,32 +163,32 @@ def test_transcripts_json(monkeypatch):
     }
 
 
-def test_transcripts_table(monkeypatch):
+def test_transcript_list_table(monkeypatch):
     """`transcripts <name>` renders title, project, count, and short times."""
     monkeypatch.setenv("COLUMNS", "200")  # don't let rich wrap the assertions apart
     _install(monkeypatch, get_map={f"/agents/{CX_UID}/transcripts": _page([SESSION], total=3)})
 
-    result = _runner.invoke(cli_app, ["agent", "transcripts", "cx"])
+    result = _runner.invoke(cli_app, ["agent", "transcript", "cx"])
     assert result.exit_code == 0, result.output
     assert "fix the alpha login bug" in result.output
     assert "/proj/alpha" in result.output
     assert "12" in result.output
-    assert "2026-05-01 09:30" in result.output  # seconds trimmed for the table
+    assert "2026-05-09 18:05" in result.output  # seconds trimmed for the table
     assert "1 of 3" in result.output  # page size vs matched total
 
 
-def test_transcripts_untitled_row_falls_back_to_session_id(monkeypatch):
+def test_transcript_list_untitled_row_falls_back_to_session_id(monkeypatch):
     """A session the agent never titled still identifies itself in the table."""
     monkeypatch.setenv("COLUMNS", "200")
     untitled = {**SESSION, "title": None, "started_at": None, "last_activity_at": None}
     _install(monkeypatch, get_map={f"/agents/{CX_UID}/transcripts": _page([untitled])})
 
-    result = _runner.invoke(cli_app, ["agent", "transcripts", "cx"])
+    result = _runner.invoke(cli_app, ["agent", "transcript", "cx"])
     assert result.exit_code == 0, result.output
     assert "a1" in result.output
 
 
-def test_transcripts_forwards_query_sort_and_paging(monkeypatch):
+def test_transcript_list_forwards_query_sort_and_paging(monkeypatch):
     """Search/sort/paging options travel as query params, not client-side.
 
     The recorded calls also pin the two-step shape: the name is resolved first,
@@ -189,7 +202,7 @@ def test_transcripts_forwards_query_sort_and_paging(monkeypatch):
         cli_app,
         [
             "agent",
-            "transcripts",
+            "transcript",
             "cx",
             "-q",
             "alpha",
@@ -222,7 +235,7 @@ def test_transcripts_forwards_query_sort_and_paging(monkeypatch):
     ]
 
 
-def test_transcripts_unknown_agent_exits_4(monkeypatch):
+def test_transcript_list_unknown_agent_exits_4(monkeypatch):
     """A name nobody holds exits 4 before any transcript route is touched.
 
     The exit code is unchanged, but the refusal moved: it used to be a 404 from
@@ -233,13 +246,66 @@ def test_transcripts_unknown_agent_exits_4(monkeypatch):
     """
     client = _install(monkeypatch, agents={})
 
-    result = _runner.invoke(cli_app, ["agent", "transcripts", "ghost"])
+    result = _runner.invoke(cli_app, ["agent", "transcript", "ghost"])
     assert result.exit_code == 4, result.output
     assert "no agent named 'ghost'" in result.output
-    assert client.calls == [("GET", "/resources", {"params": {"kind": "agent", "name": "ghost"}})]
+    assert client.calls[0] == ("GET", "/resources", {"params": {"kind": "agent", "name": "ghost"}})
+    assert all("/transcripts" not in call[1] for call in client.calls)
 
 
-def test_transcripts_is_registered():
-    """The read verb appears under `coffer agent` (CLI/REST parity)."""
-    help_out = _runner.invoke(cli_app, ["agent", "--help"]).output
-    assert "transcripts" in help_out
+def test_transcript_listing_options_refused_with_an_id(monkeypatch):
+    _install(monkeypatch)
+    result = _runner.invoke(cli_app, ["agent", "transcript", "cx", "a1", "-q", "alpha"])
+    assert result.exit_code == 2, result.output
+
+
+# ---------------------------------------------------------------------------
+# one session, against the real app
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def daemon(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+    yield from boot(tmp_path, monkeypatch)
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="the command line reads one transcript session"
+)
+def test_the_command_line_reads_one_transcript_session(
+    daemon: TestClient, tmp_path: pathlib.Path
+) -> None:
+    codex = tmp_path / ".codex"
+    codex.mkdir()
+    (codex / "config.toml").write_text("", encoding="utf-8")
+    sessions = codex / "sessions" / "2026" / "05"
+    write_codex_session(
+        sessions,
+        sid="s1",
+        cwd="/proj/secret",
+        ts_start="2026-05-04T00:00:00Z",
+        ts_end="2026-05-04T00:01:00Z",
+        user_text="deploy with sk-abcdefghijklmnopqrstuvwx please",
+    )
+    added = _runner.invoke(cli_app, ["agent", "add", "codex", "--name", "cx"])
+    assert added.exit_code == 0, added.output
+
+    listed = _runner.invoke(cli_app, ["agent", "transcript", "cx", "--json"])
+    assert listed.exit_code == 0, listed.output
+    assert [s["session_id"] for s in extract_json(listed.output)["sessions"]] == ["s1"]
+
+    one = _runner.invoke(cli_app, ["agent", "transcript", "cx", "s1", "--limit", "1", "--json"])
+    assert one.exit_code == 0, one.output
+    body = extract_json(one.output)
+    assert len(body["messages"]) == 1 and body["message_count"] == 2
+    assert "sk-abcdefghijklmnopqrstuvwx" not in one.output
+    assert "[redacted]" in body["messages"][0]["text"]
+
+    text = _runner.invoke(cli_app, ["agent", "transcript", "cx", "s1"], env={"COLUMNS": "200"})
+    assert text.exit_code == 0, text.output
+    assert "of 2" in text.output
+    assert "sk-abcdefghijklmnopqrstuvwx" not in text.output
+
+    missing = _runner.invoke(cli_app, ["agent", "transcript", "cx", "no-such-session"])
+    assert missing.exit_code != 0
+    assert "no such transcript for this agent" in (missing.output + (missing.stderr or ""))

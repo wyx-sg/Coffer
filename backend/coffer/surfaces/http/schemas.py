@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from coffer.domain.resource import TITLE_MAX_LEN
 from coffer.domain.scope import Scope
 
 # --- Error envelope ---
@@ -64,8 +65,11 @@ class ResourceOut(BaseModel):
     #: holding this resource — every route that addresses one takes this.
     uid: str = Field(examples=["9f2c1a7b4e8d4c1fa0b3d5e6f7081920"])
     kind: str
-    #: A mutable label, unique within ``kind``. Editable through PATCH.
+    #: A label, unique within ``kind``. Editable through PATCH unless the kind
+    #: declares its name fixed (``mcp_server``, ``skill``): 409 NAME_IMMUTABLE.
     name: str
+    #: Optional display text surfaces show in place of ``name``; null = none.
+    title: str | None = None
     description: str | None = None
     config: dict[str, Any]
     # Framework-level activation scope (ADR per-agent-resource-scope). None =
@@ -80,16 +84,21 @@ class ResourceOut(BaseModel):
 class ResourceCreate(BaseModel):
     kind: str
     name: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.\-]+$")
+    title: str | None = Field(default=None, max_length=TITLE_MAX_LEN)
     description: str | None = None
     config: dict[str, Any]
 
 
 class ResourceUpdate(BaseModel):
     #: Renaming is a field, not an operation. Absent means "leave the label
-    #: alone"; a value already taken within the kind is a 409.
+    #: alone"; a value already taken within the kind is a 409, and so is any
+    #: change to a fixed name (NAME_IMMUTABLE).
     name: str | None = Field(
         default=None, min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.\-]+$"
     )
+    #: Display text, on every kind. Absent leaves it alone; "" or null clears
+    #: it; longer than 80 characters is a validation error.
+    title: str | None = Field(default=None, max_length=TITLE_MAX_LEN)
     description: str | None = None
     config: dict[str, Any] | None = None
 
@@ -195,6 +204,9 @@ class MCPToolView(BaseModel):
     description: str | None = None
     input_schema: dict[str, Any] = Field(default_factory=dict)
     enabled: bool
+    #: len("mcp__coffer__<prefixed_name>"); over 64 is past the provider API
+    #: limit (spec mcp-gateway "Flag tools whose client-visible name is too long").
+    client_name_length: int
 
 
 class MCPResourceView(BaseModel):
@@ -218,6 +230,7 @@ class MCPPromptView(BaseModel):
     description: str | None = None
     arguments: list[_MCPPromptArgument] = Field(default_factory=list)
     enabled: bool
+    client_name_length: int  # as on a tool
 
 
 class CapabilityListOut(BaseModel):

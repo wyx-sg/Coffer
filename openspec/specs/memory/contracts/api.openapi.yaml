@@ -28,7 +28,7 @@ info:
     and no other partitioning axis exists ("Partition by repository plus
     global"). Partitions are created by aggregation, never by a client and never
     by an agent's working directory — so there is no `POST /partitions` on this
-    surface ("Create partitions only by aggregation").
+    surface ("Provision partitions only from aggregation").
 
     A partition is named by a readable slug from its repository, never an opaque
     id, and both the repository's identity and its absolute path travel on

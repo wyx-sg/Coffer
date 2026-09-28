@@ -54,6 +54,7 @@ give the status each code is actually sent with.
 | `RESOURCE_ALREADY_EXISTS` | 409 | A resource of that kind already has that name. | Pick another name, or edit the existing resource. |
 | `UNKNOWN_KIND` | 400 | The kind is not one this daemon registers. | Use a kind from `coffer resource list`, such as `mcp_server`, `skill` or `agent`. |
 | `GENERIC_CREATE_NOT_ALLOWED` | 409 | This kind cannot be created or updated through the generic `/resources` endpoints. | Use the kind's own endpoint or command (for example `coffer agent add`, `coffer provider add`). |
+| `NAME_IMMUTABLE` | 409 | The resource's kind fixes its name once registered, because agents quote it: an MCP server's name prefixes its tool names, and a skill's name is its folder. The message names what a re-registration resets. | Set a title to change what is shown, or delete the resource and register it again under the new name. |
 | `SCOPE_INVALID` | 422 | A reach (activation scope) payload is invalid, or the kind has no reach. | Send an agent allow-list, or use `coffer scope set` on a kind that supports it. See [reach](/architecture/resource-framework#reach). |
 | `RESOURCE_PROTECTED` | 409 | The resource is managed by Coffer itself (for example a skill Coffer generates) and cannot be taken over or deleted. | Leave it; Coffer maintains it. |
 | `UPKEEP_ALREADY_RUNNING` | 409 | An upkeep pass (memory organising, knowledge curation) is already running for this target. | Wait for the running pass; the UI shows it. |

@@ -76,7 +76,7 @@ def machine_rename(ctx: typer.Context, name: str = typer.Argument(...)) -> None:
     _console.print(f"[green]renamed[/green] to {payload['name']}")
 
 
-@machine_app.command("remove")
+@machine_app.command("rm")
 def machine_remove(ctx: typer.Context, machine_id: str = typer.Argument(...)) -> None:
     """Remove a retired machine's descriptor from the registry."""
     verbose = _verbose(ctx)

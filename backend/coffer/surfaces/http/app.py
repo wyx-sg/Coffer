@@ -37,11 +37,9 @@ from coffer.application.audit_service import AuditService
 from coffer.application.binary_deploy import deploy_frozen_sidecars
 from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.channel.kind import make_channel_kind
-from coffer.application.diagnostics import register_diagnostics_builtin_tools
 from coffer.application.resource_service import ResourceService
 from coffer.domain.resource import Kind
 from coffer.infrastructure.daemon.orphan_sweep import startup_sweep
-from coffer.infrastructure.logging.files import log_dir
 from coffer.infrastructure.logging.setup import configure_logging
 from coffer.infrastructure.persistence.engine import (
     create_async_engine_with_pragmas,
@@ -191,22 +189,6 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # nor found (spec experimental-features).
     features = app.state.feature_service
     builtin_tools = BuiltinToolRegistry(feature_enabled=features.is_enabled)
-
-    # Coffer's own history, read by the agent debugging Coffer: the audit log
-    # and the daemon log both lost their human reader, so the reader is the
-    # agent and the way in is a tool it already holds.
-    register_diagnostics_builtin_tools(
-        builtin_tools,
-        audit_repo=audit_repo,
-        log_path=lambda: log_dir() / "daemon.log",
-        # The tool's filter names a resource the way the agent asking knows it —
-        # a kind and a name. Resolving it here is what lets the query key on the
-        # resource's identity instead, so "what happened to X" answers with X's
-        # whole history rather than the slice that happened to carry its current
-        # label. Without this the tool refuses the filter rather than silently
-        # answering a different question.
-        find_resource=resource_svc.find_by_name,
-    )
 
     # Every resource kind, in dependency order (see kind_wiring).
     kinds = await wire_resource_kinds(

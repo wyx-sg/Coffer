@@ -133,7 +133,7 @@ def test_scan_lists_a_hand_placed_skill_and_not_a_managed_link(
 ) -> None:
     agent = _claude_code(daemon)
     managed = _skill_folder(tmp_path / "src", "managed-one")
-    assert _run("skill", "import", str(managed)).exit_code == 0
+    assert _run("skill", "add", str(managed)).exit_code == 0
     skills_dir = tmp_path / ".claude" / "skills"
     assert (skills_dir / "managed-one").is_symlink() or (skills_dir / "managed-one").exists()
     loose = _skill_folder(skills_dir, "loose-one")
@@ -171,6 +171,12 @@ def test_scan_adopt_and_discard_unmanaged_skills(
     assert discarded.exit_code == 0, discarded.output
     assert not junk.exists()
     assert [r for r in _rows("--agent", agent) if r["kind"] == "skill"] == []
+
+    import typer.main
+
+    groups = typer.main.get_command(cli_app).commands  # type: ignore[attr-defined]
+    for group in ("skill", "agent"):
+        assert not {"unmanaged", "adopt", "rm-unmanaged"} & set(groups[group].commands), group
 
 
 # --- mcp rows ------------------------------------------------------------------------------

@@ -57,7 +57,7 @@ Architecture: [Resource framework](/architecture/resource-framework).
 
 ## uid and name
 
-Each resource has an immutable **uid**: an opaque 32-character hex string, created once, never reused, and identical on every machine that holds the resource. Its **name** is a label you can change. Names are unique within a kind and are what you type in the CLI. Anything that must survive a rename refers to the uid. For example, the `--agent-uid` in an agent's MCP entry and the agent list in a resource's scope both store uids.
+Each resource has an immutable **uid**: an opaque 32-character hex string, created once, never reused, and identical on every machine that holds the resource. Its **name** is a label, unique within a kind, and it is what you type in the CLI. You can change it, except for an MCP server's or a skill's name, which is fixed because agents quote it. Any resource can also carry a **title**, up to 80 characters, that Coffer's pages show in place of the name. Anything that must survive a rename refers to the uid. For example, the `--agent-uid` in an agent's MCP entry and the agent list in a resource's scope both store uids.
 
 Architecture: [Resource framework](/architecture/resource-framework).
 

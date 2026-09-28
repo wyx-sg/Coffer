@@ -8,6 +8,16 @@ from __future__ import annotations
 
 from coffer.domain.errors import InvalidPrefix
 
+#: What Claude Code (and clients that follow it) put in front of a gateway tool
+#: name: ``mcp__<client-side server key>__``, the key being ``coffer``.
+CLIENT_PREFIX = "mcp__coffer__"
+
+
+def client_name_length(prefixed: str) -> int:
+    """Length of the name a client shows for ``prefixed`` (``<server>__<name>``):
+    ``mcp__coffer__<server>__<name>``. Provider APIs cap a tool name at 64."""
+    return len(CLIENT_PREFIX) + len(prefixed)
+
 
 def prefix_tool(server: str, tool: str) -> str:
     return f"{server}__{tool}"

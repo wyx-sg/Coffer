@@ -1,14 +1,18 @@
-"""`coffer mcp tool|resource|prompt ...` — capability curation sub-commands.
+"""``coffer mcp cap list|enable|disable`` — one server's tools, prompts and resources.
 
-Responsibility: enable/disable/list individual tool, resource, and prompt
-capabilities exposed by a registered MCP server.  Split from ``mcp.py`` to
-satisfy the project 400-line backend Python file-size limit.
+A capability is named on the command line by a typed ref — ``tool:<name>``,
+``prompt:<name>`` or ``resource:<uri>`` — so one command toggles any mix of
+them (spec mcp-gateway "Toggle individual capabilities"). Every ref is checked
+against what the server offers BEFORE anything is toggled: a ref that names
+nothing refuses the whole command with nothing changed.
 
-Like the rest of ``coffer mcp``, these take the server's NAME and resolve it to
-a uid once per command (ADR resource-identity-is-an-immutable-uid). The two
-helpers below each own one command's worth of HTTP, so each resolves exactly
-once — the ``with c:`` block they open is the command's whole conversation with
-the daemon.
+``cap list`` flags a tool whose client-visible name
+(``mcp__coffer__<server>__<tool>``) is longer than the 64 characters model
+provider APIs accept (spec mcp-gateway "Flag tools whose client-visible name is
+too long"). The flag only informs: the tool stays enabled and listed.
+
+Like the rest of ``coffer mcp``, these take the server's NAME and resolve it to a
+uid once per command (ADR resource-identity-is-an-immutable-uid).
 """
 
 from __future__ import annotations
@@ -16,194 +20,182 @@ from __future__ import annotations
 import json as _json
 from typing import Any
 
+import httpx
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._kind_verbs import verbose_of
 from coffer.surfaces.cli._resolve import resolve_uid
 
 _console = Console()
 
-tool_app = typer.Typer(help="Manage tool preferences")
-resource_app = typer.Typer(help="Manage resource preferences")
-prompt_app = typer.Typer(help="Manage prompt preferences")
+cap_app = typer.Typer(help="List and toggle a server's tools, prompts and resources")
+
+#: type → (the capabilities read's list key, the field that holds the key a ref names)
+_TYPES: dict[str, tuple[str, str]] = {
+    "tool": ("tools", "original_name"),
+    "prompt": ("prompts", "original_name"),
+    "resource": ("resources", "original_uri"),
+}
+#: Model provider APIs refuse a tool name longer than this.
+CLIENT_NAME_LIMIT = 64
+#: Some clients (Cursor) silently drop a tool whose name is longer than this.
+CLIENT_DROP_LIMIT = 60
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
+def _too_long(row: dict[str, Any]) -> bool | None:
+    """Over the provider limit; ``None`` when the daemon did not say (a row
+    type with no client-visible name, or a daemon that predates the field)."""
+    length = row.get("client_name_length")
+    return None if length is None else int(length) > CLIENT_NAME_LIMIT
 
 
-def _capabilities_for(name: str, *, verbose: bool = False) -> dict[str, list[dict[str, Any]]]:
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, "mcp_server", name, verbose=verbose)
-        r = c.get(f"/resources/mcp_server/{uid}/capabilities")
-        _cli_client.check(r, verbose=verbose)
+def _warning(length: int) -> str:
+    return (
+        f"client-visible name is {length} characters, over the {CLIENT_NAME_LIMIT} "
+        f"model provider APIs accept; some clients drop names above {CLIENT_DROP_LIMIT}"
+    )
+
+
+def _read(c: httpx.Client, uid: str, *, verbose: bool) -> dict[str, Any]:
+    r = c.get(f"/resources/mcp_server/{uid}/capabilities")
+    _cli_client.check(r, verbose=verbose)
     return r.json()  # type: ignore[no-any-return]
 
 
-def _render_capability_table(title: str, rows: list[dict[str, Any]], key_field: str) -> None:
-    table = Table(title=title)
-    table.add_column("Key")
-    table.add_column("Prefixed")
-    table.add_column("Enabled")
-    table.add_column("Description")
-    for r in rows:
-        table.add_row(
-            r[key_field],
-            r.get("prefixed_name") or r.get("prefixed_uri") or "",
-            str(r["enabled"]),
-            (r.get("description") or "")[:60],
+def _parse_ref(ref: str) -> tuple[str, str]:
+    type_, sep, key = ref.partition(":")
+    if not sep or type_ not in _TYPES or not key:
+        typer.echo(
+            f"a capability ref is tool:<name>, prompt:<name> or resource:<uri>, got {ref!r}",
+            err=True,
         )
-    _console.print(table)
+        raise typer.Exit(2)
+    return type_, key
 
 
-def _toggle(name: str, type_: str, key: str, *, enable: bool, verbose: bool = False) -> None:
+def _check_type(type_: str | None) -> list[str]:
+    if type_ is None:
+        return list(_TYPES)
+    if type_ not in _TYPES:
+        typer.echo(f"--type is one of {', '.join(_TYPES)}, got {type_!r}", err=True)
+        raise typer.Exit(2)
+    return [type_]
+
+
+@cap_app.command("list")
+def cap_list(
+    ctx: typer.Context,
+    server: str = typer.Argument(..., help="Server name"),
+    type_: str | None = typer.Option(None, "--type", help="tool | prompt | resource"),
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
+) -> None:
+    """List a server's capabilities, each with the ref that toggles it.
+
+    A tool whose client-visible name (mcp__coffer__<server>__<tool>) is over 64
+    characters is flagged; it stays enabled and listed.
+    """
+    verbose = verbose_of(ctx)
+    types = _check_type(type_)
     c, _info = _cli_client.client_or_exit()
-    op = "enable" if enable else "disable"
     with c:
-        # An unknown SERVER is caught here, by the resolve, and reported as
-        # such. The 404 below can therefore only mean the server exists but has
-        # no such capability — which is why the two are no longer one message.
-        uid = resolve_uid(c, "mcp_server", name, verbose=verbose)
-        # Send the capability key in the request body, not the URL
-        # path. Resource keys are URIs containing '/' (e.g. file:///etc/hosts);
-        # embedding them in the path never matches the single-segment legacy
-        # route and always 404s. The body route handles arbitrary keys.
-        r = c.post(
-            f"/resources/mcp_server/{uid}/capabilities/{type_}/{op}",
-            json={"capability_key": key},
+        uid = resolve_uid(c, "mcp_server", server, verbose=verbose)
+        caps = _read(c, uid, verbose=verbose)
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for t in types:
+        plural, key_field = _TYPES[t]
+        rows = []
+        for item in caps.get(plural) or []:
+            row = {**item, "ref": f"{t}:{item[key_field]}"}
+            if t != "resource":
+                row["name_too_long"] = _too_long(item)
+                if row["name_too_long"]:
+                    row["warning"] = _warning(int(item["client_name_length"]))
+            rows.append(row)
+        grouped[plural] = rows
+    if output_json:
+        typer.echo(_json.dumps(grouped, indent=2))
+        return
+    _render(server, grouped)
+
+
+def _render(server: str, grouped: dict[str, list[dict[str, Any]]]) -> None:
+    table = Table(title=f"{server} capabilities")
+    for col in ("Ref", "Enabled", "Name length", "Description"):
+        table.add_column(col)
+    flagged = 0
+    for rows in grouped.values():
+        for row in rows:
+            length = row.get("client_name_length")
+            shown = "—" if length is None else str(length)
+            if row.get("name_too_long"):
+                flagged += 1
+                shown += " !"
+            table.add_row(
+                row["ref"],
+                "yes" if row["enabled"] else "no",
+                shown,
+                (row.get("description") or "")[:60],
+            )
+    _console.print(table)
+    if flagged:
+        typer.echo(
+            f"! {flagged} with a client-visible name (mcp__coffer__{server}__<name>) over "
+            f"{CLIENT_NAME_LIMIT} characters: model provider APIs refuse such a name, and "
+            f"some clients drop names above {CLIENT_DROP_LIMIT}."
         )
-        if r.status_code == 404:
-            typer.echo(f"capability not found: {type_}:{key} on {name}", err=True)
+
+
+def _toggle(ctx: typer.Context, server: str, refs: list[str], *, enable: bool) -> None:
+    verbose = verbose_of(ctx)
+    op = "enable" if enable else "disable"
+    parsed = [_parse_ref(ref) for ref in refs]
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        uid = resolve_uid(c, "mcp_server", server, verbose=verbose)
+        caps = _read(c, uid, verbose=verbose)
+        offered = {
+            (t, item[key_field])
+            for t, (plural, key_field) in _TYPES.items()
+            for item in caps.get(plural) or []
+        }
+        missing = [f"{t}:{key}" for t, key in parsed if (t, key) not in offered]
+        if missing:
+            typer.echo(f"{server} offers no {', '.join(missing)} — nothing changed", err=True)
             raise typer.Exit(4)
-        _cli_client.check(r, verbose=verbose)
-    typer.echo(f"{op}d: {name} {type_}:{key}")
+        for t, key in parsed:
+            # The key travels in the body: a resource key is a URI with '/' in it.
+            r = c.post(
+                f"/resources/mcp_server/{uid}/capabilities/{t}/{op}",
+                json={"capability_key": key},
+            )
+            if r.status_code == 404:
+                typer.echo(f"capability not found: {t}:{key} on {server}", err=True)
+                raise typer.Exit(4)
+            _cli_client.check(r, verbose=verbose)
+            typer.echo(f"{op}d: {server} {t}:{key}")
 
 
-# ---------------------------------------------------------------------------
-# tool sub-commands
-# ---------------------------------------------------------------------------
+_REFS = typer.Argument(..., metavar="REF...", help="tool:<name> | prompt:<name> | resource:<uri>")
 
 
-@tool_app.command("list")
-def tool_list(
+@cap_app.command("enable")
+def cap_enable(
     ctx: typer.Context,
-    name: str = typer.Argument(...),
-    output_json: bool = typer.Option(False, "--json"),
+    server: str = typer.Argument(..., help="Server name"),
+    refs: list[str] = _REFS,
 ) -> None:
-    """List tools for an MCP server."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    caps = _capabilities_for(name, verbose=verbose)
-    if output_json:
-        typer.echo(_json.dumps({"tools": caps["tools"]}, indent=2))
-    else:
-        _render_capability_table(f"{name} tools", caps["tools"], "original_name")
+    """Enable capabilities, each named by a typed ref."""
+    _toggle(ctx, server, refs, enable=True)
 
 
-@tool_app.command("enable")
-def tool_enable(
+@cap_app.command("disable")
+def cap_disable(
     ctx: typer.Context,
-    name: str = typer.Argument(...),
-    tool_key: str = typer.Argument(...),
+    server: str = typer.Argument(..., help="Server name"),
+    refs: list[str] = _REFS,
 ) -> None:
-    """Enable a tool capability."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    _toggle(name, "tool", tool_key, enable=True, verbose=verbose)
-
-
-@tool_app.command("disable")
-def tool_disable(
-    ctx: typer.Context,
-    name: str = typer.Argument(...),
-    tool_key: str = typer.Argument(...),
-) -> None:
-    """Disable a tool capability."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    _toggle(name, "tool", tool_key, enable=False, verbose=verbose)
-
-
-# ---------------------------------------------------------------------------
-# resource sub-commands
-# ---------------------------------------------------------------------------
-
-
-@resource_app.command("list")
-def resource_list(
-    ctx: typer.Context,
-    name: str = typer.Argument(...),
-    output_json: bool = typer.Option(False, "--json"),
-) -> None:
-    """List resources for an MCP server."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    caps = _capabilities_for(name, verbose=verbose)
-    if output_json:
-        typer.echo(_json.dumps({"resources": caps["resources"]}, indent=2))
-    else:
-        _render_capability_table(f"{name} resources", caps["resources"], "original_uri")
-
-
-@resource_app.command("enable")
-def resource_enable(
-    ctx: typer.Context,
-    name: str = typer.Argument(...),
-    uri: str = typer.Argument(...),
-) -> None:
-    """Enable a resource capability."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    _toggle(name, "resource", uri, enable=True, verbose=verbose)
-
-
-@resource_app.command("disable")
-def resource_disable(
-    ctx: typer.Context,
-    name: str = typer.Argument(...),
-    uri: str = typer.Argument(...),
-) -> None:
-    """Disable a resource capability."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    _toggle(name, "resource", uri, enable=False, verbose=verbose)
-
-
-# ---------------------------------------------------------------------------
-# prompt sub-commands
-# ---------------------------------------------------------------------------
-
-
-@prompt_app.command("list")
-def prompt_list(
-    ctx: typer.Context,
-    name: str = typer.Argument(...),
-    output_json: bool = typer.Option(False, "--json"),
-) -> None:
-    """List prompts for an MCP server."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    caps = _capabilities_for(name, verbose=verbose)
-    if output_json:
-        typer.echo(_json.dumps({"prompts": caps["prompts"]}, indent=2))
-    else:
-        _render_capability_table(f"{name} prompts", caps["prompts"], "original_name")
-
-
-@prompt_app.command("enable")
-def prompt_enable(
-    ctx: typer.Context,
-    name: str = typer.Argument(...),
-    key: str = typer.Argument(...),
-) -> None:
-    """Enable a prompt capability."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    _toggle(name, "prompt", key, enable=True, verbose=verbose)
-
-
-@prompt_app.command("disable")
-def prompt_disable(
-    ctx: typer.Context,
-    name: str = typer.Argument(...),
-    key: str = typer.Argument(...),
-) -> None:
-    """Disable a prompt capability."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    _toggle(name, "prompt", key, enable=False, verbose=verbose)
+    """Disable capabilities, each named by a typed ref."""
+    _toggle(ctx, server, refs, enable=False)

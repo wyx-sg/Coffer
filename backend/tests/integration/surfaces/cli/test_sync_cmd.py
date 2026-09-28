@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import json
 import pathlib
 import stat
 from collections.abc import Awaitable, Iterator
@@ -145,10 +146,13 @@ def _seed_and_publish(fleet: Fleet, count: int = _ROOMY) -> None:
 # --- the remote -------------------------------------------------------------
 
 
-def test_remote_show_on_a_fresh_vault_says_there_is_none(fleet: Fleet) -> None:
-    result = fleet.ok("sync", "remote", "show")
+def test_status_on_a_fresh_vault_says_there_is_no_remote_and_names_remote_set(
+    fleet: Fleet,
+) -> None:
+    result = fleet.ok("sync", "status")
 
     assert "no sync remote configured" in result.output
+    assert "coffer sync remote set" in result.output
 
 
 def test_remote_set_probes_the_remote_and_stores_the_defaults(fleet: Fleet) -> None:
@@ -160,7 +164,7 @@ def test_remote_set_probes_the_remote_and_stores_the_defaults(fleet: Fleet) -> N
     assert "enabled" in result.output
     assert "working tree" in result.output
 
-    shown = fleet.ok("sync", "remote", "show")
+    shown = fleet.ok("sync", "status")
     assert "every 3600s" in shown.output
     assert "no sync remote configured" not in shown.output
 
@@ -238,7 +242,7 @@ def test_remote_pause_and_resume_without_a_remote_exit_4(fleet: Fleet) -> None:
         assert result.stderr.strip() == (
             "no sync remote configured — set one with: coffer sync remote set <url>"
         )
-    shown = fleet.ok("sync", "remote", "show")
+    shown = fleet.ok("sync", "status")
     assert "no sync remote configured" in shown.output
 
 
@@ -339,7 +343,7 @@ def test_remote_set_refuses_a_working_tree_inside_the_vault(
     said = " ".join(result.output.split())
     assert "backup remote invalid" in said
     assert reason in said
-    assert "no sync remote configured" in fleet.ok("sync", "remote", "show").output
+    assert "no sync remote configured" in fleet.ok("sync", "status").output
 
 
 def test_first_remote_set_stores_the_defaults(fleet: Fleet) -> None:
@@ -357,7 +361,7 @@ def test_remote_set_refuses_a_remote_it_cannot_reach(fleet: Fleet, tmp_path) -> 
     result = fleet.invoke("sync", "remote", "set", str(tmp_path / "no-such.git"))
 
     assert result.exit_code != 0
-    assert "no sync remote configured" in fleet.ok("sync", "remote", "show").output
+    assert "no sync remote configured" in fleet.ok("sync", "status").output
 
 
 def test_remote_clear_is_idempotent(fleet: Fleet) -> None:
@@ -632,7 +636,7 @@ def test_a_paused_remote_runs_no_round_and_asks_for_nothing(fleet: Fleet) -> Non
     assert fleet.run(fleet.a.state.pointer()) == pointer
     kept = fleet.run(fleet.a.service().get_remote())
     assert kept is not None and kept.url == remote.url and kept.enabled is False
-    assert "no sync remote configured" not in fleet.ok("sync", "remote", "show").output
+    assert "no sync remote configured" not in fleet.ok("sync", "status").output
 
 
 def test_status_exits_zero_once_the_hold_is_answered(fleet: Fleet) -> None:
@@ -675,11 +679,15 @@ def test_reject_with_nothing_held_exits_non_zero(fleet: Fleet) -> None:
 # --- undoing ----------------------------------------------------------------
 
 
-def test_rollback_with_nothing_to_roll_back_exits_non_zero(fleet: Fleet) -> None:
-    assert fleet.invoke("sync", "rollback").exit_code != 0
+def test_restore_with_nothing_to_undo_says_so(fleet: Fleet) -> None:
+    result = fleet.ok("sync", "restore")
+    assert "nothing to undo" in result.output
 
 
-def test_rollback_undoes_the_round_that_was_just_applied(fleet: Fleet) -> None:
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="restore with no revision undoes the last applied round"
+)
+def test_restore_without_at_undoes_the_round_that_was_just_applied(fleet: Fleet) -> None:
     _seed_and_publish(fleet)
     fleet.run(fleet.b.adopt())
     fleet.run(fleet.b.converge())
@@ -688,12 +696,30 @@ def test_rollback_undoes_the_round_that_was_just_applied(fleet: Fleet) -> None:
     fleet.run(fleet.b.converge())
     fleet.ok("sync", "adopt", "--yes")
     assert fleet.a.read_knowledge("notes", "n0") == "rewritten by B\n"
+    pointer = fleet.run(fleet.a.state.pointer())
 
-    result = fleet.ok("sync", "rollback")
+    result = fleet.ok("sync", "restore")
 
     assert "ok" in result.output
     assert fleet.a.read_knowledge("notes", "n0") == "original 0\n"
     assert fleet.a.read_knowledge("notes", "extra") is None
+    # The pointer stays where it was, so the next round publishes the undo.
+    assert fleet.run(fleet.a.state.pointer()) == pointer
+
+    # A round that applies nothing here sits on top now: there is nothing to
+    # undo, and the command changes nothing and says so.
+    fleet.ok("sync", "now")
+    head = fleet.run(fleet.a.mirror.head())
+    again = fleet.ok("sync", "restore")
+    assert "nothing to undo" in again.output
+    assert fleet.a.read_knowledge("notes", "n0") == "original 0\n"
+    assert fleet.run(fleet.a.mirror.head()) == head
+
+
+def test_rollback_is_not_a_command(fleet: Fleet) -> None:
+    result = fleet.invoke("sync", "rollback")
+    assert result.exit_code != 0
+    assert "No such command" in result.output
 
 
 def test_restore_at_a_revision_brings_a_deleted_note_back(fleet: Fleet) -> None:
@@ -738,6 +764,42 @@ def test_status_after_a_round_reports_the_remote_and_that_round(fleet: Fleet) ->
     assert "no round yet" not in result.output
 
 
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="the status command reports the remote's settings"
+)
+def test_status_json_reports_every_setting_of_the_remote(fleet: Fleet, tmp_path) -> None:
+    fleet.ok("sync", "remote", "set", fleet.a.remote_url)
+    custom = _configured(fleet, tmp_path)
+
+    payload = json.loads(fleet.ok("sync", "status", "--json").output)
+
+    remote = payload["remote"]
+    assert payload["configured"] is True
+    assert remote["url"] == custom.url
+    assert remote["branch"] == "vault"
+    assert remote["interval_seconds"] == 300
+    assert remote["include_credentials"] is True
+    assert remote["credential_ref"] == "sync-push"
+    assert remote["worktree_path"] == custom.worktree_path
+    assert remote["enabled"] is True
+
+    table = fleet.ok("sync", "status")
+    for shown in ("branch vault", "every 300s", "credentials included", "sync-push"):
+        assert shown in " ".join(table.output.split()), shown
+    assert "enabled" in table.output
+
+
+@pytest.mark.acceptance(
+    spec="vault-sync", scenario="the status command reports the remote's settings"
+)
+def test_status_with_no_remote_names_remote_set(fleet: Fleet) -> None:
+    table = fleet.ok("sync", "status")
+    assert "no sync remote configured" in table.output
+    assert "coffer sync remote set" in table.output
+    payload = json.loads(fleet.ok("sync", "status", "--json").output)
+    assert payload["configured"] is False and payload["remote"] is None
+
+
 # --- machines ---------------------------------------------------------------
 
 
@@ -777,7 +839,7 @@ def test_machine_rename_renames_this_machine(fleet: Fleet) -> None:
     assert fleet.a.name == "kitchen table"
 
 
-def test_machine_remove_retires_a_peer_and_touches_nothing_else(fleet: Fleet) -> None:
+def test_machine_rm_retires_a_peer_and_touches_nothing_else(fleet: Fleet) -> None:
     """Retiring is one change with one effect: the descriptor goes.
 
     It used to report a second number — how many scopes it had rewritten to
@@ -792,7 +854,7 @@ def test_machine_remove_retires_a_peer_and_touches_nothing_else(fleet: Fleet) ->
     fleet.ok("sync", "adopt", "--yes")
     fleet.run(fleet.a.set_scope("mcp_server", "shared", Scope(agents=["claude-code"])))
 
-    result = fleet.ok("sync", "machine", "remove", MACHINE_B)
+    result = fleet.ok("sync", "machine", "rm", MACHINE_B)
 
     assert "retired" in result.output
     assert "scopes updated" not in result.output
@@ -900,7 +962,7 @@ def test_remote_set_refuses_what_git_would_read_as_an_option(fleet: Fleet, argv)
     result = fleet.invoke("sync", "remote", "set", *argv)
 
     assert result.exit_code != 0, result.output
-    assert "no sync remote configured" in fleet.ok("sync", "remote", "show").output
+    assert "no sync remote configured" in fleet.ok("sync", "status").output
 
 
 def _command_tree(command: Any, prefix: tuple[str, ...] = ()) -> dict[tuple[str, ...], Any]:
@@ -918,13 +980,12 @@ def test_the_sync_group_offers_every_command_and_option_it_owes() -> None:
     owed: dict[tuple[str, ...], set[str]] = {
         ("sync", "now"): set(),
         ("sync", "adopt"): {"--keep-local", "--yes"},
-        ("sync", "status"): set(),
+        ("sync", "status"): {"--json"},
         ("sync", "history"): {"--limit"},
         ("sync", "restore"): {"--at"},
         ("sync", "confirm"): set(),
         ("sync", "reject"): set(),
         ("sync", "rebuild"): {"--yes"},
-        ("sync", "rollback"): set(),
         ("sync", "remote", "set"): {
             "--branch",
             "--interval",
@@ -933,11 +994,12 @@ def test_the_sync_group_offers_every_command_and_option_it_owes() -> None:
             "--credential-ref",
             "--worktree",
         },
-        ("sync", "remote", "show"): set(),
         ("sync", "remote", "clear"): set(),
+        ("sync", "remote", "pause"): set(),
+        ("sync", "remote", "resume"): set(),
         ("sync", "machine", "list"): set(),
         ("sync", "machine", "rename"): set(),
-        ("sync", "machine", "remove"): set(),
+        ("sync", "machine", "rm"): set(),
         ("sync", "key", "export"): set(),
         ("sync", "key", "import"): set(),
         ("sync", "key", "fingerprint"): set(),
@@ -955,9 +1017,14 @@ def test_the_sync_group_offers_every_command_and_option_it_owes() -> None:
             ("sync", "adopt"),
             ("sync", "remote", "set"),
             ("sync", "machine", "rename"),
-            ("sync", "machine", "remove"),
+            ("sync", "machine", "rm"),
             ("sync", "key", "export"),
             ("sync", "key", "import"),
         )
     }
     assert all(len(args) == 1 for args in positional.values()), positional
+    # `restore` takes its revision as an option only, so a bare `restore` is
+    # the undo of the last applied round.
+    assert [p for p in tree[("sync", "restore")].params if p.param_type_name == "argument"] == []
+    for gone in (("sync", "rollback"), ("sync", "remote", "show"), ("sync", "machine", "remove")):
+        assert gone not in tree, f"still offered: coffer {' '.join(gone)}"

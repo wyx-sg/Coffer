@@ -280,8 +280,10 @@ export interface components {
              * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
              */
             uid: string;
-            /** @description A mutable label, unique among skills, editable through the kind-agnostic `PATCH /api/v1/resources/{uid}`. It is also the skill's master folder name and the name of every link delivered into an agent's workspace, so a rename moves those with it — `master_path` on the response after a rename is the new one. */
+            /** @description Unique among skills and fixed once registered: it is the skill's master folder name, the name of every link delivered into an agent's workspace and the SKILL.md `name:`, so a changed name on `PATCH /api/v1/resources/{uid}` is refused with 409 `NAME_IMMUTABLE`. */
             name: string;
+            /** @description Optional display text the Skills page shows in place of the name, set through `PATCH /api/v1/resources/{uid}`; null when none is set. */
+            title?: string | null;
             description: string;
             source: components["schemas"]["SkillSource"];
             /** @description True for a skill Coffer generates and owns: its master folder is rewritten from the running build at every boot, so DELETE is refused with 409 `RESOURCE_PROTECTED`. Enabling, disabling and narrowing its scope stay available — those decide reach, which is the owner's to decide, while existence is not. */

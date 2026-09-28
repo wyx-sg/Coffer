@@ -38,7 +38,7 @@ human-readable framing.
 - **THEN** the first prints both changes newest first, each with its time, actor, event type and label
 - **AND** the second prints a parseable JSON document holding only that kind's entries
 
-### Requirement: Change every setting through one key–value command
+### Requirement: Change every setting through one key-value command
 The system MUST expose Coffer's own settings on the command line through one command,
 `coffer config`, over a single registry of keys; a setting that belongs to one resource is
 changed with that kind's `edit` instead. Each key MUST name its type, its default if it has one,
@@ -266,7 +266,7 @@ log-writing kind inherits.
 
 On the command line each table's period MUST be the setting `retention.<table>`, read and
 changed with `coffer config get|set|unset retention.<table>` (see "Change every setting through
-one key–value command"), taking a whole number of days or `forever`, with `unset` returning the
+one key-value command"), taking a whole number of days or `forever`, with `unset` returning the
 table to its registered default. The on-demand prune MUST be `coffer log prune [--table
 <table>]`, which prunes every registered table, or only the one named, and prints how many
 entries each lost.
@@ -314,7 +314,7 @@ directly readable or editable, the CLI MUST satisfy parity by naming the file wi
 (see "Locate file-backed state with coffer path"), while the REST route that serves the file to
 the web UI stays, because a browser page cannot read the disk. A setting changed through
 `coffer config` counts as the CLI counterpart of the route that stores it (see "Change every
-setting through one key–value command"). The reviewed CLI command tree
+setting through one key-value command"). The reviewed CLI command tree
 and the management API MUST stay in step in both directions, so neither can gain an operation
 the other lacks without the parity test failing, and every REST route answered by `coffer path`
 MUST be listed by name in the reviewed table, so that a REST read with no CLI command is a

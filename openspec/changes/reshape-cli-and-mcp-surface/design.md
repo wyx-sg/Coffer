@@ -75,7 +75,7 @@ kind, plus the kind's own flags. Every list and show verb supports `--json`.
   `mcp remove` came to exist beside `resource delete`, and how three spellings of
   delete arose.
 
-### D2. One key–value `config` command for settings
+### D2. One key-value `config` command for settings
 
 `coffer config list|get|set|unset <key>` replaces about 30 per-setting subcommands.
 Keys come from one registry. Each entry names:

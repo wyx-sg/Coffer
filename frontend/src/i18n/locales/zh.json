@@ -744,6 +744,7 @@
     "MEMORY_FILE_NOT_FOUND": "该分区里没有这个文件",
     "MEMORY_UNREADABLE": "该记忆文件无法读取",
     "MEMORY_UNSAFE_PATH": "该路径在记忆库中不被允许",
+    "NAME_IMMUTABLE": "注册后名称不能再改，因为 Agent 会引用它。要换名称请删除后以新名称重新注册，或改为设置标题",
     "NOT_FOUND": "未找到。",
     "NO_ACTIVE_PROVIDER": "当前没有启用的模型提供商——请在「模型提供商」页面添加一个",
     "PLUGIN_NOT_FOUND": "未找到该插件",

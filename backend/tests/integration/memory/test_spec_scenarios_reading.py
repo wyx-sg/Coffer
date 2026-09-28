@@ -15,7 +15,6 @@ from datetime import datetime
 import pytest
 
 from coffer.application.memory.context import compose_context
-from coffer.application.memory.recall import RecallService
 from coffer.application.memory.service import DEFAULT_READERS, KIND_MEMORY, MemoryService
 from coffer.infrastructure.memory import paths, store
 from coffer.infrastructure.memory.raw_store import list_raw_entries, read_raw_entry
@@ -215,16 +214,20 @@ async def test_two_repositories_and_a_preference_make_exactly_three_partitions(
     assert {e.entry.title for e in list_raw_entries("global")} == {"likes-short-replies"}
 
 
-# --- Create partitions only by aggregation -----------------------------------
+# --- Provision partitions only from aggregation -----------------------------------
 
 
 @pytest.mark.asyncio
 @pytest.mark.acceptance(
-    spec="memory", scenario="compose context and recall without creating a partition"
+    spec="memory",
+    scenario="compose context and locate the memory root without creating a partition",
 )
 async def test_reading_from_inside_a_repository_brings_no_partition_into_existence(
     tmp_path: pathlib.Path,
 ) -> None:
+    """Composing the context and locating the root are both reads: neither
+    brings a partition directory or a ``memory`` Resource into existence.
+    ``paths.memory_root`` is the resolution ``coffer path memory`` prints."""
     repository = init_repository(tmp_path / "home" / "dev" / "coffer")
     cwd = repository / "src"
     cwd.mkdir()
@@ -234,10 +237,10 @@ async def test_reading_from_inside_a_repository_brings_no_partition_into_existen
     assert not root.exists() or not any(root.iterdir())
 
     composed = await compose_context(service, cwd=str(cwd))
-    recalled = await RecallService(memory=service).recall("coffer")
+    located = paths.memory_root()
 
     assert composed.text == ""
-    assert recalled.notes == ()
+    assert located == root
     assert store.list_partitions() == ()
     assert not (root / "coffer").exists()
     assert await resources.list(kind=KIND_MEMORY) == []

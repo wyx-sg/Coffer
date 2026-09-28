@@ -290,8 +290,10 @@ export interface components {
              */
             uid: string;
             kind: string;
-            /** @description A mutable label, unique within its kind. Editable through PATCH. */
+            /** @description A label, unique within its kind. Editable through PATCH, except on a kind whose name is fixed (`mcp_server`, `skill`). */
             name: string;
+            /** @description Optional display text that surfaces show in place of the name; null when none is set. */
+            title?: string | null;
             description?: string | null;
             config: {
                 [key: string]: unknown;
@@ -309,14 +311,17 @@ export interface components {
         ResourceCreate: {
             kind: string;
             name: string;
+            title?: string | null;
             description?: string | null;
             config: {
                 [key: string]: unknown;
             };
         };
         ResourceUpdate: {
-            /** @description Renaming is a field, not an operation — the same level as editing a description, for every kind. Absent leaves the label alone; a label another resource of this kind already holds answers 409. */
+            /** @description Renaming is a field, not an operation — the same level as editing a description, for every kind whose name is not fixed. Absent leaves the label alone; a label another resource of this kind already holds answers 409, and so does any change on a kind whose name is fixed (`NAME_IMMUTABLE`). */
             name?: string;
+            /** @description Display text, editable on every kind including one whose name is fixed. Absent leaves it alone; an empty string or null clears it; longer than 80 characters is refused as a validation error. */
+            title?: string | null;
             description?: string | null;
             config?: {
                 [key: string]: unknown;
@@ -583,7 +588,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
-            /** @description `RESOURCE_ALREADY_EXISTS` — a rename onto a name another resource of the same kind already carries (spec resource-framework "Treat a resource's name as a mutable label"). */
+            /** @description `RESOURCE_ALREADY_EXISTS` — a rename onto a name another resource of the same kind already carries (spec resource-framework "Treat a resource's name as a mutable label"). `NAME_IMMUTABLE` — a changed name on a kind whose name is fixed (`mcp_server`, `skill`), refused before any field of the request is written; the message says to delete and register the resource again and names what that resets. */
             409: {
                 headers: {
                     [name: string]: unknown;

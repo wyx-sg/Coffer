@@ -744,6 +744,7 @@
     "MEMORY_FILE_NOT_FOUND": "That file isn't in this partition",
     "MEMORY_UNREADABLE": "That memory file could not be read",
     "MEMORY_UNSAFE_PATH": "That path isn't allowed in the memory store",
+    "NAME_IMMUTABLE": "This name is fixed once registered, because agents quote it. Delete it and register it again under the new name, or set a title instead",
     "NOT_FOUND": "Not found.",
     "NO_ACTIVE_PROVIDER": "No model provider is active — add one on the Model providers page",
     "PLUGIN_NOT_FOUND": "Plugin not found",

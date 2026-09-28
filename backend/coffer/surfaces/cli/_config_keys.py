@@ -5,13 +5,13 @@ resource-framework "Change every setting through one key-value command"):
 
 - ``daemon.port`` in the pre-bind settings file, read and written here with no
   daemon involved, because the state it most needs changing from is "the
-  daemon cannot start" (spec daemon "Fix the daemon's port");
+  daemon cannot start" (spec daemon "Bind a fixed, settable port");
 - ``engine.*`` and ``transcribe.model`` on the engine's settings row
   (``_config_engine``);
 - ``engine.provider`` and ``transcribe.provider`` as the connection flags;
 - ``credentials.storage`` through the daemon, the sole owner of the master key
-  — this module imports no credential code (spec credentials "Keep the master
-  key's owner the daemon alone");
+  — this module imports no credential code (spec credentials "Route every credential
+  command through the daemon");
 - ``feature.<key>`` and ``retention.<table>``, whose members only the daemon
   knows, as families expanded on demand.
 """

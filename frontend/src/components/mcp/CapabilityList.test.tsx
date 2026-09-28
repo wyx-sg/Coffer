@@ -41,6 +41,7 @@ const sampleTools = [
     description: "Read a file from disk",
     enabled: true,
     input_schema: { type: "object", properties: { path: { type: "string" } } },
+    client_name_length: 26,
   },
   {
     original_name: "write_file",
@@ -48,6 +49,7 @@ const sampleTools = [
     description: null,
     enabled: false,
     input_schema: undefined,
+    client_name_length: 27,
   },
 ];
 
@@ -171,6 +173,7 @@ describe("CapabilityList", () => {
         prefixed_name: "fs__summarize",
         description: "Summarize a file",
         enabled: false,
+        client_name_length: 26,
       },
     ];
 

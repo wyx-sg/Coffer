@@ -449,11 +449,18 @@ components:
         name:
           type: string
           description: >-
-            A mutable label, unique among skills, editable through the
-            kind-agnostic `PATCH /api/v1/resources/{uid}`. It is also the
-            skill's master folder name and the name of every link delivered
-            into an agent's workspace, so a rename moves those with it —
-            `master_path` on the response after a rename is the new one.
+            Unique among skills and fixed once registered: it is the skill's
+            master folder name, the name of every link delivered into an
+            agent's workspace and the SKILL.md `name:`, so a changed name on
+            `PATCH /api/v1/resources/{uid}` is refused with 409
+            `NAME_IMMUTABLE`.
+        title:
+          type: string
+          nullable: true
+          maxLength: 80
+          description: >-
+            Optional display text the Skills page shows in place of the name,
+            set through `PATCH /api/v1/resources/{uid}`; null when none is set.
         description: { type: string }
         source: { $ref: "#/components/schemas/SkillSource" }
         builtin:

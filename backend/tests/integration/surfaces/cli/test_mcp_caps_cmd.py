@@ -1,5 +1,5 @@
-"""Integration tests for `coffer mcp resource|prompt ...` curation commands
-and the shared 404 branches in ``coffer.surfaces.cli._mcp_caps``.
+"""Integration tests for the error branches of `coffer mcp cap ...`
+(``coffer.surfaces.cli._mcp_caps``) and its prompt/resource rows.
 
 Reuses the ``mcp_daemon`` fixture and ``_register_server`` helper defined in
 ``test_mcp_cmd.py`` so the same in-process daemon + stub discovery harness
@@ -8,9 +8,7 @@ applies here.
 
 from __future__ import annotations
 
-import asyncio
 import json
-import os
 from typing import Any
 
 from typer.testing import CliRunner
@@ -26,7 +24,7 @@ _runner = CliRunner()
 
 
 # ---------------------------------------------------------------------------
-# _capabilities_for 404 branch (shared by tool/resource/prompt list)
+# the capabilities read 404s (shared by cap list / enable / disable)
 #
 # The stub resolves the name to a uid, then 404s on /capabilities — so this
 # exercises the route-level 404 branch rather than the "no such server" one
@@ -78,131 +76,71 @@ def _patch_caps_404(monkeypatch: Any) -> None:
     monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (client, info))
 
 
-def test_tool_list_404_exits_4(monkeypatch: Any) -> None:
+def test_cap_list_404_exits_4(monkeypatch: Any) -> None:
     """A 404 from GET /capabilities maps to CLI exit 4 with a clear message."""
     _patch_caps_404(monkeypatch)
-    result = _runner.invoke(app, ["mcp", "tool", "list", "ghost"])
+    result = _runner.invoke(app, ["mcp", "cap", "list", "ghost"])
     assert result.exit_code == 4, result.output
     assert "not found" in (result.output + (result.stderr or ""))
 
 
-def test_resource_list_404_exits_4(monkeypatch: Any) -> None:
+def test_cap_disable_404_on_the_read_exits_4(monkeypatch: Any) -> None:
     _patch_caps_404(monkeypatch)
-    result = _runner.invoke(app, ["mcp", "resource", "list", "ghost"])
-    assert result.exit_code == 4, result.output
-
-
-def test_prompt_list_404_exits_4(monkeypatch: Any) -> None:
-    _patch_caps_404(monkeypatch)
-    result = _runner.invoke(app, ["mcp", "prompt", "list", "ghost"])
+    result = _runner.invoke(app, ["mcp", "cap", "disable", "ghost", "tool:x"])
     assert result.exit_code == 4, result.output
 
 
 # ---------------------------------------------------------------------------
-# _toggle 404 branch (capability not found)
+# a ref the server does not offer
 # ---------------------------------------------------------------------------
 
 
-def test_tool_enable_unknown_capability_exits_4(mcp_daemon: Any) -> None:
-    """Toggling a capability that has no preference row → 404 → exit 4."""
+def test_cap_enable_unknown_tool_exits_4(mcp_daemon: Any) -> None:
     _register_server()
-    result = _runner.invoke(app, ["mcp", "tool", "enable", "fs", "no_such_tool"])
+    result = _runner.invoke(app, ["mcp", "cap", "enable", "fs", "tool:no_such_tool"])
     assert result.exit_code == 4, result.output
-    assert "capability not found" in (result.output + (result.stderr or ""))
+    assert "tool:no_such_tool" in (result.output + (result.stderr or ""))
 
 
-def test_prompt_disable_unknown_capability_exits_4(mcp_daemon: Any) -> None:
+def test_cap_disable_unknown_prompt_exits_4(mcp_daemon: Any) -> None:
     _register_server()
-    result = _runner.invoke(app, ["mcp", "prompt", "disable", "fs", "no_such_prompt"])
+    result = _runner.invoke(app, ["mcp", "cap", "disable", "fs", "prompt:no_such_prompt"])
     assert result.exit_code == 4, result.output
+
+
+def test_cap_offered_but_never_recorded_exits_4(mcp_daemon: Any) -> None:
+    """The server offers the tool, but no preference row exists for it (the
+    toggle route's own 404): still exit 4, naming the capability."""
+    _register_server()
+    result = _runner.invoke(app, ["mcp", "cap", "disable", "fs", "tool:read_file"])
+    assert result.exit_code == 4, result.output
+    assert "capability not found: tool:read_file" in (result.output + (result.stderr or ""))
 
 
 # ---------------------------------------------------------------------------
-# resource list --json / table (stub discovery yields one resource)
+# --type resource / prompt (stub discovery yields one resource and no prompts)
 # ---------------------------------------------------------------------------
 
 
-def test_resource_list_json_shape(mcp_daemon: Any) -> None:
-    """`resource list --json` → object whose sole key is `resources` and which
-    contains the stub-discovered resource."""
+def test_cap_list_resources_json_shape(mcp_daemon: Any) -> None:
     _register_server()
-    result = _runner.invoke(app, ["mcp", "resource", "list", "fs", "--json"])
+    result = _runner.invoke(app, ["mcp", "cap", "list", "fs", "--type", "resource", "--json"])
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert list(payload.keys()) == ["resources"]
-    uris = {r["original_uri"] for r in payload["resources"]}
-    assert "file:///tmp/x" in uris
+    assert {r["original_uri"] for r in payload["resources"]} == {"file:///tmp/x"}
     assert "\x1b[" not in result.output, "ANSI escape leaked into --json output"
 
 
-def test_resource_list_table(mcp_daemon: Any) -> None:
+def test_cap_list_prompts_json_shape(mcp_daemon: Any) -> None:
     _register_server()
-    result = _runner.invoke(app, ["mcp", "resource", "list", "fs"])
+    result = _runner.invoke(app, ["mcp", "cap", "list", "fs", "--type", "prompt", "--json"])
     assert result.exit_code == 0, result.output
-    assert "file:///tmp/x" in result.output
+    assert json.loads(result.output) == {"prompts": []}
 
 
-# ---------------------------------------------------------------------------
-# prompt list --json / table (stub discovery yields no prompts; assert shape)
-# ---------------------------------------------------------------------------
-
-
-def test_prompt_list_json_shape(mcp_daemon: Any) -> None:
-    """`prompt list --json` → object whose sole key is `prompts`."""
+def test_cap_list_empty_type_renders_the_table(mcp_daemon: Any) -> None:
     _register_server()
-    result = _runner.invoke(app, ["mcp", "prompt", "list", "fs", "--json"])
+    result = _runner.invoke(app, ["mcp", "cap", "list", "fs", "--type", "prompt"])
     assert result.exit_code == 0, result.output
-    payload = json.loads(result.output)
-    assert list(payload.keys()) == ["prompts"]
-    assert payload["prompts"] == []
-    assert "\x1b[" not in result.output
-
-
-def test_prompt_list_table(mcp_daemon: Any) -> None:
-    _register_server()
-    result = _runner.invoke(app, ["mcp", "prompt", "list", "fs"])
-    assert result.exit_code == 0, result.output
-    # Empty prompt set still renders the titled table header.
-    assert "fs prompts" in result.output
-
-
-# ---------------------------------------------------------------------------
-# prompt enable / disable success branches (seed a prompt preference row)
-# ---------------------------------------------------------------------------
-
-
-def _seed_prompt_pref(uid: str, key: str) -> None:
-    from datetime import UTC, datetime
-
-    from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceRepo
-    from coffer.infrastructure.persistence.engine import (
-        create_async_engine_with_pragmas,
-        session_maker,
-    )
-    from coffer.infrastructure.persistence.repos import SqlAlchemyResourceRepo
-
-    engine = create_async_engine_with_pragmas(os.environ["COFFER_DB_URL"])
-
-    async def _seed() -> None:
-        sm = session_maker(engine)
-        resource = await SqlAlchemyResourceRepo(sm).find(uid)
-        assert resource is not None
-        now = datetime.now(tz=UTC)
-        await MCPCapabilityPreferenceRepo(sm).insert(resource.id, "prompt", key, True, now, now)
-        await engine.dispose()
-
-    loop = asyncio.new_event_loop()
-    loop.run_until_complete(_seed())
-    loop.close()
-
-
-def test_prompt_disable_then_enable(mcp_daemon: Any) -> None:
-    _seed_prompt_pref(_register_server(), "summarize")
-
-    disabled = _runner.invoke(app, ["mcp", "prompt", "disable", "fs", "summarize"])
-    assert disabled.exit_code == 0, disabled.output
-    assert "disabled" in disabled.output
-
-    enabled = _runner.invoke(app, ["mcp", "prompt", "enable", "fs", "summarize"])
-    assert enabled.exit_code == 0, enabled.output
-    assert "enabled" in enabled.output
+    assert "fs capabilities" in result.output

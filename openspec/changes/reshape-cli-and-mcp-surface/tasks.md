@@ -27,12 +27,14 @@
 
 ## 4. CLI per-kind groups
 
-- [ ] 4.1 `mcp`: verbs + `test` (refresh then health) + `cap list|enable|disable` with `tool:`/`prompt:`/`resource:` refs; flag `client_name_length > 64` in `cap list` — verify the mcp CLI tests
-- [ ] 4.2 `agent`: verbs + `connect|disconnect`, `show` carrying `coffer_mcp` and `memory_delivery`, `transcript [<id>]`, `models`, `config edit|rm`, `plugin list|enable|disable|rm` — verify the agent CLI tests
-- [ ] 4.3 `skill` (verbs, `add <folder>`, `verify`), `knowledge` (verbs, `write`, `upload`, `curate`), `memory` (verbs without `add`, `sync`, `distil`, `context`, `delivery on|off`) — verify each group's CLI tests and that `memory context` output is byte-identical to before
-- [ ] 4.4 `provider` (verbs, `switch`, `builtin`, `key`), `channel` (verbs, `pair`, `bind`, `notify`, `edit` with the group-gating switches), `credentials` (`set`, `get`, `list`, `rm`) — verify each group's CLI tests
-- [ ] 4.5 `daemon` (`start|stop|restart|status|rotate-token|service install|uninstall|status`, with passes in flight in `status`) and `sync` (`restore` without `--at` undoes the last round; `status` includes the remote; `machine rm`) — verify the daemon and sync CLI tests
+- [x] 4.1 `mcp`: verbs + `test` (refresh then health) + `cap list|enable|disable` with `tool:`/`prompt:`/`resource:` refs; flag `client_name_length > 64` in `cap list` — verify the mcp CLI tests
+- [x] 4.2 `agent`: verbs + `connect|disconnect`, `show` carrying `coffer_mcp` and `memory_delivery`, `transcript [<id>]`, `models`, `config edit|rm`, `plugin list|enable|disable|rm` — verify the agent CLI tests
+- [x] 4.3 `skill` (verbs, `add <folder>`, `verify`), `knowledge` (verbs, `write`, `upload`, `curate`), `memory` (verbs without `add`, `sync`, `distil`, `context`, `delivery on|off`) — verify each group's CLI tests and that `memory context` output is byte-identical to before
+- [x] 4.4 `provider` (verbs, `switch`, `builtin`, `key`), `channel` (verbs, `pair`, `bind`, `notify`, `edit` with the group-gating switches), `credentials` (`set`, `get`, `list`, `rm`) — verify each group's CLI tests
+- [x] 4.5 `daemon` (`start|stop|restart|status|rotate-token|service install|uninstall|status`, with passes in flight in `status`) and `sync` (`restore` without `--at` undoes the last round; `status` includes the remote; `machine rm`) — verify the daemon and sync CLI tests
 - [ ] 4.6 Switch `surfaces/cli/main.py` to the new tree and delete the retired modules (`resource_cmd.py`, `scope_cmd.py`, `audit_cmd.py`, `retention_cmd.py`, `engine_*`, `daemon_port_cmd.py`, `daemon_features_cmd.py`, `skill_file_cmd.py`, `memory_delivery_cmd.py`, `agent_native_memory_cmd.py`, …) — verify `coffer --help` and every group's `--help` render
+
+- [ ] 4.7 Sweep user-facing messages that still name removed commands (e.g. `domain/skill/drift.py` → `coffer skill add` / `coffer adopt skill`), and drop `--description` from `coffer knowledge edit` because a collection's description comes from its README — verify `grep -rn` over `backend/coffer` for every removed command name finds nothing user-facing
 
 ## 5. Web UI
 

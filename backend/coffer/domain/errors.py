@@ -56,6 +56,29 @@ class GenericCreateNotAllowed(CofferError):  # noqa: N818
         self.kind = kind
 
 
+class NameImmutable(CofferError):  # noqa: N818
+    """A changed name for a resource whose kind declares its name fixed.
+
+    The name is quoted outside Coffer — an MCP server's name prefixes every
+    tool name an agent sees, a skill's is the folder an agent loads it from —
+    so a rename would break whatever quotes it (ADR
+    names-visible-to-agents-are-fixed). The message names the only way to a
+    new name and what it resets. Maps to 409.
+    """
+
+    code = "NAME_IMMUTABLE"
+
+    def __init__(self, kind: str, name: str, resets: str) -> None:
+        cost = f", which resets {resets}" if resets else ""
+        super().__init__(
+            f"the name of {kind} {name!r} cannot change: it is quoted outside Coffer. "
+            f"To use a new name, delete it and register it again under that name{cost}. "
+            "To change only what is shown, set its title instead."
+        )
+        self.kind = kind
+        self.name = name
+
+
 class ConfigValidationError(CofferError):
     code = "CONFIG_INVALID"
 

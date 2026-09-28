@@ -8,8 +8,8 @@ what it will not.
 
 ## Coffer's own tools
 
-<TOOL_COUNT>, all prefixed `coffer__`. Everything else you can see through Coffer
-belongs to an upstream server and is named `<server>__<tool>`.
+Coffer adds <TOOL_COUNT> of its own, prefixed `coffer__`. Everything else you can
+see through Coffer belongs to an upstream server and is named `<server>__<tool>`.
 
 | Tool | Reach for it when |
 | --- | --- |
@@ -17,19 +17,10 @@ belongs to an upstream server and is named `<server>__<tool>`.
 <!-- when:knowledge -->
 | `coffer__write` | You learned something durable about this environment. |
 <!-- end:knowledge -->
-<!-- when:memory -->
-| `coffer__recall` | You want a note from a project other than this one. |
-<!-- end:memory -->
-| `coffer__diagnose` | Coffer itself is misbehaving and you want its side of the story. |
 
-If you cannot see these at all, Coffer's MCP server is not installed for the
-agent you are running as; the developer installs it with
-`coffer agent mcp install <agent>`.
-
-`coffer__diagnose` answers with two correlated timelines for a window you
-choose — what changed in Coffer (its audit log) and what its daemon logged —
-so reach for it when a Coffer tool fails in a way its error text does not
-explain, not as a general-purpose debugger for the developer's own program.
+If you cannot see Coffer's tools at all, Coffer's MCP server is not connected to
+the agent you are running as; the developer connects it with
+`coffer agent connect <agent>`.
 
 ## The tools you were listed are not all the tools there are
 
@@ -86,7 +77,7 @@ model notices the edit and carries it into the rest of the collection.
 Coffer reads the native memory of every registered agent — your own memory
 files, in your own format — and modifies nothing there: not a file, not a
 format, not your memory setting. What it reads it distils into its own notes
-under `~/.coffer/memory/`, which are derived and are Coffer's to own.
+under `<MEMORY_ROOT>`, which are derived and are Coffer's to own.
 
 <!-- when:knowledge -->
 The practical consequence: **you cannot ask Coffer to write a memory for you.**
@@ -95,10 +86,13 @@ purpose. If you want something in your own memory, write it there yourself, the
 way you normally would.
 
 <!-- end:knowledge -->
-`coffer__recall` locates Coffer's notes. It answers with each note's path, title
-and one-line description, never the body — read the file yourself when you want
-that. Its matching is literal and case-insensitive, so hand it a distinctive
-word or phrase rather than a question.
+### Finding a note
+
+Coffer's notes are Markdown files under `<MEMORY_ROOT>/<partition>/notes/`, one
+partition per repository plus `global`. Your session opened with the index of
+this repository's partition and of `global`. For a note from another project,
+search `<MEMORY_ROOT>` with your own tools — grep for a distinctive word or
+phrase — and read the file you find. There is no Coffer tool for this.
 
 <!-- end:memory -->
 ## Nothing here waits on a human
@@ -112,6 +106,16 @@ for you — it comes back in the same turn as an ordinary error result with the
 reason in it. Read the reason and adjust. Do not retry the identical call hoping
 it clears, and do not tell the developer you are waiting on an approval: there
 is nothing to approve.
+
+## When Coffer itself misbehaves
+
+Coffer keeps three records of what it did: its audit log (what changed), its
+MCP invocation log (every tool call through it) and its daemon log (what
+happened, including what broke). Read them with `coffer log audit`,
+`coffer log mcp` and `coffer log daemon` — each takes `--since` and `--errors`
+— and find the daemon's log files with `coffer path logs`. Reach for them when a Coffer tool
+fails in a way its error text does not explain, not as a debugger for the
+developer's own program.
 
 <!-- when:knowledge -->
 ## What not to put in

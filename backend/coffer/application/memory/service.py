@@ -23,7 +23,7 @@ there is nothing to filter — the note is simply not in the directory. That gua
 holds only as far as the read does. The previous design served ``list_facts`` from a
 value it had already computed, and went on handing back 11 facts it had itself marked
 superseded; ``list_notes`` below opens the directory every time so that cannot recur,
-and ``context.py`` and ``recall.py`` both state it as the promise they rely on.
+and ``context.py`` states it as the promise it relies on.
 """
 
 from __future__ import annotations
@@ -207,7 +207,7 @@ class MemoryService:
 
         The row is created through the lifecycle opt-in: the kind sets
         ``generic_create_allowed=False`` so nothing but a pass can conjure a partition,
-        which is "Create partitions only by aggregation" — an agent's working directory
+        which is "Provision partitions only from aggregation" — an agent's working directory
         must not bring one into existence merely by being read.
 
         One write, deliberately. This method used to follow the registration

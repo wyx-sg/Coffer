@@ -129,7 +129,7 @@ def test_switching_a_feature_on_opens_its_surfaces_without_a_restart(
         _patch_cli(monkeypatch, c)
         _assert_disabled(c.get("/api/v1/sync/status"), "vault_sync")
 
-        res = runner.invoke(cli_app, ["daemon", "features", "enable", "vault_sync"])
+        res = runner.invoke(cli_app, ["config", "set", "feature.vault_sync", "on"])
         assert res.exit_code == 0, res.output
 
         # Same process, same app: no restart between the switch and the answer.
@@ -215,6 +215,12 @@ def _tool_names(c: TestClient, session: str) -> set[str]:
     return {t["name"] for t in _mcp(c, session, "tools/list", {}).json()["result"]["tools"]}
 
 
+def _unknown_as(called: Any, unknown: Any, name: str) -> bool:
+    """Whether ``called`` is exactly what an unknown tool answers, with the
+    name swapped."""
+    return json.dumps(called).replace(name, "coffer__nosuchtool") == json.dumps(unknown)
+
+
 @pytest.mark.acceptance(
     spec="experimental-features",
     scenario="a switched-off feature's tool leaves the tool list",
@@ -222,7 +228,7 @@ def _tool_names(c: TestClient, session: str) -> set[str]:
 def test_a_switched_off_features_tool_leaves_the_tool_list(home: pathlib.Path) -> None:
     with _client() as c:
         session = _mcp(c, None, "initialize", {}).headers["mcp-session-id"]
-        assert "coffer__recall" in _tool_names(c, session)
+        assert "coffer__write" in _tool_names(c, session)
         unknown = _mcp(
             c, session, "tools/call", {"name": "coffer__nosuchtool", "arguments": {}}
         ).json()
@@ -230,31 +236,48 @@ def test_a_switched_off_features_tool_leaves_the_tool_list(home: pathlib.Path) -
         # An unknown tool is refused, not served.
         assert "error" in unknown or unknown["result"].get("isError") is True, unknown
 
-        _switch(c, "memory", False)
+        _switch(c, "knowledge", False)
         names = _tool_names(c, session)
-        assert "coffer__recall" not in names
-        # Only the memory feature's tool; the always-on ones stay.
-        assert {"coffer__search_tools", "coffer__diagnose", "coffer__write"} <= names
+        assert "coffer__write" not in names
+        # Only the knowledge feature's tool; the always-on one stays.
+        assert "coffer__search_tools" in names
 
         called = _mcp(
-            c, session, "tools/call", {"name": "coffer__recall", "arguments": {"query": "x"}}
+            c,
+            session,
+            "tools/call",
+            {"name": "coffer__write", "arguments": {"collection": "x", "title": "t"}},
         ).json()
-        # Exactly what an unknown tool answers, with the name swapped.
-        assert json.dumps(called).replace("coffer__recall", "coffer__nosuchtool") == json.dumps(
-            unknown
-        )
+        assert _unknown_as(called, unknown, "coffer__write")
 
-        _switch(c, "memory", True)
-        assert "coffer__recall" in _tool_names(c, session)
+        _switch(c, "knowledge", True)
+        assert "coffer__write" in _tool_names(c, session)
 
 
-def test_knowledge_off_takes_coffer_write_out_of_the_list(home: pathlib.Path) -> None:
-    daemon_config.write_feature_setting("knowledge", False)
+@pytest.mark.acceptance(
+    spec="mcp-gateway", scenario="the gateway advertises exactly two built-in tools"
+)
+def test_the_gateway_advertises_exactly_two_built_in_tools(home: pathlib.Path) -> None:
+    def builtins(c: TestClient, session: str) -> set[str]:
+        return {n for n in _tool_names(c, session) if n.startswith("coffer__")}
+
     with _client() as c:
         session = _mcp(c, None, "initialize", {}).headers["mcp-session-id"]
-        names = _tool_names(c, session)
-    assert "coffer__write" not in names
-    assert "coffer__recall" in names
+        unknown = _mcp(
+            c, session, "tools/call", {"name": "coffer__nosuchtool", "arguments": {}}
+        ).json()
+
+        _switch(c, "knowledge", True)
+        assert builtins(c, session) == {"coffer__search_tools", "coffer__write"}
+        _switch(c, "knowledge", False)
+        assert builtins(c, session) == {"coffer__search_tools"}
+
+        for name, arguments in (
+            ("coffer__recall", {"query": "x"}),
+            ("coffer__diagnose", {"since_minutes": 5}),
+        ):
+            called = _mcp(c, session, "tools/call", {"name": name, "arguments": arguments})
+            assert _unknown_as(called.json(), unknown, name), called.text
 
 
 # --- data kept ----------------------------------------------------------------
@@ -431,7 +454,7 @@ def test_a_channel_bound_here_registers_while_sync_is_off(
             cli_app,
             [
                 "channel",
-                "register",
+                "add",
                 "tg",
                 "--type",
                 "telegram",

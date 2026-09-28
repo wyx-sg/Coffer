@@ -17,6 +17,7 @@ import sqlite3
 import pytest
 from starlette.testclient import TestClient
 
+from coffer.infrastructure.memory import paths as memory_paths
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 from tests.integration.memory.conftest import claude_code_config, init_repository
@@ -176,15 +177,21 @@ def test_after_both_passes_no_memory_table_exists_and_each_partition_is_one_row(
     assert {uid for uid, _ in rows} == {p["uid"] for p in partitions.values()}
 
 
-# --- Expose only coffer__recall -----------------------------------------------
+# --- Expose no memory tool and name the memory root at session start --------
 
 
 @pytest.mark.acceptance(
-    spec="memory", scenario="advertise recall as a locator and no remember tool"
+    spec="memory", scenario="no memory tool is listed, and delivery names the memory root"
 )
-def test_the_gateway_lists_recall_as_a_literal_locator_and_nothing_to_remember_with(
-    client: TestClient,
+def test_no_memory_tool_is_listed_and_the_context_names_the_memory_root(
+    client: TestClient, home: pathlib.Path
 ) -> None:
+    # A partition holding notes (the repository's), and ``global`` holding more.
+    repository = _seed(client, home)
+    _sync_and_distil(client)
+    partitions = _partitions(client)
+    assert {"coffer", "global"} <= set(partitions)
+
     init = client.post(
         "/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}
     )
@@ -195,18 +202,21 @@ def test_the_gateway_lists_recall_as_a_literal_locator_and_nothing_to_remember_w
         headers={**_HEADERS, "Mcp-Session-Id": init.headers["mcp-session-id"]},
     )
     assert r.status_code == 200, r.text
-    builtins = {
-        t["name"]: t for t in r.json()["result"]["tools"] if t["name"].startswith("coffer__")
-    }
-
-    assert "coffer__recall" in builtins
-    description = builtins["coffer__recall"]["description"].lower()
-    assert "locate" in description
-    assert "literal" in description
-    assert "path" in description  # it answers with where to read
-
+    builtins = [t["name"] for t in r.json()["result"]["tools"] if t["name"].startswith("coffer__")]
+    assert "coffer__recall" not in builtins
     assert "coffer__remember" not in builtins
-    memory_tools = [
-        name for name in builtins if "memory" in name or "remember" in name or "recall" in name
-    ]
-    assert memory_tools == ["coffer__recall"]
+    assert [n for n in builtins if "memory" in n or "remember" in n or "recall" in n] == []
+    assert set(builtins) <= {"coffer__search_tools", "coffer__write"}
+
+    r = client.post("/api/v1/memory/context", json={"cwd": str(repository)})
+    assert r.status_code == 200, r.text
+    text = r.json()["text"]
+
+    # The root ``coffer path memory`` prints is the one the memory paths
+    # resolve, absolute, under the pinned ``COFFER_MEMORY_ROOT``.
+    root = str(memory_paths.memory_root())
+    assert root.startswith("/")
+    assert root == str(home / "memory")
+    assert f"under {root}/<partition>/notes/" in text
+    assert f"search {root} with your own tools" in text
+    assert "Markdown files" in text

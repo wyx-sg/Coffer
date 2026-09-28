@@ -269,7 +269,7 @@ stateDiagram-v2
   STARTING --> COOLDOWN: 4th attempt fails
   STARTING --> UNHEALTHY: server disabled
   COOLDOWN --> UNHEALTHY: 60 s elapsed, next call
-  HEALTHY --> UNHEALTHY: evict (transport failure, edit, disable, delete, rename)
+  HEALTHY --> UNHEALTHY: evict (transport failure, edit, disable, delete)
   HEALTHY --> [*]: session disposed
 ```
 

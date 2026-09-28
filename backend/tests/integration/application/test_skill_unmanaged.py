@@ -103,7 +103,6 @@ async def _setup(tmp_path: pathlib.Path):
     placeholder_kinds["agent"] = make_agent_kind(on_delete=_agent_on_delete)
     placeholder_kinds["skill"] = make_skill_kind(
         skill_svc.cleanup_bindings_for_skill,
-        skill_svc.move_master_folder,
     )
     return skill_svc, agent_svc, audit, master_store, fake_home, engine
 
