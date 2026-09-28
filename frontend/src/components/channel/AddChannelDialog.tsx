@@ -49,7 +49,7 @@ import {
   type ChannelFieldErrors,
   type ChannelSecretDraft,
 } from "./AddChannelSecretFields";
-import { FieldError, RequiredLabel } from "./RequiredLabel";
+import { FieldError } from "./FieldError";
 import { planChannel, type ChannelPlan } from "./schema";
 
 export function AddChannelDialog({
@@ -153,7 +153,7 @@ export function AddChannelDialog({
           }}
         >
           <div className="space-y-2">
-            <Label>{t("channels.dialog.type")}</Label>
+            <Label required>{t("channels.dialog.type")}</Label>
             <div className="flex gap-2" role="group" aria-label={t("channels.dialog.type")}>
               {(["telegram", "seatalk"] as const).map((ct) => (
                 <Button
@@ -170,7 +170,9 @@ export function AddChannelDialog({
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="channel-agent">{t("channels.dialog.agent")}</Label>
+            <Label htmlFor="channel-agent" required>
+              {t("channels.dialog.agent")}
+            </Label>
             <AgentSelect
               id="channel-agent"
               label={t("channels.dialog.agent")}
@@ -180,7 +182,9 @@ export function AddChannelDialog({
             <p className="text-xs text-muted-foreground">{t("channels.dialog.agentHint")}</p>
           </div>
           <div className="space-y-2">
-            <RequiredLabel htmlFor="channel-name">{t("channels.dialog.name")}</RequiredLabel>
+            <Label required htmlFor="channel-name">
+              {t("channels.dialog.name")}
+            </Label>
             <Input
               id="channel-name"
               value={name}

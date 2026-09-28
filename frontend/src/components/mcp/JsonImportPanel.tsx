@@ -68,7 +68,9 @@ export function JsonImportPanel({ onImport, importing }: Props) {
     const shown = syntaxError ? t("mcp.add.invalidJson", { detail: syntaxError }) : error;
     return (
       <div className="space-y-3">
-        <Label htmlFor="json-input">{t("mcp.import.jsonLabel")}</Label>
+        <Label htmlFor="json-input" required>
+          {t("mcp.import.jsonLabel")}
+        </Label>
         <Textarea
           id="json-input"
           className="h-56 font-mono text-xs"
