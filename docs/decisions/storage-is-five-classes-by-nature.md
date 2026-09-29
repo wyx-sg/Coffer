@@ -1,9 +1,9 @@
 # Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy
 
 **Status**: Proposed
-**Date**: 2026-09-29
+**Date**: 2026-09-30
 **Deciders**: Yuxing Wu
-**Related**: [Control-Plane State Is One SQLite File, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](sqlite-alembic-persistence.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [Resource Reach Is Machine-Local and Never Converges](resource-reach-is-machine-local.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [The Vault Converges With One User-Owned Git Remote, Git's Merge as Arbiter](vault-sync.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Reach Is a Machine-Local Predicate Over an Extensible Context](reach-is-a-machine-local-predicate-over-a-context.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [The Master Key Lives in the macOS Keychain, Readable Only by the Signed Coffer App; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [principles](../../docs-site/architecture/principles.md) (Persistence; Credentials; Single SQLite writer), spec vault-sync "Keep machine-local state out of the repository", spec vault-sync "Keep the working tree outside the vault", spec vault-sync "Carry credentials as ciphertext only", spec daemon "Deploy frozen sibling binaries and back up the vault before migrating"
+**Related**: [Control-Plane State Is One SQLite File, Written Only by the Daemon and Migrated Forward at Startup Through One Alembic Lineage](sqlite-alembic-persistence.md), [Knowledge Is a Directory of Markdown Files, Not an Index](knowledge-is-plain-files.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [Resource Reach Is Machine-Local and Never Converges](resource-reach-is-machine-local.md), [Sync Withholds Derived Output; Each Machine Renders Its Own](sync-withholds-derived-output.md), [The Vault Converges With One User-Owned Git Remote, Git's Merge as Arbiter](vault-sync.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Reach Is a Machine-Local Predicate Over an Extensible Context](reach-is-a-machine-local-predicate-over-a-context.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md), [Memory Reaches a Session at Three Moments: an Index at Start, Retrieval per Prompt, and a Guard Before a Known Trap](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md), [principles](../../docs-site/architecture/principles.md) (Persistence; Credentials; Single SQLite writer), spec vault-sync "Keep machine-local state out of the repository", spec vault-sync "Keep the working tree outside the vault", spec vault-sync "Carry credentials as ciphertext only", spec daemon "Deploy frozen sibling binaries and back up the vault before migrating", spec memory "Keep the memory tree derived and local"
 
 ## Context
 
@@ -56,13 +56,13 @@ the class, not a rule inside a translator.
 
 | Class | Directory | Holds (today's source) | Writers | Sync policy | If lost |
 | --- | --- | --- | --- | --- | --- |
-| **vault** | `~/.coffer/vault/` — always a git repository | resource files with their uid (`resources`); skills; knowledge; capability toggles (`mcp_capability_preferences`); channel pairings (`channel_peers`); engine settings and the curation owner machine (`internal_engine_config`); a channel's `runs_on`; the machine descriptors; **credential ciphertext** under `vault/credentials/`, one file per ref, the file name being the opaque ref | people, sync, the daemon — every write validated ([Every Vault Write Is One Validated, Compare-and-Swap Commit](every-vault-write-is-a-validated-commit-naming-its-writer.md)) | converges with the user's remote when one is configured; `vault/credentials/` only when that remote's `include_credentials` is on (default off), and never through a three-way merge | the only copy of the user's configuration — not deletable, backed up by the remote when there is one |
+| **vault** | `~/.coffer/vault/` — always a git repository | resource files with their uid (`resources`); skills; knowledge; capability toggles (`mcp_capability_preferences`); channel pairings (`channel_peers`); engine settings and the curation owner machine (`internal_engine_config`); a channel's `runs_on`; the machine descriptors; authored memory triggers under `vault/memory-triggers/`, one file per trigger; **credential ciphertext** under `vault/credentials/`, one file per ref, the file name being the opaque ref | people, sync, the daemon — every write validated ([Every Vault Write Is One Validated, Compare-and-Swap Commit](every-vault-write-is-a-validated-commit-naming-its-writer.md)) | converges with the user's remote when one is configured; `vault/credentials/` only when that remote's `include_credentials` is on (default off), and never through a three-way merge | the only copy of the user's configuration — not deletable, backed up by the remote when there is one |
 | **local** | `~/.coffer/local/` | reach, per resource uid (`resources.enabled`, `resources.scope_json`); the sync remote (`sync_remotes`); held paths and the pending confirmation (`sync_held_paths`, `sync_convergence_state`); retention (`retention_policies`); `daemon-config.json` | the daemon, through its settings API | never — it is true of this machine only | settings can be set again |
-| **content** | `~/.coffer/content/` | memory partitions; chat and channel media; the chat workspace | the service that owns each | not for now; a later decision may converge part of it | unrecoverable — needs a backup; retiring a machine asks export, migrate or discard |
+| **content** | `~/.coffer/content/` | chat and channel media; the chat workspace | the service that owns each | not for now; a later decision may converge part of it | unrecoverable — needs a backup; retiring a machine asks export, migrate or discard |
 | **runs** | `~/.coffer/runs.db` (+ `logs/`) | `audit_log`, `mcp_invocations`, `conversations`, `chat_messages`, `channel_thread_conversations`, `sync_runs`; later Run records and usage, with a `source` and a dedupe key reserved | the daemon, the only writer | never | history; pruned by retention anyway |
-| **derived** | `~/.coffer/derived/` | health (`mcp_server_health`), skill delivery bindings (`skill_agent_bindings`), the uid→path index, the transcript cache (`cache/agent/`), dependency probes, the rendered `coffer-guide` skill, any future search index | the daemon | never | rebuilt; deleting the directory is always safe |
+| **derived** | `~/.coffer/derived/` | the memory tree (`memory/`: partitions' `.raw/`, `notes/`, `MEMORY.md`, `RETIRED.md`), rebuilt from the agents' own memory; health (`mcp_server_health`), skill delivery bindings (`skill_agent_bindings`), the uid→path index, the transcript cache (`cache/agent/`), dependency probes, the rendered `coffer-guide` skill, the in-memory lexical index memory delivery ranks with, any future search index | the daemon | never | rebuilt; deleting the directory is always safe |
 
-The **master key** belongs to no directory: it lives in the OS credential store — the macOS Keychain on the shipped platform, reached through the platform port — never as a file under `~/.coffer/` ([The Master Key Lives in the macOS Keychain, Readable Only by the Signed Coffer App; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md)). It never syncs, and it cannot be set again: without it every ciphertext is unreadable, so it must be exported as an explicit backup (`coffer sync key export`) or imported from another machine.
+The **master key** belongs to no directory: it lives in the OS credential store — the macOS Keychain on the shipped platform, reached through the platform port — never as a file under `~/.coffer/` ([The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md)). It never syncs, and it cannot be set again: without it every ciphertext is unreadable, so it must be exported as an explicit backup (`coffer sync key export`) or imported from another machine.
 
 `daemon.json` stays where it is: it is not stored state but the rendezvous
 every surface reads to find the running daemon, and it is unlinked on exit.
@@ -84,6 +84,18 @@ Rules that come with the classes:
 - **Derived is never the only copy of anything.** A consumer that finds
   `derived/` empty rebuilds it; a writer that would put an only copy there is a
   defect.
+- **Memory is derived, not content.** The canonical copy of what an agent
+  learned is that agent's own native memory, which Coffer only reads
+  ([Aggregate the Agents' Memory; Never Write It](aggregate-agent-memory-never-write-it.md));
+  the tree under `memory/` is its distillation, and spec memory "Keep the
+  memory tree derived and local" already requires that deleting it and
+  re-running aggregation and distil gives back an equivalent partition. The
+  rebuild needs Coffer's internal model for the same wording quality, and a
+  lesson whose source the agent itself has since deleted does not come back,
+  which is the agent's retirement, not a loss. The one thing a person writes
+  about memory — a trigger that guards a known trap
+  ([Memory Reaches a Session at Three Moments](memory-reaches-a-session-at-prompt-time-and-before-a-known-trap.md))
+  — is authored, so it is vault, not derived.
 - **runs.db keeps the single-writer rule** of
   [Control-Plane State Is One SQLite File](sqlite-alembic-persistence.md): WAL,
   one Alembic lineage, the daemon the only process that opens it.
@@ -146,10 +158,10 @@ A vault directory and one local store for everything else.
 
 - **Pros.** Fewer directories; the only distinction sync cares about.
 - **Cons.** It merges three different answers into one. Reach and the master
-  key must *never* travel; memory and media do not travel *yet* but are the
+  key must *never* travel; media and the chat workspace do not travel *yet* but are the
   user's only copy and may converge later; health and bindings can be deleted
-  at any time. A user clearing "local data" would delete memory with the cache;
-  a later decision to converge memory would have to split the class.
+  at any time. A user clearing "local data" would delete media with the cache;
+  a later decision to converge media would have to split the class.
 - **Why it loses.** The distinctions it erases are the ones backup and
   cleanup need.
 
@@ -201,7 +213,7 @@ Rules a future change must respect:
   SQLite writer" guarantee (which names `coffer.db`) are amended in the same
   change, and [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md)
   is revised to store ciphertext as files; where its key lives is revised
-  by [The Master Key Lives in the macOS Keychain, Readable Only by the Signed Coffer App; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md).
+  by [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md).
 - The exporter, the appliers, the document projection and the
   backwards-compatibility layer are deleted with the sync rework
   ([Sync Only Pulls and Pushes the Vault Repository](sync-applies-clean-merges-and-stops-on-any-conflict.md)).
@@ -213,7 +225,7 @@ Rules a future change must respect:
   Reach moves to `local/` in the same migration, in its new shape, so it moves
   once ([Reach Is a Machine-Local Predicate Over an Extensible Context](reach-is-a-machine-local-predicate-over-a-context.md)).
 - A symlink a user made from an agent's own memory directory into
-  `~/.coffer/memory/` would dangle after memory moves to `content/`; Coffer
+  `~/.coffer/memory/` would dangle after memory moves to `derived/`; Coffer
   does not create such links (nothing in `application/memory/` or
   `infrastructure/memory/` does), so the migration reports any it finds and
   the reconciler can check them afterwards.
