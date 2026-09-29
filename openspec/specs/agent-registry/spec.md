@@ -381,15 +381,6 @@ Config-file reads (single files and directory children) MUST return a content fi
 - **THEN** the config file holds the local file's content, a `.bak` holds the prior content, and an `agent_config_file_written` audit entry is recorded
 - **AND** the same command with malformed JSON exits non-zero and leaves the config file unchanged
 
-### Requirement: Annotate a leftover memory-projection block as safe to delete
-When an instructions file still contains the **legacy** memory-projection managed block, the editor MUST annotate it as a leftover that is safe to delete. Coffer no longer writes or parses that block: native projection was retired ([Aggregate Agent Memory, Never Write It](../../../docs/decisions/aggregate-agent-memory-never-write-it.md)), the table behind it was dropped, and [memory](../memory/spec.md) "Reintroduce no retired mechanism" forbids reintroducing it. Detection is by marker prefix only — the block's content is never read. No live feature owns a managed block in these files, so there is no second block to annotate.
-
-#### Scenario: annotate a leftover memory block in the instructions file
-- **GIVEN** a registered agent whose instructions file still contains the legacy memory-projection block marker
-- **WHEN** the user opens that file in the Config files tab
-- **THEN** the config-file read reports the block as present
-- **AND** the editor shows an annotation that the block is a leftover that is safe to delete
-
 ### Requirement: Carry the model binding on the agent record
 The agent record MUST carry the model binding the rest of Coffer reads — `model`, `fast_model` and `wire_api` — because the model is chosen at the point of USE and an agent is where it is used, not on the connection that serves it. That binding MUST be settable without the web UI: `PATCH /api/v1/agents/{uid}` carries `model` / `fast_model` / `wire_api`, and `coffer agent edit` exposes them as `--model` / `--fast-model` / `--wire-api`, with `--clear-fast-model` for the explicit null that unbinds the fast slot — options on the verb that edits the agent rather than a command of their own, because they are fields of the agent. A field the request omits is unchanged. Only `fast_model` clears on an explicit null; `model` and `wire_api` have no null that unbinds them, so an explicit null for either is treated as omitted. Projecting a binding into the agent's native config is provider-switching's; validating a bound value against what one type accepts is that type's child spec (see [agent-registry/codex](codex/spec.md) "Accept only responses as Codex's wire_api" for `wire_api`).
 

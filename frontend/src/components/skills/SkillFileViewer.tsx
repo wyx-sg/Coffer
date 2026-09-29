@@ -65,20 +65,19 @@ export function SkillFileViewer({
 
   const absPath = content.data?.abs_path;
 
-  // Path on the first row, the open/reveal actions on a second row below —
-  // mirrors the agent config viewer (ConfigEditorPane) so the two file previews
-  // read the same.
+  // Path on the first row; the open/reveal actions share the editor's action
+  // row below it — <FileEditor> renders them left of Edit / Save / Cancel, the
+  // same as the agent config viewer (ConfigEditorPane). A binary file has no
+  // editor, so it shows the actions on their own.
   const header = (
-    <div className="space-y-2">
-      <span className="block truncate font-mono text-xs text-muted-foreground">{path}</span>
-      {absPath ? <FileActions filePath={absPath} /> : null}
-    </div>
+    <span className="block truncate font-mono text-xs text-muted-foreground">{path}</span>
   );
 
   if (content.data?.binary) {
     return (
       <div className="space-y-2">
         {header}
+        {absPath ? <FileActions filePath={absPath} /> : null}
         <div className="flex h-80 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
           {t("skills.files.binary", { size: content.data.size })}
         </div>
@@ -109,6 +108,7 @@ export function SkillFileViewer({
           builtin ? t("skills.builtinTooltip") : truncated ? t("files.readOnlyTruncated") : null
         }
         ariaLabel={t("skills.files.editorLabel", { path })}
+        filePath={absPath}
       >
         {/* Preview grows with content but is capped at 60vh and scrolls inside
             (both axes) — same as the knowledge-base doc viewer, so it never

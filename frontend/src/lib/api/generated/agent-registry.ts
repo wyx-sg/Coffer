@@ -718,8 +718,6 @@ export interface components {
             content: string;
             /** @description Content fingerprint for optimistic-concurrency writes (see "Reject stale config-file writes by fingerprint"); empty string when the file does not exist. */
             fingerprint: string;
-            /** @description True when the file still contains the legacy memory-projection block marker (see "Annotate a leftover memory-projection block as safe to delete") — the editor surfaces a notice, never parses the block. */
-            memory_block: boolean;
         };
         ConfigFileWrite: {
             /** @description New file text. Validated against the file's format before writing. */
