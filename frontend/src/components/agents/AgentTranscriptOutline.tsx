@@ -67,20 +67,18 @@ export function AgentTranscriptOutline({
 
   return (
     <div className={cn(FILE_PANE_COLUMN, className)}>
-      <p className="shrink-0 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {t("agents.conversationDetail.outline")}
+      <p className="shrink-0 px-1 text-2xs font-medium uppercase tracking-wide text-text-subtle">
+        {t("agents.sessionsTab.outline")}
       </p>
       {entries.length === 0 ? (
-        <p className="px-1 text-sm text-muted-foreground">
-          {t("agents.conversationDetail.outlineEmpty")}
-        </p>
+        <p className="px-1 text-sm text-muted-foreground">{t("agents.sessionsTab.outlineEmpty")}</p>
       ) : (
         <ul className={cn("space-y-0.5", FILE_PANE_SCROLL)} data-testid="transcript-outline">
           {entries.map((entry) => (
             <li key={entry.index}>
               <button
                 type="button"
-                className="w-full truncate rounded px-2 py-1 text-left text-xs text-muted-foreground hover:bg-surface-hover hover:text-text"
+                className="w-full break-words rounded px-2 py-1 text-left text-xs text-muted-foreground hover:bg-surface-hover hover:text-text"
                 title={entry.label}
                 onClick={() => {
                   // `block: "start"` puts the chosen turn at the top of the

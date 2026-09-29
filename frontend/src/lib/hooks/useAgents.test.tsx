@@ -19,7 +19,7 @@ import {
   useAdoptMcpEntry,
   useAdoptUnmanagedSkill,
   useAgent,
-  useAgentCandidates,
+  useAgentTypes,
   useAgentConfigFile,
   useAgentConfigFiles,
   useAgentMcpEntries,
@@ -278,27 +278,16 @@ describe("useAgentConnection / useAgentConnect", () => {
   });
 });
 
-describe("useAgentCandidates", () => {
+describe("useAgentTypes", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  test("GETs /agents/candidates when enabled", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { candidates: [] }));
+  test("GETs /agents/types and returns the rows", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { types: [] }));
     vi.stubGlobal("fetch", fetchMock);
-    const { result } = renderHook(() => useAgentCandidates(true), {
-      wrapper: wrapper(),
-    });
+    const { result } = renderHook(() => useAgentTypes(), { wrapper: wrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual([]);
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toMatch(/\/agents\/candidates$/);
-    expect((init as RequestInit).method).toBe("GET");
-  });
-
-  test("does not fetch while disabled (dialog closed)", () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { candidates: [] }));
-    vi.stubGlobal("fetch", fetchMock);
-    renderHook(() => useAgentCandidates(false), { wrapper: wrapper() });
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/agents\/types$/);
   });
 });
 

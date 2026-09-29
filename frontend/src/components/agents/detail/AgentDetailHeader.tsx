@@ -1,0 +1,138 @@
+// src/components/agents/detail/AgentDetailHeader.tsx — the agent page's header: mark, name, Coffer state, the one action, the ⋯ menu.
+//
+// Spec agent-registry "Show the Coffer connection on the agent pages": the
+// header offers the action the state calls for — Connect to Coffer when not
+// connected or when the connection is partial (the connect puts the missing
+// parts back), Enable when switched off, Add when not added — and a
+// connected agent's own next step, a new conversation; Disconnect is in the ⋯
+// menu and previews what it removes. Under the name, one mono line: the fixed
+// name, the version, the config directory and the model. No title or rename:
+// an agent is named by its type.
+import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { MessageSquarePlus, Plug, Plus, Power, Wrench, type LucideIcon } from "lucide-react";
+
+import { AgentBadge, type AgentBadgeState } from "@/components/agent/AgentBadge";
+import type { useAgentRowActions } from "@/components/agents/list/useAgentRowActions";
+import { PageHeader } from "@/components/PageHeader";
+import { StatusWord } from "@/components/status/StatusWord";
+import { Button } from "@/components/ui/button";
+import { ActionMenu } from "@/components/ui/menu";
+import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
+import { agentRowStateKey, agentRowTone, type AgentRowState } from "@/lib/agents/rowState";
+import type { AgentOut, AgentTypeOut } from "@/lib/api/agents";
+
+type RowActions = ReturnType<typeof useAgentRowActions>;
+
+interface Props {
+  typeRow: AgentTypeOut;
+  agent: AgentOut | undefined;
+  rowActions: RowActions;
+}
+
+/** How the agent's mark reads for its state (Foundations-AgentBadge). */
+function badgeState(state: AgentRowState): AgentBadgeState {
+  if (state === "connected") return "connected";
+  if (state === "disabled") return "disabled";
+  if (state === "not_installed" || state === "config_left_behind" || state === "not_found")
+    return "not-installed";
+  return "not-connected";
+}
+
+/** The header's word for a state; a connected agent says what it is connected to. */
+function stateWordKey(state: AgentRowState): string {
+  if (state === "connected") return "agents.stateHeader.connected";
+  if (state === "config_left_behind") return "agents.stateHeader.config_left_behind";
+  return agentRowStateKey(state);
+}
+
+interface HeaderAction {
+  label: string;
+  icon: LucideIcon;
+  run?: () => void;
+  to?: string;
+}
+
+function useHeaderAction(state: AgentRowState, open: RowActions["open"]): HeaderAction | null {
+  const { t } = useTranslation();
+  switch (state) {
+    case "connected":
+      return {
+        label: t("agents.detail.newConversation"),
+        icon: MessageSquarePlus,
+        to: "/conversations",
+      };
+    case "not_connected":
+      return { label: t("agents.detail.connect"), icon: Plug, run: () => open.change("connect") };
+    // Spec "the header offers the action the state calls for": a partial
+    // connection reads Needs repair (the state word) and offers Connect to
+    // Coffer, which puts the missing parts back.
+    case "needs_repair":
+      return { label: t("agents.detail.connect"), icon: Wrench, run: () => open.change("connect") };
+    case "disabled":
+      return { label: t("agents.detail.enable"), icon: Power, run: open.enable };
+    case "not_added":
+    case "never_run":
+      return { label: t("agents.detail.add"), icon: Plus, run: () => open.change("add") };
+    default:
+      return null;
+  }
+}
+
+export function AgentDetailHeader({ typeRow, agent, rowActions }: Props) {
+  const { t } = useTranslation();
+  const name = agentTypeLabel(typeRow.type);
+  const state = rowActions.state;
+  const action = useHeaderAction(state, rowActions.open);
+  const installed = typeRow.state === "installed_active" || typeRow.state === "installed_never_run";
+
+  const meta = [
+    agent?.name ?? typeRow.name,
+    installed
+      ? typeRow.version
+        ? `v${typeRow.version}`
+        : null
+      : t("agents.state.not_installed").toLowerCase(),
+    abbreviateHomePath(typeRow.config_dir),
+    agent?.model ?? null,
+  ].filter((part): part is string => !!part);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <PageHeader
+        back={{ to: "/agents", label: t("agents.title") }}
+        title={
+          <span className="inline-flex items-center gap-2.5">
+            <AgentBadge type={typeRow.type} size="lg" state={badgeState(state)} tooltip={false} />
+            {name}
+          </span>
+        }
+        badges={<StatusWord tone={agentRowTone(state)}>{t(stateWordKey(state))}</StatusWord>}
+        actions={
+          <div className="flex items-center gap-2">
+            {action?.to ? (
+              <Button variant="outline" size="sm" asChild>
+                <Link to={action.to}>
+                  <action.icon aria-hidden className="size-3.5" />
+                  {action.label}
+                </Link>
+              </Button>
+            ) : action ? (
+              <Button size="sm" onClick={action.run}>
+                <action.icon aria-hidden className="size-3.5" />
+                {action.label}
+              </Button>
+            ) : null}
+            {rowActions.actions.length > 0 ? (
+              <ActionMenu
+                label={t("agents.detail.moreActions", { name })}
+                actions={rowActions.actions}
+              />
+            ) : null}
+          </div>
+        }
+      />
+      <p className="font-mono text-xs text-text-muted">{meta.join(" · ")}</p>
+    </div>
+  );
+}

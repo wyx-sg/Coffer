@@ -22,6 +22,14 @@ export COFFER_DEV_CORS=1
 # Make sure the .coffer dir exists so daemon bootstrap can write daemon.json
 mkdir -p "${COFFER_E2E_HOME}/.coffer"
 
+# A `bin` directory in the isolated HOME, ahead of everything else on the
+# daemon's PATH. Agent detection looks for `claude` / `codex` on every probe, so
+# a spec that needs an installed agent on a machine without one (CI) drops a
+# stand-in program here and the next detection finds it; nothing is there by
+# default, and a real install on the login shell's PATH still comes first.
+mkdir -p "${COFFER_E2E_HOME}/bin"
+export PATH="${COFFER_E2E_HOME}/bin:${PATH}"
+
 # Persist the chosen home path so _helpers.ts can locate daemon.json.
 # COFFER_E2E_HOME_FILE moves the pointer so a second suite does not repoint it.
 echo "${COFFER_E2E_HOME}" > "${COFFER_E2E_HOME_FILE:-/tmp/coffer-e2e-home.path}"

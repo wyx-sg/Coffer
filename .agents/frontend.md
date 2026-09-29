@@ -110,14 +110,14 @@ The API token is deliberately not in that table: it is read from
 (`src/lib/auth.ts`). Persisting it would outlive the daemon that minted it.
 
 The URL rows matter: anything a user would expect to survive a refresh, deep-link,
-or back-button MUST be a route param (`/conversations/:id`, `/agents/:uid`), not local
+or back-button MUST be a route param (`/conversations/:id`, `/agents/:type`), not local
 state. "Which item is selected" is navigation, not UI state. The same holds one
 level down. A detail page's tab lives in the path — `/<kind>/<id>` for the
 default tab, `/<kind>/<id>/<tab>` otherwise — through `useDetailTab`
 (`lib/detailTabs.ts`), which also redirects old `?tab=` links; skills and MCP
-servers are keyed by their fixed name, renamable kinds by uid. Skills, MCP
-servers and model providers follow it; Agent, Knowledge, Sync and Activity
-still use `?tab=` until their rebuild, and the open file in a tree is always
+servers are keyed by their fixed name, agents by their type, renamable kinds
+by uid. Skills, MCP servers, model providers and agents follow it; Knowledge,
+Sync and Activity still use `?tab=` until their rebuild, and the open file in a tree is always
 `?file=`. The default tab is never spelled out (`/overview`, `?tab=overview`).
 
 There is no global store. Cross-component server data is shared through the
@@ -233,11 +233,11 @@ return useMutation({
 - **Build from `src/components/ui/` primitives** (shadcn: `Button`, `Dialog`,
   `Select`, `Textarea`, `Tooltip`, `Skeleton`, `ConfirmDialog`, …). Don't
   hand-roll a control a primitive already covers — no native `title=` hints
-  where `Tooltip` fits, no bespoke pulsing block where `Skeleton` does. There is
-  deliberately **no `DropdownMenu`**: row actions are explicit buttons
-  (`RowDeleteButton`, `ScopeControl`), the menu that once held them is gone, and
-  a primitive listed here with no caller is a control a reader would reach for
-  and not find. Add it back from shadcn when a surface actually needs one.
+  where `Tooltip` fits, no bespoke pulsing block where `Skeleton` does. Row actions
+  are explicit buttons (`RowDeleteButton`, `ScopeControl`); the one "⋯" menu is
+  `ActionMenu` (`components/ui/menu.tsx`, over `Popover`), used where the design
+  gives an object a menu of secondary commands (an agent's row and header).
+  There is no `DropdownMenu`.
 - **Shared surfaces above the primitives**, used the same way everywhere:
   - `PageHeader` is the one page header, list and detail alike: `icon` (list
     pages), `back` (detail pages), `badges` beside the title, `actions` on the

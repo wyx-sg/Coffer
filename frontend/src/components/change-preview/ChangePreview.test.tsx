@@ -206,4 +206,15 @@ describe("ChangePreview", () => {
     expect(screen.getByRole("region", { name: "Codex (work)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply 5 changes" })).toBeInTheDocument();
   });
+  test("a caller can name the confirm, tint it destructive and replace the review note", () => {
+    const { onApply } = renderPreview("ready", {
+      applyLabel: "Disconnect",
+      applyDestructive: true,
+      note: "Only Coffer’s own lines are removed.",
+    });
+    expect(screen.getByText("Only Coffer’s own lines are removed.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /apply/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    expect(onApply).toHaveBeenCalledTimes(1);
+  });
 });

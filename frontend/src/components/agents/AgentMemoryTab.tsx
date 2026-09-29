@@ -1,127 +1,124 @@
-// frontend/src/components/agents/AgentMemoryTab.tsx
-// "Memory" tab on the agent detail page, in two sections that mirror the
-// Skills and MCP-servers tabs (Coffer-managed vs the agent's own):
+// frontend/src/components/agents/AgentMemoryTab.tsx — spec agent-registry
+// "Read one native memory store's files read-only".
+// The agent detail page's Memory tab: the coding agent's OWN native memory
+// stores (Claude Code's ~/.claude/projects/<project>/memory/, Codex's
+// ~/.codex/memories/MEMORY.md sliced by project), read-only, as one table of
+// project, path and item count. Coffer reads them to build shared memory and
+// never writes them; the shared memory itself, and how it reaches agents, is
+// the Memory page's.
 //
-//   A. Coffer-managed memory — Coffer aggregates every agent's native memory
-//      into its own partitions, and an agent reaches those back through the MCP
-//      gateway (recall). They are managed on the standalone Memory page, so this
-//      tab does not re-list them: the shared CofferGatewayRow points straight
-//      there. Knowledge is a different layer with its own page and its own tab
-//      pointer — this one must not send the user there.
-//   B. The agent's own memory — the coding agent's OWN native per-project memory
-//      stores (e.g. Claude Code's ~/.claude/projects/<project>/memory/), shown
-//      read-only as a table of (project, path, item count). A store is a
-//      DIRECTORY, so clicking a row opens its own page: a file tree and a
-//      read-only preview, where the open / reveal actions live. The table has no
-//      per-row menu — a list of stores is for picking one, and what you can do
-//      to the one you picked belongs where its contents are visible. This is NOT
-//      Coffer knowledge and NOT the CLAUDE.md instructions file; it is the
-//      agent's native memory, surfaced so the user can read and open it. Coffer
-//      never writes it.
-//
-// Nothing here writes. Coffer's memory delivery hook is one part of the agent's
-// Coffer connection, installed and removed with it from the page header (spec
-// agent-registry "Show the Coffer connection on the agent pages").
+// A store is a directory, so a row opens its own page (a file tree and a
+// read-only preview, where the open / reveal actions live) — the table has no
+// per-row actions.
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { Brain, ChevronRight } from "lucide-react";
 
-import { CofferGatewayRow } from "@/components/agents/AgentManagedLink";
 import { DataTable, type Column } from "@/components/DataTable";
-import { Card } from "@/components/ui/card";
-import { translateApiError } from "@/lib/api/errors";
+import { EmptyState } from "@/components/EmptyState";
+import { Button } from "@/components/ui/button";
+import { abbreviateHomePath, agentTypeLabel } from "@/lib/agents/display";
+import { agentMemoryStorePath } from "@/lib/agents/routes";
 import type { AgentOut } from "@/lib/api/agents";
 import type { NativeMemoryStore } from "@/lib/api/agentNativeMemory";
+import { translateApiError } from "@/lib/api/errors";
 import { useAgentNativeMemory } from "@/lib/hooks/useAgentNativeMemory";
-import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
+
+/** Where the agent writes its memory, for the empty state. */
+function memoryLocation(agent: AgentOut): string {
+  const dir = abbreviateHomePath(agent.config_dir);
+  return agent.type === "codex" ? `${dir}/memories/MEMORY.md` : `${dir}/projects/<project>/memory/`;
+}
+
+/** The project a store belongs to: its real directory when Coffer resolved one. */
+function projectLabel(store: NativeMemoryStore): string {
+  return store.path ? abbreviateHomePath(store.path) : store.project;
+}
 
 export function AgentMemoryTab({ agent }: { agent: AgentOut }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const native = useAgentNativeMemory(agent.uid);
-  // The first section is Coffer's memory layer — a pointer to its page — and
-  // leaves with it while `memory` is switched off. The agent's own stores are
-  // the agent's, and stay.
-  const memoryOn = useFeatureEnabled("memory") === true;
+  const agentName = agentTypeLabel(agent.type);
+  const stores = native.data?.items ?? [];
+
+  if (native.error) {
+    return (
+      <EmptyState
+        icon={Brain}
+        tone="error"
+        title={t("agents.memoryTab.loadFailed")}
+        description={translateApiError(t, native.error)}
+        action={
+          <Button variant="outline" size="sm" onClick={() => void native.refetch()}>
+            {t("common.retry")}
+          </Button>
+        }
+      />
+    );
+  }
+  if (!native.isPending && stores.length === 0) {
+    return (
+      <EmptyState
+        icon={Brain}
+        title={t("agents.memoryTab.emptyTitle", { agent: agentName })}
+        description={t("agents.memoryTab.emptyBody", {
+          agent: agentName,
+          path: memoryLocation(agent),
+        })}
+      />
+    );
+  }
 
   const columns: Column<NativeMemoryStore>[] = [
     {
       key: "project",
       header: t("agents.memoryTab.colProject"),
-      className: "whitespace-nowrap",
-      cell: (s) => <span className="text-sm font-medium">{s.project}</span>,
+      cell: (s) => <span className="break-all text-sm text-text">{projectLabel(s)}</span>,
     },
     {
       key: "path",
       header: t("agents.memoryTab.colPath"),
-      // Prefer the real project path; for Codex every row shares one memory_dir,
-      // so the cwd in `path` is what distinguishes (and is more useful than the
-      // internal memory folder for Claude Code too).
       cell: (s) => (
-        <span className="line-clamp-1 max-w-md font-mono text-xs text-muted-foreground">
-          {s.path ?? s.memory_dir}
+        <span className="break-all font-mono text-xs text-text-muted">
+          {abbreviateHomePath(s.memory_dir)}
         </span>
       ),
     },
     {
       key: "items",
       header: t("agents.memoryTab.colItems"),
-      className: "whitespace-nowrap tabular-nums text-right",
-      cell: (s) => <span className="text-muted-foreground">{s.item_count}</span>,
+      className: "whitespace-nowrap text-right tabular-nums",
+      cell: (s) => <span className="text-text-muted">{s.item_count}</span>,
+    },
+    {
+      key: "open",
+      header: <span className="sr-only">{t("agents.memoryTab.open")}</span>,
+      className: "w-6",
+      cell: () => <ChevronRight className="size-4 text-text-subtle" aria-hidden />,
     },
   ];
 
   return (
-    <div className="space-y-3">
-      {/* The "managed by Coffer" pointer, in its own box: what the agent reaches
-          THROUGH the gateway lives on the Memory page, not here. */}
-      {memoryOn ? (
-        <Card className="p-4">
-          <CofferGatewayRow
-            agentUid={agent.uid}
-            title={t("agents.cofferManaged")}
-            hint={t("agents.memoryTab.accessViaGateway")}
-            buttonLabel={t("agents.memoryTab.openMemoryPage")}
-            onOpen={() => navigate("/memory")}
-            notInstalledHint={t("agents.memoryTab.notInstalled")}
-          />
-        </Card>
-      ) : null}
-
-      <Card className="space-y-3 p-4">
-        <div className="space-y-1">
-          <h3 className="text-sm font-medium text-muted-foreground">{t("agents.agentOwn")}</h3>
-          <p className="text-xs text-muted-foreground">{t("agents.memoryTab.nativeHint")}</p>
-        </div>
-
-        {native.isPending ? (
-          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-        ) : native.error ? (
-          <p className="text-sm text-destructive">{translateApiError(t, native.error)}</p>
-        ) : (
-          <DataTable
-            rows={native.data?.items ?? []}
-            columns={columns}
-            // Codex rows share one memory_dir, so key by the routed project too.
-            rowKey={(s) => `${s.memory_dir}::${s.path ?? s.project}`}
-            // The store's identity is its directory, so that is what the page
-            // is addressed by; the label rides along only so the heading can
-            // say "api" rather than a forty-character slug path.
-            onRowClick={(s) =>
-              navigate(
-                `/agents/${encodeURIComponent(agent.uid)}/memory?${new URLSearchParams({
-                  dir: s.memory_dir,
-                  project: s.path ?? s.project,
-                })}`,
-              )
-            }
-            search={{
-              accessor: (s) => `${s.project} ${s.path ?? ""} ${s.memory_dir}`,
-              placeholder: t("agents.memoryTab.searchPlaceholder"),
-            }}
-            emptyMessage={t("agents.memoryTab.nativeEmpty")}
-          />
-        )}
-      </Card>
+    <div className="flex flex-col gap-3.5">
+      <div className="space-y-1">
+        <h3 className="text-sm font-medium text-text">
+          {t("agents.memoryTab.title")}
+          <span className="text-text-muted">{` · ${stores.length}`}</span>
+        </h3>
+        <p className="text-xs text-text-muted">{t("agents.memoryTab.subtitle")}</p>
+      </div>
+      <DataTable
+        rows={stores}
+        columns={columns}
+        isLoading={native.isPending}
+        // Codex rows share one memory_dir, so key by the routed project too.
+        rowKey={(s) => `${s.memory_dir}::${s.path ?? s.project}`}
+        onRowClick={(s) =>
+          navigate(agentMemoryStorePath(agent.type, s.memory_dir, s.path ?? s.project))
+        }
+        emptyMessage={t("agents.memoryTab.emptyTitle", { agent: agentName })}
+      />
     </div>
   );
 }

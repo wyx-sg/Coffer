@@ -40,8 +40,7 @@ export const resourceKey = (uid: string) => ["resources", uid] as const;
 
 export const agentsKey = ["agents"] as const;
 export const agentKey = (uid: string) => ["agents", uid] as const;
-export const agentCandidatesKey = ["agents", "candidates"] as const;
-/** Every supported agent type with its detection state, registered or not. */
+/** One row per supported type, registered or not (`GET /agents/types`). */
 export const agentTypesKey = ["agents", "types"] as const;
 export const agentConfigFilesKey = (uid: string) => ["agents", uid, "config-files"] as const;
 export const agentConfigFileKey = (uid: string, key: string) =>
