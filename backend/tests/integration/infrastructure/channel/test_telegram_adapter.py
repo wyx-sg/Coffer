@@ -289,7 +289,7 @@ async def test_long_reply_is_chunked_on_paragraph_boundary(fake_telegram: FakeTe
     sends = fake_telegram.calls_for("sendMessage")
     assert len(sends) == 2  # > 4000 chars total → two messages
     assert sends[0]["text"] == para1  # split exactly on the paragraph boundary,
-    assert sends[1]["text"] == para2  # delivered in order
+    assert sends[1]["text"] == f"(2/2)\n{para2}"  # delivered in order, numbered
     assert all(len(s["text"]) <= 4000 for s in sends)
     assert sent.message_id == "102"  # handle of the LAST delivered chunk
 

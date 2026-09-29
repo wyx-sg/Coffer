@@ -283,7 +283,14 @@ class SeaTalkAdapter:
         """SeaTalk cannot edit, but it can stream — one message that
         re-renders from the full snapshot until the stream is finished."""
         return SeaTalkLiveText(
-            self._post, chat_id, name=self._name, thread_id=thread_id, chat_kind=chat_kind
+            self._post,
+            chat_id,
+            name=self._name,
+            thread_id=thread_id,
+            chat_kind=chat_kind,
+            send=self._send,
+            char_limit=self.capabilities.max_message_chars,
+            byte_limit=_BYTE_LIMIT,
         )
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:

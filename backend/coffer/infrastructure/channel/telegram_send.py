@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
+from coffer.application.channel.reply_shape import split_details
 from coffer.domain.channel.envelopes import ChoiceButton, EphemeralTarget, SentMessage
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.infrastructure.channel.render import chunk_text, markdown_to_telegram_html
@@ -18,13 +19,34 @@ from coffer.infrastructure.channel.telegram_features import Feature
 from coffer.infrastructure.channel.telegram_media import inline_keyboard, routing_params
 from coffer.infrastructure.channel.telegram_rich import RICH_MESSAGE_LIMIT, send_rich_text
 
-__all__ = ["routing_params", "send_text_chunks"]
+__all__ = ["continuation", "routing_params", "send_text_chunks"]
 
 Call = Callable[..., Awaitable[Any]]
 
 #: What one ordinary ``sendMessage`` may carry, used when a rich send falls back
 #: mid-reply and the remainder must be re-cut to the smaller budget.
 _PLAIN_LIMIT = 4000
+#: Room kept in a details chunk for the tags that wrap it.
+_WRAP_ROOM = 80
+_DETAILS_OPEN = "<details><summary>Details</summary>"
+_DETAILS_CLOSE = "</details>"
+
+
+def continuation(index: int, total: int) -> str:
+    """``(2/3)\n`` heading every piece after the first of a reply cut into
+    several (spec channels "Shape a reply for what the chat can show"), so a busy
+    group can follow it; "" for the first piece and for a reply in one piece."""
+    return f"({index + 1}/{total})\n" if index > 0 and total > 1 else ""
+
+
+def _rich_markdown(markdown: str) -> str:
+    """``## Details`` becomes a collapsed ``<details>`` block — the rich
+    format's own disclosure element, which holds lists, tables and code (an
+    expandable quotation holds inline text only)."""
+    head, details = split_details(markdown)
+    if not details:
+        return markdown
+    return f"{head}\n\n{_DETAILS_OPEN}\n\n{details}\n\n{_DETAILS_CLOSE}"
 
 
 async def send_text_chunks(
@@ -165,13 +187,13 @@ async def _send_rich_chunks(
     chat, so the remainder is finished here on the plain path rather than being
     sent twice.
     """
-    pieces = list(chunk_text(markdown, RICH_MESSAGE_LIMIT))
+    pieces = list(chunk_text(_rich_markdown(markdown), RICH_MESSAGE_LIMIT))
     last: SentMessage | None = None
     for i, piece in enumerate(pieces):
         sent = await send_rich_text(
             call,
             chat_id,
-            piece,
+            continuation(i, len(pieces)) + piece,
             channel=channel,
             feature=rich,
             buttons=buttons if i == len(pieces) - 1 else None,
@@ -183,10 +205,12 @@ async def _send_rich_chunks(
         if sent is None:
             if last is None:
                 return None
+            rest = "\n\n".join(pieces[i:])
+            rest = rest.replace(_DETAILS_OPEN, "## Details").replace(_DETAILS_CLOSE, "")
             return await _send_plain_chunks(
                 call,
                 chat_id,
-                "\n\n".join(pieces[i:]),
+                rest,
                 limit=_PLAIN_LIMIT,
                 buttons=buttons,
                 title="",
@@ -221,9 +245,13 @@ async def _send_plain_chunks(
     """
     if title and buttons:
         markdown = f"**{title}**\n{markdown}"
-    chunks = list(chunk_text(markdown, limit))
+    # ``## Details`` goes out as expandable quotations — the HTML subset's
+    # collapsed block — each chunk of it its own.
+    head, details = split_details(markdown)
+    chunks = [(c, False) for c in chunk_text(head, limit)]
+    chunks += [(c, True) for c in chunk_text(details, limit - _WRAP_ROOM)]
     last: SentMessage | None = None
-    for i, chunk in enumerate(chunks):
+    for i, (chunk, collapsed) in enumerate(chunks):
         # The inline keyboard rides on the final chunk so it sits under the
         # whole (possibly chunked) message. The reply pointer rides on the
         # FIRST: that is the one answering the user's message.
@@ -236,6 +264,8 @@ async def _send_plain_chunks(
             thread_id=thread_id,
             reply_to_message_id=reply_to_message_id if i == 0 else "",
             silent=silent or i > 0,
+            prefix=continuation(i, len(chunks)),
+            collapsed=collapsed,
         )
     return last if last is not None else SentMessage(message_id="")
 
@@ -249,8 +279,13 @@ async def _send_chunk(
     thread_id: str,
     reply_to_message_id: str,
     silent: bool = False,
+    prefix: str = "",
+    collapsed: bool = False,
 ) -> SentMessage:
     markup = inline_keyboard(buttons) if buttons else None
+    html = markdown_to_telegram_html(chunk)
+    if collapsed:
+        html = f"<b>Details</b>\n<blockquote expandable>{html}</blockquote>"
     extra = routing_params(thread_id, reply_to_message_id)
     if markup is not None:
         extra["reply_markup"] = markup
@@ -260,7 +295,7 @@ async def _send_chunk(
         sent = await call(
             "sendMessage",
             chat_id=chat_id,
-            text=markdown_to_telegram_html(chunk),
+            text=prefix + html,
             parse_mode="HTML",
             **extra,
         )
@@ -271,5 +306,5 @@ async def _send_chunk(
         # instant resend.
         if not (e.api_rejected and e.status == 400):
             raise
-        sent = await call("sendMessage", chat_id=chat_id, text=chunk, **extra)
+        sent = await call("sendMessage", chat_id=chat_id, text=prefix + chunk, **extra)
     return SentMessage(message_id=str(sent.get("message_id", "")))

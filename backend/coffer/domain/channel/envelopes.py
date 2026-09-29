@@ -177,6 +177,14 @@ class ChannelCapabilities:
     # One or two sentences telling the agent what Markdown renders on this
     # transport (see "Tell a channel-driven agent it is on a chat channel").
     render_notes: str = ""
+    # "Shape a reply for what the chat can show": whether a markdown table
+    # renders (False → bullet rows + a CSV), how many lines a code block may
+    # keep inline (0 = any; more → attached as a file), and whether the
+    # transport collapses a ``## Details`` section itself (Telegram) — one that
+    # does not may move it behind a card's button instead.
+    renders_tables: bool = True
+    max_inline_code_lines: int = 0
+    collapses_details: bool = False
 
 
 @dataclass(frozen=True)

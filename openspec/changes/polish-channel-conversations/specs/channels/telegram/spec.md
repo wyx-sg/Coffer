@@ -26,3 +26,17 @@ name. A direct answer carries none, and the silent status message carries none
 - **WHEN** the turn's answer is delivered
 - **THEN** it opens with `[Alex](tg://user?id=4242)`, and the HTML fallback renders
   that as a `tg://user?id=4242` link named Alex
+
+### Requirement: Collapse a reply's details
+A Telegram reply's `## Details` section MUST arrive collapsed. A rich message
+wraps it in `<details><summary>Details</summary>…</details>`, the rich format's
+disclosure block, which holds lists, tables and code (an expandable quotation
+holds inline text only). The HTML fallback, which has no such element, sends it
+as expandable quotations under a bold `Details` line. Every message after a
+reply's first is sent silently and opens with `(2/3)`.
+
+#### Scenario: a details section arrives collapsed
+- **GIVEN** a reply whose last section is headed `## Details`
+- **WHEN** it is delivered as a rich message
+- **THEN** that section is inside a `<details>` block summarised `Details`, and on
+  the HTML fallback it is an expandable quotation in a numbered, silent message

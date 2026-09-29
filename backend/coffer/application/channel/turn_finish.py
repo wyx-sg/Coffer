@@ -15,7 +15,8 @@ from dataclasses import dataclass
 from typing import Literal
 
 from coffer.application.channel.ports import ChannelAdapter
-from coffer.application.channel.turn_media import deliver_media
+from coffer.application.channel.reply_shape import ReplyFile, shape_reply
+from coffer.application.channel.turn_media import deliver_media, send_reply_files
 from coffer.application.channel.turn_status import format_elapsed
 from coffer.application.channel.turn_surface import TurnSurface
 from coffer.domain.chat.events import TurnError
@@ -136,10 +137,21 @@ async def deliver_reply(
     a stream hands back does not repeat it.
     """
     media_sent = 0
+    files: tuple[ReplyFile, ...] = ()
     if text:
         text, media_sent = await deliver_media(
             adapter, chat_id, text, thread_id=thread_id, chat_kind=chat_kind
         )
+        # What this chat cannot show becomes bullets and files (see "Shape a
+        # reply for what the chat can show").
+        caps = adapter.capabilities
+        shaped = shape_reply(
+            text,
+            renders_tables=caps.renders_tables,
+            max_inline_code_lines=caps.max_inline_code_lines,
+            attach=caps.supports_media,
+        )
+        text, files = shaped.body, shaped.files
     if end.error is not None:
         # What the agent streamed before failing is still the user's — a stalled
         # or dropped turn often has most of an answer in it.
@@ -163,4 +175,5 @@ async def deliver_reply(
     leftover = await surface.close(mentioned)
     if leftover:
         await send(leftover)
+    await send_reply_files(adapter, chat_id, files, thread_id=thread_id, chat_kind=chat_kind)
     return body, was_open and leftover != mentioned

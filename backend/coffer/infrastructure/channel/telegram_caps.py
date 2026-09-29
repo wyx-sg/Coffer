@@ -49,4 +49,6 @@ def telegram_capabilities(features: FeatureSet) -> ChannelCapabilities:
         reactions=TELEGRAM_REACTIONS,
         mention_template=TELEGRAM_MENTION_TEMPLATE,
         render_notes=RICH_RENDER_NOTES if rich else PLAIN_RENDER_NOTES,
+        # ``## Details`` becomes a collapsed block in both send paths.
+        collapses_details=True,
     )

@@ -13,6 +13,7 @@ from typing import Any
 from coffer.domain.channel.errors import ChannelSendFailed
 from coffer.infrastructure.channel.live_text import LIVE_KEEPALIVE_SECONDS, LiveTextSurface
 from coffer.infrastructure.channel.render import markdown_to_seatalk
+from coffer.infrastructure.channel.seatalk_send import numbered, rendered_pieces
 from coffer.infrastructure.channel.seatalk_stream_text import (
     _split_for_stream,
     interim_snapshot,
@@ -65,9 +66,19 @@ class SeaTalkLiveText(LiveTextSurface):
         chat_kind: str = "direct",
         now: Callable[[], float] = time.monotonic,
         keepalive_seconds: float = LIVE_KEEPALIVE_SECONDS,
+        send: Callable[[str, dict[str, Any], str, str], Awaitable[Any]] | None = None,
+        char_limit: int = 3500,
+        byte_limit: int = 3900,
     ) -> None:
         super().__init__(keepalive_seconds=keepalive_seconds, now=now)
         self._post = post
+        # The adapter's own chat_kind-routed send: with it, the stream delivers
+        # the remainder past its budget itself, numbered after the stream as
+        # part 1 ("(2/3)"); without it the remainder is handed back.
+        self._send = send
+        self._char_limit = char_limit
+        self._byte_limit = byte_limit
+        self._chat_kind = chat_kind
         self._name = name
         self._chat_id = chat_id
         self._thread_id = thread_id
@@ -131,7 +142,16 @@ class SeaTalkLiveText(LiveTextSurface):
         # The streamed message IS the SeaTalk reply (nothing can delete it), so
         # the final snapshot is markdown-rendered like any other SeaTalk send.
         await self._update(markdown_to_seatalk(head), finish=True)
-        return remainder
+        if not remainder or self._send is None:
+            return remainder
+        pieces = rendered_pieces(remainder, self._char_limit, self._byte_limit)
+        total = len(pieces) + 1
+        for i, piece in enumerate(pieces, start=1):
+            content = {"format": 1, "content": numbered(piece, i, total)}
+            await self._send(
+                self._chat_id, {"tag": "text", "text": content}, self._thread_id, self._chat_kind
+            )
+        return ""
 
     async def _update(self, text: str, *, finish: bool) -> None:
         self._seq += 1  # the platform requires a monotonic seq, starting at 1

@@ -78,6 +78,9 @@ def test_channel_capabilities_carries_strategy_fields():
         "mention_email_template",
         "direct_threads_are_replies",
         "render_notes",
+        "renders_tables",
+        "max_inline_code_lines",
+        "collapses_details",
     }
 
 

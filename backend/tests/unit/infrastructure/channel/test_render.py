@@ -252,6 +252,7 @@ class TestChunkTextKeepsFencesWhole:
     """A chunk boundary inside a fenced block renders as two broken halves on
     every platform, so the chunker treats a fence as one block."""
 
+    @pytest.mark.acceptance(spec="channels", scenario="a code block is never split across messages")
     def test_a_fence_holding_a_blank_line_is_never_cut_at_it(self):
         fence = "```python\nfirst = 1\n\nsecond = 2\n```"
         text = "intro paragraph here\n\n" + fence + "\n\nafter"

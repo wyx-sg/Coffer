@@ -112,6 +112,51 @@ setting is edited on the Channels page and with `coffer channel add|edit
 - **WHEN** the owner runs `coffer channel edit <name> --notify-after 0`
 - **THEN** the channel's threshold is 0, and a value past 3600 is refused
 
+### Requirement: Shape a reply for what the chat can show
+A finished reply MUST pass one structure pass before the platform renderer,
+driven by the transport's declared capabilities, never its type:
+
+- A transport that does not render tables (`renders_tables` false) receives each
+  table as one bullet per row, `- **checkout** · failed · 3DS timeout`; a table
+  of more than 12 rows or 4 columns keeps its first five rows as bullets and
+  goes out whole as an attached `.csv`.
+- A transport with `max_inline_code_lines` set receives a longer fenced block as
+  its first three lines plus a note, and the whole block as an attached file
+  (`.log`, `.diff`, `.txt` by the fence's language).
+- The files follow the answer, through the transport's ordinary file upload,
+  under their own names. A transport that cannot send files keeps everything in
+  the body instead.
+- A `## Details` section — where the agent is asked to put long content — is the
+  transport's to present: one that collapses it does so (see each child spec).
+- A reply cut into several messages is never cut inside a fenced code block (a
+  fence longer than one message is closed and reopened, its language kept), and
+  every message after the first opens with its place, `(2/3)`, so a busy group
+  can follow it.
+
+#### Scenario: a table becomes bullet rows where the chat cannot show tables
+- **GIVEN** a transport that does not render tables
+- **WHEN** a reply holds a three-column table of two rows
+- **THEN** it is delivered as two bullet rows, the first cell of each in bold, and
+  no file is attached
+
+#### Scenario: a long log is attached as a file
+- **GIVEN** a transport that keeps at most 30 lines of code inline
+- **WHEN** a reply holds a 40-line `log` block
+- **THEN** the reply keeps its first three lines and names `log-1.log`, which holds
+  all 40 lines
+
+#### Scenario: a table's CSV and a long log follow the answer as files
+- **GIVEN** a transport that renders no tables and keeps 30 lines of code inline
+- **WHEN** a reply holds a 20-row table and a 50-line log
+- **THEN** the answer is delivered first, then `table-1.csv` and `log-2.log` are
+  uploaded as documents
+
+#### Scenario: a code block is never split across messages
+- **GIVEN** a reply longer than one message whose fenced block holds a blank line
+- **WHEN** it is cut into messages
+- **THEN** no message holds half a fence, and an oversized fence is closed and
+  reopened with its language
+
 ## RENAMED Requirements
 
 - FROM: `### Requirement: Summarise only a turn that did not end normally`

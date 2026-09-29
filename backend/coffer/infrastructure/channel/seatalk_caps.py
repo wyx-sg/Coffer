@@ -50,4 +50,8 @@ SEATALK_CAPABILITIES = ChannelCapabilities(
     # Any DM message can root a thread, so a DM thread is a casual reply.
     direct_threads_are_replies=True,
     render_notes=SEATALK_RENDER_NOTES,
+    # A table arrives as raw pipes in a text message and fails in a card, and a
+    # 200-line log is a wall on a phone: both go out as files.
+    renders_tables=False,
+    max_inline_code_lines=30,
 )
