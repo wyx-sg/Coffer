@@ -486,7 +486,9 @@ spec owns the Skills page.
   naming its writer, so the History tab and whole-pass undo read and revert commits; the old
   "nothing is kept of what a pass replaced" and "where vault sync is configured" wording goes. The
   agent named on a curated version comes from the submission's `knowledge_written` audit event.
-- **Memory delivery counts** come from the delivery-fire audit events and from the note paths
-  transcripts record reading, never their text.
+- **Memory delivery is an agent's property**, so it is shown on the agent's Memory tab — what it
+  receives at session start, delivery counts and hook state — and the Memory page, which is about
+  the notes, shows none of it. Counts come from the delivery-fire audit events and from the note
+  paths transcripts record reading, never their text.
 - **No disabled collection.** Every collection is served to every agent; the remaining "enabled" /
   "disabled" wording in knowledge is removed.

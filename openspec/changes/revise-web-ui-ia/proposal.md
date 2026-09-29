@@ -135,12 +135,13 @@ unarchived until that implementation lands.
   zip-slip, symlinks and size before they are read into the store. There is no create-from-scratch.
 - **Knowledge:** Curate now drains a collection pass by pass with progress, stopping at the first
   failure; one term, Curate / Curation (整理), everywhere; an Inbox node with a count, a header
-  status line, Add a document (an item, not a document), a body-only editor with Reload / Compare on a
+  status line, Add a document (submitted as an item, not written as a document), a body-only editor with Reload / Compare on a
   stale save, and no curation controls without Coffer's model. Every document has a History tab
   and every pass can be undone as a whole from a cross-collection Recent changes view, on the
   vault's git history. Leftover "disabled collection" wording is removed.
-- **Memory** shows per agent how often memory was delivered and how many notes were read in the
-  last seven days.
+- **Memory delivery** lives on each agent's Memory tab — what it receives at session start, how
+  often memory was delivered and how many notes were read in the last seven days, and the hook's
+  state; the Memory page shows no delivery.
 - A **command palette** (⌘K / Ctrl+K) jumps to any page or object. It carries no action that
   changes state.
 - A sidebar entry carries an **attention dot** while its kind's attention signal is raised; Sync's

@@ -95,7 +95,7 @@
 - [ ] 6h.1 Manual curation drains: the route and `coffer knowledge curate <collection>` run passes until nothing is pending, one at a time, with n of m progress, stopping at the first `failed`, answering each pass's outcome; the single-document form unchanged
 - [ ] 6h.2 Collection page: Inbox node with count and the Inbox view with Curate now; header status line (documents · waiting · curated …); Add a document submitting an item with actor `user`; body-only editor with title and description as metadata; stale save → changed on disk, Reload / Compare / Copy my text; no Inbox or Curate now without Coffer's model, one line linking to Settings › General
 - [ ] 6h.3 Document History tab and Recent changes (cross-collection timeline, waiting items, per-pass diff, Undo this pass) on the vault's git history; curated versions name the agent from the `knowledge_written` event
-- [ ] 6h.4 Memory page delivery counts: deliveries per agent over 7 days from delivery-fire audit events, distinct notes read from transcript read paths
+- [ ] 6h.4 Agent Memory tab Delivery section: the session-start context for a picked recent project, deliveries over 7 days from delivery-fire audit events, distinct notes read from transcript read paths, hook state read-only; the Memory page shows no delivery
 - [ ] 6h.5 Wording: frontend i18n en/zh and docs-site say Curate / Curation (整理) and never merge for curation; inbox entries are items; knowledge files are documents
 - [ ] 6h.6 knowledge Purpose section: drop "where vault sync is configured — the vault's git history" in favour of the always-git vault history, and any remaining enabled-collection wording
 
