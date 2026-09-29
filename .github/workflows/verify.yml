@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, feature/rearch]
 
 # Every backend install here is FROZEN from backend/uv.lock, the same set ci.yml
 # and release.yml resolve. These jobs used to `pip install -e backend[dev]`, which

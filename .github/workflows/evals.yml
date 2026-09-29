@@ -19,7 +19,7 @@ on:
       - "backend/coffer/application/memory/**"
       - ".github/workflows/evals.yml"
   pull_request:
-    branches: [main]
+    branches: [main, feature/rearch]
     paths: *eval_paths
 
 concurrency:
