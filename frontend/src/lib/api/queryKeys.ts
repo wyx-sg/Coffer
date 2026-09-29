@@ -241,6 +241,7 @@ export const messagesKey = (conversationId: string) => ["messages", conversation
 export const credentialsKey = ["credentials"] as const;
 /** The approvals still waiting for a present human. */
 export const pendingApprovalsKey = ["credentials", "approvals", "pending"] as const;
+export const secretBoundaryKey = ["credentials", "secret-boundary"] as const;
 
 // ---------------------------------------------------------------------------
 // settings — daemon-side settings the Settings pages edit

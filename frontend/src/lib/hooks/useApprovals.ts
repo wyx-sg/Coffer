@@ -15,11 +15,27 @@ import { useTranslation } from "react-i18next";
 
 import { credentialsApi } from "@/lib/api/credentials";
 import { translateApiError } from "@/lib/api/errors";
-import { credentialsKey, pendingApprovalsKey } from "@/lib/api/queryKeys";
+import { credentialsKey, pendingApprovalsKey, secretBoundaryKey } from "@/lib/api/queryKeys";
 import { approvePending, onApprovalsEvent } from "@/lib/tauri";
 import { useToast } from "@/components/ui/toast";
 
 const POLL_MS = 15_000;
+
+/** The window event that reopens the approvals sheet after it was dismissed. */
+export const OPEN_APPROVALS_EVENT = "coffer:open-approvals";
+
+/** Reopen the approvals sheet from anywhere (the Secrets page, Settings › Security). */
+export function openApprovalsSheet(): void {
+  window.dispatchEvent(new Event(OPEN_APPROVALS_EVENT));
+}
+
+/** Whether a secret waits for approval before it goes somewhere new. */
+export function useSecretBoundarySettings() {
+  return useQuery({
+    queryKey: secretBoundaryKey,
+    queryFn: () => credentialsApi.secretBoundary(),
+  });
+}
 
 /** Every approval still waiting, refreshed on a timer and on the shell's signal. */
 export function usePendingApprovals() {

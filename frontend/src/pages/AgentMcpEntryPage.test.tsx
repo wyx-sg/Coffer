@@ -100,7 +100,7 @@ function renderAt(url = `/agents/u-cc/mcp-servers/skynet?source=global`, state?:
         <Routes>
           <Route path="/agents/:uid/mcp-servers/:entry" element={<AgentMcpEntryPage />} />
           <Route path="/agents/:uid" element={<Landed />} />
-          <Route path="/mcp-servers/:uid" element={<Landed />} />
+          <Route path="/mcp-servers/:name/:tab?" element={<Landed />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -216,7 +216,8 @@ describe("AgentMcpEntryPage", () => {
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Adopt into Coffer" }));
     await waitFor(() =>
-      expect(screen.getByTestId("landed")).toHaveTextContent("/mcp-servers/srv-uid-1"),
+      // Addressed by the server's fixed name, not its uid (revise-web-ui-ia).
+      expect(screen.getByTestId("landed")).toHaveTextContent(/^\/mcp-servers\/skynet$/),
     );
     expect(api.adoptMcpEntry).toHaveBeenCalledWith("u-cc", "skynet", { source: "global" });
   });

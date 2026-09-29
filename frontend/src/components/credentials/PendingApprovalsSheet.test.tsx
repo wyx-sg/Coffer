@@ -6,10 +6,11 @@
 // Approve's place. Only the network boundary (`credentialsApi`) and the shell
 // module's presence seam are mocked.
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import type { Approval } from "@/lib/api/credentials";
+import { openApprovalsSheet } from "@/lib/hooks/useApprovals";
 import { PendingApprovalsSheet } from "./PendingApprovalsSheet";
 
 vi.mock("@/lib/api/credentials", () => ({
@@ -82,6 +83,15 @@ describe("PendingApprovalsSheet", () => {
     expect(row).toHaveTextContent("cli");
     expect(row).toHaveTextContent("mcp_server/0123/GITHUB_TOKEN");
     expect(row).toHaveTextContent("mcp_server · github (GITHUB_TOKEN)");
+  });
+
+  test("a dismissed sheet comes back when Review asks for it", async () => {
+    renderSheet();
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    act(() => openApprovalsSheet());
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 
   test("reject calls the route, from any host", async () => {

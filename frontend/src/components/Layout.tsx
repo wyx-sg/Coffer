@@ -1,45 +1,109 @@
-// src/components/Layout.tsx — the app shell: sidebar rail + scrolling main region.
+// src/components/Layout.tsx — the app shell: sidebar rail + the page, with the Settings modal and the command palette over it.
 //
-// The rail is always present. At md+ it can expand to a labelled 64-wide
-// sidebar (the choice persists in localStorage); below md it is always the
-// 16-wide icon rail, so narrow viewports keep their navigation. Collapsed rows
-// get a tooltip and the language switcher folds into a globe popover.
+// The shell renders the page through `pageRoutes` against the location of the
+// page the user is on, and `settingsRoutes` over it while a Settings route is
+// open (spec web-ui "Open Settings as a modal from the sidebar footer"): the
+// page underneath stays mounted, unchanged, and a fresh load of
+// `/settings/<tab>` puts Overview under the modal.
+//
+// The rail is always present. At md+ it expands to a labelled sidebar whose
+// width the user drags between 200 and 300px (spec web-ui "Resize every split
+// view by its divider"), and collapses to a 56px icon rail (the choice persists
+// in localStorage); below md it is always the icon rail, so narrow viewports
+// keep their navigation. Collapsed rows get a tooltip and the language switcher
+// folds into a globe popover.
 import { useState } from "react";
-import { Link, Outlet } from "react-router-dom";
+import { Link, useLocation, useRoutes, type RouteObject } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Globe, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
+import { useResizableWidth } from "@/lib/hooks/useResizableWidth";
+import { isSettingsPath } from "@/lib/navigation";
+import { useOpenSettings, usePageLocation } from "@/lib/settingsModal";
 import { CofferLogo } from "./brand/CofferLogo";
-import { LanguageSwitcher } from "./LanguageSwitcher";
 import { DaemonOfflineBanner } from "./DaemonOfflineBanner";
 import { FloatingBanners } from "./FloatingBanners";
 import { SidebarNav } from "./SidebarNav";
 import { PendingApprovalsSheet } from "./credentials/PendingApprovalsSheet";
+import { SplitDivider } from "./SplitDivider";
+import { CommandPalette } from "./palette/CommandPalette";
+import { SidebarFooter } from "./shell/SidebarFooter";
+import { SidebarLanguage } from "./shell/SidebarLanguage";
+import { SidebarSearch } from "./shell/SidebarSearch";
+import { useShellShortcuts } from "./shell/useShellShortcuts";
 
 const COLLAPSE_KEY = "coffer.nav.collapsed";
 // Tailwind's `md` breakpoint — the width at which the sidebar may expand.
 const MD_QUERY = "(min-width: 768px)";
+// The expanded sidebar's bounds and default (design board 1.1.21).
+const SIDEBAR_MIN = 200;
+const SIDEBAR_MAX = 300;
+const SIDEBAR_DEFAULT = 220;
 
-export function Layout() {
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeCollapsed(collapsed: boolean): void {
+  try {
+    localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0");
+  } catch {
+    // Blocked storage: the choice holds for this visit.
+  }
+}
+
+/** The Settings modal's routes, mounted only while one is open. */
+function SettingsRoutes({ routes }: { routes: RouteObject[] }) {
+  return useRoutes(routes);
+}
+
+interface Props {
+  pageRoutes: RouteObject[];
+  settingsRoutes: RouteObject[];
+}
+
+export function Layout({ pageRoutes, settingsRoutes }: Props) {
   const { t } = useTranslation();
-  const [collapsedPref, setCollapsedPref] = useState(
-    () => localStorage.getItem(COLLAPSE_KEY) === "1",
-  );
+  const location = useLocation();
+  const pageLocation = usePageLocation();
+  const page = useRoutes(pageRoutes, pageLocation);
+  const settingsOpen = isSettingsPath(location.pathname);
+  const openSettings = useOpenSettings();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  const [collapsedPref, setCollapsedPref] = useState(readCollapsed);
   // Where matchMedia is unavailable (jsdom) treat the viewport as md+.
   const isMd = useMediaQuery(MD_QUERY, true);
   const collapsed = collapsedPref || !isMd;
+  const sidebar = useResizableWidth({
+    storageKey: "sidebar",
+    defaultWidth: SIDEBAR_DEFAULT,
+    min: SIDEBAR_MIN,
+    max: SIDEBAR_MAX,
+  });
 
   const toggleCollapsed = () => {
     setCollapsedPref((prev) => {
       const next = !prev;
-      localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+      writeCollapsed(next);
       return next;
     });
   };
+
+  useShellShortcuts({
+    togglePalette: () => setPaletteOpen((open) => !open),
+    openSettings: () => {
+      setPaletteOpen(false);
+      openSettings("general");
+    },
+  });
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -55,15 +119,9 @@ export function Layout() {
         </a>
         {/* Floats over the whole app (fixed, top-centered) — rendered at the
             root so it overlays the sidebar too and never shifts page content.
-            The slot is still a column: a daemon that is offline and one that
-            is merely out of date are two different things to do something
-            about, and either may appear while the other is up.
-
-            A vault that needs answering used to float here too. It says the
-            same thing better as a dot on the sidebar's Sync entry — in the
-            place a user already looks to navigate, cleared by going there
-            rather than by the situation changing (spec vault-sync "Say a vault
-            needs a human where the user already is"). */}
+            A vault that needs answering is a dot on the Sync entry instead
+            (spec vault-sync "Say a vault needs a human where the user already
+            is"). */}
         <FloatingBanners>
           <DaemonOfflineBanner />
         </FloatingBanners>
@@ -72,15 +130,18 @@ export function Layout() {
         <PendingApprovalsSheet />
         <aside
           className={cn(
-            "flex shrink-0 flex-col border-r border-border bg-surface-sidebar transition-[width] duration-200",
-            collapsed ? "w-16" : "w-64",
+            "flex shrink-0 flex-col gap-3 bg-surface-sidebar",
+            collapsed ? "w-14 border-r border-border" : null,
           )}
-          aria-label={t("nav.aria.primary")}
+          // The dragged width is state, not a token: the one inline style is
+          // this theming-free bridge from the divider to the rail.
+          style={collapsed ? undefined : { width: sidebar.width }}
+          data-testid="sidebar"
         >
           <div
             className={cn(
-              "flex h-16 items-center border-b border-border",
-              collapsed ? "flex-col justify-center gap-1 px-2" : "justify-between px-5",
+              "flex items-center pt-3.5",
+              collapsed ? "flex-col justify-center gap-1 px-2" : "justify-between px-4",
             )}
           >
             <Link
@@ -106,41 +167,33 @@ export function Layout() {
             ) : null}
           </div>
 
-          <SidebarNav collapsed={collapsed} />
+          <SidebarSearch collapsed={collapsed} onOpen={() => setPaletteOpen(true)} />
 
-          <div
-            className={cn("border-t border-border", collapsed ? "flex justify-center p-2" : "p-3")}
-          >
-            {collapsed ? (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={t("nav.language")}
-                    className="text-muted-foreground"
-                  >
-                    <Globe />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent side="right" align="end" className="w-auto p-3">
-                  <LanguageSwitcher />
-                </PopoverContent>
-              </Popover>
-            ) : (
-              <LanguageSwitcher />
-            )}
+          <SidebarNav collapsed={collapsed} pathname={pageLocation.pathname} />
+
+          <div>
+            <SidebarFooter collapsed={collapsed} />
+            <SidebarLanguage collapsed={collapsed} />
           </div>
         </aside>
+        {collapsed ? null : (
+          <SplitDivider
+            value={sidebar.width}
+            min={sidebar.bounds.min}
+            max={sidebar.bounds.max}
+            onChange={sidebar.setWidth}
+            onReset={sidebar.reset}
+            label={t("nav.resizeSidebar")}
+          />
+        )}
         <main id="main" tabIndex={-1} className="flex-1 overflow-y-auto outline-none">
           {/* Full-width — the content tracks the sidebar, so collapsing it
               genuinely widens the working area. */}
-          <div className="w-full px-6 py-10 md:px-10">
-            <Outlet />
-          </div>
+          <div className="w-full px-6 py-10 md:px-10">{page}</div>
         </main>
       </div>
+      {settingsOpen ? <SettingsRoutes routes={settingsRoutes} /> : null}
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </TooltipProvider>
   );
 }

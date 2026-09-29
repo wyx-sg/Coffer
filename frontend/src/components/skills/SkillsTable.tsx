@@ -151,7 +151,7 @@ export function SkillsTable({
           placeholder: t("skills.searchPlaceholder"),
         }}
         filters={filters}
-        onRowClick={(s) => navigate(`/skills/${encodeURIComponent(s.uid)}`)}
+        onRowClick={(s) => navigate(`/skills/${encodeURIComponent(s.name)}`)}
         // A built-in skill cannot be deleted, and this table's selection feeds
         // exactly one destructive bulk action, so it gets no checkbox at all
         // rather than a selection the bulk bar would then have to refuse. Its

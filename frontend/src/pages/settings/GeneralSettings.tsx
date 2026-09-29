@@ -4,8 +4,11 @@
 // theme (system / light / dark, applied at once), the
 // default rows-per-page every list table seeds from, and the preferred
 // external editor Coffer opens managed files with from its read-only viewers.
-// Below them sit two daemon-side cards: when the daemon runs, and which
-// experimental features are switched on on this machine.
+// Below them sits the Coffer's model section — the model Coffer's own engine
+// runs on, speech to text and the unattended passes — moved here unchanged
+// from its old tab (spec web-ui "Choose Coffer's model in Settings › General";
+// its redesign is change revise-web-ui-ia task 3.4). When the daemon runs is on
+// the Daemon tab now, and Settings lists no experimental features.
 //
 // Every row uses the same shadcn Select. The editor picker lists "system
 // default" plus the editors the daemon detected as installed, and a "Custom…"
@@ -16,8 +19,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DaemonResidencySettings } from "./DaemonResidencySettings";
-import { ExperimentalFeaturesSettings } from "./ExperimentalFeaturesSettings";
+import { EngineSettings } from "./EngineSettings";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -169,10 +171,7 @@ export function GeneralSettings() {
           </div>
         </CardContent>
       </Card>
-      {/* What starts Coffer's daemon and what ends it. A page about how the
-          app behaves is where a user looks for "why was it not running". */}
-      <DaemonResidencySettings />
-      <ExperimentalFeaturesSettings />
+      <EngineSettings />
     </div>
   );
 }

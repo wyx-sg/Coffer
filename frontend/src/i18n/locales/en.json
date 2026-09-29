@@ -157,9 +157,11 @@
       "primary": "Primary navigation"
     },
     "group": {
-      "resources": "Resources",
       "system": "System",
-      "agents": "Agents"
+      "agents": "Agents",
+      "run": "Run",
+      "capabilities": "Capabilities",
+      "context": "Context"
     },
     "mcpServers": "MCP servers",
     "skills": "Skills",
@@ -172,12 +174,27 @@
     "agents": "Agents",
     "channels": "Channels",
     "activity": "Activity",
-    "chat": "Chat",
     "modelProviders": "Model providers",
     "sync": "Sync",
     "experimental": "Experimental",
     "experimentalLabel": "{{label}} (experimental)",
-    "needsAttention": "Needs your attention"
+    "needsAttention": "Needs your attention",
+    "overview": "Overview",
+    "conversations": "Conversations",
+    "customTools": "Custom tools",
+    "clis": "CLIs",
+    "secrets": "Secrets",
+    "usage": "Usage",
+    "search": "Search or jump to…",
+    "resizeSidebar": "Resize the sidebar",
+    "daemon": {
+      "connecting": "Connecting to the daemon…",
+      "running": "Daemon running on port {{port}}",
+      "outOfDate": "Daemon on port {{port}} is from a different app version",
+      "stopping": "Daemon stopping",
+      "offline": "Daemon offline",
+      "runningShort": "Running on port {{port}}"
+    }
   },
   "resources": {
     "title": "MCP servers",
@@ -498,7 +515,8 @@
       "engine": "Coffer's model",
       "data": "Data",
       "security": "Security",
-      "about": "About"
+      "about": "About",
+      "daemon": "Daemon"
     },
     "general": {
       "title": "Preferences",
@@ -547,8 +565,7 @@
         "memory": "Memory aggregated from the agents' own stores, and the hook that delivers it."
       },
       "offTitle": "{{name}} is switched off",
-      "offBody": "{{name}} is an experimental feature and is switched off on this machine. Nothing it holds was removed — switch it on in Settings → General.",
-      "offCta": "Open Settings → General"
+      "offBody": "{{name}} is an experimental feature and is switched off on this machine. Nothing it holds was removed — switch it on from the command line: coffer config set feature.{{key}} on."
     },
     "retention": {
       "title": "Data retention",
@@ -614,7 +631,14 @@
           "title": "Move the master key to a file beside the database?",
           "body": "Coffer re-stores the key in a file next to its database; keychain prompts stop."
         },
-        "confirmMove": "Move key"
+        "confirmMove": "Move key",
+        "accessGroupNote": "Master key: this Mac's Keychain, readable only by Coffer's signed apps. Back it up from the Sync page in the desktop app."
+      },
+      "approvals": {
+        "title": "Secret approvals",
+        "description": "A secret goes to a place it has not gone before — a new MCP server, a changed command, another remote — only after you approve it in the Coffer desktop app.",
+        "on": "On: new destinations wait for your approval.",
+        "off": "Off: new destinations get secrets without asking. Turn it back on with: coffer config set secrets.require_approval on"
       }
     },
     "models": {
@@ -770,6 +794,15 @@
           "caution": "Switch this off and new material waits unmerged until you run a pass by hand, and edits are not carried through."
         }
       }
+    },
+    "close": "Close settings",
+    "sections": "Settings sections",
+    "daemonTab": {
+      "title": "Status",
+      "state": "State",
+      "port": "Port",
+      "version": "Version",
+      "startedAt": "Started"
     }
   },
   "daemon": {
@@ -1398,7 +1431,7 @@
     }
   },
   "chat": {
-    "title": "Chat",
+    "title": "Conversations",
     "thinking": "Thinking…",
     "message": {
       "failed": "This response did not complete.",
@@ -1913,6 +1946,51 @@
       "roundDone": "Round finished: {{status}} (+{{added}} ~{{modified}} −{{deleted}})"
     }
   },
+  "overview": {
+    "title": "Overview"
+  },
+  "customTools": {
+    "title": "Custom tools"
+  },
+  "clis": {
+    "title": "CLIs"
+  },
+  "secrets": {
+    "title": "Secrets"
+  },
+  "usage": {
+    "title": "Usage"
+  },
+  "placeholder": {
+    "title": "Coming in this release",
+    "description": "This page is part of this release and is still being built. Everything else in the sidebar works today."
+  },
+  "splitView": {
+    "resizeList": "Resize the list"
+  },
+  "palette": {
+    "label": "Command palette",
+    "placeholder": "Search pages and objects…",
+    "pages": "Pages",
+    "objects": "Objects",
+    "loading": "Loading…",
+    "failed": "{{kind}}: couldn't load the list",
+    "offline": "Objects need the daemon. Only pages are listed.",
+    "noResults": "No results for “{{query}}”",
+    "navigate": "Navigate",
+    "open": "Open",
+    "close": "Close",
+    "settingsTab": "Settings › {{tab}}",
+    "kind": {
+      "agent": "Agent",
+      "mcpServer": "MCP server",
+      "skill": "Skill",
+      "provider": "Model provider",
+      "channel": "Channel",
+      "knowledge": "Knowledge",
+      "memory": "Memory"
+    }
+  },
   "credentials": {
     "savedAwaitingApproval": "Saved. The new secret takes effect once it is approved in the Coffer app.",
     "presence": {
@@ -1933,7 +2011,8 @@
         "bind": "New use",
         "replace_value": "New value",
         "disable_protection": "Turn off protection"
-      }
+      },
+      "review": "Review"
     }
   }
 }

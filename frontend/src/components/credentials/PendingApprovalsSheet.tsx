@@ -3,12 +3,13 @@
 //
 // Mounted once in the app shell (`Layout`). It opens by itself when an approval
 // it has not shown yet appears, and closing it dismisses what it showed — a
-// newer approval opens it again. Each row says who asked, which secret, where
+// newer approval, or `openApprovalsSheet()` (the "Review" entry on the Secrets
+// page and in Settings › Security), opens it again. Each row says who asked, which secret, where
 // it would go and what for; Reject is a REST call any host may make, Approve
 // runs a presence check in the desktop shell, so a browser offers "Open in
 // Coffer app" in its place (spec desktop-app "Release plaintext and approvals
 // only after a presence check in the shell").
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import type { Approval } from "@/lib/api/credentials";
 import {
+  OPEN_APPROVALS_EVENT,
   useApproveApproval,
   usePendingApprovals,
   useRejectApproval,
@@ -37,6 +39,13 @@ export function PendingApprovalsSheet() {
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
   const open = approvals.some((a) => !dismissed.has(a.id));
   const inShell = presenceAvailable();
+  // "Review" on the Secrets page or in Settings › Security brings back what
+  // was dismissed.
+  useEffect(() => {
+    const reopen = () => setDismissed(new Set());
+    window.addEventListener(OPEN_APPROVALS_EVENT, reopen);
+    return () => window.removeEventListener(OPEN_APPROVALS_EVENT, reopen);
+  }, []);
 
   const onOpenChange = (next: boolean) => {
     if (next) return;

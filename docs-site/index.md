@@ -36,9 +36,9 @@ features:
     link: /guides/providers
     linkText: Model providers
   - title: Chat from a browser or your phone
-    details: Drive Claude Code or Codex from the web Chat page, or pair a Telegram or SeaTalk bot and message your agents from anywhere.
+    details: Drive Claude Code or Codex from the web Conversations page, or pair a Telegram or SeaTalk bot and message your agents from anywhere.
     link: /guides/chat
-    linkText: Chat
+    linkText: Conversations
   - title: Local-first by design
     details: The daemon listens only on 127.0.0.1. Secrets are Fernet ciphertext under a master key you hold. To share a vault between your machines, sync it through a git remote you own.
     link: /start/why-coffer

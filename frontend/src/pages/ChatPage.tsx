@@ -1,5 +1,6 @@
 // pages/ChatPage.tsx — 2-column chat layout (presentational).
-// Column 1 = app sidebar (Layout.tsx); column 2 = collapsible conversation list;
+// Column 1 = app sidebar (Layout.tsx); column 2 = collapsible conversation list,
+// resizable by its divider (SplitView, width remembered as `coffer.split.chat.list`);
 // column 3 = the open conversation's thread, or the draft surface when none is
 // open. Orchestration lives in useChatController; the open conversation is the
 // URL (/chat/:id), so refresh and deep-links reopen the same thread.
@@ -14,8 +15,11 @@ import { ChatErrorBanner } from "@/components/chat/ChatErrorBanner";
 import { ConversationList } from "@/components/chat/ConversationList";
 import { MessageThread } from "@/components/chat/MessageThread";
 import { DraftThread } from "@/components/chat/DraftThread";
+import { SplitView } from "@/components/SplitView";
 import { translateApiError } from "@/lib/api/errors";
-import { cn } from "@/lib/utils";
+
+// The list opened at w-64 before it became resizable; it keeps that default.
+const CHAT_LIST_DEFAULT_WIDTH = 256;
 
 export function ChatPage() {
   const { t } = useTranslation();
@@ -34,128 +38,135 @@ export function ChatPage() {
     // gives the two panes their own scroll regions — the one page that is a
     // workspace rather than a document.
     <div className="relative -mx-6 -my-10 flex h-screen overflow-hidden md:-mx-10">
-      {/* Conversation-list column */}
-      <div
-        className={cn(
-          "flex-col border-r border-border bg-surface-sidebar transition-all duration-200",
-          historyOpen ? "flex w-64" : "hidden w-0",
-        )}
-      >
-        <div className="flex items-center justify-between px-2 pt-2">
-          <span className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t("chat.title")}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="size-7 p-0"
-            onClick={() => setHistoryPref(false)}
-            aria-label={t("chat.history.collapse")}
-          >
-            <PanelLeftClose className="size-4" />
-          </Button>
-        </div>
-        <ConversationList
-          conversations={c.listConversations}
-          activeId={c.activeConv?.id ?? null}
-          loading={c.listLoading}
-          view={c.showArchived ? "archived" : "active"}
-          onToggleView={c.toggleView}
-          onSelect={c.selectConversation}
-          onCreate={c.startDraft}
-          onRename={c.renameConversation}
-          onDelete={c.requestDelete}
-          onArchive={c.requestArchive}
-          onRestore={c.restoreConversation}
-        />
-      </div>
-
-      {/* Thread column */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {!historyOpen && (
-          <div className="border-b border-border px-2 py-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="size-7 p-0"
-              onClick={() => setHistoryPref(true)}
-              aria-label={t("chat.history.expand")}
-            >
-              <PanelLeftOpen className="size-4" />
-            </Button>
-          </div>
-        )}
-
-        {c.createError ? (
-          <ChatErrorBanner
-            className="border-b"
-            message={translateApiError(t, c.createError)}
-            onDismiss={c.resetCreateError}
-          />
-        ) : null}
-
-        {c.activeConv ? (
-          <MessageThread
-            conversation={c.activeConv}
-            liveMessage={c.turn.liveMessage}
-            pendingEchoes={c.turn.pendingEchoes}
-            isStreaming={c.turn.isStreaming}
-            turnError={c.turn.error}
-            onStop={() => void c.turn.interrupt()}
-            onSend={(text, attachments) => {
-              c.turn.clearError();
-              return c.turn.send(text, attachments);
-            }}
-            onClearTurnError={c.turn.clearError}
-            retryable={c.turn.retryable}
-            restore={c.refusedFirst}
-            onRestored={c.clearRefusedFirst}
-            onResend={c.turn.resend}
-            pending={c.turn.pending}
-            onSetPending={(texts) => void c.turn.setPending(texts)}
-            agentLabel={c.activeAgent?.display_name ?? c.activeConv.agent_key}
-            readOnly={c.activeArchived}
-            onRestore={() => c.restoreConversation(c.activeConv!.id)}
-            restorePending={c.restorePending}
-          />
-        ) : c.activeLoading ? (
-          <div className="flex flex-1 items-center justify-center">
-            <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-          </div>
-        ) : c.activeNotFound ? (
-          // A stale deep-link or deleted conversation: say so explicitly
-          // instead of silently dropping into the draft surface.
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-12 text-center">
-            <MessageSquareOff
-              className="size-12 text-muted-foreground/40"
-              strokeWidth={1.25}
-              aria-hidden
-            />
-            <div className="space-y-1">
-              <h2 className="text-lg font-semibold">{t("chat.thread.notFoundTitle")}</h2>
-              <p className="max-w-xs text-sm text-muted-foreground">
-                {t("chat.thread.notFoundBody")}
-              </p>
+      {/* Conversation list beside the thread, split by a resizable divider;
+          collapsing the list hides its pane but keeps the thread mounted. */}
+      <SplitView
+        storageKey="chat.list"
+        defaultListWidth={CHAT_LIST_DEFAULT_WIDTH}
+        label={t("splitView.resizeList")}
+        listHidden={!historyOpen}
+        className="h-full flex-1"
+        listClassName="bg-surface-sidebar"
+        detailClassName="overflow-hidden"
+        list={
+          <>
+            <div className="flex items-center justify-between px-2 pt-2">
+              <span className="px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {t("chat.title")}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="size-7 p-0"
+                onClick={() => setHistoryPref(false)}
+                aria-label={t("chat.history.collapse")}
+              >
+                <PanelLeftClose className="size-4" />
+              </Button>
             </div>
-            <Button variant="outline" onClick={c.startDraft}>
-              {t("chat.thread.notFoundCta")}
-            </Button>
-          </div>
-        ) : (
-          <DraftThread
-            agents={c.agents}
-            agentKey={c.effectiveDraft.agentKey}
-            noManagedAgent={c.noManagedAgent}
-            onAgentChange={c.setDraftAgent}
-            modelValue={c.effectiveDraft.model}
-            onModelChange={c.setDraftModel}
-            effortValue={c.effectiveDraft.effort}
-            onEffortChange={c.setDraftEffort}
-            onSend={c.sendDraft}
-            creating={c.creating}
-          />
-        )}
-      </div>
+            <ConversationList
+              conversations={c.listConversations}
+              activeId={c.activeConv?.id ?? null}
+              loading={c.listLoading}
+              view={c.showArchived ? "archived" : "active"}
+              onToggleView={c.toggleView}
+              onSelect={c.selectConversation}
+              onCreate={c.startDraft}
+              onRename={c.renameConversation}
+              onDelete={c.requestDelete}
+              onArchive={c.requestArchive}
+              onRestore={c.restoreConversation}
+            />
+          </>
+        }
+        detail={
+          <>
+            {!historyOpen && (
+              <div className="border-b border-border px-2 py-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="size-7 p-0"
+                  onClick={() => setHistoryPref(true)}
+                  aria-label={t("chat.history.expand")}
+                >
+                  <PanelLeftOpen className="size-4" />
+                </Button>
+              </div>
+            )}
+
+            {c.createError ? (
+              <ChatErrorBanner
+                className="border-b"
+                message={translateApiError(t, c.createError)}
+                onDismiss={c.resetCreateError}
+              />
+            ) : null}
+
+            {c.activeConv ? (
+              <MessageThread
+                conversation={c.activeConv}
+                liveMessage={c.turn.liveMessage}
+                pendingEchoes={c.turn.pendingEchoes}
+                isStreaming={c.turn.isStreaming}
+                turnError={c.turn.error}
+                onStop={() => void c.turn.interrupt()}
+                onSend={(text, attachments) => {
+                  c.turn.clearError();
+                  return c.turn.send(text, attachments);
+                }}
+                onClearTurnError={c.turn.clearError}
+                retryable={c.turn.retryable}
+                restore={c.refusedFirst}
+                onRestored={c.clearRefusedFirst}
+                onResend={c.turn.resend}
+                pending={c.turn.pending}
+                onSetPending={(texts) => void c.turn.setPending(texts)}
+                agentLabel={c.activeAgent?.display_name ?? c.activeConv.agent_key}
+                readOnly={c.activeArchived}
+                onRestore={() => c.restoreConversation(c.activeConv!.id)}
+                restorePending={c.restorePending}
+              />
+            ) : c.activeLoading ? (
+              <div className="flex flex-1 items-center justify-center">
+                <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+              </div>
+            ) : c.activeNotFound ? (
+              // A stale deep-link or deleted conversation: say so explicitly
+              // instead of silently dropping into the draft surface.
+              <div className="flex flex-1 flex-col items-center justify-center gap-4 p-12 text-center">
+                <MessageSquareOff
+                  className="size-12 text-muted-foreground/40"
+                  strokeWidth={1.25}
+                  aria-hidden
+                />
+                <div className="space-y-1">
+                  <h2 className="text-lg font-semibold">{t("chat.thread.notFoundTitle")}</h2>
+                  <p className="max-w-xs text-sm text-muted-foreground">
+                    {t("chat.thread.notFoundBody")}
+                  </p>
+                </div>
+                <Button variant="outline" onClick={c.startDraft}>
+                  {t("chat.thread.notFoundCta")}
+                </Button>
+              </div>
+            ) : (
+              <DraftThread
+                agents={c.agents}
+                agentKey={c.effectiveDraft.agentKey}
+                noManagedAgent={c.noManagedAgent}
+                onAgentChange={c.setDraftAgent}
+                modelValue={c.effectiveDraft.model}
+                onModelChange={c.setDraftModel}
+                effortValue={c.effectiveDraft.effort}
+                onEffortChange={c.setDraftEffort}
+                onSend={c.sendDraft}
+                creating={c.creating}
+              />
+            )}
+          </>
+        }
+      />
 
       <ConfirmDialog
         open={c.deletingId !== null}

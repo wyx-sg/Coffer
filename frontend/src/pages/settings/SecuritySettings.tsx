@@ -19,9 +19,20 @@ import {
   useUpdateCredentialSettings,
 } from "@/lib/hooks/useCredentialSettings";
 
+import { SecretBoundaryCard } from "./SecretBoundaryCard";
+
 type Storage = "file" | "keychain";
 
 export function SecuritySettings() {
+  return (
+    <div className="space-y-4">
+      <MasterKeyCard />
+      <SecretBoundaryCard />
+    </div>
+  );
+}
+
+function MasterKeyCard() {
   const { t } = useTranslation();
   const { data, isPending, error } = useCredentialSettings();
   const update = useUpdateCredentialSettings();
@@ -39,6 +50,22 @@ export function SecuritySettings() {
     return (
       <Card>
         <CardContent className="py-6 text-destructive">{translateApiError(t, error)}</CardContent>
+      </Card>
+    );
+  }
+
+  // A signed release keeps the key only in its Keychain access group: there is
+  // nothing to move (spec credentials "Keep the master key behind a storage
+  // port chosen by the build").
+  if (data!.master_key_storage === "keychain_access_group") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("settings.security.masterKey.title")}</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          {t("settings.security.masterKey.accessGroupNote")}
+        </CardContent>
       </Card>
     );
   }

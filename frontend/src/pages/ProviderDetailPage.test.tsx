@@ -19,7 +19,7 @@
 // not offered yet it is held until the Switch carries it into the curated set.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ProviderDetailPage } from "./ProviderDetailPage";
 import { ApiError } from "@/lib/api/errors";
@@ -29,7 +29,18 @@ import { acceptance } from "@/test/acceptance";
 const navigateMock = vi.fn();
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
-  return { ...actual, useNavigate: () => navigateMock };
+  // Recorded, and still performed: a tab switch is a navigation too, and the
+  // page has to re-render on the new address.
+  return {
+    ...actual,
+    useNavigate: () => {
+      const navigate = actual.useNavigate();
+      return (...args: Parameters<typeof navigate>) => {
+        navigateMock(...args);
+        return navigate(...(args as unknown as [string]));
+      };
+    },
+  };
 });
 
 vi.mock("@/lib/api/providers", async (orig) => {
@@ -138,15 +149,31 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => ({
   ...overrides,
 });
 
-function renderPage() {
+/** Where the router is now — path and query — for the addressing tests. */
+const where = { url: "" };
+function Probe() {
+  const loc = useLocation();
+  where.url = loc.pathname + loc.search;
+  return null;
+}
+
+function renderPage(entry = `/model-providers/${UID}`) {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
-    <MemoryRouter initialEntries={[`/model-providers/${UID}`]}>
+    <MemoryRouter initialEntries={[entry]}>
       <QueryClientProvider client={qc}>
         <Routes>
-          <Route path="/model-providers/:uid" element={<ProviderDetailPage />} />
+          <Route
+            path="/model-providers/:uid/:tab?"
+            element={
+              <>
+                <ProviderDetailPage />
+                <Probe />
+              </>
+            }
+          />
         </Routes>
       </QueryClientProvider>
     </MemoryRouter>,
@@ -668,20 +695,26 @@ describe("ProviderDetailPage", () => {
     links.forEach((l) => expect(l).toHaveAttribute("href", "/model-providers"));
   });
 
-  test("the open tab lives in the URL, so ?tab=models opens on Models", async () => {
+  // revise-web-ui-ia: web-ui "a detail tab lives in the path"
+  test("the open tab lives in the path, so /models opens on Models", async () => {
     apiMock.get.mockResolvedValue(makeProvider());
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <MemoryRouter initialEntries={[`/model-providers/${UID}?tab=models`]}>
-        <QueryClientProvider client={qc}>
-          <Routes>
-            <Route path="/model-providers/:uid" element={<ProviderDetailPage />} />
-          </Routes>
-        </QueryClientProvider>
-      </MemoryRouter>,
-    );
+    renderPage(`/model-providers/${UID}/models`);
     await screen.findByRole("heading", { name: "acme" });
     expect(screen.getByRole("tab", { name: "Models" })).toHaveAttribute("aria-selected", "true");
     expect(probedFor).toContain(UID);
+    // Back to the default tab is the bare address, still keyed on the uid.
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Overview" }));
+    expect(where.url).toBe(`/model-providers/${UID}`);
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Models" }));
+    expect(where.url).toBe(`/model-providers/${UID}/models`);
+  });
+
+  // revise-web-ui-ia: web-ui "an old query-tab address redirects to the path"
+  test("an old ?tab=models address redirects to the path and keeps the uid", async () => {
+    apiMock.get.mockResolvedValue(makeProvider());
+    renderPage(`/model-providers/${UID}?tab=models`);
+    await screen.findByRole("heading", { name: "acme" });
+    expect(screen.getByRole("tab", { name: "Models" })).toHaveAttribute("aria-selected", "true");
+    await waitFor(() => expect(where.url).toBe(`/model-providers/${UID}/models`));
   });
 });

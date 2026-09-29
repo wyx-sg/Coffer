@@ -95,7 +95,7 @@ coffer daemon service uninstall   # stop starting it at login
 ```
 
 ```text [Web UI]
-Settings → General → Coffer's daemon → Start at login
+Settings → Daemon → Start at login
 ```
 
 :::

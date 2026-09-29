@@ -67,7 +67,7 @@ function renderPage() {
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={["/settings/general"]}>
         <TooltipProvider>
-          <SidebarNav collapsed={false} />
+          <SidebarNav collapsed={false} pathname="/" />
           <ExperimentalFeaturesSettings />
         </TooltipProvider>
       </MemoryRouter>

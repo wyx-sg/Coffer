@@ -1,9 +1,10 @@
 // e2e/web/specs/shell_settings.spec.ts
 //
-// UI Shell §User Story 5 — the redesigned Settings: tabs grouped by what the
-// user manages (General, Coffer's model, Data, Security, About), the daemon
-// never surfaced as a concept, the sidebar language switcher, and the removal
-// of the confusing controls.
+// Settings as a modal over the current page (change revise-web-ui-ia): five
+// tabs grouped by what they manage (General, Security, Data, Daemon, About),
+// each at /settings/<tab>; the sidebar language switcher; and no shutdown
+// control anywhere. The first two markers still name the scenarios of the
+// Settings page the change replaces; they follow its scenario names at archive.
 
 import { expect } from "@playwright/test";
 import { acceptance } from "./_acceptance";
@@ -15,36 +16,46 @@ acceptance(
   "web-ui",
   "settings layout uses the redesigned tabbed sidebar",
   async ({ page }) => {
-    await page.goto("/settings");
-    // /settings index redirects to the first tab — General.
-    await expect(page).toHaveURL(/\/settings\/general/);
-
-    // Settings shows five tabs, in the order the layout declares them:
-    // General, Coffer's model, Data, Security, About (frontend/src/router.tsx
-    // + SettingsLayout.tsx). The daemon is never one of them.
-    for (const name of [
-      /^General$/,
-      /^Coffer's model$/,
-      /^Data$/,
-      /^Security$/,
-      /^About$/,
-    ]) {
-      await expect(page.getByRole("link", { name })).toBeVisible();
-    }
-    // The daemon is never surfaced — no Daemon tab, no status panel. Asserted
-    // here only: this is the test that enumerates the tab set.
-    await expect(page.getByRole("link", { name: /^Daemon$/ })).toHaveCount(0);
-
-    // Click About — content swaps without leaving /settings/*
-    await page.getByRole("link", { name: /^About$/ }).click();
-    await expect(page).toHaveURL(/\/settings\/about/);
-    // Assert the About pane's own heading is now rendered — proves the
-    // outlet actually swapped, not just the URL. Without this, a regression
-    // where the link updates the URL but the inner pane fails to mount
-    // would still pass.
+    // Opened from a page, Settings is a modal over it.
+    await page.goto("/mcp-servers");
     await expect(
-      page.getByRole("heading", { name: /about coffer/i }),
+      page.getByRole("heading", { level: 1, name: "MCP servers" }),
     ).toBeVisible();
+    await page.getByTestId("sidebar-settings").click();
+    await expect(page).toHaveURL(/\/settings\/general$/);
+    const modal = page.getByTestId("settings-modal");
+    await expect(modal).toBeVisible();
+
+    // Five tabs, in this order.
+    const tabs = modal
+      .getByRole("navigation", { name: "Settings sections" })
+      .getByRole("link");
+    await expect(tabs).toHaveText([
+      "General",
+      "Security",
+      "Data",
+      "Daemon",
+      "About",
+    ]);
+
+    // Clicking a tab swaps the pane without closing the modal.
+    await modal.getByRole("link", { name: /^About$/ }).click();
+    await expect(page).toHaveURL(/\/settings\/about$/);
+    await expect(
+      modal.getByRole("heading", { name: /about coffer/i }),
+    ).toBeVisible();
+
+    // Escape closes it onto the page underneath, at that page's route.
+    await page.keyboard.press("Escape");
+    await expect(page).toHaveURL(/\/mcp-servers$/);
+    await expect(modal).toHaveCount(0);
+
+    // A fresh load of a Settings tab opens it over Overview; closing lands on /.
+    await page.goto("/settings/daemon");
+    await expect(page.getByTestId("settings-modal")).toBeVisible();
+    await expect(page.getByTestId("settings-daemon-status")).toBeVisible();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(page).toHaveURL(/\/$/);
   },
 );
 
@@ -52,16 +63,15 @@ acceptance(
   "web-ui",
   "settings drops the confusing controls",
   async ({ page }) => {
-    // No Settings tab exposes a daemon-shutdown or token-rotation control
-    // — both are rare/dangerous actions that belong on the CLI. Every tab is
-    // visited, and each is first pinned to a card heading it renders itself,
-    // so a pane that failed to mount can't satisfy the absence checks
-    // vacuously.
+    // No Settings tab exposes a daemon-shutdown control — stopping the
+    // daemon from the page kills the page. Every tab is visited, and each is
+    // first pinned to a card heading it renders itself, so a pane that failed
+    // to mount can't satisfy the absence checks vacuously.
     const panes: [string, RegExp][] = [
-      ["general", /^Preferences$/], // GeneralSettings
-      ["engine", /^Automatic upkeep$/], // EngineSettings -> UpkeepSettings
-      ["data", /^Data retention$/], // DataSettings
+      ["general", /^Automatic upkeep$/], // GeneralSettings -> Coffer's model
       ["security", /^Credential encryption$/], // SecuritySettings
+      ["data", /^Data retention$/], // DataSettings
+      ["daemon", /^Coffer's daemon$/], // DaemonSettings -> DaemonResidencySettings
       ["about", /^About Coffer$/], // AboutPage
     ];
     for (const [tab, heading] of panes) {
@@ -71,14 +81,16 @@ acceptance(
         page.getByRole("button", { name: /shut\s*down/i }),
       ).toHaveCount(0);
       await expect(
-        page.getByRole("button", { name: /rotate token/i }),
+        page.getByRole("button", { name: /stop daemon/i }),
       ).toHaveCount(0);
     }
 
     // The About tab carries no language selector (the sidebar switcher is
     // the single source) and no developer-only resource-kind list.
     await page.goto("/settings/about");
-    await expect(page.locator("main").getByRole("combobox")).toHaveCount(0);
+    await expect(
+      page.getByTestId("settings-modal").getByRole("combobox"),
+    ).toHaveCount(0);
     await expect(page.getByText(/installed resource kinds/i)).toHaveCount(0);
   },
 );

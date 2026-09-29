@@ -11,6 +11,10 @@ vi.mock("@/lib/hooks/useCredentialSettings", () => ({
   useUpdateCredentialSettings: vi.fn(),
 }));
 const hooks = await import("@/lib/hooks/useCredentialSettings");
+// Tested in SecretBoundaryCard.test.tsx; here it would only add a network poll.
+vi.mock("./SecretBoundaryCard", () => ({
+  SecretBoundaryCard: () => <div data-testid="secret-boundary-card" />,
+}));
 
 function wrap({ children }: PropsWithChildren) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -27,7 +31,10 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function seed(storage: "file" | "keychain" = "file", mutationError: Error | null = null) {
+function seed(
+  storage: "file" | "keychain" | "keychain_access_group" = "file",
+  mutationError: Error | null = null,
+) {
   vi.mocked(hooks.useCredentialSettings).mockReturnValue({
     data: { master_key_storage: storage },
     isPending: false,
@@ -42,6 +49,14 @@ function seed(storage: "file" | "keychain" = "file", mutationError: Error | null
 }
 
 describe("SecuritySettings", () => {
+  test("a signed build's access-group key has nothing to move, and approvals have a card", () => {
+    seed("keychain_access_group");
+    render(<SecuritySettings />, { wrapper: wrap });
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument();
+    expect(screen.getByText(/readable only by Coffer's signed apps/i)).toBeInTheDocument();
+    expect(screen.getByTestId("secret-boundary-card")).toBeInTheDocument();
+  });
+
   test("renders file state: switch unchecked and fileNote visible", () => {
     seed("file");
     render(<SecuritySettings />, { wrapper: wrap });

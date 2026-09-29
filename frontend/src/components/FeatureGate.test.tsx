@@ -1,6 +1,6 @@
 // A page of a switched-off experimental feature (spec experimental-features
 // "Close every surface of a switched-off feature"): the route renders a notice
-// that links to Settings → General, and the page itself never mounts.
+// that says so (linking to no Settings tab), and the page itself never mounts.
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -44,15 +44,14 @@ function renderGate() {
 beforeEach(() => getMock.mockReset());
 
 describe("FeatureGate", () => {
-  test("a switched-off feature's page shows a notice linking to Settings → General", async () => {
+  // revise-web-ui-ia: experimental-features "a switched-off feature's page says it is switched off"
+  test("a switched-off feature's page says so and links to no Settings tab", async () => {
     status({ knowledge: false, memory: true, vault_sync: true });
     renderGate();
 
     expect(await screen.findByText("Knowledge is switched off")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /settings → general/i })).toHaveAttribute(
-      "href",
-      "/settings/general",
-    );
+    expect(screen.getByText(/coffer config set feature\.knowledge on/)).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.queryByText("the knowledge page")).not.toBeInTheDocument();
   });
 
