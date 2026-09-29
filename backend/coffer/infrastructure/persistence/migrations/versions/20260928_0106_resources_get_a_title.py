@@ -5,7 +5,7 @@ tool name an agent sees, and a skill's is the folder an agent loads it from
 (ADR names-visible-to-agents-are-fixed) — so the cosmetic reason to rename one
 needs somewhere else to go. It goes here: a free-text ``title`` of at most 80
 characters that surfaces show in place of the name when it is set (spec
-resource-framework "Carry an optional editable title on every resource"). Every
+resource-framework "Carry an optional editable title on the kinds that have one"). Every
 kind gets it, fixed name or not.
 
 Nullable with no backfill: a resource registered before this had no title, and

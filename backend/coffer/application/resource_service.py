@@ -122,6 +122,10 @@ class ResourceService:
         """Whether the kind's resources carry an enabled switch at all."""
         return self._require_kind(kind).toggleable
 
+    def titled(self, kind: str) -> bool:
+        """Whether the kind's resources carry a display title (``Kind.titled``)."""
+        return self._require_kind(kind).titled
+
     def _validate_config(self, kind_def: Kind, config: dict[str, Any]) -> dict[str, Any]:
         try:
             validated = kind_def.config_schema.model_validate(config)
@@ -165,8 +169,9 @@ class ResourceService:
             # A resource created HERE, not one arriving with the identity another
             # machine gave it: only a new name meets a kind's rules for new names.
             resource_kind_ops.check_new_name(kind_def, name)
-        title = resource_kind_ops.checked_title(title)
+        title = resource_kind_ops.checked_title(kind_def, title)
         validated = self._validate_config(kind_def, config)
+        resource_kind_ops.check_derived_name(kind_def, name, validated)
         # Kind-supplied semantic validation beyond shape, at REGISTRATION only
         # (e.g. a channel's workspace directories must exist on disk), so
         # editing an unrelated field never re-probes the filesystem. Awaited

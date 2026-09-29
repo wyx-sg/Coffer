@@ -53,7 +53,9 @@ acceptance(
   "desktop app agents page",
   async ({ page }) => {
     const { token, port } = readDaemonToken();
-    const name = `e2e-cur-${Date.now().toString(36)}`;
+    // An agent is one per type and named by it, so the test registers the
+    // codex type (clearing any codex agent the shared e2e DB already holds).
+    const name = "codex";
     const configDir = mkConfigDir();
 
     try {
@@ -65,6 +67,8 @@ acceptance(
         page.getByRole("heading", { name: /^agents$/i }),
       ).toBeVisible();
 
+      await deleteAgentByApi(name);
+
       // 2. Register an agent via the daemon API (avoids brittleness against
       //    Radix Select shadow-DOM quirks under headless Chromium).
       const createResp = await fetch(`http://127.0.0.1:${port}/api/v1/agents`, {
@@ -74,18 +78,16 @@ acceptance(
           "X-Coffer-Token": token,
           "X-Coffer-Actor": "e2e",
         },
-        body: JSON.stringify({
-          type: "codex",
-          name,
-          config_dir: configDir,
-          description: "e2e",
-        }),
+        body: JSON.stringify({ type: "codex", config_dir: configDir }),
       });
       expect(createResp.status).toBe(201);
 
       // 3. Reload + the page now lists the new agent.
       await page.reload();
-      await expect(page.getByText(name)).toBeVisible({ timeout: 10_000 });
+      // Exact: the type column reads "Codex", which a substring match would hit.
+      await expect(page.getByText(name, { exact: true })).toBeVisible({
+        timeout: 10_000,
+      });
 
       // 4. Delete via the UI. The row's trash icon (aria-label "Delete
       //    {name}") opens a styled Radix confirm dialog; the actual delete is
@@ -99,7 +101,9 @@ acceptance(
       await confirmDialog.getByRole("button", { name: /^delete$/i }).click();
 
       // 5. The agent vanishes from the table (dialog closes too).
-      await expect(page.getByText(name)).toHaveCount(0, { timeout: 10_000 });
+      await expect(page.getByText(name, { exact: true })).toHaveCount(0, {
+        timeout: 10_000,
+      });
     } finally {
       await deleteAgentByApi(name);
       // Best-effort config-dir cleanup.

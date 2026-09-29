@@ -501,7 +501,6 @@ Register a new MCP server (stdio OR http; pick one).
 | `--stdio` | option | text |  | Command line to launch, quoted as one string, e.g. 'npx -y my-server --flag' |
 | `--http` | option | text |  | HTTP MCP server URL |
 | `--credential` | option | text (repeatable) |  | ENV_OR_HEADER=CREDENTIAL_REF (repeatable) |
-| `--title` | option | text |  | Display title (≤80 chars) |
 | `--description` | option | text |  |  |
 
 ### mcp list
@@ -535,13 +534,12 @@ Show one MCP server, by name or uid.
 coffer mcp edit [OPTIONS] NAME
 ```
 
-Change an MCP server's title, description, transport, env, headers, credential refs or timeouts (its name is fixed). Only the options given change.
+Change an MCP server's description, transport, env, headers, credential refs or timeouts (its name is fixed). Only the options given change.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Name or uid |
-| `--name` | option | text |  | Refused: this kind's name is fixed once registered (use --title) |
-| `--title` | option | text |  | Display title (≤80 chars); empty clears it |
+| `--name` | option | text |  | Refused: this kind's name is fixed once registered |
 | `--description` | option | text |  |  |
 | `--stdio` | option | text |  | New command line, quoted as one string (stdio transport) |
 | `--http` | option | text |  | New URL (http transport) |
@@ -765,51 +763,45 @@ List registered agents.
 ### agent add
 
 ```sh
-coffer agent add [OPTIONS] AGENT_TYPE
+coffer agent add [OPTIONS] TYPE
 ```
 
-Register an agent.
+Register the agent of TYPE — one per type, named by it.
 
-``--name`` is optional — when omitted the daemon derives a stable per-type default (``claude_code`` → ``claude-code``).
+Without ``--config-dir`` it is registered at the type's standard directory; an agent installed but never run gets that directory created. To move a registered agent, use ``coffer agent edit TYPE --config-dir``.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `AGENT_TYPE` | argument | text | required | claude_code \| codex |
-| `--name, -n` | option | text |  | Resource name (defaults to a per-type name, e.g. claude-code). |
-| `--config-dir` | option | text |  | Override config directory (default: ~/.claude etc.). |
-| `--title` | option | text |  | Display title (≤80 chars) |
-| `--description` | option | text |  |  |
+| `TYPE` | argument | text | required | claude-code \| codex |
+| `--config-dir` | option | text |  | Config directory other than the standard one (~/.claude etc.). |
 
 ### agent show
 
 ```sh
-coffer agent show [OPTIONS] NAME
+coffer agent show [OPTIONS] TYPE
 ```
 
 Show one agent, with its Coffer connection part by part.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name or uid |
+| `TYPE` | argument | text | required | Agent type (claude-code \| codex) or uid |
 | `--json` | option | flag |  | JSON output for scripts |
 
 ### agent edit
 
 ```sh
-coffer agent edit [OPTIONS] NAME
+coffer agent edit [OPTIONS] TYPE
 ```
 
-Change an agent's name, title, description, config dir or model binding.
+Change an agent's config directory or model binding.
 
-The model binding lives on the agent, not on the connection: an unbound agent projects no model and runs on its own default. A change here takes effect on disk the next time that agent's connection is activated (`coffer provider switch <name>`), which is what re-projects the config.
+An agent's name is its type and it carries no title or description, so these are the whole of what can change. The model binding lives on the agent, not on the connection: an unbound agent projects no model and runs on its own default. A change here takes effect on disk the next time that agent's connection is activated (`coffer provider switch <name>`), which is what re-projects the config.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name or uid |
-| `--name` | option | text |  | New name |
-| `--title` | option | text |  | Display title (≤80 chars); empty clears it |
-| `--description` | option | text |  |  |
-| `--config-dir` | option | text |  |  |
+| `TYPE` | argument | text | required | Agent type (claude-code \| codex) or uid |
+| `--config-dir` | option | text |  | Use a different config directory |
 | `--model` | option | text |  | Model this agent answers with |
 | `--fast-model` | option | text |  | Small/fast model slot (anthropic wire only) |
 | `--clear-fast-model` | option | flag |  | Unbind the fast slot |
@@ -1269,22 +1261,6 @@ Import a skill from a local folder; its name comes from SKILL.md.
 | --- | --- | --- | --- | --- |
 | `FOLDER` | argument | text | required | Local path to an existing skill folder |
 | `--force, -f` | option | flag |  | Replace an existing skill of the same name |
-| `--title` | option | text |  | Display title (≤80 chars) |
-
-### skill edit
-
-```sh
-coffer skill edit [OPTIONS] NAME
-```
-
-Change a skill's title, description or settings.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Name or uid |
-| `--name` | option | text |  | Refused: this kind's name is fixed once registered (use --title) |
-| `--title` | option | text |  | Display title (≤80 chars); empty clears it |
-| `--description` | option | text |  |  |
 
 ### skill rm
 

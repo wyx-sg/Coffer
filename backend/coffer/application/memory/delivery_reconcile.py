@@ -47,6 +47,7 @@ from typing import Protocol
 
 from coffer.application.memory.delivery import DeliveryService, DeliveryWrite, HookSite
 from coffer.application.reconcile.ports import Applied, AuditEvent, Undo
+from coffer.domain.agent.types import agent_display_name
 from coffer.domain.audit import AuditEventType
 from coffer.domain.hook_trust import HookTrust
 from coffer.domain.memory.delivery import MalformedDeliveryConfig
@@ -101,7 +102,7 @@ def memory_switch_subscriber(
 
 
 def _subject(site: HookSite) -> Subject:
-    return Subject("agent", site.agent.uid, site.agent.title or site.agent.name)
+    return Subject("agent", site.agent.uid, agent_display_name(site.agent.config, site.agent.name))
 
 
 class DeliveryHookTarget:

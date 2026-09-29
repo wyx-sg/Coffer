@@ -18,7 +18,7 @@ pytestmark = pytest.mark.asyncio
 
 async def _register_claude(bundle, home: pathlib.Path):
     (home / ".claude" / "skills").mkdir(parents=True, exist_ok=True)
-    return await bundle.svc.register(agent_type=AgentType.CLAUDE_CODE, name="cc", actor="cli")
+    return await bundle.svc.register(agent_type=AgentType.CLAUDE_CODE, actor="cli")
 
 
 @pytest.mark.acceptance(

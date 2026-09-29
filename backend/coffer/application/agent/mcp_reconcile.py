@@ -49,6 +49,7 @@ from coffer.domain.agent.mcp_install import (
     desired_entry,
     installed_entry,
 )
+from coffer.domain.agent.types import agent_display_name
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ConfigFileFormatInvalid, ShimNotFound
 from coffer.domain.reconcile import (
@@ -101,7 +102,7 @@ class _Found:
 
 
 def _title(r: Resource) -> str:
-    return r.title or r.name
+    return agent_display_name(r.config, r.name)
 
 
 def _text(params: object) -> str:

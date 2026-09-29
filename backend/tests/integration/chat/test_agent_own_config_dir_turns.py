@@ -1,5 +1,5 @@
 """A turn on an agent with its own config directory runs against that directory
-(spec chat "Ship Claude Code and Codex subprocess providers").
+(spec chat "Ship Claude Code and Codex subprocess providers on the type's one agent").
 
 Coffer delivers skills, installs its MCP entry and edits config files in the
 agent's ``config_dir``. The process it spawns to run a turn must read that same

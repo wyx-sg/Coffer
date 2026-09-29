@@ -4,9 +4,9 @@
 // Discovery reports every config directory with either signal — the program on
 // PATH, or the directory itself — including one CLAUDE_CONFIG_DIR / CODEX_HOME
 // names, so one type can appear more than once. Rows are keyed by `config_dir`.
-// Only an `installed_active` candidate (program + directory) can be ticked; one
-// that is installed but never run says so, and a directory without its program
-// reads "Not installed". The version rides beside the name when known.
+// Only an addable candidate (the program is on PATH) can be ticked; one that is
+// installed but never run says so — registering it creates the standard
+// directory — and a directory without its program reads "Not installed". The version rides beside the name when known.
 import { useTranslation } from "react-i18next";
 
 import { Checkbox } from "@/components/ui/checkbox";

@@ -199,7 +199,7 @@ Each conversation has one owner — you — whichever screen you are on. Chat do
 
 ## What the agent gets from the vault
 
-A chat turn runs against the config directory of the agent that answers for its type: the first enabled agent of that type, in name order. That is the directory Coffer delivers [skills](/guides/skills) into and installs its MCP entry in, so the agent in chat has the same Coffer skills and [MCP servers](/guides/mcp-servers) it has in your terminal. When that agent's config directory is not its standard location, Coffer sets `CLAUDE_CONFIG_DIR` or `CODEX_HOME` for the turn.
+A chat turn runs against the config directory of the registered agent of its type (there is one per type). That is the directory Coffer delivers [skills](/guides/skills) into and installs its MCP entry in, so the agent in chat has the same Coffer skills and [MCP servers](/guides/mcp-servers) it has in your terminal. When that agent's config directory is not its standard location, Coffer sets `CLAUDE_CONFIG_DIR` or `CODEX_HOME` for the turn.
 
 On top of the agent's own system prompt, Coffer appends, in this order:
 

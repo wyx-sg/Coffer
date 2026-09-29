@@ -84,7 +84,7 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
         # register an agent
         r = c.post(
             "/api/v1/agents",
-            json={"type": "claude_code", "name": "cur", "config_dir": str(agent_config_dir)},
+            json={"type": "claude_code", "config_dir": str(agent_config_dir)},
         )
         assert r.status_code == 201, r.text
         # The agent's uid is what every reference to it is written with here
@@ -110,7 +110,7 @@ def test_skill_full_lifecycle_via_http(tmp_path, monkeypatch):
         assert re.fullmatch(r"[0-9a-f]{32}", uid), uid
         # A binding carries both halves of the agent: the uid a client follows,
         # the name it prints.
-        assert [b["agent_name"] for b in skill["bindings"]] == ["cur"]
+        assert [b["agent_name"] for b in skill["bindings"]] == ["claude-code"]
         assert [b["agent_uid"] for b in skill["bindings"]] == [agent_uid]
         # Delivery is decided by these two fields and nothing else.
         assert skill["enabled"] is True
@@ -200,7 +200,7 @@ def test_deleting_agent_cascades_into_skill_binding_cleanup(tmp_path, monkeypatc
     with _client(app) as c:
         r = c.post(
             "/api/v1/agents",
-            json={"type": "claude_code", "name": "cur", "config_dir": str(agent_config_dir)},
+            json={"type": "claude_code", "config_dir": str(agent_config_dir)},
         )
         assert r.status_code == 201, r.text
         agent_uid = r.json()["uid"]
@@ -222,7 +222,7 @@ def test_deleting_agent_cascades_into_skill_binding_cleanup(tmp_path, monkeypatc
         r = c.get(f"/api/v1/skills/{uid}")
         assert r.status_code == 200
         assert all(b["agent_uid"] != agent_uid for b in r.json()["bindings"])
-        assert all(b["agent_name"] != "cur" for b in r.json()["bindings"])
+        assert all(b["agent_name"] != "claude-code" for b in r.json()["bindings"])
 
 
 # TEST21-010: error envelope shape for non-SSRF errors. The envelope is
@@ -385,7 +385,7 @@ def test_skill_repair_route(tmp_path, monkeypatch):
         # Register agent and import skill (creates binding + link).
         r = c.post(
             "/api/v1/agents",
-            json={"type": "claude_code", "name": "cur", "config_dir": str(agent_config_dir)},
+            json={"type": "claude_code", "config_dir": str(agent_config_dir)},
         )
         assert r.status_code == 201, r.text
         agent_uid = r.json()["uid"]
@@ -424,7 +424,7 @@ def test_skill_repair_route(tmp_path, monkeypatch):
         entries = r.json()["entries"]
 
         missing = next(e for e in entries if e["skill_name"] == "fix-me")
-        assert missing["agent_name"] == "cur"
+        assert missing["agent_name"] == "claude-code"
         # The entry is exactly these five fields — no uid rides along, so a
         # client cannot start addressing one entry out of the report.
         fields = {"skill_name", "agent_name", "kind", "target_path", "suggested_remedy"}
@@ -450,7 +450,7 @@ def test_skill_repair_route(tmp_path, monkeypatch):
         # The MISSING_LINK should be remediated, re-delivered to the agent the
         # entry names — whose uid the restored delivery row still records.
         remediated = next(e for e in body["remediated"] if e["skill_name"] == "fix-me")
-        assert remediated["agent_name"] == "cur"
+        assert remediated["agent_name"] == "claude-code"
         bindings = c.get(f"/api/v1/skills/{uid}").json()["bindings"]
         assert [b["agent_uid"] for b in bindings] == [agent_uid]
         # The link is restored.

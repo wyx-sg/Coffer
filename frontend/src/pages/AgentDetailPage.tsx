@@ -28,8 +28,6 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
 import { useAgent } from "@/lib/hooks/useAgents";
-import { displayName } from "@/lib/resourceTitle";
-import { ResourceLabel } from "@/components/resource/ResourceLabel";
 
 const TABS = [
   "overview",
@@ -105,9 +103,8 @@ export function AgentDetailPage() {
     <div className="space-y-6">
       <PageHeader
         back={{ to: "/agents", label: t("agents.detail.back") }}
-        title={<ResourceLabel resource={agent} heading />}
+        title={agent.display_name}
         badges={<AgentHeaderBadges agent={agent} />}
-        subtitle={agent.description ?? undefined}
         actions={
           <div className="flex items-center gap-2">
             <AgentConnectionButton uid={uid} />
@@ -189,7 +186,7 @@ export function AgentDetailPage() {
 
       <AgentDeleteDialog
         uid={uid}
-        name={displayName(agent)}
+        name={agent.display_name}
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         onDeleted={() => navigate("/agents")}

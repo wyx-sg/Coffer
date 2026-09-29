@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from coffer.application.agent.hooks_service import AgentHooksService
 from coffer.domain.agent.hooks import HookHealth, HookSource
 from coffer.domain.hook_trust import HookTrust
+from coffer.surfaces.http.agent_type_path import resolve_agent_path
 from coffer.surfaces.http.agent_workspace_routes import ParseErrorOut
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.workspace_dependencies import get_agent_hooks_service
@@ -18,7 +19,7 @@ from coffer.surfaces.http.workspace_dependencies import get_agent_hooks_service
 router = APIRouter(
     prefix="/api/v1/agents",
     tags=["agents"],
-    dependencies=[Depends(require_token)],
+    dependencies=[Depends(require_token), Depends(resolve_agent_path)],
 )
 
 

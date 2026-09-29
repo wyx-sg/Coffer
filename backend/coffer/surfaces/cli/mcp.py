@@ -10,8 +10,8 @@ only an MCP server has: ``add`` (the transport is parsed from ``--stdio`` or
 
 A server's name is fixed once registered, because it is the prefix of every
 tool name an agent sees (spec mcp-gateway "Manage MCP servers as resources");
-``edit --name`` is therefore refused by the daemon, and ``--title`` is the
-cosmetic change.
+``edit --name`` is therefore refused by the daemon. A server has no display
+title: its name and its description are all it carries.
 
 Every command takes the server's NAME, because that is what a person knows; the
 uid the daemon addresses it by is looked up once per command through
@@ -31,7 +31,6 @@ from coffer.surfaces.cli._kind_verbs import (
     DEFAULT_VERBS,
     Column,
     KindVerbs,
-    check_title_arg,
     register_kind_verbs,
     verbose_of,
 )
@@ -60,7 +59,6 @@ def add(
     credential: list[str] = typer.Option(  # noqa: B008
         [], "--credential", help="ENV_OR_HEADER=CREDENTIAL_REF (repeatable)"
     ),
-    title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
     description: str | None = typer.Option(None, "--description"),
 ) -> None:
     """Register a new MCP server (stdio OR http; pick one)."""
@@ -94,7 +92,6 @@ def add(
         "config": {"transport": transport},
     }
 
-    check_title_arg(title)
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post("/resources", json=payload)
@@ -108,9 +105,6 @@ def add(
             typer.echo(f"config invalid: {r.json()['error']}", err=True)
             raise typer.Exit(6)
         _cli_client.check(r, verbose=verbose)
-        if title:
-            t = c.patch(f"/resources/{r.json()['uid']}", json={"title": title})
-            _cli_client.check(t, verbose=verbose)
     typer.echo(f"registered: mcp_server {name}")
 
 
@@ -125,6 +119,7 @@ register_kind_verbs(
         noun="MCP server",
         verbs=DEFAULT_VERBS | {"scope"},
         name_fixed=True,
+        titled=False,
         edit_flags=MCP_EDIT_FLAGS,
         columns=(
             Column("Transport", _transport),
@@ -134,7 +129,7 @@ register_kind_verbs(
             "list": "List every registered MCP server.",
             "show": "Show one MCP server, by name or uid.",
             "edit": (
-                "Change an MCP server's title, description, transport, env, headers,"
+                "Change an MCP server's description, transport, env, headers,"
                 " credential refs or timeouts (its name is fixed). Only the options"
                 " given change."
             ),

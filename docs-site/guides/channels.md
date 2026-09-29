@@ -34,7 +34,7 @@ Both ways store the secret first and register the channel with a reference to it
 # Store the secret (read from stdin, so it stays out of your shell history)
 coffer credentials set channel/tg/bot-token
 
-# Register the channel; --agent is the agent's name as the Agents page shows it
+# Register the channel; --agent is the agent's type (claude-code or codex)
 coffer channel add my-telegram --type telegram \
   --bot-token-ref channel/tg/bot-token --agent claude-code
 ```

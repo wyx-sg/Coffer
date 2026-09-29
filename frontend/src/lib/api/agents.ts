@@ -1,10 +1,9 @@
 // frontend/src/lib/api/agents.ts — request helpers for /api/v1/agents/*
 //
-// Every route here is addressed by the agent's `uid`, never by its name: the
-// name is a label the user edits, and a request built from it would stop
-// resolving the moment they did (ADR resource-identity-is-an-immutable-uid).
-// The name still travels on the READ side — `AgentOut.name` is what a heading
-// and a table row show — so a caller that has an agent has both.
+// Every route here is addressed by the agent's `uid` (ADR
+// resource-identity-is-an-immutable-uid). An agent is one per type per machine
+// and its name is the type's fixed name (`claude-code` / `codex`); what a
+// heading and a table row show is `AgentOut.display_name`.
 //
 // Wire types are the agent-registry contract's generated schemas
 // (`openspec/specs/agent-registry/contracts/api.openapi.yaml` → `generated/agent-registry.ts`),
@@ -47,8 +46,14 @@ export type AgentCreate = Schemas["AgentCreate"];
 
 export type AgentPatch = Schemas["AgentPatch"];
 
+/** One supported agent type on this machine: its fixed name, detection state,
+ *  directories, and — when registered — its uid. `addable` says whether
+ *  registering it now would succeed. */
+export type AgentTypeOut = Schemas["AgentTypeOut"];
+export type AgentTypesOut = Schemas["AgentTypesOut"];
 export type AgentCandidatesOut = Schemas["AgentCandidatesOut"];
-export type AgentCandidate = Schemas["AgentCandidate"];
+/** A discovered, not-yet-registered agent type — an `AgentTypeOut` row. */
+export type AgentCandidate = AgentTypeOut;
 
 /** Every hook in the agent's native config, plus Coffer's own hook's health. */
 export type AgentHooksOut = Schemas["AgentHooksOut"];
@@ -100,6 +105,8 @@ export const agentsApi = {
   remove: (uid: string) => call<void>(`/agents/${enc(uid)}`, { method: "DELETE" }),
   // Read-only discovery: installed-but-unregistered agents the user can add.
   candidates: () => call<AgentCandidatesOut>("/agents/candidates"),
+  // One row per supported type, registered or not.
+  types: () => call<AgentTypesOut>("/agents/types"),
 
   // Config files are read AND written in-app. A write carries the fingerprint
   // from the read that seeded the editor, so a file changed underneath the

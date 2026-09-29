@@ -69,7 +69,7 @@ _GATEWAY_MODELS = ["agnes-2.5-pro-beta", "agnes-video-2.5"]
 
 #: The agents this vault holds, as a user names them — deliberately not the
 #: agent keys they map to, so nothing here can pass by comparing the two.
-_AGENTS = {AgentType.CLAUDE_CODE: "claude-code", AgentType.CODEX: "codex-cli"}
+_AGENTS = {t: t.default_name() for t in (AgentType.CLAUDE_CODE, AgentType.CODEX)}
 
 
 def _text(*ids: str) -> list[CuratedModel]:

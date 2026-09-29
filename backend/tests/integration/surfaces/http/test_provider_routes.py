@@ -87,8 +87,9 @@ def _agent_dir(tmp_path: pathlib.Path, name: str = "agent-cfg") -> pathlib.Path:
     return d
 
 
-def _register_agent(c: TestClient, *, agent_type: str, name: str, config_dir: pathlib.Path) -> str:
-    """Register an agent and return its uid — what a resource scope now holds.
+def _register_agent(c: TestClient, *, agent_type: str, config_dir: pathlib.Path) -> str:
+    """Register the one agent of ``agent_type`` (named by the type) and return
+    its uid — what a resource scope now holds.
 
     A scope's ``agents`` list names agent UIDS, not type values: a provider
     scope used to hold type values while other kinds' scopes held names, and
@@ -96,7 +97,7 @@ def _register_agent(c: TestClient, *, agent_type: str, name: str, config_dir: pa
     """
     r = c.post(
         "/api/v1/agents",
-        json={"type": agent_type, "name": name, "config_dir": str(config_dir)},
+        json={"type": agent_type, "config_dir": str(config_dir)},
     )
     assert r.status_code == 201, r.text
     return r.json()["uid"]
@@ -258,11 +259,11 @@ def test_activate_writes_claude_settings(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59780)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body())
         r = c.post(f"/api/v1/providers/{uid}/activate")
         assert r.status_code == 200, r.text
-        assert r.json()["projected"] == ["cc"]
+        assert r.json()["projected"] == ["claude-code"]
         data = json.loads((cfg / "settings.json").read_text())
         # apiKeyHelper cites THIS connection's uid (per-connection key
         # resolution), so the projected agent always reads exactly the
@@ -286,7 +287,7 @@ def test_agent_binding_drives_projected_model(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59783)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        cc = _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        cc = _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body())
         # Bind this agent to its own models; activating projects them (the model
         # lives on the binding, not the connection — spec provider-switching
@@ -310,7 +311,7 @@ def test_activate_writes_codex_config(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59790)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        cx = _register_agent(c, agent_type="codex", name="cx", config_dir=cfg)
+        cx = _register_agent(c, agent_type="codex", config_dir=cfg)
         uid = _new(
             c,
             {
@@ -326,7 +327,7 @@ def test_activate_writes_codex_config(tmp_path, monkeypatch):
         c.patch(f"/api/v1/agents/{cx}", json={"model": "gpt-x"})
         r = c.post(f"/api/v1/providers/{uid}/activate")
         assert r.status_code == 200, r.text
-        assert r.json()["projected"] == ["cx"]
+        assert r.json()["projected"] == ["codex"]
         doc = tomllib.loads((cfg / "config.toml").read_text())
         assert doc["model"] == "gpt-x"
         assert doc["model_provider"] == "coffer"
@@ -343,7 +344,7 @@ def test_use_builtin_removes_projection_and_clears_active(tmp_path, monkeypatch)
     app = _app(tmp_path, monkeypatch, 59785)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body())
         c.post(f"/api/v1/providers/{uid}/activate")
         # sanity — the connection is projected into the agent config first
@@ -356,7 +357,7 @@ def test_use_builtin_removes_projection_and_clears_active(tmp_path, monkeypatch)
         r = c.post("/api/v1/providers/use-builtin/claude_code")
         assert r.status_code == 200, r.text
         assert r.json()["agent_type"] == "claude_code"
-        assert r.json()["deprojected"] == ["cc"]
+        assert r.json()["deprojected"] == ["claude-code"]
         # ``previous`` is a LABEL — it is there for a human reading the result,
         # not for addressing anything.
         assert r.json()["previous"] == "acme"
@@ -433,7 +434,7 @@ def test_switch_preserves_keys_and_backs_up(tmp_path, monkeypatch):
     cfg = _agent_dir(tmp_path)
     (cfg / "settings.json").write_text(json.dumps({"theme": "dark"}))
     with _client(app) as c:
-        _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body())
         c.post(f"/api/v1/providers/{uid}/activate")
         data = json.loads((cfg / "settings.json").read_text())
@@ -489,7 +490,7 @@ def test_openai_connection_scoped_to_claude_code(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59890)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        cc = _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        cc = _register_agent(c, agent_type="claude_code", config_dir=cfg)
         r = c.post(
             "/api/v1/providers",
             json={
@@ -513,7 +514,7 @@ def test_openai_connection_scoped_to_claude_code(tmp_path, monkeypatch):
 
         act = c.post(f"/api/v1/providers/{uid}/activate")
         assert act.status_code == 200, act.text
-        assert act.json()["projected"] == ["cc"]
+        assert act.json()["projected"] == ["claude-code"]
         data = json.loads((cfg / "settings.json").read_text())
         _assert_helper_for(data["apiKeyHelper"], uid)
         assert data["env"]["ANTHROPIC_BASE_URL"] == "https://agnes/v1"
@@ -571,7 +572,7 @@ def test_activating_an_ollama_connection_is_refused_and_writes_nothing(tmp_path,
     app = _app(tmp_path, monkeypatch, 59855)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        cc = _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        cc = _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(
             c,
             {"name": "local-llama", "protocol": "ollama", "base_url": "http://localhost:11434"},
@@ -914,7 +915,7 @@ def test_rename_keeps_the_uid_credential_and_projection(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59920)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body(name="acme"))
         ref_before = _ref_of(c, uid)
         assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
@@ -999,7 +1000,7 @@ def test_renamed_connection_still_resolves_for_its_agent(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59940)
     cfg = _agent_dir(tmp_path)
     with _client(app) as c:
-        _register_agent(c, agent_type="claude_code", name="cc", config_dir=cfg)
+        _register_agent(c, agent_type="claude_code", config_dir=cfg)
         uid = _new(c, _anthropic_body(name="acme", secret_value="sk-the-key"))
         c.post(f"/api/v1/providers/{uid}/activate")
 
@@ -1080,12 +1081,8 @@ def test_the_key_a_wire_resolves_follows_the_scope(tmp_path, monkeypatch):
     """
     app = _app(tmp_path, monkeypatch, 59920)
     with _client(app) as c:
-        cc = _register_agent(
-            c, agent_type="claude_code", name="cc", config_dir=_agent_dir(tmp_path, "cc")
-        )
-        cx = _register_agent(
-            c, agent_type="codex", name="cx", config_dir=_agent_dir(tmp_path, "cx")
-        )
+        cc = _register_agent(c, agent_type="claude_code", config_dir=_agent_dir(tmp_path, "cc"))
+        cx = _register_agent(c, agent_type="codex", config_dir=_agent_dir(tmp_path, "cx"))
         for_claude = _new(c, _anthropic_body("for-claude", secret_value="sk-claude"))
         for_codex = _new(
             c,
@@ -1423,7 +1420,7 @@ async def test_the_two_default_flags_never_move_each_other(tmp_path, monkeypatch
 
 
 def test_provider_out_carries_the_resource_title(tmp_path, monkeypatch):
-    """spec resource-framework "Carry an optional editable title on every resource":
+    """spec resource-framework "Carry an optional editable title on the kinds that have one":
     the connection's own read carries the title set through the kind-agnostic
     update, and an empty one clears it back to null."""
     app = _app(tmp_path, monkeypatch, 59795)

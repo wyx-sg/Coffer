@@ -40,7 +40,7 @@ def daemon(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[
     monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(shim))
     claude = fake_agent_dir(home, AgentType.CLAUDE_CODE)
     for client in boot(tmp_path, monkeypatch, features="memory=on,knowledge=off,vault_sync=off"):
-        r = client.post("/agents", json={"type": "claude_code", "name": "claude-code"})
+        r = client.post("/agents", json={"type": "claude_code"})
         assert r.status_code == 201, r.text
         uid = r.json()["uid"]
         r = client.post(f"/agents/{uid}/coffer-connection")
@@ -105,7 +105,7 @@ def test_the_plan_lists_drift_and_writes_nothing(
     assert "command" in item["changed_params"]
     assert "/old/coffer-mcp-shim" in item["before"]
     assert str(daemon["shim"].resolve()) in item["after"]
-    assert item["subject"] == {"kind": "agent", "uid": uid, "title": "claude-code"}
+    assert item["subject"] == {"kind": "agent", "uid": uid, "title": "Claude Code"}
     assert {t["name"] for t in plan["targets"]} >= {
         "mcp_entry",
         "skill_link",

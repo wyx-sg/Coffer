@@ -123,6 +123,15 @@ Routes that belong to an [experimental feature](/guides/experimental-features) a
 `404 FEATURE_DISABLED` (with `details.feature`) while that feature is switched off on the
 machine, exactly like a route the build does not have. The tables below mark those groups.
 
+## Addressing an agent
+
+A machine has at most one agent per type, so every `/api/v1/agents/{uid}/...` route also
+accepts the agent's type in place of its uid: `claude-code` (or `claude_code`) or `codex`.
+`GET /api/v1/agents/types` lists every supported type with its detection state, registered
+or not. Registering a type that already has an agent answers `409 AGENT_TYPE_REGISTERED`;
+to move the agent to another config directory, `PATCH` it instead. See
+[Agents](/guides/agents#one-agent-per-type).
+
 ## Routes
 """
 

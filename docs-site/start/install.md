@@ -40,7 +40,7 @@ The script:
 Open a new shell, or `source` the profile the script names, so that `coffer` is on your `PATH`. The script ends by suggesting the two commands that connect Claude Code:
 
 ```sh
-coffer agent add claude_code
+coffer agent add claude-code
 coffer agent connect claude-code
 ```
 

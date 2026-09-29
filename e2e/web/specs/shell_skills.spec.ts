@@ -61,7 +61,8 @@ acceptance(
     const { token, port } = readDaemonToken();
     const stamp = Date.now().toString(36);
     const skillName = `e2e-skill-${stamp}`;
-    const agentName = `e2e-cur-${stamp}`;
+    // An agent is one per type and named by it.
+    const agentName = "claude-code";
     const skillSrc = mkSkillFolder(skillName);
     const agentConfigDir = mkAgentConfigDir(stamp);
     // Skills are delivered under <config_dir>/skills/<name>.
@@ -74,7 +75,14 @@ acceptance(
         page.getByRole("heading", { name: /^skills$/i }),
       ).toBeVisible();
 
-      // 2. Register an agent so the imported skill has somewhere to bind to.
+      // 2. Register an agent so the imported skill has somewhere to bind to,
+      //    clearing any claude-code agent the shared e2e DB already holds.
+      const existingAgent = await resolveResourceUid("agent", agentName);
+      if (existingAgent !== null)
+        await bestEffortDelete(
+          `http://127.0.0.1:${port}/api/v1/agents/${existingAgent}`,
+          token,
+        );
       const agentResp = await fetch(`http://127.0.0.1:${port}/api/v1/agents`, {
         method: "POST",
         headers: {
@@ -84,9 +92,7 @@ acceptance(
         },
         body: JSON.stringify({
           type: "claude_code",
-          name: agentName,
           config_dir: agentConfigDir,
-          description: "e2e",
         }),
       });
       expect(agentResp.status).toBe(201);

@@ -70,11 +70,11 @@ The combination is one state:
 | Program | Directory | State | What it means |
 | --- | --- | --- | --- |
 | found | present | installed and in use | Can be added and connected. |
-| found | absent | installed, never run | The agent creates its directory on first run; run it once, then add it. |
-| missing | present | config only | What is left of an uninstalled agent; shown as not installed. |
-| missing | absent | missing | Only a registered agent whose program and directory are both gone reads this. |
+| found | absent | installed, never run | Can be added: registering it at its standard directory creates that directory, holding only what Coffer needs there (its `skills` folder). |
+| missing | present | config only | What is left of an uninstalled agent; shown as not installed, and cannot be added. |
+| missing | absent | missing | Nothing of the type on this machine. |
 
-Discovery looks at each agent's standard directory and at the directory the agent's own environment variable names in the daemon's environment, when one is set, and nowhere else. Each directory is its own candidate, so several config sets of one agent can be registered side by side. Nothing is stored: the state is read whenever an agent or a candidate is shown.
+There is one agent per type, named by it (spec agent-registry "Keep one agent per type, named by it"), so detection is reported per type rather than per directory (spec agent-registry "Report every supported type's detection state"). Every supported type gets one row, registered or not, carrying its state, version, the directory it has or would be registered at, its standard directory and whether it can be added. For each type discovery looks at the standard directory and at the directory the type's own environment variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) names in the daemon's environment, when one is set, and nowhere else. That second directory never becomes a second candidate: it is offered as "use a different config directory" for the one agent, or is the directory Add registers when only it exists. A type that is not registered and is seen by either signal is a candidate, at most one per type. Nothing is stored: the state is read whenever an agent or a candidate is shown.
 
 ## Hooks are read, and Coffer's own is checked
 

@@ -112,7 +112,7 @@ async def _build(
     )
     await resources.register(
         kind="agent",
-        name="the-agent",
+        name=agent_type.default_name(),
         config={"type": agent_type.value, "config_dir": str(agent.config_dir)},
         actor="test",
         allow_lifecycle_kind=True,

@@ -90,9 +90,18 @@ Routes that belong to an [experimental feature](/guides/experimental-features) a
 `404 FEATURE_DISABLED` (with `details.feature`) while that feature is switched off on the
 machine, exactly like a route the build does not have. The tables below mark those groups.
 
+## Addressing an agent
+
+A machine has at most one agent per type, so every `/api/v1/agents/{uid}/...` route also
+accepts the agent's type in place of its uid: `claude-code` (or `claude_code`) or `codex`.
+`GET /api/v1/agents/types` lists every supported type with its detection state, registered
+or not. Registering a type that already has an agent answers `409 AGENT_TYPE_REGISTERED`;
+to move the agent to another config directory, `PATCH` it instead. See
+[Agents](/guides/agents#one-agent-per-type).
+
 ## Routes
 
-The daemon mounts 170 operations in 22 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 171 operations in 22 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -107,7 +116,7 @@ The daemon mounts 170 operations in 22 groups. Groups follow the order the daemo
 | [settings](#settings) | 2 |
 | [sync](#sync) | 19 |
 | [internal-engine](#internal-engine) | 6 |
-| [agents](#agents) | 35 |
+| [agents](#agents) | 36 |
 | [fs](#fs) | 5 |
 | [skills](#skills) | 9 |
 | [mcp](#mcp) | 10 |
@@ -242,8 +251,9 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 | Method | Path | Summary |
 | --- | --- | --- |
 | `GET` | `/api/v1/agents` | List Agents |
-| `POST` | `/api/v1/agents` | Register Agent |
-| `GET` | `/api/v1/agents/candidates` | Discover the agents on this machine that aren't registered yet (read-only). |
+| `POST` | `/api/v1/agents` | Register the one agent of ``type``, named by it. |
+| `GET` | `/api/v1/agents/types` | Every supported type with its detection state, registered or not (read-only), so a surface can always show one row per type. |
+| `GET` | `/api/v1/agents/candidates` | The supported types seen on this machine that aren't registered yet (read-only), each with its detection state and version (spec agent-registry "Detect an agent by its program and its config directory"). |
 | `GET` | `/api/v1/agents/{uid}` | Get Agent |
 | `PATCH` | `/api/v1/agents/{uid}` | Update Agent |
 | `DELETE` | `/api/v1/agents/{uid}` | Delete Agent |

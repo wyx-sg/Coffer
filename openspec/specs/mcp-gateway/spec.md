@@ -11,7 +11,7 @@ catalogue grows past what a model can reason over, and records which capability 
 long and with what outcome — never what was said. `mcp_server` was Coffer's first resource kind.
 
 This spec owns the gateway, capability curation, the invocation record and the `coffer mcp` / shim surfaces
-over them. The kind-agnostic lifecycle an `mcp_server` is managed through (immutable `uid`, fixed name and editable title, per-agent
+over them. The kind-agnostic lifecycle an `mcp_server` is managed through (immutable `uid`, fixed name, per-agent
 reach, audit log, retention) is [resource-framework](../resource-framework/spec.md)'s, and this spec
 contributes one `Kind` descriptor to it; the daemon that hosts the gateway — port, discovery file, token,
 loopback posture — is [daemon](../daemon/spec.md)'s; the encrypted store behind an upstream's credential
@@ -172,8 +172,9 @@ through is that spec's too.
 A server's `name` is the prefix of every capability name an agent sees, so `mcp_server` declares its name
 fixed: once registered it MUST NOT change, and a changed name MUST be refused with `NAME_IMMUTABLE`
 ([resource-framework](../resource-framework/spec.md) "Treat a resource's name as a mutable label"). A server
-MAY carry a title, which surfaces show in place of the name
-([resource-framework](../resource-framework/spec.md) "Carry an optional editable title on every resource").
+carries no title: its fixed name and its description — a note the user keeps for themselves — are all it has
+([resource-framework](../resource-framework/spec.md) "Carry an optional editable title on the kinds that have one"),
+and `coffer mcp add` and `coffer mcp edit` offer no `--title`.
 At registration the name MUST be at most 24 characters, in addition to the existing name pattern and the ban
 on `__`; a server registered earlier with a longer name MUST keep it and keep working.
 
@@ -225,6 +226,12 @@ on `__`; a server registered earlier with a longer name MUST keep it and keep wo
 - **WHEN** the user runs `coffer mcp test <server>`
 - **THEN** the command reports the server's health, and `coffer mcp cap list <server>` then lists the new tool
 - **AND** for a server whose upstream is unreachable, the command exits non-zero and names the failure
+
+#### Scenario: an MCP server is shown by its name
+- **GIVEN** the daemon is running
+- **WHEN** the user registers a server with `coffer mcp add fs --stdio '<command>' --description "Local files"` and then lists servers
+- **THEN** the list shows it as `fs` with that description, and `coffer mcp show fs --json` carries a `null` title
+- **AND** a title submitted for it through the kind-agnostic update route is refused as a validation error
 
 ### Requirement: Support stdio and HTTP upstreams
 The system MUST support both stdio and HTTP MCP transports for upstream servers. An HTTP upstream MAY cite a

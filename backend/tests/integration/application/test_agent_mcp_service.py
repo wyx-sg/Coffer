@@ -27,12 +27,12 @@ async def _register_claude(bundle, home: pathlib.Path) -> Resource:
     addresses it by ``uid``, and the audit queries filter on the resource
     itself rather than on the label it happens to carry."""
     (home / ".claude" / "skills").mkdir(parents=True, exist_ok=True)
-    return await bundle.svc.register(agent_type=AgentType.CLAUDE_CODE, name="cc", actor="cli")
+    return await bundle.svc.register(agent_type=AgentType.CLAUDE_CODE, actor="cli")
 
 
 async def _register_codex(bundle, home: pathlib.Path) -> Resource:
     (home / ".codex" / "skills").mkdir(parents=True, exist_ok=True)
-    return await bundle.svc.register(agent_type=AgentType.CODEX, name="cx", actor="cli")
+    return await bundle.svc.register(agent_type=AgentType.CODEX, actor="cli")
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="report Coffer-MCP install status")

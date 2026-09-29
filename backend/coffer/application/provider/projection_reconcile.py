@@ -43,7 +43,7 @@ from coffer.application.provider.targets import projection_targets
 from coffer.application.reconcile.ports import Applied, AuditEvent, Undo
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
-from coffer.domain.agent.types import AgentType
+from coffer.domain.agent.types import AgentType, agent_display_name
 from coffer.domain.audit import AuditEventType
 from coffer.domain.provider.agent_projection import ProviderProjection
 from coffer.domain.provider.config import ProviderConfig
@@ -112,7 +112,7 @@ class _Scan:
 
 
 def _title(r: Resource) -> str:
-    return r.title or r.name
+    return agent_display_name(r.config, r.name)
 
 
 class ProviderProjectionTarget:

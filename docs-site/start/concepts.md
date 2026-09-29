@@ -57,7 +57,7 @@ Architecture: [Resource framework](/architecture/resource-framework).
 
 ## uid and name
 
-Each resource has an immutable **uid**: an opaque 32-character hex string, created once, never reused, and identical on every machine that holds the resource. Its **name** is a label, unique within a kind, and it is what you type in the CLI. You can change it with `coffer <kind> edit <name> --name <new>`, except for an MCP server's or a skill's name, which is fixed because agents quote it. Any resource can also carry a **title**, up to 80 characters, that Coffer's pages and the CLI show in place of the name. Anything that must survive a rename refers to the uid. For example, the `--agent-uid` in an agent's MCP entry and the agent list in a resource's scope both store uids.
+Each resource has an immutable **uid**: an opaque 32-character hex string, created once, never reused, and identical on every machine that holds the resource. Its **name** is a label, unique within a kind, and it is what you type in the CLI. You can change it with `coffer <kind> edit <name> --name <new>`, except for an MCP server's or a skill's name, which is fixed because agents quote it, and an agent's, which is its type. Providers, channels, knowledge collections and memory partitions can also carry a **title**, up to 80 characters, that Coffer's pages and the CLI show in place of the name; agents, MCP servers and skills have none. Anything that must survive a rename refers to the uid. For example, the `--agent-uid` in an agent's MCP entry and the agent list in a resource's scope both store uids.
 
 Architecture: [Resource framework](/architecture/resource-framework).
 
@@ -70,11 +70,11 @@ A resource's **reach** decides where it takes effect. Reach has two parts:
 
 Scope applies to MCP servers (which agents see the server's tools), skills (which agents receive the skill), providers (which agents' config a switch writes into) and channels (which agents the channel may drive). Knowledge collections and memory partitions have neither: each is served to every agent, and only the `knowledge` or `memory` experimental feature switches the whole layer. Reach is **machine-local**: it is set on the machine it applies to and never syncs, so each of your machines decides reach for itself.
 
-Set scope with `coffer <kind> scope <name> --agents <names>` (`--all` for every agent, `--none` for none), or from the **Reach** control on the resource's page in the web UI. Guide: [MCP servers](/guides/mcp-servers), [Skills](/guides/skills). Architecture: [Resource framework](/architecture/resource-framework).
+Set scope with `coffer <kind> scope <name> --agents <types>` (an agent is named by its type, such as `claude-code`) (`--all` for every agent, `--none` for none), or from the **Reach** control on the resource's page in the web UI. Guide: [MCP servers](/guides/mcp-servers), [Skills](/guides/skills). Architecture: [Resource framework](/architecture/resource-framework).
 
 ## Agent
 
-An **agent** is a registered local coding agent: Claude Code (`claude_code`) or Codex (`codex`). Registering an agent tells Coffer where its config directory is. Nothing is registered automatically: `coffer scan` only lists candidates. The agent's own files stay the source of truth. Coffer reads its config, MCP entries, plugins, memory and transcripts when it needs them. It writes only allowlisted entries, atomically and with a `.bak` backup.
+An **agent** is a registered local coding agent: Claude Code (`claude_code`) or Codex (`codex`). A machine has at most one agent of each type, and its name is its type: `claude-code` or `codex`. Registering an agent tells Coffer where its config directory is, by default the type's standard one (`~/.claude`, `~/.codex`). Nothing is registered automatically: `coffer scan` only lists candidates. The agent's own files stay the source of truth. Coffer reads its config, MCP entries, plugins, memory and transcripts when it needs them. It writes only allowlisted entries, atomically and with a `.bak` backup.
 
 Guide: [Agents](/guides/agents). Architecture: [Resource framework](/architecture/resource-framework).
 

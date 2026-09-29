@@ -1,6 +1,6 @@
 // src/lib/resourceTitle.ts
 // The one rule for what a resource is called on screen (spec resource-framework
-// "Carry an optional editable title on every resource"): its title when one is
+// "Carry an optional editable title on the kinds that have one"): its title when one is
 // set, its name otherwise. Every list row, detail header and confirmation goes
 // through `displayName` so no surface re-derives it.
 

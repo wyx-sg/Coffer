@@ -54,10 +54,6 @@ def _test_action(uid: str) -> AttentionAction:
     )
 
 
-def _title(resource: Resource) -> str:
-    return resource.title or resource.name
-
-
 class McpAttentionSource:
     name = "mcp_server"
     feature: str | None = None
@@ -92,7 +88,7 @@ class McpAttentionSource:
                 AttentionItem(
                     kind=KIND,
                     uid=server.uid,
-                    title=_title(server),
+                    title=server.name,
                     reason_code="mcp_missing_launcher",
                     reason=f"Its launcher `{runner}` is not installed on this machine.",
                     severity=Severity.ERROR,
@@ -106,7 +102,7 @@ class McpAttentionSource:
             AttentionItem(
                 kind=KIND,
                 uid=server.uid,
-                title=_title(server),
+                title=server.name,
                 reason_code="mcp_failing",
                 reason="Its last connection test failed.",
                 severity=Severity.ERROR,
@@ -127,7 +123,7 @@ class McpAttentionSource:
                     AttentionItem(
                         kind=KIND,
                         uid=server.uid,
-                        title=_title(server),
+                        title=server.name,
                         reason_code="mcp_missing_secret",
                         reason=f"The credential `{ref}` it uses is not stored on this machine.",
                         severity=Severity.ERROR,

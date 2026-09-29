@@ -16,7 +16,6 @@ from __future__ import annotations
 import asyncio
 import os
 import pathlib
-import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
@@ -30,23 +29,45 @@ from coffer.domain.resource import Resource
 
 
 @dataclass(frozen=True)
-class AgentCandidate:
-    """An agent seen on this machine that is not registered yet."""
+class AgentTypeDetection:
+    """What this machine holds of one supported type — the row the Agents page
+    always renders for it, registered or not (spec agent-registry "Report every
+    supported type's detection state")."""
 
     type: AgentType
     display_name: str
+    #: The registered agent's directory, or — for a type not registered — the
+    #: directory Add would register: the standard one, or the one the type's
+    #: environment variable names when only that one exists.
     config_dir: str
+    #: The type's standard directory (``~/.claude``, ``~/.codex``) — where Add
+    #: registers when it is given no other.
+    standard_config_dir: str
     default_skill_dir: str
-    suggested_name: str
     state: DetectionState
     version: str | None
+    #: The registered agent of this type, when there is one.
+    uid: str | None = None
+    #: Another directory seen for this type — the one its environment variable
+    #: names — offered as "use a different config directory", never added.
+    other_config_dir: str | None = None
+
+    @property
+    def name(self) -> str:
+        return self.type.default_name()
 
     @property
     def addable(self) -> bool:
-        """Only an agent that is installed and has its config directory can be
-        registered: registration never creates the config directory, and a
+        """Whether Add may register this type here: not registered yet, and its
+        program is installed. ``installed_never_run`` is addable — registration
+        creates the standard directory — while ``config_only`` is not, because a
         directory whose program is gone belongs to no working agent."""
-        return self.state is DetectionState.INSTALLED_ACTIVE
+        return self.uid is None and self.state.installed
+
+    @property
+    def is_candidate(self) -> bool:
+        """Not registered, and seen here by either signal."""
+        return self.uid is None and self.state is not DetectionState.MISSING
 
 
 @dataclass(frozen=True)
@@ -73,12 +94,6 @@ def _same_dir(a: pathlib.Path, b: pathlib.Path) -> bool:
         return a.expanduser().resolve() == b.expanduser().resolve()
     except OSError:
         return a == b
-
-
-def _suffix(path: pathlib.Path) -> str:
-    """A name-safe tail for a candidate in a non-standard directory."""
-    slug = re.sub(r"[^A-Za-z0-9_-]+", "-", path.name.lstrip(".")).strip("-")
-    return slug or "custom"
 
 
 class AutoDetectService:
@@ -119,42 +134,57 @@ class AutoDetectService:
                 dirs.append(env_dir)
         return dirs
 
-    async def discover(self) -> list[AgentCandidate]:
-        """Every agent seen here that is not registered yet, as candidates.
+    async def types(self) -> list[AgentTypeDetection]:
+        """One row per supported type, in manifest order, registered or not.
 
-        Read-only: it never writes. A directory a registered agent already
-        holds is skipped, so the list only shows what is not managed yet — a
-        removed agent re-appears here while its program or directory remains.
+        Read-only: it never writes. A registered type reports its agent's own
+        directory; any other reports the directory Add would register — the
+        standard one unless only the one the type's environment variable names
+        exists — with the other named as ``other_config_dir`` when it exists.
         """
-        registered: list[pathlib.Path] = []
+        registered: dict[AgentType, Resource] = {}
         for row in await self._agents.list():
             try:
-                registered.append(AgentConfig.model_validate(row.config).resolved_config_dir())
+                registered.setdefault(AgentConfig.model_validate(row.config).type, row)
             except Exception:
                 continue
-        candidates: list[AgentCandidate] = []
+        rows: list[AgentTypeDetection] = []
         for descriptor in self._catalog:
             program = await asyncio.to_thread(self._program, descriptor)
-            for index, config_dir in enumerate(self._looked_at(descriptor)):
-                if any(_same_dir(config_dir, r) for r in registered):
-                    continue
-                exists = await asyncio.to_thread(self._dir_exists, config_dir)
-                state = classify(program, config_dir_exists=exists)
-                if state is DetectionState.MISSING:
-                    continue
-                name = descriptor.type.default_name()
-                candidates.append(
-                    AgentCandidate(
-                        type=descriptor.type,
-                        display_name=descriptor.display_name,
-                        config_dir=str(config_dir),
-                        default_skill_dir=str(config_dir / descriptor.skill_subpath),
-                        suggested_name=name if index == 0 else f"{name}-{_suffix(config_dir)}",
-                        state=state,
-                        version=program.version,
-                    )
+            agent = registered.get(descriptor.type)
+            looked_at = self._looked_at(descriptor)
+            exists = [await asyncio.to_thread(self._dir_exists, d) for d in looked_at]
+            if agent is not None:
+                config_dir = AgentConfig.model_validate(agent.config).resolved_config_dir()
+                dir_exists = await asyncio.to_thread(self._dir_exists, config_dir)
+            else:
+                pick = 1 if len(looked_at) > 1 and exists[1] and not exists[0] else 0
+                config_dir, dir_exists = looked_at[pick], exists[pick]
+            others = [
+                d
+                for d, e in zip(looked_at, exists, strict=True)
+                if e and not _same_dir(d, config_dir)
+            ]
+            rows.append(
+                AgentTypeDetection(
+                    type=descriptor.type,
+                    display_name=descriptor.display_name,
+                    config_dir=str(config_dir),
+                    standard_config_dir=str(looked_at[0]),
+                    default_skill_dir=str(config_dir / descriptor.skill_subpath),
+                    state=classify(program, config_dir_exists=dir_exists),
+                    version=program.version,
+                    uid=agent.uid if agent is not None else None,
+                    other_config_dir=str(others[0]) if others else None,
                 )
-        return candidates
+            )
+        return rows
+
+    async def discover(self) -> list[AgentTypeDetection]:
+        """The types seen here that are not registered yet, as candidates —
+        at most one per type. A removed agent re-appears here while its program
+        or directory remains."""
+        return [row for row in await self.types() if row.is_candidate]
 
 
-__all__ = ["AgentCandidate", "AgentDetection", "AutoDetectService"]
+__all__ = ["AgentDetection", "AgentTypeDetection", "AutoDetectService"]
