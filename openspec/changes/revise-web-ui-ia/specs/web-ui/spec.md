@@ -429,10 +429,12 @@ machine only is a setting shown on the tab it belongs to:
 - **History** — the retention of each record kind — changes, MCP calls and
   conversations — Keep forever or a number of days, cleaned up nightly, with a
   **Clear expired now** action; a saved value survives a reload.
-- **Rebuildable cache** — Coffer's memory tree and the agents' model catalogues,
-  which Coffer rebuilds on its own: one **Clear** action, behind a confirmation
-  saying that memory is rebuilt from the agents' own memory on the next update
-  and that notes whose sources are gone do not come back.
+- **Rebuildable cache** — Coffer's memory tree and the transcript summary cache
+  (`cache/agent/`), which Coffer rebuilds on its own: one **Clear** action,
+  behind a confirmation saying that memory is rebuilt from the agents' own
+  memory on the next update, that an equivalent rebuild needs Coffer's model
+  (without it each entry becomes a note of its own), and that notes whose
+  sources are gone do not come back.
 
 Edits auto-save, like every settings surface: there is no Save button.
 
@@ -444,7 +446,7 @@ Edits auto-save, like every settings surface: there is no Save button.
 #### Scenario: the data tab shows four blocks and no this-mac block
 - **GIVEN** a vault with versions, chat media on disk, and memory partitions
 - **WHEN** the user opens `/settings/data`
-- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced), History (retention for changes, MCP calls and conversations with Clear expired now) and Rebuildable cache (memory tree and model catalogues with Clear), and no This Mac only block
+- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced), History (retention for changes, MCP calls and conversations with Clear expired now) and Rebuildable cache (memory tree and transcript summary cache with Clear), and no This Mac only block
 
 #### Scenario: clear expired now removes what retention has passed
 - **GIVEN** MCP calls kept for 7 days and calls older than that
@@ -454,7 +456,7 @@ Edits auto-save, like every settings surface: there is no Save button.
 #### Scenario: clearing the cache is confirmed and rebuilt
 - **GIVEN** memory partitions with notes
 - **WHEN** the user chooses Clear in Rebuildable cache and confirms
-- **THEN** the memory tree and the model catalogues are cleared, and the next memory update rebuilds the partitions from the agents' own memory, with no vault or local content touched
+- **THEN** the memory tree and the transcript summary cache are cleared, and the next memory update rebuilds the partitions from the agents' own memory, with no vault or local content touched
 
 ## ADDED Requirements
 

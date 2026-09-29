@@ -158,7 +158,7 @@ unarchived until that implementation lands.
   control while the user reads, with no Pause / Resume; export of the filtered records (JSON / CSV)
   is in the overflow menu.
 - **Settings › Data** shows four blocks by kind of data: Vault, Local content (media only), History
-  (retention, Clear expired now) and Rebuildable cache (memory tree and model catalogues, one Clear).
+  (retention, Clear expired now) and Rebuildable cache (memory tree and transcript summary cache, one Clear).
 - A **command palette** (⌘K / Ctrl+K) jumps to any page or object. It carries no action that
   changes state.
 - A sidebar entry carries an **attention dot** while its kind's attention signal is raised; Sync's

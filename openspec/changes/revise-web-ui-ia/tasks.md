@@ -117,7 +117,7 @@
 
 ## 6k. Settings › Data
 
-- [ ] 6k.1 Data tab: Vault (size, git version count, Open folder), Local content (chat and channel media size, Open folder, not-synced note), History (retention per changes / MCP calls / conversations, nightly cleanup, Clear expired now), Rebuildable cache (memory tree and model catalogues, one confirmed Clear); no This Mac only block
+- [ ] 6k.1 Data tab: Vault (size, git version count, Open folder), Local content (chat and channel media size, Open folder, not-synced note), History (retention per changes / MCP calls / conversations, nightly cleanup, Clear expired now), Rebuildable cache (memory tree and transcript summary cache `cache/agent/`, one confirmed Clear); no This Mac only block
 - [ ] 6k.2 Storage ADR `storage-is-five-classes-by-nature.md`: move memory partitions from the content class to derived, matching memory "Keep the memory tree derived and local", before it is accepted
 
 ## 6a. Auto-update (after the release is Apple Developer ID signed)

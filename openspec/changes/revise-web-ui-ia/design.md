@@ -365,7 +365,7 @@ the gateway's registration rules (fixed names, the 24-character limit) are uncha
   - *Data by kind.* The Data tab shows four blocks — Vault (size, versions, Open folder), Local
     content (chat and channel media only; not synced, the user backs it up), History (retention
     per record kind, nightly cleanup, Clear expired now) and Rebuildable cache (memory tree and
-    model catalogues, one Clear). The memory tree is rebuildable because memory's own spec makes
+    the transcript summary cache, one Clear; the model catalogues are in-process only and have nothing on disk to clear). The memory tree is rebuildable because memory's own spec makes
     it derived ("Keep the memory tree derived and local"): deleting it and re-running aggregation
     and distil reproduces an equivalent set from the agents' own memory, and a note whose sources
     are gone would be retired on the next pass anyway. That puts memory in the storage ADR's
