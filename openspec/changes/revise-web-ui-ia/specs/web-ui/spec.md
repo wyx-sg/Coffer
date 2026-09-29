@@ -333,8 +333,10 @@ picker MUST show its state inline: *not set* (saying what Coffer does without
 it — no internal pass runs; voice messages reach the agent as audio files),
 *set*, or *failing* (the last test or call failed, with the error). The Model
 providers page MUST carry no Coffer's model tab. The legacy `/settings/engine`
-and `/settings/embedding` paths MUST open the Settings modal on General rather
-than resolve to a "page not found" view.
+path MUST open the Settings modal on General rather than resolve to a "page not
+found" view, and so MUST `/settings/embedding`, which the router already keeps
+only as a redirect for old bookmarks: Coffer has no embedding configuration
+(search is literal-only), and the second picker is Speech to text.
 
 #### Scenario: coffer's model is chosen in settings general
 - **GIVEN** two connections, each with a list of models

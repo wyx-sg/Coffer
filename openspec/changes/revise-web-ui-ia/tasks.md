@@ -11,7 +11,7 @@
 - [ ] 2.1 `router.tsx`: `/` renders the Overview page in place (no redirect to `/agents`); `/agents` unchanged
 - [ ] 2.2 Settings routes `/settings/general`, `/settings/security`, `/settings/data`, `/settings/daemon`, `/settings/about`, rendered as a modal over a background location; `/settings` opens General; a fresh load renders it over Overview; close control, Escape, outside click and Back return to the page underneath
 - [ ] 2.2a ⌘, / Ctrl+, opens the Settings modal on General from any page (not while typing in a text field)
-- [ ] 2.3 Model providers is one table with no tabs (no Coffer's model tab, no "who runs on what" view); `/settings/engine` and `/settings/embedding` redirect to `/settings/general`
+- [ ] 2.3 Model providers is one table with no tabs (no Coffer's model tab, no "who runs on what" view); `/settings/engine` and the existing legacy redirect `/settings/embedding` (kept only for old bookmarks; there is no embedding configuration) redirect to `/settings/general`
 - [ ] 2.4 `/secrets` route for the Secrets page
 - [ ] 2.4a `/usage` route for the Usage page; its content lands with the change that meters use
 - [ ] 2.5 Agent detail tab routes (`?tab=` for Overview, Installed, Config files, Conversations, Memory, Model; Installed sections addressable); the old per-kind tab addresses (`?tab=skills`, `?tab=mcp-servers`, `?tab=plugins`) open the matching Installed section

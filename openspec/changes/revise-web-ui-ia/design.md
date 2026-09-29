@@ -304,7 +304,9 @@ credential-supplier module as Restart and the skew check and rendered only on Ab
   seen-key behaviour behind it.
 - **Legacy redirects.** Keep `/settings/llm-connections`, `/settings/models`,
   `/settings/providers` and `/settings/embedding`; point `/settings/engine` and
-  `/settings/embedding` at `/settings/general`.
+  `/settings/embedding` at `/settings/general`. `/settings/embedding` is an existing redirect
+  for old bookmarks only — Coffer has no embedding configuration — and no new Settings route is
+  added for speech to text, which is a picker in General.
 
 ## Risks
 
