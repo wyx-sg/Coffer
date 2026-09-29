@@ -3,7 +3,8 @@
 Part of spec agent-registry "Expose every agent operation through REST, CLI and
 the Agents page".
 
-MCP entries, plugins, and directory config-file children. Kept out of
+MCP entries and directory config-file children (plugins are in
+``agent_plugin_cmd``). Kept out of
 ``agent_cmd.py`` to respect the 400-line backend file cap;
 ``agent_cmd`` calls :func:`attach` to register everything on its existing
 typers, so the user-facing tree stays ``coffer agent mcp/config/plugin/...``.
@@ -27,8 +28,8 @@ from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._resolve import resolve_uid
+from coffer.surfaces.cli.agent_plugin_cmd import plugin_app
 
-plugin_app = typer.Typer(help="View and manage an agent's installed plugins")
 _console = Console()
 
 
@@ -196,134 +197,6 @@ def mcp_adopt(
         _cli_client.check(r, verbose=_verbose(ctx))
     data = r.json()
     typer.echo(f"adopted: {data['kind']} {data['name']}")
-
-
-# --- coffer agent plugin ... --------------------------------------------------
-
-
-@plugin_app.command("list")
-def plugin_list(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    output_json: bool = typer.Option(False, "--json", help="JSON output"),
-) -> None:
-    """List the agent's installed plugins and known marketplaces."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
-        r = c.get(f"/agents/{uid}/plugins")
-        _not_found_exit(r)
-        _cli_client.check(r, verbose=_verbose(ctx))
-    data = r.json()
-    if output_json:
-        typer.echo(_json.dumps(data, indent=2))
-        return
-    _warn_parse_errors(data["parse_errors"])
-    table = Table(title=f"Plugins — {name}")
-    for col in ("ID", "Name", "Marketplace", "Enabled", "Cache"):
-        table.add_column(col)
-    for it in data["items"]:
-        table.add_row(
-            it["id"],
-            it["name"],
-            it["marketplace"],
-            "✓" if it["enabled"] else "✗",
-            "✓" if it["cache_present"] else "",
-        )
-    _console.print(table)
-    for m in data["marketplaces"]:
-        src = " ".join(s for s in (m["source_type"], m["source"]) if s)
-        typer.echo(f"marketplace: {m['name']}" + (f" ({src})" if src else ""))
-
-
-@plugin_app.command("show")
-def plugin_show(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    plugin_id: str = typer.Argument(..., help="Plugin id (name@marketplace)"),
-    output_json: bool = typer.Option(False, "--json", help="JSON output"),
-) -> None:
-    """Show one plugin: its metadata, install dir and everything it contributes."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
-        r = c.get(f"/agents/{uid}/plugins/{plugin_id}")
-        _not_found_exit(r)
-        _cli_client.check(r, verbose=_verbose(ctx))
-    data = r.json()
-    if output_json:
-        typer.echo(_json.dumps(data, indent=2))
-        return
-    p = data["plugin"]
-    src = data["marketplace_source"]
-    typer.echo(f"{p['id']}  {'enabled' if p['enabled'] else 'disabled'}")
-    for label, value in (
-        ("version", p["version"]),
-        ("author", p["author"]),
-        ("description", p["description"]),
-        ("homepage", p["homepage"]),
-        ("marketplace", p["marketplace"] + (f" ({src})" if src else "")),
-        ("installed at", data["install_path"]),
-    ):
-        if value:
-            typer.echo(f"{label}: {value}")
-    for key in ("skills", "commands", "agents"):
-        for comp in data[key]:
-            desc = f" — {comp['description']}" if comp["description"] else ""
-            typer.echo(f"{key[:-1]}: {comp['name']}{desc}")
-    for event in data["hooks"]:
-        typer.echo(f"hook: {event}")
-    for server in data["mcp_servers"]:
-        typer.echo(f"mcp server: {server}")
-
-
-def _plugin_set_enabled(ctx: typer.Context, name: str, plugin_id: str, enabled: bool) -> None:
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
-        r = c.patch(f"/agents/{uid}/plugins/{plugin_id}", json={"enabled": enabled})
-        _not_found_exit(r)
-        _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(f"{'enabled' if enabled else 'disabled'}: plugin {plugin_id} (agent {name})")
-
-
-@plugin_app.command("enable")
-def plugin_enable(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    plugin_id: str = typer.Argument(..., help="Plugin id (name@marketplace)"),
-) -> None:
-    """Enable a plugin in the agent's config."""
-    _plugin_set_enabled(ctx, name, plugin_id, True)
-
-
-@plugin_app.command("disable")
-def plugin_disable(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    plugin_id: str = typer.Argument(..., help="Plugin id (name@marketplace)"),
-) -> None:
-    """Disable a plugin in the agent's config."""
-    _plugin_set_enabled(ctx, name, plugin_id, False)
-
-
-@plugin_app.command("uninstall")
-def plugin_uninstall(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    plugin_id: str = typer.Argument(..., help="Plugin id (name@marketplace)"),
-    force: bool = typer.Option(False, "--force", "-f"),
-) -> None:
-    """Uninstall a plugin (Codex edits its config; Claude Code shells out to its own CLI)."""
-    if not force and not typer.confirm(f"Really uninstall plugin {plugin_id!r} from agent {name}?"):
-        raise typer.Exit(1)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
-        r = c.delete(f"/agents/{uid}/plugins/{plugin_id}")
-        _not_found_exit(r)
-        _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(f"uninstalled: plugin {plugin_id} from agent {name}")
 
 
 # --- coffer agent config files / write / rm -----------------------------------
