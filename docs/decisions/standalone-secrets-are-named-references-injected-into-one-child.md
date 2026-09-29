@@ -1,9 +1,9 @@
 # Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process
 
 **Status**: Proposed
-**Date**: 2026-09-29
+**Date**: 2026-09-30
 **Deciders**: Yuxing Wu
-**Related**: [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [Names Visible to Agents Are Fixed; Every Resource Carries an Editable Title](names-visible-to-agents-are-fixed.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [The Master Key Lives in the macOS Keychain, Readable Only by the Signed Coffer App; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [principles](../../docs-site/architecture/principles.md) (Credentials; "Not a firewall or security boundary"), research note [credentials and secrets](../research/credentials-secrets.md), spec credentials "Address a secret by an opaque reference", spec credentials "Audit every read of a secret value", spec credentials "List every cited reference with its presence", spec credentials "Route every credential command through the daemon", spec credentials "Release unshared references when a resource is deleted", spec credentials "Hold plaintext only in memory at the moment of use"
+**Related**: [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [Names Visible to Agents Are Fixed; Every Resource Carries an Editable Title](names-visible-to-agents-are-fixed.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [principles](../../docs-site/architecture/principles.md) (Credentials; "Not a firewall or security boundary"; an amendment to both is proposed separately), research note [credentials and secrets](../research/credentials-secrets.md), spec credentials "Address a secret by an opaque reference", spec credentials "Audit every read of a secret value", spec credentials "List every cited reference with its presence", spec credentials "Route every credential command through the daemon", spec credentials "Release unshared references when a resource is deleted", spec credentials "Hold plaintext only in memory at the moment of use"
 
 ## Context
 
@@ -55,16 +55,20 @@ minimal allow-list plus that server's own refs
 (`infrastructure/mcp/subprocess.py:101-110`).
 
 The threat model has to be stated before the options, because it decides
-them. Coffer is "not a firewall or security boundary" (principles), and a
+them. It is set by
+[Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md):
+the adversary is a prompt-injected agent running as the user, and Coffer's
+boundary against it is the secret itself — plaintext reaches only a present
+human in the desktop app, and a secret is sent to a new destination only with
+that human's approval. There is no route that returns a value, the master key
+is readable only by Coffer's signed binaries
+([The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md)),
+and the daemon's per-start token therefore no longer buys a secret. What a
+standalone secret still has to survive is the process it is handed to: a
 managed agent runs with full permissions
-([Managed Agents Run With Full Permissions](managed-agents-run-with-full-permissions.md)):
-Claude Code with `bypassPermissions`, Codex with `approvalPolicy: "never"`.
-Such an agent runs as the user. It can read `~/.coffer/daemon.json` with the
-per-start token and then ask the daemon for any value — whether the master
-key is a file it can also read (today's default,
-`surfaces/http/credential_composition.py:99`) or a Keychain item only the
-signed daemon reads silently ([The Master Key Lives in the macOS Keychain, Readable Only by the Signed Coffer App; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md)). Nothing a local tool does stops a process that *intends* to read a
-secret its user can read.
+([Managed Agents Run With Full Permissions](managed-agents-run-with-full-permissions.md)),
+and the initial environment of any same-user process is readable with `ps eww`
+— measured on 2026-09-30 from inside Claude Code's sandbox too.
 
 | Threat | Protected? |
 | --- | --- |
@@ -72,7 +76,8 @@ secret its user can read.
 | A secret echoed into a transcript by a command that prints its config or an error | **Mostly** — the value never enters the agent's environment, and `coffer run` masks exact matches in the child's output |
 | A plaintext secrets file read by any tool that walks `~/.coffer/` | **Yes**, after migration — the file holds references |
 | A secret in the agent's own environment inherited by its shell or MCP children | **Yes** for secrets resolved through `coffer run` — they never enter it |
-| An agent, prompt-injected or not, that deliberately reads the master key, the daemon token or runs `coffer run -- env` | **No** — and this ADR does not claim otherwise |
+| An agent that asks Coffer for a secret's value, through REST, the CLI, MCP or the master key | **Yes** — no route returns a value, and no binary but Coffer's signed ones can read the key |
+| An agent that runs `coffer run --secret X -- env`, or reads the environment of the child it started | **No** — the agent is the child's parent; the secret is labelled "readable by local agents" and this ADR does not claim otherwise |
 
 ## Options Considered
 
@@ -136,8 +141,9 @@ secret its user can read.
   and, for `secret/` names, the skills in the master store whose files mention
   the URI (a literal search of Coffer's own skill store, and later the
   `requires.secrets` frontmatter). A row with zero citers is the cleanup
-  candidate the product cannot show today. `coffer credentials get --show`
-  stays, audited as now, with its risk documented.
+  candidate the product cannot show today. The list carries no values: a
+  value is seen only in the desktop app, under a presence check, and
+  `coffer credentials get --show` is removed.
 - **A secret scanner gates every commit into the vault.** The vault is a
   git repository that records every accepted write as a commit
   ([Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md)),
@@ -155,8 +161,9 @@ secret its user can read.
 - **Migration of plaintext secret files.** `coffer secret import` reads
   `~/.coffer/secrets/*.env` (`KEY=VALUE` lines) and `*.json` (a flat map of
   strings), proposes one name per entry (`<file stem>.<key>`), and on
-  confirmation stores each value, reads it back through the daemon to verify
-  it, rewrites the file with `coffer://secret/<name>` in place of each value,
+  confirmation stores each value — the daemon decrypts what it stored and
+  compares it with what it received in the same call, returning only whether
+  they match — rewrites the file with `coffer://secret/<name>` in place of each value,
   and lists the skills in the master store whose files mention the old path so
   their commands can move to `coffer run --env-file`. No plaintext backup is
   kept: the values are in the store, which is backed up with the vault. A
@@ -175,7 +182,7 @@ to resolve anything; a gitleaks false positive leaves a file uncommitted until
 the user changes it or adds an allow rule.
 
 It wins because it removes the accidental paths — files, git, the agent's own
-environment — without pretending to stop a deliberate reader, and because it
+environment — without pretending to stop the agent that runs the command, and because it
 is almost entirely reuse: the store, the resolver, the daemon-routed CLI and
 the audit log already exist.
 
@@ -241,24 +248,29 @@ Cite `op://vault/item/field` and resolve with that tool's own `run`.
   opaque, so a future scheme prefix could route to an external manager
   without changing any citation form this ADR introduces.
 
-### Option F — A real boundary: a broker the agent cannot bypass
+### Option F — A real boundary for `coffer run` too: a broker the agent cannot bypass
 
-Keep the master key and daemon token out of the agent's reach — a separate OS
-user for the daemon, the key only in a signed keychain item, per-agent tokens
-— so even a deliberate agent cannot read a secret.
+Keep every secret out of the agent's reach, including the ones a command needs:
+run the daemon as a separate OS user, or never hand a command a value at all
+and inject it into the command's outbound requests through a TLS-terminating
+proxy with a placeholder in the environment (the pattern of Claude Code's
+`sandbox.credentials` `mask` mode and 1Password with OpenShell).
 
-- **Pros.** It would protect against the one threat Option A does not.
-- **Cons.** The agent runs as the user with full permissions by design; a
-  separate OS user means an installer, privilege separation and a second home
-  directory for a single-user tool; a signed Keychain item keeps the master
-  key itself out of reach ([The Master Key Lives in the macOS Keychain, Readable Only by the Signed Coffer App; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md))
-  but not the daemon, which answers anyone holding its per-start token;
-  and per-agent tokens would live in files the same agent can read, which
-  [Per-Agent Resource Scope Is One Framework Allow-List](per-agent-resource-scope.md)
-  already rejected as ceremony under a same-user threat model.
-- **Why it loses.** It contradicts the principles' "not a security boundary"
-  stance and the full-permission agent model at once; claiming a boundary the
-  platform cannot hold would be worse than stating plainly that there is none.
+- **Pros.** It would close the one row of the threat table this ADR leaves
+  open.
+- **Cons.** The parts of this that hold at user level are adopted elsewhere:
+  no route returns a value and only Coffer's signed binaries can read the master key
+  ([Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)).
+  What remains costs far more than it buys here. A separate OS user means an
+  installer, privilege separation and a second home for a single-user tool,
+  and the command still runs as the user. A placeholder proxy needs a local CA
+  every client must trust (`NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`), fails
+  against SDKs that validate a token's format (OpenShell #894), is bypassed by
+  an `HTTPS_PROXY` override, and cannot serve the database passwords and
+  non-HTTP protocols most skills need a secret for.
+- **Why it loses** for `coffer run`. The command a person or an agent runs is
+  the agent's own child; handing it a value is handing the agent the value, and
+  the design says so instead of pretending otherwise.
 
 ## Decision
 
@@ -275,10 +287,11 @@ Plaintext secret files are migrated into the store and rewritten as
 references.
 
 The threat model is part of the decision: this protects against secrets
-landing in transcripts, git and plaintext files by accident. It does not
-protect against a deliberate agent running with full permissions, which can
-read the daemon token and ask the daemon for any value; nothing in Coffer
-claims otherwise.
+landing in transcripts, git and plaintext files by accident, and — with no
+route that returns a value — against an agent asking Coffer for one. It does
+not protect a secret from the agent that runs the command it is resolved into:
+that agent is the child's parent. Every secret usable through `coffer run` is
+labelled "readable by local agents", and nothing in Coffer claims otherwise.
 
 Rules a future change must respect:
 
@@ -300,10 +313,10 @@ Rules a future change must respect:
   (`docs-site/guides/writing-skill-libraries.md:159`) is rewritten to
   `coffer://secret/` plus `coffer run`; the `coffer-guide` skill learns
   `coffer run`; `SECURITY.md` states the threat model above.
-- A known exposure outside this ADR remains: the `COFFER_PROVIDER_KEY` Coffer
-  injects into the Codex process it drives is inherited by Codex's shell tool
-  under the default policy. Narrowing it (projecting a `shell_environment_policy`
-  exclude, or `inherit = "core"`) is follow-up work for provider-switching.
+- The `COFFER_PROVIDER_KEY` Coffer injected into the Codex process it drives
+  is excluded from Codex's shell commands (PR #464), and goes away with the
+  local model proxy, which hands an agent only its local proxy token
+  ([API-Key Providers Are Reached Through a Separate Local Model Proxy](api-key-providers-are-reached-through-a-separate-local-model-proxy.md)).
 - **Obligations.** Spec deltas in credentials (the namespace, `coffer run`,
   audit on resolve, listing every stored ref) and vault-sync (the scan before
   every vault commit); a store enumeration method in `infrastructure/credentials/`; the
