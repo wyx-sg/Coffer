@@ -10,8 +10,8 @@ skill.
 
 Nothing to back-fill: no skill had a Git source before this revision.
 
-Revision ID: 0113
-Revises: 0112
+Revision ID: 0114
+Revises: 0113
 Create Date: 2026-09-30
 """
 
@@ -22,8 +22,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0113"
-down_revision: str | None = "0112"
+revision: str = "0114"
+down_revision: str | None = "0113"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

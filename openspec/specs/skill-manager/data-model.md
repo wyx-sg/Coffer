@@ -230,7 +230,7 @@ Index: `idx_bindings_agent` on `(agent_resource_id, enabled)` — supports "whic
 
 ### `skill_source_status`
 
-Migration `20260930_0113_skill_source_status.py` (revision `0113`). One row per
+Migration `20260930_0114_skill_source_status.py` (revision `0114`). One row per
 Git-imported skill: what this machine last learned about its repository (spec
 skill-manager "Update a Git-imported skill from its source"). Observation, not
 vault state — vault sync never carries it; the pin itself is in the skill's

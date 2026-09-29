@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0113"
+HEAD_REVISION = "0114"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -237,7 +237,7 @@ EXPECTED_TABLES = {
     "usage_requests",
     "usage_daily",
     "quota_snapshots",
-    # 0113: what this machine last learned about a Git-imported skill's source
+    # 0114: what this machine last learned about a Git-imported skill's source
     # (spec skill-manager "Update a Git-imported skill from its source").
     "skill_source_status",
 }
@@ -272,7 +272,7 @@ PRE_MERGE_TABLES = (
         "secret_bindings",
         "secret_approvals",
         "secret_boundary_settings",
-        # 0113 created this.
+        # 0114 created this.
         "skill_source_status",
     }
 ) | {
