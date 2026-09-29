@@ -19,9 +19,10 @@ switched-off feature put in front of agents").
 
 **Direction policy** (:meth:`DeliveryHookTarget.decide`):
 
-- a hook whose command or event differs is rewritten (``stale_command``, spec
-  memory "Repair stale delivery hooks") — which moves an older build's Codex
-  hook off ``UserPromptSubmit`` onto ``SessionStart``;
+- a hook whose command or events differ is rewritten (``stale_command``, spec
+  memory "Repair stale delivery hooks") — which gives an older build's single
+  ``SessionStart`` entry the other three events, and moves an older Codex
+  entry's ``$PPID`` guard off ``UserPromptSubmit``;
 - a current hook the agent will not run (Codex's ``trust`` is not
   ``trusted``) is only reported (``hook_untrusted``, ``hook_disabled``,
   ``hook_trust_unknown``): approving a hook is the user's act in the agent,
@@ -50,7 +51,7 @@ from coffer.application.reconcile.ports import Applied, AuditEvent, Undo
 from coffer.domain.agent.types import agent_display_name
 from coffer.domain.audit import AuditEventType
 from coffer.domain.hook_trust import HookTrust
-from coffer.domain.memory.delivery import MalformedDeliveryConfig
+from coffer.domain.memory.delivery import MalformedDeliveryConfig, commands_label, events_label
 from coffer.domain.reconcile import (
     Decision,
     Difference,
@@ -162,16 +163,21 @@ class DeliveryHookTarget:
         items: list[Item] = []
         for site in await self._delivery.sites():
             try:
-                hook = self._delivery.installed_hook(site)
+                hooks = self._delivery.installed_hooks(site)
             except MalformedDeliveryConfig as exc:
                 _log.warning("delivery_hook: %s; left alone", exc)
                 unreadable[site.agent.uid] = str(exc)
                 continue
-            if hook is None:
+            if not hooks:
                 continue
-            # The event it actually sits on: an older build put Codex's hook
-            # on UserPromptSubmit, and that is a difference to repair.
-            params: dict[str, str] = {"event": hook.event, "command": hook.command}
+            # The events its entries actually sit on: an older build put one
+            # entry on SessionStart (or, for Codex, on UserPromptSubmit), and a
+            # missing or extra event is a difference to repair.
+            command = commands_label([h.command for h in hooks])
+            params: dict[str, str] = {
+                "event": events_label([h.event for h in hooks]),
+                "command": command,
+            }
             if site.trust_path is not None:
                 params["trust"] = self._delivery.trust(site).value
             items.append(
@@ -180,7 +186,7 @@ class DeliveryHookTarget:
                     subject=_subject(site),
                     params=params,
                     file=str(site.path),
-                    text=hook.command,
+                    text=command,
                 )
             )
         self._unreadable = unreadable

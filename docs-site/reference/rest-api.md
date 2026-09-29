@@ -101,7 +101,7 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 206 operations in 24 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 214 operations in 24 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -121,7 +121,7 @@ The daemon mounts 206 operations in 24 groups. Groups follow the order the daemo
 | [skills](#skills) | 19 |
 | [mcp](#mcp) | 10 |
 | [knowledge](#knowledge) | 15 |
-| [memory](#memory) | 8 |
+| [memory](#memory) | 16 |
 | [agent-providers](#agent-providers) | 2 |
 | [models](#models) | 3 |
 | [chat](#chat) | 16 |
@@ -389,6 +389,14 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `memory` 
 | `GET` | `/api/v1/memory/partitions/{uid}/files` | The partition's own directory, as a read-only tree. |
 | `GET` | `/api/v1/memory/partitions/{uid}/files/content` | One file out of the partition's directory. |
 | `POST` | `/api/v1/memory/context` | Compose the session-start payload for one directory. |
+| `POST` | `/api/v1/memory/hook` | Answer one hook fire; every fire that delivers something is audited. |
+| `GET` | `/api/v1/memory/triggers` | List Triggers |
+| `POST` | `/api/v1/memory/triggers` | Add Trigger |
+| `POST` | `/api/v1/memory/triggers/{trigger_id}/arm` | Arm Trigger |
+| `POST` | `/api/v1/memory/triggers/{trigger_id}/disarm` | Disarm Trigger |
+| `DELETE` | `/api/v1/memory/triggers/{trigger_id}` | Delete Trigger |
+| `GET` | `/api/v1/memory/deliveries` | Deliveries |
+| `GET` | `/api/v1/memory/partitions/{uid}/delivered` | Delivered |
 
 ### agent-providers
 

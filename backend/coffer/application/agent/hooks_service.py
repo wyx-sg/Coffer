@@ -73,8 +73,9 @@ class NativeHook:
 
 @dataclass(frozen=True)
 class CofferHook:
-    """Coffer's own delivery hook for this agent."""
+    """Coffer's own delivery hook for this agent — its entries on every event."""
 
+    #: The events Coffer's entries sit on, comma-joined.
     event: str
     path: str
     health: HookHealth
@@ -191,11 +192,13 @@ class AgentHooksService:
         text = self._store.read_text(path) or ""
         expected = hook.command_for(agent.uid)
         try:
-            found = hook.find(text)
+            found = hook.find_all(text)
         except Exception:
             # An unparseable file is already a parse error in the listing.
-            found = None
-        installed = found.command if found is not None else None
+            found = []
+        commands = sorted({h.command for h in found})
+        installed = " | ".join(commands) if commands else None
+        events = ",".join(sorted({h.event for h in found}))
         trust_text: str | None = None
         if hook.trust_config_key is not None:
             trust_path = spec_for(cfg.type, hook.trust_config_key, config_dir).path
@@ -203,7 +206,7 @@ class AgentHooksService:
         trust = hook.trust(text, trust_text, str(path))
         if installed is None:
             health = HookHealth.MISSING
-        elif installed == expected:
+        elif installed == expected and events == hook.event:
             health = HookHealth.CURRENT
         else:
             health = HookHealth.STALE
@@ -213,7 +216,7 @@ class AgentHooksService:
         return CofferHook(
             # Where it sits when installed (an older build's may sit on another
             # event), where it would go otherwise.
-            event=found.event if found is not None else hook.event,
+            event=events or hook.event,
             path=str(path),
             health=health,
             trust=trust,

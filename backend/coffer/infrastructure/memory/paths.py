@@ -75,6 +75,36 @@ def memory_root() -> pathlib.Path:
     return home / ".coffer" / "memory"
 
 
+def triggers_root() -> pathlib.Path:
+    """Where authored memory triggers live: ``vault/memory-triggers/``, one file
+    per trigger (ADR storage-is-five-classes-by-nature). In the vault, not under
+    the memory root, because a person wrote them: deleting and rebuilding the
+    derived memory tree must not take them with it. ``$COFFER_MEMORY_TRIGGERS_ROOT``
+    overrides it, as ``$COFFER_MEMORY_ROOT`` does the tree."""
+    override = os.environ.get("COFFER_MEMORY_TRIGGERS_ROOT")
+    if override:
+        return pathlib.Path(override)
+    home = pathlib.Path(os.environ.get("HOME", "~")).expanduser()
+    return home / ".coffer" / "vault" / "memory-triggers"
+
+
+def notes_signature(name: str) -> tuple[tuple[str, int, int], ...]:
+    """What a partition's ``notes/`` holds, cheaply: each file's name, mtime and
+    size. A ranking index built from the notes is rebuilt when this changes;
+    empty when the directory does not exist."""
+    try:
+        directory = notes_dir(name)
+        with os.scandir(directory) as it:
+            entries = [
+                (e.name, e.stat().st_mtime_ns, e.stat().st_size)
+                for e in it
+                if e.is_file() and e.name.endswith(".md")
+            ]
+    except (OSError, UnsafeMemoryPath):
+        return ()
+    return tuple(sorted(entries))
+
+
 def check_segment(segment: str) -> None:
     """Refuse a partition or note name that is hidden, all dots, or unsafe.
 

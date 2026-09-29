@@ -1,5 +1,6 @@
-"""DeliveryService — install / status / remove Coffer's own session-start-like
-hook for an agent the developer drives themselves (spec memory "Install
+"""DeliveryService — install / status / remove Coffer's own memory hook (its
+four entries: session start, each prompt, before and after a shell command)
+for an agent the developer drives themselves (spec memory "Install
 delivery hooks explicitly and removably", "Audit every delivery fire").
 
 **Explicit only.** Nothing installs this as a side effect of registering an
@@ -256,6 +257,15 @@ class DeliveryService:
         hook = self.installed_hook(site)
         return hook.command if hook is not None else None
 
+    def installed_hooks(self, site: HookSite) -> list[InstalledHook]:
+        """Every Coffer entry in `site`'s file, on every event. Raises like
+        :meth:`installed_command`."""
+        text = self._store.read_text(site.path) or ""
+        try:
+            return site.adapter.find_all(text)
+        except MalformedDeliveryConfig as e:
+            raise MalformedDeliveryConfig(f"{site.path}: {e}") from e
+
     def installed_hook(self, site: HookSite) -> InstalledHook | None:
         """Coffer's marker-scoped entry in `site`'s file — on whichever event
         it sits, which for an older build's may not be the one this build
@@ -332,7 +342,9 @@ class DeliveryService:
             )
         return await self.status(agent_uid)
 
-    async def record_fired(self, agent_uid: str) -> None:
+    async def record_fired(
+        self, agent_uid: str, details: dict[str, object] | None = None
+    ) -> Resource:
         """Record that an agent's hook just fired (spec memory "Audit every delivery fire").
 
         Called by whatever actually serves the context — never by
@@ -343,11 +355,16 @@ class DeliveryService:
         and the row is what ties the fire to the agent's history.
 
         The actor is the agent, by the name it answers to now: nobody clicked
-        anything, the hook ran because that agent started a session.
+        anything, the hook ran because that agent started a session, sent a
+        prompt or ran a command. ``details`` says which moment it was and which
+        notes it carried (``moment``, ``notes``, ``trigger``, ``session_id``),
+        never their text. Returns the agent row.
         """
         agent = await self._agents.get(agent_uid)
         await self._audit.record(
             AuditEventType.MEMORY_DELIVERY_FIRED.value,
             resource=agent,
             actor=agent.name,
+            details=dict(details) if details else None,
         )
+        return agent
