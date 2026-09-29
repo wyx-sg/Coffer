@@ -63,6 +63,10 @@ function daemonToken(): string {
 
 test.beforeEach(async ({ context }) => {
   const token = daemonToken();
+  // The daemon's change feed is a stream that never ends, so the page would
+  // never reach network idle; refuse it, and the pages fall back to their
+  // "not live" mark, the same in every run.
+  await context.route("**/api/v1/events", (route) => route.abort());
   // An init script, not page.addStyleTag: the Vite dev server reloads the page
   // once when it first optimises dependencies, and a tag added after goto
   // would be gone after that reload.
@@ -98,6 +102,9 @@ function timeDependent(page: Page): Locator[] {
     page.getByText(/\b\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/),
     page.getByText(/\b\d{1,2}:\d{2}(:\d{2})?\s?(AM|PM)?\b/),
     page.getByText(/\buptime\b/i),
+    // Records and counts that differ from one fresh daemon to the next (the
+    // daemon's own log lines, how many were written) — marked by the page.
+    page.locator("[data-visual-volatile]"),
   ];
 }
 

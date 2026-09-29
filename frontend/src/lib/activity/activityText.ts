@@ -1,4 +1,4 @@
-// frontend/src/pages/activity/activityText.ts
+// frontend/src/lib/activity/activityText.ts
 //
 // Every plain-language line the Activity tabs render, and the search haystack
 // that must match it. The two are deliberately produced by the same functions:

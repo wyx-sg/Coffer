@@ -46,7 +46,7 @@ The sidebar is grouped by what you come to Coffer to do. **Overview** sits on to
 
 | Group | Entry | Route | What it is for |
 | --- | --- | --- | --- |
-| — | **Overview** | `/` | The landing page: a summary of the whole vault. |
+| — | **Overview** | `/` | The landing page: what needs you, the health of every area and the last few changes. See [Overview](#overview) below. |
 | Agents | **Agents** | `/agents` | The AI agents installed on this machine that Coffer manages. Each agent's page has **Overview**, **Skills**, **MCP servers**, **Plugins**, **Memory**, **Conversations** and **Config files** tabs. See [Agents](/guides/agents). |
 | Agents | **Model providers** | `/model-providers` | Vendor endpoints and their keys — the models your agents run on. See [Model providers](/guides/providers). |
 | Run | **Conversations** | `/conversations` | Conversations with Claude Code or Codex, including those started from a channel. See [Chat](/guides/chat). |
@@ -58,14 +58,14 @@ The sidebar is grouped by what you come to Coffer to do. **Overview** sits on to
 | Context | **Knowledge** | `/knowledge` | Collections of documents under `~/.coffer/knowledge/`. See [Knowledge](/guides/knowledge). |
 | Context | **Memory** | `/memory` | Memory aggregated from the agents' own stores. See [Memory](/guides/memory). |
 | System | **Secrets** | `/secrets` | The credentials stored in the vault. |
-| System | **Activity** | `/activity` | What changed, what was called and what the daemon logged, as three tabs: **Changes**, **MCP calls** and **Daemon**. See [Activity and audit](/guides/activity). |
+| System | **Activity** | `/activity` | What changed, what agents called and what the daemon logged: **Everything** merged into one stream, then **Changes**, **MCP calls** and **Daemon log**. See [Activity and audit](/guides/activity). |
 | System | **Usage** | `/usage` | How much your agents use their models. |
 | System | **Sync** | `/sync` | Converging this vault with a git remote you own, as **Runs**, **Setup** and **Machines** tabs. See [Vault sync](/guides/vault-sync). |
 
 In Chinese the groups read 智能体 · 运行 · 能力 · 上下文 · 系统, and an agent is always called 智能体.
 
 ::: info Pages still being built
-**Overview**, **Custom tools**, **CLIs**, **Secrets** and **Usage** have their place in the sidebar already, but for now each shows a "Coming in this release" notice: their pages arrive later in this release. Every other entry works today.
+**Custom tools**, **CLIs**, **Secrets** and **Usage** have their place in the sidebar already, but for now each shows a "Coming in this release" notice: their pages arrive later in this release. Every other entry works today.
 :::
 
 **Knowledge**, **Memory** and **Sync** are experimental features. While one is switched off its entry is left out of the sidebar, and a group whose entries are all switched off loses its heading too. While one is on, its entry carries an **Experimental** marker. Following a link to a switched-off feature's page shows a notice saying the feature is off. Features are switched on and off from the command line, `coffer config set feature.<key> on`; see [Experimental features](/guides/experimental-features).
@@ -73,6 +73,17 @@ In Chinese the groups read 智能体 · 运行 · 能力 · 上下文 · 系统,
 **Attention dots.** A small dot beside an entry means something there **Needs your attention** — today, a sync round that is held or failed and waiting for you. It is a dot, not a count, and it clears once you visit the page. The dot stays visible on the collapsed rail.
 
 **Collapsing and resizing.** Collapse the sidebar to a narrow icon rail with **Collapse sidebar**; the choice is remembered. While expanded, drag the thin line on its right edge to make it wider or narrower (see [Resizing split views](#resizing-split-views)).
+
+
+## Overview
+
+**Overview** is the page the app opens on. It answers "is everything OK, and what needs me?" in three parts:
+
+- **Needs you** — one row per problem across every area, most severe first and then oldest: the thing it is about (a server, an agent, a channel, the vault's sync), the reason in a sentence, since when, and one button that opens the page where you deal with it. The list is the daemon's attention list (`GET /api/v1/attention`, or `coffer attention` in a terminal). Rows clear themselves: the page follows the daemon's event stream, so a row disappears as soon as its problem is resolved. If one area could not be checked, the page says so above the rows, because anything that area would report is missing. When nothing needs you, a calm card says so.
+- **Health** — a tile per area: Agents, Model providers, MCP servers, Skills and Channels, plus Knowledge, Memory and Sync when those features are switched on. Each shows a status word, a count and a one-line summary (for MCP servers, the calls and errors of the last 24 hours) and opens the area's page. A tile that fails to load says so with **Retry**, and the rest of the page keeps working. Areas that have no backend yet, such as Custom tools and CLIs, have no tile.
+- **Recent activity** — the last few changes, with a link to [Activity](/guides/activity).
+
+Before any agent is registered, Overview opens on connecting one instead: it lists the agents Coffer supports and which it found on this machine, then the first step for each thing they share.
 
 ## Search or jump to
 
@@ -132,7 +143,7 @@ Switch between **English** and **中文** with the language switcher at the bott
 
 ## Conventions every page shares
 
-**URLs describe what you are looking at.** A refresh, a bookmark or a shared link reopens the same view. A detail page's tab is part of its path: the default tab is the bare address, any other tab adds its name — `/mcp-servers/github` and `/mcp-servers/github/tools`. Skills and MCP servers are addressed by their name, which is fixed once registered (`/skills/release-notes`). Kinds you can rename — model providers, channels, knowledge collections, memory partitions — are addressed by their immutable uid (`/model-providers/<uid>/models`), so a rename does not break a link. Agent pages, Activity and Sync still carry their tab as `?tab=` (`/agents/<uid>?tab=conversations`, `/activity?tab=mcp`, `/sync?tab=setup`) until they are rebuilt, and an open file in a tree is `?file=`. An open conversation is `/conversations/<id>`.
+**URLs describe what you are looking at.** A refresh, a bookmark or a shared link reopens the same view. A detail page's tab is part of its path: the default tab is the bare address, any other tab adds its name — `/mcp-servers/github` and `/mcp-servers/github/tools`. Skills and MCP servers are addressed by their name, which is fixed once registered (`/skills/release-notes`). Kinds you can rename — model providers, channels, knowledge collections, memory partitions — are addressed by their immutable uid (`/model-providers/<uid>/models`), so a rename does not break a link. Agent pages, Activity and Sync still carry their tab as `?tab=` (`/agents/<uid>?tab=conversations`, `/activity?tab=mcp` — Everything is the bare `/activity` — `/sync?tab=setup`) until they are rebuilt, and an open file in a tree is `?file=`. An open conversation is `/conversations/<id>`.
 
 **Lists look and behave alike.** Every list page uses one table with search, filters, pagination and bulk selection, and clicking a row opens its detail page. Every row action is labelled.
 

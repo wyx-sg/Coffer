@@ -1,9 +1,48 @@
-// src/pages/OverviewPage.tsx — PLACEHOLDER for the Overview page, replaced by its own work item in this release.
+// src/pages/OverviewPage.tsx — the page the app opens on: is everything OK, and what needs me?
+//
+// "Needs you" first (one row per problem across every area), then a Health
+// tile per area, then the last few notable events. Before any agent is
+// registered the first two give way to the first-run panel. The page follows
+// the daemon's event stream: an attention change refetches the list, a
+// resource change the lists the tiles read (useDaemonEvents), so rows clear
+// themselves as problems resolve.
 import { LayoutDashboard } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
-import { PlaceholderPage } from "@/components/PlaceholderPage";
+import { PageHeader } from "@/components/PageHeader";
+import { FirstRun } from "@/components/overview/FirstRun";
+import { HealthTiles } from "@/components/overview/HealthTiles";
+import { LiveMark } from "@/components/overview/LiveMark";
+import { NeedsYouList } from "@/components/overview/NeedsYouList";
+import { RecentActivity } from "@/components/overview/RecentActivity";
+import { useAgents } from "@/lib/hooks/useAgents";
+import { useAttention } from "@/lib/hooks/useAttention";
+import { useDaemonEvents } from "@/lib/hooks/useDaemonEvents";
 
-// PLACEHOLDER: renders "coming in this release" until the Overview page lands.
 export function OverviewPage() {
-  return <PlaceholderPage icon={LayoutDashboard} titleKey="overview.title" />;
+  const { t } = useTranslation();
+  const { live } = useDaemonEvents();
+  const attention = useAttention();
+  const agents = useAgents();
+  const firstRun = agents.data !== undefined && agents.data.length === 0;
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        icon={LayoutDashboard}
+        title={t("overview.title")}
+        subtitle={t("overview.subtitle")}
+        actions={<LiveMark live={live} checkedAt={attention.dataUpdatedAt} />}
+      />
+      {firstRun ? (
+        <FirstRun />
+      ) : (
+        <>
+          <NeedsYouList />
+          <HealthTiles />
+        </>
+      )}
+      <RecentActivity />
+    </div>
+  );
 }

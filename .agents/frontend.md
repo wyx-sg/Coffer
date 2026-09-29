@@ -87,6 +87,12 @@ src/i18n/locales/{en,zh}.json    — under the top-level "x" key
   - `components/SplitView` / `SplitDivider` + `lib/hooks/useResizableWidth.ts`
     for every resizable split; widths are per-browser conveniences.
   - `components/PlaceholderPage` — temporary, for sidebar pages not yet built.
+  - `lib/events/eventStream.ts` + `lib/hooks/useDaemonEvents.ts` — the one reader of
+    the daemon's change feed (`GET /api/v1/events`): reconnects with `Last-Event-ID`,
+    backs off while the daemon is down, invalidates the keys each envelope's kind is
+    read through (`attention` → `attentionKey`, `resync` → everything). A page that
+    shows live state mounts `useDaemonEvents()` instead of polling; Overview and
+    Activity do.
 
 ## 3. State Management
 
@@ -146,8 +152,9 @@ whole subtree:
 Every request leaves through one of two modules, and both resolve base URL +
 token through `src/lib/auth.ts` (`getCofferBaseUrl`, `getCofferToken`) and send
 `X-Coffer-Token` + `X-Coffer-Actor: "ui"`. **The actor is always `"ui"`** from
-the web surface. Nothing else in `src` calls `fetch` — the only exception is
-the chat SSE stream (below).
+the web surface. Nothing else in `src` calls `fetch` — the only exceptions are
+the two SSE readers: the chat stream (below) and the daemon's change feed
+(`lib/events/eventStream.ts`).
 
 - **Generated types for every contract.** `npm run codegen`
   (`frontend/scripts/codegen.mjs`) runs openapi-typescript over each
@@ -336,6 +343,8 @@ When you work near these, migrate toward the target; don't extend the debt:
    carries) and delete the entry. The daemon-wide change feed
    (`GET /api/v1/events`, fetch-read with the token header like the chat
    stream) is the replacement for per-hook `refetchInterval` polling: a
-   rebuilt page invalidates the query keys an envelope's `kind`/`id` name.
+   rebuilt page mounts `useDaemonEvents()`, which invalidates the query keys an
+   envelope's `kind` names. The audit and MCP call logs are not on it (they are
+   not resources), so Activity re-reads their newest page on a short poll.
 2. **The `codemirror` vendor chunk (~590 kB)** is one file; split the language
    modes out of it if a page that needs only one mode becomes a landing page.

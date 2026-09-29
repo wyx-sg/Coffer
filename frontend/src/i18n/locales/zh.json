@@ -467,38 +467,186 @@
   },
   "activity": {
     "title": "活动",
-    "subtitle": "Coffer 保存的三份记录——金库变更、它代理的调用，以及守护进程自己的日志——各占一个标签页，按时间倒序。",
+    "subtitle": "改了什么、智能体经 Coffer 调用了什么、守护进程记录了什么——最新的在最上面。",
+    "live": "实时",
+    "notLive": "未连接",
+    "liveHint": "新记录发生时即出现。",
+    "notLiveHint": "正在重新连接守护进程；新记录仍会每隔几秒到达。",
+    "countFloor": "{{value}}+",
     "tabs": {
+      "everything": "全部",
       "changes": "变更",
       "mcp": "MCP 调用",
-      "daemon": "守护进程"
+      "daemon": "守护进程日志"
     },
-    "changes": {
-      "emptyState": "没有匹配的活动记录。",
-      "table": {
-        "time": "时间",
-        "activity": "活动",
-        "actor": "操作者"
-      }
+    "sources": {
+      "change": "变更",
+      "call": "MCP 调用",
+      "daemon": "守护进程日志"
     },
-    "daemon": {
-      "emptyState": "没有匹配的日志记录。",
-      "noMessage": "（无消息的日志记录）",
-      "searchPlaceholder": "搜索日志记录",
-      "table": {
-        "time": "时间",
-        "level": "级别",
-        "logger": "来源模块",
-        "message": "消息"
-      },
+    "actor": {
+      "ui": "你",
+      "user": "你",
+      "cli": "命令行",
+      "api": "API",
+      "system": "Coffer",
+      "agent": "智能体",
+      "channel": "消息渠道"
+    },
+    "status": {
+      "ok": "成功",
+      "error": "错误",
+      "timeout": "超时",
+      "denied": "已拒绝"
+    },
+    "call": {
+      "failed": "失败",
+      "failedWith": "失败——{{message}}",
+      "timeout": "超时",
+      "denied": "被拒绝"
+    },
+    "filters": {
+      "any": "任意",
+      "by": "智能体",
+      "agents": "智能体",
+      "notAnAgent": "非智能体",
+      "server": "服务器",
+      "kind": "类型",
+      "status": "状态",
+      "logger": "记录器",
+      "clear": "清除",
+      "clearAll": "清除筛选",
       "levelLabel": "日志级别",
       "level": {
-        "all": "全部级别",
-        "debug": "Debug 及以上",
-        "info": "Info 及以上",
-        "warning": "警告与错误",
-        "error": "仅错误"
+        "all": "全部",
+        "info": "信息",
+        "warning": "警告",
+        "error": "错误"
+      },
+      "searchLabel": "筛选记录",
+      "search": {
+        "everything": "按名称、工具或路径筛选",
+        "changes": "筛选变更",
+        "mcp": "工具、服务器或会话",
+        "daemon": "搜索日志记录"
+      },
+      "kinds": {
+        "calls": "MCP 调用",
+        "changes": "变更",
+        "allChanges": "全部变更",
+        "daemon": "守护进程记录",
+        "notDaemon": "除守护进程记录外的全部"
+      },
+      "changeKinds": {
+        "mcp_server": "MCP 服务器",
+        "skill": "技能",
+        "agent": "智能体",
+        "provider": "模型提供商",
+        "channel": "消息渠道",
+        "knowledge": "知识",
+        "memory": "记忆"
       }
+    },
+    "table": {
+      "time": "时间",
+      "event": "事件",
+      "by": "操作者",
+      "took": "耗时",
+      "agent": "智能体",
+      "serverTool": "服务器 · 工具",
+      "status": "状态",
+      "level": "级别",
+      "logger": "记录器",
+      "message": "消息"
+    },
+    "day": {
+      "today": "今天 · {{date}}",
+      "yesterday": "昨天 · {{date}}",
+      "undated": "无时间"
+    },
+    "pending_one": "{{count}} 条新记录",
+    "pending_other": "{{count}} 条新记录",
+    "loaded_one": "已加载 {{count}} 条记录",
+    "loaded_other": "已加载 {{count}} 条记录",
+    "loadOlder": "加载更早的记录",
+    "loadingOlder": "正在加载更早的记录…",
+    "end": "这个时间范围内的记录已全部显示。",
+    "empty": {
+      "title": "还没有任何活动",
+      "body": "你在 Coffer 里做的更改、智能体经 Coffer 调用的工具都会出现在这里。接入一个智能体，就能在这里看到它的第一次调用。",
+      "connect": "接入智能体",
+      "addServer": "添加 MCP 服务器",
+      "noMatch": "没有符合筛选条件的记录",
+      "noMatchBody": "放宽时间范围或清除筛选。"
+    },
+    "failed": {
+      "title": "{{sources}}加载失败",
+      "partial": "只显示其余记录；它们是完整的。",
+      "retry": "重试"
+    },
+    "menu": {
+      "label": "更多",
+      "heading": "导出筛选后的记录",
+      "json": "导出为 JSON",
+      "csv": "导出为 CSV",
+      "note": "此标签页中符合筛选条件的全部记录。",
+      "done_one": "已导出 {{count}} 条记录",
+      "done_other": "已导出 {{count}} 条记录"
+    },
+    "drawer": {
+      "label": "详情",
+      "previous": "上一条记录",
+      "next": "下一条记录",
+      "close": "关闭详情",
+      "kinds": {
+        "change": "变更",
+        "call": "MCP 调用",
+        "daemon": "守护进程记录"
+      },
+      "who": "操作者",
+      "what": "对象",
+      "kindNames": {
+        "mcp_server": "MCP 服务器",
+        "skill": "技能",
+        "agent": "智能体",
+        "provider": "模型提供商",
+        "channel": "消息渠道",
+        "knowledge": "知识",
+        "memory": "记忆"
+      },
+      "event": "事件",
+      "whatChanged": "改了什么",
+      "noDiff": "配置前后相同。",
+      "secretNote": "密钥的值从不记录。",
+      "agent": "智能体",
+      "noAgent": "未报告",
+      "session": "会话",
+      "server": "服务器",
+      "capability": {
+        "tool": "工具",
+        "resource": "资源",
+        "prompt": "提示词"
+      },
+      "took": "耗时",
+      "callId": "调用 ID",
+      "callProblem": {
+        "error": "对 {{server}} 的调用失败",
+        "timeout": "对 {{server}} 的调用超时",
+        "denied": "对 {{server}} 的调用被拒绝"
+      },
+      "callNote": "Coffer 只记录谁在何时调用了哪个工具、结果如何。参数和返回内容直接透传，从不存储。",
+      "level": "级别",
+      "logger": "记录器",
+      "around": "同一时间前后",
+      "open": "打开 {{name}}",
+      "copyDetails": "复制详情",
+      "copyCallId": "复制调用 ID",
+      "copyRecord": "复制记录",
+      "copied": "已复制",
+      "copyFailed": "无法复制到剪贴板"
+    },
+    "daemon": {
+      "noMessage": "（没有消息的日志记录）"
     }
   },
   "settings": {
@@ -1924,7 +2072,183 @@
     }
   },
   "overview": {
-    "title": "总览"
+    "title": "总览",
+    "subtitle": "Coffer 在这台 Mac 上为你的智能体运行的一切，以及需要你处理的事。",
+    "retry": "重试",
+    "live": {
+      "on": "实时",
+      "off": "未连接",
+      "checked": "检查于"
+    },
+    "needsYou": {
+      "title": "需要你处理",
+      "order": "最紧急的在前",
+      "failing": "失败",
+      "attention": "需要关注",
+      "since": "始于",
+      "sinceYesterday": "始于昨天",
+      "actionFor": "{{action}}：{{name}}",
+      "sourceFailed": "{{area}}无法检查，因此它需要你处理的事不在这份列表里。",
+      "error": "无法检查需要你处理的事",
+      "empty": {
+        "title": "没有需要你处理的事",
+        "body": "需要你处理的事会显示在这里。",
+        "checked": "检查于"
+      }
+    },
+    "actions": {
+      "connect": "连接",
+      "test": "重新测试",
+      "set_secret": "添加密钥",
+      "check": "检查",
+      "run": "查看",
+      "review": "查看",
+      "repair": "修复偏移",
+      "open": "打开"
+    },
+    "kinds": {
+      "agent": "智能体",
+      "provider": "模型提供商",
+      "mcp_server": "MCP 服务器",
+      "skill": "技能",
+      "channel": "消息渠道",
+      "knowledge": "知识",
+      "memory": "记忆",
+      "sync": "同步",
+      "reconcile": "智能体配置",
+      "cli": "命令行工具",
+      "custom_tool": "自定义工具",
+      "other": "其他"
+    },
+    "sources": {
+      "agent": "智能体",
+      "mcp_server": "MCP 服务器",
+      "channel": "消息渠道",
+      "sync": "同步",
+      "reconcile": "智能体配置检查"
+    },
+    "health": {
+      "title": "健康状况",
+      "loadFailed": "加载失败",
+      "open": "打开{{area}}",
+      "failing_one": "{{count}} 个失败",
+      "failing_other": "{{count}} 个失败",
+      "agents": {
+        "ok": "全部已连接",
+        "warn_one": "{{count}} 个待连接",
+        "warn_other": "{{count}} 个待连接",
+        "unit": "/ {{total}} 已连接",
+        "unitRegistered_one": "已登记",
+        "unitRegistered_other": "已登记"
+      },
+      "providers": {
+        "ok": "就绪",
+        "warn_one": "{{count}} 个需要关注",
+        "warn_other": "{{count}} 个需要关注",
+        "unit_one": "个提供商",
+        "unit_other": "个提供商",
+        "none": "智能体使用各自的登录"
+      },
+      "channels": {
+        "ok": "全部已连接",
+        "warn_one": "{{count}} 个重连中",
+        "warn_other": "{{count}} 个重连中",
+        "unit_one": "个渠道",
+        "unit_other": "个渠道",
+        "none": "还没有消息渠道"
+      },
+      "mcpServers": {
+        "ok": "全部可响应",
+        "warn_one": "{{count}} 个需要关注",
+        "warn_other": "{{count}} 个需要关注",
+        "unit_one": "个服务器",
+        "unit_other": "个服务器",
+        "calls": "过去 24 小时 {{calls}} 次调用 · {{errors}} 次出错"
+      },
+      "skills": {
+        "ok": "已是最新",
+        "warn_one": "{{count}} 个偏移",
+        "warn_other": "{{count}} 个偏移",
+        "unit_one": "个技能",
+        "unit_other": "个技能",
+        "delivered_one": "已投递给 {{count}} 个智能体",
+        "delivered_other": "已投递给 {{count}} 个智能体",
+        "notDelivered": "还没有投递给任何智能体"
+      },
+      "knowledge": {
+        "ok": "已是最新",
+        "warn_one": "{{count}} 个需要关注",
+        "warn_other": "{{count}} 个需要关注",
+        "unit_one": "篇文档",
+        "unit_other": "篇文档",
+        "collections_one": "{{count}} 个集合",
+        "collections_other": "{{count}} 个集合"
+      },
+      "memory": {
+        "ok": "已是最新",
+        "warn_one": "{{count}} 个需要关注",
+        "warn_other": "{{count}} 个需要关注",
+        "unit_one": "个分区",
+        "unit_other": "个分区",
+        "notes_one": "{{count}} 条笔记",
+        "notes_other": "{{count}} 条笔记"
+      },
+      "sync": {
+        "ok": "已同步",
+        "warn_one": "{{count}} 轮被暂扣",
+        "warn_other": "{{count}} 轮被暂扣",
+        "notSetUp": "未设置",
+        "noRemote": "还没有设置远端",
+        "round": {
+          "ok": "已同步",
+          "no_change": "已同步",
+          "conflict": "有冲突",
+          "awaiting_confirmation": "已暂扣",
+          "push_failed": "推送失败",
+          "failed": "失败",
+          "disabled": "已暂停",
+          "awaiting_join": "等待加入",
+          "none": "还没有同步过"
+        }
+      }
+    },
+    "activity": {
+      "title": "最近活动",
+      "open": "打开活动",
+      "empty": "还没有发生任何事。",
+      "by": "来自{{actor}}"
+    },
+    "firstRun": {
+      "title": "连接你的编程智能体",
+      "body": "连接智能体会把 Coffer 的网关加进它的配置，让每个智能体共享同一套 MCP 服务器和技能。",
+      "preview": "Coffer 写入任何文件之前，你都会先看到改动。",
+      "found": "已在这台 Mac 上找到",
+      "notInstalled": "未安装",
+      "connect": "查看并连接",
+      "thenTitle": "然后添加它们共享的内容",
+      "shared": {
+        "mcpServers": {
+          "body": "还没有服务器",
+          "cta": "添加 MCP 服务器"
+        },
+        "skills": {
+          "body": "还没有技能",
+          "cta": "添加技能"
+        },
+        "knowledge": {
+          "body": "还没有集合",
+          "cta": "添加知识"
+        },
+        "providers": {
+          "body": "智能体使用各自的登录",
+          "cta": "添加提供商"
+        },
+        "channels": {
+          "body": "还没有消息渠道",
+          "cta": "添加消息渠道"
+        }
+      }
+    }
   },
   "customTools": {
     "title": "自定义工具"
