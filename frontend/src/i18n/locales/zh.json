@@ -1259,36 +1259,35 @@
     "builtinTooltip": "Coffer 自行生成该技能，并在每次启动时重写它，任何修改都不会保留：它的文件在此只读，也无法删除。你仍可以停用它，或收窄它触达的智能体。",
     "builtinDeleteHint": "Coffer 管理该技能，并在每次启动时重写它，因此无法删除。可以改为停用它，或收窄它的触达范围。",
     "title": "技能",
-    "subtitle": "Coffer 管理的 AgentSkills 标准目录，会下发到所有已注册的智能体。",
+    "subtitle": "含 SKILL.md 的文件夹：Coffer 只保存一份，再链接到你的智能体。",
     "loadFailed": "加载技能失败",
     "add": "添加技能",
-    "addSubtitle": "从磁盘导入本地 AgentSkills 标准目录。",
-    "import": "导入",
-    "path": "本地路径",
     "name": "名称",
-    "source": "来源",
     "description": "描述",
-    "allSources": "全部来源",
-    "searchPlaceholder": "搜索技能…",
+    "searchPlaceholder": "筛选技能",
     "noMatches": "没有匹配的技能。",
-    "deleteAria": "删除 {{name}}",
     "removeConfirmTitle": "移除技能 {{name}}？",
     "removeConfirmBody": "这会删除主存储文件夹以及所有智能体端链接。",
-    "importConflictTitle": "已存在名为「{{name}}」的技能，要替换它吗？",
-    "importReplace": "替换",
     "detail": {
-      "back": "返回技能列表",
-      "versionHash": "版本哈希",
-      "masterPath": "主存储路径",
-      "lastSynced": "上次同步",
-      "created": "创建时间",
-      "updated": "更新时间",
+      "updated": "更新于 {{when}}",
       "tabs": {
         "overview": "概览",
-        "files": "文件"
+        "files": "文件",
+        "delivery": "投递",
+        "requires": "依赖",
+        "history": "历史"
       },
-      "sourceBuiltin": "由 Coffer 生成",
-      "fixedNameHint": "智能体从这个名称的文件夹加载该技能。"
+      "notFound": "没有名为「{{name}}」的技能",
+      "source": {
+        "local": "来自 {{path}}",
+        "archive": "来自 {{archive}}",
+        "git": "来自 Git",
+        "builtin": "由 Coffer 生成"
+      },
+      "builtinBanner": {
+        "title": "这个技能由 Coffer 自己编写",
+        "body": "每次启动都会重新生成，所以它的文件只读、不能删除。你仍然可以关闭它，或缩小哪些智能体能拿到它。"
+      }
     },
     "files": {
       "tree": "文件",
@@ -1296,23 +1295,94 @@
       "binary": "二进制文件（{{size}} 字节）",
       "truncated": "内容已截断——仅显示文件开头部分。",
       "truncatedReadonly": "该文件过大，暂不支持在此编辑。",
-      "editorLabel": "{{path}} 的内容"
+      "editorLabel": "{{path}} 的内容",
+      "viewLabel": "显示方式",
+      "preview": "预览",
+      "source": "源码"
     },
-    "welcome": {
-      "title": "管理你的技能",
-      "body": "从磁盘导入 AgentSkills 标准目录。Coffer 会保留一份主副本，并下发到你已注册的智能体。",
-      "featureImport": {
-        "title": "导入",
-        "body": "从磁盘导入本地技能文件夹。"
+    "library": "技能库",
+    "checkCopies": "检查副本",
+    "offMark": "已关闭",
+    "updateAvailable": "有可用更新",
+    "sourceUnreachable": "无法访问来源",
+    "filter": {
+      "label": "显示",
+      "all": "全部",
+      "on": "开启",
+      "off": "关闭"
+    },
+    "bulk": {
+      "label": "已选技能"
+    },
+    "choose": {
+      "title": "选择一个技能",
+      "body": "从技能库中选一个技能，查看它的文件以及哪些智能体拿到了它。"
+    },
+    "firstRun": {
+      "title": "还没有技能",
+      "titleBuiltinOnly": "目前只有 Coffer 自带的指南",
+      "body": "技能只需添加一次，Coffer 会把它链接到你选中的每个智能体。在一处编辑，每个智能体都能看到改动。",
+      "fromFolder": "从文件夹添加",
+      "fromArchive": "从压缩包添加",
+      "fromGit": "从 Git 添加",
+      "agentsHint": "智能体自带的技能在各智能体的「技能」标签页里。",
+      "openAgents": "打开智能体"
+    },
+    "delivery": {
+      "countOf": "{{delivered}} / {{total}} 个智能体",
+      "checkAgain": "重新检查",
+      "checking": "检查中…",
+      "state": {
+        "linked": "已链接",
+        "copied": "已复制",
+        "notDelivered": "未投递"
       },
-      "featureDeliver": {
-        "title": "下发到你的智能体",
-        "body": "技能默认下发给所有智能体，也可只下发给你选定的几个——Coffer 会把它链接到每个智能体的技能目录。"
+      "hint": {
+        "linked": "链接到主副本，在 Coffer 里的编辑会立即生效。",
+        "copied": "这里无法创建链接，所以是一份副本。重新投递之前看不到新的编辑。"
       },
-      "featureReach": {
-        "title": "选择哪些智能体拿到哪个技能",
-        "body": "每个技能都有生效范围——所有智能体，或只限你选中的几个。不在范围内的技能仍留在库里，只是不会下发。"
+      "reason": {
+        "skillOff": "该技能已关闭。",
+        "outsideReach": "不在该技能的可用范围内。",
+        "agentOff": "该智能体已关闭。",
+        "pending": "还没有副本记录。点「重新检查」查看智能体的文件夹。"
       }
+    },
+    "driftKind": {
+      "missing_link": "链接缺失",
+      "tampered_link": "指向别处",
+      "replaced_with_regular": "有文件夹占位",
+      "missing_master": "主副本缺失",
+      "orphan_master": "不在技能库中"
+    },
+    "requires": {
+      "declared": "声明于 SKILL.md",
+      "openClis": "打开命令行工具",
+      "minVersion": "≥ {{version}}",
+      "anyVersion": "任意版本",
+      "emptyTitle": "这个技能没有声明需要的命令",
+      "emptyBody": "在 SKILL.md 的 frontmatter 里用 requires: 列出它需要的命令，例如 requires: [jq, \"gh>=2.40\"]。",
+      "stillDelivered": "无论这些命令是否已安装，技能都会照常投递。"
+    },
+    "history": {
+      "title": "尚未记录版本",
+      "body": "等 vault 开始保存历史后，这个技能的过往版本会显示在这里。"
+    },
+    "copies": {
+      "title": "检查智能体的副本",
+      "body": "把每个智能体手里每个技能的副本与技能库比对。检查不会改动任何东西。",
+      "checking": "正在检查每个智能体的副本…",
+      "checkAgain": "重新检查",
+      "repair": "修复",
+      "repairing": "修复中…",
+      "summary_one": "{{count}} 项发现",
+      "summary_other": "{{count}} 项发现",
+      "allMatchTitle": "所有副本都与技能库一致",
+      "allMatchBody": "每个智能体手里的每个技能都是 Coffer 投递的那份。",
+      "repaired": "已由 Coffer 修复",
+      "needsYou": "需要你处理",
+      "library": "技能库",
+      "repairHint": "修复只放回 Coffer 能自行恢复的内容；它不会覆盖不是它创建的文件夹，这些会继续列在这里等你处理。"
     }
   },
   "knowledge": {
@@ -2013,6 +2083,160 @@
         "disable_protection": "关闭保护"
       },
       "review": "查看"
+    }
+  },
+  "skillSources": {
+    "add": {
+      "title": "添加技能",
+      "subtitle": {
+        "folder": "Coffer 把文件夹复制进技能库，并链接到你的智能体。",
+        "archive": "Coffer 把压缩包解压进技能库，并把技能链接到你的智能体。",
+        "git": "Coffer 从仓库复制技能、固定提交，并链接到你的智能体。"
+      },
+      "sourceLabel": "来源",
+      "source": {
+        "folder": "从文件夹",
+        "archive": "从压缩包",
+        "git": "从 Git"
+      },
+      "looking": "正在查找技能…",
+      "addOne": "添加技能",
+      "addMany": "添加 {{count}} 个技能",
+      "replaceOne": "替换 {{name}}",
+      "adding": "正在添加…"
+    },
+    "folder": {
+      "label": "文件夹",
+      "placeholder": "~/src/skills/my-skill",
+      "help": "顶层有 SKILL.md 的文件夹，或下一层文件夹里放着技能。"
+    },
+    "archive": {
+      "label": "压缩包",
+      "choose": "选择文件…",
+      "chooseAnother": "换一个文件",
+      "empty": ".zip 或 .skill 文件——也可以拖到这个对话框里",
+      "meta": "{{ext}} · {{size}} · 拖入另一个文件可替换"
+    },
+    "git": {
+      "url": "仓库地址",
+      "urlPlaceholder": "https://github.com/owner/repo",
+      "urlHelp": "一个仓库，或仓库里的一个文件夹。Coffer 固定它克隆的提交，来源有更新时会告诉你。",
+      "ref": "分支或标签",
+      "refPlaceholder": "默认分支",
+      "path": "仓库中的文件夹",
+      "pathPlaceholder": "仓库顶层",
+      "clone": "克隆",
+      "cloning": "正在克隆…",
+      "cloningLine": "正在克隆 {{url}}…",
+      "retry": "重试"
+    },
+    "found": {
+      "top": "在顶层找到 SKILL.md",
+      "inFolder": "在 {{folder}}/ 中找到 SKILL.md",
+      "invalid": "无法作为技能添加",
+      "meta_one": "{{count}} 个文件 · {{size}}",
+      "meta_other": "{{count}} 个文件 · {{size}}",
+      "name": "名称",
+      "description": "描述",
+      "noDescription": "无描述",
+      "why": "原因",
+      "several": "找到 {{count}} 个技能——选择要添加的",
+      "listLabel": "找到的技能",
+      "chooseNamed": "添加 {{name}}",
+      "replaceNamed": "替换 {{name}}",
+      "replace": "将替换你的",
+      "taken": "技能库里已有同名技能；选中它会替换你的版本。",
+      "protected": "Coffer 自带的内置技能用了这个名字，无法替换。",
+      "takenTitle": "你已经有一个名为 {{name}} 的技能",
+      "takenBody": "替换会把主文件夹换成这个版本，并重新链接到所有拥有它的智能体。名字来自它的 SKILL.md，所以只能有一个 {{name}}。想保留你的版本，请取消。"
+    },
+    "refusal": {
+      "title": "无法作为技能添加",
+      "noSkillMd": "没有找到 SKILL.md",
+      "noSkillMdBody": "SKILL.md 必须在顶层或下一层文件夹里。没有添加任何内容。",
+      "unsafe": "压缩包里有不安全的条目",
+      "unsafeBody": "没有解压任何内容。这些条目可能写到压缩包之外或链接到别处：",
+      "tooLarge": "超过了 50 MB 的技能上限",
+      "unreachable": "无法访问仓库",
+      "entries": "有问题的条目",
+      "problem": {
+        "absolute_path": "绝对路径",
+        "parent_segment": "跳出压缩包（..）",
+        "symlink": "符号链接",
+        "size_limit": "超过 50 MB 上限",
+        "corrupt": "无法读取"
+      }
+    },
+    "source": {
+      "title": "来源",
+      "checkNow": "立即检查",
+      "checkAgain": "再次检查",
+      "checking": "正在检查…",
+      "repository": "仓库",
+      "folder": "文件夹",
+      "folderTop": "仓库顶层",
+      "pinned": "固定于",
+      "defaultBranch": "默认分支",
+      "status": "状态",
+      "notChecked": "尚未检查",
+      "upToDate": "已是最新",
+      "checkedAt": "检查于 {{time}}",
+      "updateAvailable": "有可用更新",
+      "commits_one": "{{count}} 个提交",
+      "commits_other": "{{count}} 个提交",
+      "files_one": "{{count}} 个文件",
+      "files_other": "{{count}} 个文件",
+      "unreachableSince": "自 {{time}} 起无法访问来源",
+      "unreachableTitle": "无法访问 {{repo}}",
+      "unreachableBody": "技能继续使用固定的副本工作，只是暂停了更新。",
+      "lastSuccess": "上次成功检查：{{time}}",
+      "neverSucceeded": "还没有成功检查过。",
+      "bannerTitle": "{{repo}} 有可用更新",
+      "bannerBody_one": "{{ref}} 比固定的 {{pinned}} 新了 {{count}} 个提交，{{files}} 个文件有改动。在你审阅之前不会有任何变化。",
+      "bannerBody_other": "{{ref}} 比固定的 {{pinned}} 新了 {{count}} 个提交，{{files}} 个文件有改动。在你审阅之前不会有任何变化。",
+      "review": "审阅更新…"
+    },
+    "update": {
+      "title": "更新 {{name}}",
+      "loading": "正在准备更新…",
+      "upToDate": "已是最新",
+      "upToDateBody": "{{name}} 已在其来源的最新提交上。",
+      "commits": "提交 · {{count}}",
+      "commitsLabel": "本次更新的提交",
+      "changes": "改动 · {{count}}",
+      "noChanges": "没有文件改动。",
+      "diffLabel": "{{path}} 的改动",
+      "binary": "二进制文件——不显示差异。",
+      "noDiff": "没有行级改动。",
+      "truncated": "差异已截断；整个文件都会更新。",
+      "agentsNote": "智能体通过链接立即看到改动。",
+      "notNow": "以后再说",
+      "apply": "更新到 {{commit}}",
+      "applying": "正在更新…"
+    },
+    "conflict": {
+      "title": "{{name}} 两边都改了",
+      "body": "自固定的 {{pinned}} 以来你在本地改过它，而更新 {{to}} 也改了它。",
+      "localEdits": "你的改动 · {{count}}",
+      "localEditsLabel": "你改过的文件",
+      "keep": "保留我的改动",
+      "keeping": "正在保留…",
+      "keepHelp": "保持固定在 {{pinned}} 并保留你的改动。有更新的提交时 Coffer 会再次提醒你。",
+      "take": "采用更新",
+      "takeHelp": "移到 {{to}}。你的改动会被丢弃。",
+      "compare": "对比",
+      "back": "返回",
+      "confirmTitle": "丢弃你的改动？",
+      "confirmBody": "采用 {{to}} 会用更新替换你对 {{name}} 的改动。"
+    },
+    "compare": {
+      "files": "要对比的文件",
+      "local": "本地",
+      "pinned": "固定版本",
+      "incoming": "新版本",
+      "binary": "二进制文件",
+      "missing": "此版本中没有",
+      "truncated": "已截断"
     }
   }
 }
