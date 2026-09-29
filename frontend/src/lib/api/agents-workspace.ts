@@ -15,6 +15,11 @@ type Schemas = components["schemas"];
 
 export type McpEntryOut = Schemas["McpEntry"];
 
+/** One entry in full — the listing's fields plus the config file's `path`,
+ *  `cwd` and every other key (`extra`, secret-looking values masked by the
+ *  daemon: `value: null, masked: true`). */
+export type McpEntryDetailOut = Schemas["McpEntryDetail"];
+
 export type McpEntriesResponse = Schemas["McpEntriesOut"];
 
 export type AdoptMcpEntryBody = Schemas["McpEntryAdopt"];

@@ -183,3 +183,94 @@ def test_remove_entry_json_dotted_container():
     assert [e.name for e in entries] == ["coffer"]
     with pytest.raises(McpEntryNotFound):
         me.remove_entry(ConfigFileFormat.JSON, out, "files", container_key="mcp.servers")
+
+
+# --- cwd / extra keys / masking (the one-entry detail read) -----------------
+
+DETAIL_TOML = """
+[mcp_servers.full]
+command = "uvx"
+args = ["srv"]
+cwd = "/work"
+startup_timeout_sec = 20
+enabled = true
+bearer_token = "tok"
+empty_token = ""
+[mcp_servers.full.env]
+A = "1"
+[mcp_servers.full.oauth]
+client_secret = "s"
+scopes = ["read"]
+"""
+
+
+def test_parse_keeps_cwd_and_every_other_key_as_plain_values() -> None:
+    (entry,) = me.parse_entries(ConfigFileFormat.TOML, DETAIL_TOML, source="config")
+    assert entry.cwd == "/work"
+    # Typed fields (command/args/env/enabled/cwd) never repeat in extra, and
+    # tomlkit items come out as plain Python.
+    assert entry.extra == {
+        "startup_timeout_sec": 20,
+        "bearer_token": "tok",
+        "empty_token": "",
+        "oauth": {"client_secret": "s", "scopes": ["read"]},
+    }
+    assert type(entry.extra["oauth"]) is dict
+    assert type(entry.extra["startup_timeout_sec"]) is int
+
+
+def test_parse_json_entry_without_cwd_or_extra() -> None:
+    entries = me.parse_entries(ConfigFileFormat.JSON, CLAUDE_JSON, source="global")
+    jira = next(e for e in entries if e.name == "jira")
+    assert jira.cwd is None
+    assert jira.extra == {}
+
+
+def test_extra_values_stay_out_of_repr() -> None:
+    (entry,) = me.parse_entries(ConfigFileFormat.TOML, DETAIL_TOML, source="config")
+    assert "bearer_token" not in repr(entry)
+    assert "client_secret" not in repr(entry)
+
+
+def test_masked_extra_withholds_secret_keys_and_tables_that_nest_them() -> None:
+    fields = me.masked_extra(
+        {
+            "timeout": 20,
+            "bearer_token": "tok",
+            "empty_token": "",
+            "oauth": {"client_secret": "s"},
+            "hosts": [{"api_key": "k"}],
+            "type": "sse",
+            "flags": {"debug": True},
+        }
+    )
+    assert [f.key for f in fields] == sorted(
+        ["timeout", "bearer_token", "empty_token", "oauth", "hosts", "type", "flags"]
+    )
+    by_key = {f.key: f for f in fields}
+    assert by_key["timeout"] == me.ExtraField("timeout", "20", False)
+    assert by_key["type"] == me.ExtraField("type", "sse", False)
+    assert by_key["flags"] == me.ExtraField("flags", '{"debug": true}', False)
+    # An empty secret-looking value hides nothing, so it is shown as it is.
+    assert by_key["empty_token"] == me.ExtraField("empty_token", "", False)
+    for key in ("bearer_token", "oauth", "hosts"):
+        assert by_key[key] == me.ExtraField(key, None, True)
+
+
+def test_looks_secret_matches_the_adopt_pattern() -> None:
+    assert me.looks_secret("GITHUB_TOKEN")
+    assert me.looks_secret("x_api_key")
+    assert me.looks_secret("Authorization")
+    assert not me.looks_secret("LANG")
+
+
+def test_matches_transport_compares_command_args_or_url() -> None:
+    entries = {e.name: e for e in me.parse_entries(ConfigFileFormat.TOML, CODEX_TOML, source="c")}
+    local, gas = entries["local"], entries["gas"]
+    assert me.matches_transport(
+        local, {"type": "stdio", "command": "npx", "args": ["-y", "some-mcp"]}
+    )
+    assert not me.matches_transport(local, {"type": "stdio", "command": "npx", "args": []})
+    assert not me.matches_transport(local, {"type": "stdio", "command": "npx", "args": "bad"})
+    assert me.matches_transport(gas, {"type": "http", "url": "https://gas.example/mcp"})
+    assert not me.matches_transport(gas, {"type": "stdio", "url": "https://gas.example/mcp"})

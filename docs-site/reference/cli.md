@@ -1065,7 +1065,7 @@ coffer agent mcp [OPTIONS] COMMAND [ARGS]...
 
 Install/uninstall Coffer's MCP server into an agent
 
-Subcommands: `status`, `install`, `uninstall`, `entries`, `remove-entry`, `adopt`.
+Subcommands: `status`, `install`, `uninstall`, `entries`, `show-entry`, `remove-entry`, `adopt`.
 
 ### agent mcp status
 
@@ -1115,6 +1115,21 @@ List the MCP server entries in the agent's own config files.
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Agent name |
+| `--json` | option | flag |  | JSON output |
+
+### agent mcp show-entry
+
+```sh
+coffer agent mcp show-entry [OPTIONS] NAME ENTRY
+```
+
+Show one MCP entry in full — secret values are never printed.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Agent name |
+| `ENTRY` | argument | text | required | MCP entry name |
+| `--source` | option | text |  | Config-file key when the entry exists in several files. |
 | `--json` | option | flag |  | JSON output |
 
 ### agent mcp remove-entry

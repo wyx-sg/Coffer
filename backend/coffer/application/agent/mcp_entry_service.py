@@ -30,6 +30,7 @@ from coffer.domain.agent.descriptor import descriptor_for
 from coffer.domain.agent.mcp_entries import (
     COFFER_SERVER_KEY,
     McpEntry,
+    matches_transport,
     parse_entries,
     secret_env_keys,
     to_transport_config,
@@ -78,6 +79,14 @@ class McpEntriesView:
     parse_errors: list[ParseErrorInfo]
 
 
+@dataclass(frozen=True)
+class McpEntryDetail:
+    """One MCP entry and the absolute path of the config file it lives in."""
+
+    entry: McpEntry
+    path: str
+
+
 class _AgentLookup(Protocol):
     async def get(self, uid: str) -> Resource: ...
 
@@ -113,22 +122,6 @@ class _CredentialStorePort(Protocol):
     def set(self, ref: str, value: str) -> None: ...
 
     def delete(self, ref: str) -> None: ...
-
-
-def _matches_transport(entry: McpEntry, transport: Mapping[str, Any]) -> bool:
-    """Equivalence between a config-file entry and a registered resource's transport.
-
-    stdio: same command AND same args; http: same url. Tolerates missing keys.
-    """
-    if entry.transport == "stdio":
-        raw_args = transport.get("args") or []
-        args = [str(a) for a in raw_args] if isinstance(raw_args, (list, tuple)) else []
-        return (
-            transport.get("type") == "stdio"
-            and transport.get("command") == entry.command
-            and args == list(entry.args)
-        )
-    return transport.get("type") == "http" and transport.get("url") == entry.url
 
 
 class AgentMcpEntryService:
@@ -193,18 +186,33 @@ class AgentMcpEntryService:
                     ParseErrorInfo(source=spec.key, path=str(spec.path), error=str(e))
                 )
 
-        resources = await self._rs.list(kind="mcp_server")
-        annotated: list[McpEntry] = []
+        return McpEntriesView(items=await self._annotate(items), parse_errors=parse_errors)
+
+    async def _annotate(self, items: list[McpEntry]) -> list[McpEntry]:
+        """Fill ``matches_resource`` with an equivalent registered server's name."""
+        registered = [
+            (r.name, t)
+            for r in await self._rs.list(kind="mcp_server")
+            if isinstance(t := r.config.get("transport"), Mapping)
+        ]
+        out: list[McpEntry] = []
         for entry in items:
-            match: str | None = None
+            match = None
             if not entry.is_coffer:
-                for r in resources:
-                    transport = r.config.get("transport")
-                    if isinstance(transport, Mapping) and _matches_transport(entry, transport):
-                        match = r.name
-                        break
-            annotated.append(dataclasses.replace(entry, matches_resource=match) if match else entry)
-        return McpEntriesView(items=annotated, parse_errors=parse_errors)
+                match = next((n for n, t in registered if matches_transport(entry, t)), None)
+            out.append(dataclasses.replace(entry, matches_resource=match) if match else entry)
+        return out
+
+    async def get_entry(self, uid: str, entry: str, *, source: str | None = None) -> McpEntryDetail:
+        """One direct entry with everything its file says about it, plus that file's path.
+
+        Read-only and addressed like remove/adopt (``source`` disambiguates a
+        name two files share). Values are still the raw ones here — masking is
+        the surface's job, and nothing below it logs them (``repr=False``).
+        """
+        spec, _text, parsed = await self._locate(uid, entry, source)
+        (annotated,) = await self._annotate([parsed])
+        return McpEntryDetail(entry=annotated, path=str(spec.path))
 
     async def _locate(
         self, uid: str, entry: str, source: str | None

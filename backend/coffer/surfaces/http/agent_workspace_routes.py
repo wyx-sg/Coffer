@@ -1,11 +1,12 @@
 """/api/v1/agents/{uid}/mcp-entries and /plugins routes (spec agent-registry agent workspace).
 
 MCP entries + plugins in the agent's OWN config files, derived at read time —
-nothing is stored. Env/header VALUES never cross HTTP: listings expose key
-names only (plus which keys look secret-like). Domain errors map centrally via
-surfaces/http/errors.py; the one exception is adopt's name-conflict 409, which
-needs a ``suggested_name`` detail and so builds the envelope explicitly with
-:func:`coffer.surfaces.http.errors.error_response`.
+nothing is stored. Env/header VALUES never cross HTTP: the listing and the
+one-entry read expose key names only (plus which keys look secret-like), and
+the one-entry read withholds the value of any other secret-looking key.
+Domain errors map centrally via surfaces/http/errors.py; the one exception is
+adopt's name-conflict 409, which needs a ``suggested_name`` detail and so
+builds the envelope explicitly with :func:`coffer.surfaces.http.errors.error_response`.
 """
 
 from __future__ import annotations
@@ -15,10 +16,10 @@ from typing import Any
 from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel, Field
 
-from coffer.application.agent.mcp_entry_service import ParseErrorInfo
+from coffer.application.agent.mcp_entry_service import McpEntryDetail, ParseErrorInfo
 from coffer.application.agent.plugin_views import PluginView
 from coffer.domain.agent.config import AgentConfig
-from coffer.domain.agent.mcp_entries import McpEntry, secret_env_keys
+from coffer.domain.agent.mcp_entries import McpEntry, masked_extra, secret_env_keys
 from coffer.domain.agent.plugin_state import MarketplaceInfo
 from coffer.domain.errors import ResourceAlreadyExists
 from coffer.surfaces.http.agent_dependencies import get_agent_service
@@ -51,6 +52,22 @@ class McpEntryOut(BaseModel):
     enabled: bool | None
     is_coffer: bool
     matches_resource: str | None
+
+
+class McpEntryFieldOut(BaseModel):
+    key: str
+    # None when masked: a secret-looking key's value never crosses HTTP.
+    value: str | None
+    masked: bool
+
+
+class McpEntryDetailOut(McpEntryOut):
+    """One entry in full — the listing's fields plus the file it came from, its
+    working directory and every other key it carries (secret-looking ones masked)."""
+
+    path: str
+    cwd: str | None
+    extra: list[McpEntryFieldOut]
 
 
 class ParseErrorOut(BaseModel):
@@ -140,6 +157,18 @@ def _entry_out(e: McpEntry) -> McpEntryOut:
     )
 
 
+def _entry_detail_out(d: McpEntryDetail) -> McpEntryDetailOut:
+    return McpEntryDetailOut(
+        **_entry_out(d.entry).model_dump(),
+        path=d.path,
+        cwd=d.entry.cwd,
+        extra=[
+            McpEntryFieldOut(key=f.key, value=f.value, masked=f.masked)
+            for f in masked_extra(d.entry.extra)
+        ],
+    )
+
+
 def _parse_error_out(p: ParseErrorInfo) -> ParseErrorOut:
     return ParseErrorOut(source=p.source, path=p.path, error=p.error)
 
@@ -180,6 +209,16 @@ async def list_mcp_entries(
         items=[_entry_out(e) for e in view.items],
         parse_errors=[_parse_error_out(p) for p in view.parse_errors],
     )
+
+
+@router.get("/{uid}/mcp-entries/{entry}", response_model=McpEntryDetailOut)
+async def get_mcp_entry(
+    uid: str,
+    entry: str,
+    source: str | None = None,
+    svc: Any = Depends(get_agent_mcp_entry_service),  # noqa: B008
+) -> McpEntryDetailOut:
+    return _entry_detail_out(await svc.get_entry(uid, entry, source=source))
 
 
 @router.delete(

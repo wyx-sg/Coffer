@@ -116,6 +116,7 @@ export type {
   AdoptedResource,
   AdoptMcpEntryBody,
   McpEntriesResponse,
+  McpEntryDetailOut,
   McpEntryOut,
   PluginOut,
   PluginsResponse,
@@ -128,6 +129,7 @@ import type {
   AdoptedResource,
   AdoptMcpEntryBody,
   McpEntriesResponse,
+  McpEntryDetailOut,
   PluginsResponse,
   SkillRefOut,
   UnmanagedSkillDetailOut,
@@ -170,6 +172,12 @@ export const agentsApi = {
 
   // MCP entries (specs agent-registry/005 workspace amendment)
   mcpEntries: (uid: string) => call<McpEntriesResponse>(`/agents/${enc(uid)}/mcp-entries`),
+  // One entry in full, read-only. `source` is sent whenever known — it is what
+  // tells two same-named entries (claude_code's two files) apart.
+  mcpEntry: (uid: string, entry: string, source?: string) => {
+    const qs = source ? `?source=${enc(source)}` : "";
+    return call<McpEntryDetailOut>(`/agents/${enc(uid)}/mcp-entries/${enc(entry)}${qs}`);
+  },
   // Deletes the entry from the agent's own config file (a .bak is written by
   // the daemon). `source` names which config file the entry came from — an
   // entry name can repeat across sources.
