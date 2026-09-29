@@ -112,6 +112,10 @@ unarchived until that implementation lands.
   them live on that agent's Skills tab, and the empty state only links there. A skill's detail
   page has four tabs — **Files · Delivery · Requires · History** — with no separate SKILL.md tab:
   Files opens with `SKILL.md` selected and rendered, a Preview / Source toggle and Edit.
+- **Tab addresses** follow one rule on every detail page: `/<kind>/<id>/<tab>`, the default tab
+  at the bare path, named by the resource's fixed name for skills, MCP servers and custom tool
+  groups, by type for agents, by command for CLIs, and by `uid` for kinds that can be renamed; old
+  `?tab=` and uid addresses redirect.
 - A **command palette** (⌘K / Ctrl+K) jumps to any page or object. It carries no action that
   changes state.
 - A sidebar entry carries an **attention dot** while its kind's attention signal is raised; Sync's

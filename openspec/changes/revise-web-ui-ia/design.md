@@ -406,5 +406,16 @@ the gateway's registration rules (fixed names, the 24-character limit) are uncha
   file of the tree; Preview / Source and Edit use the conditional save that already exists.
   Delivery takes what the old Overview tab held (description, source, version, reach) plus
   where the skill is delivered. Requires links each declared command to the CLIs page; History
-  shows the vault history of the folder. Tabs stay in `?tab=` as today; `?tab=overview` opens
-  Delivery. There is no SKILL.md tab address in the router to redirect.
+  shows the vault history of the folder. Tabs are paths (`/skills/<name>/delivery`, decision 14);
+  `?tab=overview` opens Delivery. There is no SKILL.md tab address in the router to redirect.
+
+### 14. Tab addresses
+
+Every detail page puts its tab in the path, `/<kind>/<id>/<tab>`, with the default tab at the
+bare path: one rule instead of `?tab=` on some pages and paths on others, and an address a person
+can read and type. The `<id>` is the name where a kind's name is fixed and unique — skills, MCP
+servers and custom tool groups (the only kinds that declare `name_fixed`), agents by type, CLIs
+by command — and the `uid` where a name can be renamed (model providers, channels, knowledge
+collections, memory partitions), because an address must survive a rename. Old `?tab=` and old
+uid addresses of fixed-name kinds redirect. The MCP servers route stays `/mcp-servers`, the
+sidebar's route, rather than a shorter `/mcp`.

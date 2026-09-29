@@ -39,10 +39,10 @@ The web surfaces:
   endpoint and protocol, plus Custom, which reveals a manual protocol selector; the CLI takes
   `--protocol`. The dialog surfaces test-connection and list-models with an inline, not-yet-saved
   secret.
-- The connection detail page splits into Overview and Models tabs. Its header carries the shared
+- The connection detail page (`/model-providers/<uid>`, addressed by `uid` because a connection can be renamed) splits into Overview and Models (`/model-providers/<uid>/models`) tabs. Its header carries the shared
   scope control — the single place the connection's reach and its enabled state are both shown and
   changed. Overview carries a read-only **Used by** list: each agent switched to the connection,
-  with the model it runs, opening that agent's Model tab; and Coffer's engine and Speech to text
+  with the model it runs, opening that agent's Model tab (`/agents/<type>/model`); and Coffer's engine and Speech to text
   when the connection is flagged for them, each opening `/settings/general`. Used by carries no
   switch, activate or revert control: an agent's connection is switched only on its Model tab.
 - Per-agent connection and model selection lives on the agent detail page's Model tab, filtered to

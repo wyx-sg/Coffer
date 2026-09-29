@@ -255,7 +255,7 @@ the dialog MUST NOT send that server's registration until the name is shortened.
 - **GIVEN** the user opens the Add server dialog from the MCP servers page
 - **WHEN** they paste the standard `mcpServers` JSON holding one server and add it from the prefilled form
 - **THEN** the app posts the server to `/api/v1/resources`, then writes any secret env values to `/api/v1/credentials` (register-first ordering avoids orphan credential entries when registration fails)
-- **AND** on success the dialog closes and the app navigates to the server's detail page `/mcp-servers/<uid>` showing the Overview tab
+- **AND** on success the dialog closes and the app navigates to the server's detail page `/mcp-servers/<name>` showing the Overview tab
 - **AND** the new server appears on the MCP servers list with health "unknown" then "healthy" within 10 seconds
 
 #### Scenario: add-server form navigates to detail then back to list shows card
@@ -332,6 +332,67 @@ primary action — and MUST NOT render an empty table or a placeholder ghost row
 - **WHEN** the user opens `/mcp-servers`
 - **THEN** the page renders a welcome card with a short pitch and a primary "Add server" button
 - **AND** the welcome card does NOT show an empty table or a placeholder ghost row
+
+### Requirement: Lay out every detail page's tabs alike
+Every detail page MUST lay its tabs out the same way as every other. What a tab
+shows belongs to the capability that owns that kind — the agent detail page's
+tabs are [agent-registry](../agent-registry/spec.md)'s; this capability owns
+only that they are tabs on a detail page laid out like every other.
+
+Every detail page MUST put its tab in the path: `/<kind>/<id>/<tab>`, with the
+default tab at the bare `/<kind>/<id>`, never in a `?tab=` query. The `<id>` is
+the resource's name where the kind's name is fixed and unique within the kind —
+skills (`/skills/<name>`), MCP servers (`/mcp-servers/<name>`) and custom tool
+groups (`/custom-tools/<group>`), which are `mcp_server` resources — the agent's
+type for agents (`/agents/<type>`), and the command for CLIs (`/clis/<command>`).
+A kind whose name can be renamed — model providers, channels, knowledge
+collections, memory partitions — MUST keep its immutable `uid` as the `<id>`
+(`/model-providers/<uid>/models`), because a renamed name would break every
+address to it. A page opened from a tab (a plugin, a direct MCP entry, an
+unmanaged skill) nests under that tab's path. An old `?tab=<tab>` address MUST
+redirect to the matching path, and an old uid address of a kind now addressed by
+name MUST redirect to its name address, rather than resolve to "page not
+found".
+
+#### Scenario: detail pages share one tab layout
+- **GIVEN** two detail pages of different kinds
+- **WHEN** each is opened with a tab named in its URL
+- **THEN** each renders its tabs in the shared tab strip with that tab selected
+- **AND** switching tab rewrites the URL the same way on both
+
+#### Scenario: a detail tab lives in the path
+- **GIVEN** a skill named `release-notes` and an MCP server named `github`
+- **WHEN** the user opens the skill's Delivery tab and the server's Tools tab
+- **THEN** the addresses read `/skills/release-notes/delivery` and `/mcp-servers/github/tools`
+- **AND** `/skills/release-notes` and `/mcp-servers/github` open each page on its default tab
+
+#### Scenario: an old query-tab address redirects to the path
+- **GIVEN** bookmarks to `/mcp-servers/<uid>?tab=tools` and `/model-providers/<uid>?tab=models`
+- **WHEN** each is opened
+- **THEN** the first lands on `/mcp-servers/github/tools` and the second on `/model-providers/<uid>/models`, and no "page not found" view is shown
+
+#### Scenario: a renamable kind keeps its uid in the address
+- **GIVEN** a model provider renamed from `work` to `work-proxy`
+- **WHEN** the user follows an address to it saved before the rename
+- **THEN** the address still opens that provider, because it carries the uid and not the name
+
+### Requirement: Redirect legacy resource paths
+The legacy path `/resources` MUST resolve as a redirect to the MCP server
+surface rather than as a "page not found" view. Detail routes are addressed as
+"Lay out every detail page's tabs alike" says — by name for kinds whose name is
+fixed, by `uid` for the rest — and an old uid address of a fixed-name kind MUST
+redirect to its name address, which needs only the lookup by `uid` every kind
+already has.
+
+#### Scenario: legacy resource paths redirect instead of 404ing
+- **GIVEN** a user follows an old bookmark to `/resources`
+- **WHEN** the route resolves
+- **THEN** the app redirects to the MCP server surface and no "page not found" view is shown
+
+#### Scenario: an old uid address of a fixed-name kind redirects to its name
+- **GIVEN** a skill named `release-notes` and a bookmark to `/skills/<its uid>`
+- **WHEN** the route resolves
+- **THEN** the app lands on `/skills/release-notes` and no "page not found" view is shown
 
 ## ADDED Requirements
 
@@ -657,7 +718,7 @@ show an empty panel.
 - **GIVEN** a registered MCP server whose title differs from its name
 - **WHEN** the user opens the palette and types part of its name, and then part of its title
 - **THEN** each query lists the server under Objects
-- **AND** choosing it opens `/mcp-servers/<uid>`
+- **AND** choosing it opens `/mcp-servers/<name>`
 
 #### Scenario: the palette offers no actions
 - **GIVEN** the palette open with an empty query
@@ -902,11 +963,13 @@ offering two ways in:
 - **Define one request by hand** — method, path, parameters and body schema —
   joining an existing group or a new one named in the same step.
 
-A group's detail page MUST carry its definition (base URL, auth header with the
-secret it is bound to, and each tool's request), a **Test** action that calls one
-tool with sample arguments and shows the response, the reach control with each
-tool's override, the per-tool switches, and its calls (the Activity calls table
-scoped to the group). Script tools are not offered: they are deferred past 1.0.
+A group's detail page (`/custom-tools/<group>`) MUST carry three tabs:
+**Overview** (the default — its definition: base URL, auth header with the
+secret it is bound to, the group's reach, and Re-import for an imported group),
+**Tools** (`/custom-tools/<group>/tools` — each tool's request, its switch, its
+reach override, and a **Test** action that calls the tool with sample arguments
+and shows the response) and **Calls** (`/custom-tools/<group>/calls` — the
+Activity calls table scoped to the group). Script tools are not offered: they are deferred past 1.0.
 How the gateway runs an HTTP API tool is specified with the change that adds the
 transport.
 
