@@ -213,7 +213,8 @@ still has no host branch outside it.
 
 ⌘K / Ctrl+K, and a search control in the sidebar, open a palette that only navigates: pages
 (every sidebar entry and Settings tab) and objects (agents and every listed resource kind,
-matched by title and name). No actions. A palette that can also enable, delete or change reach is
+matched by name, and by title on the kinds that still carry one — model providers, channels,
+knowledge and memory; agents, MCP servers and skills have none). No actions. A palette that can also enable, delete or change reach is
 a second way to reach every mutation, each needing its own confirmation and error handling, and it
 bypasses the page that shows what the change will do. *Rejected:* an action palette in the style
 of an editor's command list; it may come later as its own change.
@@ -284,8 +285,9 @@ automatically each time the page loads. A row is not installed (with the install
 copy), config left behind with its program not found (with the reinstall command), not added
 (Add) — including installed but never run, whose config directory Add creates with only Coffer's
 entries — or added with its Coffer state (Connect, Repair). Add registers the agent under its
-default config directory and connects it; feature/rearch's rule that only `installed_active`
-can be added is relaxed for `installed_never_run`, because a first-run user who has installed
+default config directory and connects it; the rule that only `installed_active` could be
+added is relaxed for `installed_never_run` (the registry side shipped with
+one-agent-per-type-and-no-titles), because a first-run user who has installed
 Codex but not opened it yet should not have to run it once before Coffer can set it up; Add, Connect and Repair each preview every
 file they will write before writing. A different config directory is the exception, so it is a
 row-menu item. First run, with neither added, offers Add both. *Rejected:* a Detect agents button
@@ -395,11 +397,13 @@ the gateway's registration rules (fixed names, the 24-character limit) are uncha
 - **A scenario name that no longer matches its body.** agent-registry "show a leftover config
   directory as not installed" keeps its name because OpenSpec refuses to drop a scenario from a
   MODIFIED requirement; its body says the row reads as config left behind, program not found.
-- **The registry still allows more than a row per type.** Agents keep a renamable name, a title
-  and, per type, any number of config directories ("Manage the agent lifecycle", "Allow one agent
-  per name and per config directory"). The Agents list and the `/agents/<type>` paths assume one
-  agent per type named by its type; the change that narrows the registry to that owns the
-  backend and CLI side, and until it lands the web UI shows the first agent of each type.
+- **One agent per type is the registry's rule now, not an assumption.** The Agents list and the
+  `/agents/<type>` paths need one agent per type named by its type; the archived change
+  one-agent-per-type-and-no-titles made that the registry's rule (agent-registry "Keep one agent
+  per type, named by it"), with no title on agents, MCP servers or skills, every agent route and
+  command accepting the type in place of the uid, and `GET /api/v1/agents/types` giving the
+  per-type rows this page renders. A database with several agents of one type is collapsed to
+  one on upgrade, so the page never has to choose among them.
 - **Relearning the sidebar.** Users of the eleven-entry sidebar find Model providers under
   Agents, Channels under Run, and Settings in the row at the sidebar's foot. The palette finds each by
   name, and routes are unchanged.
@@ -410,15 +414,16 @@ the gateway's registration rules (fixed names, the 24-character limit) are uncha
   shell, so a lost private key means no update can be verified; the key is kept in the
   repository's secrets with an offline backup.
 
-- **Open: does a reply from Coffer reach the channel?** When the user replies from the
-  Conversations page in a conversation a channel opened, the chat spec says the page and the
-  channel are "two windows onto one timeline", and the conversation keeps the channel binding as a
-  return address ([Chat Is a Single-Owner Live Mirror](../../../docs/decisions/chat-single-owner-live-mirror.md)).
-  The current runtime does **not** deliver that reply to the channel: a channel renders only the
-  turns its own inbound messages start (`TurnDriver` spawns a `TurnRenderer` from the orchestrator's
-  `on_start` sink for a channel message), so a web-sent turn is seen in Coffer only, and the IM side
-  sees nothing until its next message. Whether a web reply should also be sent to the channel is
-  not decided here; the Conversations page must not claim it is.
+- **Decided elsewhere: a reply from Coffer reaches the channel.** When the user replies from the
+  Conversations page in a conversation a channel opened, the reply is mirrored into that channel's
+  chat and thread, marked `(from Coffer)`, and the agent's answer is delivered there too; a
+  group's main chat is the exception and the reply stays in Coffer; a reply the channel cannot
+  send yet is kept, marked not delivered and sent once the channel runs (chat "Mirror a web reply
+  into the channel it came from", archived with redesign-channel-commands, on the channel's return
+  address of [Chat Is a Single-Owner Live Mirror](../../../docs/decisions/chat-single-owner-live-mirror.md)).
+  The composer says before sending where the reply will also go (chat "Show where a reply will
+  also be sent"). This change only renames the page those requirements call the Chat page; the
+  Conversations page keeps both.
 - **Token rotation strands other clients.** A second open tab or a client with a literal token
   fails until it re-reads the token. The confirmation says so; the offline banner already reads a
   `401` as "not ready" and a reload recovers a daemon-served page.
@@ -444,8 +449,8 @@ the gateway's registration rules (fixed names, the 24-character limit) are uncha
 Every detail page puts its tab in the path, `/<kind>/<id>/<tab>`, with the default tab at the
 bare path: one rule instead of `?tab=` on some pages and paths on others, and an address a person
 can read and type. The `<id>` is the name where a kind's name is fixed and unique — skills, MCP
-servers and custom tool groups (the only kinds that declare `name_fixed`), agents by type, CLIs
-by command — and the `uid` where a name can be renamed (model providers, channels, knowledge
+servers and custom tool groups (which declare `name_fixed`), agents by type (an agent's fixed
+name is its type), CLIs by command — and the `uid` where a name can be renamed (model providers, channels, knowledge
 collections, memory partitions), because an address must survive a rename. Old `?tab=` and old
 uid addresses of fixed-name kinds redirect. The MCP servers route stays `/mcp-servers`, the
 sidebar's route, rather than a shorter `/mcp`.

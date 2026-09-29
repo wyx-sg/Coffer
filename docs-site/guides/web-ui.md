@@ -81,7 +81,7 @@ The **Search or jump to…** control at the top of the sidebar opens the command
 The palette is for navigation only — it takes you somewhere and never runs an action. It lists two groups:
 
 - **Pages** — every sidebar entry and every Settings tab. Pages are always available, even while the daemon is offline.
-- **Objects** — your agents, MCP servers, skills, model providers, channels, knowledge collections and memory partitions, matched by title and by name. Each kind loads on its own: while one loads its group says so, and if one fails only that group shows an error. While the daemon cannot be reached, the palette lists Pages only and says that objects need the daemon.
+- **Objects** — your agents, MCP servers, skills, model providers, channels, knowledge collections and memory partitions, matched by name (and by title on the kinds that carry one). Each kind loads on its own: while one loads its group says so, and if one fails only that group shows an error. While the daemon cannot be reached, the palette lists Pages only and says that objects need the daemon.
 
 Pages and objects of a switched-off experimental feature are left out.
 

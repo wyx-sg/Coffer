@@ -70,7 +70,7 @@ The footer reports; it does not ask you to act. Coffer starts its daemon by itse
 
 ## The palette is navigation only
 
-**⌘K** (**Ctrl+K**) or the **Search or jump to…** control opens the command palette. It lists **Pages** — every sidebar entry and Settings tab — and **Objects** — agents and the resources of every listed kind, matched by title and by name.
+**⌘K** (**Ctrl+K**) or the **Search or jump to…** control opens the command palette. It lists **Pages** — every sidebar entry and Settings tab — and **Objects** — agents and the resources of every listed kind, matched by name (and by title on the kinds that carry one).
 
 - **It only navigates.** Choosing an item opens a page; nothing in the palette creates, deletes or changes anything. Actions stay on the pages that own them, next to the context that makes them safe.
 - **It adds no search route.** Each kind's objects come from the same list query that kind's page already uses, so the palette reuses whatever is cached and fetches only what is not. There is no aggregate index that could fall behind the pages.

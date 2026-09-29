@@ -102,7 +102,7 @@ The Agents page in the web UI MUST expose all of these, config-file content writ
 - **AND** Overview shows no Title or Name field, and its Skills, MCP servers and Plugins summary rows each open their tab; Config files lists the instructions file beside the settings files
 
 ### Requirement: Expose agent discovery on every surface
-The system MUST expose a read-only discovery operation listing the agents seen on this machine that are not registered, as candidates, available from the REST API (`GET /api/v1/agents/candidates`), the `coffer scan` CLI (as rows of kind `agent`), and the Agents page in the web UI, where a candidate is a row of the list that is not added (see "List the supported agents as fixed rows on the Agents page"). Detection is automatic: the page reads the candidates each time it loads and offers no Detect action. The user adds an `installed_active` or `installed_never_run` candidate with the row's Add, after a preview of what it will write, with no typing of type identifiers, names or paths; a `config_only` candidate is shown as config left behind with its program not found, with the reinstall command and no Add action. On the command line an addable candidate is registered with the `coffer agent add` command its scan row names.
+The system MUST expose a read-only discovery operation listing the supported types seen on this machine that have no agent registered, as candidates — at most one per type — available from the REST API (`GET /api/v1/agents/candidates`, rows shaped as "Report every supported type's detection state" describes), the `coffer scan` CLI (as rows of kind `agent`), and the Agents page in the web UI, where a candidate is a row of the list that is not added (see "List the supported agents as fixed rows on the Agents page"). Detection is automatic: the page reads the candidates each time it loads and offers no Detect action. The user adds an addable candidate — `installed_active`, or `installed_never_run`, whose standard directory registration creates — with the row's Add, after a preview of what it will write, with no typing of type identifiers, names or paths; a `config_only` candidate is shown as config left behind with its program not found, with the reinstall command and no Add action. On the command line an addable candidate is registered with the `coffer agent add <type>` command its scan row names.
 
 #### Scenario: list discovery candidates from the command line
 - **GIVEN** a supported agent is installed with its standard config directory present and no agent of that type is registered
@@ -145,7 +145,7 @@ The agent detail page's header MUST offer **Connect to Coffer** when the agent i
 - **THEN** the preview lists only the missing parts, and confirming installs them and the row reads Connected
 
 ### Requirement: Detect an agent by its program and its config directory
-The system MUST detect an agent from two signals: its program on the agent's real `PATH` — the user's login-shell `PATH` merged with the daemon's inherited one, asked through the platform layer — together with the version that program reports, and its config directory on disk. The version MUST be read with the program's own version flag under a bounded timeout, and detection MUST NOT run anything that needs a login, a network call or the agent's config. The two signals MUST be named as one state: `installed_active` (program and directory), `installed_never_run` (program, no directory yet), `config_only` (directory, program missing) and `missing` (neither). Discovery candidates and every registered agent read (`GET /api/v1/agents`, `GET /api/v1/agents/{uid}`, `coffer agent show`) MUST carry the state and the version, read at request time and never stored. An `installed_never_run` agent can be added: its program works and the directory it has not created yet is created by the registration (see "Validate the config directory at registration"). A `config_only` agent is shown as config left behind with its program not found — not as not installed — because a directory of its own is still on disk and the fix is to reinstall the program; `missing` is shown as not installed.
+The system MUST detect an agent from two signals: its program on the agent's real `PATH` — the user's login-shell `PATH` merged with the daemon's inherited one, asked through the platform layer — together with the version that program reports, and its config directory on disk. The version MUST be read with the program's own version flag under a bounded timeout, and detection MUST NOT run anything that needs a login, a network call or the agent's config. The two signals MUST be named as one state: `installed_active` (program and directory), `installed_never_run` (program, no directory yet), `config_only` (directory, program missing) and `missing` (neither). Discovery candidates, the per-type listing of "Report every supported type's detection state" and every registered agent read (`GET /api/v1/agents`, `GET /api/v1/agents/{uid}`, `coffer agent show`) MUST carry the state and the version, read at request time and never stored. An `installed_never_run` agent can be added: its program works and the directory it has not created yet is created by the registration (see "Validate the config directory at registration"). A `config_only` agent is shown as config left behind with its program not found — not as not installed — because a directory of its own is still on disk and the fix is to reinstall the program; `missing` is shown as not installed.
 
 #### Scenario: read the installed program's version
 - **GIVEN** the agent's program is on the agent's `PATH` and answers its version flag with `2.1.281 (Claude Code)`
@@ -164,10 +164,10 @@ The system MUST detect an agent from two signals: its program on the agent's rea
 - **THEN** that type is a candidate in state `config_only`, with no version, shown as config left behind with its program not found, and is not offered for adding
 
 #### Scenario: offer the directory named by the agent's environment variable
-- **GIVEN** the daemon's environment sets `CLAUDE_CONFIG_DIR` to an existing directory other than `~/.claude`, and Claude Code's program is installed
+- **GIVEN** the daemon's environment sets `CLAUDE_CONFIG_DIR` to an existing directory other than `~/.claude`, `~/.claude` exists, and Claude Code's program is installed
 - **WHEN** the user runs discovery
-- **THEN** that directory is a candidate beside the standard one, with a suggested name of its own
-- **AND** a variable naming the standard directory adds no second candidate
+- **THEN** Claude Code is one candidate at `~/.claude` whose `other_config_dir` is the variable's directory
+- **AND** when `~/.claude` does not exist the candidate is the variable's directory, and a variable naming the standard directory adds nothing
 
 #### Scenario: report a registered agent's detection state
 - **GIVEN** a registered agent whose program is installed and whose config directory exists
@@ -176,25 +176,25 @@ The system MUST detect an agent from two signals: its program on the agent's rea
 - **AND** an agent whose program and directory are both gone reads `missing`
 
 ### Requirement: Discover agents on this machine as candidates without registering them
-The system MUST provide a read-only discovery operation that looks, for each supported type, at its standard config directory — named in that type's child spec — and at the directory that type's own environment variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) names in the daemon's environment when set, and reports every such directory with either detection signal of "Detect an agent by its program and its config directory" that no registered agent holds as a **candidate** (each carrying `type`, `display_name`, `config_dir`, `default_skill_dir`, `suggested_name`, `state` and `version`). Nothing else is scanned. Candidates are derived at scan time and never stored. Discovery MUST NOT register anything automatically — the user reviews candidates and confirms which to add, and an `installed_active` or `installed_never_run` candidate can be added — the second's registration creates its standard config directory with only the entries Coffer needs — while a `config_only` candidate cannot, because a directory whose program is gone belongs to no working agent. The daemon MUST NOT auto-register agents on startup.
+The system MUST provide a read-only discovery operation that looks, for each supported type, at its standard config directory — named in that type's child spec — and at the directory that type's own environment variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) names in the daemon's environment when set, and reports each type with no agent registered and with either detection signal of "Detect an agent by its program and its config directory" as one **candidate**, carrying the fields of "Report every supported type's detection state". Nothing else is scanned. Candidates are derived at scan time and never stored. Discovery MUST NOT register anything automatically — the user reviews candidates and confirms which to add, and an `installed_active` or `installed_never_run` candidate can be added — the second's registration creates its standard config directory with only the entries Coffer needs — while a `config_only` candidate cannot, because a directory whose program is gone belongs to no working agent. The daemon MUST NOT auto-register agents on startup.
 
-On the command line, candidates are rows of kind `agent` in `coffer scan`, the one listing of everything agents hold that Coffer does not manage yet (see [resource-framework](../resource-framework/spec.md), the requirement that defines `coffer scan`, `coffer adopt` and `coffer discard`). Each row MUST carry the candidate's state and version; an addable row MUST name the `coffer agent add <type>` command that registers it — with `--name` and `--config-dir` for a directory other than the standard one — through the ordinary registration of "Manage the agent lifecycle", and any other row says why it cannot be added yet. A candidate MUST NOT be discardable: nothing of Coffer's put the agent there, so neither `coffer adopt` nor `coffer discard` offers an `agent` command.
+On the command line, candidates are rows of kind `agent` in `coffer scan`, the one listing of everything agents hold that Coffer does not manage yet (see [resource-framework](../resource-framework/spec.md), the requirement that defines `coffer scan`, `coffer adopt` and `coffer discard`). Each row MUST carry the candidate's state and version; an addable row MUST name the `coffer agent add <type>` command that registers it — with `--config-dir` only for a directory other than the standard one — through the ordinary registration of "Manage the agent lifecycle", and any other row says why it cannot be added. A candidate MUST NOT be discardable: nothing of Coffer's put the agent there, so neither `coffer adopt` nor `coffer discard` offers an `agent` command.
 
 #### Scenario: discover installed agents as candidates
 - **GIVEN** a Coffer install with a supported agent's program installed, its standard config directory present, and no agent registered
 - **WHEN** the user runs discovery
-- **THEN** Coffer reports that type as an `installed_active` candidate (type, display name, config dir, suggested name, version) and registers nothing — discovery is read-only
+- **THEN** Coffer reports that type as an `installed_active` candidate (type, name, display name, config dir, version, addable) and registers nothing — discovery is read-only
 
 #### Scenario: skip already-registered config directories on subsequent scan
-- **GIVEN** `codex` agents are already registered for `~/.codex` and for the directory `CODEX_HOME` names
+- **GIVEN** a `codex` agent is registered for `~/.codex`, and `CODEX_HOME` names another existing directory
 - **WHEN** the user runs discovery again
-- **THEN** no `codex` candidate is offered
+- **THEN** no `codex` candidate is offered, for either directory, because the type already has its agent
 
 #### Scenario: adopt a discovered agent from the command line
 - **GIVEN** Codex is installed, `~/.codex` is present and no `codex` agent is registered
 - **WHEN** the user runs `coffer scan`, then `coffer agent add codex`
 - **THEN** the scan lists a row of kind `agent` for `codex` that names `coffer agent add codex`, and registers nothing
-- **AND** the add registers a `codex` agent under the candidate's suggested name and default config directory, audited as `resource_created`
+- **AND** the add registers the `codex` agent at the default config directory, audited as `resource_created`
 - **AND** neither `coffer adopt` nor `coffer discard` offers an `agent` command
 
 #### Scenario: add an agent that has never run
@@ -202,30 +202,6 @@ On the command line, candidates are rows of kind `agent` in `coffer scan`, the o
 - **WHEN** the user runs `coffer scan`, then `coffer agent add codex`
 - **THEN** the scan lists a `codex` row in state `installed_never_run` that names `coffer agent add codex`
 - **AND** the add creates `~/.codex` with only the entries Coffer needs and registers the agent, audited as `resource_created`
-
-### Requirement: Validate the config directory at registration
-At registration the system MUST auto-create the `<config_dir>/skills` subdirectory, then validate that the resolved `config_dir` exists — or, for the standard config directory of a type in state `installed_never_run`, create it first, holding only the entries Coffer needs — is a directory, is writable, and is not a privileged system path before accepting the value. The privileged locations are `/etc`, `/bin`, `/sbin`, `/usr`, `/var`, `/sys`, `/proc`, `/root`, `/boot`, `/dev`, `/System` and `/Library/Application Support/Apple` on POSIX hosts — matched at a path-component boundary, after resolving symlinks and stripping macOS's `/private` firmlink prefix, with the user temp area under `/var/folders/` carved out as usable — and `C:\Windows`, `C:\Program Files` and `C:\Program Files (x86)` on Windows. A rejected registration leaves no partial state, and no `config_dir` value may permit writing outside the directory itself.
-
-#### Scenario: reject registration with an invalid config dir
-- **GIVEN** the daemon is running
-- **WHEN** the user registers an agent whose `config_dir` does not exist, is not a directory, or is not writable
-- **THEN** registration is rejected with a message naming the path, and nothing is persisted
-
-#### Scenario: reject registration into privileged system path
-- **GIVEN** the daemon is running
-- **WHEN** the user attempts to register an agent whose `config_dir` resolves under a privileged location (e.g. `/etc`, `/usr`, `/var` outside `/var/folders/`, `/System`, `C:\Windows`, or `C:\Program Files`)
-- **THEN** registration is rejected with `unprocessable_entity` (422) and no resource row, audit event, or filesystem write occurs
-
-#### Scenario: register an agent with a custom config dir
-- **GIVEN** the daemon is running
-- **WHEN** the user registers an agent of supported type with an explicit, writable `config_dir`
-- **THEN** the agent is persisted with that path (and its `<config_dir>/skills` subdirectory auto-created) and appears in `coffer agent list`
-
-#### Scenario: register an installed agent whose config directory is not created yet
-- **GIVEN** Codex's program is installed and `~/.codex` does not exist
-- **WHEN** the user registers a `codex` agent on its standard config directory
-- **THEN** `~/.codex` is created with its `skills` subdirectory and nothing else, and the agent is persisted
-- **AND** registering a type whose program is not installed on a directory that does not exist is still rejected, with nothing created
 
 ## ADDED Requirements
 

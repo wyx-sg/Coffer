@@ -118,7 +118,7 @@ If Claude Code is not logged in, the banner says so and tells you to run `claude
 
 ## Replying to a channel's conversation
 
-A conversation a [channel](/guides/channels) opened is one conversation, whichever screen you type on. When you reply to it from the Chat page, the reply also goes back to the chat it came from, so your phone shows the whole exchange and not only its own half.
+A conversation a [channel](/guides/channels) opened is one conversation, whichever screen you type on. When you reply to it from the Conversations page, the reply also goes back to the chat it came from, so your phone shows the whole exchange and not only its own half.
 
 - Before you send, the composer says where the reply will also go, for example **Also sends to SeaTalk · 🧵#1 deploy check**.
 - The reply is posted in that chat or thread as `(from Coffer) …`, and the agent's answer follows it there, exactly like the answer to a message you typed on your phone.

@@ -55,7 +55,7 @@
 
 ## 6. Command palette
 
-- [x] 6.1 Palette component opened by ⌘K / Ctrl+K and by a sidebar search control; Pages group from the sidebar entries and Settings tabs; Objects group from the agent list and each listed kind's list hook, matched by title and name (Objects: agents, MCP servers, skills, model providers, channels, knowledge, memory; custom tools and CLIs join with their pages, task 6c.3)
+- [x] 6.1 Palette component opened by ⌘K / Ctrl+K and by a sidebar search control; Pages group from the sidebar entries and Settings tabs; Objects group from the agent list and each listed kind's list hook, matched by name and, on the kinds that carry one, by title (Objects: agents, MCP servers, skills, model providers, channels, knowledge, memory; custom tools and CLIs join with their pages, task 6c.3)
 - [x] 6.2 Navigation only — no entry that sends a mutating request; switched-off features' pages and objects left out
 - [x] 6.3 Per-group loading and error rows, Pages-only offline state, no-results message; arrow keys, Enter, Escape with focus return
 - [ ] 6.4 en / zh strings for the palette, footer, Daemon tab, the Coffer's model section, the Secrets page and the agent detail tabs — *shell part done*: palette and footer strings; the Daemon tab, Coffer's model section, Secrets page and agent-tab strings land with those items
@@ -114,7 +114,8 @@
 - [ ] 6i.1 Rename Chat to Conversations: `/conversations` and `/conversations/:id`, `/chat` and `/chat/:id` redirect; list every conversation with a source badge (channel or Coffer) and filters by source and agent; conversation page with the full exchange and a reply box; New conversation as a secondary action; no welcome / suggestions page and no voice input in the composer — *shell part done*: `/conversations` and `/conversations/:id` with `/chat` redirects, and the Conversations name; the list with source badges and filters lands with the Conversations page item
 - [ ] 6i.2 Channels page: setup, connection status and settings only; a link per channel to Conversations filtered by it
 - [ ] 6i.3 Agent detail: rename the Conversations tab to Sessions at `/agents/<type>/sessions`, the old path redirecting
-- [ ] 6i.4 chat spec: the other requirements' "Chat page" titles and bodies read Conversations page at archive; chat Purpose follows
+- [ ] 6i.4 chat spec: the other requirements' "Chat page" titles and bodies read Conversations page at archive — "Mirror a web reply into the channel it came from" and "Show where a reply will also be sent" included; chat Purpose follows
+- [ ] 6i.5 Conversations page keeps the web-reply mirror of chat "Show where a reply will also be sent": the composer's "Also sends to …" / stays-in-Coffer line and the not-delivered mark on each reply the channel has not received
 
 ## 6j. Activity
 

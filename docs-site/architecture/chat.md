@@ -335,7 +335,7 @@ The commands a phone can send are a small, closed vocabulary: `/new [agent]`, `/
 
 ### Mirroring a web reply
 
-A conversation a channel opened is one conversation with two screens, so a reply typed on the Chat page must reach the phone too. Chat must not import the channel kind, so the dependency points the other way: **chat declares a mirror port** — "is this conversation mirrored, where to, and deliver this reply" — and **the channel kind implements it**, wired together at the composition root.
+A conversation a channel opened is one conversation with two screens, so a reply typed on the Conversations page must reach the phone too. Chat must not import the channel kind, so the dependency points the other way: **chat declares a mirror port** — "is this conversation mirrored, where to, and deliver this reply" — and **the channel kind implements it**, wired together at the composition root.
 
 - **Where a reply may go.** The conversation is located through the per-thread history: its channel, chat, thread and chat kind. A direct chat, its threads and a group thread are deliverable. A group's main chat is not: it is the room's shared space, and a reply typed at a desk, followed by an answer nobody in the room asked for, does not belong there. Such a reply stays in Coffer. The conversation's view names the target (platform and thread mark) so the page can say where a reply will go before it is sent.
 - **What is sent.** The reply is posted to that chat or thread marked `(from Coffer)`, and the turn is queued with the same render hook a channel-driven turn gets, so the agent's answer reaches the chat exactly as it would have.

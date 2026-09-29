@@ -794,7 +794,9 @@ It MUST list two groups, filtered together by what the user types:
   sidebar and the tabs use (see "Call a surface by one name everywhere"). A
   Settings tab opens in the Settings modal over the current page.
 - **Objects** — the agents, the resources of every kind with a list surface
-  (custom tools included) and the CLIs, matched by title and by name, each
+  (custom tools included) and the CLIs, matched by name — and also by title
+  on the kinds that carry one ([resource-framework](../resource-framework/spec.md)
+  "Carry an optional editable title on the kinds that have one") — each
   opening its detail page.
 
 A page or object of a switched-off experimental feature MUST NOT appear. The
@@ -815,10 +817,10 @@ show an empty panel.
 - **THEN** the app navigates to `/activity` and the palette closes
 
 #### Scenario: the palette jumps to an object
-- **GIVEN** a registered MCP server whose title differs from its name
-- **WHEN** the user opens the palette and types part of its name, and then part of its title
-- **THEN** each query lists the server under Objects
-- **AND** choosing it opens `/mcp-servers/<name>`
+- **GIVEN** a registered MCP server, and a model provider whose title differs from its name
+- **WHEN** the user opens the palette and types part of the server's name, then part of the provider's name, then part of the provider's title
+- **THEN** the first query lists the server under Objects, and the second and third each list the provider
+- **AND** choosing the server opens `/mcp-servers/<name>`
 
 #### Scenario: the palette offers no actions
 - **GIVEN** the palette open with an empty query
