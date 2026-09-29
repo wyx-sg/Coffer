@@ -96,6 +96,19 @@ The system MUST validate skill configuration against a kind-specific schema with
 - **WHEN** its resource is read back
 - **THEN** its config holds a `git_import` source carrying the URL, `main`, `skills/review` and the full commit id that was checked out
 
+### Requirement: Import a skill from a local path
+The system MUST support importing a skill from a local filesystem path; the original source path is recorded for provenance but is not retained as a live dependency. Re-importing a name that already exists MUST be rejected by default (`conflict`, 409); with an explicit `overwrite` flag (CLI `--force`) the existing skill is replaced in place — the master folder content is swapped atomically, its `version_hash` and `last_synced_from_source_at` are refreshed, and its per-agent bindings and delivered symlinks are preserved (the master folder name is unchanged). For a skill added from a folder or an archive, re-import overwrite is the only update mechanism (there is no live source to re-fetch); a skill added from a Git repository is updated from its source instead (see "Update a Git-imported skill from its source"). The replacement is audited as an update. On a name collision the user either renames via SKILL.md frontmatter and retries, or re-imports with `overwrite`.
+
+#### Scenario: import a valid local skill folder
+- **GIVEN** the daemon is running and no skill named `my-skill` exists,
+- **WHEN** the user imports a folder containing a valid SKILL.md with frontmatter `name: my-skill`,
+- **THEN** Coffer copies the folder to `~/.coffer/skills/my-skill/`, persists a Resource of kind `skill`, and records an audit entry.
+
+#### Scenario: re-import a skill with overwrite replaces it
+- **GIVEN** a skill named `my-skill` is already imported and enabled for an agent,
+- **WHEN** the user imports a folder with frontmatter `name: my-skill` again with `overwrite` (`--force`),
+- **THEN** the master folder content is replaced atomically, the skill's `version_hash` is refreshed, the existing per-agent binding and its delivered symlink are preserved, and a skill-update audit entry is recorded — whereas the same re-import without `overwrite` is rejected with `conflict` (409).
+
 ## ADDED Requirements
 
 ### Requirement: Add skills from an archive
@@ -153,17 +166,58 @@ find skills under the subpath by the rule archives use (a `SKILL.md` at the subp
 down), offering a choice when there are several. Symlinks that leave the checkout, and a checkout past
 the 50 MB skill cap, MUST be rejected before anything is written. A chosen skill is validated, named
 and confirmed as an archive's is, and is recorded with a `git_import` source pinned to the commit it
-was copied from. It is a point-in-time copy: nothing follows the repository afterwards, and taking a
-newer commit is adding it again with Replace. A repository that cannot be fetched MUST be reported
+was copied from. It stays pinned to that commit until the user takes a newer one through "Update a Git-imported
+skill from its source". A repository that cannot be fetched MUST be reported
 with git's own message, and nothing is written.
 
 #### Scenario: add a skill from a repository subpath at a ref
 - **GIVEN** a repository whose `skills/review/SKILL.md` is valid on tag `v1.2`
 - **WHEN** the user adds it with ref `v1.2` and subpath `skills/review` and confirms
 - **THEN** the skill is added from that commit, and its source records the URL, `v1.2`, `skills/review` and the commit id
-- **AND** a later commit on the repository changes nothing until the user adds it again with Replace
+- **AND** a later commit on the repository changes nothing until the user applies it as an update
 
 #### Scenario: an unreachable repository writes nothing
 - **GIVEN** a URL that git cannot fetch
 - **WHEN** the user tries to add from it
 - **THEN** the dialog shows git's message and nothing is written
+
+### Requirement: Update a Git-imported skill from its source
+A skill with a `git_import` source MUST be checked for newer commits on its ref — on demand, from a
+**Check for updates** action on the skill's page, and periodically, every six hours — by fetching the
+repository with this machine's `git` into a staging area; a check writes nothing to the master store.
+When the ref has moved past the pinned commit, the skill MUST show **Update available** on the Skills
+page and its detail page, with the commit range from the pinned commit to the new one. Choosing it
+MUST show a preview of the change to the skill's folder — the files added, removed and changed, with a
+diff — and apply nothing until the user confirms; confirming replaces the folder's content atomically
+with the new commit's, moves the pin to it, keeps the skill's reach and delivered links, and is
+audited as an update. When the skill's folder has been edited locally since the pinned commit (its
+content no longer matches that commit), the update MUST show a **conflict** instead of a plain
+preview, offering **Keep mine** (leave the folder and the pin as they are and stop offering this
+update until a newer commit arrives), **Take theirs** (apply the new commit, discarding the local
+edits) and **Compare** (the local folder, the pinned commit and the new commit side by side). A
+source that cannot be fetched MUST be reported on the skill with git's message and the time of the
+last successful check, and changes nothing.
+
+#### Scenario: a newer commit shows update available
+- **GIVEN** a skill pinned to commit `a1` of `main`, and `main` now at `c3`
+- **WHEN** the periodic check runs, or the user chooses Check for updates
+- **THEN** the skill shows Update available with the range `a1..c3` on the Skills page and its detail page
+- **AND** nothing under `~/.coffer/skills/` has changed
+
+#### Scenario: an update is applied after its preview
+- **GIVEN** a skill showing Update available and not edited locally
+- **WHEN** the user opens the update, reviews the preview of added, removed and changed files, and confirms
+- **THEN** the folder holds `c3`'s content, the source is pinned to `c3`, the skill's reach and delivered links are unchanged, and the update is audited
+- **AND** closing the preview without confirming leaves the folder and the pin at `a1`
+
+#### Scenario: a local edit makes the update a conflict
+- **GIVEN** a skill pinned to `a1` whose `SKILL.md` the user edited, and `main` at `c3`
+- **WHEN** the user opens the update
+- **THEN** the dialog shows a conflict offering Keep mine, Take theirs and Compare instead of a plain preview
+- **AND** Keep mine leaves the edited folder and the `a1` pin in place and stops offering `c3`, while Take theirs applies `c3` and discards the edit
+
+#### Scenario: an unreachable source is reported and changes nothing
+- **GIVEN** a Git-imported skill whose repository can no longer be fetched
+- **WHEN** the user chooses Check for updates
+- **THEN** the skill shows git's message and the time of its last successful check
+- **AND** the folder and the pin are unchanged

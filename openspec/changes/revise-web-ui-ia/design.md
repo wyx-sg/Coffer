@@ -445,7 +445,9 @@ that configure them. The decisions:
   field when it cannot be read, a warning under 64k; Claude Code gets
   `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` and `CLAUDE_CODE_MAX_CONTEXT_TOKENS` automatically.
   A local model connection here is one speaking the agent's own protocol; the `ollama` protocol
-  stays internal-only ("Keep ollama connections internal-only").
+  stays internal-only ("Keep ollama connections internal-only") for now — the v0.3 proxy /
+  local-models change replaces it with a keyless local connection, per
+  `local-models-research.md` in the rearchitecture plan.
 - **Back to built-in removes every key Coffer wrote**, so stale pins never redirect tiers on the
   subscription; a value the user has since changed through `/model` or `/effort` is theirs.
 
@@ -458,8 +460,11 @@ taken, or something that should never be unpacked. Archives are the untrusted in
 an absolute path or `..`, a symlink, or an uncompressed size past the 50 MB skill cap rejects the
 whole archive, judged as entries are read rather than on the sizes the archive declares. A skill is
 a folder with `SKILL.md` at the top or one folder down, the two layouts skill archives are shipped
-in. A Git import is a point-in-time copy pinned to the commit it came from; following a repository
-is Sources, a later entry, and taking a newer commit is adding again with Replace. *Rejected:* a
+in. A Git import is pinned to the commit it came from and updated from its source: Coffer checks for
+newer commits on demand and every six hours, shows Update available with the commit range, previews
+the diff, and applies it only when confirmed; a folder edited locally since the pin turns the update
+into a conflict with Keep mine, Take theirs and Compare. Subscribing to a whole repository of skills
+is Sources, a later entry. *Rejected:* a
 "create a new skill" form, which was drawn but never built — a skill is authored in the user's
 editor, and a form would be a worse editor. The dialog is specified in skill-manager because that
 spec owns the Skills page.

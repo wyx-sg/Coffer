@@ -130,7 +130,8 @@ unarchived until that implementation lands.
   built-in login removes every key Coffer wrote.
 - **Adding a skill** offers three sources — a folder, an archive (`.zip` / `.skill`, uploaded or
   `coffer skill add <file.zip>`) and a Git repository (URL, optional ref and subpath, pinned to a
-  commit) — each showing what it found before anything is written. Archives are checked for
+  commit, with Update available, a previewed diff and a conflict view when the skill was edited
+  locally) — each showing what it found before anything is written. Archives are checked for
   zip-slip, symlinks and size before they are read into the store. There is no create-from-scratch.
 - A **command palette** (⌘K / Ctrl+K) jumps to any page or object. It carries no action that
   changes state.
