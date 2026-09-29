@@ -17,13 +17,14 @@
 // the chat provider key `claude_code`), so the values below are opaque too.
 import { describe, expect, test } from "vitest";
 
+import { honoursRequireMention, parseDirectories, planChannelEdit } from "./editChannel";
 import {
-  honoursRequireMention,
   parseBurstWait,
-  parseDirectories,
-  planChannelEdit,
+  parseNotifyAfter,
   storedBurstWait,
-} from "./editChannel";
+  storedNotifyAfter,
+  storedShowSteps,
+} from "./channelTurnSettings";
 
 /** The two channels every case below edits: a uid to address, a name to read. */
 const TG = { uid: "u-3d9a1f77", name: "tg" };
@@ -233,6 +234,65 @@ describe("planChannelEdit", () => {
       expect(parseBurstWait("-1")).toBeNull();
       expect(parseBurstWait("60.5")).toBeNull();
       expect(parseBurstWait("abc")).toBeNull();
+    });
+  });
+
+  describe("replies", () => {
+    // Two per-channel settings: list each step under the live status line
+    // (show_steps, default on) and the completion ping threshold
+    // (notify_after_seconds, default 90, 0 = off).
+    const config = { channel_type: "telegram", bot_token_ref: "channel/tg/bot-token" };
+
+    test("absent keys read as the backend defaults, stored ones as themselves", () => {
+      expect(storedShowSteps(config)).toBe(true);
+      expect(storedNotifyAfter(config)).toBe(90);
+      expect(storedShowSteps({ show_steps: false })).toBe(false);
+      expect(storedNotifyAfter({ notify_after_seconds: 0 })).toBe(0);
+    });
+
+    test("values at the defaults write nothing", () => {
+      const plan = planChannelEdit({
+        ...TG,
+        config,
+        values: { default_agent: AGENT_A, show_steps: true, notify_after_seconds: 90 },
+      });
+
+      expect("show_steps" in plan.config).toBe(false);
+      expect("notify_after_seconds" in plan.config).toBe(false);
+    });
+
+    test("changed values write their keys, and 0 turns the ping off", () => {
+      const plan = planChannelEdit({
+        ...TG,
+        config,
+        values: { default_agent: AGENT_A, show_steps: false, notify_after_seconds: 0 },
+      });
+
+      expect(plan.config.show_steps).toBe(false);
+      expect(plan.config.notify_after_seconds).toBe(0);
+    });
+
+    test("an unchanged stored value is kept as-is", () => {
+      const stored = { ...config, show_steps: false, notify_after_seconds: 300 };
+      const plan = planChannelEdit({
+        ...TG,
+        config: stored,
+        values: { default_agent: AGENT_A, show_steps: false, notify_after_seconds: 300 },
+      });
+
+      expect(plan.config.show_steps).toBe(false);
+      expect(plan.config.notify_after_seconds).toBe(300);
+    });
+
+    test("parseNotifyAfter accepts 0..3600 seconds and rejects the rest", () => {
+      expect(parseNotifyAfter("0")).toBe(0);
+      expect(parseNotifyAfter("90")).toBe(90);
+      expect(parseNotifyAfter("3600")).toBe(3600);
+      expect(parseNotifyAfter("")).toBeNull();
+      expect(parseNotifyAfter("  ")).toBeNull();
+      expect(parseNotifyAfter("-1")).toBeNull();
+      expect(parseNotifyAfter("3601")).toBeNull();
+      expect(parseNotifyAfter("abc")).toBeNull();
     });
   });
 

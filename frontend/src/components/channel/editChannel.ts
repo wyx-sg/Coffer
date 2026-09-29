@@ -2,13 +2,20 @@
 // Apply plumbing for EditChannelDialog: rotated secrets are written to their
 // existing credential refs FIRST (so the channel keeps working off the same
 // refs), then the resource config is PATCHed (bound agent / SeaTalk app id /
-// group gating / message batching / /dir directories), with the title when it
-// changed.
+// group gating / message batching / replies / /dir directories), with the
+// title when it changed.
 // Unlike registration there is nothing to roll back — overwriting a ref's
 // value and PATCHing a live resource are both in-place updates.
 import { getApiClient } from "@/lib/api/client";
 import { throwApiError } from "@/lib/api/errors";
 
+import {
+  BURST_WAIT_DEFAULTS,
+  storedBurstWait,
+  storedNotifyAfter,
+  storedShowSteps,
+  type BurstWaitKey,
+} from "./channelTurnSettings";
 import type { ChannelEditPlan } from "./schema";
 
 async function writeSecret(ref: string, value: string): Promise<void> {
@@ -66,6 +73,12 @@ interface ChannelEditValues {
   wait_after_text_seconds?: number;
   /** Quiet window (seconds) after a forwarded chat record or text-less files. */
   wait_after_forward_seconds?: number;
+  /** List each step under the live status line while a turn runs. Undefined
+   *  leaves the stored value alone. */
+  show_steps?: boolean;
+  /** A turn running at least this long (seconds) ends with a completion ping;
+   *  0 turns it off. Undefined leaves the stored value alone. */
+  notify_after_seconds?: number;
   /** The folders `/dir` may switch into, normalised (see parseDirectories).
    *  Undefined leaves the stored list alone. */
   directories?: string[];
@@ -114,44 +127,6 @@ export function directoriesDraftValid(text: string): boolean {
 }
 
 /**
- * The two message-batching windows — spec channels "Take a burst of messages
- * as one turn". The defaults are the backend's, used when the config key is
- * absent; 0 means "don't wait" (every message is its own turn).
- */
-const BURST_WAIT_DEFAULTS = {
-  wait_after_text_seconds: 1.5,
-  wait_after_forward_seconds: 5,
-} as const;
-export type BurstWaitKey = keyof typeof BURST_WAIT_DEFAULTS;
-export const BURST_WAIT_MIN = 0;
-export const BURST_WAIT_MAX = 60;
-
-/** A stored batching window, or the backend default when absent / not a number. */
-export function storedBurstWait(config: Record<string, unknown>, key: BurstWaitKey): number {
-  const v = config[key];
-  return typeof v === "number" && Number.isFinite(v) ? v : BURST_WAIT_DEFAULTS[key];
-}
-
-/** Parse what the user typed into a batching field: seconds in [0, 60], or
- *  null for anything else (blank, not a number, out of range). */
-export function parseBurstWait(text: string): number | null {
-  if (text.trim() === "") return null;
-  const n = Number(text);
-  if (!Number.isFinite(n) || n < BURST_WAIT_MIN || n > BURST_WAIT_MAX) return null;
-  return n;
-}
-
-/** Whether both batching fields, as typed, parse to a value the backend accepts. */
-export function burstDraftValid(draft: {
-  waitAfterText: string;
-  waitAfterForward: string;
-}): boolean {
-  return (
-    parseBurstWait(draft.waitAfterText) !== null && parseBurstWait(draft.waitAfterForward) !== null
-  );
-}
-
-/**
  * Whether this channel type delivers un-addressed group messages at all — the
  * only case where require-mention changes anything. SeaTalk sends the bot a
  * group message only when it @mentions the bot, so there the switch would gate
@@ -179,7 +154,7 @@ export interface ChannelEditInput {
  * never moves the ref, so the config is unchanged when only a secret changes)
  * and build the full config PATCH preserving every `*_ref` / unknown field
  * while applying the mutable changes (bound agent, SeaTalk app id, group
- * gating, message batching, /dir directories).
+ * gating, message batching, replies, /dir directories).
  *
  * Pure (no network), mirroring planChannel: the config is fully assembled
  * before any side effect runs. A blank secret value writes no credential.
@@ -211,6 +186,16 @@ export function planChannelEdit(input: ChannelEditInput): ChannelEditPlan {
   for (const key of Object.keys(BURST_WAIT_DEFAULTS) as BurstWaitKey[]) {
     const next = values[key];
     if (next !== undefined && next !== storedBurstWait(config, key)) nextConfig[key] = next;
+  }
+  // And the reply settings.
+  if (values.show_steps !== undefined && values.show_steps !== storedShowSteps(config)) {
+    nextConfig.show_steps = values.show_steps;
+  }
+  if (
+    values.notify_after_seconds !== undefined &&
+    values.notify_after_seconds !== storedNotifyAfter(config)
+  ) {
+    nextConfig.notify_after_seconds = values.notify_after_seconds;
   }
   // So is the /dir allow-list (order matters: the chat lists it as given).
   if (

@@ -29,6 +29,17 @@ _MENTION_ID_SAFE = re.compile(r"\A[A-Za-z0-9_.:-]+\Z")
 #: relying on a tag happening to be marker-free.
 _MENTION_EMAIL_SAFE = re.compile(r"\A[^\s\"'<>&@]+@[^\s\"'<>&@]+\.[^\s\"'<>&@]+\Z")
 
+#: A display name goes into a platform's mention markup as the link TEXT of a
+#: markdown link (Telegram: ``[{name}](tg://user?id={user_id})``), so the
+#: characters that would end that text or break the markup are dropped.
+_NAME_UNSAFE = re.compile(r"[\[\]()<>\\`*_~|\n\r]")
+_NAME_MAX_CHARS = 64
+
+
+def _mention_name(name: str) -> str:
+    cleaned = " ".join(_NAME_UNSAFE.sub("", name).split())[:_NAME_MAX_CHARS]
+    return cleaned or "you"
+
 
 def mention_prefix(
     template: str,
@@ -36,6 +47,7 @@ def mention_prefix(
     *,
     email_template: str = "",
     user_email: str = "",
+    user_name: str = "",
 ) -> str:
     """The transport's @mention markup for one member, or "" when there is none.
 
@@ -51,7 +63,9 @@ def mention_prefix(
     come back empty for a sender outside the bot's organisation.
     """
     if template and user_id and _MENTION_ID_SAFE.match(user_id):
-        return template.replace("{user_id}", user_id)
+        # ``{name}`` is for a platform whose mention is a link that needs text
+        # (Telegram); a template without it ignores the name.
+        return template.replace("{user_id}", user_id).replace("{name}", _mention_name(user_name))
     if email_template and user_email and _MENTION_EMAIL_SAFE.match(user_email):
         return email_template.replace("{user_id}", user_email)
     return ""
@@ -65,6 +79,7 @@ def with_mention(
     user_id: str,
     email_template: str = "",
     user_email: str = "",
+    user_name: str = "",
 ) -> str:
     """``body`` opened by an @mention of whoever asked, where that is right (see
     "Mention the asker in a group answer").
@@ -88,7 +103,11 @@ def with_mention(
     if chat_kind != "group" or not body:
         return body
     prefix = mention_prefix(
-        id_template, user_id, email_template=email_template, user_email=user_email
+        id_template,
+        user_id,
+        email_template=email_template,
+        user_email=user_email,
+        user_name=user_name,
     )
     return f"{prefix} {body}" if prefix else body
 

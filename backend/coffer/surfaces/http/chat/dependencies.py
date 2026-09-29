@@ -19,6 +19,7 @@ from coffer.application.chat.ports import ChannelMirrorPort, ModelCatalogPort
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
+from coffer.infrastructure.chat.adapter_support import ChannelNoteResolver
 
 _chat_service: ChatService | None = None
 
@@ -102,6 +103,20 @@ def get_attachment_service() -> ChatAttachmentService:
 
 
 _channel_mirror: ChannelMirrorPort | None = None
+_channel_note_reader: ChannelNoteResolver | None = None
+
+
+def set_channel_note_reader(reader: ChannelNoteResolver | None) -> None:
+    """Called by the channel kind's composition (spec channels "Tell a
+    channel-driven agent it is on a chat channel"); ``None`` unwires it."""
+    global _channel_note_reader
+    _channel_note_reader = reader
+
+
+def get_channel_note_reader() -> ChannelNoteResolver | None:
+    """The channel kind's note reader, or ``None`` when no channel kind is wired
+    — the note then names the channel only."""
+    return _channel_note_reader
 
 
 def set_channel_mirror(mirror: ChannelMirrorPort | None) -> None:

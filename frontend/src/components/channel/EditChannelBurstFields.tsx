@@ -12,7 +12,7 @@ import { useTranslation } from "react-i18next";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { BURST_WAIT_MAX, BURST_WAIT_MIN, parseBurstWait } from "./editChannel";
+import { BURST_WAIT_MAX, BURST_WAIT_MIN, parseBurstWait } from "./channelTurnSettings";
 
 /** The two batching windows, as typed (seconds). */
 export interface ChannelBurstDraft {

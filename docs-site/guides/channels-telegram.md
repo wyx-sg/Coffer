@@ -94,10 +94,10 @@ The code is single-use, expires after an hour, and is invalidated after 10 wrong
 
 Send the bot a message, for example `list the files in my home directory`. You should see:
 
-1. a 👀 reaction on your message as soon as Coffer receives it;
-2. for a longer turn, a status message showing each tool call (`⏳ Bash · list home directory`) and then the reply as it is written;
-3. the final reply, formatted, with the status message removed;
-4. a ✅ reaction on your message when the turn finished cleanly.
+1. a 👀 reaction on your message as soon as Coffer receives it, which becomes 👨‍💻 when the turn starts;
+2. for a longer turn, the status line (`⏳ Working · 12s · 2 steps`, then the newest steps) and the reply as it is written;
+3. the final reply, formatted, with the status removed;
+4. a 👌 reaction on your message when the turn finished — 😢 if it failed, 🤷 if it was stopped. Telegram lets a bot react with a fixed list of emoji only, and these are on it.
 
 Open **Chat** in the web UI and the same conversation is there, marked `via my-telegram`.
 
@@ -107,11 +107,13 @@ Telegram replies are built from the agent's Markdown.
 
 - **Rich messages** — where the Bot API server Coffer reaches supports them, a reply with headings, lists, tables or code is sent as a rich message that keeps that structure.
 - **HTML fallback** — otherwise the reply is converted to Telegram's HTML subset and split into messages of at most 4,000 characters on paragraph boundaries. A chunk Telegram refuses as HTML is re-sent as plain text.
-- **Live progress** — in a direct chat, where the server supports message drafts, the reply streams into a draft that also shows Telegram's own stop button; pressing it is the same as `/stop`. Elsewhere, a status message appears once a turn has run for more than about 1.5 seconds, is edited as the turn progresses, and is deleted when the final reply is sent. A quick reply opens no status message at all.
+- **Live progress** — in a direct chat, where the server supports message drafts, the reply streams into a draft that also shows Telegram's own stop button; pressing it is the same as `/stop`. Where the server supports rich drafts, the status header sits in the draft's collapsible thinking block. In a group, a status message appears once a turn has run for more than about 1.5 seconds, is edited as the turn progresses, and is deleted when the final reply is sent; it is sent silently, so it does not buzz the group. A quick reply opens no status message at all.
+- **Mentions** — in a group, every answer is a reply to your message and opens with a real mention of you, so it notifies you even in a busy group.
+- **Details** — a `## Details` section is collapsed: a `<details>` block in a rich message, an expandable quotation on the HTML fallback.
 - **Private command answers** — in a group, where the server supports ephemeral messages, the answers to `/model`, `/dir`, `/status`, `/resume` and `/help` are shown only to you.
 - **Cards** — a bare `/model`, `/dir`, `/resume` or `/kb` answers with an inline keyboard, and `/status` and `/help` carry **Stop**, **New**, **Model**, **Resume** and **Dir** buttons. The card's title is a heading or a bold first line.
 
-Coffer probes each newer Bot API surface (rich messages, drafts, ephemeral messages) once. If the server refuses it as unsupported, Coffer stops trying it for the life of the daemon and uses the older mechanism, so an older server costs formatting and liveness, never delivery.
+Coffer probes each newer Bot API surface (rich messages, drafts, rich drafts, ephemeral messages) once. If the server refuses it as unsupported, Coffer stops trying it for the life of the daemon and uses the older mechanism, so an older server costs formatting and liveness, never delivery.
 
 ## Command menus
 

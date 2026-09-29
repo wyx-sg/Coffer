@@ -17,16 +17,23 @@ Application layer only: no infrastructure import here.
 
 from __future__ import annotations
 
+import contextlib
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
 from coffer.application.channel.commands import ChannelCommands, SafeSend
+from coffer.application.channel.needs_you import reply_text
 from coffer.application.channel.ports import ChannelBinding
 from coffer.application.channel.store_ports import ChannelPeerRepoPort
 from coffer.application.channel.turn_driver import SessionAccessor
-from coffer.domain.channel.envelopes import InboundCallback, InboundLifecycle, InboundStop
+from coffer.domain.channel.envelopes import (
+    ChoiceButton,
+    InboundCallback,
+    InboundLifecycle,
+    InboundStop,
+)
 
 __all__ = ["EXTERNAL_GROUP_WARNING", "InboundEvents"]
 
@@ -58,6 +65,11 @@ class InboundEvents:
     #: only for a ``collection:`` choice (spec channels "Save a sent document into a
     #: collection"): the pending document a `/kb` tap saves lives there.
     session: SessionAccessor
+    #: Sends an answer tapped on a question's button into the conversation as the
+    #: owner's own message (see "Turn a question for the owner into buttons") —
+    #: the processor's ordinary inbound path, so it is gated and queued like any
+    #: message. ``None`` ignores such taps.
+    submit_reply: Callable[[ChannelBinding, InboundCallback, str], Awaitable[None]] | None = None
 
     async def on_callback(
         self, binding: ChannelBinding, cb: InboundCallback, *, conversation_thread_id: str
@@ -96,6 +108,10 @@ class InboundEvents:
                 return
             if peer.sender_id is not None and cb.sender_id and peer.sender_id != cb.sender_id:
                 return
+        answer = reply_text(cb.data)
+        if answer is not None:
+            await self._answer(binding, cb, answer)
+            return
         await self.commands.dispatch_callback(
             binding,
             peer,
@@ -107,6 +123,25 @@ class InboundEvents:
             conversation_thread_id=conversation_thread_id,
             card_message_id=cb.platform_message_id,
         )
+
+    async def _answer(self, binding: ChannelBinding, cb: InboundCallback, answer: str) -> None:
+        """The owner tapped an option on a question the agent asked. The card is
+        rewritten first to show the answer and offer nothing more — a second
+        tap must not send it twice — then the answer enters the conversation as
+        the owner's own reply."""
+        caps = binding.adapter.capabilities
+        if cb.platform_message_id and caps.supports_card_update:
+            chosen = [ChoiceButton(label=f"{answer} ✓", value="answered:", selected=True)]
+            with contextlib.suppress(Exception):
+                await binding.adapter.update_card(
+                    cb.chat_id,
+                    cb.platform_message_id,
+                    f"Answered: {answer}",
+                    chosen,
+                    chat_kind=cb.chat_kind,
+                )
+        if self.submit_reply is not None:
+            await self.submit_reply(binding, cb, answer)
 
     async def on_lifecycle(self, binding: ChannelBinding, event: InboundLifecycle) -> None:
         """The bot's own standing in a chat changed.

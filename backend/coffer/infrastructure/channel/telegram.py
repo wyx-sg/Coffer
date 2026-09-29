@@ -27,6 +27,7 @@ from coffer.domain.channel.envelopes import (
 )
 from coffer.infrastructure.channel.live_text import TelegramLiveText
 from coffer.infrastructure.channel.telegram_album import AlbumBuffer
+from coffer.infrastructure.channel.telegram_caps import telegram_capabilities
 from coffer.infrastructure.channel.telegram_cards import edit_card
 from coffer.infrastructure.channel.telegram_draft import TelegramDraftLiveText
 from coffer.infrastructure.channel.telegram_features import FeatureSet
@@ -43,7 +44,7 @@ from coffer.infrastructure.channel.telegram_profile import (
     probe_identity,
     register_profile,
 )
-from coffer.infrastructure.channel.telegram_rich import RICH_MESSAGE_LIMIT
+from coffer.infrastructure.channel.telegram_reactions import set_reaction
 from coffer.infrastructure.channel.telegram_send import send_text_chunks
 from coffer.infrastructure.channel.telegram_topics import open_private_topic
 from coffer.infrastructure.channel.telegram_transport import call
@@ -110,22 +111,7 @@ class TelegramAdapter:
 
     @property
     def capabilities(self) -> ChannelCapabilities:
-        return ChannelCapabilities(
-            supports_edit=True,
-            supports_live_text=True,  # the edit IS its live surface
-            supports_typing=True,
-            # "Render replies in the platform's rich format": a rich message carries 32k characters
-            # against an ordinary message's 4k, so the chunk budget follows whether the platform
-            # still accepts them — and drops back the moment it does not.
-            max_message_chars=(
-                RICH_MESSAGE_LIMIT if self._features.rich_messages.available else _CHUNK_LIMIT
-            ),
-            supports_buttons=True,
-            supports_card_update=True,  # editMessageText rewrites text + keyboard
-            supports_media=True,
-            supports_groups=True,
-            supports_reactions=True,
-        )
+        return telegram_capabilities(self._features)
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -345,6 +331,11 @@ class TelegramAdapter:
                 channel=self._name,
                 feature=self._features.message_drafts,
                 thread_id=thread_id,
+                # A rich draft needs rich messages: a server refusing those
+                # knows neither.
+                rich=(
+                    self._features.rich_drafts if self._features.rich_messages.available else None
+                ),
             )
         return TelegramLiveText(self._call, chat_id, thread_id=thread_id)
 
@@ -375,12 +366,8 @@ class TelegramAdapter:
         )
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
-        # React on the user's message (👀 receipt / ✅ completion, both in
-        # Telegram's fixed allowed set). An empty list would clear; we only set.
-        reaction = [{"type": "emoji", "emoji": emoji}]
-        await self._call(
-            "setMessageReaction", chat_id=chat_id, message_id=message_id, reaction=reaction
-        )
+        # Only an emoji on Telegram's fixed list lands (see telegram_reactions).
+        await set_reaction(self._call, chat_id, message_id, emoji)
 
     # -- context fetch (ContextFetchPort) -------------------------------------
 

@@ -76,8 +76,10 @@ async def send_rich_text(
     title: str = "",
     thread_id: str = "",
     reply_to_message_id: str = "",
+    silent: bool = False,
 ) -> SentMessage | None:
-    """Deliver ``markdown`` as one rich message.
+    """Deliver ``markdown`` as one rich message (``silent``: without a
+    notification — a continuation of a reply whose first piece already rang).
 
     Returns ``None`` when the caller must fall back to the plain path — either
     the feature is already latched off, or the platform refused this send. A
@@ -97,6 +99,8 @@ async def send_rich_text(
     }
     if buttons:
         params["reply_markup"] = inline_keyboard(buttons)
+    if silent:
+        params["disable_notification"] = True
     try:
         sent = await call("sendRichMessage", **params)
     except ChannelSendFailed as e:

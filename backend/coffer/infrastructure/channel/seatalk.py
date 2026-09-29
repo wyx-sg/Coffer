@@ -27,9 +27,10 @@ from coffer.domain.channel.envelopes import (
     SentMessage,
 )
 from coffer.domain.channel.errors import ChannelSendFailed
-from coffer.infrastructure.channel.live_text import SeaTalkLiveText
+from coffer.infrastructure.channel.seatalk_caps import SEATALK_CAPABILITIES
 from coffer.infrastructure.channel.seatalk_cards import update_interactive_card
 from coffer.infrastructure.channel.seatalk_history import THREAD_PAGE_MAX, SeaTalkContextReader
+from coffer.infrastructure.channel.seatalk_live import SeaTalkLiveText
 from coffer.infrastructure.channel.seatalk_media import (
     default_media_dir,
     media_attachments,
@@ -41,15 +42,10 @@ from coffer.infrastructure.channel.seatalk_parse import (
     mentions_others,
     strip_group_mentions,
 )
-from coffer.infrastructure.channel.seatalk_send import (
-    SEATALK_MENTION_EMAIL_TEMPLATE,
-    SEATALK_MENTION_TEMPLATE,
-    send_text_pieces,
-)
+from coffer.infrastructure.channel.seatalk_send import send_text_pieces
 from coffer.infrastructure.channel.seatalk_transport import SeaTalkTransport
 from coffer.infrastructure.channel.seatalk_typing import send_typing
 
-_CHUNK_LIMIT = 3500  # paragraph-chunking budget, in characters
 _BYTE_LIMIT = 3900  # SeaTalk caps content at 4096 BYTES; stay clear of it
 
 
@@ -81,30 +77,7 @@ class SeaTalkAdapter:
 
     @property
     def capabilities(self) -> ChannelCapabilities:
-        return ChannelCapabilities(
-            supports_edit=False,  # no API rewrites a delivered SeaTalk message
-            # But a message CAN grow in place — init_stream/update_stream.
-            supports_live_text=True,
-            live_text_persists=True,  # the streamed message IS the reply
-            # Both chat kinds: single_chat_typing and group_chat_typing. The
-            # group one silently no-ops above 200 members (code 7003), so this
-            # promises an attempt, never a delivered receipt.
-            supports_typing=True,
-            max_message_chars=_CHUNK_LIMIT,
-            supports_buttons=True,
-            # Update Message covers interactive cards (never text — see supports_edit).
-            supports_card_update=True,
-            supports_media=True,
-            supports_groups=True,
-            supports_history_fetch=True,
-            # "Mention the asker in a group answer": SeaTalk mentions from a bare id, so a group
-            # reply can open by @mentioning whoever asked without resolving a display name. Its
-            # documented email form is the fallback for a sender with no id.
-            mention_template=SEATALK_MENTION_TEMPLATE,
-            mention_email_template=SEATALK_MENTION_EMAIL_TEMPLATE,
-            # Any DM message can root a thread, so a DM thread is a casual reply.
-            direct_threads_are_replies=True,
-        )
+        return SEATALK_CAPABILITIES
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -310,7 +283,14 @@ class SeaTalkAdapter:
         """SeaTalk cannot edit, but it can stream — one message that
         re-renders from the full snapshot until the stream is finished."""
         return SeaTalkLiveText(
-            self._post, chat_id, name=self._name, thread_id=thread_id, chat_kind=chat_kind
+            self._post,
+            chat_id,
+            name=self._name,
+            thread_id=thread_id,
+            chat_kind=chat_kind,
+            send=self._send,
+            char_limit=self.capabilities.max_message_chars,
+            byte_limit=_BYTE_LIMIT,
         )
 
     async def edit_text(self, chat_id: str, message_id: str, text: str) -> None:

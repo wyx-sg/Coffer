@@ -27,6 +27,7 @@ from coffer.application.channel.kind import make_channel_kind
 from coffer.application.channel.mirror import ChannelMirror
 from coffer.application.channel.pairing import PairingManager
 from coffer.application.channel.ports import ChannelAdapter
+from coffer.application.channel.prompt_note import ChannelNoteReader
 from coffer.application.channel.runtime import ChannelRuntime
 from coffer.application.channel.service import ChannelService
 from coffer.application.channel.sync_state import ChannelPeerSyncState
@@ -44,7 +45,7 @@ from coffer.infrastructure.channel.telegram import TelegramAdapter
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.sync.identity import resolve_identity
 from coffer.surfaces.http.channel_routes import get_channel_service, set_channel_service
-from coffer.surfaces.http.chat.dependencies import set_channel_mirror
+from coffer.surfaces.http.chat.dependencies import set_channel_mirror, set_channel_note_reader
 from coffer.surfaces.http.chat_wiring import ChatWiring
 from coffer.surfaces.http.knowledge_wiring import KnowledgeWiring
 from coffer.surfaces.http.sync_contributions import SyncContributions
@@ -137,6 +138,13 @@ def wire_channel_kind(
         processor=processor,
     )
     set_channel_mirror(mirror)
+    # The facts the channel note of a channel-driven turn is written from (spec
+    # channels "Tell a channel-driven agent it is on a chat channel"): chat
+    # composes the note, only the channel kind knows platform, chat kind and
+    # what the running transport renders.
+    set_channel_note_reader(
+        ChannelNoteReader(resources=resource_svc, threads=threads, binding=processor.binding)
+    )
 
     runtime = ChannelRuntime(
         resources=resource_svc,

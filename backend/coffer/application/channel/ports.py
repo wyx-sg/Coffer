@@ -180,7 +180,7 @@ class ChannelAdapter(Protocol):
 
     async def set_reaction(self, chat_id: str, message_id: str, emoji: str) -> None:
         """Set an emoji reaction on ``message_id`` ("Acknowledge receipt and completion
-        by capability": 👀 on receipt, ✅ on completion). Only called when the transport
+        by capability": one of ``capabilities.reactions``). Only called when the transport
         declares ``capabilities.supports_reactions`` — others may raise; the core never
         reaches them (SeaTalk uses its typing signal for the same receipt cue).
         Best-effort at the call site: a failed reaction never breaks the turn."""
@@ -238,6 +238,10 @@ class ChannelBinding:
     # Quiet windows of "Take a burst of messages as one turn", from the channel config.
     wait_after_text_seconds: float = 1.5
     wait_after_forward_seconds: float = 5.0
+    # "Show a turn's working state as one status line": list the step lines.
+    show_steps: bool = True
+    # "Ping the asker when a long turn ends": the threshold in seconds, 0 = off.
+    notify_after_seconds: float = 90.0
     # The channel's framework-level ``scope`` off the row (ADR
     # per-agent-resource-scope), rewritten into agent KEYS by the gate
     # (``wanted.Routing``) — the row names agent UIDS, every reader below here

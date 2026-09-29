@@ -4,7 +4,8 @@
 // channel already points at, so a rotation never re-pairs or re-registers —
 // re-bind the default agent (SeaTalk also exposes its app id), and set when
 // the bot answers in a group (EditChannelGroupFields), and how long a burst of
-// messages is held before it runs as one turn (EditChannelBurstFields), and the
+// messages is held before it runs as one turn (EditChannelBurstFields), how a
+// running turn shows itself in the chat (EditChannelReplyFields), and the
 // folders /dir may switch into (EditChannelDirectoriesField). The bound
 // agent's models all stay available; the model is switched in chat with
 // /model. Apply plumbing (secrets-first write, then config PATCH) lives in
@@ -29,17 +30,23 @@ import type { ResourceOut } from "@/lib/api/resources";
 import { EditChannelSecretFields, type ChannelEditDraft } from "./EditChannelSecretFields";
 import { EditChannelGroupFields, type ChannelGroupDraft } from "./EditChannelGroupFields";
 import { EditChannelBurstFields, type ChannelBurstDraft } from "./EditChannelBurstFields";
+import { EditChannelReplyFields, type ChannelReplyDraft } from "./EditChannelReplyFields";
 import { EditChannelDirectoriesField } from "./EditChannelDirectoriesField";
 import {
-  burstDraftValid,
   directoriesDraftValid,
   honoursRequireMention,
-  parseBurstWait,
   parseDirectories,
   planChannelEdit,
-  storedBurstWait,
   storedDirectories,
 } from "./editChannel";
+import {
+  burstDraftValid,
+  parseBurstWait,
+  parseNotifyAfter,
+  storedBurstWait,
+  storedNotifyAfter,
+  storedShowSteps,
+} from "./channelTurnSettings";
 
 function strField(config: Record<string, unknown>, key: string): string {
   const v = config[key];
@@ -97,10 +104,20 @@ export function EditChannelDialog({
   });
   const [burst, setBurst] = useState<ChannelBurstDraft>(storedBurst);
   const patchBurst = (patch: Partial<ChannelBurstDraft>) => setBurst((b) => ({ ...b, ...patch }));
+  // Replies; an absent key shows the backend default (steps shown / 90s).
+  const storedReply = (): ChannelReplyDraft => ({
+    showSteps: storedShowSteps(config),
+    notifyAfter: String(storedNotifyAfter(config)),
+  });
+  const [reply, setReply] = useState<ChannelReplyDraft>(storedReply);
+  const patchReply = (patch: Partial<ChannelReplyDraft>) => setReply((r) => ({ ...r, ...patch }));
   // The /dir allow-list, one path per line.
   const storedDirs = () => storedDirectories(config).join("\n");
   const [dirs, setDirs] = useState(storedDirs);
-  const formValid = burstDraftValid(burst) && directoriesDraftValid(dirs);
+  const formValid =
+    burstDraftValid(burst) &&
+    parseNotifyAfter(reply.notifyAfter) !== null &&
+    directoriesDraftValid(dirs);
 
   const reset = () => {
     setDefaultAgent(strField(config, "default_agent"));
@@ -108,6 +125,7 @@ export function EditChannelDialog({
     setSecrets(storedSecrets());
     setGroup(storedGroup());
     setBurst(storedBurst());
+    setReply(storedReply());
     setDirs(storedDirs());
   };
 
@@ -130,6 +148,8 @@ export function EditChannelDialog({
         ignore_other_mentions: group.ignoreOtherMentions,
         wait_after_text_seconds: parseBurstWait(burst.waitAfterText) ?? undefined,
         wait_after_forward_seconds: parseBurstWait(burst.waitAfterForward) ?? undefined,
+        show_steps: reply.showSteps,
+        notify_after_seconds: parseNotifyAfter(reply.notifyAfter) ?? undefined,
         directories: parseDirectories(dirs).directories,
       },
     });
@@ -193,6 +213,8 @@ export function EditChannelDialog({
           <EditChannelGroupFields channelType={channelType} draft={group} onChange={patchGroup} />
 
           <EditChannelBurstFields draft={burst} onChange={patchBurst} />
+
+          <EditChannelReplyFields draft={reply} onChange={patchReply} />
 
           <EditChannelDirectoriesField value={dirs} onChange={setDirs} />
 

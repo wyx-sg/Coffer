@@ -26,11 +26,13 @@ import secrets
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from coffer.application.channel.turn_status import LIVE_SEPARATOR, split_snapshot
 from coffer.application.channel.turn_text import clip_stream_preview
 from coffer.infrastructure.channel.live_text import LIVE_KEEPALIVE_SECONDS, LiveTextSurface
-from coffer.infrastructure.channel.telegram_features import Feature
+from coffer.infrastructure.channel.telegram_features import Feature, is_unsupported
+from coffer.infrastructure.channel.telegram_rich import normalize_rich_markdown
 
-__all__ = ["TelegramDraftLiveText", "new_draft_id"]
+__all__ = ["TelegramDraftLiveText", "draft_markdown", "new_draft_id"]
 
 Call = Callable[..., Awaitable[Any]]
 
@@ -57,6 +59,37 @@ DRAFT_TEXT_LIMIT = 4096
 #: of a different platform. So: its own value, on the same order, and moved
 #: only against Telegram's own behaviour.
 _DRAFT_UPDATE_INTERVAL = 0.2
+
+
+def clip_draft(text: str, limit: int) -> str:
+    """Fit a snapshot to the draft cap, clipping the answer before the status
+    block so the header stays visible on a long reply."""
+    if len(text) <= limit:
+        return text
+    block, answer = split_snapshot(text)
+    head = f"{block}\n{LIVE_SEPARATOR}\n"
+    if answer and len(head) < limit - 1:
+        return head + clip_stream_preview(answer, limit - len(head))
+    return clip_stream_preview(text, limit)
+
+
+def _entity_escape(text: str) -> str:
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def draft_markdown(snapshot: str) -> str:
+    """A live snapshot as a rich draft (spec channels/telegram "Show the working
+    status in a direct chat's thinking block"): the status header goes in the
+    draft-only ``<tg-thinking>`` block, the narration and step lines follow as a
+    list, and the answer written so far is rich markdown under them."""
+    block, answer = split_snapshot(snapshot)
+    header, *rest = block.split("\n")
+    parts = [f"<tg-thinking>{_entity_escape(header.removeprefix('⏳ ').strip())}</tg-thinking>"]
+    if rest:
+        parts.append("\n".join(f"- {_entity_escape(line)}" for line in rest if line.strip()))
+    if answer:
+        parts.append(normalize_rich_markdown(answer))
+    return "\n\n".join(parts)
 
 
 def new_draft_id() -> int:
@@ -87,6 +120,7 @@ class TelegramDraftLiveText(LiveTextSurface):
         feature: Feature,
         thread_id: str = "",
         now: Callable[[], float] | None = None,
+        rich: Feature | None = None,
     ) -> None:
         kwargs: dict[str, Any] = {
             "keepalive_seconds": LIVE_KEEPALIVE_SECONDS,
@@ -99,6 +133,9 @@ class TelegramDraftLiveText(LiveTextSurface):
         self._chat_id = chat_id
         self._channel = channel
         self._feature = feature
+        # sendRichMessageDraft, where the server still offers it; None or
+        # latched off sends the plain draft.
+        self._rich = rich
         self._thread_id = thread_id
         self._draft_id = new_draft_id()
 
@@ -107,13 +144,31 @@ class TelegramDraftLiveText(LiveTextSurface):
         return self._draft_id
 
     async def _write(self, text: str) -> None:
+        text = clip_draft(text, DRAFT_TEXT_LIMIT)
+        if self._rich is not None and self._rich.available:
+            try:
+                await self._call(
+                    "sendRichMessageDraft",
+                    rich_message={"markdown": draft_markdown(text)},
+                    **self._common(),
+                )
+                return
+            except Exception as e:
+                # A server that does not know it latches the rich draft off and
+                # this snapshot goes out as the plain draft instead; any other
+                # refusal is this surface's failure, as for the plain draft.
+                self._rich.note_failure(self._channel, e)
+                if not is_unsupported(e):
+                    raise
+        await self._plain(text)
+
+    def _common(self) -> dict[str, Any]:
         params: dict[str, Any] = {
             "chat_id": int(self._chat_id),
             "draft_id": self._draft_id,
-            "text": clip_stream_preview(text, DRAFT_TEXT_LIMIT),
-            # Let the platform draw the stop control. Only safe to
-            # advertise because the stopped_message_generation update is routed
-            # to the same interrupt path /stop takes.
+            # Let the platform draw the stop control. Only safe to advertise
+            # because the stopped_message_generation update is routed to the
+            # same interrupt path /stop takes.
             "can_stop": True,
             # The finished reply is sent as a real message straight after, so a
             # kept draft would leave the user reading the answer twice.
@@ -121,6 +176,10 @@ class TelegramDraftLiveText(LiveTextSurface):
         }
         if self._thread_id:
             params["message_thread_id"] = int(self._thread_id)
+        return params
+
+    async def _plain(self, text: str) -> None:
+        params = {**self._common(), "text": text}
         try:
             await self._call("sendMessageDraft", **params)
         except Exception as e:

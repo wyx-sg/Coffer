@@ -26,6 +26,7 @@ from claude_agent_sdk import (
 )
 from claude_agent_sdk import TextBlock as SdkTextBlock
 
+from coffer.domain.chat.channel_note import ChannelNote
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.domain.chat.message import Message, Role, TextBlock
@@ -112,9 +113,9 @@ async def _repo(tmp_path) -> tuple[ConversationRepo, Any]:  # type: ignore[no-un
 _TELEGRAM_UID = "0b9d2f1a4c7e4b6a8d3f5c1e7a9b2d40"
 
 
-async def _telegram_name(uid: str) -> str | None:
+async def _telegram_name(uid: str, conversation_id: str) -> ChannelNote | None:
     assert uid == _TELEGRAM_UID
-    return "Telegram"
+    return ChannelNote(name="tg", platform="Telegram", chat_kind="direct")
 
 
 def _conv(agent_key: str = "claude_code", *, channel_uid: str | None = None) -> Conversation:
@@ -343,7 +344,7 @@ async def test_channel_conversation_appends_system_context(tmp_path) -> None:  #
         conversations=repo,
         session_factory=factory,
         list_models=_models,
-        resolve_channel_name=_telegram_name,
+        resolve_channel=_telegram_name,
     )
 
     await provider.init_conversation(conv.id, {"cwd": str(tmp_path)})
@@ -376,7 +377,7 @@ async def test_a_channel_whose_name_will_not_resolve_still_gets_the_channel_note
     conv = await repo.create(_conv(channel_uid=_TELEGRAM_UID))
     factory, captured = _make_factory(_simple_messages())
 
-    async def _gone(uid: str) -> str | None:
+    async def _gone(uid: str, conversation_id: str) -> ChannelNote | None:
         return None
 
     async def _memory(agent_key: str, cwd: str) -> str | None:
@@ -385,7 +386,7 @@ async def test_a_channel_whose_name_will_not_resolve_still_gets_the_channel_note
     provider = ClaudeSdkProvider(
         conversations=repo,
         session_factory=factory,
-        resolve_channel_name=_gone,
+        resolve_channel=_gone,
         compose_memory_context=_memory,
     )
 
@@ -394,7 +395,7 @@ async def test_a_channel_whose_name_will_not_resolve_still_gets_the_channel_note
     await _collect(adapter, _user_turn("hi", conv.id))
 
     append = captured[0].system_prompt["append"]
-    assert "over a chat channel" in append
+    assert "You are replying in a chat channel" in append
     assert "MEDIA:/absolute/path" in append
     assert "## Coffer memory" in append
 

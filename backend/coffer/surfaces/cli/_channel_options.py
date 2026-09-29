@@ -34,6 +34,20 @@ _WAIT_AFTER_TEXT = typer.Option(
     max=60,
     help="Seconds to wait after a text message for more before answering (default: 1.5; 0 = none)",
 )
+# "Show a turn's working state as one status line".
+_SHOW_STEPS = typer.Option(
+    None,
+    "--show-steps/--hide-steps",
+    help="List each step under the live status line while a turn runs (default: on)",
+)
+# "Ping the asker when a long turn ends".
+_NOTIFY_AFTER = typer.Option(
+    None,
+    "--notify-after",
+    min=0,
+    max=3600,
+    help="Ping the chat when a turn runs at least this many seconds (default: 90; 0 = never)",
+)
 _WAIT_AFTER_FORWARD = typer.Option(
     None,
     "--wait-after-forward",
@@ -71,15 +85,20 @@ def _settings(
     ignore_other_mentions: bool | None,
     wait_after_text: float | None = None,
     wait_after_forward: float | None = None,
+    show_steps: bool | None = None,
+    notify_after: float | None = None,
 ) -> dict[str, bool | float]:
     """The config keys the user actually passed: group gating ("Configure when the
-    bot answers in a group") and the quiet windows ("Take a burst of messages as
-    one turn")."""
+    bot answers in a group"), the quiet windows ("Take a burst of messages as
+    one turn") and what a running turn shows ("Show a turn's working state as
+    one status line")."""
     passed: dict[str, bool | float | None] = {
         "require_mention": require_mention,
         "ignore_other_mentions": ignore_other_mentions,
         "wait_after_text_seconds": wait_after_text,
         "wait_after_forward_seconds": wait_after_forward,
+        "show_steps": show_steps,
+        "notify_after_seconds": notify_after,
     }
     return {key: value for key, value in passed.items() if value is not None}
 
@@ -92,6 +111,8 @@ def settings_config(resource: dict[str, Any], values: dict[str, Any]) -> dict[st
             values.get("ignore_other_mentions"),
             values.get("wait_after_text"),
             values.get("wait_after_forward"),
+            values.get("show_steps"),
+            values.get("notify_after"),
         )
     )
     dirs = directories(values.get("dirs"), bool(values.get("no_dirs")))

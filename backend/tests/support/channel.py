@@ -25,9 +25,16 @@ from coffer.domain.channel.envelopes import (
     ChoiceButton,
     InboundAttachment,
     InboundCallback,
+    ReactionSet,
     SentMessage,
 )
 from coffer.domain.channel.rich_content import ForwardedItem
+
+#: The progress marks a reacting fake declares unless a test names others —
+#: Telegram's, so a reacting fake reads like the transport it stands in for.
+TELEGRAM_LIKE_REACTIONS = ReactionSet(
+    received="👀", working="👨‍💻", done="👌", failed="😢", stopped="🤷"
+)
 
 
 class FakeChannelAdapter:
@@ -51,6 +58,8 @@ class FakeChannelAdapter:
         mention_template: str = "",
         mention_email_template: str = "",
         direct_threads_are_replies: bool = False,
+        reactions: ReactionSet | None = None,
+        **capabilities: Any,
     ) -> None:
         self._caps = ChannelCapabilities(
             supports_edit=supports_edit,
@@ -80,6 +89,13 @@ class FakeChannelAdapter:
             # SeaTalk-shaped when True: a DM reply-in-thread is a casual reply
             # (see "Key conversation identity by channel, chat and thread").
             direct_threads_are_replies=direct_threads_are_replies,
+            reactions=(
+                reactions
+                if reactions is not None
+                else (TELEGRAM_LIKE_REACTIONS if supports_reactions else ReactionSet())
+            ),
+            # Any further capability a test names (renders_tables, …).
+            **capabilities,
         )
         # When True, ``set_reaction`` raises — proves the best-effort suppression
         # at the call sites (a failed ack must never break the turn) (see
