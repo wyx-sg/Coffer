@@ -369,7 +369,7 @@ For the resource model behind enable and reach, see [Resource framework](/archit
 
 **An agent does not see a skill.** Check that the skill is enabled and that its reach includes the agent: `coffer scope show skill <name>`. Check that the agent itself is enabled. Then run `coffer skill verify` to see whether its link is missing or blocked by a foreign folder.
 
-**Import is refused.** The error names the rule the folder broke. The most common causes are a `name` with uppercase letters or dots, a missing `description`, or a symlink inside the folder that points outside it.
+**Import is refused.** The error names the rule the folder broke and, for a frontmatter problem, the field and the check it failed (for example `description: String should have at most 1024 characters`). The most common causes are a `name` with uppercase letters or dots, a missing or over-long `description`, or a symlink inside the folder that points outside it.
 
 **A skill shows the Copied badge.** The agent's filesystem does not support links (this happens only on Windows). The copy does not follow edits to the master. After editing, trigger a new delivery, for example by disabling and re-enabling the skill.
 
