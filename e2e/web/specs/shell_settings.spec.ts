@@ -69,7 +69,7 @@ acceptance(
     // to mount can't satisfy the absence checks vacuously.
     const panes: [string, RegExp][] = [
       ["general", /^Automatic upkeep$/], // GeneralSettings -> Coffer's model
-      ["security", /^Credential encryption$/], // SecuritySettings
+      ["security", /^Encryption$/], // SecuritySettings
       ["data", /^Data retention$/], // DataSettings
       ["daemon", /^Coffer's daemon$/], // DaemonSettings -> DaemonResidencySettings
       ["about", /^About Coffer$/], // AboutPage
