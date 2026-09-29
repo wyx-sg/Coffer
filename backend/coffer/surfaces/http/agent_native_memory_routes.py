@@ -25,7 +25,7 @@ these audits.
 from __future__ import annotations
 
 import pathlib
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -57,7 +57,7 @@ class MemoryFileNodeOut(BaseModel):
 
     name: str
     path: str
-    type: str  # "file" | "dir"
+    type: Literal["file", "dir"]
     size: int | None = None
     #: A directory whose descendants were clipped at the walk-depth bound.
     truncated: bool = False

@@ -40,7 +40,8 @@ changed from the CLI through the `engine.upkeep.*` keys of `coffer config`.
 It is a spec, not a rule in the principles, because it owns state and operable surfaces.
 `audit_log` and `retention_policies` are its tables: every kind writes the first, and
 this spec seeds, reads, configures and prunes both. Its route family is
-`/api/v1/resources*`, `/api/v1/audit`, `/api/v1/retention/*` and `/api/v1/upkeep/runs`;
+`/api/v1/resources*`, `/api/v1/audit`, `/api/v1/retention/*`, `/api/v1/upkeep/runs`
+and the daemon-wide change feed `/api/v1/events`;
 its packages are `domain/{resource,scope,audit,retention}.py`, the kind-agnostic
 services beside them in `application/`, and their surfaces; an import-linter contract
 fences the core off from every kind; and it has ADRs of its own
@@ -416,16 +417,23 @@ its title empty.
 ### Requirement: Read the audit log from the command line
 The system MUST let a terminal read the audit log with `coffer log audit`, over the same route
 the web UI reads (`GET /api/v1/audit`). It MUST take the filters that route affords,
-`--kind`, `--name`, `--event-type`, `--since` and `--limit`, and MUST print the entries newest
-first. Each entry MUST show its time, actor, event type, and the label the resource carried at
-that moment. With `--json` it MUST print the route's entries as one parseable document with no
-human-readable framing.
+`--kind`, `--name`, `--event-type`, `--since` and `--limit`, and the route's cursor as
+`--cursor`, and MUST print the entries newest first. Each entry MUST show its time, actor,
+event type, and the label the resource carried at that moment; when more entries follow the
+page, the output MUST end with the `--cursor` value that reads the next one. With `--json` it
+MUST print the route's answer — its entries and its `next_cursor` — as one parseable document
+with no human-readable framing.
 
 #### Scenario: the command line reads the audit log
 - **GIVEN** the user has disabled a resource and then changed another resource's title
 - **WHEN** they run `coffer log audit --limit 2`, and then `coffer log audit --kind <kind> --json`
 - **THEN** the first prints both changes newest first, each with its time, actor, event type and label
 - **AND** the second prints a parseable JSON document holding only that kind's entries
+
+#### Scenario: the command line pages the audit log by cursor
+- **GIVEN** three audit entries
+- **WHEN** the user runs `coffer log audit --limit 2 --json` and then `coffer log audit --limit 2 --cursor <next_cursor> --json` with the cursor the first printed
+- **THEN** the first prints the two newest entries and a `next_cursor`, and the second prints the oldest entry and a `null` `next_cursor`
 
 ### Requirement: Change every setting through one key-value command
 The system MUST expose Coffer's own settings on the command line through one command,
@@ -630,3 +638,83 @@ forward.
 - **GIVEN** a newly registered resource at revision 1
 - **WHEN** its config, its enabled flag and its title are changed in turn
 - **THEN** it reads revision 4, and each write emitted one hint carrying the revision it produced
+
+### Requirement: Announce every change on one daemon-wide event stream
+`GET /api/v1/events` MUST be one Server-Sent Events stream for the whole
+daemon, gated by the token header like every other management call, so a
+client reads it with `fetch` rather than `EventSource`. Each `change` event
+MUST carry an envelope `{seq, kind, id, rev, op}` and an SSE id that names both
+the daemon run and the `seq`, because `seq` starts again at 1 on every run:
+`seq` grows by one per event across the daemon run, `kind` is the resource
+kind or `attention`, `id` is the resource's uid (none for `attention`), `rev`
+is the revision the write produced (none for `attention`), and `op` is
+`upsert` or `delete`. Every resource write through the framework MUST produce
+one envelope, and so MUST every change in what the attention list reports. An
+envelope is an invalidation hint only: it MUST NOT carry the resource's state,
+and a client refetches through the typed endpoints. The daemon MUST keep a
+bounded buffer of recent envelopes: a client that reconnects with
+`Last-Event-ID` MUST receive every envelope after that `seq` still in the
+buffer, in order, and then live ones; when the buffer cannot cover the gap —
+the `seq` is older than the buffer's oldest, or is not one this daemon run has
+issued — the stream MUST send one `resync` event before going live, telling the
+client to refetch everything. While nothing changes the stream MUST send a
+`heartbeat` event carrying the current head `seq` at a fixed interval.
+
+#### Scenario: a resource write is announced as an invalidation hint
+- **GIVEN** a client reading the event stream
+- **WHEN** a resource is disabled and then deleted
+- **THEN** the client receives two `change` events for that uid, an `upsert` carrying the revision the disable produced and then a `delete`, with consecutive `seq` values
+- **AND** neither envelope carries any field of the resource beyond its kind, uid and revision
+
+#### Scenario: a reconnecting client resumes after the last event it saw
+- **GIVEN** a client that saw `change` events up to `seq` n and disconnected, after which two more resources were written
+- **WHEN** it reconnects with the SSE id of event n as `Last-Event-ID`
+- **THEN** it receives exactly the two missed envelopes, `seq` n+1 and n+2, before any live event, and no `resync`
+
+#### Scenario: a client the buffer cannot cover is told to resync
+- **GIVEN** more writes since a client's last `seq` than the buffer holds, or a `Last-Event-ID` this daemon run never issued — an earlier run's included, even when its `seq` is one this run has reached
+- **WHEN** the client reconnects with that `Last-Event-ID`
+- **THEN** the first event it receives is `resync`, and live `change` events follow it
+
+#### Scenario: an attention change is announced on the event stream
+- **GIVEN** a client reading the event stream and an attention list with no items
+- **WHEN** something starts needing a person, so the attention list gains an item
+- **THEN** the client receives a `change` event of kind `attention` with no id, and no attention item in it
+
+#### Scenario: an idle event stream carries heartbeats
+- **GIVEN** a client reading the event stream while nothing changes
+- **WHEN** the heartbeat interval passes
+- **THEN** the client receives a `heartbeat` event carrying the current head `seq`
+
+#### Scenario: the event stream requires the token
+- **GIVEN** a running daemon
+- **WHEN** a client opens `GET /api/v1/events` without the `X-Coffer-Token` header
+- **THEN** the request is refused `401 UNAUTHENTICATED` and no stream is opened
+
+### Requirement: Page growing lists by an opaque cursor
+A list that can grow while it is being read — the audit log, the MCP
+invocation log, an agent's transcript sessions and the chat conversation
+listings — MUST page by an opaque cursor rather than by `offset`. A request
+MUST take `limit` and an optional `cursor`; the answer MUST carry
+`next_cursor`, which is `null` exactly when no row follows the page. The list
+MUST have a stable order with a unique tie-break, and the page read with a
+cursor MUST hold the rows that follow the cursor's row in that order, so a row
+written at the head between two reads neither repeats an earlier row nor
+skips a later one. A cursor MUST be bound to the list and the filters it was
+issued for: one that does not decode, or that is sent to another list or with
+other filters, MUST be refused `400 CURSOR_INVALID`.
+
+#### Scenario: a page read after new rows arrive neither repeats nor skips
+- **GIVEN** an audit log of five entries read with `limit=2`, and a new entry recorded after the first page was read
+- **WHEN** the next two pages are read with each answer's `next_cursor`
+- **THEN** together the three pages hold the five original entries exactly once each, newest first, and the new entry is not among them
+
+#### Scenario: the last page carries no next cursor
+- **GIVEN** an audit log of three entries
+- **WHEN** it is read with `limit=3`
+- **THEN** the answer holds all three and its `next_cursor` is `null`
+
+#### Scenario: a malformed or foreign cursor is refused
+- **GIVEN** a cursor issued for the audit log filtered by one kind
+- **WHEN** it is sent with another kind's filter, and a string that is not a cursor is sent as `cursor`
+- **THEN** both requests are refused `400 CURSOR_INVALID`

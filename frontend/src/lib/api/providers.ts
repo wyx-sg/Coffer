@@ -1,12 +1,8 @@
 // frontend/src/lib/api/providers.ts — request helpers for /api/v1/providers/*
 //
-// The enums and the activate/deactivate answers are the provider-switching
-// contract's generated schemas (`generated/provider-switching.ts`). The
-// connection shapes themselves stay hand-written, because the contract lags
-// the backend (`provider_schemas.py`): it omits `enabled` and `description` on
-// the read side, `description` on create/patch, and `protocol` on patch, and
-// marks `ProviderModel.modality` optional where the UI relies on it being set.
-// Transport via the shared `call` (agents/frontend.md §4).
+// Every wire type is an alias of the provider-switching contract's generated
+// schemas (`generated/provider-switching.ts`), generated from
+// `provider_schemas.py`. Transport via the shared `call` (agents/frontend.md §4).
 
 import { call, enc } from "@/lib/api/call";
 import type { components } from "@/lib/api/generated/provider-switching";
@@ -58,10 +54,7 @@ export const MODALITIES: readonly Modality[] = [
  * user corrects) — so a discovered model round-trips into the curated set
  * without reshaping.
  */
-export interface ProviderModel {
-  id: string;
-  modality: Modality;
-}
+export type ProviderModel = Schemas["ProviderModel"];
 
 /** The ids of `models`, optionally narrowed to ONE modality, order preserved. */
 export function modelIds(models: ProviderModel[], modality?: Modality): string[] {
@@ -79,74 +72,13 @@ export const WIRE_BY_AGENT: Record<string, Protocol> = {
   codex: "openai",
 };
 
-export interface Provider {
-  /** The connection Resource's immutable identity — what every route below
-   *  takes. */
-  uid: string;
-  /** A mutable label. Display only: nothing Coffer writes into another tool's
-   *  config spells it any more, which is what let the provider-specific rename
-   *  route go — renaming is now the kind-agnostic
-   *  `PATCH /resources/{uid}` (`resourcesApi.rename`). */
-  name: string;
-  /** The display title a person chose, shown in place of the name; null when
-   *  none is set. Edited through `PATCH /resources/{uid}` (`resourcesApi.setTitle`). */
-  title?: string | null;
-  protocol: Protocol;
-  base_url: string;
-  /** Null for ollama (no key) and any connection created without a credential. */
-  credential_ref: string | null;
-  /** READ-ONLY. The effective agents this connection projects into, derived
-   * server-side from the resource's per-agent scope intersected with the agent
-   * types Coffer knows; empty for a disabled or keyless (ollama) connection. The
-   * Agent Overview picker and the chat ModelPicker filter on this. To CHANGE it,
-   * write the scope (`scopeApi.put(uid, …)`) — there is no request field for
-   * it. */
-  compatible_agents: AgentType[];
-  is_active: boolean;
-  /** ≤1 globally — the connection Coffer's internal engine uses. */
-  internal_default: boolean;
-  /** ≤1 globally — the connection Coffer transcribes speech on. A SECOND flag
-   * rather than a reuse of `internal_default`, with no fallback between them:
-   * a gateway that serves chat completions commonly serves no
-   * `/audio/transcriptions` at all, so borrowing the engine's connection would
-   * aim every voice message at a 404. */
-  transcribe_default: boolean;
-  /** The curated model set offered for this connection, each entry carrying its
-   * modality. EMPTY = no restriction: every model the endpoint serves is
-   * offered. Non-empty narrows every downstream picker to these entries OF THE
-   * MODALITY it serves — a chat dropdown never sees an embedding model. */
-  models: ProviderModel[];
-  enabled: boolean;
-  description?: string | null;
-  created_at: string;
-  updated_at: string;
-}
+export type Provider = Schemas["ProviderOut"];
 
-export interface ProviderListOut {
-  providers: Provider[];
-}
+export type ProviderListOut = Schemas["ProviderListOut"];
 
-export interface ProviderCreate {
-  name: string;
-  protocol: Protocol;
-  base_url: string;
-  credential_ref?: string | null;
-  secret_value?: string | null;
-  /** Curated model set (`{id, modality}` entries); omit or `[]` for "no
-   * restriction". */
-  models?: ProviderModel[] | null;
-  description?: string | null;
-}
+export type ProviderCreate = Schemas["ProviderCreate"];
 
-export interface ProviderPatch {
-  /** The wire the endpoint speaks; correctable when the probe guessed wrong. */
-  protocol?: Protocol;
-  base_url?: string | null;
-  secret_value?: string | null;
-  /** Whole-value replace of the curated model set; `[]` clears the restriction. */
-  models?: ProviderModel[] | null;
-  description?: string | null;
-}
+export type ProviderPatch = Schemas["ProviderPatch"];
 
 export type ActivateOut = Schemas["ActivateOut"];
 

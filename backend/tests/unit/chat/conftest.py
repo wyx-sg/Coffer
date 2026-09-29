@@ -54,9 +54,18 @@ class FakeConversationRepo:
     async def get(self, conversation_id: str) -> Conversation | None:
         return self._store.get(conversation_id)
 
-    async def list(self, *, archived: bool = False) -> list[Conversation]:
+    async def list(
+        self,
+        *,
+        archived: bool = False,
+        limit: int | None = None,
+        after: tuple[datetime, str] | None = None,
+    ) -> list[Conversation]:
         rows = [c for c in self._store.values() if (c.archived_at is not None) == archived]
-        return sorted(rows, key=lambda c: c.updated_at, reverse=True)
+        rows.sort(key=lambda c: (c.updated_at, c.id), reverse=True)
+        if after is not None:
+            rows = [c for c in rows if (c.updated_at, c.id) < after]
+        return rows if limit is None else rows[:limit]
 
     async def rename(self, conversation_id: str, new_title: str) -> Conversation:
         conv = self._store[conversation_id]

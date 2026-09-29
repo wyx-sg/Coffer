@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { acceptance } from "@/test/acceptance";
 import { MarkdownContent } from "./MarkdownContent";
 import { MessageBubble } from "./MessageBubble";
+import { contentBlock } from "@/lib/chat/contentBlock";
 
 describe("MarkdownContent code-block copy", () => {
   afterEach(() => {
@@ -116,8 +117,11 @@ acceptance("chat", "assistant text keeps its line breaks and every code block co
         seq: 1,
         role: "assistant",
         status: "complete",
+        prompt_tokens: null,
+        completion_tokens: null,
+        model_id: null,
         created_at: "2026-01-01T00:00:00Z",
-        content: [{ type: "text", text: reply }],
+        content: [contentBlock({ type: "text", text: reply })],
       }}
     />,
   );

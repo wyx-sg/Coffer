@@ -37,6 +37,7 @@ const existing = (overrides?: Partial<Provider>): Provider => ({
   credential_ref: "provider/acme/key",
   compatible_agents: ["codex"],
   is_active: false,
+  title: null,
   internal_default: false,
   transcribe_default: false,
   models: [],

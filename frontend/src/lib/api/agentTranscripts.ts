@@ -1,7 +1,7 @@
 // frontend/src/lib/api/agentTranscripts.ts — the read-only conversation surfaces
 // for /api/v1/agents/{uid}/transcripts: the browse list, and the single-session
 // read behind one conversation's page. Split from agents.ts for file-size. Wire
-// types from the agent-registry contract; transport via the shared `call`
+// types are aliases of the agent-registry contract's schemas; transport via the shared `call`
 // (.agents/frontend.md §4).
 //
 // The two are separate calls because the wire shapes are deliberately different:
@@ -9,37 +9,31 @@
 // only ever travels for the one session a reader opened.
 
 import { call, enc } from "@/lib/api/call";
-import type { components, operations } from "@/lib/api/generated/agent-registry";
+import type { components, paths } from "@/lib/api/generated/agent-registry";
 
 // ---------------------------------------------------------------------------
 // Wire types
 // ---------------------------------------------------------------------------
 
-/**
- * Hand-written rather than the contract's `TranscriptSession`: the contract
- * marks `title` / `project_path` / `started_at` / `last_activity_at` optional,
- * while the backend always sends them (null when unknown) and the table cells
- * take `string | null`.
- */
-export interface TranscriptSessionSummary {
-  session_id: string;
-  title: string | null;
-  project_path: string | null;
-  message_count: number;
-  started_at: string | null;
-  last_activity_at: string | null;
-  /** Absolute path of the .jsonl file, so a row can open/reveal it. */
-  source_path: string;
-}
+type Schemas = components["schemas"];
 
-type ListQuery = NonNullable<operations["listAgentTranscripts"]["parameters"]["query"]>;
+/** One session in the listing. `source_path` is the absolute path of the
+ *  .jsonl file, so a row can open/reveal it. */
+export type TranscriptSessionSummary = Schemas["TranscriptSessionSummary"];
+
+type ListQuery = NonNullable<
+  paths["/api/v1/agents/{uid}/transcripts"]["get"]["parameters"]["query"]
+>;
 
 export type TranscriptSort = NonNullable<ListQuery["sort"]>;
 export type SortOrder = NonNullable<ListQuery["order"]>;
 
+/** @ui-only The listing's query as the page builds it; every field maps to a
+ *  query parameter of the route. */
 export interface TranscriptListParams {
   limit?: number;
-  offset?: number;
+  /** The previous page's `next_cursor`; omitted for the first page. */
+  cursor?: string;
   /** Case-insensitive substring matched against title or project path. */
   q?: string;
   /** Filter to sessions whose project_path equals this exactly. */
@@ -48,35 +42,16 @@ export interface TranscriptListParams {
   order?: SortOrder;
 }
 
-/** `TranscriptSessionListOut` with the hand-written session row above. */
-export type TranscriptSessionListResponse = Omit<
-  components["schemas"]["TranscriptSessionListOut"],
-  "sessions"
-> & { sessions: TranscriptSessionSummary[] };
+/** The listing pages by cursor: `next_cursor` reads the page after this one
+ *  and is null on the last page. */
+export type TranscriptSessionListResponse = Schemas["TranscriptSessionListResponse"];
 
 /** One conversational turn, already secret-scrubbed and capped server-side. */
-export interface TranscriptMessage {
-  role: string;
-  text: string;
-  timestamp: string | null;
-  /** The turn was longer than the server's cap and `text` is its start. */
-  truncated: boolean;
-}
+export type TranscriptMessage = Schemas["TranscriptMessageOut"];
 
-/** One session's summary plus a window of its turns. */
-export interface TranscriptSessionDetail {
-  session_id: string;
-  title: string | null;
-  project_path: string | null;
-  /** Turns in the WHOLE file — not the length of `messages`. */
-  message_count: number;
-  started_at: string | null;
-  last_activity_at: string | null;
-  source_path: string;
-  messages: TranscriptMessage[];
-  limit: number;
-  offset: number;
-}
+/** One session's summary plus a window of its turns; `message_count` counts
+ *  the turns in the WHOLE file, not the length of `messages`. */
+export type TranscriptSessionDetail = Schemas["TranscriptSessionDetailResponse"];
 
 // ---------------------------------------------------------------------------
 // Request functions
@@ -88,7 +63,7 @@ export function listTranscripts(
 ): Promise<TranscriptSessionListResponse> {
   const sp = new URLSearchParams();
   sp.set("limit", String(opts.limit ?? 100));
-  sp.set("offset", String(opts.offset ?? 0));
+  if (opts.cursor) sp.set("cursor", opts.cursor);
   if (opts.q) sp.set("q", opts.q);
   if (opts.project) sp.set("project", opts.project);
   if (opts.sort) sp.set("sort", opts.sort);

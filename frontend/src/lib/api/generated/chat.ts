@@ -11,168 +11,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List the agents the turn platform can run a turn on */
-        get: operations["listAgentProviders"];
+        /**
+         * List Agent Providers
+         * @description List the registered agent providers, each with an availability flag.
+         */
+        get: operations["list_agent_providers_api_v1_agent_providers_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/chat/conversations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List conversations, newest first */
-        get: operations["listConversations"];
-        put?: never;
-        /**
-         * Create a conversation
-         * @description Creates a conversation for the named Coffer-managed agent. `agent_key` is required; `agent_config` is an opaque, agent-specific configuration object the named agent validates and stores. For a managed agent it accepts an optional `cwd`, an optional `model` (the agent's own model, free-text) and an optional `effort` (its reasoning level). An unknown `agent_key` or an invalid `agent_config` is rejected with 400.
-         */
-        post: operations["createConversation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/chat/conversations/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
-            };
-            cookie?: never;
-        };
-        /** Get one conversation */
-        get: operations["getConversation"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete a conversation and its messages
-         * @description Any in-flight turn for the conversation is cancelled and discarded before deletion, so no background task outlives the row.
-         */
-        delete: operations["deleteConversation"];
-        options?: never;
-        head?: never;
-        /** Rename a conversation */
-        patch: operations["updateConversation"];
-        trace?: never;
-    };
-    "/api/v1/chat/conversations/{id}/agent-config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
-            };
-            cookie?: never;
-        };
-        /** Read a conversation's agent config (cwd, model, effort) */
-        get: operations["getAgentConfig"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Set a conversation's model and reasoning effort (managed agents)
-         * @description Sets `agent_config.model` — the managed agent's own model, passed through to its CLI (Claude Code `--model`, Codex `model`) — and `agent_config.effort`, how hard that model thinks, preserving `cwd` and `session_id`. Each field is written only when the body mentions it. An empty or null `model` clears the override so the conversation inherits the active provider profile's projected default; an empty or null `effort` clears it so the agent runs at its own configured level. The agent itself is fixed at creation and cannot be changed here. Mirrors the channel `/model` and `/effort` commands. It is unrelated to the `model_id` recorded on each message, which reports the model a turn actually ran on and is never read back as configuration.
-         */
-        patch: operations["setAgentConfig"];
-        trace?: never;
-    };
-    "/api/v1/chat/conversations/{id}/archive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Archive a conversation (hide from the active list, keep restorable) */
-        post: operations["archiveConversation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/chat/conversations/{id}/unarchive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Restore an archived conversation into the active list */
-        post: operations["unarchiveConversation"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/chat/conversations/{id}/messages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
-            };
-            cookie?: never;
-        };
-        /** Conversation message history */
-        get: operations["listMessages"];
-        put?: never;
-        /**
-         * Send a user message (starts or enqueues a turn; fire-and-return)
-         * @description Starts a turn for the message, or enqueues it on the conversation's pending queue when a turn is already in flight. Returns immediately; turn events are consumed via `GET /conversations/{id}/events`, the single event path. The composer never locks — a message sent during a turn is queued, not rejected.
-         */
-        post: operations["sendMessage"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/chat/conversations/{id}/messages/{message_id}/resend": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
-                message_id: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Send a persisted user message again (the page's Retry)
-         * @description Rebuilds the user message from its persisted row — its text and every attachment reference, from the web composer or a channel — and starts or enqueues a turn for it exactly as `POST .../messages` does, persisting a new user row. A referenced file the 30-day media sweep has since deleted is refused with `ATTACHMENT_EXPIRED` (410) and nothing is persisted or queued; the message is never sent without it.
-         */
-        post: operations["resendMessage"];
         delete?: never;
         options?: never;
         head?: never;
@@ -189,10 +34,134 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Upload a file for a later web message
-         * @description The web composer's entrance for a file (see "Upload a file for a web message"). The bytes are stored under `~/.coffer/chat-media` and the response names them by an opaque id, which `POST /conversations/{id}/messages` then carries in `attachment_ids`; the local path never leaves the daemon. Not tied to a conversation, so a draft can attach before its conversation exists. One file per call, at most 20 MB; accepted types are images, audio, documents (PDF, Word, PowerPoint, Excel, RTF, EPUB, CSV) and any UTF-8 text file. Stored files are pruned 30 days after upload.
+         * Upload Attachment
+         * @description Store one file for a later send and return its id, name, type and size
+         *     (spec chat "Upload a file for a web message"). The local path is never
+         *     returned.
          */
-        post: operations["uploadChatAttachment"];
+        post: operations["upload_attachment_api_v1_chat_attachments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Conversations
+         * @description List conversations, newest activity first, paged by cursor.
+         *     ``?archived=true`` returns the archived threads; the default lists active
+         *     ones only. The conversation id breaks ties.
+         */
+        get: operations["list_conversations_api_v1_chat_conversations_get"];
+        put?: never;
+        /**
+         * Create Conversation
+         * @description Create a conversation for the named Coffer-managed agent.
+         *
+         *     ``agent_key`` is required — chat has no built-in agent (ADR
+         *     coffer-model-is-an-internal-engine); ``agent_config`` is validated by that
+         *     agent. An unknown agent or an invalid config is rejected with 400.
+         */
+        post: operations["create_conversation_api_v1_chat_conversations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/conversations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Conversation
+         * @description Get a single conversation by id.  Returns 404 if not found.
+         */
+        get: operations["get_conversation_api_v1_chat_conversations__id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Conversation
+         * @description Delete a conversation and all its messages.
+         *
+         *     Any in-flight turn for this conversation is cancelled (and discarded)
+         *     before deletion so the background task does not keep running after the row
+         *     is gone (spec chat "Create, rename, archive, unarchive and delete
+         *     conversations").
+         */
+        delete: operations["delete_conversation_api_v1_chat_conversations__id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Conversation
+         * @description Rename a conversation.
+         *
+         *     A body that names no ``title`` changes nothing and returns the conversation
+         *     as it stands. The agent's own model is not set here — it lives in the
+         *     conversation's agent_config (PATCH ``/conversations/{id}/agent-config``,
+         *     ADR model-catalogue-read-from-the-agent).
+         */
+        patch: operations["update_conversation_api_v1_chat_conversations__id__patch"];
+        trace?: never;
+    };
+    "/api/v1/chat/conversations/{id}/agent-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Agent Config
+         * @description Read a conversation's agent config (cwd, model, effort). 404 if not found.
+         *
+         *     ``session_id`` is provider-internal and deliberately not surfaced.
+         */
+        get: operations["get_agent_config_api_v1_chat_conversations__id__agent_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Agent Config
+         * @description Set a managed agent's own model and effort for a conversation (ADR
+         *     coffer-model-is-an-internal-engine → ADR model-catalogue-read-from-the-agent).
+         *
+         *     Mirrors the channel ``/model`` command: read-then-``replace`` so ``cwd`` and
+         *     ``session_id`` are preserved, and a body that mentions only one of the two
+         *     leaves the other where it was. An empty/whitespace ``model`` clears the
+         *     override (the conversation then inherits the active provider profile's
+         *     projected default); an empty/whitespace ``effort`` clears it (the agent then
+         *     runs at whatever its own config says).
+         */
+        patch: operations["set_agent_config_api_v1_chat_conversations__id__agent_config_patch"];
+        trace?: never;
+    };
+    "/api/v1/chat/conversations/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive Conversation
+         * @description Archive a conversation — hidden from the default list, still restorable.
+         */
+        post: operations["archive_conversation_api_v1_chat_conversations__id__archive_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -203,41 +172,21 @@ export interface paths {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
-            };
+            path?: never;
             cookie?: never;
         };
         /**
-         * Subscribe to a conversation's live turn events (SSE)
-         * @description Server-Sent Events stream of the conversation's turn events, for any client. On attach, an in-flight turn's events so far are replayed, then streamed live; when idle the connection is held open and the next turn — from any surface, a channel included — is streamed. Event names: `turn_start`, `text_delta`, `tool_call`, `tool_result`, `turn_done`, `turn_error`, `queue_changed`. A `turn_error` carries a `code`; the platform itself raises `stream_ended` (the agent's stream ended without a terminal event), `turn_timeout` (the idle watchdog cancelled a silent turn) and `daemon_stopped` (the daemon cancelled the turn on shutdown), and every other code is the agent's own.
+         * Subscribe Events
+         * @description Subscribe to the conversation's live turn events (SSE, ADR chat-single-owner-live-mirror).
+         *
+         *     On attach, the in-flight turn's events so far are replayed (and the current
+         *     pending-queue snapshot), then events stream live; when idle the connection is
+         *     held open and the next turn — from any surface — is streamed. 404 when the
+         *     conversation does not exist. The stream ends on the ``None`` sentinel
+         *     (conversation deleted) or when the client disconnects.
          */
-        get: operations["subscribeConversationEvents"];
+        get: operations["subscribe_events_api_v1_chat_conversations__id__events_get"];
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/chat/conversations/{id}/pending": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Replace the conversation's pending message queue
-         * @description Replaces the ordered pending-message texts: one primitive that clears (empty list), drops, reorders, or resumes the queue. Unpauses the queue and starts the next turn when none is in flight. Broadcasts `queue_changed`.
-         */
-        put: operations["setPendingQueue"];
         post?: never;
         delete?: never;
         options?: never;
@@ -249,19 +198,126 @@ export interface paths {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
-            };
+            path?: never;
             cookie?: never;
         };
         get?: never;
         put?: never;
         /**
-         * Stop the conversation's in-flight turn, keeping partial output
-         * @description Stops a running turn and pauses the pending queue. Whatever the agent produced so far is persisted as the assistant message. A no-op when no turn is in flight.
+         * Interrupt Turn
+         * @description Stop the conversation's in-flight turn (keeping its partial output) and
+         *     pause the pending queue.
+         *
+         *     404 ``ConversationNotFound`` when the conversation does not exist; a no-op
+         *     when no turn is in flight.
          */
-        post: operations["interruptTurn"];
+        post: operations["interrupt_turn_api_v1_chat_conversations__id__interrupt_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/conversations/{id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Messages
+         * @description Return message history for a conversation, ordered by seq ascending.
+         */
+        get: operations["list_messages_api_v1_chat_conversations__id__messages_get"];
+        put?: never;
+        /**
+         * Send Message
+         * @description Start a turn for the message, or enqueue it behind the in-flight one.
+         *
+         *     Fire-and-return (ADR chat-single-owner-live-mirror): the composer never locks
+         *     — a message sent during a turn is queued, not rejected. Turn events are
+         *     consumed via ``GET .../events``.
+         *     ``ConversationNotFound`` propagates to the global handler as 404.
+         *
+         *     ``attachment_ids`` resolve to the uploaded files, which the orchestrator
+         *     persists as references after the text exactly as it does a channel's media
+         *     (spec chat "Send uploaded files with a web message"); an id naming no
+         *     upload is ``AttachmentNotFound`` (422) and nothing is persisted or queued.
+         */
+        post: operations["send_message_api_v1_chat_conversations__id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/conversations/{id}/messages/{message_id}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resend Message
+         * @description Send one of the conversation's user messages again, attachments included.
+         *
+         *     This is the page's Retry after a failed turn (spec chat "Show a failed turn
+         *     as one inline banner with Retry"). The daemon rebuilds the message from its
+         *     persisted row, so the retry carries the original's text AND its attachment
+         *     references, whether they came from the web composer or a channel; a new
+         *     user row is persisted exactly as a send would. A referenced file the media
+         *     sweep has since deleted is ``AttachmentExpired`` (410) and nothing is
+         *     persisted or queued; an id naming no user message of the conversation is
+         *     ``MessageNotFound`` (404).
+         */
+        post: operations["resend_message_api_v1_chat_conversations__id__messages__message_id__resend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/conversations/{id}/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Pending
+         * @description Replace the conversation's pending message queue (resume / drop / reorder).
+         *
+         *     Unpauses the queue and starts the next turn when none is in flight; broadcasts
+         *     ``queue_changed``. 404 when the conversation does not exist.
+         */
+        put: operations["set_pending_api_v1_chat_conversations__id__pending_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/chat/conversations/{id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unarchive Conversation
+         * @description Restore an archived conversation back into the active list.
+         */
+        post: operations["unarchive_conversation_api_v1_chat_conversations__id__unarchive_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -272,176 +328,315 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        AgentProviderOut: {
-            agent_key: string;
-            display_name: string;
-            /** @description Whether the agent's CLI is present on this host. */
-            available: boolean;
+        /**
+         * AgentConfigOut
+         * @description Read view of a conversation's agent config (managed agents).
+         *
+         *     ``session_id`` is provider-internal and deliberately not surfaced.
+         */
+        AgentConfigOut: {
+            /** Cwd */
+            cwd: string | null;
+            /** Effort */
+            effort: string | null;
+            /** Model */
+            model: string | null;
         };
+        /**
+         * AgentConfigPatch
+         * @description Body for PATCH /conversations/{id}/agent-config.
+         *
+         *     Sets the managed agent's own model (free-text, passed through to its CLI)
+         *     and how hard it should think. An empty or null ``model`` clears the override
+         *     so the conversation inherits the active provider profile's projected
+         *     default; an empty or null ``effort`` clears it so the agent keeps whatever
+         *     its own config says. Each field is written only when the body mentions it,
+         *     so setting one leaves the other alone; ``cwd`` / ``session_id`` are
+         *     preserved (ADR coffer-model-is-an-internal-engine → ADR model-catalogue-read-from-the-agent).
+         */
+        AgentConfigPatch: {
+            /** Effort */
+            effort?: string | null;
+            /** Model */
+            model?: string | null;
+        };
+        /** AgentProviderListOut */
         AgentProviderListOut: {
+            /** Agents */
             agents: components["schemas"]["AgentProviderOut"][];
         };
-        ConversationCreate: {
-            /** @description Which registered agent the conversation talks to. */
+        /** AgentProviderOut */
+        AgentProviderOut: {
+            /** Agent Key */
             agent_key: string;
-            /** @description Opaque, agent-specific configuration validated by the named agent. For a managed agent (Claude Code / Codex): an optional `cwd`, an optional `model` (the agent's own model, free-text, passed through to its CLI) and an optional `effort` (its reasoning level). */
+            /** Available */
+            available: boolean;
+            /** Display Name */
+            display_name: string;
+        };
+        /** Body_upload_attachment_api_v1_chat_attachments_post */
+        Body_upload_attachment_api_v1_chat_attachments_post: {
+            /** File */
+            file: string;
+        };
+        /**
+         * ChannelBindingOut
+         * @description The IM channel a conversation is also driven from (ADR chat-single-owner-live-mirror).
+         *
+         *     The return address for relaying the agent's output back to the channel;
+         *     present iff the conversation has a channel binding.
+         */
+        ChannelBindingOut: {
+            /** Channel */
+            channel: string | null;
+            /** Channel Uid */
+            channel_uid: string;
+            /** Chat Id */
+            chat_id: string;
+        };
+        /**
+         * ChatAttachmentOut
+         * @description Response for POST /attachments — one stored upload.
+         *
+         *     ``id`` is what a send names; the file's local path never leaves the daemon
+         *     (spec chat "Upload a file for a web message").
+         */
+        ChatAttachmentOut: {
+            /** Filename */
+            filename: string;
+            /** Id */
+            id: string;
+            /** Mime */
+            mime: string;
+            /** Size */
+            size: number;
+        };
+        /**
+         * ContentBlockOut
+         * @description Wire representation of a ContentBlock (text | tool_use | tool_result |
+         *     attachment). ``filename``/``mime`` describe an ``attachment`` reference; the
+         *     local ``path`` is deliberately NOT surfaced (leak/security — spec chat
+         *     "Re-materialise attachments from persisted history").
+         */
+        ContentBlockOut: {
+            /** Error */
+            error: string | null;
+            /** Filename */
+            filename: string | null;
+            /** Mime */
+            mime: string | null;
+            /** Output */
+            output: {
+                [key: string]: unknown;
+            } | null;
+            /** Text */
+            text: string | null;
+            /** Tool Input */
+            tool_input: {
+                [key: string]: unknown;
+            } | null;
+            /** Tool Name */
+            tool_name: string | null;
+            /** Tool Use Id */
+            tool_use_id: string | null;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "text" | "tool_use" | "tool_result" | "attachment";
+        };
+        /**
+         * ConversationCreate
+         * @description Body for POST /conversations.
+         *
+         *     ``agent_key`` selects the Coffer-managed agent to talk to (required — chat
+         *     has no built-in agent of its own, ADR coffer-model-is-an-internal-engine).
+         *     ``agent_config`` is an opaque, agent-specific configuration object the named
+         *     agent validates and stores (e.g. ``cwd`` for ``claude_code`` / ``codex``).
+         */
+        ConversationCreate: {
+            /** Agent Config */
             agent_config?: {
                 [key: string]: unknown;
             } | null;
+            /** Agent Key */
+            agent_key: string;
         };
+        /**
+         * ConversationListOut
+         * @description One page of conversations, newest activity first.
+         */
+        ConversationListOut: {
+            /** Conversations */
+            conversations: components["schemas"]["ConversationOut"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * ConversationOut
+         * @description Single conversation response.
+         */
+        ConversationOut: {
+            /** Agent Key */
+            agent_key: string;
+            /** Archived At */
+            archived_at: string | null;
+            channel_binding: components["schemas"]["ChannelBindingOut"] | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ConversationPatch
+         * @description Body for PATCH /conversations/{id}.
+         */
         ConversationPatch: {
+            /** Title */
             title?: string | null;
         };
-        ConversationOut: {
-            id: string;
-            agent_key: string;
-            title: string;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
+        /** ErrorDetail */
+        ErrorDetail: {
             /**
-             * Format: date-time
-             * @description Null for an active conversation; the instant it was archived otherwise.
+             * Code
+             * @example RESOURCE_NOT_FOUND
              */
-            archived_at?: string | null;
-            /** @description The IM channel this conversation is also driven from; null for a conversation started on the web page. Present iff the conversation stores a channel uid. */
-            channel_binding?: components["schemas"]["ChannelBindingOut"] | null;
-        };
-        ConversationListOut: {
-            conversations: components["schemas"]["ConversationOut"][];
-        };
-        ChannelBindingOut: {
-            /** @description The channel's identity. The conversation row stores this, not the name, so a renamed channel keeps its conversations — and a client follows it to reach the channel. */
-            channel_uid: string;
-            /** @description The channel's current label, resolved when this is read rather than stored, so it says what the channel is called now. Null when the channel has since been deleted: the conversation keeps its binding — it really did arrive over a channel — and there is simply no name left to show for it. */
-            channel: string | null;
-            /** @description The IM chat id used as the return address. */
-            chat_id: string;
-        };
-        AgentConfigPatch: {
-            /** @description The managed agent's model (free-text, passed through to its CLI). Empty or null clears the override; `cwd` and `session_id` are preserved. */
-            model?: string | null;
-            /** @description How hard that model should think, for an agent that takes a reasoning effort of its own (Claude Code and Codex both do). Empty or null clears it, so the agent runs at whatever its own config says. A body that mentions only one of the two fields leaves the other where it was. */
-            effort?: string | null;
-        };
-        AgentConfigOut: {
-            cwd: string | null;
-            model: string | null;
-            effort?: string | null;
-        };
-        ContentBlockOut: {
-            /** @enum {string} */
-            type: "text" | "tool_use" | "tool_result" | "attachment";
-            text?: string | null;
-            tool_use_id?: string | null;
-            tool_name?: string | null;
-            tool_input?: {
+            code: string;
+            /** Details */
+            details: {
                 [key: string]: unknown;
-            } | null;
-            output?: {
-                [key: string]: unknown;
-            } | null;
-            error?: string | null;
-            /** @description An `attachment` block references a file a channel downloaded or the web composer uploaded, by filename and mime only; the local path is never emitted to the wire (see "Re-materialise attachments from persisted history"). */
-            filename?: string | null;
-            mime?: string | null;
+            };
+            /**
+             * Message
+             * @example resource not found: mcp_server:filesystem
+             */
+            message: string;
         };
-        MessageOut: {
-            id: string;
-            conversation_id: string;
-            seq: number;
-            /** @enum {string} */
-            role: "user" | "assistant";
-            content: components["schemas"]["ContentBlockOut"][];
-            /** @enum {string} */
-            status: "complete" | "streaming" | "failed";
-            model_id?: string | null;
-            prompt_tokens?: number | null;
-            completion_tokens?: number | null;
-            /** Format: date-time */
-            created_at: string;
+        /** ErrorResponse */
+        ErrorResponse: {
+            error: components["schemas"]["ErrorDetail"];
         };
+        /**
+         * MessageListOut
+         * @description List of messages for a conversation.
+         */
         MessageListOut: {
+            /** Messages */
             messages: components["schemas"]["MessageOut"][];
         };
-        /** @description A message carries text, at least one attachment, or both — never neither (422). An attachment-only message is persisted with a short stand-in text naming its files. */
-        SendMessageRequest: {
-            /** @default  */
-            text: string;
-            /** @description Ids returned by `POST /api/v1/chat/attachments`, in the order the files are attached. Each is persisted on the user message as an attachment reference (see "Send uploaded files with a web message"); an id naming no stored upload is refused with `ATTACHMENT_NOT_FOUND` (422) and nothing is persisted or queued. */
-            attachment_ids?: string[];
-        };
-        ChatAttachmentOut: {
-            /** @description Opaque upload id (32 hex characters) a send names. */
+        /**
+         * MessageOut
+         * @description Single message response.
+         */
+        MessageOut: {
+            /** Completion Tokens */
+            completion_tokens: number | null;
+            /** Content */
+            content: components["schemas"]["ContentBlockOut"][];
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
             id: string;
-            /** @description The display name, reduced to its last path segment. */
-            filename: string;
-            /** @description The type the file is stored and handed to the agent under. */
-            mime: string;
-            /** @description Size in bytes. */
-            size: number;
+            /** Model Id */
+            model_id: string | null;
+            /** Prompt Tokens */
+            prompt_tokens: number | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+            /** Seq */
+            seq: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "complete" | "streaming" | "failed";
         };
+        /**
+         * PendingQueueIn
+         * @description Body for PUT /conversations/{id}/pending — replaces the ordered queue.
+         */
+        PendingQueueIn: {
+            /** Pending */
+            pending: string[];
+        };
+        /**
+         * PendingQueueOut
+         * @description The conversation's current ordered pending-message texts.
+         *
+         *     ADR chat-single-owner-live-mirror.
+         */
+        PendingQueueOut: {
+            /** Pending */
+            pending: string[];
+        };
+        /**
+         * SendMessageAck
+         * @description Response for POST /conversations/{id}/messages — fire-and-return
+         *     (ADR chat-single-owner-live-mirror).
+         *
+         *     ``queued`` is True when the message was enqueued behind an in-flight turn,
+         *     False when its turn started immediately.
+         */
         SendMessageAck: {
-            /** @description True when the message was enqueued behind an in-flight turn; false when its turn started immediately. */
+            /** Queued */
             queued: boolean;
         };
-        PendingQueueIn: {
-            /** @description The new ordered pending-message texts (replaces the queue). */
-            pending: string[];
-        };
-        PendingQueueOut: {
-            /** @description The conversation's current ordered pending-message texts. */
-            pending: string[];
-        };
-        ErrorEnvelope: {
-            error: {
-                code: string;
-                message: string;
-                details?: Record<string, never>;
-            };
-        };
-    };
-    responses: {
-        /** @description Validation failed */
-        BadRequest: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorEnvelope"];
-            };
-        };
-        /** @description No agent or conversation with this key or id */
-        NotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorEnvelope"];
-            };
+        /**
+         * SendMessageRequest
+         * @description Body for POST /conversations/{id}/messages.
+         *
+         *     ``attachment_ids`` name files uploaded through ``POST /attachments`` (spec
+         *     chat "Send uploaded files with a web message"). A message carries text, at
+         *     least one attachment, or both — never neither.
+         */
+        SendMessageRequest: {
+            /** Attachment Ids */
+            attachment_ids?: string[];
+            /**
+             * Text
+             * @default
+             */
+            text?: string;
         };
     };
-    parameters: {
-        /** @description Conversation id */
-        ConversationId: string;
-    };
+    responses: never;
+    parameters: never;
     requestBodies: never;
     headers: never;
     pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    listAgentProviders: {
+    list_agent_providers_api_v1_agent_providers_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description The registered agent providers, each with availability */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -450,21 +645,87 @@ export interface operations {
                     "application/json": components["schemas"]["AgentProviderListOut"];
                 };
             };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    listConversations: {
+    upload_attachment_api_v1_chat_attachments_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_attachment_api_v1_chat_attachments_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatAttachmentOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_conversations_api_v1_chat_conversations_get: {
         parameters: {
             query?: {
-                /** @description When true, returns archived conversations; the default lists active (non-archived) conversations only. Either listing leaves out a conversation owned by another surface (see "Show every conversation on the Chat page"); such a conversation is still readable by id. */
                 archived?: boolean;
+                limit?: number;
+                /** @description The previous page's next_cursor. Bound to the listing (active or archived) it was issued for; any other value is 400 CURSOR_INVALID. */
+                cursor?: string | null;
             };
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -473,12 +734,32 @@ export interface operations {
                     "application/json": components["schemas"]["ConversationListOut"];
                 };
             };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    createConversation: {
+    create_conversation_api_v1_chat_conversations_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -488,7 +769,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created */
+            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -497,22 +778,40 @@ export interface operations {
                     "application/json": components["schemas"]["ConversationOut"];
                 };
             };
-            400: components["responses"]["BadRequest"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    getConversation: {
+    get_conversation_api_v1_chat_conversations__id__get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
+                id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -521,38 +820,74 @@ export interface operations {
                     "application/json": components["schemas"]["ConversationOut"];
                 };
             };
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    deleteConversation: {
+    delete_conversation_api_v1_chat_conversations__id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
+                id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description No Content */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    updateConversation: {
+    update_conversation_api_v1_chat_conversations__id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
+                id: string;
             };
             cookie?: never;
         };
@@ -562,7 +897,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -571,22 +906,40 @@ export interface operations {
                     "application/json": components["schemas"]["ConversationOut"];
                 };
             };
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    getAgentConfig: {
+    get_agent_config_api_v1_chat_conversations__id__agent_config_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
+                id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -595,16 +948,34 @@ export interface operations {
                     "application/json": components["schemas"]["AgentConfigOut"];
                 };
             };
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    setAgentConfig: {
+    set_agent_config_api_v1_chat_conversations__id__agent_config_patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
+                id: string;
             };
             cookie?: never;
         };
@@ -614,7 +985,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -623,22 +994,40 @@ export interface operations {
                     "application/json": components["schemas"]["AgentConfigOut"];
                 };
             };
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    archiveConversation: {
+    archive_conversation_api_v1_chat_conversations__id__archive_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
+                id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -647,46 +1036,120 @@ export interface operations {
                     "application/json": components["schemas"]["ConversationOut"];
                 };
             };
-            404: components["responses"]["NotFound"];
-        };
-    };
-    unarchiveConversation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConversationOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            404: components["responses"]["NotFound"];
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    listMessages: {
+    subscribe_events_api_v1_chat_conversations__id__events_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
+                id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    interrupt_turn_api_v1_chat_conversations__id__interrupt_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_messages_api_v1_chat_conversations__id__messages_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -695,16 +1158,34 @@ export interface operations {
                     "application/json": components["schemas"]["MessageListOut"];
                 };
             };
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    sendMessage: {
+    send_message_api_v1_chat_conversations__id__messages_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
+                id: string;
             };
             cookie?: never;
         };
@@ -714,7 +1195,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Accepted — the turn started, or the message was queued. */
+            /** @description Successful Response */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -723,32 +1204,41 @@ export interface operations {
                     "application/json": components["schemas"]["SendMessageAck"];
                 };
             };
-            404: components["responses"]["NotFound"];
-            /** @description Neither text nor an attachment, more than ten attachments, or an attachment id naming no stored upload (`ATTACHMENT_NOT_FOUND`). */
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    resendMessage: {
+    resend_message_api_v1_chat_conversations__id__messages__message_id__resend_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
+                id: string;
                 message_id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Accepted — the turn started, or the message was queued. */
+            /** @description Successful Response */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -757,103 +1247,34 @@ export interface operations {
                     "application/json": components["schemas"]["SendMessageAck"];
                 };
             };
-            /** @description No such conversation (`CONVERSATION_NOT_FOUND`), or no user message with that id in it (`MESSAGE_NOT_FOUND`). */
-            404: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description A file the message referenced is no longer stored (`ATTACHMENT_EXPIRED`). */
-            410: {
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    uploadChatAttachment: {
+    set_pending_api_v1_chat_conversations__id__pending_put: {
         parameters: {
             query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": {
-                    /** Format: binary */
-                    file: string;
-                };
+            header?: {
+                "x-coffer-token"?: string | null;
             };
-        };
-        responses: {
-            /** @description Stored. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChatAttachmentOut"];
-                };
-            };
-            /** @description Over the 20 MB ceiling (`ATTACHMENT_TOO_LARGE`); the message names the limit. */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description A type no agent can use from a turn (`ATTACHMENT_TYPE_UNSUPPORTED`). */
-            415: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            422: components["responses"]["BadRequest"];
-        };
-    };
-    subscribeConversationEvents: {
-        parameters: {
-            query?: never;
-            header?: never;
             path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description SSE stream of agent events */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": string;
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
-    };
-    setPendingQueue: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
+                id: string;
             };
             cookie?: never;
         };
@@ -863,7 +1284,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The updated pending queue. */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -872,29 +1293,66 @@ export interface operations {
                     "application/json": components["schemas"]["PendingQueueOut"];
                 };
             };
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    interruptTurn: {
+    unarchive_conversation_api_v1_chat_conversations__id__unarchive_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description Conversation id */
-                id: components["parameters"]["ConversationId"];
+                id: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description No Content */
-            204: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ConversationOut"];
+                };
             };
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
 }

@@ -65,14 +65,23 @@ const SESSION = {
   source_path: "/home/u/.codex/sessions/2026/06/rollout-s1.jsonl",
 };
 
+const NEXT_CURSOR = "cursor-for-page-2";
+
 function stubTranscripts(
   sessions: (typeof SESSION)[] = [SESSION],
   opts: { isPending?: boolean; error?: Error | null; total?: number } = {},
 ) {
+  const total = opts.total ?? sessions.length;
   vi.mocked(hooks.useAgentTranscripts).mockReturnValue({
     data: opts.isPending
       ? undefined
-      : { sessions, total: opts.total ?? sessions.length, limit: 10, offset: 0 },
+      : {
+          sessions,
+          total,
+          limit: 10,
+          // More matches than rows: the server hands a cursor for the next page.
+          next_cursor: total > sessions.length ? NEXT_CURSOR : null,
+        },
     isPending: opts.isPending ?? false,
     error: opts.error ?? null,
   } as unknown as ReturnType<typeof hooks.useAgentTranscripts>);
@@ -141,11 +150,11 @@ describe("AgentConversationsTab", () => {
     expect(screen.getByText(/no conversations found/i)).toBeInTheDocument();
   });
 
-  test("first page request carries limit/offset (paged on demand)", () => {
+  test("first page request carries a limit and no cursor (paged on demand)", () => {
     stubTranscripts([SESSION], { total: 250 });
     render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
     expect(typeof lastParams().limit).toBe("number");
-    expect(lastParams().offset).toBe(0);
+    expect(lastParams().cursor).toBeUndefined();
   });
 
   test("typing in search forwards the query to the hook, once it settles", async () => {
@@ -210,25 +219,24 @@ describe("AgentConversationsTab", () => {
     expect(lastNavigation().params.get("path")).toBe(dup.source_path);
   });
 
-  test("stepping to the next page advances the offset by the page size", () => {
+  test("stepping to the next page sends the cursor the first page returned", () => {
     stubTranscripts([SESSION], { total: 250 });
     render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
-    const limit = lastParams().limit as number;
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
-    expect(lastParams().offset).toBe(limit);
+    expect(lastParams().cursor).toBe(NEXT_CURSOR);
   });
 
   test("searching from a later page goes back to the first one", async () => {
-    // Otherwise the stale offset outruns the narrower result set and the table
-    // reads "no conversations" while matches exist.
+    // Otherwise the old cursor, issued for the previous search, is sent with the
+    // new one and refused.
     stubTranscripts([SESSION], { total: 250 });
     render(<AgentConversationsTab uid="u-codex" />, { wrapper: wrap });
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
-    expect(lastParams().offset).toBeGreaterThan(0);
+    expect(lastParams().cursor).toBe(NEXT_CURSOR);
 
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "alpha" } });
-    expect(lastParams().offset).toBe(0); // the page resets on the keystroke…
+    expect(lastParams().cursor).toBeUndefined(); // the page resets on the keystroke…
     await waitFor(() => expect(lastParams().q).toBe("alpha")); // …the query waits
-    expect(lastParams().offset).toBe(0);
+    expect(lastParams().cursor).toBeUndefined();
   });
 });

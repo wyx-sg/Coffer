@@ -12,6 +12,7 @@ which is where the traversal guard belongs — it is the layer that touches disk
 from __future__ import annotations
 
 import pathlib
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -37,7 +38,7 @@ class SkillFileNodeOut(BaseModel):
     path: str  # POSIX, relative to the master folder root ("" for the root)
     abs_path: str  # resolved absolute path of this entry on disk
     folder_abs_path: str  # absolute path of this entry's containing folder
-    type: str  # "file" | "dir"
+    type: Literal["file", "dir"]
     size: int | None = None
     truncated: bool = False  # directory clipped at the max walk depth
     children: list[SkillFileNodeOut] = Field(default_factory=list)

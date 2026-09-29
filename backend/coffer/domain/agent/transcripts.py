@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, Literal
 
 from coffer.domain.agent.types import AgentType
 
@@ -166,15 +167,41 @@ def scrub_secrets(text: str) -> str:
     return scrubbed
 
 
+#: The keys the session listing sorts by, and its two directions.
+TranscriptSort = Literal["started_at", "last_activity_at", "message_count"]
+SortOrder = Literal["asc", "desc"]
+
+# Sort value for a session with no timestamp — last on a desc sort (first on
+# asc), and tz-aware so it never mixes with naive datetimes.
+_DT_MIN = datetime(1, 1, 1, tzinfo=UTC)
+
+
+def session_sort_key(session: TranscriptSession, sort: str) -> Any:
+    """The value a session sorts by under ``sort``; ``session_id`` breaks ties.
+
+    One definition for the reader that orders the listing and the service that
+    writes the cursor naming a page's last session, so the two cannot disagree
+    about where that session sits.
+    """
+    if sort == "message_count":
+        return session.message_count
+    if sort == "started_at":
+        return session.started_at or _DT_MIN
+    return session.last_activity_at or _DT_MIN
+
+
 __all__ = [
     "MAX_MESSAGE_CHARS",
+    "SortOrder",
     "TranscriptMessage",
     "TranscriptSession",
     "TranscriptSessionBody",
+    "TranscriptSort",
     "UnsupportedAgentTypeError",
     "is_session_of",
     "is_transcript_file",
     "scrub_secrets",
+    "session_sort_key",
     "sessions_dir",
     "supports_transcripts",
 ]

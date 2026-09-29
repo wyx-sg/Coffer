@@ -90,7 +90,7 @@ machine, exactly like a route the build does not have. The tables below mark tho
 
 ## Routes
 
-The daemon mounts 169 operations in 21 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 170 operations in 22 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -100,6 +100,7 @@ The daemon mounts 169 operations in 21 groups. Groups follow the order the daemo
 | [retention](#retention) | 3 |
 | [upkeep](#upkeep) | 1 |
 | [reconcile](#reconcile) | 3 |
+| [events](#events) | 1 |
 | [credentials](#credentials) | 5 |
 | [settings](#settings) | 2 |
 | [sync](#sync) | 19 |
@@ -171,6 +172,12 @@ The daemon mounts 169 operations in 21 groups. Groups follow the order the daemo
 | `GET` | `/api/v1/reconcile/plan` | Every difference a pass would find now, and what it would do about it. |
 | `POST` | `/api/v1/reconcile/apply` | Apply the named differences now. |
 | `GET` | `/api/v1/attention` | What needs a person now, across every kind whose feature is on — each item with one action, the route its own page calls. |
+
+### events
+
+| Method | Path | Summary |
+| --- | --- | --- |
+| `GET` | `/api/v1/events` | Every change the daemon announces, as invalidation hints, from now on (or from after `Last-Event-ID`, replayed from a bounded buffer). |
 
 ### credentials
 
@@ -361,7 +368,7 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `memory` 
 
 | Method | Path | Summary |
 | --- | --- | --- |
-| `GET` | `/api/v1/chat/conversations` | List conversations, newest first. |
+| `GET` | `/api/v1/chat/conversations` | List conversations, newest activity first, paged by cursor. |
 | `POST` | `/api/v1/chat/conversations` | Create a conversation for the named Coffer-managed agent. |
 | `GET` | `/api/v1/chat/conversations/{id}` | Get a single conversation by id. |
 | `PATCH` | `/api/v1/chat/conversations/{id}` | Rename a conversation. |

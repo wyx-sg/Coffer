@@ -38,7 +38,7 @@ def test_coffer_log_audit_still_reads_the_audit_log(in_proc_daemon: Any) -> None
 
     result = _runner.invoke(app, ["log", "audit", "--json"])
     assert result.exit_code == 0, result.output
-    entries = json.loads(result.output)["audit_events"]
+    entries = json.loads(result.output)["entries"]
     assert any(e.get("resource_name") == "reader-probe" for e in entries), entries
 
 
@@ -154,7 +154,7 @@ def test_coffer_log_mcp_without_a_server_keeps_its_filters(mcp_daemon: Any) -> N
     assert errors.exit_code == capped.exit_code == future.exit_code == 0, errors.output
     assert {r["capability_key"] for r in json.loads(errors.output)["invocations"]} == {"b", "c"}
     assert len(json.loads(capped.output)["invocations"]) == 1
-    assert json.loads(future.output) == {"invocations": []}
+    assert json.loads(future.output) == {"invocations": [], "next_cursor": None}
 
 
 def test_coffer_log_mcp_table_names_each_rows_server(mcp_daemon: Any) -> None:  # noqa: F811

@@ -48,11 +48,19 @@ const ITEMS: CollectionOut[] = [
   {
     uid: "kn-8c1f",
     name: "shopee",
+    title: null,
     description: "internal notes",
     document_count: 23,
     pending_count: 9,
   },
-  { uid: "kn-3e70", name: "personal", description: null, document_count: 4, pending_count: 0 },
+  {
+    uid: "kn-3e70",
+    name: "personal",
+    title: null,
+    description: "",
+    document_count: 4,
+    pending_count: 0,
+  },
 ];
 
 const rowFor = (name: string) => screen.getByText(name).closest("tr") as HTMLElement;

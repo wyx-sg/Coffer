@@ -8,6 +8,7 @@ from typing import Any
 
 from coffer.application.repos import AuditRepo
 from coffer.domain.audit import AuditEntry
+from coffer.domain.pagination import Page, decode_cursor, paginate, position_of, time_and_id
 from coffer.domain.resource import Resource
 
 _logger = logging.getLogger(__name__)
@@ -114,4 +115,47 @@ class AuditService:
             event_prefix=event_prefix,
             since=since,
             limit=limit,
+        )
+
+    async def page(
+        self,
+        *,
+        resource: Resource | None = None,
+        kind: str | None = None,
+        event_type: str | None = None,
+        event_prefix: str | None = None,
+        since: datetime | None = None,
+        limit: int = 50,
+        cursor: str | None = None,
+    ) -> Page[AuditEntry]:
+        """One page of :meth:`query`, newest first, continued by ``cursor``
+        (spec resource-framework "Page growing lists by an opaque cursor").
+
+        The cursor is bound to these filters: one issued for another kind or
+        another ``since`` is refused ``CURSOR_INVALID`` rather than read as a
+        position in an order it was never taken from.
+        """
+        filters = {
+            "kind": kind,
+            "resource_uid": resource.uid if resource else None,
+            "event_type": event_type,
+            "event_prefix": event_prefix,
+            "since": since.isoformat() if since else None,
+        }
+        after = time_and_id(decode_cursor(cursor, list_tag="audit", filters=filters), int)
+        rows = await self._repo.query(
+            kind=kind,
+            resource_id=resource.id if resource else None,
+            event_type=event_type,
+            event_prefix=event_prefix,
+            since=since,
+            limit=limit + 1,
+            after=after,
+        )
+        return paginate(
+            rows,
+            limit,
+            list_tag="audit",
+            filters=filters,
+            key=lambda e: position_of(e.timestamp, e.id),
         )

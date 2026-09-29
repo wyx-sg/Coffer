@@ -40,7 +40,7 @@ import contextlib
 import contextvars
 import logging
 import time
-from collections.abc import AsyncIterator, Collection, Sequence
+from collections.abc import AsyncIterator, Callable, Collection, Sequence
 from datetime import UTC, datetime
 
 from coffer.application.audit_service import AuditService
@@ -71,6 +71,10 @@ DEFAULT_SETTLE_SECONDS = 0.5
 #: against, and a pass that exceeds it means a target is doing too much.
 PASS_BUDGET_SECONDS = 2.0
 
+#: Told about every writing pass once it has finished (the event stream's
+#: attention watcher). Called synchronously; must not block.
+PassListener = Callable[[PassReport], None]
+
 _in_pass: contextvars.ContextVar[bool] = contextvars.ContextVar("reconcile_in_pass", default=False)
 
 
@@ -97,6 +101,7 @@ class Reconciler:
         self._first_seen: dict[str, datetime] = {}
         self._last: PassReport | None = None
         self._holder: asyncio.Task[object] | None = None
+        self._listeners: list[PassListener] = []
 
     # --- registry ------------------------------------------------------------
 
@@ -131,6 +136,11 @@ class Reconciler:
 
     def targets_for_kind(self, kind: str) -> tuple[str, ...]:
         return tuple(n for n, t in self._targets.items() if kind in t.kinds)
+
+    def add_pass_listener(self, listener: PassListener) -> None:
+        """Call ``listener`` after every writing pass (never a dry-run). One
+        that raises is logged; it never fails the pass."""
+        self._listeners.append(listener)
 
     # --- hints ---------------------------------------------------------------
 
@@ -298,7 +308,15 @@ class Reconciler:
         if not dry_run:
             self._remember(report, names, only is None)
             log_report(report)
+            self._tell_listeners(report)
         return report
+
+    def _tell_listeners(self, report: PassReport) -> None:
+        for listener in self._listeners:
+            try:
+                listener(report)
+            except Exception:
+                _log.exception("reconcile.pass_listener_failed")
 
     def _locked(self) -> contextlib.AbstractAsyncContextManager[object]:
         """The pass lock — unless this task already holds it (:meth:`hold`)."""
@@ -330,5 +348,6 @@ __all__ = [
     "DEFAULT_PERIOD_SECONDS",
     "DEFAULT_SETTLE_SECONDS",
     "PASS_BUDGET_SECONDS",
+    "PassListener",
     "Reconciler",
 ]

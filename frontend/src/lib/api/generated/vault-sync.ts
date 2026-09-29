@@ -4,56 +4,6 @@
  */
 
 export interface paths {
-    "/api/v1/sync/run": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Run one converge round now.
-         * @description Never joins. On a machine that has not joined the remote the round
-         *     still detects the join — new, or returning with its recovered base —
-         *     and reports it in `join` and `join_report`, applying and pushing
-         *     nothing, with status `awaiting_join`; `POST /adopt` joins.
-         */
-        post: operations["runSyncRound"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sync/join": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * State the join `/adopt` would make, applying nothing.
-         * @description Joining is explicit and reported: before anything is applied, the
-         *     surfaces state which case it is, when this machine last converged, how
-         *     many documents the remote has changed since, and how many this vault
-         *     has. This fetches and reads the remote's registry the way the round's
-         *     step 0 does, and stops there — the vault and the pointer are
-         *     untouched. `joining: false` means this machine already converged here
-         *     and `/adopt` is an ordinary round. `case: ambiguous` is a returning
-         *     machine whose recorded base is gone; it still needs `choice`.
-         */
-        get: operations["previewSyncJoin"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/sync/adopt": {
         parameters: {
             query?: never;
@@ -64,14 +14,17 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Join the configured remote.
-         * @description The same round as any other. The surfaces call `GET /join` first and
-         *     show its answer before calling this. `choice` is only for a returning machine
-         *     whose recorded base is gone from the remote's history: `keep-local`
-         *     joins as new and publishes this vault's documents as additions. Absent,
-         *     that case is refused rather than guessed.
+         * Adopt
+         * @description Join the configured remote.
+         *
+         *     The same round as any other, and the only one allowed to join: ``/run``
+         *     on a machine with no pointer reports ``awaiting_join``. Whether this is a
+         *     join, and of which kind, is still read from the pointer and the registry,
+         *     so configuring a remote on a machine that forgot its pointer cannot route
+         *     around the new-versus-returning distinction. The surfaces call
+         *     ``GET /join`` first and show its answer.
          */
-        post: operations["adoptSyncRemote"];
+        post: operations["adopt_api_v1_sync_adopt_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -87,117 +40,29 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Apply a round the deletion guard held. */
-        post: operations["confirmHeldSyncRound"];
+        /** Confirm */
+        post: operations["confirm_api_v1_sync_confirm_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sync/reject": {
+    "/api/v1/sync/join": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /** Discard a held round, leaving both sides as they are. */
-        post: operations["rejectHeldSyncRound"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sync/rebuild": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
         /**
-         * Rebuild this machine from the remote, discarding local-only documents.
-         * @description Destructive on purpose — the answer for a machine whose vault is gone.
+         * Preview Join
+         * @description State the join ``/adopt`` would make, applying nothing.
+         *
+         *     The surfaces call this first so the user sees the case, the day this
+         *     machine last converged and the counts before a single document moves.
          */
-        post: operations["rebuildVaultFromRemote"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sync/rollback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Undo the last round. */
-        post: operations["rollbackLastSyncRound"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sync/restore": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Bring the vault back to an earlier point in the remote's history. */
-        post: operations["restoreVaultAtPoint"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sync/remote": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The configured remote, or nothing. */
-        get: operations["getSyncRemote"];
-        /**
-         * Configure the remote.
-         * @description Every field but the URL carries a default, so a `PUT` with a bare URL is
-         *     a complete configuration rather than a half-set one.
-         */
-        put: operations["setSyncRemote"];
-        post?: never;
-        /** Forget the remote. Idempotent. */
-        delete: operations["clearSyncRemote"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sync/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The remote, the last round, and this machine's own identity. */
-        get: operations["getSyncStatus"];
+        get: operations["preview_join_api_v1_sync_join_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -206,23 +71,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sync/runs": {
+    "/api/v1/sync/key/export": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Every round this vault has run, newest first.
-         * @description Read-only and unfiltered. The surface searches, filters and pages in the
-         *     browser over the window it is handed, the same way the Activity page
-         *     does, so this route stays one query with one knob. Rounds that changed
-         *     nothing are included — they are what makes a gap in the record visible.
-         */
-        get: operations["listSyncRuns"];
+        get?: never;
+        put?: never;
+        /** Export Key */
+        post: operations["export_key_api_v1_sync_key_export_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/key/fingerprint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Key Fingerprint */
+        get: operations["key_fingerprint_api_v1_sync_key_fingerprint_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/key/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Key */
+        post: operations["import_key_api_v1_sync_key_import_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -236,8 +129,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every machine in the registry, with this one marked. */
-        get: operations["listSyncMachines"];
+        /** List Machines */
+        get: operations["list_machines_api_v1_sync_machines_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -260,10 +153,13 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Rename this machine.
-         * @description Free — nothing keys on the label, so nothing else has to change.
+         * Rename Self
+         * @description Rename this machine.
+         *
+         *     Free: nothing keys on the label — a channel's binding and the curation
+         *     owner name the derived id — so nothing else has to change.
          */
-        patch: operations["renameSelfMachine"];
+        patch: operations["rename_self_api_v1_sync_machines_self_patch"];
         trace?: never;
     };
     "/api/v1/sync/machines/{machine_id}": {
@@ -276,26 +172,141 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /**
-         * Retire a machine from the registry.
-         * @description Idempotent: retiring an id the registry does not hold answers
-         *     `removed: true` as well.
-         */
-        delete: operations["retireSyncMachine"];
+        /** Retire Machine */
+        delete: operations["retire_machine_api_v1_sync_machines__machine_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sync/key/fingerprint": {
+    "/api/v1/sync/rebuild": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** This machine's master-key fingerprint. */
-        get: operations["getMasterKeyFingerprint"];
+        get?: never;
+        put?: never;
+        /**
+         * Rebuild
+         * @description Rebuild this machine from the remote, discarding local-only documents.
+         *
+         *     The answer for a machine whose vault is gone. Such a machine rejoins with a
+         *     valid base and nothing to publish but the loss, so neither ordinary answer
+         *     serves it: confirming spreads the loss and rejecting refuses the same round
+         *     forever. Destructive on purpose.
+         */
+        post: operations["rebuild_api_v1_sync_rebuild_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject */
+        post: operations["reject_api_v1_sync_reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/remote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Remote */
+        get: operations["get_remote_api_v1_sync_remote_get"];
+        /** Put Remote */
+        put: operations["put_remote_api_v1_sync_remote_put"];
+        post?: never;
+        /** Delete Remote */
+        delete: operations["delete_remote_api_v1_sync_remote_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore */
+        post: operations["restore_api_v1_sync_restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rollback */
+        post: operations["rollback_api_v1_sync_rollback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run Round */
+        post: operations["run_round_api_v1_sync_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sync/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Runs
+         * @description Every round this vault has run, newest first.
+         *
+         *     Read-only and unfiltered. The surface searches, filters and pages in the
+         *     browser over the window it is handed, the same way the Activity page does,
+         *     so this route stays one query with one knob.
+         */
+        get: operations["list_runs_api_v1_sync_runs_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -304,38 +315,17 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sync/key/export": {
+    "/api/v1/sync/status": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Status */
+        get: operations["status_api_v1_sync_status_get"];
         put?: never;
-        /**
-         * Hand back the master key's material.
-         * @description Moves key **material** only, never documents. The caller decides where
-         *     it lands; the daemon never writes to a path a caller named.
-         */
-        post: operations["exportMasterKey"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sync/key/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Adopt a master key exported from another machine. */
-        post: operations["importMasterKey"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -346,339 +336,407 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        ErrorEnvelope: {
-            error: {
-                code: string;
-                message: string;
-            };
+        /** AdoptIn */
+        AdoptIn: {
+            /** Choice */
+            choice?: "keep-local" | null;
         };
-        /** @description One document's fate in one round — what moved, and which way. */
-        DocChangeOut: {
-            path: string;
-            /** @enum {string} */
-            status: "added" | "modified" | "deleted";
+        /** BreachOut */
+        BreachOut: {
+            /** Area */
+            area: string;
+            /** Deleted */
+            deleted: number;
+            /** Total */
+            total: number;
         };
         /**
-         * @description What a round moved, as a tally **and** as the list behind it. The tally
-         *     is what a row shows; the list is what the reader opens the row to find.
+         * ChangeStatus
+         * @enum {string}
+         */
+        ChangeStatus: "added" | "modified" | "deleted";
+        /**
+         * ConvergeStatus
+         * @enum {string}
+         */
+        ConvergeStatus: "ok" | "no_change" | "conflict" | "awaiting_confirmation" | "push_failed" | "failed" | "disabled" | "awaiting_join";
+        /**
+         * DiffCountsOut
+         * @description What a round moved, as a tally AND as the list behind it.
+         *
+         *     The tally alone is what a row can show; the list is what the reader opens
+         *     the row to find out. A round reporting `+1 ~1` and then "nothing further to
+         *     report" is the surface refusing to answer the only question the row raises,
+         *     and the paths were in the payload the whole time.
          */
         DiffCountsOut: {
-            /** @default 0 */
-            added: number;
-            /** @default 0 */
-            modified: number;
-            /** @default 0 */
-            deleted: number;
             /**
-             * @description Every path this side of the round touched, sorted, with its status.
+             * Added
+             * @default 0
+             */
+            added: number;
+            /**
+             * Changes
              * @default []
              */
             changes: components["schemas"]["DocChangeOut"][];
+            /**
+             * Deleted
+             * @default 0
+             */
+            deleted: number;
+            /**
+             * Modified
+             * @default 0
+             */
+            modified: number;
         };
-        FailureOut: {
+        /**
+         * DocChangeOut
+         * @description One document's fate in one round: what moved, and which way.
+         */
+        DocChangeOut: {
+            /** Path */
             path: string;
+            status: components["schemas"]["ChangeStatus"];
+        };
+        /** ErrorDetail */
+        ErrorDetail: {
+            /**
+             * Code
+             * @example RESOURCE_NOT_FOUND
+             */
+            code: string;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /**
+             * Message
+             * @example resource not found: mcp_server:filesystem
+             */
+            message: string;
+        };
+        /** ErrorResponse */
+        ErrorResponse: {
+            error: components["schemas"]["ErrorDetail"];
+        };
+        /** FailureOut */
+        FailureOut: {
+            /** Path */
+            path: string;
+            /** Reason */
             reason: string;
         };
-        /** @description One area the deletion guard tripped on, and by how much. */
-        BreachOut: {
-            area: string;
-            deleted: number;
-            total: number;
+        /**
+         * JoinPreviewOut
+         * @description The join a round would make, stated before anything is applied.
+         *
+         *     ``joining`` is False for a machine that already converged here: adopting
+         *     is then an ordinary round with nothing to announce. ``case`` is
+         *     ``ambiguous`` for a returning machine whose base is gone, which still
+         *     needs the explicit ``keep-local`` choice (or a rebuild) before it joins.
+         */
+        JoinPreviewOut: {
+            /** Base */
+            base: string | null;
+            /** Case */
+            case: ("new" | "returning" | "ambiguous") | null;
+            /** Joining */
+            joining: boolean;
+            /** Last Converged On */
+            last_converged_on: string | null;
+            /** Remote Changed */
+            remote_changed: number | null;
+            /** Vault Documents */
+            vault_documents: number | null;
         };
-        /** @description A round the deletion guard held. */
+        /** KeyFingerprintOut */
+        KeyFingerprintOut: {
+            /** Fingerprint */
+            fingerprint: string | null;
+        };
+        /** KeyImportOut */
+        KeyImportOut: {
+            /** Locked Refs */
+            locked_refs: string[];
+        };
+        /** KeyMaterialIn */
+        KeyMaterialIn: {
+            /** Material */
+            material: string;
+        };
+        /** KeyMaterialOut */
+        KeyMaterialOut: {
+            /** Material */
+            material: string;
+        };
+        /** MachineListOut */
+        MachineListOut: {
+            /** Machines */
+            machines: components["schemas"]["MachineOut"][];
+        };
+        /** MachineOut */
+        MachineOut: {
+            /** Agents */
+            agents: string[];
+            /** Coffer Version */
+            coffer_version: string;
+            /** Hostname */
+            hostname: string;
+            /** Is Self */
+            is_self: boolean;
+            /** Key Matches */
+            key_matches: boolean | null;
+            /** Last Converged On */
+            last_converged_on: string | null;
+            /** Machine Id */
+            machine_id: string;
+            /** Name */
+            name: string;
+            /** Os */
+            os: string;
+        };
+        /** MachineRemovedOut */
+        MachineRemovedOut: {
+            /** Removed */
+            removed: boolean;
+        };
+        /** MachineRenameIn */
+        MachineRenameIn: {
+            /** Name */
+            name: string;
+        };
+        /**
+         * PendingConfirmationOut
+         * @description A round the deletion guard held.
+         *
+         *     ``direction`` says which way it tripped: ``apply`` means the remote would
+         *     delete too much of this vault, ``publish`` means this vault would delete
+         *     too much of the remote — the case where this machine is the damaged one.
+         */
         PendingConfirmationOut: {
+            /** Breaches */
+            breaches: components["schemas"]["BreachOut"][];
             /**
-             * @description `apply` means the remote would delete too much of this vault;
-             *     `publish` means this vault would delete too much of the remote — the
-             *     case where this machine is the damaged one.
+             * Direction
              * @enum {string}
              */
             direction: "apply" | "publish";
-            breaches: components["schemas"]["BreachOut"][];
+            /** Paths */
             paths: string[];
-            /** Format: date-time */
+            /**
+             * Raised At
+             * Format: date-time
+             */
             raised_at: string;
         };
-        JoinPreviewOut: {
-            /** @description False when this machine already converged with the remote. */
-            joining: boolean;
-            /**
-             * @default null
-             * @enum {string|null}
-             */
-            case: "new" | "returning" | "ambiguous" | null;
-            /**
-             * @description The commit a returning machine recovered from its own descriptor.
-             * @default null
-             */
-            base: string | null;
-            /**
-             * Format: date
-             * @description The day this machine last converged here; null for a new machine.
-             * @default null
-             */
-            last_converged_on: string | null;
-            /**
-             * @description Documents the remote changed since this machine's base — everything
-             *     it holds, for a new machine. Null when the base is gone.
-             * @default null
-             */
-            remote_changed: number | null;
-            /**
-             * @description Documents this vault holds.
-             * @default null
-             */
-            vault_documents: number | null;
+        /** RestoreIn */
+        RestoreIn: {
+            /** At */
+            at?: string | null;
         };
-        /** @description One converge round's outcome. */
+        /**
+         * RoundOut
+         * @description One converge round's outcome.
+         */
         RoundOut: {
             /**
-             * @description The whole of `ConvergeStatus`, and `status` is what discriminates this
-             *     one shape across every round-shaped operation. `no_change` and
-             *     `disabled` are successes rather than skips: an unchanged vault makes
-             *     no commit by design, and an unconfigured or switched-off remote is
-             *     the ordinary state of a fresh install. `conflict` left the vault
-             *     untouched and the pointer unmoved; `awaiting_confirmation` is held at
-             *     the deletion guard and `pending` says which way; `push_failed`
-             *     applied everything locally and kept the commit for the next round.
-             *     `awaiting_join` is a machine that has not joined the remote: joining
-             *     is explicit, so an ordinary round applied and pushed nothing, and
-             *     only `POST /adopt` joins.
-             * @enum {string}
-             */
-            status: "ok" | "no_change" | "conflict" | "awaiting_confirmation" | "push_failed" | "failed" | "disabled" | "awaiting_join";
-            /**
-             * @description `new` or `returning` when this round joined a remote; null otherwise.
-             * @default null
-             */
-            join: string | null;
-            applied: components["schemas"]["DiffCountsOut"];
-            published: components["schemas"]["DiffCountsOut"];
-            /** @default null */
-            commit: string | null;
-            /** @default [] */
-            conflicts: string[];
-            /**
-             * @description Paths an agent merged. Always reported, successful or not: a silent
-             *     machine merge of the user's own notes is what they would most want
-             *     told.
+             * Agent Resolved
              * @default []
              */
             agent_resolved: string[];
-            /** @default [] */
-            failures: components["schemas"]["FailureOut"][];
+            applied: components["schemas"]["DiffCountsOut"];
+            /** Commit */
+            commit: string | null;
             /**
-             * @description Paths this round met that can never apply on this machine (an agent
-             *     whose config directory does not exist here). Held and not retried,
-             *     and not failures.
+             * Conflicts
              * @default []
              */
-            not_applicable: string[];
+            conflicts: string[];
+            /** Error */
+            error: string | null;
             /**
-             * @description Credential refs whose ciphertext this machine cannot decrypt.
+             * Failures
+             * @default []
+             */
+            failures: components["schemas"]["FailureOut"][];
+            /** Join */
+            join: string | null;
+            join_report: components["schemas"]["JoinPreviewOut"] | null;
+            /**
+             * Locked Refs
              * @default []
              */
             locked_refs: string[];
             /**
-             * @description On an `awaiting_join` round: the join the round detected — detection
-             *     runs on every round without a pointer — and did not apply. `join`
-             *     names its kind.
-             * @default null
+             * Not Applicable
+             * @default []
              */
-            join_report: components["schemas"]["JoinPreviewOut"] | null;
-            /** @default null */
+            not_applicable: string[];
             pending: components["schemas"]["PendingConfirmationOut"] | null;
-            /** @default null */
+            published: components["schemas"]["DiffCountsOut"];
+            status: components["schemas"]["ConvergeStatus"];
+        };
+        /**
+         * RunRecordOut
+         * @description One round as the history holds it: the same report, plus when.
+         *
+         *     A superset of ``RoundOut`` rather than a shape of its own, so the two
+         *     surfaces that show a round — the status page and the history table — can
+         *     never drift into describing it differently. The timestamps are what the
+         *     last-round view never needed and a history cannot do without.
+         */
+        RunRecordOut: {
+            /**
+             * Agent Resolved
+             * @default []
+             */
+            agent_resolved: string[];
+            applied: components["schemas"]["DiffCountsOut"];
+            /** Commit */
+            commit: string | null;
+            /**
+             * Conflicts
+             * @default []
+             */
+            conflicts: string[];
+            /** Error */
             error: string | null;
-        };
-        RunRecordOut: components["schemas"]["RoundOut"] & {
             /**
-             * @description A row key for a surface, never shown — two rounds that changed
-             *     nothing are otherwise indistinguishable values.
+             * Failures
+             * @default []
              */
-            id: number;
-            /** Format: date-time */
-            started_at: string;
-            /** Format: date-time */
+            failures: components["schemas"]["FailureOut"][];
+            /**
+             * Finished At
+             * Format: date-time
+             */
             finished_at: string;
+            /** Id */
+            id: number;
+            /** Join */
+            join: string | null;
+            join_report: components["schemas"]["JoinPreviewOut"] | null;
+            /**
+             * Locked Refs
+             * @default []
+             */
+            locked_refs: string[];
+            /**
+             * Not Applicable
+             * @default []
+             */
+            not_applicable: string[];
+            pending: components["schemas"]["PendingConfirmationOut"] | null;
+            published: components["schemas"]["DiffCountsOut"];
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            status: components["schemas"]["ConvergeStatus"];
         };
-        SyncRunListOut: {
-            runs: components["schemas"]["RunRecordOut"][];
-        };
-        AdoptIn: {
-            /**
-             * @description `keep-local` only, and only for a returning machine whose recorded
-             *     base is gone from the remote's history.
-             * @default null
-             */
-            choice: string | null;
-        };
-        SyncRemoteIn: {
-            /** @description Becomes an argument to `git`, so it may not begin with `-`. */
-            url: string;
-            /**
-             * @description Held to `git check-ref-format --branch`.
-             * @default main
-             */
-            branch: string;
-            /**
-             * @description A name in the credential store — **never** the secret. The daemon
-             *     resolves it at push time and nowhere else.
-             * @default null
-             */
-            credential_ref: string | null;
-            /**
-             * @description Whether encrypted credentials travel with the documents.
-             * @default false
-             */
-            include_credentials: boolean;
-            /**
-             * @description Seconds between automatic rounds, at least one minute. The worker converges on this
-             *     interval as soon as a remote is configured and `enabled`.
-             * @default 3600
-             */
-            interval_seconds: number;
-            /**
-             * @description Whether sync runs. `false` PAUSES the remote without forgetting it:
-             *     every round reports `disabled`, records nothing and raises no
-             *     attention on any surface, while the remote, the pointer and the
-             *     history are kept (see "Pause a configured remote without
-             *     forgetting it"). `coffer sync remote set` sends the stored value
-             *     back, so re-running it keeps a paused remote paused; a first remote
-             *     is stored enabled.
-             * @default true
-             */
-            enabled: boolean;
-            /**
-             * @description The separate working tree the round commits from — never the live
-             *     vault directory.
-             * @default ~/.coffer/sync
-             */
-            worktree_path: string;
-        };
-        SyncRemoteOut: {
-            url: string;
-            branch: string;
-            credential_ref: string | null;
-            include_credentials: boolean;
-            interval_seconds: number;
-            enabled: boolean;
-            worktree_path: string;
-        };
-        SyncRemoteStateOut: {
-            /** @description `false` on a fresh vault. */
-            configured: boolean;
-            remote: components["schemas"]["SyncRemoteOut"] | null;
-        };
+        /** SyncRemoteClearedOut */
         SyncRemoteClearedOut: {
-            /** @description `false` when there was nothing to clear — delete is idempotent. */
+            /** Cleared */
             cleared: boolean;
         };
-        SyncStatusOut: {
+        /**
+         * SyncRemoteIn
+         * @description The remote as the user configures it.
+         *
+         *     Every field but the URL carries the spec's default, so a ``PUT`` with a
+         *     bare URL is a complete configuration rather than a half-set one.
+         *
+         *     The URL and the branch become arguments to ``git``. Neither may begin with
+         *     ``-`` — git would read it as an option, and ``--receive-pack=<cmd>`` is a
+         *     command — and the branch is held to ``git check-ref-format --branch``. The
+         *     ``pattern`` catches the shape at the wire; the validators run the domain's
+         *     full rule, so a bad name is a 422 here rather than a git error later.
+         */
+        SyncRemoteIn: {
+            /**
+             * Branch
+             * @default main
+             */
+            branch?: string;
+            /** Credential Ref */
+            credential_ref?: string | null;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled?: boolean;
+            /**
+             * Include Credentials
+             * @default false
+             */
+            include_credentials?: boolean;
+            /**
+             * Interval Seconds
+             * @default 3600
+             */
+            interval_seconds?: number;
+            /** Url */
+            url: string;
+            /**
+             * Worktree Path
+             * @default ~/.coffer/sync
+             */
+            worktree_path?: string;
+        };
+        /** SyncRemoteOut */
+        SyncRemoteOut: {
+            /** Branch */
+            branch: string;
+            /** Credential Ref */
+            credential_ref: string | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Include Credentials */
+            include_credentials: boolean;
+            /** Interval Seconds */
+            interval_seconds: number;
+            /** Url */
+            url: string;
+            /** Worktree Path */
+            worktree_path: string;
+        };
+        /** SyncRemoteStateOut */
+        SyncRemoteStateOut: {
+            /** Configured */
             configured: boolean;
             remote: components["schemas"]["SyncRemoteOut"] | null;
-            last_run: components["schemas"]["RoundOut"] | null;
-            /** @description This machine's own id, so a surface can mark its row in the registry. */
-            machine_id: string;
+        };
+        /** SyncRunListOut */
+        SyncRunListOut: {
+            /** Runs */
+            runs: components["schemas"]["RunRecordOut"][];
+        };
+        /** SyncStatusOut */
+        SyncStatusOut: {
+            /** Configured */
+            configured: boolean;
             /**
-             * @description `true` when the id was derived from the host; `false` when it came
-             *     from the local fallback file (`~/.coffer/machine-id`), which does
-             *     not survive deleting `~/.coffer`.
-             */
-            machine_id_is_derived: boolean;
-            /**
-             * @description Whether this machine has joined the remote. Until it has, a round
-             *     reports `awaiting_join` and only `POST /adopt` joins.
+             * Joined
              * @default false
              */
             joined: boolean;
+            last_run: components["schemas"]["RoundOut"] | null;
+            /** Machine Id */
+            machine_id: string;
+            /** Machine Id Is Derived */
+            machine_id_is_derived: boolean;
             /**
-             * @description Every path recorded as not applicable on this machine, sorted.
+             * Not Applicable
              * @default []
              */
             not_applicable: string[];
-        };
-        MachineOut: {
-            machine_id: string;
-            name: string;
-            os: string;
-            hostname: string;
-            coffer_version: string;
-            /**
-             * @description The **day** this machine last converged — a day rather than an
-             *     instant, because an idle machine must not commit a heartbeat every
-             *     round.
-             */
-            last_converged_on: string | null;
-            /**
-             * @description Null when either side has published no fingerprint yet. `false`
-             *     means that machine's credentials cannot be decrypted here.
-             */
-            key_matches: boolean | null;
-            agents: string[];
-            is_self: boolean;
-        };
-        MachineListOut: {
-            machines: components["schemas"]["MachineOut"][];
-        };
-        MachineRenameIn: {
-            name: string;
-        };
-        /**
-         * @description Retiring a machine removes its descriptor and rewrites nothing else; a
-         *     channel binding or curation owner that named it is then reported as
-         *     naming a machine the registry does not hold. That is why this answer
-         *     has no second half.
-         */
-        MachineRemovedOut: {
-            removed: boolean;
-        };
-        RestoreIn: {
-            /**
-             * @description A sha, a ref, or a `YYYY-MM-DD` date resolving to the last commit at
-             *     or before it — the tip cannot return something deleted last week.
-             * @default null
-             */
-            at: string | null;
-        };
-        KeyMaterialIn: {
-            material: string;
-        };
-        KeyMaterialOut: {
-            material: string;
-        };
-        KeyImportOut: {
-            /** @description Refs whose ciphertext is still undecryptable after the import. */
-            locked_refs: string[];
-        };
-        KeyFingerprintOut: {
-            fingerprint: string | null;
+            remote: components["schemas"]["SyncRemoteOut"] | null;
         };
     };
-    responses: {
-        /** @description `GIT_MIRROR_FAILED` — a git operation against the working tree or the remote failed. */
-        GitFailed: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorEnvelope"];
-            };
-        };
-        /**
-         * @description The remote was refused: a malformed URL or branch at the wire, or
-         *     `BACKUP_REMOTE_INVALID` when the working tree is refused or the remote
-         *     cannot be reached.
-         */
-        Unprocessable: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorEnvelope"];
-            };
-        };
-    };
+    responses: never;
     parameters: never;
     requestBodies: never;
     headers: never;
@@ -686,16 +744,22 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    runSyncRound: {
+    adopt_api_v1_sync_adopt_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AdoptIn"] | null;
+            };
+        };
         responses: {
-            /** @description The round's outcome. A held round reports `pending`. */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -704,21 +768,80 @@ export interface operations {
                     "application/json": components["schemas"]["RoundOut"];
                 };
             };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    previewSyncJoin: {
+    confirm_api_v1_sync_confirm_post: {
         parameters: {
-            query?: {
-                /** @description Preview the join as `/adopt` would make it with this choice. */
-                choice?: "keep-local";
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
             };
-            header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description The join, stated. */
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_join_api_v1_sync_join_get: {
+        parameters: {
+            query?: {
+                choice?: "keep-local" | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -727,422 +850,38 @@ export interface operations {
                     "application/json": components["schemas"]["JoinPreviewOut"];
                 };
             };
-        };
-    };
-    adoptSyncRemote: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["AdoptIn"];
-            };
-        };
-        responses: {
-            /** @description The joining round's outcome. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundOut"];
-                };
-            };
-        };
-    };
-    confirmHeldSyncRound: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The now-applied round's outcome. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundOut"];
-                };
-            };
-            /** @description `SYNC_NOTHING_PENDING` — no round is held for confirmation. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
-    rejectHeldSyncRound: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Cleared. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SyncRemoteClearedOut"];
-                };
-            };
-            /** @description `SYNC_NOTHING_PENDING` — no round is held for confirmation. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
-    rebuildVaultFromRemote: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The rebuilding round's outcome. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundOut"];
-                };
-            };
-            /**
-             * @description `SYNC_NOTHING_TO_ROLL_BACK` when no remote is configured;
-             *     `SYNC_BUNDLE_TOO_NEW` when the remote's layout is newer than this
-             *     build understands.
-             */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            502: components["responses"]["GitFailed"];
-        };
-    };
-    rollbackLastSyncRound: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /**
-             * @description The rollback round's outcome. The pointer does not move: the
-             *     reverted vault is an ordinary local change the next round publishes.
-             */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundOut"];
-                };
-            };
-            /** @description `SYNC_NOTHING_TO_ROLL_BACK` — no remote, no pointer, or no pre-apply snapshot to return to. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
-    restoreVaultAtPoint: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["RestoreIn"];
-            };
-        };
-        responses: {
-            /** @description The restoring round's outcome. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoundOut"];
-                };
-            };
-            /**
-             * @description `SYNC_NOTHING_TO_ROLL_BACK` when no remote is configured or this
-             *     machine has no pointer; `SYNC_BUNDLE_TOO_NEW` when the revision's
-             *     layout is newer than this build understands.
-             */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            502: components["responses"]["GitFailed"];
-        };
-    };
-    getSyncRemote: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /**
-             * @description `configured: false` with `remote: null` on a fresh vault — sync
-             *     being off is the ordinary state, not an error.
-             */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SyncRemoteStateOut"];
-                };
-            };
-        };
-    };
-    setSyncRemote: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SyncRemoteIn"];
-            };
-        };
-        responses: {
-            /** @description The stored remote, without its credential. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SyncRemoteOut"];
-                };
-            };
-            422: components["responses"]["Unprocessable"];
-        };
-    };
-    clearSyncRemote: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description `cleared: false` when there was nothing to clear. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SyncRemoteClearedOut"];
-                };
-            };
-        };
-    };
-    getSyncStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The status a surface opens on. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SyncStatusOut"];
-                };
-            };
-        };
-    };
-    listSyncRuns: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The run history. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SyncRunListOut"];
-                };
-            };
-        };
-    };
-    listSyncMachines: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The registry. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MachineListOut"];
-                };
-            };
-        };
-    };
-    renameSelfMachine: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MachineRenameIn"];
-            };
-        };
-        responses: {
-            /** @description This machine's descriptor, renamed. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MachineOut"];
-                };
-            };
-            /** @description `BACKUP_REMOTE_INVALID` — the name is empty. */
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-        };
-    };
-    retireSyncMachine: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                machine_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Removed. Nothing else in the vault is rewritten. */
-            200: {
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MachineRemovedOut"];
-                };
-            };
-            /**
-             * @description `SYNC_CANNOT_RETIRE_SELF` when the id is this machine's own;
-             *     `BACKUP_REMOTE_INVALID` when no sync remote is configured, so there
-             *     is no registry to retire from.
-             */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    getMasterKeyFingerprint: {
+    export_key_api_v1_sync_key_export_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description The fingerprint, or null when none has been published. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KeyFingerprintOut"];
-                };
-            };
-        };
-    };
-    exportMasterKey: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The key material. */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1151,21 +890,72 @@ export interface operations {
                     "application/json": components["schemas"]["KeyMaterialOut"];
                 };
             };
-            /** @description `MASTER_KEY_FILE_INVALID` — this machine holds no master key to export. */
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    importMasterKey: {
+    key_fingerprint_api_v1_sync_key_fingerprint_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeyFingerprintOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    import_key_api_v1_sync_key_import_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1175,10 +965,7 @@ export interface operations {
             };
         };
         responses: {
-            /**
-             * @description The credential refs still locked after the import — ciphertext this
-             *     machine holds but cannot decrypt.
-             */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1187,13 +974,558 @@ export interface operations {
                     "application/json": components["schemas"]["KeyImportOut"];
                 };
             };
-            /** @description `MASTER_KEY_FILE_INVALID` — no material was supplied, or it is not a valid Fernet key. */
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_machines_api_v1_sync_machines_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rename_self_api_v1_sync_machines_self_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MachineRenameIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    retire_machine_api_v1_sync_machines__machine_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                machine_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MachineRemovedOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rebuild_api_v1_sync_rebuild_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reject_api_v1_sync_reject_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRemoteClearedOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_remote_api_v1_sync_remote_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRemoteStateOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_remote_api_v1_sync_remote_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncRemoteIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRemoteOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_remote_api_v1_sync_remote_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRemoteClearedOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_api_v1_sync_restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RestoreIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rollback_api_v1_sync_rollback_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    run_round_api_v1_sync_run_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoundOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_runs_api_v1_sync_runs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRunListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    status_api_v1_sync_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncStatusOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

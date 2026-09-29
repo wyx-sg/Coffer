@@ -30,6 +30,7 @@ detached from a shell. Each writes on its own route, for the reason
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
@@ -37,7 +38,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from coffer.application.engine_timeout import DEFAULT_MODEL_TIMEOUT_S
 from coffer.application.internal_engine_config_service import InternalEngineConfigService
 from coffer.application.upkeep_schedule import DEFAULT_INTERVALS
-from coffer.domain.errors import ConfigValidationError
 from coffer.domain.internal_engine_config import (
     AGGREGATE,
     CURATE,
@@ -153,7 +153,7 @@ class UpkeepUpdate(BaseModel):
     timer can be changed independently.
     """
 
-    pass_name: str = Field(alias="pass")
+    pass_name: Literal["aggregate", "distil", "curate"] = Field(alias="pass")
     enabled: bool | None = None
     interval_s: int | None = Field(default=None, ge=60)
     #: Explicitly return this pass to its own default interval. Needed because
@@ -216,10 +216,6 @@ async def update_upkeep(
     Each half is left alone when the client does not send it, so a settings
     page can flip a switch without restating a timer it never looked at.
     """
-    if body.pass_name not in _PASSES:
-        raise ConfigValidationError(
-            f"unknown upkeep pass '{body.pass_name}' (known: {', '.join(_PASSES)})"
-        )
     current = (await svc.get()).upkeep(body.pass_name)
     interval = (
         None

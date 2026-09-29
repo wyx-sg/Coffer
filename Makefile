@@ -22,7 +22,7 @@ PYTEST_XDIST := -n $(PYTEST_WORKERS) --dist loadgroup
 	eval eval-routing eval-curate \
 	bundle-binaries \
 	desktop desktop-stage-binaries desktop-lint desktop-test \
-	frontend-codegen docs-reference \
+	contracts frontend-codegen docs-reference \
 	lint format dev clean
 
 help:
@@ -58,6 +58,7 @@ help:
 	@echo ""
 	@echo "  Dev:"
 	@echo "  make dev                   run backend (:8000) + frontend (:5173) in parallel"
+	@echo "  make contracts             regenerate every spec's contracts/api.openapi.yaml from the Pydantic models, then the frontend types"
 	@echo "  make frontend-codegen      regenerate the frontend's OpenAPI types from the OpenSpec contracts"
 	@echo "  make docs-reference        regenerate the docs site's CLI and REST API reference pages"
 	@echo "  make bundle-binaries       freeze the three CLI binaries with PyInstaller (into dist/)"
@@ -127,6 +128,10 @@ openspec-validate:
 
 lint:
 	$(PY) scripts/check_file_sizes.py
+# The wire contracts are generated from the Pydantic models (Principles,
+# "Contract direction"); this fails when a checked-in contract is not what the
+# models produce, or a served route has no owning spec. Fix: `make contracts`.
+	$(PY) scripts/gen_contracts.py --check
 	$(PY) scripts/check_response_models.py
 	$(PY) scripts/check_doc_numbering.py
 	$(PY) scripts/check_spec_citations.py
@@ -315,6 +320,12 @@ dev:
 	echo "Daemon ready on port $$_port. Starting Vite…"; \
 	(cd $(FRONTEND) && npm run dev) & \
 	wait
+
+# Models → contracts → frontend types, in that order: the second step reads
+# what the first wrote.
+contracts:
+	$(PY) scripts/gen_contracts.py
+	$(MAKE) frontend-codegen
 
 frontend-codegen:
 	@if [ -d $(FRONTEND) ]; then \

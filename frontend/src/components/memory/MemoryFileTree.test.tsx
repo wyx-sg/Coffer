@@ -40,7 +40,7 @@ function file(name: string, path: string): MemoryFileNode {
     type: "file",
     size: 42,
     truncated: false,
-    children: null,
+    children: [],
   };
 }
 

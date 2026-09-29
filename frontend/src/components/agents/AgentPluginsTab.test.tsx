@@ -21,7 +21,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { AgentPluginsTab } from "./AgentPluginsTab";
 import { acceptance } from "@/test/acceptance";
-import type { AgentOut, PluginsResponse } from "@/lib/api/agents";
+import type { AgentOut, PluginOut, PluginsResponse } from "@/lib/api/agents";
 import en from "@/i18n/locales/en.json";
 import zh from "@/i18n/locales/zh.json";
 
@@ -42,6 +42,12 @@ const CODEX_AGENT: AgentOut = {
   type: "codex",
   config_dir: "/home/u/.codex",
   description: null,
+  title: null,
+  model: null,
+  fast_model: null,
+  wire_api: null,
+  version: null,
+  state: "installed_active",
   created_at: "2026-05-22T00:00:00Z",
   updated_at: "2026-05-22T00:00:00Z",
 };
@@ -52,25 +58,47 @@ const CLAUDE_AGENT: AgentOut = {
   type: "claude_code",
   config_dir: "/home/u/.claude",
   description: null,
+  title: null,
+  model: null,
+  fast_model: null,
+  wire_api: null,
+  version: null,
+  state: "installed_active",
   created_at: "2026-05-22T00:00:00Z",
   updated_at: "2026-05-22T00:00:00Z",
 };
 
-const PLUGIN_A = {
+/** A plugin row in the wire's full shape; a test names only what it varies. */
+function plugin(
+  fields: Pick<PluginOut, "id" | "name" | "marketplace" | "enabled" | "cache_present">,
+): PluginOut {
+  return {
+    author: null,
+    commands: [],
+    description: null,
+    homepage: null,
+    mcp_servers: [],
+    skills: [],
+    version: null,
+    ...fields,
+  };
+}
+
+const PLUGIN_A = plugin({
   id: "npm:@scope/plugin-a",
   name: "plugin-a",
   marketplace: "npm",
   enabled: true,
   cache_present: true,
-};
+});
 
-const PLUGIN_B = {
+const PLUGIN_B = plugin({
   id: "gh:owner/plugin-b",
   name: "plugin-b",
   marketplace: "github",
   enabled: false,
   cache_present: false,
-};
+});
 
 const MARKETPLACES = [
   { name: "npm", source_type: "npm", source: "https://registry.npmjs.org" },
@@ -143,13 +171,13 @@ describe("AgentPluginsTab", () => {
 
   test("search filters rows by plugin name", async () => {
     // Two plugins so the single search box has something to hide.
-    const PLUGIN_C = {
+    const PLUGIN_C = plugin({
       id: "npm:@scope/plugin-c",
       name: "plugin-c",
       marketplace: "npm",
       enabled: true,
       cache_present: true,
-    };
+    });
     stub({ items: [PLUGIN_A, PLUGIN_C], marketplaces: [MARKETPLACES[0]] });
     renderTab();
 

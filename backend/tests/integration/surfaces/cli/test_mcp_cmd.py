@@ -481,15 +481,16 @@ def test_mcp_list_empty(mcp_daemon: Any) -> None:
 @pytest.mark.acceptance(spec="mcp-gateway", scenario="CLI --json output is machine-readable")
 def test_mcp_list_and_log_mcp_json_are_machine_readable(mcp_daemon: Any) -> None:
     _seed_invocations(_register_server())
-    for argv, key in (
-        (["mcp", "list", "--json"], "resources"),
-        (["log", "mcp", "--json"], "invocations"),
+    for argv, key, keys in (
+        (["mcp", "list", "--json"], "resources", ["resources"]),
+        # The invocation log is the route's page: its rows and its next_cursor.
+        (["log", "mcp", "--json"], "invocations", ["invocations", "next_cursor"]),
     ):
         result = _runner.invoke(app, argv)
         assert result.exit_code == 0, result.output
         payload = json.loads(result.output)
-        # Stable top-level key per spec scenario, and nothing else.
-        assert list(payload.keys()) == [key], f"{argv}: {list(payload.keys())}"
+        # Stable top-level keys per spec scenario, and nothing else.
+        assert list(payload.keys()) == keys, f"{argv}: {list(payload.keys())}"
         assert payload[key], f"{argv} printed no rows"
         # Machine-readable: pure JSON, no human framing (table headers, ANSI).
         assert "\x1b[" not in result.output, "ANSI escape leaked into --json output"

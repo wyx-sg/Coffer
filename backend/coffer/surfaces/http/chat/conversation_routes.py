@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import replace
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
@@ -132,14 +132,26 @@ def _msg_out(msg: Message) -> MessageOut:
 @router.get("/conversations", response_model=ConversationListOut)
 async def list_conversations(
     archived: bool = False,
+    limit: int = Query(default=100, ge=1, le=500),
+    cursor: str | None = Query(
+        default=None,
+        description=(
+            "The previous page's next_cursor. Bound to the listing (active or "
+            "archived) it was issued for; any other value is 400 CURSOR_INVALID."
+        ),
+    ),
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
     resources: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> ConversationListOut:
-    """List conversations, newest first. ``?archived=true`` returns the archived
-    threads; the default lists active ones only."""
-    convs = await svc.list_conversations(archived=archived)
+    """List conversations, newest activity first, paged by cursor.
+    ``?archived=true`` returns the archived threads; the default lists active
+    ones only. The conversation id breaks ties."""
+    page = await svc.page_conversations(archived=archived, limit=limit, cursor=cursor)
     names = await _channel_names(resources)
-    return ConversationListOut(conversations=[_conv_out(c, names) for c in convs])
+    return ConversationListOut(
+        conversations=[_conv_out(c, names) for c in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
 @router.post(

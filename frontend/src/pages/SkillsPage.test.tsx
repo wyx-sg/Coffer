@@ -40,6 +40,7 @@ const SAMPLE: SkillOut[] = [
     // only what the cell prints.
     uid: "sk-11aa",
     name: "hello",
+    title: null,
     description: "h",
     source: { type: "local_import", original_path: "/tmp/h" },
     builtin: false,

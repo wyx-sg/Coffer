@@ -17,6 +17,7 @@ from coffer.domain.scope import Scope
 from coffer.infrastructure.persistence.internal_engine_repo import (
     SqlAlchemyInternalEngineConfigRepo,  # re-export (split out for file-size budget)
 )
+from coffer.infrastructure.persistence.keyset import newest_first_after
 from coffer.infrastructure.persistence.models import (
     AuditLogModel,
     ResourceModel,
@@ -271,9 +272,18 @@ class SqlAlchemyAuditRepo:
         event_prefix: str | None = None,
         since: datetime | None = None,
         limit: int = 50,
+        after: tuple[datetime, int] | None = None,
     ) -> list[AuditEntry]:
         async with self._sm() as session:
-            stmt = select(AuditLogModel).order_by(AuditLogModel.timestamp.desc())
+            # Newest first with the id as the tie-break, so ``after`` (the last
+            # row of the page before) names one place in the order.
+            stmt = select(AuditLogModel).order_by(
+                AuditLogModel.timestamp.desc(), AuditLogModel.id.desc()
+            )
+            if after is not None:
+                stmt = stmt.where(
+                    newest_first_after(AuditLogModel.timestamp, AuditLogModel.id, after)
+                )
             if resource_id is not None:
                 # By id alone. The old query ORed in "rows carrying this kind
                 # and name", which brought back a renamed resource's earlier

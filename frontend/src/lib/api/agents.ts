@@ -18,35 +18,13 @@ type Schemas = components["schemas"];
 // Keep AgentType in sync with the backend domain (`domain/agent/types.py`).
 export type AgentType = Schemas["AgentType"];
 
-type ConfigFileFormat = Schemas["ConfigFileFormat"];
-
 /** `installed_active` (program + config dir), `installed_never_run` (program
  *  only), `config_only` (dir only — not installed), `missing` (neither). */
 export type DetectionState = Schemas["DetectionState"];
 
-/**
- * Hand-written rather than the contract's `ConfigFileInfo`: the contract makes
- * `folder_path` and `kind` required and `size` / `modified_at` optional; the
- * daemon (and the test fixtures) do the reverse.
- */
-export interface ConfigFileInfo {
-  key: string;
-  display_name: string;
-  path: string;
-  /** Absolute path of the containing folder. */
-  folder_path?: string;
-  format: ConfigFileFormat;
-  exists: boolean;
-  size: number | null;
-  modified_at: string | null;
-  kind?: Schemas["ConfigFileKind"];
-  files?: Schemas["DirChild"][] | null;
-}
+export type ConfigFileInfo = Schemas["ConfigFileInfoOut"];
 
-/** `GET /agents/{uid}/config-files` — an inline shape in the contract. */
-export interface ConfigFileListOut {
-  items: ConfigFileInfo[];
-}
+export type ConfigFileListOut = Schemas["ConfigFileListOut"];
 
 /** Body of a config-file save. `expected_fingerprint` makes the write
  *  conditional: the daemon refuses it with 409 CONFIG_FILE_STALE when the file
@@ -54,82 +32,28 @@ export interface ConfigFileListOut {
 export type ConfigFileWrite = Schemas["ConfigFileWrite"];
 
 /** `path` / `folder_path` are absolute, for the external-editor actions. */
-export type ConfigFileContent = Schemas["ConfigFileContent"];
+export type ConfigFileContent = Schemas["ConfigFileContentOut"];
 
 /** An agent's Coffer connection: every part Coffer writes into the agent
  *  that applies now (`mcp` always, `memory_hook` while memory is on), and a
  *  state derived from them — `partial` is "needs repair". */
-export type CofferConnection = Schemas["CofferConnection"];
+export type CofferConnection = Schemas["CofferConnectionOut"];
 
-/**
- * Hand-written rather than the contract's `AgentOut`: the contract requires
- * `model` / `fast_model` / `wire_api` and makes `description` optional; the
- * pages and fixtures treat the binding as optional and `description` as
- * always present.
- */
-export interface AgentOut {
-  /** The agent Resource's immutable identity — what every route below takes,
-   *  and what every cross-resource reference to this agent holds (a scope's
-   *  agent list, a channel's `default_agent`, a skill binding). */
-  uid: string;
-  name: string;
-  /** The display title a person chose, shown in place of the name; null when
-   *  none is set. Edited through `PATCH /resources/{uid}`. */
-  title?: string | null;
-  type: AgentType;
-  config_dir: string;
-  description: string | null;
-  created_at: string;
-  updated_at: string;
-  /** Per-agent model binding (spec provider-switching "Take projected model
-   * keys from the agent's binding"). The model the agent projects — null =
-   * unbound (falls back to the active connection). */
-  model?: string | null;
-  fast_model?: string | null;
-  wire_api?: string | null;
-  /** Two-signal detection (program on PATH + config directory). Optional here
-   *  like the binding above: older fixtures and daemons leave it out, and an
-   *  absent state reads as installed. */
-  state?: DetectionState;
-  /** What the agent's program reports as its version; null when not found. */
-  version?: string | null;
-}
+export type AgentOut = Schemas["AgentOut"];
 
-/** `GET /agents` — an inline shape in the contract. */
-export interface AgentListOut {
-  items: AgentOut[];
-}
+export type AgentListOut = Schemas["AgentListOut"];
 
-/**
- * Hand-written rather than the contract's `AgentCreate` / `AgentPatch`: the
- * forms send an explicit `null` for `name` / `config_dir` ("use the default"),
- * which the contract types as `string` only.
- */
-export interface AgentCreate {
-  type: AgentType;
-  // Optional — the server derives a stable default from the type when omitted.
-  name?: string | null;
-  // Optional override; default is the type's standard config directory.
-  config_dir?: string | null;
-  description?: string | null;
-}
+export type AgentCreate = Schemas["AgentCreate"];
 
-export interface AgentPatch {
-  config_dir?: string | null;
-  description?: string | null;
-  // Per-agent model binding; explicit null fast_model clears the fast slot.
-  model?: string | null;
-  fast_model?: string | null;
-  wire_api?: string | null;
-}
+export type AgentPatch = Schemas["AgentPatch"];
 
 export type AgentCandidatesOut = Schemas["AgentCandidatesOut"];
 export type AgentCandidate = Schemas["AgentCandidate"];
 
 /** Every hook in the agent's native config, plus Coffer's own hook's health. */
 export type AgentHooksOut = Schemas["AgentHooksOut"];
-export type NativeHook = Schemas["NativeHook"];
-export type CofferHook = Schemas["CofferHook"];
+export type NativeHook = Schemas["NativeHookOut"];
+export type CofferHook = Schemas["CofferHookOut"];
 
 // Agent workspace wire types (MCP entries / plugins / unmanaged skills) live in
 // agents-workspace.ts for the file-size budget; re-exported so existing

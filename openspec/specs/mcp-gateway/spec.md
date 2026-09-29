@@ -294,8 +294,9 @@ every log-writing kind inherits — not this spec's own rule. This spec contribu
 registry with a 30-day default. The record is read per server
 (`GET /api/v1/resources/mcp_server/{uid}/invocations`, `coffer log mcp --server <server>`) or across every
 server (`GET /api/v1/mcp/invocations`, `coffer log mcp` with no server), the cross-server read
-including Coffer's own built-in calls (`coffer`) and deleted servers' rows (`deleted:<name>`); both CLI forms
-take `--status`, `--since`, `--limit` and `--json`.
+including Coffer's own built-in calls (`coffer`) and deleted servers' rows (`deleted:<name>`). Both reads
+page newest first by cursor ([resource-framework](../resource-framework/spec.md) "Page growing lists by an opaque cursor"),
+and both CLI forms take `--status`, `--since`, `--limit`, `--cursor` and `--json`.
 
 #### Scenario: invocation log records calls without arguments
 - **GIVEN** an MCP client has invoked tools,
@@ -307,6 +308,11 @@ take `--status`, `--since`, `--limit` and `--json`.
 - **WHEN** the user runs `coffer log mcp --server <server>` and then `coffer log mcp --status error --json`
 - **THEN** the first prints only that server's calls, newest first
 - **AND** the second prints, under `invocations`, only failed calls across every server, each naming its server, including `coffer` and `deleted:<name>` rows
+
+#### Scenario: the invocation log pages by cursor
+- **GIVEN** a server with three recorded invocations
+- **WHEN** its invocations are read with `limit=2` and then with the answer's `next_cursor`
+- **THEN** the first page holds the two newest calls and the second the oldest, with a `null` `next_cursor`
 
 ### Requirement: Name a missing stdio launcher
 A stdio server whose launcher command does not resolve on this machine (an imported server referencing e.g.

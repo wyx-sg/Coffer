@@ -8,6 +8,7 @@ import { useMessageThread } from "./useMessageThread";
 import { messagesKey } from "@/lib/api/queryKeys";
 import type { Message } from "@/lib/api/chat";
 import type { LiveMessage } from "@/lib/hooks/chatTurnEvents";
+import { contentBlock } from "@/lib/chat/contentBlock";
 
 vi.mock("@/lib/api/chat", () => ({
   chatApi: { listMessages: vi.fn() },
@@ -21,8 +22,11 @@ const row = (overrides: Partial<Message>): Message => ({
   conversation_id: "conv-1",
   seq: 1,
   role: "user",
-  content: [{ type: "text", text: "hi" }],
+  content: [contentBlock({ type: "text", text: "hi" })],
   status: "complete",
+  prompt_tokens: null,
+  completion_tokens: null,
+  model_id: null,
   created_at: "2026-01-01T00:00:00Z",
   ...overrides,
 });
@@ -81,7 +85,7 @@ describe("useMessageThread", () => {
           seq: 3,
           role: "assistant",
           status: "streaming",
-          content: [{ type: "text", text: "so far" }],
+          content: [contentBlock({ type: "text", text: "so far" })],
         }),
       ],
     });

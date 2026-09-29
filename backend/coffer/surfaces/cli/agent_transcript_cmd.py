@@ -50,7 +50,10 @@ def transcript(
     limit: int | None = typer.Option(
         None, "--limit", help="Sessions to list (default 20) or turns to show (default 200)"
     ),
-    offset: int = typer.Option(0, "--offset", help="Skip this many sessions or turns."),
+    offset: int = typer.Option(0, "--offset", help="With an ID: skip this many turns."),
+    cursor: str | None = typer.Option(
+        None, "--cursor", help="Listing: read the page after the one that printed this cursor."
+    ),
     query: str | None = typer.Option(None, "--query", "-q", help="Search title or project path."),
     project: str | None = typer.Option(None, "--project", help="Only this exact project path."),
     sort: str | None = typer.Option(
@@ -61,15 +64,29 @@ def transcript(
 ) -> None:
     """List this agent's conversations on this machine, or print one of them.
 
-    With an ID, what comes back is a window — --limit turns from --offset, each
-    cut at the server's per-turn cap and secret-scrubbed — and the header says
-    how many turns the whole session holds.
+    The listing pages by cursor: a page with more after it ends with the
+    --cursor value that reads the next one. With an ID, what comes back is a
+    window — --limit turns from --offset, each cut at the server's per-turn cap
+    and secret-scrubbed — and the header says how many turns the whole session
+    holds.
     """
     verbose = verbose_of(ctx)
-    listing_only = {"--query": query, "--project": project, "--sort": sort, "--order": order}
+    listing_only = {
+        "--query": query,
+        "--project": project,
+        "--sort": sort,
+        "--order": order,
+        "--cursor": cursor,
+    }
     if session_id is not None and any(v is not None for v in listing_only.values()):
         used = ", ".join(k for k, v in listing_only.items() if v is not None)
         typer.echo(f"{used} only apply to the listing (no ID)", err=True)
+        raise typer.Exit(2)
+    if session_id is None and offset:
+        typer.echo(
+            "--offset only applies to one session (with an ID); the listing takes --cursor",
+            err=True,
+        )
         raise typer.Exit(2)
     c, _info = _cli_client.client_or_exit()
     with c:
@@ -77,7 +94,6 @@ def transcript(
         if session_id is None:
             params: dict[str, Any] = {
                 "limit": limit or 20,
-                "offset": offset,
                 "sort": sort or "last_activity_at",
                 "order": order or "desc",
             }
@@ -85,6 +101,8 @@ def transcript(
                 params["q"] = query
             if project:
                 params["project"] = project
+            if cursor:
+                params["cursor"] = cursor
             r = c.get(f"/agents/{uid}/transcripts", params=params)
             _cli_client.check(r, verbose=verbose)
             _print_listing(name, r.json(), output_json)
@@ -101,17 +119,17 @@ def transcript(
 def _source_path(c: httpx.Client, uid: str, session_id: str, *, verbose: bool) -> str:
     """The ``source_path`` of the listed session called ``session_id``, or the id
     itself when no listed session carries it (the route then answers)."""
-    offset = 0
+    params: dict[str, Any] = {"limit": _PAGE}
     while True:
-        r = c.get(f"/agents/{uid}/transcripts", params={"limit": _PAGE, "offset": offset})
+        r = c.get(f"/agents/{uid}/transcripts", params=params)
         _cli_client.check(r, verbose=verbose)
         page = r.json()
         for s in page["sessions"]:
             if s["session_id"] == session_id:
                 return str(s["source_path"])
-        offset += len(page["sessions"])
-        if not page["sessions"] or offset >= page["total"]:
+        if not page.get("next_cursor"):
             return session_id
+        params["cursor"] = page["next_cursor"]
 
 
 def _print_listing(name: str, data: dict[str, Any], output_json: bool) -> None:
@@ -131,6 +149,8 @@ def _print_listing(name: str, data: dict[str, Any], output_json: bool) -> None:
             _short_time(s.get("last_activity_at")),
         )
     _console.print(table)
+    if data.get("next_cursor"):
+        typer.echo(f"More sessions follow: add --cursor {data['next_cursor']}")
 
 
 def _print_session(data: dict[str, Any], output_json: bool) -> None:

@@ -20,7 +20,7 @@ openspec/
   specs/<capability>/
     spec.md                          purpose, requirements, scenarios (required)
     data-model.md                    entities and fields, when the capability has state
-    contracts/api.openapi.yaml       the hand-written wire contract, when it has endpoints
+    contracts/api.openapi.yaml       the wire contract, generated from the models, when it has endpoints
     <child>/spec.md                  a child capability, id <capability>/<child>
   changes/<change-id>/
     .openspec.yaml                   schema and creation date (+ skip_specs for no-delta work)
@@ -208,7 +208,7 @@ One rule applies across every spec: **every mutation, and every read of state th
 When a change alters behaviour, the same pull request updates:
 
 - the spec deltas, archived into `openspec/specs/`
-- `contracts/api.openapi.yaml`, when an endpoint or schema changes. Then run `make frontend-codegen`
+- `contracts/api.openapi.yaml`, when an endpoint or schema changes. It is never edited by hand: change the backend model and run `make contracts`, which regenerates the contract and then the frontend's types, and review the contract diff like any other
 - `data-model.md`, when an entity changes
 - The architecture pages under [`docs-site/architecture/`](/architecture/). `scripts/check_architecture_doc.py` fails if its code-layout tree or its built-in tool roster drifts from the code
 - the affected ADR, the pages of this site, and any `.agents/` convention

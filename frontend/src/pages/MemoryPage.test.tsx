@@ -50,6 +50,7 @@ function renderPage() {
 const COFFER: PartitionOut = {
   uid: "mp-be27",
   name: "coffer",
+  title: null,
   repository_path: "/Users/dev/coffer",
   repository_key: "remote:github.com/wyx-sg/coffer",
   note_count: 34,
@@ -61,6 +62,7 @@ const COFFER: PartitionOut = {
 const GONE: PartitionOut = {
   uid: "mp-0d5c",
   name: "old-api",
+  title: null,
   repository_path: "/Users/dev/old-api",
   repository_key: "path:/Users/dev/old-api",
   note_count: 3,
