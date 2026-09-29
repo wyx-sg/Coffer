@@ -11,9 +11,14 @@ the collection README out of the corpus").
 There is exactly one hidden directory, and it is Coffer's: ``.inbox/``, where
 new material waits to be merged into the documents — an upload's extracted
 text, an agent's ``coffer__write``, a migrated file. It is hidden because it is
-not knowledge yet: nothing lists it, no catalogue names it, and each item is
-deleted the moment a pass has folded it in (see "Hide dot-prefixed entries
-except the inbox"). Hidden entries are otherwise never addressable.
+not knowledge yet: no count or catalogue names it, and each item is deleted the
+moment a pass has folded it in (see "Hide dot-prefixed entries except the
+inbox"). A person may still *look* at it — the tree lists a collection's inbox
+and the read route reads an item — and that one allowance is
+:func:`inbox_parts`, spelled out here rather than made by loosening the dot rule
+in :func:`check_segment`: :func:`resolve` and :func:`require_document` still
+refuse every hidden segment, so no write, delete or stamp reaches the inbox
+through them. Every other hidden entry is never addressable.
 
 ``$COFFER_KNOWLEDGE_ROOT`` overrides the root for tests. Every segment that
 becomes a path component goes through the traversal guard here (see "Guard every
@@ -155,3 +160,25 @@ def readme_path(collection: str) -> pathlib.Path:
 def inbox_dir(collection: str) -> pathlib.Path:
     """Where a collection's unmerged material waits."""
     return collection_dir(collection) / INBOX_DIR_NAME
+
+
+def inbox_parts(relpath: str) -> tuple[str, str | None] | None:
+    """``(collection, item)`` when ``relpath`` names a collection's inbox, else ``None``.
+
+    ``<collection>/.inbox`` gives ``item`` ``None``; ``<collection>/.inbox/<name>``
+    gives the item's file name. This is the one hidden path any surface may
+    address, and only to list or read it (see "Hide dot-prefixed entries except
+    the inbox"): the other segments go through the same guard as any path, and
+    the inbox holds no folders, so anything deeper is refused.
+    """
+    cleaned = (relpath or "").strip().strip("/")
+    segments = [s for s in cleaned.split("/") if s]
+    if len(segments) < 2 or segments[1] != INBOX_DIR_NAME:
+        return None
+    if len(segments) > 3:
+        raise UnsafeKnowledgePath(relpath, "the inbox holds no folders")
+    check_segment(segments[0], relpath)
+    if len(segments) == 2:
+        return segments[0], None
+    check_segment(segments[2], relpath)
+    return segments[0], segments[2]

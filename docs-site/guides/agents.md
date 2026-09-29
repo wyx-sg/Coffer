@@ -226,13 +226,16 @@ Agents often carry MCP servers configured directly in their own files. The **MCP
 | Claude Code | `mcpServers` in `.claude.json` (the `global` file) and in `settings.json` |
 | Codex | `[mcp_servers.*]` in `config.toml` (the `enabled` flag is shown but never written) |
 
+Click a direct server's name to open its detail page. It shows, read-only, everything the agent's file holds for that server: the transport, the command and each argument (or the URL), the working directory, the `enabled` flag where the format has one, the names of its environment variables and HTTP headers, any other keys the entry carries, and the config file it lives in, with **Open in editor** and **Reveal** beside the path. Secret values never leave the daemon: environment and header values are shown only as *set* or *secret · hidden*, and any other key whose name looks secret (the pattern below) shows as *hidden*. Coffer does not start a direct server to show this page, so it lists no tools. The back link returns to the agent's **MCP servers** tab, and the page carries the same two actions as the row.
+
 You can do two things with a direct entry:
 
 - **Remove** it from its source file (atomic write, `.bak` kept, audited as `agent_mcp_entry_removed`).
-- **Adopt into Coffer**: Coffer registers the entry as an `mcp_server` resource, checks that it reads back, and only then removes the direct entry. Any failure rolls the new resource back and leaves the agent's file byte-identical. The server is then served to every agent through the gateway.
+- **Adopt into Coffer**: Coffer registers the entry as an `mcp_server` resource, checks that it reads back, and only then removes the direct entry. Any failure rolls the new resource back and leaves the agent's file byte-identical. The server is then served to every agent through the gateway. Adopting from the detail page opens the new managed server's page.
 
 ```sh
 coffer agent mcp entries claude-code
+coffer agent mcp show-entry claude-code github --source global
 coffer agent mcp remove-entry claude-code old-server --source settings
 coffer agent mcp adopt claude-code github --secret GITHUB_TOKEN=github/token
 ```
@@ -241,10 +244,23 @@ When the entry's environment or headers carry a non-empty value under a secret-l
 
 ## Plugins
 
-The **Plugins** tab lists installed plugins as `<name>@<marketplace>`, with their enabled state, marketplace, version, author, and the skills, commands and MCP servers each plugin bundles. A plugin whose cache directory is gone is marked **Cache missing**; Coffer does not try to repair it.
+The **Plugins** tab lists installed plugins with their marketplace (and the marketplace's source), enabled state and an uninstall action. A plugin whose cache directory is gone is marked **Cache missing**; Coffer does not try to repair it.
+
+Click a plugin's name to open its detail page. It shows the plugin's `<name>@<marketplace>` id, version, author, description and homepage, the marketplace it came from, and the directory it is installed in, with **Open in editor** and **Reveal** buttons. Below that it lists everything the plugin contributes, read from its package's default locations:
+
+| Contents | Read from |
+| --- | --- |
+| Skills, with their descriptions | `skills/<name>/SKILL.md` |
+| Commands, with their descriptions | `commands/*.md` |
+| Subagents, with their descriptions | `agents/*.md` |
+| Hook events | `hooks/hooks.json` |
+| MCP servers | `.mcp.json` |
+
+The page header has the same enabled switch and **Uninstall** as the tab. After an uninstall, and from its back link, the page returns to the agent's Plugins tab. The page only reads the plugin's files; it changes nothing.
 
 ```sh
 coffer agent plugin list claude-code
+coffer agent plugin show claude-code formatter@acme
 coffer agent plugin disable claude-code formatter@acme
 coffer agent plugin enable claude-code formatter@acme
 coffer agent plugin uninstall codex formatter@acme

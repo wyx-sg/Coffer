@@ -17,7 +17,7 @@ Knowledge holds facts about the world you work in: which team owns a service, ho
 
 - **One copy for every agent.** Claude Code and Codex read the same files, so what one agent records in the morning another reads in the afternoon.
 - **Plain files.** Each document is a Markdown file you can open, edit, grep and back up. Coffer keeps no index, no embeddings and no database copy of the content.
-- **Written together.** You edit documents in your own editor. Agents submit new material. Coffer's curation pass merges that material into the documents that already cover the subject, so a fact lives in one place instead of piling up as notes.
+- **Written together.** You edit documents on the Knowledge page or in your own editor. Agents submit new material. Coffer's curation pass merges that material into the documents that already cover the subject, so a fact lives in one place instead of piling up as notes.
 
 Knowledge is not [memory](/guides/memory). Memory is what agents learn while working, read out of their own memory stores. Knowledge is what somebody deliberately wrote down.
 
@@ -38,7 +38,7 @@ A **collection** is a top-level folder under the knowledge root:
 - **Documents** are the Markdown files in the collection. A document's path is its identity; there is no separate id. File names are slugs of the title, with a suffix such as `-2` on a collision.
 - **Folders** inside a collection are optional and carry no meaning. You, or curation, can create, move and remove them.
 - **`README.md`** at the collection root describes the collection. Its first paragraph is the collection's description everywhere Coffer shows one, and it is what the `coffer-guide` skill tells agents the collection is about. It is never listed as a document, counted or curated.
-- **Hidden entries** (names starting with `.`) are left out of every listing, count and catalogue. Coffer writes exactly one: the `.inbox/` folder, where submitted material waits to be merged.
+- **Hidden entries** (names starting with `.`) are left out of every document count and the catalogue. Coffer writes exactly one: the `.inbox/` folder, where submitted material waits to be merged. The collection's tree lists `.inbox/` so you can see what is waiting, and its items can be read but not edited or deleted; no other hidden entry is listed.
 
 To move the knowledge root, set `COFFER_KNOWLEDGE_ROOT` in the daemon's environment.
 
@@ -109,7 +109,7 @@ An agent connected to Coffer's MCP gateway (see [Connect a client](/guides/conne
 
 The `coffer-guide` skill tells agents to reach for `coffer__write` when they learn something durable. You can also ask directly: "write down what we just found out about the session TTL in the payments collection."
 
-A write naming a collection that does not exist or is disabled is refused, and the error lists the collections that are available.
+A write naming a collection that does not exist is refused, and the error lists the collections that are available.
 
 ### From the CLI: `coffer knowledge write`
 
@@ -154,13 +154,13 @@ If you have a [channel](/guides/channels) paired, send a document to it as an at
 /save payments
 ```
 
-Coffer saves the attachment into that collection through the same upload path and replies with a confirmation naming the file and the collection. With no name, or a name that is not an enabled collection, it offers a card listing your collections to pick from. Only the channel's owner can save.
+Coffer saves the attachment into that collection through the same upload path and replies with a confirmation naming the file and the collection. With no name, or a name that is not one of your collections, it offers a card listing your collections to pick from. Only the channel's owner can save.
 
 ### Edit a file yourself
 
 Writing, editing or deleting a Markdown file in the collection folder with any editor is a complete way to change knowledge. There is no import step. The change is live on the next read, and the next curation sweep notices the edit (by its modification time) and carries it through to the rest of the collection.
 
-On the Knowledge page, choose a document and use **Open in editor** or **Reveal in Finder** to jump to the file.
+On the Knowledge page, choose a document and use **Edit** to change it in place, or **Open in editor** or **Reveal in Finder** to jump to the file. **Edit** rewrites the document's body and keeps its frontmatter. A save that finds the file changed on disk since the page loaded it is refused as a conflict, and the page offers to reload. The saved file counts as your edit, exactly like one made in your own editor. From the CLI, `coffer knowledge save <path> <body-file>` does the same (`-` reads the body from stdin).
 
 Agents may do the same thing with their own file tools: the `coffer-guide` skill tells them they can correct or extend a document they have read by editing it.
 
@@ -266,8 +266,8 @@ Coffer has **no tool for reading, listing or searching knowledge**. An agent rea
 
 What tells it where to look is Coffer's built-in [`coffer-guide` skill](/guides/skills#the-built-in-coffer-guide-skill), which Coffer links into every agent's skill folder:
 
-- Its **description**, which is in every session, names the subjects of your enabled collections, taken from each `README.md`.
-- Its **body**, loaded when the agent opens the skill, gives the knowledge root's path and a catalogue of every document in every enabled collection: its path, title and description.
+- Its **description**, which is in every session, names the subjects of your collections, taken from each `README.md`.
+- Its **body**, loaded when the agent opens the skill, gives the knowledge root's path and a catalogue of every document in every collection: its path, title and description.
 
 Coffer rewrites the skill whenever the catalogue changes, so a new document appears in it within one sweep.
 
@@ -293,31 +293,16 @@ Knowledge → choose the collection
 
 :::
 
-The collection page shows one tree of documents beside a read-only preview. The **Filter by name…** box narrows the names already shown; it does not search content. The page shows how many new items are waiting to be merged, and the preview shows when each document was last curated. Inbox items are never listed.
+The collection page shows one tree of documents beside a preview, both filling the window. The preview shows when each document was last curated, and offers **Edit** (see [Edit a file yourself](#edit-a-file-yourself)). The tree also shows the collection's **Inbox** folder: material waiting to be merged. An inbox item opens read-only — it cannot be edited or deleted — and it leaves the folder once curation has merged it.
 
 `coffer knowledge read --json` includes the absolute path of the file and of its folder.
 
-## Enable or disable a collection
+## Every collection reaches every agent
 
-A collection has one switch: enabled or disabled. Every enabled collection is available to every agent; there is no per-agent reach for knowledge.
+A collection has no on/off switch and no per-agent reach: every collection is available to every agent, and a collection leaves agents' `coffer-guide` skill only by being deleted. `coffer resource enable` and `disable` refuse a collection with `RESOURCE_NOT_TOGGLEABLE`. To switch the whole knowledge layer off, use the `knowledge` [experimental feature](/guides/experimental-features).
 
-A disabled collection is left out of the `coffer-guide` skill entirely — its name, description and catalogue — and `coffer__write` refuses to write into it.
-
-::: code-group
-
-```sh [CLI]
-coffer resource disable knowledge payments
-coffer resource enable knowledge payments
-```
-
-```text [Web UI]
-Knowledge → the Status control on the collection's row
-```
-
-:::
-
-::: warning Disabled is not hidden on disk
-Disabling stops Coffer from naming a collection to agents. It does not protect the files: the skill hands agents the knowledge root, and an agent can still read anything under it with its own tools.
+::: warning Not access control
+The skill hands agents the knowledge root, and an agent can read anything under it with its own tools. Keep nothing in a collection that an agent on this machine should not read.
 :::
 
 ## Delete documents and collections
@@ -365,7 +350,7 @@ The files are the only copy. Coffer keeps no history of deleted or rewritten doc
 
 **Pending material never gets merged.** Check that curation is switched on (`coffer engine upkeep list`), that this machine is the owner or no owner is set (`coffer engine curate-owner show`), and that Coffer's model is configured. Run `coffer knowledge curate <collection>` to see the status of one pass.
 
-**An agent does not use the knowledge.** Check that the collection is enabled, that the `coffer-guide` skill is enabled and reaches that agent (`coffer scope show skill coffer-guide`), and that the collection's `README.md` opens with a sentence naming its subjects.
+**An agent does not use the knowledge.** Check that the `knowledge` feature is on, that the `coffer-guide` skill is enabled and reaches that agent (`coffer scope show skill coffer-guide`), and that the collection's `README.md` opens with a sentence naming its subjects.
 
 **`coffer__write` is missing from the agent's tools.** The `knowledge` feature is switched off on this machine, or Coffer's MCP server is not installed for that agent (`coffer agent mcp install <agent>`).
 

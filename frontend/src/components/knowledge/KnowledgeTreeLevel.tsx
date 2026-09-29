@@ -14,17 +14,19 @@
 // start CLOSED: pre-opening them would fire one request per child folder for a
 // subtree nobody has asked to see.
 //
-// The filter narrows FILES only. A directory's children are not loaded until it
-// is expanded, so hiding a directory whose name doesn't match would hide
-// matches the user cannot see yet; directories therefore always stay visible.
+// One hidden entry is listed: a collection's `.inbox`, first at the root while
+// it holds material waiting to be merged (spec knowledge "Present a collection
+// as one tree in the web UI"). Its row says what it is — an inbox icon, a
+// plain-language label and how many items wait — rather than a bare dot-name,
+// and it expands like any folder. The items inside carry `inbox: true`; they
+// open in the viewer read-only, so their rows are drawn muted.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen, Inbox } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
-import { matchesFilter } from "@/lib/knowledge/filter";
 import { useKnowledgeTree } from "@/lib/hooks/useKnowledge";
 
 interface Props {
@@ -35,8 +37,6 @@ interface Props {
   depth: number;
   /** Relative path of the file being previewed, if it is at this level. */
   selectedPath: string | null;
-  /** Client-side filename filter, applied to this level's files. */
-  filter: string;
   onSelect: (path: string) => void;
   /** What an EMPTY collection root says — how to put the first document in,
    *  which an empty subfolder has no need to repeat. The caller passes it for
@@ -49,14 +49,7 @@ function indentOf(depth: number): { paddingLeft: string } {
   return { paddingLeft: `${depth * 0.75 + 0.25}rem` };
 }
 
-export function KnowledgeTreeLevel({
-  path,
-  depth,
-  selectedPath,
-  filter,
-  onSelect,
-  emptyLabel,
-}: Props) {
+export function KnowledgeTreeLevel({ path, depth, selectedPath, onSelect, emptyLabel }: Props) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState<string[]>([]);
   const { data, isPending, error } = useKnowledgeTree(path);
@@ -80,13 +73,11 @@ export function KnowledgeTreeLevel({
     );
   }
 
-  const files = data.files.filter((f) => matchesFilter(filter, f.title, f.path));
+  const files = data.files;
   if (data.directories.length === 0 && files.length === 0) {
     return (
       <p style={indentOf(depth)} className="py-1.5 text-sm text-muted-foreground">
-        {filter.trim()
-          ? t("knowledge.detail.noMatches")
-          : (emptyLabel ?? t("knowledge.detail.emptyFolder"))}
+        {emptyLabel ?? t("knowledge.detail.emptyFolder")}
       </p>
     );
   }
@@ -114,19 +105,29 @@ export function KnowledgeTreeLevel({
               ) : (
                 <ChevronRight className="size-3.5 shrink-0 opacity-70" />
               )}
-              {open ? (
+              {dir.inbox ? (
+                <Inbox className="size-4 shrink-0 opacity-70" />
+              ) : open ? (
                 <FolderOpen className="size-4 shrink-0 opacity-70" />
               ) : (
                 <Folder className="size-4 shrink-0 opacity-70" />
               )}
-              <span className="truncate">{dir.name}</span>
+              {dir.inbox ? (
+                <>
+                  <span className="truncate">{t("knowledge.detail.inboxFolder")}</span>
+                  <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">
+                    {dir.file_count}
+                  </span>
+                </>
+              ) : (
+                <span className="truncate">{dir.name}</span>
+              )}
             </button>
             {open ? (
               <KnowledgeTreeLevel
                 path={dir.path}
                 depth={depth + 1}
                 selectedPath={selectedPath}
-                filter={filter}
                 onSelect={onSelect}
               />
             ) : null}
@@ -145,6 +146,7 @@ export function KnowledgeTreeLevel({
               selectedPath === file.path
                 ? "bg-primary/10 text-primary"
                 : "hover:bg-secondary hover:text-foreground",
+              file.inbox && selectedPath !== file.path && "text-muted-foreground",
             )}
           >
             {/* The chevron's width, kept as blank space so file rows line up

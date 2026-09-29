@@ -247,7 +247,7 @@ async def test_a_partition_two_real_agents_filled_records_its_repository_only(va
     row = vault["resources"].by_name(KIND_MEMORY, "coffer")
     assert row.config["repository_path"] == str(vault["project_root"].resolve())
     assert row.scope is None
-    assert await vault["service"].enabled_partitions() == ["coffer", "global"]
+    assert await vault["service"].served_partitions() == ["coffer", "global"]
 
 
 @pytest.mark.asyncio

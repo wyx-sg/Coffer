@@ -101,8 +101,16 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "transcripts",
     },
     "agent config": {"files", "ls", "cat", "write", "edit", "rm"},
-    "agent mcp": {"status", "install", "uninstall", "adopt", "entries", "remove-entry"},
-    "agent plugin": {"list", "enable", "disable", "uninstall"},
+    "agent mcp": {
+        "status",
+        "install",
+        "uninstall",
+        "adopt",
+        "entries",
+        "show-entry",
+        "remove-entry",
+    },
+    "agent plugin": {"list", "show", "enable", "disable", "uninstall"},
     "channel": {"register", "list", "status", "pair", "bind", "set", "notify"},
     # `files`, `cat` and `write` are the skill-file tree the web editor browses
     # and saves (spec skill-manager "Offer every skill operation on REST, CLI
@@ -120,7 +128,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "cat",
         "write",
     },
-    # Exactly the list in spec knowledge "Cover collection management on REST and the
+    # Exactly the list in spec knowledge "Cover knowledge management on REST and the
     # CLI" and nothing beyond it. `grep` and `search` are gone with the retrieval
     # surface (spec knowledge "Expose exactly one knowledge tool") — the corpus is
     # plain Markdown under ~/.coffer/knowledge/, so a person's own grep beats
@@ -133,6 +141,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "delete",
         "ls",
         "read",
+        "save",
         "upload",
         "write",
     },

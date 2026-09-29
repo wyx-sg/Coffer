@@ -606,6 +606,29 @@ def test_mcp_entries_list_json_and_table(workspace_cli):
     assert "fetcher" in r.output
 
 
+def test_mcp_show_entry_prints_the_entry_without_secret_values(workspace_cli):
+    """`agent mcp show-entry` reads one entry in full: file, command, key names."""
+    tmp_path, _keyring = workspace_cli
+    r = _runner.invoke(cli_app, ["agent", "mcp", "show-entry", "cx", "fetcher", "--json"])
+    assert r.exit_code == 0, r.output
+    body = json.loads(_extract_json(r.output))
+    assert body["path"] == str(tmp_path / ".codex" / "config.toml")
+    assert body["command"] == "uvx"
+    assert body["args"] == ["mcp-fetch"]
+    assert body["secret_keys"] == ["API_TOKEN"]
+    assert _SECRET_VALUE not in r.output
+
+    r = _runner.invoke(cli_app, ["agent", "mcp", "show-entry", "cx", "fetcher"])
+    assert r.exit_code == 0, r.output
+    assert f"file: {tmp_path / '.codex' / 'config.toml'}" in r.output
+    assert "command: uvx mcp-fetch" in r.output
+    assert "env API_TOKEN: (secret)" in r.output
+    assert _SECRET_VALUE not in r.output
+
+    r = _runner.invoke(cli_app, ["agent", "mcp", "show-entry", "cx", "missing"])
+    assert r.exit_code == 4, r.output
+
+
 def test_mcp_remove_entry_force_and_prompt(workspace_cli):
     # Without --force the prompt aborts and the entry survives.
     r = _runner.invoke(cli_app, ["agent", "mcp", "remove-entry", "cx", "fetcher"], input="n\n")
@@ -677,6 +700,39 @@ def test_plugin_list_enable_disable(workspace_cli):
     by_id = {p["id"]: p for p in body["items"]}
     assert by_id["p1@m1"]["enabled"] is False
     assert by_id["p2@m1"]["enabled"] is True
+
+
+def test_plugin_show_prints_contents_and_json(workspace_cli):
+    """`agent plugin show` reads the detail route: metadata and contents as
+    text, the route's body unchanged with --json, exit 4 for an unknown id."""
+    tmp_path, _keyring = workspace_cli
+    pkg = tmp_path / ".codex" / "plugins" / "cache" / "m1" / "p1" / "0.3.0"
+    (pkg / ".codex-plugin").mkdir(parents=True)
+    (pkg / ".codex-plugin" / "plugin.json").write_text(
+        json.dumps({"version": "0.3.0", "author": "Ada"}), encoding="utf-8"
+    )
+    (pkg / "commands").mkdir()
+    (pkg / "commands" / "fix.md").write_text("---\ndescription: Fix it\n---\n", encoding="utf-8")
+    (pkg / ".mcp.json").write_text(json.dumps({"mcpServers": {"srv": {}}}), encoding="utf-8")
+
+    r = _runner.invoke(cli_app, ["agent", "plugin", "show", "cx", "p1@m1"])
+    assert r.exit_code == 0, r.output
+    assert "p1@m1  enabled" in r.output
+    assert "author: Ada" in r.output
+    assert "marketplace: m1 (https://example.com/m1.git)" in r.output
+    assert f"installed at: {pkg}" in r.output
+    assert "command: fix — Fix it" in r.output
+    assert "mcp server: srv" in r.output
+
+    r = _runner.invoke(cli_app, ["agent", "plugin", "show", "cx", "p1@m1", "--json"])
+    assert r.exit_code == 0, r.output
+    body = json.loads(_extract_json(r.output))
+    assert body["commands"] == [{"name": "fix", "description": "Fix it"}]
+    assert body["install_path"] == str(pkg)
+
+    r = _runner.invoke(cli_app, ["agent", "plugin", "show", "cx", "ghost@m1"])
+    assert r.exit_code == 4, r.output
+    assert "plugin not found" in r.output
 
 
 def test_plugin_enable_unknown_id_exit4(workspace_cli):

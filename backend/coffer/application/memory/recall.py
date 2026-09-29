@@ -15,8 +15,8 @@ the thing this layer just removed: a tool standing between an agent and a file. 
 previous version returned whole bodies, and was called five times in its lifetime.
 
 **No score, no mode, no connection — and no caller identity either.** Matching is a
-case-insensitive literal scan over every enabled partition's notes (see "Serve every
-enabled partition to every agent"), the same corpus for whoever asks. There is no
+case-insensitive literal scan over every partition's notes (see "Serve every
+partition to every agent"), the same corpus for whoever asks. There is no
 ranking to explain and no embedder to be missing; an installation with no internal
 connection gets the same recall as any other (see "Recall locations by literal match").
 The scan used to be narrowed to the asking agent's per-agent scope, and that scope was
@@ -67,7 +67,7 @@ class MemoryPort(Protocol):
     module applies afterwards.
     """
 
-    async def enabled_partitions(self) -> Sequence[str]: ...
+    async def served_partitions(self) -> Sequence[str]: ...
 
     async def list_notes(self, partition: str) -> Sequence[Note]: ...
 
@@ -103,9 +103,9 @@ class RecallService:
         self._memory = memory
 
     async def recall(self, query: str, *, top_k: int = DEFAULT_TOP_K) -> RecallOutcome:
-        """Locate the notes matching ``query``, across every enabled partition."""
+        """Locate the notes matching ``query``, across every partition."""
         by_path: dict[str, Note] = {}
-        for partition in await self._memory.enabled_partitions():
+        for partition in await self._memory.served_partitions():
             for note in await self._memory.list_notes(partition):
                 by_path[_abspath(note)] = note
 

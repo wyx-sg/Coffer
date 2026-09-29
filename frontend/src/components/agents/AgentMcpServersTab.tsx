@@ -8,7 +8,8 @@
 //
 //   B. Direct servers — the agent's own MCP entries read from its config
 //      files (spec agent-registry "List the MCP entries in the agent's own config
-//      files"). Name, description, and two
+//      files"). The name links to the entry's read-only detail page
+//      (AgentMcpEntryPage). Name, description, and two
 //      actions: adopt the entry into Coffer, or delete it from the agent's own
 //      config file (behind a confirm — the daemon writes a .bak).
 //
@@ -26,6 +27,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Import } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { AgentAdoptMcpDialog } from "@/components/agents/AgentAdoptMcpDialog";
 import { AgentGatewayMcpSection } from "@/components/agents/AgentGatewayMcpSection";
@@ -68,7 +70,20 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
       cell: (e) => (
         <div className="space-y-1">
           <span className="flex items-center gap-2">
-            <span className="font-medium">{e.name}</span>
+            {/* The name opens the entry's read-only detail page; the state
+                carries the way back to this tab under the agent's name. */}
+            <Link
+              to={`/agents/${encodeURIComponent(agent.uid)}/mcp-servers/${encodeURIComponent(
+                e.name,
+              )}?source=${encodeURIComponent(e.source)}`}
+              state={{
+                backTo: `/agents/${encodeURIComponent(agent.uid)}?tab=mcpServers`,
+                backLabel: agent.name,
+              }}
+              className="font-medium hover:underline"
+            >
+              {e.name}
+            </Link>
             {duplicated.has(e.name) && <Badge variant="secondary">{e.source}</Badge>}
           </span>
           {e.matches_resource !== null && (

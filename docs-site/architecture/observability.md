@@ -155,7 +155,7 @@ The vocabulary is a closed enumeration, `AuditEventType` in `backend/coffer/doma
 | Credentials | `credential_set`, `credential_read`, `credential_deleted`, `credential_migrated`, `master_key_relocated` |
 | Agents | `agent_config_file_written`, `agent_config_file_deleted`, `agent_mcp_installed`, `agent_mcp_uninstalled`, `agent_mcp_entry_removed`, `agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled` |
 | Skills | `skill_imported`, `skill_updated`, `skill_bound`, `skill_unbound`, `skill_relinked`, `skill_drift_remediated`, `skill_adopted`, `skill_unmanaged_deleted` |
-| Knowledge | `knowledge_written`, `knowledge_deleted`, `knowledge_curated` |
+| Knowledge | `knowledge_written`, `knowledge_edited`, `knowledge_deleted`, `knowledge_curated` |
 | Memory | `memory_aggregated`, `memory_distilled`, `memory_delivery_installed`, `memory_delivery_removed`, `memory_delivery_fired` |
 | Channels | `channel_pairing_issued`, `channel_paired` |
 | Vault sync | `sync_run`, `sync_confirmed`, `sync_rejected`, `sync_rolled_back`, `sync_machine_removed`, `master_key_exported`, `master_key_imported` |

@@ -61,6 +61,27 @@ def split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     return {}, text
 
 
+def replace_body(text: str, body: str) -> str:
+    """``text`` with its body replaced and its frontmatter block kept verbatim.
+
+    The block is carried through as the characters it is — never parsed and
+    re-dumped — so a save from the web UI cannot reorder, restyle or drop a key
+    a person or curation wrote (spec knowledge "Save a document edited in the
+    web UI"). The fence rule is :func:`split_frontmatter`'s: a closing fence at
+    column 0. Text with no block gets the new body alone. The body is laid out
+    the way :func:`render_frontmatter` lays it out, one blank line after the
+    fence and one newline at the end.
+    """
+    body_clean = body.strip("\n")
+    if text.startswith(_FENCE):
+        lines = text.split("\n")
+        for i in range(1, len(lines)):
+            if lines[i].rstrip() == _FENCE:
+                head = "\n".join(lines[: i + 1])
+                return f"{head}\n\n{body_clean}\n"
+    return f"{body_clean}\n"
+
+
 def render_frontmatter(frontmatter: dict[str, Any], body: str) -> str:
     """Render a ``---``-fenced YAML block + body. Keys keep insertion order."""
     block = yaml.safe_dump(

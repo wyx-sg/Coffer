@@ -7,11 +7,14 @@ as it is a Resource row, so ``generic_create_allowed`` is False and
 per-kind seam") rather than the generic ``POST /resources`` path being able
 to conjure a directory-less row.
 
-``supports_scope`` is left at the Kind default of False, and a partition is a Resource
-for three other things: its lifecycle (it is created by a pass and deleted through the
-framework's own route), the repository identity its config carries (see "Identify a
-partition by its repository"), and its ``enabled`` flag — which is now the only gate on
-what gets served.
+``supports_scope`` is left at the Kind default of False and ``toggleable`` is False, and
+a partition is a Resource for two other things: its lifecycle (it is created by a pass
+and deleted through the framework's own route) and the repository identity its config
+carries (see "Identify a partition by its repository"). Every partition is served to
+every agent (see "Serve every partition to every agent"); the kind-agnostic
+enable/disable route refuses one with ``RESOURCE_NOT_TOGGLEABLE``. The switch it used to
+carry gated only what Coffer pointed an agent at — a disabled partition was still a
+folder of Markdown any agent could open — and nobody turned one off.
 
 It used to carry the framework's per-agent reach, and the reach was never chosen:
 ``MemoryService._register_partition`` seeded it with "the agents this partition was
@@ -21,9 +24,7 @@ served no project memory whatsoever — while the ``account*`` partitions came o
 to ``codex`` and Claude Code got nothing from them. That default defeated the layer's
 whole purpose: memory aggregated from several agents exists precisely so each of them
 can read what the others learned. It was never a boundary either, because a note is a
-file the agent is handed the path to. So the reach is gone rather than re-defaulted, and
-every enabled partition is served to every agent (see "Serve every enabled partition to
-every agent").
+file the agent is handed the path to. So the reach is gone rather than re-defaulted.
 
 ``converges`` is False, and this is the only kind that sets it (spec memory "Keep the
 memory tree derived and local"). A partition row is derived from the agents installed on
@@ -114,5 +115,6 @@ def make_memory_kind(service: MemoryService) -> Kind:
         on_delete=_on_delete,
         on_rename=_on_rename,
         generic_create_allowed=False,
+        toggleable=False,
         converges=False,
     )

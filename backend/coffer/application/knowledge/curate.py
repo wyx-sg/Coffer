@@ -63,7 +63,7 @@ from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.knowledge.entry import Pending
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
-from coffer.infrastructure.knowledge import catalogue, fs, paths
+from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
 
 if TYPE_CHECKING:
     from coffer.domain.provider.config import ResolvedConnection
@@ -194,7 +194,7 @@ async def run_curation(
             raise UnsafeKnowledgePath(item.document, f"not a document of {collection!r}")
         found = await asyncio.to_thread(fs.read_file, item.document)
     else:
-        found = await asyncio.to_thread(fs.read_material, collection, item.material or "")
+        found = await asyncio.to_thread(inbox.read_material, collection, item.material or "")
     label = found.path
     if len(found.body) > MAX_SOURCE_CHARS:
         # No pass can hold it, so it leaves the queue as it stands rather than

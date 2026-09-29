@@ -11,9 +11,9 @@ has ``Read`` and ``Grep`` of its own and is handed absolute paths by the
 delivered skill, so a retrieval tool for it would be a tool it never
 remembers to call; a person at a prompt has neither the paths nor the daemon's
 scope resolution in front of them. What this group must cover is the list in
-"Cover collection management on REST and the CLI" — create a collection, list
-a level, read a document, submit material, upload a document, delete a
-document, trigger curation — and nothing beyond it. There is
+"Cover knowledge management on REST and the CLI" — create a collection, list
+a level, read a document, save an edited document's body, submit material,
+upload a document, delete a document, trigger curation — and nothing beyond it. There is
 deliberately no ``grep`` and no ``search`` command: the corpus is plain
 Markdown under ``~/.coffer/knowledge/``, so a person's own ``grep`` is already
 better than anything this group could wrap, and the group's help says where
@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json as _json
 import pathlib
+import sys
 
 import typer
 from rich.console import Console
@@ -148,6 +149,35 @@ def read_file(
         typer.echo(_json.dumps(data, indent=2))
         return
     typer.echo(data["body"])
+
+
+@app.command("save")
+def save_file(
+    ctx: typer.Context,
+    path: str = typer.Argument(..., help="Document path, e.g. payments/gateway.md"),
+    body_file: str = typer.Argument(..., help="File holding the new body, or - for stdin"),
+) -> None:
+    """Replace a document's body, keeping its frontmatter.
+
+    Reads the document first and saves with the fingerprint that read carried,
+    so a file changed in between is refused rather than overwritten (spec
+    knowledge "Save a document edited in the web UI").
+    """
+    body = sys.stdin.read() if body_file == "-" else pathlib.Path(body_file).read_text("utf-8")
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.get("/knowledge/file", params={"path": path})
+        _cli_client.check(r, verbose=_verbose(ctx))
+        r = c.put(
+            "/knowledge/file",
+            json={
+                "path": path,
+                "body": body,
+                "expected_fingerprint": r.json()["fingerprint"],
+            },
+        )
+        _cli_client.check(r, verbose=_verbose(ctx))
+    typer.echo(f"saved {path}")
 
 
 @app.command("write")

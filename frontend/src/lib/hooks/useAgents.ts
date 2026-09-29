@@ -17,7 +17,9 @@ import {
   agentConfigFilesKey,
   agentKey,
   agentMcpEntriesKey,
+  agentMcpEntryKey,
   agentMcpInstallKey,
+  agentPluginKey,
   agentPluginsKey,
   agentsKey,
   agentUnmanagedSkillsKey,
@@ -146,6 +148,16 @@ export function useAgentMcpEntries(uid: string) {
   });
 }
 
+/** One direct entry in full, for its detail page. `source` may be empty when
+ *  the URL carried none — the daemon then resolves the name on its own. */
+export function useAgentMcpEntry(uid: string, entry: string, source: string) {
+  return useQuery({
+    queryKey: agentMcpEntryKey(uid, entry, source),
+    queryFn: () => agentsApi.mcpEntry(uid, entry, source || undefined),
+    enabled: !!uid && !!entry,
+  });
+}
+
 export function useRemoveMcpEntry(agentUid: string) {
   const qc = useQueryClient();
   const onError = useAgentToastError();
@@ -180,6 +192,14 @@ export function useAgentPlugins(uid: string) {
     queryKey: agentPluginsKey(uid),
     queryFn: () => agentsApi.plugins(uid),
     enabled: !!uid,
+  });
+}
+
+export function useAgentPlugin(uid: string, id: string) {
+  return useQuery({
+    queryKey: agentPluginKey(uid, id),
+    queryFn: () => agentsApi.plugin(uid, id),
+    enabled: !!uid && !!id,
   });
 }
 

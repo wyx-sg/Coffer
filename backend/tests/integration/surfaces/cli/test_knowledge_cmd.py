@@ -7,7 +7,7 @@ temp HOME — then route ``_cli_client.client_or_exit`` at a Starlette
 collection in here exists because a test created it (spec knowledge "Create
 collections only deliberately").
 
-The group covers exactly the list in "Cover collection management on REST and
+The group covers exactly the list in "Cover knowledge management on REST and
 the CLI" and nothing beyond it. There is no ``grep`` and no ``search`` command
 any more: the corpus is plain Markdown under ``~/.coffer/knowledge/``, so a
 person's own ``grep`` is better than anything this group could wrap — and the
@@ -258,6 +258,22 @@ def test_read_returns_the_body_of_any_document(knowledge_cli_daemon, tmp_path):
     assert "what curation concluded" in read_nested.output
 
 
+def test_save_replaces_a_body_and_keeps_the_frontmatter(knowledge_cli_daemon, tmp_path):
+    """``coffer knowledge save`` reads the fingerprint itself, then saves ("Save a
+    document edited in the web UI")."""
+    _make_collection("shopee")
+    path = _write("shopee", "Session", body="old")
+    body_file = tmp_path / "new-body.md"
+    body_file.write_text("account.session owns login state\n", encoding="utf-8")
+
+    saved = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "save", path, str(body_file)])
+    assert saved.exit_code == 0, saved.output
+
+    read = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "read", path, "--json"])
+    out = json.loads(read.output)
+    assert (out["title"], out["body"].strip()) == ("Session", "account.session owns login state")
+
+
 def test_ls_lists_one_level_of_a_collection(knowledge_cli_daemon, tmp_path):
     _make_collection("shopee")
     path = _write("shopee", "Session")
@@ -468,19 +484,20 @@ _KNOWLEDGE_OPERATIONS = {
     ("POST", "/api/v1/knowledge/collections"),
     ("GET", "/api/v1/knowledge/tree"),
     ("GET", "/api/v1/knowledge/file"),
+    ("PUT", "/api/v1/knowledge/file"),
     ("POST", "/api/v1/knowledge/material"),
     ("POST", "/api/v1/knowledge/upload"),
     ("DELETE", "/api/v1/knowledge/file"),
     ("POST", "/api/v1/knowledge/collections/{uid}/curate"),
 }
-_KNOWLEDGE_COMMANDS = {"create", "ls", "read", "write", "upload", "delete", "curate"}
+_KNOWLEDGE_COMMANDS = {"create", "ls", "read", "save", "write", "upload", "delete", "curate"}
 _FORBIDDEN_ROUTE_WORDS = ("index", "reindex", "source", "embedding", "scope", "reach")
 
 
 @pytest.mark.acceptance(
-    spec="knowledge", scenario="expose every collection operation and no document write"
+    spec="knowledge", scenario="expose every knowledge operation on both surfaces"
 )
-def test_rest_and_cli_cover_every_operation_and_write_no_document(knowledge_cli_daemon):
+def test_rest_and_cli_cover_every_knowledge_operation(knowledge_cli_daemon):
     from coffer.surfaces.cli.knowledge_cmd import app as knowledge_app
 
     # Read from the OpenAPI schema: FastAPI 0.141 no longer flattens an included
@@ -497,7 +514,6 @@ def test_rest_and_cli_cover_every_operation_and_write_no_document(knowledge_cli_
     commands = {command.name for command in knowledge_app.registered_commands}
     assert commands >= _KNOWLEDGE_COMMANDS
 
-    assert not any(method in {"PUT", "PATCH"} for method, _ in routes)
     for _, path in routes:
         tail = path.removeprefix("/api/v1/knowledge").lower()
         assert not any(word in tail for word in _FORBIDDEN_ROUTE_WORDS), path

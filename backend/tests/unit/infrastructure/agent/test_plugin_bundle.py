@@ -130,3 +130,78 @@ def test_author_as_string_and_repository_fallback(tmp_path: pathlib.Path) -> Non
     assert detail is not None
     assert detail.author == "Jane Doe"  # bare string author
     assert detail.homepage == "https://example/repo"  # falls back to repository
+
+
+# ---------------------------------------------------------------------------
+# read_contents — the per-plugin detail read
+# ---------------------------------------------------------------------------
+
+
+def test_read_contents_lists_components_with_descriptions(tmp_path: pathlib.Path) -> None:
+    root = tmp_path / "hud" / "0.2.0"
+    _write(root / ".claude-plugin" / "plugin.json", json.dumps({"name": "hud"}))
+    _write(root / "skills" / "tdd" / "SKILL.md", "---\nname: tdd\ndescription: Test first\n---\n")
+    (root / "skills" / "bare").mkdir(parents=True)  # no SKILL.md → no description
+    _write(root / "commands" / "setup.md", "---\ndescription: Set it up\n---\nbody")
+    _write(root / "commands" / "plain.md", "# no frontmatter")
+    _write(
+        root / "agents" / "rev.md",
+        "---\nname: code-reviewer\ndescription: Reviews diffs\n---\n",
+    )
+    _write(root / "agents" / "broken.md", "---\nname: [unclosed\n---\n")  # bad YAML
+    _write(
+        root / "hooks" / "hooks.json",
+        json.dumps({"hooks": {"SessionStart": [], "PreToolUse": []}}),
+    )
+    _write(root / ".mcp.json", json.dumps({"mcpServers": {"hud-srv": {}}}))
+
+    c = FsPluginDetailReader().read_contents(str(root))
+
+    assert c is not None
+    assert c.root == str(root)
+    assert [(s.name, s.description) for s in c.skills] == [("bare", None), ("tdd", "Test first")]
+    assert [(s.name, s.description) for s in c.commands] == [
+        ("plain", None),
+        ("setup", "Set it up"),
+    ]
+    # A subagent is named by its frontmatter; unparseable frontmatter falls
+    # back to the file stem with no description rather than failing the read.
+    assert [(s.name, s.description) for s in c.agents] == [
+        ("broken", None),
+        ("code-reviewer", "Reviews diffs"),
+    ]
+    assert c.hooks == ("PreToolUse", "SessionStart")
+    assert c.mcp_servers == ("hud-srv",)
+
+
+def test_read_contents_descends_into_newest_version_dir(tmp_path: pathlib.Path) -> None:
+    """Codex hands the ``<marketplace>/<name>`` parent; the root reported is
+    the version dir the manifest sits in."""
+    parent = tmp_path / "cache" / "m" / "lint"
+    _write(parent / "1.0.0" / ".codex-plugin" / "plugin.json", "{}")
+    _write(parent / "1.0.0" / "commands" / "fix.md", "")
+
+    c = FsPluginDetailReader().read_contents(str(parent))
+
+    assert c is not None
+    assert c.root == str(parent / "1.0.0")
+    assert [x.name for x in c.commands] == ["fix"]
+    assert c.skills == () and c.agents == () and c.hooks == () and c.mcp_servers == ()
+
+
+def test_read_contents_missing_dir_is_none(tmp_path: pathlib.Path) -> None:
+    assert FsPluginDetailReader().read_contents(str(tmp_path / "gone")) is None
+    assert FsPluginDetailReader().read_contents("") is None
+
+
+def test_read_contents_ignores_malformed_hooks_and_mcp(tmp_path: pathlib.Path) -> None:
+    root = tmp_path / "p"
+    _write(root / ".claude-plugin" / "plugin.json", "{}")
+    _write(root / "hooks" / "hooks.json", "{not json")
+    _write(root / ".mcp.json", json.dumps({"mcpServers": ["not", "a", "map"]}))
+
+    c = FsPluginDetailReader().read_contents(str(root))
+
+    assert c is not None
+    assert c.hooks == ()
+    assert c.mcp_servers == ()

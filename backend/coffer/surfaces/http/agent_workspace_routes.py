@@ -1,11 +1,12 @@
 """/api/v1/agents/{uid}/mcp-entries and /plugins routes (spec agent-registry agent workspace).
 
 MCP entries + plugins in the agent's OWN config files, derived at read time —
-nothing is stored. Env/header VALUES never cross HTTP: listings expose key
-names only (plus which keys look secret-like). Domain errors map centrally via
-surfaces/http/errors.py; the one exception is adopt's name-conflict 409, which
-needs a ``suggested_name`` detail and so builds the envelope explicitly with
-:func:`coffer.surfaces.http.errors.error_response`.
+nothing is stored. Env/header VALUES never cross HTTP: the listing and the
+one-entry read expose key names only (plus which keys look secret-like), and
+the one-entry read withholds the value of any other secret-looking key.
+Domain errors map centrally via surfaces/http/errors.py; the one exception is
+adopt's name-conflict 409, which needs a ``suggested_name`` detail and so
+builds the envelope explicitly with :func:`coffer.surfaces.http.errors.error_response`.
 """
 
 from __future__ import annotations
@@ -15,10 +16,11 @@ from typing import Any
 from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel, Field
 
-from coffer.application.agent.mcp_entry_service import ParseErrorInfo
-from coffer.application.agent.plugin_views import PluginView
+from coffer.application.agent.mcp_entry_service import McpEntryDetail, ParseErrorInfo
+from coffer.application.agent.plugin_views import PluginDetailView, PluginView
 from coffer.domain.agent.config import AgentConfig
-from coffer.domain.agent.mcp_entries import McpEntry, secret_env_keys
+from coffer.domain.agent.mcp_entries import McpEntry, masked_extra, secret_env_keys
+from coffer.domain.agent.plugin_bundle import PluginComponent
 from coffer.domain.agent.plugin_state import MarketplaceInfo
 from coffer.domain.errors import ResourceAlreadyExists
 from coffer.surfaces.http.agent_dependencies import get_agent_service
@@ -51,6 +53,22 @@ class McpEntryOut(BaseModel):
     enabled: bool | None
     is_coffer: bool
     matches_resource: str | None
+
+
+class McpEntryFieldOut(BaseModel):
+    key: str
+    # None when masked: a secret-looking key's value never crosses HTTP.
+    value: str | None
+    masked: bool
+
+
+class McpEntryDetailOut(McpEntryOut):
+    """One entry in full — the listing's fields plus the file it came from, its
+    working directory and every other key it carries (secret-looking ones masked)."""
+
+    path: str
+    cwd: str | None
+    extra: list[McpEntryFieldOut]
 
 
 class ParseErrorOut(BaseModel):
@@ -119,6 +137,27 @@ class PluginsOut_(BaseModel):  # noqa: N801 — avoids clashing with the service
     can_uninstall: bool = False
 
 
+class PluginComponentOut(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class PluginDetailOut(BaseModel):
+    """One plugin's detail page (spec agent-registry "Read one installed plugin's
+    detail read-only"): the listing row, where it came from, and what it adds."""
+
+    plugin: PluginOut
+    marketplace_source_type: str | None
+    marketplace_source: str | None
+    install_path: str | None
+    can_uninstall: bool
+    skills: list[PluginComponentOut]
+    commands: list[PluginComponentOut]
+    agents: list[PluginComponentOut]
+    hooks: list[str]
+    mcp_servers: list[str]
+
+
 class PluginPatch(BaseModel):
     enabled: bool
 
@@ -137,6 +176,18 @@ def _entry_out(e: McpEntry) -> McpEntryOut:
         enabled=e.enabled,
         is_coffer=e.is_coffer,
         matches_resource=e.matches_resource,
+    )
+
+
+def _entry_detail_out(d: McpEntryDetail) -> McpEntryDetailOut:
+    return McpEntryDetailOut(
+        **_entry_out(d.entry).model_dump(),
+        path=d.path,
+        cwd=d.entry.cwd,
+        extra=[
+            McpEntryFieldOut(key=f.key, value=f.value, masked=f.masked)
+            for f in masked_extra(d.entry.extra)
+        ],
     )
 
 
@@ -180,6 +231,16 @@ async def list_mcp_entries(
         items=[_entry_out(e) for e in view.items],
         parse_errors=[_parse_error_out(p) for p in view.parse_errors],
     )
+
+
+@router.get("/{uid}/mcp-entries/{entry}", response_model=McpEntryDetailOut)
+async def get_mcp_entry(
+    uid: str,
+    entry: str,
+    source: str | None = None,
+    svc: Any = Depends(get_agent_mcp_entry_service),  # noqa: B008
+) -> McpEntryDetailOut:
+    return _entry_detail_out(await svc.get_entry(uid, entry, source=source))
 
 
 @router.delete(
@@ -245,6 +306,32 @@ async def list_plugins(
         marketplaces=[_marketplace_out(m) for m in out.marketplaces],
         parse_errors=[_parse_error_out(p) for p in out.parse_errors],
         can_uninstall=out.can_uninstall,
+    )
+
+
+@router.get("/{uid}/plugins/{plugin_id}", response_model=PluginDetailOut)
+async def get_plugin(
+    uid: str,
+    plugin_id: str,
+    svc: Any = Depends(get_agent_plugin_service),  # noqa: B008
+) -> PluginDetailOut:
+    d: PluginDetailView = await svc.get_plugin(uid, plugin_id)
+    c = d.contents
+
+    def comps(items: tuple[PluginComponent, ...]) -> list[PluginComponentOut]:
+        return [PluginComponentOut(name=i.name, description=i.description) for i in items]
+
+    return PluginDetailOut(
+        plugin=_plugin_out(d.plugin),
+        marketplace_source_type=d.marketplace_source_type,
+        marketplace_source=d.marketplace_source,
+        install_path=d.install_path,
+        can_uninstall=d.can_uninstall,
+        skills=comps(c.skills) if c else [],
+        commands=comps(c.commands) if c else [],
+        agents=comps(c.agents) if c else [],
+        hooks=list(c.hooks) if c else [],
+        mcp_servers=list(c.mcp_servers) if c else [],
     )
 
 

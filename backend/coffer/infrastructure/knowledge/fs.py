@@ -15,15 +15,16 @@ Two kinds of file live under a collection, and this module is where they meet:
   a curation pass writes them through :func:`write_file`. Each carries
   ``coffer_curated_at``, the moment curation last had it in front of it, and an
   edit made since is what the sweep comes back for.
-* **Material** — the hidden ``.inbox/``. New knowledge waits here until a pass
-  folds it into the documents, and is deleted when that pass completes; with no
-  model to fold it, :func:`promote` makes it a document of its own (see
-  "Promote material directly when no model is configured").
+* **Material** — the hidden ``.inbox/``, written and read by ``inbox.py``. New
+  knowledge waits there until a pass folds it into the documents, and is
+  deleted when that pass completes (see "Submit every entrance's input as
+  material").
 """
 
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import os
 import pathlib
 import shutil
@@ -31,11 +32,16 @@ from datetime import UTC, datetime
 from typing import Any
 
 from coffer.domain.knowledge.entry import ACTOR_AGENT, KnowledgeFile
-from coffer.domain.knowledge.errors import KnowledgeFileNotFound
+from coffer.domain.knowledge.errors import (
+    KnowledgeFileConflict,
+    KnowledgeFileNotFound,
+    UnsafeKnowledgePath,
+)
 from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.catalogue import is_markdown
 from coffer.infrastructure.knowledge.frontmatter import (
     render_frontmatter,
+    replace_body,
     split_frontmatter,
 )
 from coffer.infrastructure.knowledge.naming import slugify, unique_name
@@ -54,8 +60,24 @@ CURATED_AT_KEY = "coffer_curated_at"
 _ORDERED_KEYS = ("title", "description", "actor", "created_at", "updated_at", CURATED_AT_KEY)
 
 
-def _now() -> str:
+def timestamp() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def fingerprint(raw: bytes) -> str:
+    """sha256 hex of a file's bytes — the same digest a skill file's read carries.
+
+    What an edit hands back (see "Save a document edited in the web UI"): a
+    file whose bytes moved since the editor loaded them is refused, not
+    overwritten.
+    """
+    return hashlib.sha256(raw).hexdigest()
+
+
+def decode(raw: bytes) -> str:
+    """Bytes as text, newlines normalised the way ``Path.read_text`` does."""
+    text = raw.decode("utf-8", errors="replace")
+    return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def read_file(relpath: str) -> KnowledgeFile:
@@ -63,8 +85,8 @@ def read_file(relpath: str) -> KnowledgeFile:
     path = paths.resolve(relpath)
     if not path.is_file():
         raise KnowledgeFileNotFound(relpath)
-    text = path.read_text(encoding="utf-8", errors="replace")
-    fm, body = split_frontmatter(text)
+    raw = path.read_bytes()
+    fm, body = split_frontmatter(decode(raw))
     return KnowledgeFile(
         path=paths.relative_of(path),
         title=str(fm.get("title") or path.stem),
@@ -76,10 +98,11 @@ def read_file(relpath: str) -> KnowledgeFile:
         file_path=str(path),
         folder_path=str(path.parent),
         curated_at=str(fm.get(CURATED_AT_KEY) or ""),
+        fingerprint=fingerprint(raw),
     )
 
 
-def _atomic_write(path: pathlib.Path, text: str) -> None:
+def atomic_write(path: pathlib.Path, text: str) -> None:
     """Write ``text`` to ``path`` through a sibling temp file and one rename.
 
     The guard is re-run here, on the parent that exists by now, because this
@@ -105,7 +128,7 @@ def _atomic_write(path: pathlib.Path, text: str) -> None:
     tmp.replace(path)
 
 
-def _render(frontmatter: dict[str, Any], body: str) -> str:
+def render(frontmatter: dict[str, Any], body: str) -> str:
     """The known keys in their fixed order, then anything else, unharmed.
 
     The tail matters. ``mark_curated`` rewrites a file a *person* also edits to
@@ -139,7 +162,7 @@ def write_file(
     back. Any other write leaves the stamp off, which is exactly what makes the
     sweep look at it.
     """
-    now = _now()
+    now = timestamp()
     created = now
     if relpath is not None:
         paths.require_document(relpath)
@@ -162,10 +185,39 @@ def write_file(
     }
     if curated:
         frontmatter[CURATED_AT_KEY] = now
-    _atomic_write(target, _render(frontmatter, body))
+    atomic_write(target, render(frontmatter, body))
     if curated:
         _align_mtime(target, now)
     return read_file(paths.relative_of(target))
+
+
+def save_body(relpath: str, body: str, *, expected_fingerprint: str) -> KnowledgeFile:
+    """Replace a document's body, keeping its frontmatter as it stands.
+
+    A person's edit from the web UI (see "Save a document edited in the web
+    UI"). ``expected_fingerprint`` is what the editor's read carried: a file
+    whose bytes moved since — a person's own editor, a curation pass — is
+    refused with ``KnowledgeFileConflict`` and left untouched. Nothing here
+    stamps ``coffer_curated_at``: the write moves the file's mtime past any
+    stamp it carries, which is exactly what makes the sweep treat it as a
+    person's edit (see "Let newer statements win and a person's edit stand").
+
+    Only a Markdown document can be saved: ``require_document`` keeps the
+    collection, its README and the inbox out of reach, and a file a person
+    dropped in that is not Markdown is bytes this route has no business
+    rewriting as text.
+    """
+    paths.require_document(relpath)
+    path = paths.resolve(relpath)
+    if not path.is_file():
+        raise KnowledgeFileNotFound(relpath)
+    if not is_markdown(path.name):
+        raise UnsafeKnowledgePath(relpath, "only a Markdown document can be edited")
+    raw = path.read_bytes()
+    if fingerprint(raw) != expected_fingerprint:
+        raise KnowledgeFileConflict(relpath)
+    atomic_write(path, replace_body(decode(raw), body))
+    return read_file(relpath)
 
 
 def delete_file(relpath: str) -> None:
@@ -207,9 +259,9 @@ def mark_curated(relpath: str, *, when: str | None = None) -> None:
     # list a person wrote must come back a YAML list, or the stamp has still
     # damaged their file — just more quietly than deleting the key would.
     merged: dict[str, Any] = {k: v for k, v in fm.items() if v not in (None, "")}
-    stamp = when or _now()
+    stamp = when or timestamp()
     merged[CURATED_AT_KEY] = stamp
-    _atomic_write(path, _render(merged, body))
+    atomic_write(path, render(merged, body))
     _align_mtime(path, stamp)
 
 
@@ -250,109 +302,6 @@ def _parse(stamp: str) -> float:
         return datetime.fromisoformat(stamp).timestamp()
     except ValueError:
         return 0.0
-
-
-# ----- the inbox ----------------------------------------------------------
-
-
-def _inbox_item(collection: str, name: str) -> pathlib.Path:
-    """One inbox item by its file name, guarded like any other segment."""
-    paths.check_segment(name, f"{collection}/{paths.INBOX_DIR_NAME}/{name}")
-    return paths.inbox_dir(collection) / name
-
-
-def submit_material(
-    collection: str,
-    *,
-    title: str,
-    description: str,
-    body: str,
-    actor: str = ACTOR_AGENT,
-) -> str:
-    """Put new material in the collection's inbox. Returns the item's name.
-
-    The item is ordinary frontmatter and Markdown, so the pass that merges it
-    reads it exactly as it reads a document. It is written under a name of its
-    own — never onto an existing item — because two submissions of the same
-    title are two pieces of material.
-    """
-    directory = paths.inbox_dir(collection)
-    directory.mkdir(parents=True, exist_ok=True)
-    target = directory / unique_name(directory, slugify(title))
-    now = _now()
-    _atomic_write(
-        target,
-        _render(
-            {
-                "title": title,
-                "description": description,
-                "actor": actor,
-                "created_at": now,
-                "updated_at": now,
-            },
-            body,
-        ),
-    )
-    return target.name
-
-
-def inbox_items(collection: str) -> tuple[str, ...]:
-    """The names of a collection's unmerged items, oldest first."""
-    directory = paths.inbox_dir(collection)
-    if not directory.is_dir():
-        return ()
-    found = [
-        (entry.stat().st_mtime, entry.name)
-        for entry in directory.iterdir()
-        if entry.is_file() and is_markdown(entry.name)
-    ]
-    return tuple(name for _, name in sorted(found))
-
-
-def read_material(collection: str, name: str) -> KnowledgeFile:
-    """One inbox item, read the way a document is."""
-    path = _inbox_item(collection, name)
-    if not path.is_file():
-        raise KnowledgeFileNotFound(f"{collection}/{paths.INBOX_DIR_NAME}/{name}")
-    fm, body = split_frontmatter(path.read_text(encoding="utf-8", errors="replace"))
-    return KnowledgeFile(
-        path=f"{collection}/{paths.INBOX_DIR_NAME}/{name}",
-        title=str(fm.get("title") or path.stem),
-        description=str(fm.get("description") or ""),
-        actor=str(fm.get("actor") or ACTOR_AGENT),
-        created_at=str(fm.get("created_at") or ""),
-        updated_at=str(fm.get("updated_at") or ""),
-        body=body,
-        file_path=str(path),
-        folder_path=str(path.parent),
-    )
-
-
-def discard_material(collection: str, name: str) -> None:
-    """Delete an inbox item a pass has folded in."""
-    _inbox_item(collection, name).unlink(missing_ok=True)
-
-
-def promote(collection: str, name: str) -> KnowledgeFile:
-    """Make an inbox item a document of its own, as it stands.
-
-    The path with no model to merge it: the material is knowledge the moment it
-    arrives, so it must not wait in a hidden directory for a connection that
-    may never be configured. It lands at the collection root, stamped as
-    curated — nothing is going to curate it, and an unstamped document would
-    only be handed back by every sweep.
-    """
-    material = read_material(collection, name)
-    written = write_file(
-        directory=collection,
-        title=material.title,
-        description=material.description,
-        body=material.body,
-        actor=material.actor,
-        curated=True,
-    )
-    discard_material(collection, name)
-    return written
 
 
 def create_collection_dir(name: str) -> pathlib.Path:

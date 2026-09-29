@@ -11,7 +11,7 @@ the surfaces answer with. Authority is [`spec.md`](spec.md) and
 **This layer adds no table of its own** ("Add no table of its own"). Notes,
 raw entries, the index and the retirement record are files; the only database
 presence a partition has is the row every Resource has, in the kind-agnostic
-`resources` table, carrying its name, its `enabled` flag and a two-field
+`resources` table, carrying its name, an `enabled` flag that is always true and a two-field
 `config` — the repository it was learned in, and nothing else.
 
 Everything under `~/.coffer/memory/` is **derived** ("Keep the memory tree
@@ -49,7 +49,7 @@ trusting a comment:
 
 | Path | Written by | Read by |
 |---|---|---|
-| `.raw/` | aggregation, and only aggregation | the distil pass; the file tree, marked as derived input |
+| `.raw/` | aggregation, and only aggregation | the distil pass only — the file tree leaves it out and its read route refuses it |
 | `notes/` | the distil pass | delivery, recall, the file tree, and any agent holding the path |
 | `MEMORY.md` | the distil pass | delivery, and a human opening the folder |
 | `RETIRED.md` | the distil pass | **the next distil pass**, and a human |
@@ -80,7 +80,7 @@ global").
 | `name` | the directory name, and the Resource's name | A readable slug from the repository's own name — `/home/dev/coffer` → `coffer`. A collision is resolved by prefixing a parent segment (`work-api` vs `personal-api`), never by an id ("Identify a partition by its repository"). |
 | `repository_key` | `Resource.config` | The identity a directory is resolved to. `remote:<host>/<path>` when the repository has an `origin` remote, so two clones agree; `path:<abs>` when it has none. Empty for `global`. |
 | `repository_path` | `Resource.config`, restated at the top of `MEMORY.md` | Absolute path of the repository's main working tree. Empty for `global`. |
-| `enabled` | the Resource's own column | The framework's, not this layer's. |
+| `enabled` | the Resource's own column | Always true: the kind declares itself non-toggleable, so every partition is served and enable/disable is refused with `RESOURCE_NOT_TOGGLEABLE` ("Serve every partition to every agent"). |
 | `note_count` | counted from `notes/` at call time | Never stored. |
 | `unresolvable` | computed at call time | True when `repository_path` no longer exists on disk. Surfaced rather than hidden, because an orphaned partition is delivered to nobody and the developer is the only one who can decide to delete it ("Report unresolvable partitions"). |
 
@@ -308,7 +308,7 @@ every kind shares.
 | Event | Recorded when |
 |---|---|
 | `memory_aggregated` | an aggregation pass completes, with the actor distinguishing a scheduled pass from a requested one |
-| `memory_distilled` | a distil pass completes, with its merge / open / retire / kept-nothing counts and whether a model was used |
+| `memory_distilled` | a distil pass completes — scheduled, on one partition by hand, or as part of an Update memory action — with its merge / open / retire / kept-nothing counts and whether a model was used |
 | `memory_delivery_installed` | delivery is installed for an agent |
 | `memory_delivery_removed` | delivery is removed for an agent |
 | `memory_delivery_fired` | an installed hook fires ("Audit every delivery fire") |

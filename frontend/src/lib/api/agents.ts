@@ -116,7 +116,10 @@ export type {
   AdoptedResource,
   AdoptMcpEntryBody,
   McpEntriesResponse,
+  McpEntryDetailOut,
   McpEntryOut,
+  PluginComponentOut,
+  PluginDetailOut,
   PluginOut,
   PluginsResponse,
   SkillRefOut,
@@ -128,6 +131,8 @@ import type {
   AdoptedResource,
   AdoptMcpEntryBody,
   McpEntriesResponse,
+  McpEntryDetailOut,
+  PluginDetailOut,
   PluginsResponse,
   SkillRefOut,
   UnmanagedSkillDetailOut,
@@ -170,6 +175,12 @@ export const agentsApi = {
 
   // MCP entries (specs agent-registry/005 workspace amendment)
   mcpEntries: (uid: string) => call<McpEntriesResponse>(`/agents/${enc(uid)}/mcp-entries`),
+  // One entry in full, read-only. `source` is sent whenever known — it is what
+  // tells two same-named entries (claude_code's two files) apart.
+  mcpEntry: (uid: string, entry: string, source?: string) => {
+    const qs = source ? `?source=${enc(source)}` : "";
+    return call<McpEntryDetailOut>(`/agents/${enc(uid)}/mcp-entries/${enc(entry)}${qs}`);
+  },
   // Deletes the entry from the agent's own config file (a .bak is written by
   // the daemon). `source` names which config file the entry came from — an
   // entry name can repeat across sources.
@@ -189,6 +200,8 @@ export const agentsApi = {
   // writes the agent's documented config surface; uninstall drops the entry
   // (Codex) or delegates to the agent's own CLI (Claude Code).
   plugins: (uid: string) => call<PluginsResponse>(`/agents/${enc(uid)}/plugins`),
+  plugin: (uid: string, id: string) =>
+    call<PluginDetailOut>(`/agents/${enc(uid)}/plugins/${enc(id)}`),
   togglePlugin: (uid: string, id: string, enabled: boolean) =>
     call<void>(`/agents/${enc(uid)}/plugins/${enc(id)}`, { method: "PATCH", body: { enabled } }),
   uninstallPlugin: (uid: string, id: string) =>

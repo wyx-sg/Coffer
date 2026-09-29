@@ -55,6 +55,7 @@ class AuditEventType(StrEnum):
     # spec knowledge
     KNOWLEDGE_WRITTEN = "knowledge_written"
     KNOWLEDGE_DELETED = "knowledge_deleted"
+    KNOWLEDGE_EDITED = "knowledge_edited"
     KNOWLEDGE_CURATED = "knowledge_curated"
     # spec memory
     MEMORY_AGGREGATED = "memory_aggregated"

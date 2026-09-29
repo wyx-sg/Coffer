@@ -24,7 +24,8 @@ import json
 import pathlib
 import re
 
-from coffer.domain.agent.plugin_bundle import PluginDetail
+from coffer.domain.agent.plugin_bundle import PluginContents, PluginDetail
+from coffer.infrastructure.agent.plugin_contents import read_plugin_contents
 
 # Manifest locations, in priority order — a plugin carries exactly one.
 _MANIFEST_RELPATHS = (
@@ -67,6 +68,16 @@ class FsPluginDetailReader:
             commands=self._command_names(root / "commands"),
             mcp_servers=self._mcp_server_names(root / ".mcp.json"),
         )
+
+    def read_contents(self, install_path: str) -> PluginContents | None:
+        """Everything the plugin contributes, with descriptions, for the
+        per-plugin detail read; ``None`` when the install dir is missing."""
+        if not install_path:
+            return None
+        root = self._resolve_root(pathlib.Path(install_path))
+        if root is None:
+            return None
+        return read_plugin_contents(root)
 
     @classmethod
     def _resolve_root(cls, path: pathlib.Path) -> pathlib.Path | None:

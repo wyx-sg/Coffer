@@ -10,6 +10,7 @@
 import { useTranslation } from "react-i18next";
 
 import { FileEditor } from "@/components/FileEditor";
+import { FILE_PANE_BODY } from "@/components/filePane";
 import { CodeView } from "@/components/preview/CodeView";
 import type { useFileDraft } from "@/lib/hooks/useFileDraft";
 
@@ -36,8 +37,8 @@ export interface ConfigEditorPaneProps {
 export function ConfigEditorPane(props: ConfigEditorPaneProps) {
   const { t } = useTranslation();
   return (
-    <div className="space-y-2">
-      <div className="flex items-start justify-between gap-2">
+    <div className={FILE_PANE_BODY}>
+      <div className="flex shrink-0 items-start justify-between gap-2">
         <span className="min-w-0 flex-1">
           <span className="block truncate font-mono text-xs text-muted-foreground">
             {props.pathLabel}
@@ -64,14 +65,14 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
         readOnlyReason={props.readOnlyMissing ? t("files.readOnlyMissing") : null}
         ariaLabel={t("agents.config.editorLabel", { key: props.editorKey })}
         filePath={props.filePath}
+        fill
       >
-        {/* Preview grows with content but is capped at 60vh and scrolls inside
-            (both axes) — same as the knowledge-base doc viewer, so it never
-            exceeds the window and adapts to the window size. */}
+        {/* The preview takes the rest of the pane, down to the bottom of the
+            window, and scrolls inside (components/filePane.ts). */}
         <CodeView
           value={props.loading ? "" : props.content}
           filename={props.filePath}
-          maxHeight="60vh"
+          fill
           ariaLabel={t("agents.config.editorLabel", { key: props.editorKey })}
           className="bg-muted/30"
         />

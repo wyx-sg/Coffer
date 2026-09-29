@@ -15,6 +15,11 @@ type Schemas = components["schemas"];
 
 export type McpEntryOut = Schemas["McpEntry"];
 
+/** One entry in full — the listing's fields plus the config file's `path`,
+ *  `cwd` and every other key (`extra`, secret-looking values masked by the
+ *  daemon: `value: null, masked: true`). */
+export type McpEntryDetailOut = Schemas["McpEntryDetail"];
+
 export type McpEntriesResponse = Schemas["McpEntriesOut"];
 
 export type AdoptMcpEntryBody = Schemas["McpEntryAdopt"];
@@ -37,6 +42,14 @@ export type PluginOut = Schemas["Plugin"];
  * (capability +, for CLI-strategy agents like Claude, the agent's CLI being on
  * PATH). */
 export type PluginsResponse = Schemas["PluginsOut"];
+
+/** One plugin's detail page: its listing row (`plugin`), marketplace source,
+ * the directory its package was read from, `can_uninstall`, and the skills /
+ * commands / subagents (with descriptions), hook events and MCP servers it
+ * contributes. */
+export type PluginDetailOut = Schemas["PluginDetail"];
+
+export type PluginComponentOut = Schemas["PluginComponent"];
 
 /** `location` is the scan location the entry was found in — `skills` is
  * `<config_dir>/skills`, `agents_dir` the agent product's secondary standard

@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
 import { translateApiError } from "@/lib/api/errors";
+import { cn } from "@/lib/utils";
 
 export interface FileEditorProps {
   /** The draft (in edit mode) or the loaded content (otherwise). */
@@ -46,6 +47,10 @@ export interface FileEditorProps {
    *  partial read would cut the file short on disk. */
   readOnlyReason?: string | null;
   ariaLabel: string;
+  /** Take the remaining height of a flex column: the preview (pass it `fill`
+   *  too) and the textarea both stretch to it — how a file pane fills the
+   *  window (components/filePane.ts). */
+  fill?: boolean;
   /** Absolute on-disk path of the file. When set, the open-in-editor / reveal
    *  actions render at the start of the action row, left of Edit / Save / Cancel. */
   filePath?: string | null;
@@ -72,8 +77,8 @@ export function FileEditor(props: FileEditorProps) {
   };
 
   return (
-    <div className="space-y-2">
-      <div data-testid="file-editor-actions" className="flex flex-wrap items-center gap-2">
+    <div className={props.fill ? "flex min-h-0 flex-1 flex-col gap-2" : "space-y-2"}>
+      <div data-testid="file-editor-actions" className="flex shrink-0 flex-wrap items-center gap-2">
         {props.filePath ? <FileActions filePath={props.filePath} /> : null}
         <div className="ml-auto flex items-center gap-2">
           {props.readOnlyReason ? (
@@ -98,7 +103,7 @@ export function FileEditor(props: FileEditorProps) {
       {props.error ? (
         <div
           role="alert"
-          className="space-y-2 rounded-md border border-destructive/50 bg-destructive/10 px-2 py-1.5 text-xs text-destructive"
+          className="shrink-0 space-y-2 rounded-md border border-destructive/50 bg-destructive/10 px-2 py-1.5 text-xs text-destructive"
         >
           <p>{props.conflict ? t("files.conflict") : translateApiError(t, props.error)}</p>
           {props.conflict ? (
@@ -113,10 +118,15 @@ export function FileEditor(props: FileEditorProps) {
         // Tall enough to edit comfortably from the start, grows with the
         // content (rows) and stays user-resizable; a fixed viewport fraction
         // clipped short files with dead space and long ones with a scrollbar.
+        // In a filling pane it takes exactly the preview's place instead, and
+        // scrolls inside.
         <textarea
           aria-label={props.ariaLabel}
           rows={Math.max(16, props.value.split("\n").length + 2)}
-          className="min-h-96 w-full resize-y rounded-md border bg-background p-3 font-mono text-xs leading-relaxed outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className={cn(
+            "w-full rounded-md border bg-background p-3 font-mono text-xs leading-relaxed outline-none focus-visible:ring-1 focus-visible:ring-ring",
+            props.fill ? "min-h-0 flex-1 resize-none" : "min-h-96 resize-y",
+          )}
           value={props.value}
           spellCheck={false}
           onChange={(e) => props.onChange(e.target.value)}

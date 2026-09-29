@@ -14,6 +14,7 @@ which describes the directory it sits in rather than being content in it (see
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import pathlib
 
@@ -105,7 +106,7 @@ def list_collections() -> tuple[CollectionEntry, ...]:
         CollectionEntry(
             # Empty here by construction: this walks the DIRECTORY, which knows
             # names and counts and nothing about identity. The application layer
-            # joins the registry in and fills it, and its enabled-rows filter is
+            # joins the registry in and fills it, and that join is
             # what keeps an unclaimed folder out of the list a caller gets.
             uid="",
             name=d.name,
@@ -168,11 +169,47 @@ def list_level(relpath: str) -> CatalogueLevel:
             )
         elif is_listed(child.name):
             files.append(_file_entry(child))
+    segments = paths.split(relpath)
+    if len(segments) == 1:
+        # A collection's root also shows what waits to be merged, so a person
+        # can see it (see "Hide dot-prefixed entries except the inbox"). The
+        # one hidden entry any listing names, first as a sorted name would
+        # put it; it is absent when empty.
+        waiting = _count_inbox(segments[0])
+        if waiting:
+            directories.insert(
+                0,
+                DirectoryEntry(
+                    path=f"{segments[0]}/{paths.INBOX_DIR_NAME}",
+                    name=paths.INBOX_DIR_NAME,
+                    file_count=waiting,
+                    inbox=True,
+                ),
+            )
     return CatalogueLevel(
         path=relpath.strip("/"),
         directories=tuple(directories),
         files=tuple(files),
     )
+
+
+def list_inbox(collection: str) -> CatalogueLevel:
+    """A collection's inbox as a tree level: its items, read-only, and no folders.
+
+    Each item is titled from its frontmatter, or by its file name when it has
+    none. A collection whose inbox is empty — or was never created — lists
+    nothing rather than failing: the inbox is part of every collection's shape,
+    and emptying it is exactly what a pass does.
+    """
+    inbox = paths.inbox_dir(collection)
+    files: list[FileEntry] = []
+    if inbox.is_dir():
+        files = [
+            dataclasses.replace(_file_entry(f), inbox=True)
+            for f in sorted(inbox.iterdir())
+            if f.is_file() and is_markdown(f.name)
+        ]
+    return CatalogueLevel(path=f"{collection}/{paths.INBOX_DIR_NAME}", files=tuple(files))
 
 
 def walk_files(directory: pathlib.Path) -> tuple[FileEntry, ...]:

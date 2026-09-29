@@ -22,7 +22,12 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen } from "lucide-react";
 
-import { FILE_PANE_MAX_HEIGHT } from "@/components/filePane";
+import {
+  FILE_PANE_COLUMN,
+  FILE_PANE_GRID,
+  FILE_PANE_SCROLL,
+  useFillToBottom,
+} from "@/components/filePane";
 import { AgentMemoryStoreFileViewer } from "@/components/agents/AgentMemoryStoreFileViewer";
 import { translateApiError } from "@/lib/api/errors";
 import type { NativeMemoryFileNode } from "@/lib/api/agentNativeMemory";
@@ -33,12 +38,17 @@ export function AgentMemoryStoreTree({ agentUid, dir }: { agentUid: string; dir:
   const { t } = useTranslation();
   const tree = useNativeMemoryFiles(agentUid, dir);
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const fill = useFillToBottom();
 
   return (
-    <div className="grid gap-4 md:grid-cols-[18rem_1fr]">
+    <div
+      ref={fill.ref}
+      style={fill.style}
+      className={cn(FILE_PANE_GRID, "md:grid-cols-[18rem_minmax(0,1fr)]")}
+    >
       {/* Left: the recursive file tree. */}
-      <div className="space-y-1">
-        <p className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <div className={FILE_PANE_COLUMN}>
+        <p className="shrink-0 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {t("agents.memoryStore.tree")}
         </p>
         {tree.isPending ? (
@@ -46,7 +56,7 @@ export function AgentMemoryStoreTree({ agentUid, dir }: { agentUid: string; dir:
         ) : tree.error ? (
           <p className="px-1 text-sm text-destructive">{translateApiError(t, tree.error)}</p>
         ) : tree.data ? (
-          <ul className={cn("space-y-0.5", FILE_PANE_MAX_HEIGHT)}>
+          <ul className={cn("space-y-0.5", FILE_PANE_SCROLL)}>
             <TreeNode
               node={tree.data.root}
               depth={0}
@@ -59,11 +69,11 @@ export function AgentMemoryStoreTree({ agentUid, dir }: { agentUid: string; dir:
       </div>
 
       {/* Right: read-only content of the selected file. */}
-      <div className="min-w-0">
+      <div className={FILE_PANE_COLUMN}>
         {selectedPath ? (
           <AgentMemoryStoreFileViewer agentUid={agentUid} dir={dir} path={selectedPath} />
         ) : (
-          <div className="flex h-80 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
+          <div className="flex min-h-0 flex-1 items-center justify-center rounded border border-dashed text-sm text-muted-foreground">
             {t("agents.memoryStore.selectFile")}
           </div>
         )}

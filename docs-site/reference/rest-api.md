@@ -90,7 +90,7 @@ machine, exactly like a route the build does not have. The tables below mark tho
 
 ## Routes
 
-The daemon mounts 165 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 167 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -103,11 +103,11 @@ The daemon mounts 165 operations in 20 groups. Groups follow the order the daemo
 | [settings](#settings) | 2 |
 | [sync](#sync) | 19 |
 | [internal-engine](#internal-engine) | 6 |
-| [agents](#agents) | 32 |
+| [agents](#agents) | 34 |
 | [fs](#fs) | 5 |
 | [skills](#skills) | 9 |
 | [mcp](#mcp) | 10 |
-| [knowledge](#knowledge) | 8 |
+| [knowledge](#knowledge) | 9 |
 | [memory](#memory) | 12 |
 | [agent-providers](#agent-providers) | 2 |
 | [models](#models) | 3 |
@@ -238,9 +238,11 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 | `POST` | `/api/v1/agents/{uid}/mcp-install` | Install Mcp |
 | `DELETE` | `/api/v1/agents/{uid}/mcp-install` | Uninstall Mcp |
 | `GET` | `/api/v1/agents/{uid}/mcp-entries` | List Mcp Entries |
+| `GET` | `/api/v1/agents/{uid}/mcp-entries/{entry}` | Get Mcp Entry |
 | `DELETE` | `/api/v1/agents/{uid}/mcp-entries/{entry}` | Delete Mcp Entry |
 | `POST` | `/api/v1/agents/{uid}/mcp-entries/{entry}/adopt` | Adopt Mcp Entry |
 | `GET` | `/api/v1/agents/{uid}/plugins` | List Plugins |
+| `GET` | `/api/v1/agents/{uid}/plugins/{plugin_id}` | Get Plugin |
 | `PATCH` | `/api/v1/agents/{uid}/plugins/{plugin_id}` | Patch Plugin |
 | `DELETE` | `/api/v1/agents/{uid}/plugins/{plugin_id}` | Delete Plugin |
 | `GET` | `/api/v1/agents/{uid}/native-memory` | The agent's own native memory stores, most populated first. |
@@ -306,6 +308,7 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `knowledg
 | `POST` | `/api/v1/knowledge/collections` | Create Collection |
 | `GET` | `/api/v1/knowledge/tree` | Read Tree |
 | `GET` | `/api/v1/knowledge/file` | Read File |
+| `PUT` | `/api/v1/knowledge/file` | Save File |
 | `DELETE` | `/api/v1/knowledge/file` | Delete File |
 | `POST` | `/api/v1/knowledge/material` | Submit Material |
 | `POST` | `/api/v1/knowledge/collections/{uid}/curate` | Curate |
@@ -320,7 +323,7 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `memory` 
 | Method | Path | Summary |
 | --- | --- | --- |
 | `GET` | `/api/v1/memory/partitions` | List Partitions |
-| `POST` | `/api/v1/memory/sync` | Run aggregation over every registered, enabled agent's native memory. |
+| `POST` | `/api/v1/memory/sync` | Update memory: aggregate every registered, enabled agent's native memory, then distil every partition it left with undistilled raw entries ("Update memory in one action"; see ``application/memory/update.py``). |
 | `POST` | `/api/v1/memory/partitions/{uid}/distil` | Turn one partition's raw entries into notes, and rewrite its index. |
 | `GET` | `/api/v1/memory/partitions/{uid}/notes` | Every note in one partition, read from ``notes/`` at call time. |
 | `GET` | `/api/v1/memory/partitions/{uid}/notes/{slug}` | One note, whole. |

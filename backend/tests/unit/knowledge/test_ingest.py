@@ -28,12 +28,12 @@ from coffer.domain.knowledge.entry import ACTOR_USER
 from coffer.domain.knowledge.errors import CollectionNotFound, KnowledgeFileNotFound, UploadTooLarge
 from coffer.domain.provider.config import ProviderConfig, ResolvedConnection
 from coffer.domain.resource import Resource
-from coffer.infrastructure.knowledge import catalogue, fs, paths
+from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
 
 
 class _Resources:
-    """A fake ``ResourceService``: just enough for ``enabled_collections``."""
+    """A fake ``ResourceService``: just enough for ``collection_names``."""
 
     def __init__(self, names: list[str]) -> None:
         now = datetime.now(tz=UTC)
@@ -202,7 +202,7 @@ async def test_an_upload_becomes_material_and_nothing_else(knowledge) -> None:  
 
     # One inbox item, carrying the text; no original and no document beside it.
     assert _on_disk() == [".inbox/meeting-notes.md"]
-    material = fs.read_material("shopee", "meeting-notes.md")
+    material = inbox.read_material("shopee", "meeting-notes.md")
     assert material.actor == ACTOR_USER
     assert material.description == result.description
     assert material.body.strip() == data.decode().strip()
@@ -239,7 +239,7 @@ async def test_a_non_markdown_upload_is_converted_and_its_original_dropped(knowl
 
     assert result.converter == "csv"
     assert result.title == "team"
-    material = fs.read_material("shopee", "team.md")
+    material = inbox.read_material("shopee", "team.md")
     assert "| name | role |" in material.body
     assert "| Ada | engineer |" in material.body
     # The `.csv` itself is nowhere: the collection keeps knowledge, not the

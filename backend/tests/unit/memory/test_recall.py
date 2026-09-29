@@ -6,7 +6,7 @@ feature being restated:
 
 * an answer is a **path**, a title and a description — never a body, because
   the caller is a local process that reads files;
-* it spans every **enabled** partition, for whoever asks — a partition used
+* it spans every **served** partition, for whoever asks — a partition used
   to carry a per-agent reach that defaulted to the agents it had been
   aggregated from, which is how an agent came to be refused every note about
   the repository it was working in;
@@ -37,7 +37,7 @@ class _FakeMemory:
         self._notes = notes
         self._enabled = list(enabled) if enabled is not None else sorted(notes)
 
-    async def enabled_partitions(self) -> list[str]:
+    async def served_partitions(self) -> list[str]:
         return list(self._enabled)
 
     async def list_notes(self, partition: str) -> list[Note]:
@@ -130,11 +130,13 @@ async def test_an_answer_carries_no_score_no_mode_and_no_reason() -> None:
 @pytest.mark.acceptance(
     spec="memory", scenario="recall answers with locations, and never with a retired note"
 )
-async def test_recall_spans_only_the_enabled_partitions() -> None:
-    """``enabled`` is the only thing that can keep a note out of an answer.
+async def test_recall_spans_only_the_served_partitions() -> None:
+    """Recall spans exactly what the port serves, whoever asks.
 
     The narrowing that used to sit here was per-agent and nobody had chosen
-    it, so it is gone: this asserts the switch the developer *does* set.
+    it, and the enabled switch after it is gone too; the service serves every
+    registered partition, so a partition the port does not name is one that
+    has been deleted.
     """
     service = _service(
         {

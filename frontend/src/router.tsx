@@ -90,6 +90,20 @@ export const routes: RouteObject[] = [
         path: "agents/:uid/memory",
         element: lazyPage(() => import("./pages/AgentMemoryStorePage"), "AgentMemoryStorePage"),
       },
+      // A direct (unmanaged) MCP server of the agent, from the MCP servers
+      // tab. It has no uid — it is a stanza in the agent's own config file — so
+      // it is addressed as the REST route addresses it: the entry's name, and
+      // `?source=` for the file when two of the agent's files share that name.
+      {
+        path: "agents/:uid/mcp-servers/:entry",
+        element: lazyPage(() => import("./pages/AgentMcpEntryPage"), "AgentMcpEntryPage"),
+      },
+      // A plugin, reached from the agent's Plugins tab. Its id
+      // (`<name>@<marketplace>`) is URL-encoded into one path segment.
+      {
+        path: "agents/:uid/plugins/:pluginId",
+        element: lazyPage(() => import("./pages/AgentPluginPage"), "AgentPluginPage"),
+      },
       { path: "channels", element: <ChannelsPage /> },
       {
         path: "channels/:uid",

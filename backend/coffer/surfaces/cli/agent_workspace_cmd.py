@@ -3,7 +3,8 @@
 Part of spec agent-registry "Expose every agent operation through REST, CLI and
 the Agents page".
 
-MCP entries, plugins, and directory config-file children. Kept out of
+MCP entries and directory config-file children (plugins are in
+``agent_plugin_cmd``). Kept out of
 ``agent_cmd.py`` to respect the 400-line backend file cap;
 ``agent_cmd`` calls :func:`attach` to register everything on its existing
 typers, so the user-facing tree stays ``coffer agent mcp/config/plugin/...``.
@@ -27,8 +28,8 @@ from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._resolve import resolve_uid
+from coffer.surfaces.cli.agent_plugin_cmd import plugin_app
 
-plugin_app = typer.Typer(help="View and manage an agent's installed plugins")
 _console = Console()
 
 
@@ -53,7 +54,7 @@ def _tristate(value: bool | None) -> str:
     return "✓" if value else "✗"
 
 
-# --- coffer agent mcp entries / remove-entry / adopt -------------------------
+# --- coffer agent mcp entries / show-entry / remove-entry / adopt ------------
 
 
 def mcp_entries(
@@ -86,6 +87,42 @@ def mcp_entries(
             it["matches_resource"] or "",
         )
     _console.print(table)
+
+
+def mcp_show_entry(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Agent name"),
+    entry: str = typer.Argument(..., help="MCP entry name"),
+    source: str | None = typer.Option(
+        None, "--source", help="Config-file key when the entry exists in several files."
+    ),
+    output_json: bool = typer.Option(False, "--json", help="JSON output"),
+) -> None:
+    """Show one MCP entry in full — secret values are never printed."""
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        params = {"source": source} if source is not None else None
+        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        r = c.get(f"/agents/{uid}/mcp-entries/{entry}", params=params)
+        _not_found_exit(r)
+        _cli_client.check(r, verbose=_verbose(ctx))
+    d = r.json()
+    if output_json:
+        typer.echo(_json.dumps(d, indent=2))
+        return
+    secret = set(d["secret_keys"])
+    rows: list[tuple[str, str]] = [("name", d["name"]), ("file", d["path"])]
+    rows.append(("transport", d["transport"]))
+    if d["transport"] == "stdio":
+        rows.append(("command", " ".join([d["command"] or "", *d["args"]]).strip()))
+    else:
+        rows.append(("url", d["url"] or ""))
+    rows += [("cwd", d["cwd"])] if d["cwd"] else []
+    rows += [(f"env {k}", "(secret)" if k in secret else "(set)") for k in d["env_keys"]]
+    rows += [(f"header {k}", "(secret)" if k in secret else "(set)") for k in d["header_keys"]]
+    rows += [(f["key"], "(secret)" if f["masked"] else f["value"]) for f in d["extra"]]
+    for label, value in rows:
+        typer.echo(f"{label}: {value}")
 
 
 def mcp_remove_entry(
@@ -160,93 +197,6 @@ def mcp_adopt(
         _cli_client.check(r, verbose=_verbose(ctx))
     data = r.json()
     typer.echo(f"adopted: {data['kind']} {data['name']}")
-
-
-# --- coffer agent plugin ... --------------------------------------------------
-
-
-@plugin_app.command("list")
-def plugin_list(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    output_json: bool = typer.Option(False, "--json", help="JSON output"),
-) -> None:
-    """List the agent's installed plugins and known marketplaces."""
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
-        r = c.get(f"/agents/{uid}/plugins")
-        _not_found_exit(r)
-        _cli_client.check(r, verbose=_verbose(ctx))
-    data = r.json()
-    if output_json:
-        typer.echo(_json.dumps(data, indent=2))
-        return
-    _warn_parse_errors(data["parse_errors"])
-    table = Table(title=f"Plugins — {name}")
-    for col in ("ID", "Name", "Marketplace", "Enabled", "Cache"):
-        table.add_column(col)
-    for it in data["items"]:
-        table.add_row(
-            it["id"],
-            it["name"],
-            it["marketplace"],
-            "✓" if it["enabled"] else "✗",
-            "✓" if it["cache_present"] else "",
-        )
-    _console.print(table)
-    for m in data["marketplaces"]:
-        src = " ".join(s for s in (m["source_type"], m["source"]) if s)
-        typer.echo(f"marketplace: {m['name']}" + (f" ({src})" if src else ""))
-
-
-def _plugin_set_enabled(ctx: typer.Context, name: str, plugin_id: str, enabled: bool) -> None:
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
-        r = c.patch(f"/agents/{uid}/plugins/{plugin_id}", json={"enabled": enabled})
-        _not_found_exit(r)
-        _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(f"{'enabled' if enabled else 'disabled'}: plugin {plugin_id} (agent {name})")
-
-
-@plugin_app.command("enable")
-def plugin_enable(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    plugin_id: str = typer.Argument(..., help="Plugin id (name@marketplace)"),
-) -> None:
-    """Enable a plugin in the agent's config."""
-    _plugin_set_enabled(ctx, name, plugin_id, True)
-
-
-@plugin_app.command("disable")
-def plugin_disable(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    plugin_id: str = typer.Argument(..., help="Plugin id (name@marketplace)"),
-) -> None:
-    """Disable a plugin in the agent's config."""
-    _plugin_set_enabled(ctx, name, plugin_id, False)
-
-
-@plugin_app.command("uninstall")
-def plugin_uninstall(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    plugin_id: str = typer.Argument(..., help="Plugin id (name@marketplace)"),
-    force: bool = typer.Option(False, "--force", "-f"),
-) -> None:
-    """Uninstall a plugin (Codex edits its config; Claude Code shells out to its own CLI)."""
-    if not force and not typer.confirm(f"Really uninstall plugin {plugin_id!r} from agent {name}?"):
-        raise typer.Exit(1)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
-        r = c.delete(f"/agents/{uid}/plugins/{plugin_id}")
-        _not_found_exit(r)
-        _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(f"uninstalled: plugin {plugin_id} from agent {name}")
 
 
 # --- coffer agent config files / write / rm -----------------------------------
@@ -338,6 +288,7 @@ def config_rm(
 def attach(agent_app: typer.Typer, *, config_app: typer.Typer, mcp_app: typer.Typer) -> None:
     """Register the workspace commands on agent_cmd's existing typers."""
     mcp_app.command("entries")(mcp_entries)
+    mcp_app.command("show-entry")(mcp_show_entry)
     mcp_app.command("remove-entry")(mcp_remove_entry)
     mcp_app.command("adopt")(mcp_adopt)
     config_app.command("files")(config_files)

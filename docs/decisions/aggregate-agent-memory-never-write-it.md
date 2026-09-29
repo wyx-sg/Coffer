@@ -153,7 +153,9 @@ path to read the bodies as files.**
    reads no transcripts or rollouts. Where a source states its own search terms,
    as Codex's summary does, those travel with the entry.
 2. **Two layers on disk, one writer each.** `.raw/` holds what was read,
-   verbatim, written only by aggregation. `notes/` holds Coffer's own writing,
+   verbatim, written only by aggregation; it is the distil pass's input, not
+   shown in the web UI nor readable through the partition file routes.
+   `notes/` holds Coffer's own writing,
    written only by the distil pass. A bad distillation is re-run without
    re-reading the agents.
 3. **The product is a distillation, not a copy.** A note is one topic, in
@@ -202,8 +204,10 @@ path to read the bodies as files.**
   visibly worse.
 - **Two readers stay coupled to two private formats.** A format change must
   break one reader loudly and locally, not the layer.
-- **`enabled` governs what Coffer serves, not what a process can open.** Memory
-  carries no per-agent reach; handing an agent a path is handing it the file.
+- **Every partition is served to every agent.** A partition has no per-agent
+  reach and no enabled switch; handing an agent a path is handing it the file,
+  so a switch could only govern what Coffer serves, never what a process can
+  open.
 - **A session's opening is more expensive** — an index of a hundred notes
   rather than eight lines; Claude Code spends ~9k tokens on its own index every
   session, so this is the ecosystem's normal price for not searching.

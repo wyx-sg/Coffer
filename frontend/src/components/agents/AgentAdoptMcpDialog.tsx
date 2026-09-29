@@ -24,7 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
-import type { AdoptMcpEntryBody, McpEntryOut } from "@/lib/api/agents";
+import type { AdoptedResource, AdoptMcpEntryBody, McpEntryOut } from "@/lib/api/agents";
 import { ApiError, translateApiError } from "@/lib/api/errors";
 import { useAdoptMcpEntry } from "@/lib/hooks/useAgents";
 
@@ -43,6 +43,7 @@ export function AgentAdoptMcpDialog({
   entry,
   open,
   onOpenChange,
+  onAdopted,
 }: {
   /** The agent being adopted from — what the adopt request is addressed to. */
   agentUid: string;
@@ -51,6 +52,9 @@ export function AgentAdoptMcpDialog({
   entry: McpEntryOut;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Called with what adoption created, after the dialog closes — the entry's
+   *  detail page uses it to move on to the new managed server. */
+  onAdopted?: (created: AdoptedResource) => void;
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -84,6 +88,7 @@ export function AgentAdoptMcpDialog({
         onSuccess: (res) => {
           toast.success(t("agents.workspace.mcp.adoptSuccess", { name: res.name }));
           onOpenChange(false);
+          onAdopted?.(res);
         },
         onError: (err) => {
           const details =

@@ -34,7 +34,8 @@ export interface paths {
          * Create a collection
          * @description Creates one collection: a directory under the knowledge root, and one
          *     `knowledge` Resource for it — which is what gives the collection a
-         *     lifecycle, an audit trail and its one `enabled` switch.
+         *     lifecycle and an audit trail. The kind has no `enabled` switch (see
+         *     "Serve every collection to every agent").
          *     Nothing else creates one — not a read, not a write, not an agent's
          *     working directory (see "Create collections only deliberately").
          *
@@ -68,8 +69,12 @@ export interface paths {
          *     top level, `shopee/account` for a folder inside it. The listing is
          *     generated at call time by walking the directory and reading frontmatter,
          *     never materialized (see "Store each collection as one tree of Markdown
-         *     files"). Hidden entries — the inbox included — are absent, and so is the
-         *     collection's `README.md`.
+         *     files"). The collection's `README.md` is absent, and so is every hidden
+         *     entry but one: at a collection's root, a non-empty `.inbox` is listed
+         *     as a directory (`inbox: true`, `file_count` its items), and `path`
+         *     `<collection>/.inbox` lists those items as files, each titled from its
+         *     frontmatter or by its file name (see "Hide dot-prefixed entries except
+         *     the inbox").
          */
         get: operations["readKnowledgeTree"];
         put?: never;
@@ -93,14 +98,35 @@ export interface paths {
          *     absolute on-disk paths the UI needs to offer open-in-editor and
          *     reveal-in-file-manager on the file and on its folder (see "Return
          *     absolute paths on reads"). `curated_at` says when curation last had it
-         *     in front of it.
+         *     in front of it. `fingerprint` is the sha256 of the file's bytes, which a
+         *     save hands back (see "Save a document edited in the web UI").
+         *
+         *     `path` may also name an item in a collection's `.inbox`; it is read the
+         *     same way and carries `inbox: true` — it can be looked at, never saved
+         *     or deleted.
          *
          *     Whole file, always: no chunking, no passage granularity, no `top_k`.
          *     Bytes come off disk at call time, so an edit made in the person's own
          *     editor is what comes back.
          */
         get: operations["readKnowledgeFile"];
-        put?: never;
+        /**
+         * Save an edited document's body
+         * @description Replaces the document's body with `body` and keeps its frontmatter
+         *     exactly as it is on disk — title, description, actor, the curation
+         *     stamp and any key a person added (see "Save a document edited in the
+         *     web UI"). `expected_fingerprint` is the `fingerprint` the editor's read
+         *     carried; a file whose bytes changed since is refused with 409
+         *     `KNOWLEDGE_FILE_CONFLICT` and left untouched. The write is atomic, and
+         *     it moves the file's modification time past its curation stamp, so the
+         *     sweep treats it as a person's edit (see "Let newer statements win and a
+         *     person's edit stand"). Recorded in the audit log as `knowledge_edited`.
+         *
+         *     Only a Markdown document: the collection itself, its `README.md`, an
+         *     inbox item or anything else hidden, and a file that is not Markdown are
+         *     refused as `KNOWLEDGE_PATH_UNSAFE`.
+         */
+        put: operations["saveKnowledgeFile"];
         post?: never;
         /**
          * Delete a document
@@ -350,8 +376,14 @@ export interface components {
             path: string;
             /** @description The directory's own name. */
             name: string;
-            /** @description Files beneath it, counted recursively. */
+            /** @description Files beneath it, counted recursively; for the inbox, its items. */
             file_count: number;
+            /**
+             * @description True for a collection's `.inbox` and the items waiting in it —
+             *     material a person may read but not edit or delete (see "Hide
+             *     dot-prefixed entries except the inbox").
+             */
+            inbox: boolean;
         };
         /**
          * @description One file as a tree row shows it — enough to judge relevance without
@@ -370,6 +402,12 @@ export interface components {
             actor: "agent" | "user";
             /** @description ISO-8601 timestamp from frontmatter. */
             updated_at: string;
+            /**
+             * @description True for a collection's `.inbox` and the items waiting in it —
+             *     material a person may read but not edit or delete (see "Hide
+             *     dot-prefixed entries except the inbox").
+             */
+            inbox: boolean;
         };
         /** @description One level of one collection — never the whole tree. */
         TreeOut: {
@@ -405,6 +443,31 @@ export interface components {
              *     demand").
              */
             curated_at: string;
+            /**
+             * @description sha256 hex of the file's bytes as read. Hand it back as
+             *     `expected_fingerprint` on `PUT /file`; a file changed since is
+             *     refused (see "Save a document edited in the web UI").
+             */
+            fingerprint: string;
+            /**
+             * @description True for a collection's `.inbox` and the items waiting in it —
+             *     material a person may read but not edit or delete (see "Hide
+             *     dot-prefixed entries except the inbox").
+             */
+            inbox: boolean;
+        };
+        /**
+         * @description A document's new body from the web UI's editor (see "Save a document
+         *     edited in the web UI"). The frontmatter is kept as it is on disk, so
+         *     none of it is sent.
+         */
+        FileSave: {
+            /** @description Document path relative to the knowledge root. */
+            path: string;
+            /** @description The new Markdown body, without frontmatter. */
+            body: string;
+            /** @description The `fingerprint` the editor's `GET /file` carried. */
+            expected_fingerprint: string;
         };
         /**
          * @description New knowledge for a collection (see "Submit every entrance's input as
@@ -420,7 +483,7 @@ export interface components {
         MaterialIn: {
             /**
              * @description The collection's directory name — a filesystem value, like every
-             *     path on this family. Must exist and be enabled.
+             *     path on this family. Must name a registered collection.
              */
             collection: string;
             /** @description Names the subject; also the slug of the document it becomes if promoted. */
@@ -599,8 +662,9 @@ export interface components {
     };
     responses: {
         /**
-         * @description A path that escapes the knowledge root, names a hidden entry — the inbox
-         *     included — or cannot name a document because it is the collection itself
+         * @description A path that escapes the knowledge root, names a hidden entry — for a
+         *     write or a delete, the inbox included; a read or a listing may name the
+         *     inbox — or cannot name a document because it is the collection itself
          *     or its `README.md` (`KNOWLEDGE_PATH_UNSAFE`). The rule lives in path
          *     construction rather than in a check each handler remembers to make,
          *     which is why it is reported here (see "Guard every path through one
@@ -652,6 +716,19 @@ export interface components {
         };
         /** @description No file at that path (`KNOWLEDGE_FILE_NOT_FOUND`). */
         FileNotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorEnvelope"];
+            };
+        };
+        /**
+         * @description The file changed on disk since the editor read it
+         *     (`KNOWLEDGE_FILE_CONFLICT`); nothing was written (see "Save a document
+         *     edited in the web UI").
+         */
+        FileConflict: {
             headers: {
                 [name: string]: unknown;
             };
@@ -863,6 +940,41 @@ export interface operations {
             422: components["responses"]["ValidationFailed"];
         };
     };
+    saveKnowledgeFile: {
+        parameters: {
+            query?: never;
+            header?: {
+                /**
+                 * @description Who is writing, for the audit trail and for the file's `actor`
+                 *     frontmatter. `agent` is recorded as such; anything else, an absent
+                 *     header included, is recorded as `user`.
+                 */
+                "X-Coffer-Actor"?: components["parameters"]["ActorHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileSave"];
+            };
+        };
+        responses: {
+            /** @description Saved; the document as it now is, with its new fingerprint */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileOut"];
+                };
+            };
+            400: components["responses"]["UnsafePath"];
+            404: components["responses"]["FileNotFound"];
+            409: components["responses"]["FileConflict"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
     deleteKnowledgeFile: {
         parameters: {
             query: {
@@ -954,10 +1066,7 @@ export interface operations {
                      * @description The document to convert. One per call.
                      */
                     file: string;
-                    /**
-                     * @description The collection's directory name. Must already exist and be
-                     *     enabled.
-                     */
+                    /** @description The collection's directory name. Must already exist. */
                     collection: string;
                 };
             };
@@ -1021,8 +1130,7 @@ export interface operations {
             /**
              * @description `RESOURCE_NOT_FOUND` for a uid no resource answers to, the same as
              *     every other uid-addressed route; `KNOWLEDGE_COLLECTION_NOT_FOUND`
-             *     for a disabled collection, or a uid naming a resource that is not
-             *     a collection. An unknown uid is always an error — nothing is
+             *     for a uid naming a resource that is not a collection. An unknown uid is always an error — nothing is
              *     conjured into existence by being asked for (see "Create
              *     collections only deliberately").
              */

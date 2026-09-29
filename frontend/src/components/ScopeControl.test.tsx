@@ -36,7 +36,6 @@ const disableMutate = vi.fn();
 /** The resources under test: an identity, and separately a label. */
 const FS_UID = "u-mcp-9f2c"; // named "fs"
 const WRITING_UID = "u-skill-4e8d"; // named "writing"
-const TG_UID = "u-channel-1b77"; // named "tg"
 
 /** The agents the machine knows, as the pair the picker works in: a uid a
  *  scope stores, and the name the row is labelled and asserted by. */
@@ -50,14 +49,10 @@ const AGENTS = [
   { uid: CODEX, name: "codex" },
 ];
 
-function seed(opts: {
-  scope: Scope | null;
-  supports_scope?: boolean;
-  agents?: { uid: string; name: string }[];
-}) {
-  const { scope, supports_scope = true, agents = AGENTS } = opts;
+function seed(opts: { scope: Scope | null; agents?: { uid: string; name: string }[] }) {
+  const { scope, agents = AGENTS } = opts;
   vi.mocked(scopeHooks.useResourceScope).mockReturnValue({
-    data: { scope, supports_scope },
+    data: { scope, supports_scope: true },
     isPending: false,
   } as unknown as ReturnType<typeof scopeHooks.useResourceScope>);
   vi.mocked(scopeHooks.useUpdateResourceScope).mockReturnValue({
@@ -209,22 +204,6 @@ describe("ScopeControl", () => {
     render(<ScopeControl kind="mcp_server" uid={FS_UID} enabled />);
     openPanel();
     expect(screen.getByText(/no agents registered/i)).toBeInTheDocument();
-  });
-
-  test("a kind that declares no scope still gets a working enable/disable", () => {
-    // Every kind Coffer ships today declares scope; this is the fallback for
-    // one that does not, so the control never has to be forked for it. It stays
-    // ONE button so a table's status column reads the same whatever the kind.
-    seed({ scope: null, supports_scope: false });
-    render(<ScopeControl kind="unscoped_kind" uid={TG_UID} enabled />);
-    expect(trigger()).toHaveTextContent(/^enabled/i);
-    openPanel();
-    expect(screen.queryByRole("radio", { name: /every agent/i })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("radio")).toHaveLength(2);
-    fireEvent.click(choice(/^disabled$/i));
-    // `kind` rides along for the invalidation; the request is the uid's.
-    expect(disableMutate).toHaveBeenCalledWith({ kind: "unscoped_kind", uid: TG_UID });
-    expect(mutate).not.toHaveBeenCalled();
   });
 
   test("a disabled resource says so, and no scope state claims to be live", () => {

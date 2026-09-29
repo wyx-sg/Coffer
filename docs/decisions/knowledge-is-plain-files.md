@@ -57,14 +57,15 @@ frontmatter (`title`, `description`, `actor`, timestamps), nested however
 whoever filed them chose. The path is the identity; there is no id field and
 no id-to-path table. There is no derived store of any kind. An agent reads
 documents with its own `Read` and `Grep` at absolute paths; what tells it which
-paths exist is a catalogue — every enabled collection's documents with path,
+paths exist is a catalogue — every collection's documents with path,
 title and description — rendered into Coffer's own `coffer-guide` skill, whose
 frontmatter description names the subjects the collections cover (drawn from
 each collection's `README.md`). The only knowledge tool is `coffer__write`,
 which submits new material.
 
-- **Pros.** Nothing to keep level with the disk: a person's edit in their own
-  editor is live on the next read. Retrieval uses the tools the agent uses all
+- **Pros.** Nothing to keep level with the disk: a person's edit — in their own
+  editor or in the web UI's editor, which rewrites the same file — is live on
+  the next read. Retrieval uses the tools the agent uses all
   day, so the one step that failed in the audit — remembering to call a Coffer
   tool — is gone. The catalogue is generated, so it cannot rot the way the
   hand-written index did. The files are what a person backs up, syncs and reads.
@@ -221,9 +222,9 @@ Rules a future change must respect:
   person's action on the REST, CLI and web surfaces.
 - **The catalogue is generated and delivered as a skill.** This layer renders
   the text; the skill kind writes, registers and delivers it.
-- **One undivided store.** A collection carries no per-agent reach: every
-  enabled collection is named in the one rendered skill, a disabled one in
-  none. `enabled` is the collection's only gate; above it, the `knowledge`
+- **One undivided store.** A collection carries no per-agent reach and no
+  enabled switch: every collection is named to every agent in the one rendered
+  skill, and a collection is withheld only by deleting it. The `knowledge`
   experimental feature (off by default on the stable channel) closes the whole
   layer — its routes, `coffer__write`, the catalogue in the skill and the
   curation sweep.
@@ -235,14 +236,14 @@ Rules a future change must respect:
 - **The agent stops guessing.** It never has to name a collection, guess a
   phrase or remember a tool: the catalogue is in front of it with absolute
   paths, and the tools it reads with are the ones it uses all day.
-- **A person's correction is live immediately.** Direct edits in the tree are a
-  complete way to change knowledge; no import or registration step exists.
+- **A person's correction is live immediately.** Direct edits in the tree — in
+  their own editor or the web UI's — are a complete way to change knowledge; no
+  import or registration step exists.
 - **Adding an agent costs this layer nothing.** The surface is one write tool
   and plain files.
-- **`enabled` is non-disclosure, not access control.** An agent with shell tools
-  can read any file under the knowledge root; a disabled collection is one no
-  skill names, not one no process can open. The surfaces say so rather than
-  implying a boundary.
+- **No pretence of a gate.** The knowledge root is readable by any agent with
+  shell tools, so Coffer does not pretend to gate collections: there is no
+  per-collection switch to suggest a boundary that does not exist.
 - **Keeping the corpus organised becomes someone's job.** Duplication, drift
   and contradictions across documents are not prevented by a lane; they are
   resolved by curation, which rewrites the only copy under the rules in
@@ -258,5 +259,5 @@ Rules a future change must respect:
   `backend/coffer/infrastructure/knowledge/paths.py`;
   spec knowledge "Store each collection as one tree of Markdown files",
   spec knowledge "Expose exactly one knowledge tool",
-  spec knowledge "Gate collections with enabled alone",
+  spec knowledge "Serve every collection to every agent",
   spec knowledge "Carry no vector or embedding dependency".

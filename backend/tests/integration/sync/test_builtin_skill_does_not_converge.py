@@ -58,7 +58,7 @@ def _guide_text(*enabled: str) -> str:
 
     The renderer is pure and takes the catalogue it is given, which is the
     whole point: ``KnowledgeService.catalogue()`` builds that list from
-    ``enabled_collections()``, so "which collections are switched on here" is
+    ``collection_names()``, so "which collections are registered here" is
     an input to these bytes.
     """
     catalogue = []

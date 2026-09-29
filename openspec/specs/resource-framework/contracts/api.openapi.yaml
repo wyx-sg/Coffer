@@ -186,6 +186,15 @@ paths:
               schema: { $ref: "#/components/schemas/ResourceOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: >-
+            `RESOURCE_NOT_TOGGLEABLE` — the resource's kind has no enabled
+            switch (`knowledge`, `memory`); nothing is changed (spec
+            resource-framework "Address every resource by an immutable uid
+            through one kind-agnostic surface").
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   /resources/{uid}/disable:
     parameters:
@@ -205,6 +214,13 @@ paths:
               schema: { $ref: "#/components/schemas/ResourceOut" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: >-
+            `RESOURCE_NOT_TOGGLEABLE` — the resource's kind has no enabled
+            switch (`knowledge`, `memory`); nothing is changed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   /resources/{uid}/scope:
     parameters:
@@ -526,7 +542,7 @@ components:
 
     ResourceOut:
       type: object
-      required: [uid, kind, name, config, enabled, created_at, updated_at]
+      required: [uid, kind, name, config, enabled, toggleable, created_at, updated_at]
       properties:
         uid:
           type: string
@@ -553,6 +569,13 @@ components:
         scope:
           $ref: "#/components/schemas/ScopeOut"
         enabled: { type: boolean }
+        toggleable:
+          type: boolean
+          description: >-
+            Whether the kind has an enabled switch at all. False for
+            `knowledge` and `memory`, whose resources are always enabled and
+            refuse enable/disable with `RESOURCE_NOT_TOGGLEABLE`, so a surface
+            can leave the switch out.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 

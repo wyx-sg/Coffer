@@ -235,7 +235,21 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Read one MCP entry from the agent's config file in full
+         * @description Read-only, derived at read time like the listing (see "Show one direct
+         *     MCP entry's full configuration without its secrets"). Carries every
+         *     listing field plus the absolute `path` of the config file the entry
+         *     lives in, its `cwd`, and every other key it holds as `extra`. Env and
+         *     header VALUES never cross HTTP (key names only), and the value of any
+         *     other key whose name looks secret-like — or that nests one — is
+         *     withheld (`masked: true`, `value: null`). Nothing is spawned: this
+         *     reads the file, it does not start the server. Addressed like the
+         *     delete: `source` disambiguates a name several files share (422,
+         *     `MCP_ENTRY_SOURCE_AMBIGUOUS`, when omitted then); the `coffer` entry
+         *     is not addressable here (422, `MCP_ENTRY_PROTECTED`).
+         */
+        get: operations["getAgentMcpEntry"];
         put?: never;
         post?: never;
         /**
@@ -335,7 +349,21 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Read one of the agent's plugins in detail
+         * @description Read-only (see "Read one installed plugin's detail read-only"). Returns
+         *     the plugin's listing row, its marketplace's source, the directory its
+         *     package was read from, whether in-app uninstall can run now, and
+         *     everything the package contributes from its default locations — skills
+         *     (`skills/<name>/SKILL.md`) and commands (`commands/*.md`) and subagents
+         *     (`agents/*.md`) with their frontmatter descriptions, the hook events
+         *     `hooks/hooks.json` registers, and the MCP servers `.mcp.json` bundles.
+         *     A plugin whose cache directory is missing has `install_path: null` and
+         *     empty contents. Backs the plugin detail page reached from the agent's
+         *     Plugins tab. An id the listing does not report is 404
+         *     (`PLUGIN_NOT_FOUND`); nothing is written and nothing is audited.
+         */
+        get: operations["getAgentPlugin"];
         put?: never;
         post?: never;
         /**
@@ -755,6 +783,40 @@ export interface components {
             /** @description Name of an equivalent registered mcp_server resource, when one exists — the user can remove the duplicate instead of adopting. */
             matches_resource: string | null;
         };
+        /** @description One key of an MCP entry beyond the ones the listing names, rendered as text (strings as themselves, anything else as compact JSON). */
+        McpEntryField: {
+            key: string;
+            /** @description Null when masked — a secret-looking value never crosses HTTP. */
+            value: string | null;
+            /** @description True when the key's name looks secret-like (same pattern as `secret_keys`, non-empty value) or its value nests such a key. */
+            masked: boolean;
+        };
+        /** @description One MCP entry in full: every `McpEntry` field plus the config file it came from, its working directory and its other keys. Env/header VALUES never cross HTTP; secret-looking `extra` values are masked. */
+        McpEntryDetail: {
+            name: string;
+            /** @description Allowlist key of the source file. */
+            source: string;
+            /** @enum {string} */
+            transport: "stdio" | "http";
+            command: string | null;
+            args: string[];
+            /** @description Env variable KEY NAMES only (sorted); values stay on disk. */
+            env_keys: string[];
+            /** @description Env/header key names that look secret-like (see `McpEntry`). */
+            secret_keys: string[];
+            url: string | null;
+            /** @description HTTP header KEY NAMES only (sorted); values stay on disk. */
+            header_keys: string[];
+            enabled: boolean | null;
+            is_coffer: boolean;
+            matches_resource: string | null;
+            /** @description Resolved absolute path of the config file the entry lives in. */
+            path: string;
+            /** @description Working directory a stdio server is started in, when the entry sets one. */
+            cwd: string | null;
+            /** @description Every other key the entry carries, sorted by key. */
+            extra: components["schemas"]["McpEntryField"][];
+        };
         McpEntriesOut: {
             items: components["schemas"]["McpEntry"][];
             parse_errors: components["schemas"]["ParseError"][];
@@ -804,6 +866,33 @@ export interface components {
             commands?: string[];
             /** @description Names of MCP servers the plugin bundles (its `.mcp.json`). */
             mcp_servers?: string[];
+        };
+        /** @description One skill, command or subagent a plugin contributes. */
+        PluginComponent: {
+            name: string;
+            /** @description From the component file's YAML frontmatter, when it has one. */
+            description?: string | null;
+        };
+        /** @description One plugin's detail page — derived at read time, never stored. */
+        PluginDetail: {
+            plugin: components["schemas"]["Plugin"];
+            marketplace_source_type: string | null;
+            /** @description Where the plugin's marketplace comes from (e.g. `owner/repo`). */
+            marketplace_source: string | null;
+            /** @description The directory the plugin's package was read from; null when no install directory is recorded or it is missing on disk. */
+            install_path: string | null;
+            /** @description Same flag as the listing's — whether in-app uninstall can run now. */
+            can_uninstall: boolean;
+            /** @description The package's `skills/<name>/` folders, described by `SKILL.md`. */
+            skills: components["schemas"]["PluginComponent"][];
+            /** @description The package's `commands/*.md` slash commands. */
+            commands: components["schemas"]["PluginComponent"][];
+            /** @description The package's `agents/*.md` subagents. */
+            agents: components["schemas"]["PluginComponent"][];
+            /** @description Hook event names `hooks/hooks.json` registers handlers for. */
+            hooks: string[];
+            /** @description MCP server names the package's `.mcp.json` bundles. */
+            mcp_servers: string[];
         };
         Marketplace: {
             name: string;
@@ -1360,6 +1449,37 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    getAgentMcpEntry: {
+        parameters: {
+            query?: {
+                /** @description Config-file key the entry lives in, when ambiguous. */
+                source?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
+                /** @description MCP entry name as it appears in the agent's config file. */
+                entry: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpEntryDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+        };
+    };
     deleteAgentMcpEntry: {
         parameters: {
             query?: {
@@ -1448,6 +1568,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginsOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getAgentPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
+                /** @description Plugin identifier as the listing reports it (`<name>@<marketplace>`). */
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginDetail"];
                 };
             };
             401: components["responses"]["Unauthorized"];

@@ -48,7 +48,14 @@ export const agentConfigChildKey = (uid: string, key: string, relpath: string) =
   ["agents", uid, "config-files", key, relpath] as const;
 export const agentMcpInstallKey = (uid: string) => ["agents", uid, "mcp-install"] as const;
 export const agentMcpEntriesKey = (uid: string) => ["agents", uid, "mcp-entries"] as const;
+/** One entry's detail — under the listing's key, so whatever refreshes the
+ *  listing (a remove, an adopt) refreshes the detail too. */
+export const agentMcpEntryKey = (uid: string, entry: string, source: string) =>
+  ["agents", uid, "mcp-entries", entry, source] as const;
 export const agentPluginsKey = (uid: string) => ["agents", uid, "plugins"] as const;
+/** One plugin's detail — under the listing's key, so a toggle or uninstall that
+ *  invalidates the listing refreshes the detail page too. */
+export const agentPluginKey = (uid: string, id: string) => ["agents", uid, "plugins", id] as const;
 export const agentUnmanagedSkillsKey = (uid: string) =>
   ["agents", uid, "unmanaged-skills"] as const;
 /** One unmanaged folder's preview — nested under the list key, so adopting or
@@ -179,6 +186,8 @@ export const resourceScopeKey = (uid: string) => ["scope", uid] as const;
 
 export const knowledgeKey = ["knowledge"] as const;
 export const knowledgeCollectionsKey = ["knowledge", "collections"] as const;
+/** Every directory level of every collection — the prefix a save invalidates. */
+export const knowledgeTreeRootKey = ["knowledge", "tree"] as const;
 /** One directory level; `path` is relative to the knowledge root. */
 export const knowledgeTreeKey = (path: string) => ["knowledge", "tree", path] as const;
 export const knowledgeFileKey = (path: string) => ["knowledge", "file", path] as const;
