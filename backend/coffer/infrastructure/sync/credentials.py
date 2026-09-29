@@ -29,6 +29,7 @@ from datetime import UTC, datetime
 from cryptography.fernet import Fernet, InvalidToken
 
 from coffer.domain.credential_errors import CredentialLocked
+from coffer.domain.model_proxy.state import PROXY_TOKEN_REF_PREFIX
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
 
 _logger = logging.getLogger(__name__)
@@ -92,9 +93,12 @@ class CredentialSyncAdapter:
         return conn
 
     def list_refs(self) -> list[str]:
+        """Every ref that converges — the machine-local proxy tokens excluded
+        (``PROXY_TOKEN_REF_PREFIX``): a token unlocks only this machine's
+        loopback model proxy, so it has nowhere else to go."""
         with closing(self._connect()) as conn:
             rows = conn.execute("SELECT ref FROM credentials ORDER BY ref").fetchall()
-        return [r[0] for r in rows]
+        return [r[0] for r in rows if not str(r[0]).startswith(PROXY_TOKEN_REF_PREFIX)]
 
     def read_ciphertext(self, ref: str) -> bytes | None:
         with closing(self._connect()) as conn:

@@ -103,10 +103,13 @@ value object.
 Pure (I/O-free) functions that take the file's existing text and return the new
 text, analogous to `domain/agent/mcp_install.py`'s `apply_install`.
 
-- `apply_anthropic_settings(text, *, base_url, model, fast_model, api_key_helper) -> str`
-  and its inverse `remove_anthropic_settings(text) -> str`
-- `apply_codex_provider(text, *, base_url, model, wire_api, display_name, provider_id, env_key, catalog_path) -> str`
-  and its inverse `remove_codex_provider(text, *, provider_id) -> str`
+- `apply_anthropic_settings(text, *, base_url, api_key_helper, model, effort, tier_models, picker_models, replace_builtin_picker, local, local_context_window, loopback_proxy) -> str`
+  and its inverse `remove_anthropic_settings(text, *, managed_model, managed_effort) -> str`
+- `apply_codex_provider(text, *, base_url, model, wire_api, display_name, effort, auth, provider_id, env_key, catalog_path) -> str`
+  (in `domain/provider/codex_projection.py`) and its inverse
+  `remove_codex_provider(text, *, provider_id, managed_effort) -> str`
+- `suggest_tier_models(model, curated, *, local) -> dict` (`domain/agent/tiers.py`) —
+  the tier pins used when the agent stores none
 - `codex_model_catalog_json(models) -> str | None` — the catalogue document, or
   `None` when there is nothing honest to write; `codex_model_catalog_path(dir)`
 - `anthropic_api_key_helper(connection_uid) -> str` — the only helper Coffer
@@ -137,10 +140,18 @@ is preserved, and the projection tests assert exactly this set.
 
 | Managed key path | Source |
 |---|---|
-| `apiKeyHelper` | `"<absolute path to coffer> provider key --connection-uid <uid>"` (shell-quoted; the bare `coffer` when no CLI is found) — the connection's immutable uid, so the line survives a rename |
-| `env.ANTHROPIC_BASE_URL` | the connection's `base_url` |
-| `env.ANTHROPIC_MODEL` | the AGENT binding's `model` (key removed when unbound) |
-| `env.ANTHROPIC_SMALL_FAST_MODEL` | the agent binding's `fast_model` (key removed when unset) |
+| `apiKeyHelper` | `"<absolute path to coffer> proxy token --agent-uid <agent uid>"` (shell-quoted; the bare `coffer` when no CLI is found) — prints the agent's local proxy token, never a provider key |
+| `env.ANTHROPIC_BASE_URL` | the local model proxy's Anthropic route, `http://127.0.0.1:<proxy port>/anthropic` |
+| `env.NO_PROXY` | gains `127.0.0.1,localhost`, appended to the user's own entries; de-projection takes back only that appended pair |
+| `model` | the AGENT binding's `model`; left untouched when unbound, removed on de-projection only while it still equals the binding |
+| `effortLevel` | the binding's `effort`; same rule |
+| `env.ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU,FABLE}_MODEL` | the binding's `tier_models`, else Coffer's suggestion (`suggest_tier_models`); an unpinned tier is removed |
+| `modelPicker` | the connection's curated text models, each option described `via Coffer` (the ownership marker); `replaceBuiltInOptions` true when no curated id is a Claude id |
+| `env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` / `env.CLAUDE_CODE_MAX_CONTEXT_TOKENS` | a local runtime only: `"1"` and the chosen model's recorded window |
+
+Every write deletes `env.ANTHROPIC_MODEL` and `env.ANTHROPIC_SMALL_FAST_MODEL`,
+which earlier builds wrote. A `provider key` helper an earlier build wrote is
+still recognised as Coffer's, so de-projection removes it.
 
 `ANTHROPIC_API_KEY` is never written — it would override the helper.
 De-projection removes an `apiKeyHelper` only when it starts with
@@ -154,9 +165,15 @@ De-projection removes an `apiKeyHelper` only when it starts with
 | `model_provider` | `"coffer"` |
 | `model_catalog_json` | the absolute path of the Coffer-owned catalogue, written only while the connection curates `text` models; dropped otherwise |
 | `model_providers.coffer.name` | `f"Coffer ({name})"` — deliberately the readable label, since nothing resolves it; it goes cosmetically stale after a rename until the next projection |
-| `model_providers.coffer.base_url` | the connection's `base_url` |
+| `model_providers.coffer.base_url` | the local model proxy's Responses route, `http://127.0.0.1:<proxy port>/openai/v1` |
 | `model_providers.coffer.wire_api` | the agent binding's `wire_api`, defaulting to `"responses"` |
-| `model_providers.coffer.env_key` | `"COFFER_PROVIDER_KEY"` |
+| `model_providers.coffer.supports_websockets` / `requires_openai_auth` | `false` / `false` |
+| `model_providers.coffer.auth` | `{command = "<absolute path to coffer>", args = ["proxy", "token", "--agent-uid", "<agent uid>"]}` |
+| `model_reasoning_effort` | the binding's `effort`, only when the chosen curated model records that level |
+
+Each catalogue entry carries `context_window`, `max_context_window` and
+`auto_compact_token_limit` (90%) when the curated model records a window, and
+`supported_reasoning_levels` / `default_reasoning_level` when it records levels.
 
 The catalogue file is written before `config.toml` points at it, and the
 pointer is dropped before the file is deleted, so Codex never reads a
@@ -369,3 +386,41 @@ copies, and the Codex model catalogue.
   while the single global speech-to-text default rests on the operation alone
   (see "Keep an independent speech-to-text default").
 - All HTTP routes are loopback-only, gated by `X-Coffer-Token`.
+
+### Local model proxy state (`domain/model_proxy/state.py`)
+
+What the daemon pushes the proxy over its control route, replaced wholesale on
+every push: `ProxyState {revision, agents: [ProxyAgent {agent_uid, agent_type,
+token_sha256}], routes: [ProxyRoute {agent_uid, wire, members: [ProxyMember
+{connection_uid, connection_name, upstream_root, auth, key, models, local}]}]}`.
+`key` is held only in the proxy's memory and never shown by `repr`. The
+per-agent tokens live in the credential store under `proxy-token/<agent_uid>`
+(machine-local; vault sync skips them). `~/.coffer/proxy.json` (mode `0600`)
+holds `{port, pid, started_at, version, control_token}`.
+
+### Local runtime (`ProviderConfig.local_runtime`)
+
+`LocalRuntime {runtime: ollama | lmstudio | vllm | llama_server, version,
+wires: [anthropic | openai]}` — what detection found; set only on a connection
+whose `base_url` is loopback, and it makes `credential_ref` optional. Omitted
+from the stored document when unset.
+
+### Curated-model facts
+
+`CuratedModel` gains `context_window`, `effort_levels`, `default_effort` and
+`price` (`CuratedPrice {input, output, cache_write_5m?, cache_write_1h?,
+cache_read?, web_search?}`, USD per million tokens / per thousand searches), each
+omitted from the stored document while unknown.
+
+### Usage (`usage_requests`, `usage_daily`, `quota_snapshots`; migration 0111)
+
+- `usage_requests` — one row per proxied upstream attempt: every field of
+  `UsageRecord` (`domain/usage/records.py`) plus `cost_usd`, `price_version`
+  (`snapshot:<version>` or `override:<connection uid>`) and `unpriced`;
+  `UNIQUE(source, dedupe_key)`. Retention follows `mcp_invocations`.
+- `usage_daily` — per local day, agent, connection and model: request,
+  unknown-usage and unpriced counts, token sums per category, estimated cost.
+  Grouping columns use `''` for "none". Kept 365 days.
+- `quota_snapshots` — the latest official window per `(agent_type,
+  window_key)`: used percent, window length, reset time, label, source, when it
+  was seen, plan. An older observation never replaces a newer one.

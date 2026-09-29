@@ -1,9 +1,9 @@
 # Provider Keys Never Land in an Agent's Native Config
 
-**Status**: Accepted
+**Status**: Accepted — revised 2026-09-30 by [API-Key Providers Are Reached Through a Separate Local Model Proxy](api-key-providers-are-reached-through-a-separate-local-model-proxy.md): the agents now hold a local proxy token, and `coffer provider key` and its routes are gone
 **Date**: 2026-06-21
 **Deciders**: Yuxing Wu
-**Related**: [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credential References](credential-references.md), [Resource Identity Is an Immutable uid](resource-identity-is-an-immutable-uid.md), [Daemon Auth and Origin Guard](daemon-auth-and-origin-guard.md), spec provider-switching "Resolve a key for exactly one connection", spec provider-switching "Never return the raw secret in a connection", spec provider-switching "Require a connection or a wire for the key command", spec credentials "Hold plaintext only in memory at the moment of use", [principles](../../docs-site/architecture/principles.md) (Credentials), PR #165, PR #309
+**Related**: [Provider Connections Projected Into Agent Config](provider-connections-projected-into-agent-config.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credential References](credential-references.md), [Resource Identity Is an Immutable uid](resource-identity-is-an-immutable-uid.md), [Daemon Auth and Origin Guard](daemon-auth-and-origin-guard.md), spec provider-switching "Authenticate each agent to the proxy with its own local token" (which replaced the removed key-resolution requirement), spec provider-switching "Never return the raw secret in a connection", spec credentials "Hold plaintext only in memory at the moment of use", [principles](../../docs-site/architecture/principles.md) (Credentials), PR #165, PR #309
 
 ## Context
 

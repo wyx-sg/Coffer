@@ -517,13 +517,17 @@ export interface components {
             created_at: string;
             /** Display Name */
             display_name: string;
-            /** Fast Model */
-            fast_model: string | null;
+            /** Effort */
+            effort: string | null;
             /** Model */
             model: string | null;
             /** Name */
             name: string;
             state: components["schemas"]["DetectionState"];
+            /** Tier Models */
+            tier_models: {
+                [key: string]: string;
+            } | null;
             type: components["schemas"]["AgentType"];
             /** Uid */
             uid: string;
@@ -541,10 +545,14 @@ export interface components {
         AgentPatch: {
             /** Config Dir */
             config_dir?: string | null;
-            /** Fast Model */
-            fast_model?: string | null;
+            /** Effort */
+            effort?: string | null;
             /** Model */
             model?: string | null;
+            /** Tier Models */
+            tier_models?: {
+                [key: string]: string;
+            } | null;
             /** Wire Api */
             wire_api?: string | null;
         };

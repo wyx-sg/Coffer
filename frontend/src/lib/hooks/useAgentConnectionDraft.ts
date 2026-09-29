@@ -78,7 +78,9 @@ export function useAgentConnectionDraft(agent: AgentOut) {
   // connection the moment one was renamed under it.
   const appliedConn = active?.uid ?? BUILTIN;
   const appliedModel = active === null ? "" : (agent.model ?? "");
-  const appliedFast = active === null ? "" : (agent.fast_model ?? "");
+  // The Haiku tier — Claude Code's background model — is what the old "fast
+  // model" slot projected; the full Model per tier section is a later UI item.
+  const appliedFast = active === null ? "" : (agent.tier_models?.haiku ?? "");
 
   // DRAFT state — re-syncs to the applied state whenever the latter changes
   // (initial load, after a confirm, an external change); a same-value refetch
@@ -200,7 +202,8 @@ export function useAgentConnectionDraft(agent: AgentOut) {
       return;
     }
     const body: AgentPatch = { model: draftModel };
-    if (wire === "anthropic" && draftFast) body.fast_model = draftFast;
+    if (wire === "anthropic" && draftFast)
+      body.tier_models = { ...(agent.tier_models ?? {}), haiku: draftFast };
     patchAgent.mutate({ uid: agent.uid, body }, { onSuccess: () => activate.mutate(draftConn) });
   };
 

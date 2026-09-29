@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 from coffer.application.agent.model_catalogue import AgentModelCatalogueService
 from coffer.application.agent.service import AgentService
 from coffer.application.chat.attachments import ChatAttachmentService
+from coffer.application.chat.ports import QuotaObserver
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
@@ -165,6 +166,7 @@ def wire_chat(
     resource_service: ResourceService,
     agent_catalog: AgentCatalog,
     compose_memory_context: MemoryContextComposer | None = None,
+    observe_quota: QuotaObserver | None = None,
 ) -> ChatWiring:
     """Wire the agent-chat feature (spec chat) into the running app.
 
@@ -218,6 +220,10 @@ def wire_chat(
         _credential_resolver,
         compose_memory_context=compose_memory_context,
         resolve_channel=_channel_note,
+        # Official subscription quota from the turns Coffer drives (spec
+        # provider-switching "Show a subscription's official quota as of when
+        # it was seen").
+        observe_quota=observe_quota,
     )
 
     # 4. Application services + the agent-agnostic turn orchestrator.

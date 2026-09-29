@@ -22,11 +22,9 @@ import pathlib
 from collections.abc import AsyncIterator, Callable, Sequence
 from typing import Any, Protocol
 
-from claude_agent_sdk import (
-    ClaudeAgentOptions,
-    ClaudeSDKClient,
-)
+from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, RateLimitEvent
 
+from coffer.application.chat.ports import QuotaObserver
 from coffer.domain.chat.attachment import (
     INLINE_IMAGE_MAX_BYTES,
     Attachment,
@@ -49,6 +47,7 @@ from coffer.infrastructure.chat.document_extract import (
     extract_document_attachments,
     prompt_with_document_text,
 )
+from coffer.infrastructure.chat.quota_observe import forward_quota
 from coffer.infrastructure.chat.transcribe import (
     Transcriber,
     prompt_with_transcripts,
@@ -56,11 +55,6 @@ from coffer.infrastructure.chat.transcribe import (
 )
 
 _logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Session injection seam
-# ---------------------------------------------------------------------------
 
 
 class ClaudeSdkSession(Protocol):
@@ -84,11 +78,8 @@ SdkSessionFactory = Callable[[ClaudeAgentOptions], ClaudeSdkSession]
 
 
 class ClaudeSdkClientSession:
-    """Adapts the real ``ClaudeSDKClient`` to the ``ClaudeSdkSession`` protocol.
-
-    Kept deliberately thin — the only place the concrete SDK client is touched —
-    so the rest of the adapter stays unit-testable behind the protocol.
-    """
+    """Adapts the real ``ClaudeSDKClient`` to the ``ClaudeSdkSession`` protocol —
+    the only place the concrete SDK client is touched."""
 
     def __init__(self, options: ClaudeAgentOptions) -> None:
         self._client = ClaudeSDKClient(options=options)
@@ -148,10 +139,6 @@ def _attachment_block(att: Attachment) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Adapter
-# ---------------------------------------------------------------------------
-
 #: Sentinel pushed after the terminal event so ``_stream`` knows to stop.
 _SENTINEL = object()
 
@@ -183,6 +170,7 @@ class ClaudeSdkAgentAdapter:
         system_context: str | None = None,
         transcriber: Transcriber | None = None,
         document_extractor: DocumentExtractor | None = None,
+        observe_quota: QuotaObserver | None = None,
     ) -> None:
         self._cwd = cwd
         self._resume = resume_session
@@ -193,6 +181,10 @@ class ClaudeSdkAgentAdapter:
         self._system_context = system_context
         self._transcriber = transcriber
         self._document_extractor = document_extractor
+        # Claude Code's own subscription windows, reported on the stream as a
+        # ``rate_limit_event``; forwarded as-is (``.raw`` keeps the @internal
+        # ``unifiedWindows``), never affecting the turn.
+        self._observe_quota = observe_quota
 
     async def run_turn(
         self,
@@ -341,6 +333,9 @@ class ClaudeSdkAgentAdapter:
             # terminal event ends the drain.
             try:
                 async for msg in session.receive_messages():
+                    if isinstance(msg, RateLimitEvent):
+                        raw = msg.rate_limit_info.raw
+                        await forward_quota(self._observe_quota, "claude_code", raw)
                     for event in map_sdk_message(msg, state):
                         await queue.put(event)
                         if isinstance(event, (TurnDone, TurnError)):

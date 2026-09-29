@@ -68,7 +68,7 @@ The file Coffer writes is chosen by the **agent**, not by the protocol. Reaching
 
 1. Open **Agents**, choose the agent, and stay on **Overview**.
 2. In the **Model provider** card, pick a **Provider**. Only enabled providers that reach this agent are offered.
-3. Pick a **Model** (and, for Claude Code, a **Fast model**). The first model the endpoint returns is pre-selected.
+3. Pick a **Model** (and, for Claude Code, the model for the **Haiku** tier, which also runs its background tasks). The first model the endpoint returns is pre-selected.
 4. Click **Test connection**. **Confirm switch** stays disabled until the test passes for the current provider and model.
 5. Click **Confirm switch**. Coffer saves the model on the agent and then activates the provider — the only step that writes the agent's config.
 
@@ -77,7 +77,7 @@ Picking **Use built-in (agent's own login)** and confirming puts the agent back 
 ### From the command line
 
 ```sh
-coffer agent edit claude-code --model sonnet --fast-model haiku
+coffer agent edit claude-code --model sonnet --effort high --tier haiku=haiku
 coffer provider switch deepseek
 # switched to deepseek [openai] → claude_code, codex
 
@@ -93,55 +93,80 @@ The model lives on the **agent**, not on the provider: a provider says which gat
 
 ## What gets written
 
+An agent on a provider does not call the provider directly. It calls Coffer's **local model proxy** on `127.0.0.1:8001`, which forwards each request to the provider with the real key attached, fails over to another provider serving the same model if the first one fails before answering, and records what the request cost ([Usage and quota](/guides/usage)). How the proxy works is in [The local model proxy](/architecture/model-proxy). What lands in the agent's own file is therefore the proxy's address and a command that prints the agent's own **local proxy token** — never the provider's endpoint or its key.
+
 Coffer merges only its own keys into the agent's file and leaves everything else as it was. Writes go through the same machinery as the [config-file editor](/guides/agents#edit-config-files): atomic, with `.bak`, `.bak.1` and `.bak.2` kept, and refused with `CONFIG_FILE_STALE` if the file changed after Coffer read it (audited as `provider_projection_refused`).
 
 ### Claude Code — `<config_dir>/settings.json`
 
 ```json
 {
-  "apiKeyHelper": "/Users/you/.coffer/bin/coffer provider key --connection-uid 59ecb631d06a501c936fa5affdace553",
+  "apiKeyHelper": "/Users/you/.coffer/bin/coffer proxy token --agent-uid 3f1c0b9a7d2e4c5f8a6b1d0e9f2c3a4b",
   "env": {
-    "ANTHROPIC_BASE_URL": "https://api.deepseek.com",
-    "ANTHROPIC_MODEL": "sonnet",
-    "ANTHROPIC_SMALL_FAST_MODEL": "haiku"
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:8001/anthropic",
+    "NO_PROXY": "127.0.0.1,localhost",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "deepseek-pro",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-pro",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-pro"
+  },
+  "model": "deepseek-pro",
+  "effortLevel": "high",
+  "modelPicker": {
+    "options": [{ "model": "deepseek-pro", "label": "deepseek-pro", "description": "via Coffer" }],
+    "replaceBuiltInOptions": true
   }
 }
 ```
 
-The key is never written. Claude Code runs the `apiKeyHelper` command to fetch it, and `coffer provider key --connection-uid <uid>` prints the decrypted key for exactly that provider. The helper cites the provider's uid, so renaming the provider does not break it. `ANTHROPIC_API_KEY` is never written, because it would override the helper. When the provider is disabled or no longer reaches any agent, the helper prints nothing and exits with code 4, so Claude Code does not keep a stale key.
+- **The key is never written.** Claude Code runs `apiKeyHelper`, and `coffer proxy token --agent-uid <uid>` prints the agent's local token, which unlocks only the loopback proxy. The proxy swaps it for the provider's key. `ANTHROPIC_API_KEY` is never written, because it would override the helper. For an agent this machine does not have, the helper prints nothing and exits with code 4.
+- **The file names the proxy, not the provider.** Switching Claude Code from one API-key provider to another changes the proxy's route; `settings.json` stays as it is, and renaming a provider touches nothing.
+- **`NO_PROXY`** gains `127.0.0.1,localhost`, so a corporate `HTTPS_PROXY` never captures the loopback call. Your own entries stay, and switching back removes only the pair Coffer appended.
+- **The model** goes in the top-level `model` key, which `/model` also saves to, so choosing another model inside Claude Code sticks. **Effort** goes in `effortLevel`.
+- **Every tier is pinned.** Claude Code asks for models by tier — Opus, Sonnet, Haiku (which also runs its background tasks) and Fable. On an endpoint that serves no Claude ids each tier is the agent's model; on a gateway serving Claude ids each tier is the model whose name carries it. `coffer agent edit <agent> --tier haiku=<model>` sets one yourself.
+- **`modelPicker`** puts the provider's models in `/model`, replacing the built-in rows when the provider serves no Claude ids.
+- Coffer deletes the deprecated `ANTHROPIC_SMALL_FAST_MODEL` and an `ANTHROPIC_MODEL` an earlier version wrote.
 
-The helper names the `coffer` CLI by absolute path (shell-quoted if the path holds a space), because Claude Code started from the Dock or Finder does not get your login shell's `PATH`. For an install under `~/.coffer/bin` the path is the stable `~/.coffer/bin/coffer`, not the versioned directory behind it, so an upgrade does not break it. The path is resolved at each switch.
-
-::: warning When no CLI is found
-If the daemon cannot find the `coffer` CLI when it writes the projection, it writes the bare `coffer provider key …` instead, which works only where `coffer` is on the `PATH` Claude Code runs with. Switch again after installing the CLI to get the absolute form.
-:::
+The helper names the `coffer` CLI by absolute path (shell-quoted if the path holds a space), because Claude Code started from the Dock or Finder does not get your login shell's `PATH`. For an install under `~/.coffer/bin` the path is the stable `~/.coffer/bin/coffer`, so an upgrade does not break it.
 
 ### Codex — `<config_dir>/config.toml`
 
 ```toml
 model = "deepseek-flash"
 model_provider = "coffer"
+model_reasoning_effort = "high"
 model_catalog_json = "/Users/you/.codex/coffer-model-catalog.json"
 
 [model_providers.coffer]
 name = "Coffer (deepseek)"
-base_url = "https://api.deepseek.com"
+base_url = "http://127.0.0.1:8001/openai/v1"
 wire_api = "responses"
-env_key = "COFFER_PROVIDER_KEY"
-
-[shell_environment_policy]
-exclude = ["COFFER_PROVIDER_KEY"]
+supports_websockets = false
+requires_openai_auth = false
+auth = { command = "/Users/you/.coffer/bin/coffer", args = ["proxy", "token", "--agent-uid", "8e2d…"] }
 ```
 
-The file is edited with `tomlkit`, so your comments and key order survive. Codex reads the key from the `COFFER_PROVIDER_KEY` environment variable. Coffer sets it for every Codex process it starts itself ([chat](/guides/chat) and [channel](/guides/channels) turns). The `shell_environment_policy.exclude` entry keeps the variable out of the shell commands Codex runs for the agent, so an `env` in a turn cannot print the key; any entries you already had in that list stay, and switching back removes only Coffer's. For Codex runs you start in your own shell, export it there:
+The file is edited with `tomlkit`, so your comments and key order survive. Codex runs the `auth` command for its token itself, so a Codex you start in your own terminal needs nothing exported, and no key is in any Codex process's environment. The command-backed `auth` table needs **Codex 0.155.1 or later**. `supports_websockets = false` keeps Codex from trying the Responses WebSocket transport first, which stalls against any base URL but OpenAI's.
+
+When the provider curates models, Coffer writes its own catalogue next to `config.toml` so Codex's picker lists them. Each entry carries the model's context window, an auto-compact limit at 90% of it, and its effort levels, from what the provider records for the model; `model_reasoning_effort` is written only when the chosen model has levels.
+
+Reverting to the built-in login removes exactly the keys Coffer wrote. A `model` or effort you changed since with `/model` or `/effort` is yours and stays.
+
+## Local model runtimes
+
+A provider can be a model runtime on this machine: **Ollama** (≥ 0.14.0 for Claude Code, ≥ 0.13.4 for Codex), **LM Studio** (≥ 0.4.1 / ≥ 0.3.29), **vLLM** (≥ 0.11.1 / ≥ 0.10.0) or llama.cpp's **llama-server** (Codex support is experimental). Coffer talks to each in its own native protocol through the proxy — no translation — so `mlx_lm.server`, which speaks only Chat Completions, is not supported; use LM Studio's MLX engine.
 
 ```sh
-export COFFER_PROVIDER_KEY="$(coffer provider key --connection-uid 59ecb631d06a501c936fa5affdace553)"
+coffer provider detect-local
+# ollama 0.14.2 at http://127.0.0.1:11434 — anthropic, openai
+#   qwen3-coder  (65536, tools)
+
+coffer provider add ollama --protocol anthropic --base-url http://127.0.0.1:11434 --local
 ```
 
-`model_catalog_json` and the `coffer-model-catalog.json` file beside `config.toml` are written only when the provider curates text models; they replace Codex's built-in model list with the ones the endpoint serves. Switching back removes both and Codex's own list returns.
-
-Reverting to the built-in login removes exactly these keys — and removes `apiKeyHelper` only when it is Coffer's own.
+- **Detection is read-only.** It probes loopback addresses only (each runtime's default port, or the URL you give), fingerprints the runtime rather than trusting the port, and never pulls, loads or downloads a model. vLLM's default port 8000 is Coffer's own daemon port, so start vLLM on another port and pass it with `--base-url`.
+- **`--local` needs no key** and curates the runtime's models that can call tools, each with the context window the runtime serves it with. Ollama's served window is known once the model is loaded; before that it is unknown, and you can set it on the provider's Models tab.
+- **Claude Code** gets `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` (local runtimes reject its beta fields) and `CLAUDE_CODE_MAX_CONTEXT_TOKENS` set to the served window, with every tier pinned to the one model. **Codex** gets the window in its catalogue. Coffer never runs Codex with `--oss`, which can pull models.
+- Agents work far better with a window of at least 64k tokens; token counts from local runtimes are approximate, and a first request may wait for a cold model load.
 
 ## Curate the models a provider offers
 
@@ -174,7 +199,7 @@ coffer provider rm deepseek
 
 - **Rotating** the key overwrites the stored secret at the same ref; nothing that cites it changes.
 - **Changing the protocol** is refused with `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` while the provider is switched on. Run `coffer provider builtin <agent_type>` for each agent type it reaches (the refusal names them), edit, then switch again.
-- **Renaming** changes only the label. The uid, the credential ref and the projected `apiKeyHelper` stay as they are; Codex's `name = "Coffer (<name>)"` label updates on the next switch.
+- **Renaming** changes only the label. The uid, the credential ref and the agents' files stay as they are; Codex's `name = "Coffer (<name>)"` label updates on the next switch.
 - **Deleting** removes the provider and deletes its credential if nothing else cites it.
 
 ## Boot self-check
@@ -210,8 +235,9 @@ The other `engine.*` keys control the unattended passes (`engine.upkeep.<pass>.e
 | --- | --- | --- |
 | Switch fails with `CONFIG_FILE_STALE` | The agent's config changed between Coffer's read and write | Run the switch again. |
 | Switch fails with `PROVIDER_INTERNAL_ONLY` | You tried to switch an agent onto an `ollama` provider | Use it as the internal-engine default instead. |
-| Claude Code sends requests without a key | The provider was disabled or reaches no agent, or the helper runs a bare `coffer` that is not on the `PATH` Claude Code runs with | Run the `apiKeyHelper` command from `settings.json` yourself; switch again to rewrite it with the CLI's absolute path. |
-| Codex run from your shell fails to authenticate | `COFFER_PROVIDER_KEY` is not exported there | Export it as shown above. |
+| The agent gets `503` "no connection is active" from the proxy | The provider was disabled, reaches no agent, or its key is missing | Check the provider's reach and key; `coffer proxy status` shows the proxy itself. |
+| The agent gets `401` from the proxy | The helper printed no token, or a stale one | Run the `apiKeyHelper` / `auth` command from the agent's file yourself; `coffer proxy rotate <agent>` issues a fresh token. |
+| Nothing answers on `127.0.0.1:8001` | The proxy is not running | `coffer proxy status`; the daemon restarts a crashed proxy within a few seconds. |
 | The agent page shows the built-in login | Coffer's regular check found the agent's config no longer carries the projection, and marked the connection inactive rather than re-route the agent | Switch again if you still want the provider. |
 | A `wire_api` other than `responses` is refused | Codex refuses to load any other value | Leave it at `responses`. |
 

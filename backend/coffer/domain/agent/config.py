@@ -42,13 +42,16 @@ class AgentConfig(BaseModel):
     # scope") — the same single mechanism ``mcp_server`` uses.
     # Per-agent model binding (spec provider-switching "Take projected model
     # keys from the agent's binding"). The model the agent projects comes from
-    # HERE, not the connection: ``model`` →
-    # ``ANTHROPIC_MODEL`` / Codex ``model``; ``fast_model`` →
-    # ``ANTHROPIC_SMALL_FAST_MODEL`` (anthropic only); ``wire_api`` → the Codex
-    # chat/responses choice. All optional — an unbound agent projects no model
-    # env, so it runs on its OWN default model (the connection carries none).
+    # HERE, not the connection: ``model`` → Claude Code's top-level ``model``
+    # settings key / Codex's ``model``; ``effort`` → Claude Code's
+    # ``effortLevel`` / Codex's ``model_reasoning_effort``; ``tier_models`` →
+    # Claude Code's ``ANTHROPIC_DEFAULT_<TIER>_MODEL`` pins (the Haiku pin also
+    # runs its background tasks); ``wire_api`` → Codex's provider wire. All
+    # optional — an unbound agent projects no model key, so it runs on its OWN
+    # default model (the connection carries none).
     model: str | None = None
-    fast_model: str | None = None
+    effort: str | None = None
+    tier_models: dict[str, str] | None = None
     # Validated against the one Codex wire-api value that still exists (see
     # _validate_wire_api) so a bad value is a 422 at PATCH time, not a Codex
     # config that fails to load.
@@ -77,6 +80,38 @@ class AgentConfig(BaseModel):
                 f"wire_api must be {_CODEX_WIRE_API!r} — Codex no longer supports any other value"
             )
         return v
+
+    @field_validator("effort")
+    @classmethod
+    def _validate_effort(cls, v: str | None) -> str | None:
+        """Shape only: the levels are the model's own (read back from the agent
+        or recorded on the connection's curated model), so Coffer does not keep
+        a list of its own to check against."""
+        if v is None:
+            return None
+        v = v.strip()
+        if not v or len(v) > 32:
+            raise ValueError("effort must be a non-empty level name")
+        return v
+
+    @field_validator("tier_models")
+    @classmethod
+    def _validate_tiers(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        """Only Claude Code's four tiers, each naming a non-blank model id; an
+        empty mapping is no mapping."""
+        if v is None:
+            return None
+        from coffer.domain.agent.tiers import CLAUDE_TIERS
+
+        cleaned: dict[str, str] = {}
+        for tier, model in v.items():
+            if tier not in CLAUDE_TIERS:
+                known = ", ".join(CLAUDE_TIERS)
+                raise ValueError(f"unknown tier {tier!r}: expected one of {known}")
+            if not isinstance(model, str) or not model.strip():
+                raise ValueError(f"tier {tier!r} must name a model")
+            cleaned[tier] = model.strip()
+        return cleaned or None
 
     @field_validator("config_dir")
     @classmethod

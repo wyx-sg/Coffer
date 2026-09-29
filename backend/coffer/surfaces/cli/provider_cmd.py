@@ -5,13 +5,12 @@ lifecycle verbs every kind's group shares (``_kind_verbs``). This kind keeps
 its own ``add`` and ``edit``: creating a connection stores its secret through
 the credential store, and editing it can rotate that secret or correct the
 wire, both of which ``PATCH /providers/{uid}`` owns and the generic route does
-not. ``switch``, ``builtin`` and ``key`` are the connection-specific commands.
+not. ``switch`` and ``builtin`` are the connection-specific commands; the key an
+agent used to fetch through ``key`` stays with the local model proxy, and the
+agents run ``coffer proxy token`` instead.
 
 Every command takes the connection's NAME and resolves it to the uid the
-routes address (ADR resource-identity-is-an-immutable-uid). ``key`` is the
-exception: its caller is the ``apiKeyHelper`` line Coffer writes into another
-tool's config file, so it takes the uid directly — a machine reading a value
-Coffer put there, not a person typing.
+routes address (ADR resource-identity-is-an-immutable-uid).
 
 Which connection the internal engine and speech-to-text run on is a setting,
 ``coffer config set engine.provider|transcribe.provider <name>``.
@@ -50,8 +49,18 @@ def add(
     ),
     title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
     description: str | None = typer.Option(None, "--description"),
+    local: bool = typer.Option(
+        False,
+        "--local",
+        help="A model runtime on this machine (Ollama, LM Studio, vLLM, llama-server): "
+        "detect it, curate its tool-capable models, no key needed",
+    ),
 ) -> None:
     """Create an LLM connection.
+
+    With --local the base URL must be a loopback address; Coffer detects the
+    runtime there read-only (nothing is pulled or loaded) and records the wires
+    it serves and each model's served context window.
 
     For anthropic/openai/unknown supply exactly one of --secret /
     --credential-ref; an ollama connection needs neither. The new connection
@@ -75,6 +84,22 @@ def add(
     check_title_arg(title)
     c, _info = _cli_client.client_or_exit()
     with c:
+        if local:
+            d = c.post("/providers/detect-local", json={"base_url": base_url})
+            if d.status_code == 422:
+                typer.echo(f"not a local address: {base_url}", err=True)
+                raise typer.Exit(6)
+            _cli_client.check(d, verbose=verbose)
+            found = d.json()["found"]
+            if not found:
+                typer.echo(f"no local model runtime answers at {base_url}", err=True)
+                raise typer.Exit(4)
+            body["local_runtime"] = found[0]["runtime"]
+            body["models"] = [
+                {"id": m["id"], "context_window": m["context_window"]}
+                for m in found[0]["models"]
+                if m.get("tools") is not False
+            ]
         r = c.post("/providers", json=body)
         if r.status_code in (400, 422):
             typer.echo(f"invalid provider config: {r.text}", err=True)
@@ -88,6 +113,39 @@ def add(
             t = c.patch(f"/resources/{data['uid']}", json={"title": title})
             _cli_client.check(t, verbose=verbose)
     typer.echo(f"added provider {data['name']} ({data['protocol']})")
+
+
+def detect_local(
+    base_url: str | None = typer.Option(
+        None, "--base-url", help="A loopback URL to probe; default: each runtime's default port"
+    ),
+    json_out: bool = typer.Option(False, "--json", help="Machine-readable output"),
+) -> None:
+    """Find local model runtimes (read-only: nothing is pulled or loaded)."""
+    import json as _json
+
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        r = c.post("/providers/detect-local", json={"base_url": base_url})
+        if r.status_code == 422:
+            typer.echo(f"not a local address: {base_url}", err=True)
+            raise typer.Exit(6)
+        _cli_client.check(r, verbose=False)
+    found = r.json()["found"]
+    if json_out:
+        typer.echo(_json.dumps(found, indent=2))
+        return
+    if not found:
+        typer.echo("no local model runtime found")
+        return
+    for hit in found:
+        rt = hit["runtime"]
+        wires = ", ".join(rt["wires"]) or "none it can serve natively"
+        typer.echo(f"{rt['runtime']} {rt.get('version') or ''} at {hit['base_url']} — {wires}")
+        for m in hit["models"]:
+            window = m["context_window"] or "window unknown"
+            tools = {True: "tools", False: "no tools", None: "tools unknown"}[m["tools"]]
+            typer.echo(f"  {m['id']}  ({window}, {tools})")
 
 
 def _config(item: dict[str, Any], key: str) -> Any:
@@ -211,58 +269,6 @@ def builtin(
     typer.echo(f"{data['agent_type']} back on its built-in login, was {previous} → {deprojected}")
 
 
-def key(
-    connection_uid: str | None = typer.Option(
-        None,
-        "--connection-uid",
-        help="Print this specific connection's key (the projected helper)",
-    ),
-    wire: str | None = typer.Option(
-        None, "--wire", help="Back-compat: print the key active for a wire (anthropic | openai)"
-    ),
-) -> None:
-    """Print a connection's API key for Claude Code's apiKeyHelper.
-
-    Coffer writes this call into the agent's own config file when it switches
-    the agent onto a connection; you rarely run it yourself. It takes the
-    connection's uid, not its name, so renaming the connection keeps it working.
-
-    --wire is the legacy form, which resolves whichever connection is active for
-    that wire's agent instead of naming one.
-
-    Exits 4 with nothing on stdout when the daemon resolves no key — for
-    --connection-uid that includes a connection the user disabled or scoped to
-    no agent, so the agent's helper fails instead of reading a stale key.
-
-    \f
-    The one command in this module that does NOT take a name. Its caller is the
-    ``apiKeyHelper`` line Coffer writes into the agent's own config file, and
-    that line has to keep resolving to the same connection after the user
-    relabels it — so it cites the uid
-    (ADR resource-identity-is-an-immutable-uid).
-    """
-    if connection_uid:
-        path = f"/providers/{connection_uid}/key"
-        missing = (
-            f"no key for connection {connection_uid!r}: it is absent, disabled, "
-            "scoped to no agent, or keyless"
-        )
-    elif wire:
-        path, missing = f"/providers/active-key/{wire}", f"no active provider for wire {wire!r}"
-    else:
-        typer.echo("specify --connection-uid <uid> or --wire <wire>", err=True)
-        raise typer.Exit(6)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.get(path)
-        if r.status_code == 404:
-            typer.echo(missing, err=True)
-            raise typer.Exit(4)
-        r.raise_for_status()
-    # Raw value only — apiKeyHelper consumes stdout as the token.
-    typer.echo(r.json()["value"])
-
-
 _PROVIDER = KindVerbs(
     kind="provider",
     noun="connection",
@@ -291,4 +297,4 @@ register_kind_verbs(
 )
 app.command("switch")(switch)
 app.command("builtin")(builtin)
-app.command("key")(key)
+app.command("detect-local")(detect_local)

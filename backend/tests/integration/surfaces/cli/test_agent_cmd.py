@@ -855,24 +855,29 @@ def test_agent_edit_binds_a_model(agent_cli_daemon):
 @pytest.mark.acceptance(
     spec="agent-registry", scenario="bind a model to an agent from the command line"
 )
-def test_agent_edit_binds_a_fast_model_and_can_clear_it(agent_cli_daemon):
+def test_agent_edit_binds_effort_and_tiers_and_can_clear_them(agent_cli_daemon):
     """The route distinguishes "absent" from "explicitly null" via
     ``model_fields_set``; the CLI needs a way to say the second one, otherwise
-    a fast model can be set and never taken off."""
+    an effort or a tier pin can be set and never taken off."""
     _add_codex(agent_cli_daemon)
     bound = _runner.invoke(
         cli_app,
-        ["agent", "edit", "codex", "--model", "big", "--fast-model", "small"],
-    )
+        [
+            "agent", "edit", "codex", "--model", "big", "--effort", "high",
+            "--tier", "haiku=small", "--tier", "opus=big",
+        ],
+    )  # fmt: skip
     assert bound.exit_code == 0, bound.output
     shown = json.loads(_runner.invoke(cli_app, ["agent", "show", "codex", "--json"]).output)
-    assert (shown["model"], shown["fast_model"]) == ("big", "small")
+    assert (shown["model"], shown["effort"]) == ("big", "high")
+    assert shown["tier_models"] == {"haiku": "small", "opus": "big"}
+    assert "fast_model" not in shown
 
-    cleared = _runner.invoke(cli_app, ["agent", "edit", "codex", "--clear-fast-model"])
+    cleared = _runner.invoke(cli_app, ["agent", "edit", "codex", "--clear-tiers"])
     assert cleared.exit_code == 0, cleared.output
     shown = json.loads(_runner.invoke(cli_app, ["agent", "show", "codex", "--json"]).output)
-    assert shown["fast_model"] is None
-    assert shown["model"] == "big", "clearing the fast slot must not disturb the main one"
+    assert shown["tier_models"] is None
+    assert (shown["model"], shown["effort"]) == ("big", "high"), "clearing tiers keeps the rest"
 
 
 def test_agent_edit_binding_a_model_leaves_the_config_dir_alone(agent_cli_daemon):

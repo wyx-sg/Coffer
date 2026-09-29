@@ -133,7 +133,7 @@ def test_unchanged_file_projects_normally_with_the_fingerprint_check(
     )
     assert projected == ["cc"]
     text = settings.read_text(encoding="utf-8")
-    assert '"theme": "light"' in text and "gw.example" in text
+    assert '"theme": "light"' in text and "127.0.0.1:8001/anthropic" in text
 
 
 class _FakeAudit:

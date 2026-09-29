@@ -53,7 +53,8 @@ const agent: AgentOut = {
   config_dir: "/home/me/.claude",
   display_name: "Claude Code",
   model: null,
-  fast_model: null,
+  effort: null,
+  tier_models: null,
   wire_api: null,
   version: null,
   state: "installed_active",
@@ -71,6 +72,7 @@ function makeConn(over: Partial<Provider> = {}): Provider {
     protocol: "anthropic" as Provider["protocol"],
     base_url: "https://api.anthropic.com",
     credential_ref: "ref",
+    local_runtime: null,
     is_active: true,
     title: null,
     internal_default: false,
@@ -295,7 +297,7 @@ describe("AgentOverviewTab", () => {
     fireEvent.click(confirmBtn());
     // Confirm PATCHes both slots (default = first model) then activates.
     expect(patchAgentMutate).toHaveBeenCalledWith(
-      { uid: "u-my-claude", body: { model: "agnes-2.0", fast_model: "agnes-2.0" } },
+      { uid: "u-my-claude", body: { model: "agnes-2.0", tier_models: { haiku: "agnes-2.0" } } },
       expect.anything(),
     );
     expect(activateMutate).toHaveBeenCalledWith("u-agnes");

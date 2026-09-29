@@ -64,6 +64,7 @@ OWNERS: tuple[tuple[str, str], ...] = (
     ("/api/v1/memory", "memory"),
     ("/api/v1/models", "provider-switching"),
     ("/api/v1/providers", "provider-switching"),
+    ("/api/v1/proxy", "provider-switching"),
     ("/api/v1/reconcile", "resource-framework"),
     ("/api/v1/resources", "resource-framework"),
     ("/api/v1/resources/mcp_server", "mcp-gateway"),
@@ -72,6 +73,7 @@ OWNERS: tuple[tuple[str, str], ...] = (
     ("/api/v1/skills", "skill-manager"),
     ("/api/v1/sync", "vault-sync"),
     ("/api/v1/upkeep", "resource-framework"),
+    ("/api/v1/usage", "provider-switching"),
 )
 
 #: Served paths that are deliberately in no REST contract: ``/mcp`` is the MCP

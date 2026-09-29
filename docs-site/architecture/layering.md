@@ -131,7 +131,9 @@ backend/coffer/
 │   ├── channel/            # channel config, envelopes
 │   ├── chat/               # conversation, message, attachment, turn events
 │   ├── memory/             # note, partition, budget, reader protocol
-│   ├── provider/           # provider config, projection rules
+│   ├── provider/           # provider config, projection rules, local runtimes
+│   ├── model_proxy/        # the state the daemon pushes the model proxy
+│   ├── usage/              # usage records, stream usage readers, prices, ranges, quota
 │   └── sync/               # manifest, diff, convergence and machine rules
 ├── application/            # each kind package holds its services, ports and make_<kind>_kind()
 │   ├── resource_service.py # kind-agnostic CRUD, plus resource_*_ops.py
@@ -153,7 +155,8 @@ backend/coffer/
 │   ├── channel/            # adapter protocol, pairing, inbound, runtime
 │   ├── chat/               # turn orchestrator, runner, conversation service
 │   ├── memory/             # aggregate, distil, delivery, session-start context
-│   ├── provider/           # provider service, projection, projection target
+│   ├── provider/           # provider service, projection, projection target, proxy tokens and state
+│   ├── usage/              # usage ingest, reports, subscription quota
 │   └── sync/               # converge round, exporter, appliers, worker, ports
 ├── infrastructure/
 │   ├── persistence/        # SQLAlchemy engine, ORM models, repos, Alembic
@@ -172,7 +175,9 @@ backend/coffer/
 │   ├── channel/            # Telegram and SeaTalk transports
 │   ├── chat/               # Claude SDK and Codex adapters, persistence
 │   ├── memory/             # native-memory readers, store
-│   ├── provider/           # provider introspector
+│   ├── provider/           # provider introspector, local-runtime detection
+│   ├── model_proxy/        # the local model proxy process and its supervisor
+│   ├── usage/              # the proxy's usage spool, as the daemon reads it
 │   └── sync/               # git mirror, tree mirror, machine id
 └── surfaces/
     ├── http/               # FastAPI app, composition root, routes, *_wiring.py

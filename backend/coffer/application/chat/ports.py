@@ -11,7 +11,7 @@ Code and Codex providers) and in tests (fakes).
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from typing import Any, Protocol, TypeVar
 
 from coffer.domain.chat.attachment import Attachment, UploadedAttachment
@@ -191,3 +191,12 @@ class ChannelMirrorPort(Protocol):
         """Send ``text`` to the chat now, or keep it for later; the result's
         ``on_start`` is what the reply's turn is queued with."""
         ...
+
+
+#: Where a driven agent's OFFICIAL subscription-quota report goes (ADR
+#: usage-is-metered-at-the-proxy-and-subscriptions-show-only-official-quota):
+#: ``(agent_type, payload)`` — ``("claude_code", rate_limit_event raw dict)`` or
+#: ``("codex", account/rateLimits/updated params)``. The chat kind only forwards
+#: what the agent said; the composition root binds the usage kind's service. A
+#: failing observer never affects the turn.
+QuotaObserver = Callable[[str, dict[str, Any]], Awaitable[None]]
