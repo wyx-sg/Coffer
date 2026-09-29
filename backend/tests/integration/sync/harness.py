@@ -82,6 +82,7 @@ from coffer.infrastructure.sync.bundle import Bundle
 from coffer.infrastructure.sync.credentials import CredentialSyncAdapter, ResolvedMasterKey
 from coffer.infrastructure.sync.git_mirror import GitMirror
 from coffer.infrastructure.sync.paths import non_converging_tree_paths
+from tests.support.homes import bare_remote as bare_remote
 
 BRANCH = "main"
 SNAPSHOT_PREFIX = "coffer/pre-apply/"
@@ -359,19 +360,6 @@ class ConvergenceState:
         self._retry.clear()
         self._not_applicable.clear()
         self._pending = None
-
-
-def bare_remote(path: pathlib.Path) -> str:
-    """A real bare repository to converge through, with an identity of its own
-    so a machine with no global git config can still be committed against."""
-    subprocess.run(
-        ["git", "init", "--bare", "-b", BRANCH, str(path)], check=True, capture_output=True
-    )
-    for key, value in (("user.email", "harness@localhost"), ("user.name", "Harness")):
-        subprocess.run(
-            ["git", "-C", str(path), "config", key, value], check=True, capture_output=True
-        )
-    return str(path)
 
 
 def another_coffer_pushes(remote_url: str, *, layout: int, adding: str) -> None:

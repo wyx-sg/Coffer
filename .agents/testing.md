@@ -40,6 +40,8 @@ The suite is the safety net: **a green `make verify` (+ `verify-e2e`) must mean 
 
 ```
 backend/tests/
+├── conftest.py                # installs the real-home guard first (see below)
+├── support/                   # shared, not tests: real_home_guard, homes, channel, fixtures
 ├── unit/                      # pure logic, no I/O (purity-checked)
 │   └── <module>/test_*.py
 ├── integration/               # real local I/O
@@ -187,6 +189,23 @@ Only mock when:
 - The dependency is **non-local** (external HTTP service, LLM API).
 - The dependency is **non-deterministic** in a way the test cares about (system clock, randomness).
 - The dependency is **slow** (only as last resort — usually means the test is the wrong tier).
+
+## The Real-Home Guard
+
+No test may touch the real user's home. `backend/tests/conftest.py` installs `tests/support/real_home_guard.py` before any `coffer` import; it enforces the rules below mechanically.
+
+- **What it does.** At import: `HOME` → a throwaway dir; every inherited `COFFER_*` stripped (kept: `COFFER_RUN_*`, `COFFER_SMOKE_*`, `COFFER_TEST_*`); `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GIT_CONFIG_GLOBAL`, `XDG_*` removed. Per test (autouse `_real_home_guard`): a fresh `HOME` from `tmp_path_factory` with a `.gitconfig` identity. Always: an audit hook (`sys.addaudithook`) refuses `open` / dir / rename / remove / `shutil` / `sqlite3.connect` / spawn events under the real home's `.coffer`, `.claude`, `.claude.json`, `.codex`, `.agents` — raising `RealHomeAccessError` before the syscall — and refuses a spawn whose env has no `HOME` or the real one. Every refusal is recorded; the test fails at teardown even if the code swallowed the error. A violation outside any test fails the session.
+- **Rules.**
+  1. Build every path from `tmp_path` or a builder in `tests/support/homes.py`; never from the real home.
+  2. A subprocess inherits `os.environ` (already isolated). If you hand-build `env=`, start from `os.environ` or `IsolatedHome.env()` — never omit `HOME`.
+  3. Do not re-add a `COFFER_*` path from the developer's shell; set it with `monkeypatch.setenv` to a tmp path.
+  4. Do not weaken the guard to make a test pass. `GUARD.expect_violation()` is for the guard's own tests only (`integration/isolation/test_real_home_guard.py`).
+  5. A new Coffer path root (a new `COFFER_*_ROOT` or a new top-level dir under the home) must derive from `$HOME` or be pinned in the root conftest; a new agent config dir goes into `PROTECTED_NAMES`.
+- **Builders** (`tests/support/homes.py`, fixtures in `tests/support/fixtures.py`) — extend these, do not write another `_setup_home`:
+  - `isolated_home` / `make_home(path)` — one machine; `.activate(monkeypatch)`, `.env()` for subprocesses.
+  - `two_homes` / `two_machine_homes(base)` — machines `a`, `b` + one bare remote (`bare_remote()`, shared with `integration/sync/harness.py`).
+  - `claude_code_dir`, `codex_dir` / `fake_agent_dir(home, AgentType.X, config_dir=None, files=None)` — agent config tree laid out from the descriptor; `.write(key, text)`, `.add_skill(name)`, `.home_env()`.
+  - `fake_channel_adapter` / `tests.support.channel.FakeChannelAdapter` — recording IM transport (re-exported by `integration/channel/conftest.py`).
 
 ## Make Targets
 

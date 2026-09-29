@@ -1,11 +1,11 @@
 ---
 title: Testing
-description: Coffer's four test tiers, where each lives and how to run it, acceptance markers, the mocking philosophy, every gate make verify runs, and the CI workflows.
+description: Coffer's four test tiers, where each lives and how to run it, the real-home guard and isolated homes, acceptance markers, the mocking philosophy, every gate make verify runs, and the CI workflows.
 ---
 
 # Testing
 
-This page covers how Coffer is tested: the four tiers and where each lives, how to run them, how tests link to spec scenarios, what counts as a good test here, and every gate that `make verify` and CI apply. The full convention is in [`.agents/testing.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/testing.md).
+This page covers how Coffer is tested: the four tiers and where each lives, how to run them, how the suite keeps tests away from your real home, how tests link to spec scenarios, what counts as a good test here, and every gate that `make verify` and CI apply. The full convention is in [`.agents/testing.md`](https://github.com/wyx-sg/Coffer/blob/main/.agents/testing.md).
 
 The standard is simple to state: **a green `make verify` plus `make verify-e2e` must mean the product works**, with no manual re-testing.
 
@@ -60,9 +60,28 @@ Prefer the real thing whenever it is fast enough:
 
 Mock only what is **non-local** (an external HTTP service, an LLM API), **non-deterministic** in a way the test cares about (the clock, randomness), or, as a last resort, **slow**. A test that needs to mock something slow is often in the wrong tier.
 
-### Tests never touch your real vault
+### Tests never touch your real home
 
-`backend/tests/conftest.py` sets `COFFER_LOG_DIR`, `COFFER_KNOWLEDGE_ROOT`, `COFFER_MEMORY_ROOT` and `COFFER_AGENT_STATE_ROOT` to temporary directories at import time. Autouse fixtures then give each test its own knowledge, memory and agent-state tree. Without these pins, a test that boots the app would run migrations on the developer's real `~/.coffer`. Keep new fixtures inside this safety net. A test that wants a specific path overrides it with `monkeypatch.setenv`.
+Nearly everything Coffer keeps on disk lives under your home directory: the vault with its database, notes and logs, and the configuration of the coding agents that Coffer connects to. A test that forgets to point one of those somewhere else does not fail. It quietly runs against your real data.
+
+This has happened. When the setting that locates the knowledge tree was left unset, Coffer fell back to the default location in the home directory. A test that started the app without setting it ran the knowledge migration over a developer's real vault and moved their files. Setting one more variable would only have closed that one path, so the suite now enforces the rule for every path at once, in two layers.
+
+**Redirect the home.** Before any Coffer code loads, the test run points the home directory at a throwaway location. It also drops every Coffer setting inherited from your shell, along with the variables that could send an agent or git to a different directory. Each test then gets a fresh home of its own, already set up so git can commit in it. Programs that a test starts, such as the daemon, the MCP shim or the command line, inherit the same throwaway home, so they cannot reach the real one either.
+
+**A tripwire on the real home.** Redirection can still be undone, most easily by a test that changes or removes the home variable. Without one, the system falls back to your real home. So the suite also watches the interpreter's own file, database and process-start events. Any attempt to read or write inside Coffer's directory or an agent's configuration directory under your real home is refused *before* it happens, so nothing is ever written. Starting a program with no home set, or with the real one, is refused the same way. Each refusal is also recorded, because code that tolerates an unreadable file might quietly swallow the error. The test then fails with a list of what it tried to touch, even when nothing else went wrong. A dedicated set of tests proves this: they aim at the real home on purpose, and they check both that every attempt is refused and that nothing appeared.
+
+If the tripwire fails your test, the message names each path. The fix is almost always to build that path inside the test's own temporary directory, or to use one of the isolated setups below. Do not point anything at your real home.
+
+### Isolated homes
+
+In a test, a "machine" is simply a home directory. The suite provides ready-made isolated setups, so a test never has to assemble its own:
+
+- **A single machine.** A fresh home that the test process is already using. Coffer derives every one of its directories from it, exactly as an installed copy would. The same home can be handed to a program the test starts, so the program runs as that machine.
+- **Two machines sharing a remote.** Two independent homes that share nothing except one real git repository they can both reach. Vault sync scenarios are played out between them through the real sync code and real git, with nothing faked.
+- **Fake agent configuration.** An agent's configuration directory, such as Claude Code's or Codex's, laid out inside an isolated home from the same description of that agent that Coffer itself uses. A file the test writes therefore lands exactly where Coffer will look for it. Both the default location and a custom one are supported.
+- **A fake chat channel.** A stand-in for an instant-messaging platform. It records everything Coffer sends (messages, cards, edits, typing indicators, reactions, files) and lets a test deliver incoming messages and button taps. Its capabilities can be switched on and off, so the same fake can act like a platform that edits messages in place or like one that streams its replies.
+
+When a test needs a new kind of isolated setup, add it next to these rather than building a one-off inside a single test file.
 
 ## Acceptance markers
 
