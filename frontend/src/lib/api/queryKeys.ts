@@ -133,11 +133,8 @@ export const attentionKey = ["attention"] as const;
 export const providersKey = ["providers"] as const;
 export const providerKey = (uid: string) => ["providers", uid] as const;
 
-/** The models a connection's endpoint reports. Deliberately NOT under
- *  `providerKey(uid)`: every connection mutation invalidates that subtree,
- *  and this list changes when the ENDPOINT changes, not when our curation
- *  does. MUST stay equal to `endpointModelsKey` in
- *  `lib/hooks/useModelIntrospection.ts` until that file imports this one. */
+/** The models a connection's endpoint reports. NOT under `providerKey(uid)`:
+ *  it changes with the ENDPOINT, not with every connection mutation. */
 export const endpointModelsKey = (uid: string) => ["endpointModels", uid] as const;
 
 /** POST /providers/detect-local at a loopback URL (`null` = default ports); a runtime, not a connection. */
