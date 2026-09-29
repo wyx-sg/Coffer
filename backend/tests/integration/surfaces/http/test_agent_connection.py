@@ -86,6 +86,12 @@ def _audit_types(c: TestClient, uid: str) -> list[str]:
     return [e["event_type"] for e in r.json()["entries"]]
 
 
+def _connection_events(c: TestClient, uid: str) -> list[str]:
+    """The audit entries a connection writes — not the daemon's own background
+    passes (a memory aggregation at boot) that land on the same agent."""
+    return [t for t in _audit_types(c, uid) if t.startswith(("agent_mcp_", "memory_delivery_"))]
+
+
 def _parts(body: dict[str, Any]) -> dict[str, bool]:
     return {p["key"]: p["installed"] for p in body["parts"]}
 
@@ -154,7 +160,7 @@ def test_a_connection_missing_the_hook_reads_partial_and_connect_repairs_it(
     # page reports the gap, and connecting is the act that closes it.
     daemon_config.write_feature_setting("memory", True)
     with _client() as c:
-        audit_before = _audit_types(c, uid)
+        audit_before = _connection_events(c, uid)
         status = c.get(f"/api/v1/agents/{uid}/coffer-connection").json()
         assert status["state"] == "partial"
         assert _parts(status) == {"mcp": True, "memory_hook": False}
@@ -162,7 +168,7 @@ def test_a_connection_missing_the_hook_reads_partial_and_connect_repairs_it(
         assert mcp_part["detail"] == str(home / "coffer-mcp-shim")
         assert not _hook_installed(home)
         # Reading the connection writes and audits nothing.
-        assert _audit_types(c, uid) == audit_before
+        assert _connection_events(c, uid) == audit_before
 
         repaired = c.post(f"/api/v1/agents/{uid}/coffer-connection").json()
         assert repaired["state"] == "connected"
@@ -191,7 +197,7 @@ def test_disconnect_removes_only_coffers_entries(home: pathlib.Path) -> None:
         settings = json.loads(_settings_text(home))
         assert settings["hooks"]["SessionStart"] == [{"hooks": [foreign]}]
         assert settings["env"] == {"A": "1"}
-        events = _audit_types(c, uid)
+        events = _connection_events(c, uid)
         assert events.count("agent_mcp_uninstalled") == 1
         assert events.count("memory_delivery_removed") == 1
 
@@ -202,7 +208,7 @@ def test_disconnect_removes_only_coffers_entries(home: pathlib.Path) -> None:
         assert again.json()["state"] == "disconnected"
         assert (home / ".claude.json").stat().st_mtime_ns == claude_mtime
         assert (home / ".claude" / "settings.json").stat().st_mtime_ns == settings_mtime
-        assert _audit_types(c, uid) == events
+        assert _connection_events(c, uid) == events
 
 
 def test_disconnect_takes_out_a_hook_left_while_memory_is_off(home: pathlib.Path) -> None:
