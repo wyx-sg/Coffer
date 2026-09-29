@@ -36,7 +36,7 @@ from coffer.application.audit_service import AuditService
 from coffer.application.credentials.presence import CHALLENGE_TTL_SECONDS
 from coffer.application.knowledge.guide_render import GUIDE_SKILL_NAME
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import (
+from coffer.domain.credential_errors import (
     CredentialMissing,
     PresenceGrantInvalid,
     SecretNameInvalid,

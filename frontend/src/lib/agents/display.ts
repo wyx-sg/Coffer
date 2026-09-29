@@ -2,7 +2,7 @@
 // The daemon speaks in registry keys (`claude_code`) and absolute paths; the UI
 // shows a product name and a home-relative path. Kept as pure functions so the
 // table, the add form and the detail header all render the same label.
-import type { AgentCandidate, AgentType, DetectionState } from "@/lib/api/agents";
+import type { AgentType, AgentTypeOut, DetectionState } from "@/lib/api/agents";
 
 const AGENT_TYPE_LABELS: Record<AgentType, string> = {
   claude_code: "Claude Code",
@@ -40,8 +40,9 @@ export function isAgentInstalled(state: DetectionState | undefined): boolean {
   return state !== "config_only" && state !== "missing";
 }
 
-/** Whether a discovered candidate can be registered: only one whose program is
- *  on PATH and whose config directory exists (`installed_active`). */
-export function isAddableCandidate(c: AgentCandidate): boolean {
-  return c.state === "installed_active";
+/** Whether a discovered candidate can be registered — the daemon says so
+ *  (`addable`): the program is on PATH, whether or not it has run yet
+ *  (registering an `installed_never_run` type creates its standard directory). */
+export function isAddableCandidate(c: AgentTypeOut): boolean {
+  return c.addable;
 }

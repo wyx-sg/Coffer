@@ -12,8 +12,8 @@ wrapping that app. This mirrors the strategy used by
 routes the desktop UI consumes — which is the spec scenario "CLI surface
 mirrors REST operations".
 
-"Tiny" now means two routers, not one. Every ``coffer agent`` verb takes a
-NAME and resolves it to the uid the routes address
+"Tiny" now means two routers, not one. Every ``coffer agent`` verb takes the
+agent's TYPE (its name) and resolves it to the uid the routes address
 (ADR resource-identity-is-an-immutable-uid), and that resolution is
 ``GET /resources?kind=agent&name=`` — the framework's shared route, on a
 different router from ``/agents``. An app serving only ``agent_router`` would
@@ -163,52 +163,43 @@ def _audit_events(uid: str) -> list[str]:
     return [e["event_type"] for e in r.json()["entries"]]
 
 
+def _show_json(ref: str) -> dict:
+    result = _runner.invoke(cli_app, ["agent", "show", ref, "--json"])
+    assert result.exit_code == 0, result.output
+    return dict(json.loads(result.output))
+
+
 def test_agent_list_empty_json(agent_cli_daemon):
     """`agent list --json` prints no rows when no agents are registered."""
     assert _listed() == []
 
 
 def test_agent_list_table_default(agent_cli_daemon):
-    """`agent list` (no --json) renders the rich table without crashing."""
-    # First register one so the table has a row to render.
-    config_dir = agent_cli_daemon / "cfg"
-    config_dir.mkdir()
-    _runner.invoke(
-        cli_app,
-        [
-            "agent",
-            "add",
-            "codex",
-            "--name",
-            "cur",
-            "--config-dir",
-            str(config_dir),
-        ],
-    )
-    result = _runner.invoke(cli_app, ["agent", "list"])
+    """`agent list` (no --json) renders the rich table: the type's name, the
+    product's display name, the enabled flag and the config dir."""
+    _add_codex(agent_cli_daemon)
+    result = _runner.invoke(cli_app, ["agent", "list"], env={"COLUMNS": "200"})
     assert result.exit_code == 0, result.output
-    # Table title and the Config Dir column header must be present.
     assert "Agents" in result.output
-    assert "Config Dir" in result.output
-    assert "cur" in result.output
-    assert "Enabled" in result.output
+    for header in ("Type", "Agent", "Enabled", "Config Dir"):
+        assert header in result.output
+    assert "codex" in result.output
+    assert "OpenAI Codex" in result.output
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="agent reads print JSON with --json")
 def test_agent_list_shows_registered_json(agent_cli_daemon):
-    """`agent list --json` includes a previously-registered agent."""
-    config_dir = agent_cli_daemon / "cfg"
-    config_dir.mkdir()
-    _runner.invoke(
-        cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(config_dir)],
-    )
+    """`agent list --json` carries the agent's name, display name, type and
+    config directory — and no title or description, which an agent has none of."""
+    config_dir = _add_codex(agent_cli_daemon)
     items = _listed()
     assert len(items) == 1
-    assert items[0]["name"] == "cur"
-    assert items[0]["title"] is None
+    assert items[0]["name"] == "codex"
+    assert items[0]["display_name"] == "OpenAI Codex"
     assert items[0]["type"] == "codex"
     assert items[0]["config_dir"] == str(config_dir)
+    assert "title" not in items[0]
+    assert "description" not in items[0]
     assert "skill_dir" not in items[0]
 
 
@@ -220,67 +211,73 @@ def test_agent_list_shows_registered_json(agent_cli_daemon):
 def test_agent_add_success(agent_cli_daemon):
     config_dir = agent_cli_daemon / "cfg"
     config_dir.mkdir()
-    result = _runner.invoke(
-        cli_app,
-        [
-            "agent",
-            "add",
-            "codex",
-            "--name",
-            "cur",
-            "--config-dir",
-            str(config_dir),
-            "--description",
-            "manual",
-        ],
-    )
-    assert result.exit_code == 0, result.output
-    assert "registered: agent cur" in result.output
-
-
-def test_agent_add_without_name_uses_per_type_default(agent_cli_daemon):
-    """Per "Manage the agent lifecycle", --name is
-    optional; omitting it registers under the type's default name (codex ->
-    codex, claude_code -> claude-code)."""
-    config_dir = agent_cli_daemon / "cfg"
-    config_dir.mkdir()
     result = _runner.invoke(cli_app, ["agent", "add", "codex", "--config-dir", str(config_dir)])
     assert result.exit_code == 0, result.output
-    # `agent codex`, not `agent:codex`: the `<kind>:<name>` string form is gone
-    # with the identity it used to be (ADR resource-identity-is-an-immutable-uid),
-    # and the echo now just names the kind and the label separately.
     assert "registered: agent codex" in result.output
-    # The agent is listed under the derived name.
-    names = [i["name"] for i in _listed()]
-    assert "codex" in names
 
 
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="register an agent without an explicit name"
+)
+def test_agent_add_registers_by_type_only(agent_cli_daemon):
+    """`coffer agent add claude-code` — the type alone — registers the agent
+    under the type's name at its standard config directory, audited as
+    `resource_created`. There is no `--name` to give."""
+    standard = agent_cli_daemon / ".claude"
+    standard.mkdir()
+    result = _runner.invoke(cli_app, ["agent", "add", "claude-code"])
+    assert result.exit_code == 0, result.output
+    assert "registered: agent claude-code" in result.output
+    [agent] = _listed()
+    assert (agent["name"], agent["type"], agent["config_dir"]) == (
+        "claude-code",
+        "claude_code",
+        str(standard),
+    )
+    assert "resource_created" in _audit_events(agent["uid"])
+
+    named = _runner.invoke(cli_app, ["agent", "add", "codex", "--name", "cur"])
+    assert named.exit_code == 2, named.output
+
+
+@pytest.mark.acceptance(spec="agent-registry", scenario="reject duplicate agent name")
 def test_agent_add_duplicate_fails(agent_cli_daemon):
-    # Distinct config dirs so the collision is on the name, not the
-    # one-agent-per-config-dir rule.
-    first = agent_cli_daemon / "cfg1"
-    second = agent_cli_daemon / "cfg2"
-    first.mkdir()
-    second.mkdir()
-    _runner.invoke(
-        cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(first)],
-    )
-    result = _runner.invoke(
-        cli_app,
-        [
-            "agent",
-            "add",
-            "claude_code",
-            "--name",
-            "cur",
-            "--config-dir",
-            str(second),
-        ],
-    )
-    # add() routes 4xx through _cli_client.check, which maps 409 →
-    # ExitCode.CONFLICT (5). CODE25-018 — fix-validation.
+    """A second agent of a registered type — even on another directory — is
+    refused: its name would be the type's, which the first one holds."""
+    _add_codex(agent_cli_daemon)
+    uid = _listed()[0]["uid"]
+    other = agent_cli_daemon / "cfg2"
+    other.mkdir()
+    result = _runner.invoke(cli_app, ["agent", "add", "codex", "--config-dir", str(other)])
+    # 409 maps to ExitCode.CONFLICT (5).
     assert result.exit_code == 5, result.output
+    assert [(a["name"], a["uid"]) for a in _listed()] == [("codex", uid)]
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="adopt a discovered agent from the command line"
+)
+def test_adopt_a_discovered_agent_from_the_command_line(agent_cli_daemon):
+    codex_home = agent_cli_daemon / ".codex"
+    codex_home.mkdir()
+
+    scanned = _runner.invoke(cli_app, ["scan", "--json"])
+    assert scanned.exit_code == 0, scanned.output
+    rows = [r for r in json.loads(scanned.output)["rows"] if r["kind"] == "agent"]
+    [row] = [r for r in rows if r["ref"] == "codex"]
+    assert "coffer agent add codex" in row["detail"]
+    assert "--config-dir" not in row["detail"]
+    assert _listed() == []
+
+    added = _runner.invoke(cli_app, ["agent", "add", "codex"])
+    assert added.exit_code == 0, added.output
+    [agent] = _listed()
+    assert (agent["name"], agent["config_dir"]) == ("codex", str(codex_home))
+    assert "resource_created" in _audit_events(agent["uid"])
+
+    for verb in ("adopt", "discard"):
+        group = typer.main.get_command(cli_app).commands[verb]  # type: ignore[attr-defined]
+        assert "agent" not in group.commands  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
@@ -289,43 +286,32 @@ def test_agent_add_duplicate_fails(agent_cli_daemon):
 
 
 def test_agent_show_existing_text(agent_cli_daemon):
-    config_dir = agent_cli_daemon / "cfg"
-    config_dir.mkdir()
-    _runner.invoke(
-        cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(config_dir)],
-    )
-    result = _runner.invoke(cli_app, ["agent", "show", "cur"])
+    config_dir = _add_codex(agent_cli_daemon)
+    result = _runner.invoke(cli_app, ["agent", "show", "codex"])
     assert result.exit_code == 0, result.output
-    assert "name: cur" in result.output
+    lines = result.output.splitlines()
+    # The product's display name heads the record, then the name typed, the
+    # uid everything else addresses, the type and the directory.
+    assert lines[0] == "OpenAI Codex"
+    assert "name: codex" in result.output
     assert "type: codex" in result.output
     assert f"config_dir: {config_dir}" in result.output
-    # `show` is the one place the uid is printed, and it sits between the label
-    # and the rest so a reader meets the two identities together — the name they
-    # typed and the uid everything else addresses
-    # (ADR resource-identity-is-an-immutable-uid).
-    keys = [line.split(":", 1)[0] for line in result.output.splitlines() if ":" in line]
-    assert keys[:3] == ["name", "uid", "type"], result.output
+    keys = [line.split(":", 1)[0] for line in lines if ":" in line]
+    assert keys[:4] == ["name", "uid", "type", "config_dir"], result.output
+    assert "title" not in keys
+    assert "description" not in keys
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="agent reads print JSON with --json")
 def test_agent_show_existing_json(agent_cli_daemon):
-    config_dir = agent_cli_daemon / "cfg"
-    config_dir.mkdir()
-    _runner.invoke(
-        cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(config_dir)],
-    )
-    result = _runner.invoke(cli_app, ["agent", "show", "cur", "--json"])
-    assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
-    assert data["name"] == "cur"
-    assert data["title"] is None
+    config_dir = _add_codex(agent_cli_daemon)
+    data = _show_json("codex")
+    assert data["name"] == "codex"
+    assert data["display_name"] == "OpenAI Codex"
     assert data["type"] == "codex"
     assert data["config_dir"] == str(config_dir)
+    assert "title" not in data
     assert "skill_dir" not in data
-    # A script reading `--json` must be able to keep hold of the agent across a
-    # later rename, which the name cannot do and the uid can.
     assert data["uid"]
     # The derived connection is always present. This app does not serve the
     # connection route, so it is unknown (null).
@@ -333,43 +319,35 @@ def test_agent_show_existing_json(agent_cli_daemon):
     assert data["coffer_connection"] is None
 
 
-def test_agent_show_prints_the_uid_the_daemon_reports(agent_cli_daemon):
-    """The uid `show` prints is the one the resolution route answers with.
+@pytest.mark.acceptance(spec="agent-registry", scenario="address an agent by its type")
+def test_agent_show_takes_the_type_either_spelling_or_the_uid(agent_cli_daemon):
+    (agent_cli_daemon / ".claude").mkdir()
+    assert _runner.invoke(cli_app, ["agent", "add", "claude_code"]).exit_code == 0
+    uid = _listed()[0]["uid"]
+    for ref in ("claude-code", "claude_code", uid):
+        data = _show_json(ref)
+        assert (data["name"], data["uid"]) == ("claude-code", uid), ref
+    missing = _runner.invoke(cli_app, ["agent", "show", "codex"])
+    assert missing.exit_code == 4, missing.output
 
-    There are two spellings of "which agent" in play now — the name a person
-    types and the uid every route takes — and exactly one thing they may
-    denote. So this asserts the join: the value `agent show cur` prints must be
-    the value `GET /resources?kind=agent&name=cur` reports, that being the one
-    route allowed to find a resource by its label and the one every `coffer
-    agent` verb resolves through. If the two ever drift, the whole command tree
-    is quietly operating on an agent other than the one that was named, and
-    nothing else in this file would notice.
-    """
+
+def test_agent_show_prints_the_uid_the_daemon_reports(agent_cli_daemon):
+    """The uid `show` prints is the one the resolution route answers with —
+    the type the user typed and the uid every route takes denote one agent."""
     _add_codex(agent_cli_daemon)
-    shown = _runner.invoke(cli_app, ["agent", "show", "cur"])
+    shown = _runner.invoke(cli_app, ["agent", "show", "codex"])
     assert shown.exit_code == 0, shown.output
     printed = [
         line.split(": ", 1)[1] for line in shown.output.splitlines() if line.startswith("uid: ")
     ]
-
-    # Asked of the daemon directly rather than through a second CLI verb: the
-    # claim is that the CLI agrees with the daemon, so the daemon's answer has
-    # to be read without the CLI in the middle. `client_or_exit` is the
-    # fixture's patched-in TestClient.
     client, _info = _cli_client.client_or_exit()
-    r = client.get("/resources", params={"kind": "agent", "name": "cur"})
+    r = client.get("/resources", params={"kind": "agent", "name": "codex"})
     assert r.status_code == 200, r.text
     assert printed == [res["uid"] for res in r.json()["resources"]]
 
 
 def test_agent_show_not_found(agent_cli_daemon):
-    """An unheld name fails at resolution, before any agent route is reached.
-
-    Same exit code as when `/agents/{uid}` used to 404 on the name, but the
-    message now comes from ``_resolve`` and names what was looked for — which
-    is the point of resolving up front instead of letting a later request 404
-    on a uid the user never typed and cannot connect back to what they did.
-    """
+    """An unheld ref fails at resolution, before any agent route is reached."""
     result = _runner.invoke(cli_app, ["agent", "show", "ghost"])
     assert result.exit_code == 4, result.output
     assert "no agent named 'ghost'" in (result.output + (result.stderr or ""))
@@ -381,55 +359,60 @@ def test_agent_show_not_found(agent_cli_daemon):
 
 
 def test_agent_edit_config_dir(agent_cli_daemon):
-    old = agent_cli_daemon / "cfg"
+    _add_codex(agent_cli_daemon)
     new = agent_cli_daemon / "cfg2"
-    old.mkdir()
     new.mkdir()
-    _runner.invoke(
-        cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(old)],
-    )
-    result = _runner.invoke(cli_app, ["agent", "edit", "cur", "--config-dir", str(new)])
+    result = _runner.invoke(cli_app, ["agent", "edit", "codex", "--config-dir", str(new)])
     assert result.exit_code == 0, result.output
-    # The echo reports the label the user gave, not the uid it resolved to: the
-    # uid is an address, and echoing one back would answer a question nobody
-    # asked in a vocabulary nobody typed.
-    assert "updated: agent cur" in result.output
-    # And the new config_dir was actually persisted.
-    show = _runner.invoke(cli_app, ["agent", "show", "cur", "--json"])
-    data = json.loads(show.output)
-    assert data["config_dir"] == str(new)
+    assert "updated: agent codex" in result.output
+    assert _show_json("codex")["config_dir"] == str(new)
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry", scenario="use a different config directory from the command line"
+)
+def test_use_a_different_config_directory_from_the_command_line(agent_cli_daemon):
+    standard = agent_cli_daemon / ".claude"
+    standard.mkdir()
+    assert _runner.invoke(cli_app, ["agent", "add", "claude-code"]).exit_code == 0
+    before = _show_json("claude-code")
+    assert before["config_dir"] == str(standard)
+    other = agent_cli_daemon / "elsewhere"
+    other.mkdir()
+
+    result = _runner.invoke(cli_app, ["agent", "edit", "claude-code", "--config-dir", str(other)])
+    assert result.exit_code == 0, result.output
+
+    after = _show_json("claude-code")
+    assert (after["config_dir"], after["uid"], after["name"]) == (
+        str(other),
+        before["uid"],
+        "claude-code",
+    )
+    group = typer.main.get_command(cli_app).commands["agent"]  # type: ignore[attr-defined]
+    options = {o for p in group.commands["edit"].params for o in p.opts}
+    assert not {"--name", "--title", "--description"} & options, options
 
 
 def test_agent_edit_no_fields_exits_2(agent_cli_daemon):
     """`edit` with no flags is a no-op and exits non-zero with a clear message."""
-    config_dir = agent_cli_daemon / "cfg"
-    config_dir.mkdir()
-    _runner.invoke(
-        cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(config_dir)],
-    )
-    result = _runner.invoke(cli_app, ["agent", "edit", "cur"])
+    _add_codex(agent_cli_daemon)
+    result = _runner.invoke(cli_app, ["agent", "edit", "codex"])
     assert result.exit_code == 2
     assert "nothing to change" in (result.output + (result.stderr or ""))
 
 
-def test_agent_edit_description(agent_cli_daemon):
-    config_dir = agent_cli_daemon / "cfg"
-    config_dir.mkdir()
-    _runner.invoke(
-        cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(config_dir)],
-    )
-    result = _runner.invoke(cli_app, ["agent", "edit", "cur", "--description", "work box"])
-    assert result.exit_code == 0, result.output
-    show = _runner.invoke(cli_app, ["agent", "show", "cur", "--json"])
-    assert json.loads(show.output)["description"] == "work box"
+def test_agent_edit_has_no_description(agent_cli_daemon):
+    """An agent carries no description, so `--description` is an unknown option."""
+    _add_codex(agent_cli_daemon)
+    result = _runner.invoke(cli_app, ["agent", "edit", "codex", "--description", "work box"])
+    assert result.exit_code == 2, result.output
+    assert "description" not in _show_json("codex")
 
 
 def test_agent_edit_not_found(agent_cli_daemon):
-    """Resolution runs before the PATCH, so an unheld name never reaches it."""
-    result = _runner.invoke(cli_app, ["agent", "edit", "ghost", "--description", "x"])
+    """Resolution runs before the PATCH, so an unheld ref never reaches it."""
+    result = _runner.invoke(cli_app, ["agent", "edit", "ghost", "--model", "x"])
     assert result.exit_code == 4
     assert "no agent named 'ghost'" in (result.output + (result.stderr or ""))
 
@@ -440,24 +423,17 @@ def test_agent_edit_not_found(agent_cli_daemon):
 
 
 def test_agent_rm_force(agent_cli_daemon):
-    config_dir = agent_cli_daemon / "cfg"
-    config_dir.mkdir()
-    _runner.invoke(
-        cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(config_dir)],
-    )
-    result = _runner.invoke(cli_app, ["agent", "rm", "cur", "--force"])
+    _add_codex(agent_cli_daemon)
+    result = _runner.invoke(cli_app, ["agent", "rm", "codex", "--force"])
     assert result.exit_code == 0, result.output
-    assert "removed: agent cur" in result.output
-    # The name now holds nothing, so the next `show` stops at resolution — the
-    # same exit 4 the deleted-uid 404 used to produce, from one step earlier.
-    show = _runner.invoke(cli_app, ["agent", "show", "cur"])
+    assert "removed: agent codex" in result.output
+    show = _runner.invoke(cli_app, ["agent", "show", "codex"])
     assert show.exit_code == 4
-    assert "no agent named 'cur'" in (show.output + (show.stderr or ""))
+    assert "no agent named 'codex'" in (show.output + (show.stderr or ""))
 
 
 def test_agent_rm_not_found(agent_cli_daemon):
-    """Resolution runs before the DELETE, so an unheld name never reaches it."""
+    """Resolution runs before the DELETE, so an unheld ref never reaches it."""
     result = _runner.invoke(cli_app, ["agent", "rm", "ghost", "--force"])
     assert result.exit_code == 4
     assert "no agent named 'ghost'" in (result.output + (result.stderr or ""))
@@ -465,24 +441,16 @@ def test_agent_rm_not_found(agent_cli_daemon):
 
 def test_agent_rm_without_force_aborts(agent_cli_daemon):
     """Without --force the prompt aborts (empty stdin → typer.confirm returns False)."""
-    config_dir = agent_cli_daemon / "cfg"
-    config_dir.mkdir()
-    _runner.invoke(
-        cli_app,
-        ["agent", "add", "codex", "--name", "cur", "--config-dir", str(config_dir)],
-    )
-    result = _runner.invoke(cli_app, ["agent", "rm", "cur"], input="n\n")
+    _add_codex(agent_cli_daemon)
+    result = _runner.invoke(cli_app, ["agent", "rm", "codex"], input="n\n")
     assert result.exit_code == 1
-    # The prompt names the agent the way the user does. It is also asked BEFORE
-    # the name is resolved, which is why it can quote a label and no uid.
-    assert "Really remove agent cur?" in result.output
-    # The agent must still exist.
-    show = _runner.invoke(cli_app, ["agent", "show", "cur"])
+    assert "Really remove agent codex?" in result.output
+    show = _runner.invoke(cli_app, ["agent", "show", "codex"])
     assert show.exit_code == 0
 
 
 # ---------------------------------------------------------------------------
-# title, enable/disable, and the whole verb set against the REST routes
+# title and rename refused, enable/disable, and the verb set against REST
 # ---------------------------------------------------------------------------
 
 
@@ -490,43 +458,48 @@ def test_agent_rm_without_force_aborts(agent_cli_daemon):
     spec="agent-registry", scenario="give an agent a title from the command line"
 )
 def test_give_an_agent_a_title_from_the_command_line(agent_cli_daemon):
-    _add_codex(agent_cli_daemon, "claude-code")
-    uid = json.loads(_runner.invoke(cli_app, ["agent", "show", "claude-code", "--json"]).output)[
-        "uid"
-    ]
+    (agent_cli_daemon / ".claude").mkdir()
+    assert _runner.invoke(cli_app, ["agent", "add", "claude-code"]).exit_code == 0
+    uid = _show_json("claude-code")["uid"]
 
     result = _runner.invoke(
         cli_app, ["agent", "edit", "claude-code", "--title", "Work laptop Claude"]
     )
-    assert result.exit_code == 0, result.output
-    assert "updated: agent Work laptop Claude" in result.output
+    # typer's exit code for an option the command does not have.
+    assert result.exit_code == 2, result.output
 
-    table = _runner.invoke(cli_app, ["agent", "list"], env={"COLUMNS": "200"})
-    assert "Work laptop Claude" in table.output
+    client, _info = _cli_client.client_or_exit()
+    r = client.patch(f"/resources/{uid}", json={"title": "Work laptop Claude"})
+    assert r.status_code == 422, r.text
+
     shown = _runner.invoke(cli_app, ["agent", "show", "claude-code"])
     assert shown.exit_code == 0, shown.output
-    assert "title: Work laptop Claude" in shown.output
-    # Still addressed by its name, and still the same uid.
-    data = json.loads(_runner.invoke(cli_app, ["agent", "show", "claude-code", "--json"]).output)
-    assert (data["name"], data["title"], data["uid"]) == (
-        "claude-code",
-        "Work laptop Claude",
-        uid,
-    )
+    assert "Work laptop Claude" not in shown.output
+    data = _show_json("claude-code")
+    assert (data["name"], data["uid"]) == ("claude-code", uid)
+    assert "title" not in data
+    assert client.get(f"/resources/{uid}").json()["title"] is None
 
 
-def test_agent_edit_renames_through_the_resource_route(agent_cli_daemon):
+def test_agent_edit_has_no_rename(agent_cli_daemon):
+    """The name is the type's: `--name` is not an option, and the kind-agnostic
+    route refuses a rename with NAME_IMMUTABLE."""
     _add_codex(agent_cli_daemon)
-    result = _runner.invoke(cli_app, ["agent", "edit", "cur", "--name", "box"])
-    assert result.exit_code == 0, result.output
-    assert [a["name"] for a in _listed()] == ["box"]
+    result = _runner.invoke(cli_app, ["agent", "edit", "codex", "--name", "box"])
+    assert result.exit_code == 2, result.output
+    uid = _listed()[0]["uid"]
+    client, _info = _cli_client.client_or_exit()
+    r = client.patch(f"/resources/{uid}", json={"name": "box"})
+    assert r.status_code == 409, r.text
+    assert r.json()["error"]["code"] == "NAME_IMMUTABLE"
+    assert [a["name"] for a in _listed()] == ["codex"]
 
 
 @pytest.mark.acceptance(
     spec="agent-registry", scenario="switch an agent off and on from the command line"
 )
 def test_switch_an_agent_off_and_on_from_the_command_line(agent_cli_daemon):
-    _add_codex(agent_cli_daemon, "codex")
+    _add_codex(agent_cli_daemon)
     off = _runner.invoke(cli_app, ["agent", "disable", "codex"])
     assert off.exit_code == 0, off.output
     assert _listed()[0]["enabled"] is False
@@ -547,23 +520,23 @@ def test_every_agent_verb_mirrors_its_rest_route(agent_cli_daemon):
 
     new_dir = agent_cli_daemon / "moved"
     new_dir.mkdir()
-    edited = _runner.invoke(cli_app, ["agent", "edit", "cur", "--config-dir", str(new_dir)])
+    edited = _runner.invoke(cli_app, ["agent", "edit", "codex", "--config-dir", str(new_dir)])
     assert edited.exit_code == 0, edited.output
     assert client.get(f"/agents/{uid}").json()["config_dir"] == str(new_dir)
 
-    shown = json.loads(_runner.invoke(cli_app, ["agent", "show", uid, "--json"]).output)
+    shown = _show_json(uid)
     assert shown["config_dir"] == client.get(f"/agents/{uid}").json()["config_dir"]
 
-    assert _runner.invoke(cli_app, ["agent", "disable", "cur"]).exit_code == 0
+    assert _runner.invoke(cli_app, ["agent", "disable", "codex"]).exit_code == 0
     assert client.get(f"/resources/{uid}").json()["enabled"] is False
-    assert _runner.invoke(cli_app, ["agent", "enable", "cur"]).exit_code == 0
+    assert _runner.invoke(cli_app, ["agent", "enable", "codex"]).exit_code == 0
     assert client.get(f"/resources/{uid}").json()["enabled"] is True
 
     scanned = _runner.invoke(cli_app, ["scan", "--json"])
     assert scanned.exit_code == 0, scanned.output
     assert "rows" in json.loads(scanned.output)
 
-    assert _runner.invoke(cli_app, ["agent", "rm", "cur", "--yes"]).exit_code == 0
+    assert _runner.invoke(cli_app, ["agent", "rm", "codex", "--yes"]).exit_code == 0
     assert client.get("/agents").json()["items"] == []
     assert _listed() == []
 
@@ -631,7 +604,7 @@ def _extract_json(output: str) -> str:
 
 @pytest.fixture
 def workspace_cli(tmp_path, monkeypatch):
-    """Full in-process app (create_app) with a registered codex agent ``cx``.
+    """Full in-process app (create_app) with a registered codex agent.
 
     Same bootstrap as test_skill_cmd.py: the lifespan stays open for the whole
     test (CLI verbs use ``with c:`` which must not tear the app down), and the
@@ -690,7 +663,7 @@ def workspace_cli(tmp_path, monkeypatch):
         _cli_client, "client_or_exit", lambda: (_PersistentClient(fake_client), info)
     )
 
-    r = _runner.invoke(cli_app, ["agent", "add", "codex", "--name", "cx"])
+    r = _runner.invoke(cli_app, ["agent", "add", "codex"])
     assert r.exit_code == 0, r.output
 
     yield tmp_path, keyring
@@ -700,19 +673,19 @@ def workspace_cli(tmp_path, monkeypatch):
 
 
 def test_scan_lists_the_agents_mcp_entries_without_secret_values(workspace_cli):
-    """`scan --agent cx --json` carries the direct entry; secret VALUES never appear."""
-    r = _runner.invoke(cli_app, ["scan", "--agent", "cx", "--json"])
+    """`scan --agent codex --json` carries the direct entry; secret VALUES never appear."""
+    r = _runner.invoke(cli_app, ["scan", "--agent", "codex", "--json"])
     assert r.exit_code == 0, r.output
     rows = {row["ref"]: row for row in json.loads(_extract_json(r.output))["rows"]}
-    assert rows["cx:fetcher"]["kind"] == "mcp"
-    assert rows["cx:fetcher"]["source"] == "config"
+    assert rows["codex:fetcher"]["kind"] == "mcp"
+    assert rows["codex:fetcher"]["source"] == "config"
     assert _SECRET_VALUE not in r.output
 
 
 def test_scan_ref_prints_an_mcp_entry_without_secret_values(workspace_cli):
     """`scan --ref <agent>:<entry>` reads one entry in full: file, command, key names."""
     tmp_path, _keyring = workspace_cli
-    r = _runner.invoke(cli_app, ["scan", "--ref", "cx:fetcher", "--json"])
+    r = _runner.invoke(cli_app, ["scan", "--ref", "codex:fetcher", "--json"])
     assert r.exit_code == 0, r.output
     body = json.loads(_extract_json(r.output))
     assert body["path"] == str(tmp_path / ".codex" / "config.toml")
@@ -721,41 +694,41 @@ def test_scan_ref_prints_an_mcp_entry_without_secret_values(workspace_cli):
     assert body["secret_keys"] == ["API_TOKEN"]
     assert _SECRET_VALUE not in r.output
 
-    r = _runner.invoke(cli_app, ["scan", "--ref", "cx:fetcher"])
+    r = _runner.invoke(cli_app, ["scan", "--ref", "codex:fetcher"])
     assert r.exit_code == 0, r.output
     assert f"file: {tmp_path / '.codex' / 'config.toml'}" in r.output
     assert "command: uvx mcp-fetch" in r.output
     assert "env API_TOKEN: (secret)" in r.output
     assert _SECRET_VALUE not in r.output
 
-    r = _runner.invoke(cli_app, ["scan", "--ref", "cx:missing"])
+    r = _runner.invoke(cli_app, ["scan", "--ref", "codex:missing"])
     assert r.exit_code == 4, r.output
 
 
 def test_discard_mcp_entry_asks_first(workspace_cli):
     # Declining the prompt leaves the entry where it is.
-    r = _runner.invoke(cli_app, ["discard", "mcp", "cx:fetcher"], input="n\n")
+    r = _runner.invoke(cli_app, ["discard", "mcp", "codex:fetcher"], input="n\n")
     assert r.exit_code == 1
-    scanned = _runner.invoke(cli_app, ["scan", "--agent", "cx", "--json"]).output
-    assert "cx:fetcher" in scanned
+    scanned = _runner.invoke(cli_app, ["scan", "--agent", "codex", "--json"]).output
+    assert "codex:fetcher" in scanned
 
-    r = _runner.invoke(cli_app, ["discard", "mcp", "cx:fetcher", "--yes"])
+    r = _runner.invoke(cli_app, ["discard", "mcp", "codex:fetcher", "--yes"])
     assert r.exit_code == 0, r.output
-    scanned = _runner.invoke(cli_app, ["scan", "--agent", "cx", "--json"]).output
-    assert "cx:fetcher" not in scanned
+    scanned = _runner.invoke(cli_app, ["scan", "--agent", "codex", "--json"]).output
+    assert "codex:fetcher" not in scanned
 
 
 def test_adopt_mcp_entry_with_secret(workspace_cli):
     """`adopt mcp --secret KEY=REF` adopts the entry into a managed resource."""
     _tmp, _keyring = workspace_cli
     # Without the secret mapping: exit 6 plus the --secret hint.
-    r = _runner.invoke(cli_app, ["adopt", "mcp", "cx:fetcher"])
+    r = _runner.invoke(cli_app, ["adopt", "mcp", "codex:fetcher"])
     assert r.exit_code == 6, r.output
     assert "API_TOKEN" in r.output
     assert "--secret" in r.output
 
     ref = "mcp.fetcher.API_TOKEN"
-    r = _runner.invoke(cli_app, ["adopt", "mcp", "cx:fetcher", "--secret", f"API_TOKEN={ref}"])
+    r = _runner.invoke(cli_app, ["adopt", "mcp", "codex:fetcher", "--secret", f"API_TOKEN={ref}"])
     assert r.exit_code == 0, r.output
     # The secret value landed in the encrypted credential store, keyed by the
     # ref. The CLI only confirms presence (no command prints a value), so the
@@ -770,23 +743,25 @@ def test_adopt_mcp_entry_with_secret(workspace_cli):
 
 def test_plugin_list_enable_disable(workspace_cli):
     """`agent plugin list` shows both plugins; enable/disable flip the config."""
-    r = _runner.invoke(cli_app, ["agent", "plugin", "list", "cx", "--json"])
+    r = _runner.invoke(cli_app, ["agent", "plugin", "list", "codex", "--json"])
     assert r.exit_code == 0, r.output
     body = json.loads(_extract_json(r.output))
     by_id = {p["id"]: p for p in body["items"]}
     assert by_id["p1@m1"]["enabled"] is True
     assert by_id["p2@m1"]["enabled"] is False
 
-    r = _runner.invoke(cli_app, ["agent", "plugin", "disable", "cx", "p1@m1"])
+    r = _runner.invoke(cli_app, ["agent", "plugin", "disable", "codex", "p1@m1"])
     assert r.exit_code == 0, r.output
     assert "disabled: plugin p1@m1" in r.output
 
-    r = _runner.invoke(cli_app, ["agent", "plugin", "enable", "cx", "p2@m1"])
+    r = _runner.invoke(cli_app, ["agent", "plugin", "enable", "codex", "p2@m1"])
     assert r.exit_code == 0, r.output
     assert "enabled: plugin p2@m1" in r.output
 
     body = json.loads(
-        _extract_json(_runner.invoke(cli_app, ["agent", "plugin", "list", "cx", "--json"]).output)
+        _extract_json(
+            _runner.invoke(cli_app, ["agent", "plugin", "list", "codex", "--json"]).output
+        )
     )
     by_id = {p["id"]: p for p in body["items"]}
     assert by_id["p1@m1"]["enabled"] is False
@@ -806,7 +781,7 @@ def test_plugin_show_prints_contents_and_json(workspace_cli):
     (pkg / "commands" / "fix.md").write_text("---\ndescription: Fix it\n---\n", encoding="utf-8")
     (pkg / ".mcp.json").write_text(json.dumps({"mcpServers": {"srv": {}}}), encoding="utf-8")
 
-    r = _runner.invoke(cli_app, ["agent", "plugin", "show", "cx", "p1@m1"])
+    r = _runner.invoke(cli_app, ["agent", "plugin", "show", "codex", "p1@m1"])
     assert r.exit_code == 0, r.output
     assert "p1@m1  enabled" in r.output
     assert "author: Ada" in r.output
@@ -815,19 +790,19 @@ def test_plugin_show_prints_contents_and_json(workspace_cli):
     assert "command: fix — Fix it" in r.output
     assert "mcp server: srv" in r.output
 
-    r = _runner.invoke(cli_app, ["agent", "plugin", "show", "cx", "p1@m1", "--json"])
+    r = _runner.invoke(cli_app, ["agent", "plugin", "show", "codex", "p1@m1", "--json"])
     assert r.exit_code == 0, r.output
     body = json.loads(_extract_json(r.output))
     assert body["commands"] == [{"name": "fix", "description": "Fix it"}]
     assert body["install_path"] == str(pkg)
 
-    r = _runner.invoke(cli_app, ["agent", "plugin", "show", "cx", "ghost@m1"])
+    r = _runner.invoke(cli_app, ["agent", "plugin", "show", "codex", "ghost@m1"])
     assert r.exit_code == 4, r.output
     assert "plugin not found" in r.output
 
 
 def test_plugin_enable_unknown_id_exit4(workspace_cli):
-    r = _runner.invoke(cli_app, ["agent", "plugin", "enable", "cx", "ghost@m1"])
+    r = _runner.invoke(cli_app, ["agent", "plugin", "enable", "codex", "ghost@m1"])
     assert r.exit_code == 4, r.output
     assert "plugin not found" in r.output
 
@@ -837,15 +812,17 @@ def test_plugin_rm_force_and_prompt(workspace_cli):
     cache_dir = tmp_path / ".codex" / "plugins" / "cache" / "m1" / "p1"
 
     # Without --force the prompt aborts and the plugin survives.
-    r = _runner.invoke(cli_app, ["agent", "plugin", "rm", "cx", "p1@m1"], input="n\n")
+    r = _runner.invoke(cli_app, ["agent", "plugin", "rm", "codex", "p1@m1"], input="n\n")
     assert r.exit_code == 1
     assert cache_dir.is_dir()
 
-    r = _runner.invoke(cli_app, ["agent", "plugin", "rm", "cx", "p1@m1", "--force"])
+    r = _runner.invoke(cli_app, ["agent", "plugin", "rm", "codex", "p1@m1", "--force"])
     assert r.exit_code == 0, r.output
     assert "removed: plugin p1@m1" in r.output
     body = json.loads(
-        _extract_json(_runner.invoke(cli_app, ["agent", "plugin", "list", "cx", "--json"]).output)
+        _extract_json(
+            _runner.invoke(cli_app, ["agent", "plugin", "list", "codex", "--json"]).output
+        )
     )
     assert [p["id"] for p in body["items"]] == ["p2@m1"]
     assert not cache_dir.exists()
@@ -863,22 +840,19 @@ def test_plugin_rm_force_and_prompt(workspace_cli):
 # ---------------------------------------------------------------------------
 
 
-def _add_codex(agent_cli_daemon, name: str = "cur"):
-    config_dir = agent_cli_daemon / f"cfg-{name}"
+def _add_codex(agent_cli_daemon):
+    config_dir = agent_cli_daemon / "cfg-codex"
     config_dir.mkdir(exist_ok=True)
-    added = _runner.invoke(
-        cli_app,
-        ["agent", "add", "codex", "--name", name, "--config-dir", str(config_dir)],
-    )
+    added = _runner.invoke(cli_app, ["agent", "add", "codex", "--config-dir", str(config_dir)])
     assert added.exit_code == 0, added.output
     return config_dir
 
 
 def test_agent_edit_binds_a_model(agent_cli_daemon):
     _add_codex(agent_cli_daemon)
-    result = _runner.invoke(cli_app, ["agent", "edit", "cur", "--model", "gpt-5-codex"])
+    result = _runner.invoke(cli_app, ["agent", "edit", "codex", "--model", "gpt-5-codex"])
     assert result.exit_code == 0, result.output
-    shown = json.loads(_runner.invoke(cli_app, ["agent", "show", "cur", "--json"]).output)
+    shown = json.loads(_runner.invoke(cli_app, ["agent", "show", "codex", "--json"]).output)
     assert shown["model"] == "gpt-5-codex"
 
 
@@ -892,15 +866,15 @@ def test_agent_edit_binds_a_fast_model_and_can_clear_it(agent_cli_daemon):
     _add_codex(agent_cli_daemon)
     bound = _runner.invoke(
         cli_app,
-        ["agent", "edit", "cur", "--model", "big", "--fast-model", "small"],
+        ["agent", "edit", "codex", "--model", "big", "--fast-model", "small"],
     )
     assert bound.exit_code == 0, bound.output
-    shown = json.loads(_runner.invoke(cli_app, ["agent", "show", "cur", "--json"]).output)
+    shown = json.loads(_runner.invoke(cli_app, ["agent", "show", "codex", "--json"]).output)
     assert (shown["model"], shown["fast_model"]) == ("big", "small")
 
-    cleared = _runner.invoke(cli_app, ["agent", "edit", "cur", "--clear-fast-model"])
+    cleared = _runner.invoke(cli_app, ["agent", "edit", "codex", "--clear-fast-model"])
     assert cleared.exit_code == 0, cleared.output
-    shown = json.loads(_runner.invoke(cli_app, ["agent", "show", "cur", "--json"]).output)
+    shown = json.loads(_runner.invoke(cli_app, ["agent", "show", "codex", "--json"]).output)
     assert shown["fast_model"] is None
     assert shown["model"] == "big", "clearing the fast slot must not disturb the main one"
 
@@ -909,8 +883,8 @@ def test_agent_edit_binding_a_model_leaves_the_config_dir_alone(agent_cli_daemon
     """A PATCH that omits `config_dir` must preserve the override — the route
     says so, and the CLI must not send one it was never given."""
     config_dir = _add_codex(agent_cli_daemon)
-    assert _runner.invoke(cli_app, ["agent", "edit", "cur", "--model", "big"]).exit_code == 0
-    shown = json.loads(_runner.invoke(cli_app, ["agent", "show", "cur", "--json"]).output)
+    assert _runner.invoke(cli_app, ["agent", "edit", "codex", "--model", "big"]).exit_code == 0
+    shown = json.loads(_runner.invoke(cli_app, ["agent", "show", "codex", "--json"]).output)
     assert shown["config_dir"] == str(config_dir)
 
 
@@ -918,7 +892,7 @@ def test_agent_edit_rejects_a_wire_api_codex_cannot_load(agent_cli_daemon):
     """`chat` makes Codex fail to load config.toml at all. The domain refuses
     it; the CLI must surface that as a readable error, not a traceback."""
     _add_codex(agent_cli_daemon)
-    bad = _runner.invoke(cli_app, ["agent", "edit", "cur", "--wire-api", "chat"])
+    bad = _runner.invoke(cli_app, ["agent", "edit", "codex", "--wire-api", "chat"])
     combined = bad.output + (bad.stderr or "")
     # 6 = INVALID_INPUT, i.e. the daemon refused the value — not 2, which is
     # what typer returns for an option the command does not have at all.
@@ -931,9 +905,9 @@ def test_agent_show_reports_the_model_binding(agent_cli_daemon):
     """A write with no read is half a surface: `show` is where a terminal user
     checks what the projector will actually write."""
     _add_codex(agent_cli_daemon)
-    bound = _runner.invoke(cli_app, ["agent", "edit", "cur", "--model", "gpt-5-codex"])
+    bound = _runner.invoke(cli_app, ["agent", "edit", "codex", "--model", "gpt-5-codex"])
     assert bound.exit_code == 0, bound.output
-    shown = _runner.invoke(cli_app, ["agent", "show", "cur"])
+    shown = _runner.invoke(cli_app, ["agent", "show", "codex"])
     assert shown.exit_code == 0, shown.output
     assert "gpt-5-codex" in shown.output
 
@@ -959,41 +933,41 @@ def memory_daemon(tmp_path, monkeypatch):
 )
 @pytest.mark.acceptance(spec="agent-registry", scenario="agent reads print JSON with --json")
 def test_agent_show_reports_the_connection_part_by_part(memory_daemon, tmp_path):
-    for name in ("with", "without"):
-        config_dir = tmp_path / f"claude-{name}"
+    # One agent per type: Claude Code gets connected, Codex stays disconnected.
+    for agent_type in ("claude_code", "codex"):
+        config_dir = tmp_path / f"cfg-{agent_type}"
         (config_dir / "skills").mkdir(parents=True)
         added = _runner.invoke(
-            cli_app,
-            ["agent", "add", "claude_code", "--name", name, "--config-dir", str(config_dir)],
+            cli_app, ["agent", "add", agent_type, "--config-dir", str(config_dir)]
         )
         assert added.exit_code == 0, added.output
-    shown = {
-        name: json.loads(
-            _extract_json(_runner.invoke(cli_app, ["agent", "show", name, "--json"]).output)
-        )
-        for name in ("with", "without")
-    }
-    connected = _runner.invoke(cli_app, ["agent", "connect", "with"])
+
+    def show(ref: str) -> dict:
+        out = _runner.invoke(cli_app, ["agent", "show", ref, "--json"]).output
+        return dict(json.loads(_extract_json(out)))
+
+    without = show("codex")
+    connected = _runner.invoke(cli_app, ["agent", "connect", "claude-code"])
     assert connected.exit_code == 0, connected.output
 
-    with_ = json.loads(
-        _extract_json(_runner.invoke(cli_app, ["agent", "show", "with", "--json"]).output)
-    )
-    without = shown["without"]
+    with_ = show("claude-code")
     parts = {p["key"]: p["installed"] for p in with_["coffer_connection"]["parts"]}
     assert with_["coffer_connection"]["state"] == "connected"
     assert parts == {"mcp": True, "memory_hook": True}
     assert without["coffer_connection"]["state"] == "disconnected"
     for data in (with_, without):
         assert "last_fired" not in json.dumps(data["coffer_connection"])
-        assert {"name", "title", "type", "config_dir", "uid", "coffer_connection"} <= set(data)
+        assert {"name", "display_name", "type", "config_dir", "uid", "coffer_connection"} <= set(
+            data
+        )
+        assert "title" not in data
     listed = json.loads(_extract_json(_runner.invoke(cli_app, ["agent", "list", "--json"]).output))[
         "resources"
     ]
-    assert {(a["name"], a["type"]) for a in listed} == {
-        ("with", "claude_code"),
-        ("without", "claude_code"),
+    assert {(a["name"], a["display_name"], a["type"]) for a in listed} == {
+        ("claude-code", "Claude Code", "claude_code"),
+        ("codex", "OpenAI Codex", "codex"),
     }
-    text = _runner.invoke(cli_app, ["agent", "show", "with"]).output
+    text = _runner.invoke(cli_app, ["agent", "show", "claude-code"]).output
     assert "coffer_connection: connected" in text
     assert "memory delivery hook: installed" in text

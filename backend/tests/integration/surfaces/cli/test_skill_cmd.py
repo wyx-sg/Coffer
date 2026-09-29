@@ -150,19 +150,17 @@ def skill_cli_daemon(tmp_path, monkeypatch):
     set_active_token(None)
 
 
-def _register_agent(home: pathlib.Path, name: str) -> pathlib.Path:
-    """Register an agent via the CLI; return where its skills are delivered.
+def _register_agent(home: pathlib.Path, agent_type: str = "claude-code") -> pathlib.Path:
+    """Register the agent of ``agent_type`` via the CLI; return where its
+    skills are delivered.
 
-    The agent model uses ``config_dir``; registration auto-creates
-    ``<config_dir>/skills`` and that is where enabled skills land. We return
-    that delivery dir so link-location assertions stay correct.
+    An agent is named by its type, so ``agent_type`` is also the name the
+    tests type afterwards. Registration auto-creates ``<config_dir>/skills``
+    and that is where enabled skills land.
     """
-    config_dir = home / f"{name}-cfg"
+    config_dir = home / f"{agent_type}-cfg"
     config_dir.mkdir()
-    r = _runner.invoke(
-        cli_app,
-        ["agent", "add", "claude_code", "--name", name, "--config-dir", str(config_dir)],
-    )
+    r = _runner.invoke(cli_app, ["agent", "add", agent_type, "--config-dir", str(config_dir)])
     assert r.exit_code == 0, r.output
     return config_dir / "skills"
 
@@ -225,14 +223,14 @@ def test_skill_scope_prints_agent_names_while_storing_uids(skill_cli_daemon, mon
     the name and NOT the uid.
     """
     monkeypatch.setenv("COLUMNS", "200")  # don't let rich wrap the Scope cell apart
-    _register_agent(skill_cli_daemon, "cur")
+    _register_agent(skill_cli_daemon)
     src = skill_cli_daemon / "src"
     _write_skill_folder(src, name="scoped-1")
     assert _runner.invoke(cli_app, ["skill", "add", str(src)]).exit_code == 0
 
-    uid = _agent_uid("cur")
+    uid = _agent_uid("claude-code")
     # `skill scope` takes the agent NAME too, and resolves it on the way in.
-    r = _runner.invoke(cli_app, ["skill", "scope", "scoped-1", "--agents", "cur"])
+    r = _runner.invoke(cli_app, ["skill", "scope", "scoped-1", "--agents", "claude-code"])
     assert r.exit_code == 0, r.output
 
     # What was stored: the uid, not the name.
@@ -243,12 +241,12 @@ def test_skill_scope_prints_agent_names_while_storing_uids(skill_cli_daemon, mon
     # What is printed: the name, and nowhere the uid.
     shown = _runner.invoke(cli_app, ["skill", "show", "scoped-1"])
     assert shown.exit_code == 0, shown.output
-    assert "scope:       agents: cur" in shown.output
+    assert "scope:       agents: claude-code" in shown.output
     assert uid not in shown.output
 
     listed = _runner.invoke(cli_app, ["skill", "list"])
     assert listed.exit_code == 0, listed.output
-    assert "agents: cur" in listed.output
+    assert "agents: claude-code" in listed.output
     assert uid not in listed.output
 
 
@@ -264,7 +262,7 @@ def test_skill_scope_prints_an_unmatched_uid_verbatim(skill_cli_daemon, monkeypa
     have one.
     """
     monkeypatch.setenv("COLUMNS", "200")
-    _register_agent(skill_cli_daemon, "cur")
+    _register_agent(skill_cli_daemon)
     src = skill_cli_daemon / "src"
     _write_skill_folder(src, name="scoped-2")
     assert _runner.invoke(cli_app, ["skill", "add", str(src)]).exit_code == 0
@@ -276,13 +274,13 @@ def test_skill_scope_prints_an_unmatched_uid_verbatim(skill_cli_daemon, monkeypa
     ][0]["uid"]
     put = c.put(
         f"/resources/{skill_uid}/scope",
-        json={"scope": {"agents": [_agent_uid("cur"), stray]}},
+        json={"scope": {"agents": [_agent_uid("claude-code"), stray]}},
     )
     assert put.status_code == 200, put.text
 
     shown = _runner.invoke(cli_app, ["skill", "show", "scoped-2"])
     assert shown.exit_code == 0, shown.output
-    assert f"scope:       agents: cur, {stray}" in shown.output
+    assert f"scope:       agents: claude-code, {stray}" in shown.output
 
 
 # ---------------------------------------------------------------------------
@@ -354,7 +352,7 @@ def test_skill_show_not_found(skill_cli_daemon):
 
 def test_skill_verify_no_drift_text(skill_cli_daemon):
     """`verify` prints `no drift` and exits 0 when bindings are clean."""
-    skills_dir = _register_agent(skill_cli_daemon, "cur")
+    skills_dir = _register_agent(skill_cli_daemon)
     src = skill_cli_daemon / "src"
     _write_skill_folder(src, name="vfy-1")
     _runner.invoke(cli_app, ["skill", "add", str(src)])
@@ -366,7 +364,7 @@ def test_skill_verify_no_drift_text(skill_cli_daemon):
 
 def test_skill_verify_drift_exits_2(skill_cli_daemon):
     """Once a link is missing, `verify` exits non-zero and reports the drift."""
-    skills_dir = _register_agent(skill_cli_daemon, "cur")
+    skills_dir = _register_agent(skill_cli_daemon)
     src = skill_cli_daemon / "src"
     _write_skill_folder(src, name="vfy-2")
     _runner.invoke(cli_app, ["skill", "add", str(src)])
@@ -472,13 +470,13 @@ def test_skill_rm_without_force_aborts(skill_cli_daemon):
 def test_scan_names_an_unmanaged_folder_that_is_then_read_on_disk(skill_cli_daemon):
     """`coffer scan --agent --json` reports the unmanaged folder with its absolute
     path; its files are read there, and reading adopts nothing."""
-    skills_dir = _register_agent(skill_cli_daemon, "cur")
+    skills_dir = _register_agent(skill_cli_daemon)
     folder = _write_skill_folder(skills_dir / "loose-skill", name="loose-skill")
     (folder / "refs").mkdir()
     (folder / "refs" / "a.txt").write_text("alpha\n", encoding="utf-8")
 
     def skill_rows() -> list[dict]:
-        r = _runner.invoke(cli_app, ["scan", "--agent", "cur", "--json"])
+        r = _runner.invoke(cli_app, ["scan", "--agent", "claude-code", "--json"])
         assert r.exit_code == 0, r.output
         return [
             row for row in json.loads(_extract_json(r.output))["rows"] if row["kind"] == "skill"
@@ -507,7 +505,7 @@ def test_scan_names_an_unmanaged_folder_that_is_then_read_on_disk(skill_cli_daem
 
 def test_skill_verify_fix_repairs_and_reports(skill_cli_daemon):
     """--fix re-delivers MISSING_LINK and reports remaining drift."""
-    skills_dir = _register_agent(skill_cli_daemon, "cur")
+    skills_dir = _register_agent(skill_cli_daemon)
     src = skill_cli_daemon / "src"
     _write_skill_folder(src, name="fix-1")
     _runner.invoke(cli_app, ["skill", "add", str(src)])
@@ -529,7 +527,7 @@ def test_skill_verify_fix_repairs_and_reports(skill_cli_daemon):
 
 def test_skill_verify_fix_remaining_exits_2(skill_cli_daemon):
     """--fix exits 2 when unrepairable drift remains."""
-    skills_dir = _register_agent(skill_cli_daemon, "cur")
+    skills_dir = _register_agent(skill_cli_daemon)
     src = skill_cli_daemon / "src"
     _write_skill_folder(src, name="foreign-1")
     _runner.invoke(cli_app, ["skill", "add", str(src)])
@@ -566,15 +564,15 @@ def _skill_trail(name: str) -> list[str]:
     spec="skill-manager", scenario="switch and scope a skill from its own command group"
 )
 def test_scope_disable_and_enable_a_skill_from_the_skill_group(skill_cli_daemon):
-    first = _register_agent(skill_cli_daemon, "first")
-    second = _register_agent(skill_cli_daemon, "second")
+    first = _register_agent(skill_cli_daemon, "claude-code")
+    second = _register_agent(skill_cli_daemon, "codex")
     _write_skill_folder(skill_cli_daemon / "src", name="switch-me")
     assert _runner.invoke(cli_app, ["skill", "add", str(skill_cli_daemon / "src")]).exit_code == 0
     assert (first / "switch-me").is_symlink() and (second / "switch-me").is_symlink()
 
-    scoped = _runner.invoke(cli_app, ["skill", "scope", "switch-me", "--agents", "first"])
+    scoped = _runner.invoke(cli_app, ["skill", "scope", "switch-me", "--agents", "claude-code"])
     assert scoped.exit_code == 0, scoped.output
-    assert "reach: first" in scoped.output
+    assert "reach: claude-code" in scoped.output
     assert (first / "switch-me").is_symlink()
     assert not (second / "switch-me").exists()
 
@@ -593,8 +591,10 @@ def test_scope_disable_and_enable_a_skill_from_the_skill_group(skill_cli_daemon)
 
 
 @pytest.mark.acceptance(spec="skill-manager", scenario="desktop and CLI cover every operation")
+@pytest.mark.acceptance(spec="resource-framework", scenario="a kind without a title refuses one")
 def test_the_skill_group_is_the_lifecycle_verbs_and_the_folder_is_a_path(skill_cli_daemon):
-    """The group offers the shared verbs plus `add` and `verify`, every read
+    """The group offers the shared verbs plus `add` and `verify` — no `edit`,
+    since a skill has nothing on its record to edit — every read
     takes `--json`, and the master folder is named by `coffer path skill`
     rather than listed, printed or written through the group."""
     import typer.main
@@ -607,16 +607,22 @@ def test_the_skill_group_is_the_lifecycle_verbs_and_the_folder_is_a_path(skill_c
         "list",
         "show",
         "add",
-        "edit",
         "rm",
         "enable",
         "disable",
         "scope",
         "verify",
     ]
-    assert not {"import", "files", "cat", "write", "unmanaged", "adopt", "rm-unmanaged"} & set(
-        group.commands
-    )
+    assert not {
+        "import",
+        "files",
+        "cat",
+        "write",
+        "edit",
+        "unmanaged",
+        "adopt",
+        "rm-unmanaged",
+    } & set(group.commands)
     for read in (["list"], ["show", "every-op"], ["scope", "every-op"], ["verify"]):
         r = _runner.invoke(cli_app, ["skill", *read, "--json"])
         assert r.exit_code == 0, (read, r.output)
@@ -647,9 +653,12 @@ def test_skill_show_takes_a_uid_as_well_as_a_name(skill_cli_daemon):
 @pytest.mark.acceptance(
     spec="skill-manager", scenario="a skill's title is edited without touching disk"
 )
-def test_skill_edit_title_shows_in_list_and_leaves_the_folder(skill_cli_daemon, monkeypatch):
+def test_a_skill_shows_its_name_and_carries_no_title(skill_cli_daemon, monkeypatch):
+    """The CLI half of the scenario: a title for a skill has nowhere to go —
+    `coffer skill` has no `edit`, `list` shows the name and `show --json`
+    carries no `title` — and the folder and link are untouched."""
     monkeypatch.setenv("COLUMNS", "200")
-    skills_dir = _register_agent(skill_cli_daemon, "cur")
+    skills_dir = _register_agent(skill_cli_daemon)
     src = _write_skill_folder(skill_cli_daemon / "src", name="before")
     assert _runner.invoke(cli_app, ["skill", "add", str(src)]).exit_code == 0
     master = pathlib.Path(
@@ -662,32 +671,14 @@ def test_skill_edit_title_shows_in_list_and_leaves_the_folder(skill_cli_daemon, 
 
     r = _runner.invoke(cli_app, ["skill", "edit", "before", "--title", "Release checklist"])
 
-    assert r.exit_code == 0, r.output
+    assert r.exit_code == 2, r.output  # no such command
     listed = _runner.invoke(cli_app, ["skill", "list"])
-    assert "Release checklist" in listed.output
+    assert "before" in listed.output
+    assert "Release checklist" not in listed.output
     data = json.loads(
         _extract_json(_runner.invoke(cli_app, ["skill", "show", "before", "--json"]).output)
     )
-    assert (data["name"], data["title"]) == ("before", "Release checklist")
+    assert data["name"] == "before"
+    assert "title" not in data
     assert (master / "SKILL.md").read_bytes() == skill_md
     assert (skills_dir / "before").resolve() == link_target
-
-
-@pytest.mark.acceptance(spec="skill-manager", scenario="refuse changing a registered skill's name")
-def test_skill_edit_name_is_refused_and_moves_nothing(skill_cli_daemon):
-    skills_dir = _register_agent(skill_cli_daemon, "cur")
-    src = _write_skill_folder(skill_cli_daemon / "src", name="before")
-    assert _runner.invoke(cli_app, ["skill", "add", str(src)]).exit_code == 0
-
-    r = _runner.invoke(cli_app, ["skill", "edit", "before", "--name", "after"])
-
-    assert r.exit_code == 5, r.output
-    # The refusal says what a new name costs, and what to change instead.
-    flat = " ".join(r.output.split())
-    assert "cannot change" in flat
-    assert "its scope and its deliveries" in flat
-    assert "title" in flat
-    assert _runner.invoke(cli_app, ["skill", "show", "before"]).exit_code == 0
-    assert (skills_dir / "before").is_symlink()
-    assert not (skill_cli_daemon / ".coffer" / "skills" / "after").exists()
-    assert _runner.invoke(cli_app, ["skill", "verify"]).exit_code == 0

@@ -32,7 +32,7 @@ async def test_register_into_privileged_dir_creates_nothing(agent_bundle, tmp_pa
 
     with pytest.raises(PrivilegedPath):
         await agent_bundle.svc.register(
-            agent_type=AgentType.CODEX, name="sys", config_dir=str(config_dir), actor="cli"
+            agent_type=AgentType.CODEX, config_dir=str(config_dir), actor="cli"
         )
 
     assert not (config_dir / "skills").exists()
@@ -44,7 +44,7 @@ async def test_update_into_privileged_dir_creates_nothing(agent_bundle, tmp_path
     home = tmp_path / "home"
     home.mkdir()
     agent = await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX, name="a", config_dir=str(home), actor="cli"
+        agent_type=AgentType.CODEX, config_dir=str(home), actor="cli"
     )
     system = tmp_path / "system"
     config_dir = system / ".codex"

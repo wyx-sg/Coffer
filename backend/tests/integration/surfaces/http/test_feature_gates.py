@@ -327,13 +327,12 @@ def _hook_installed(config_dir: pathlib.Path) -> bool:
     return settings.is_file() and f": {MARKER}" in settings.read_text()
 
 
-def _agent(c: TestClient, home: pathlib.Path, name: str) -> tuple[str, pathlib.Path]:
-    config_dir = home / f"{name}-config"
+def _agent(
+    c: TestClient, home: pathlib.Path, agent_type: str = "claude_code"
+) -> tuple[str, pathlib.Path]:
+    config_dir = home / f"{agent_type}-config"
     config_dir.mkdir()
-    r = c.post(
-        "/api/v1/agents",
-        json={"type": "claude_code", "name": name, "config_dir": str(config_dir)},
-    )
+    r = c.post("/api/v1/agents", json={"type": agent_type, "config_dir": str(config_dir)})
     assert r.status_code == 201, r.text
     return str(r.json()["uid"]), config_dir
 
@@ -342,7 +341,7 @@ def _agent_with_hook(c: TestClient, home: pathlib.Path) -> tuple[str, pathlib.Pa
     """A Claude Code agent connected to Coffer, which with memory on puts the
     delivery hook in its settings (spec agent-registry "Connect an agent to
     Coffer in one action")."""
-    uid, config_dir = _agent(c, home, "cc")
+    uid, config_dir = _agent(c, home)
     r = c.post(f"/api/v1/agents/{uid}/coffer-connection")
     assert r.status_code == 200, r.text
     assert _hook_installed(config_dir)
@@ -356,7 +355,8 @@ def _agent_with_hook(c: TestClient, home: pathlib.Path) -> tuple[str, pathlib.Pa
 def test_switching_memory_off_removes_the_delivery_hook(home: pathlib.Path) -> None:
     with _client() as c:
         _uid, config_dir = _agent_with_hook(c, home)
-        _other_uid, other_dir = _agent(c, home, "not-connected")
+        # One agent per type: the one left unconnected is Codex.
+        _other_uid, other_dir = _agent(c, home, "codex")
 
         _switch(c, "memory", False)
         assert not _hook_installed(config_dir)
@@ -467,7 +467,7 @@ def test_a_channel_bound_here_registers_while_sync_is_off(
         (home / "cc-config").mkdir()
         agent = c.post(
             "/api/v1/agents",
-            json={"type": "claude_code", "name": "cc", "config_dir": str(home / "cc-config")},
+            json={"type": "claude_code", "config_dir": str(home / "cc-config")},
         )
         assert agent.status_code == 201, agent.text
         stored = c.post("/api/v1/credentials", json={"ref": "tg-token", "value": "123:abc"})
@@ -483,7 +483,7 @@ def test_a_channel_bound_here_registers_while_sync_is_off(
                 "--bot-token-ref",
                 "tg-token",
                 "--agent",
-                "cc",
+                "claude-code",
             ],
         )
         channels = c.get("/api/v1/resources", params={"kind": "channel"}).json()

@@ -51,7 +51,7 @@ def agent_home_env_resolver(
     the model catalogue reads) decides it: a custom ``config_dir`` becomes
     ``CLAUDE_CONFIG_DIR`` / ``CODEX_HOME``, the default one (or no registered
     agent) sets nothing (spec chat "Ship Claude Code and Codex subprocess
-    providers"). ``agents`` is a getter so the registry is read at request
+    providers on the type's one agent"). ``agents`` is a getter so the registry is read at request
     time, after the composition root has published it, and so a changed
     ``config_dir`` takes effect on the next turn without a restart.
     """

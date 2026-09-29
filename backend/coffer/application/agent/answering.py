@@ -23,19 +23,15 @@ class AgentLister(Protocol):
 
 
 async def answering_agent_config(agents: AgentLister, agent_key: str) -> AgentConfig | None:
-    """The config of the first ENABLED agent resource of this type in NAME
-    order, or ``None``.
+    """The config of this type's one agent while it is ENABLED, or ``None``.
 
-    Name order is the registry's own: ``agents.list()`` returns agents ordered
-    by ``(kind, name)``, so with two agents of one type registered (different
-    config dirs) the one whose name sorts first answers, and renaming either
-    can change which one does (spec chat "Ship Claude Code and Codex subprocess
-    providers", spec agent-registry "Serve each agent type's model catalogue").
-    One resource answers for the type, so what is read for a type is always one
-    agent's answer rather than a blend of several. Disabled agents are skipped:
-    the user has told Coffer to leave them alone. A row Coffer can no longer
-    parse is skipped too — a read-only lookup must not fail on it; the agent
-    routes surface it.
+    A type has one agent (spec agent-registry "Keep one agent per type, named
+    by it"), so this is the agent a chat turn runs against and whose models the
+    pickers offer (spec chat "Ship Claude Code and Codex subprocess providers on
+    the type's one agent", spec agent-registry "Serve each agent type's model
+    catalogue from its one agent"). A disabled agent is skipped: the user has
+    told Coffer to leave it alone. A row Coffer can no longer parse is skipped
+    too — a read-only lookup must not fail on it; the agent routes surface it.
     """
     for resource in await agents.list():
         if not resource.enabled:

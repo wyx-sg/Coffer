@@ -493,8 +493,9 @@ def test_0031_deletes_removed_agent_type_rows(tmp_path, monkeypatch):
 
     with sqlite3.connect(db_path) as conn:
         names = {r[0] for r in conn.execute("SELECT name FROM resources WHERE kind = 'agent'")}
-    # Removed-type rows are gone; kept-type rows survive.
-    assert names == {"a-claude", "a-codex"}
+    # Removed-type rows are gone; kept-type rows survive, named by their type
+    # since 0109 (one agent per type).
+    assert names == {"claude-code", "codex"}
 
     # Downgrade is intentionally lossy — it cannot resurrect the deleted rows;
     # the kept-type rows remain and nothing is conjured back.
@@ -503,7 +504,7 @@ def test_0031_deletes_removed_agent_type_rows(tmp_path, monkeypatch):
         names_after = {
             r[0] for r in conn.execute("SELECT name FROM resources WHERE kind = 'agent'")
         }
-    assert names_after == {"a-claude", "a-codex"}
+    assert names_after == {"claude-code", "codex"}
 
 
 def test_0032_strips_skill_content_scan_fields(tmp_path, monkeypatch):

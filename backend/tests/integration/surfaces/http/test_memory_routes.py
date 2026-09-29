@@ -102,8 +102,9 @@ def client(tmp_path, monkeypatch):
         yield c
 
 
-def _register_agent(c: TestClient, name: str, agent_type: str = "claude_code") -> str:
-    r = c.post("/api/v1/agents", json={"type": agent_type, "name": name})
+def _register_agent(c: TestClient, agent_type: str = "claude_code") -> str:
+    """Register the one agent of ``agent_type``, named by its type."""
+    r = c.post("/api/v1/agents", json={"type": agent_type})
     assert r.status_code == 201, r.text
     return str(r.json()["uid"])
 
@@ -173,7 +174,7 @@ def _distilled(c: TestClient, tmp_path: pathlib.Path, files: dict[str, str] | No
     with real notes in it, and notes only exist after a distil pass: aggregation
     writes ``.raw/`` and nothing else ("Keep raw entries verbatim and hidden").
     """
-    _register_agent(c, "cc")
+    _register_agent(c)
     repository = _repository(tmp_path)
     _seed(tmp_path, repository, files if files is not None else _default_files())
     _sync(c)
@@ -207,7 +208,7 @@ def _binding_ceiling(text: str, *, room_for: int) -> int:
 
 
 def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> None:
-    _register_agent(client, "cc")
+    _register_agent(client)
     repository = _repository(tmp_path)
     _seed(tmp_path, repository, _default_files())
 
@@ -256,7 +257,7 @@ def test_sync_then_distil_lists_partitions_and_their_notes(client, tmp_path) -> 
 
     detail = client.get(f"/api/v1/memory/partitions/{coffer_uid}/notes/python-lockfile").json()
     assert "uv sync --frozen" in detail["body"]
-    assert detail["origins"][0]["agent"] == "cc"
+    assert detail["origins"][0]["agent"] == "claude-code"
     assert detail["origins"][0]["native_path"].endswith("/memory/python-lockfile.md")
     assert detail["origins"][0]["anchor"] == "python-lockfile"
 
@@ -364,7 +365,7 @@ def test_distil_with_no_internal_connection_still_writes_an_index(client, tmp_pa
     """Per "Distil mechanically with no internal connection": thinner, not absent.
     Each raw entry becomes a note of its own and ``MEMORY.md`` is still written, so
     this installation still has a delivery."""
-    _register_agent(client, "cc")
+    _register_agent(client)
     repository = _repository(tmp_path)
     _seed(tmp_path, repository, _default_files())
     # Update memory runs the mechanical pass itself: one note per raw entry.
@@ -445,7 +446,7 @@ def test_update_memory_skips_a_partition_whose_distil_is_already_running(client,
     claim: two writers only collide if both spell the partition the same way,
     and the label is the spelling that can move.
     """
-    _register_agent(client, "cc")
+    _register_agent(client)
     repository = _repository(tmp_path)
     _seed(tmp_path, repository, _default_files())
     # A first update registers the partition (its uid is what gets claimed);
@@ -508,7 +509,10 @@ def test_context_carries_every_note_and_the_absolute_notes_path(client, tmp_path
 
     r = client.post(
         "/api/v1/memory/context",
-        json={"agent_uid": _uid(client, "agent", "cc"), "cwd": str(repository / "backend")},
+        json={
+            "agent_uid": _uid(client, "agent", "claude-code"),
+            "cwd": str(repository / "backend"),
+        },
     )
     assert r.status_code == 200, r.text
     data = r.json()
@@ -557,7 +561,7 @@ def test_context_under_a_binding_ceiling_keeps_the_repository_and_drops_global(
     )
     partition = _distilled(client, tmp_path, files)
     repository = tmp_path / "coffer"
-    cc_uid = _uid(client, "agent", "cc")
+    cc_uid = _uid(client, "agent", "claude-code")
 
     full = client.post(
         "/api/v1/memory/context", json={"agent_uid": cc_uid, "cwd": str(repository)}
@@ -610,7 +614,7 @@ def test_context_serves_a_partition_to_an_agent_that_contributed_nothing_to_it(
     aggregating several agents' memory into one place.
     """
     partition = _distilled(client, tmp_path)
-    outsider_uid = _register_agent(client, "outsider", agent_type="codex")
+    outsider_uid = _register_agent(client, "codex")
     repository = tmp_path / "coffer"
 
     # The kind carries no reach any more, and the framework's own scope route
@@ -631,7 +635,7 @@ def test_context_serves_a_partition_to_an_agent_that_contributed_nothing_to_it(
     ).json()
     to_a_source = client.post(
         "/api/v1/memory/context",
-        json={"agent_uid": _uid(client, "agent", "cc"), "cwd": str(repository)},
+        json={"agent_uid": _uid(client, "agent", "claude-code"), "cwd": str(repository)},
     ).json()
 
     assert served["partition"] == partition
@@ -648,7 +652,7 @@ def test_context_for_a_directory_in_no_repository_is_global(client, tmp_path) ->
     data = client.post(
         "/api/v1/memory/context",
         json={
-            "agent_uid": _uid(client, "agent", "cc"),
+            "agent_uid": _uid(client, "agent", "claude-code"),
             "cwd": str(tmp_path / "Documents" / "2026-09-17"),
         },
     ).json()
@@ -672,7 +676,7 @@ def _hook(client: TestClient, uid: str, method: str = "GET") -> dict:
 
 
 def test_connect_status_and_record_fired_round_trip(client) -> None:
-    cc_uid = _register_agent(client, "cc")
+    cc_uid = _register_agent(client)
 
     status = _hook(client, cc_uid)
     assert status["installed"] is False
@@ -704,35 +708,8 @@ def test_connect_status_and_record_fired_round_trip(client) -> None:
     assert removed["state"] == "disconnected"
 
 
-def test_an_installed_hook_survives_the_agent_being_renamed(client) -> None:
-    """The failure the uid removes. The hook entry is a string in somebody
-    else's settings file that Coffer writes once and never revisits, so a label
-    baked into it would start naming an agent nothing answers to the first time
-    the user edited it — and every session's fire would go unattributed.
-    """
-    cc_uid = _register_agent(client, "cc")
-    command = _hook(client, cc_uid, "POST")["detail"]
-
-    renamed = client.patch(f"/api/v1/resources/{cc_uid}", json={"name": "claude-code"})
-    assert renamed.status_code == 200, renamed.text
-
-    # The command on disk was not rewritten, and it is still recognised.
-    status = _hook(client, cc_uid)
-    assert status["installed"] is True
-    assert status["detail"] == command
-
-    # And the fire it records still lands on this agent.
-    r = client.post(
-        "/api/v1/memory/context",
-        json={"agent_uid": cc_uid, "cwd": "/tmp", "record_fired": True},
-    )
-    assert r.status_code == 200, r.text
-    audit = client.get("/api/v1/audit").json()["entries"]
-    assert any(e["event_type"] == "memory_delivery_fired" for e in audit)
-
-
 def test_context_without_record_fired_does_not_record_a_fire(client) -> None:
-    cc_uid = _register_agent(client, "cc")
+    cc_uid = _register_agent(client)
     _hook(client, cc_uid, "POST")
 
     client.post("/api/v1/memory/context", json={"agent_uid": cc_uid, "cwd": "/tmp"})
@@ -743,7 +720,7 @@ def test_context_without_record_fired_does_not_record_a_fire(client) -> None:
 
 def test_the_delivery_management_routes_are_gone(client) -> None:
     """Installed with the connection, and nowhere else."""
-    cc_uid = _register_agent(client, "cc")
+    cc_uid = _register_agent(client)
     assert client.get("/api/v1/memory/delivery").status_code in (404, 405)
     assert client.post(f"/api/v1/memory/delivery/{cc_uid}/install").status_code in (404, 405)
 
@@ -837,10 +814,10 @@ def test_files_of_an_unknown_partition_are_not_found(client) -> None:
 
 
 def test_partition_list_carries_the_resource_title(client, tmp_path) -> None:
-    """spec resource-framework "Carry an optional editable title on every resource":
+    """spec resource-framework "Carry an optional editable title on the kinds that have one":
     the partition list carries the title set through the kind-agnostic update,
     and ``name`` stays the directory label."""
-    _register_agent(client, "cc")
+    _register_agent(client)
     _seed(tmp_path, _repository(tmp_path), _default_files())
     _sync(client)
     uid = _partition_uid(client, "global")

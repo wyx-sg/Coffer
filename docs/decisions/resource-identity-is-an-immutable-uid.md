@@ -1,9 +1,9 @@
 # Resource Identity Is an Immutable `uid`, Not the Name
 
 **Status**: Accepted
-**Date**: 2026-09-18
+**Date**: 2026-09-30
 **Deciders**: Yuxing Wu
-**Related**: [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [The Resource Framework Is Core Domain](resource-framework-upfront.md), [Kind Plug-in Contract](kind-plugin-contract.md), [Vault Sync](vault-sync.md), [Sync Deletion Breaker](sync-deletion-breaker.md), [Credential References](credential-references.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), spec resource-framework "Address every resource by an immutable uid through one kind-agnostic surface", spec resource-framework "Treat a resource's name as a mutable label", spec vault-sync "Key resource documents by uid", PR #406
+**Related**: [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [The Resource Framework Is Core Domain](resource-framework-upfront.md), [Kind Plug-in Contract](kind-plugin-contract.md), [Vault Sync](vault-sync.md), [Sync Deletion Breaker](sync-deletion-breaker.md), [Credential References](credential-references.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), spec resource-framework "Address every resource by an immutable uid through one kind-agnostic surface", spec resource-framework "Treat a resource's name as a mutable label", spec agent-registry "Keep one agent per type, named by it", spec vault-sync "Key resource documents by uid", PR #406, OpenSpec change `one-agent-per-type-and-no-titles`
 
 ## Context
 
@@ -66,7 +66,7 @@ it: `/api/v1/resources/{uid}`, per-kind route prefixes
 path `resources/<kind>/<uid>.yaml` with `uid` inside the document, web UI
 detail routes. `name` stays unique within a kind but is a label, renamed
 through the ordinary `PATCH` — except on the kinds whose name is quoted outside
-Coffer, which [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md)
+Coffer, or derived from the config, which [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md)
 exempts. The integer `id` stays exactly what it was: the
 internal, per-machine surrogate key and foreign-key target.
 
@@ -189,9 +189,13 @@ identified.
 `name` is a mutable label: unique within its kind, renamed by a field on
 `PATCH /api/v1/resources/{uid}`, audited as `from`/`to`. A kind whose name is
 visible outside Coffer declares it fixed (`Kind.name_fixed`: today `mcp_server`
-and `skill`) and refuses a changed name with `409 NAME_IMMUTABLE`; every
-resource also carries an editable display `title`
-([Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md)). The
+and `skill`) and refuses a changed name with `409 NAME_IMMUTABLE`. So does
+`agent`, whose name is derived from its type (`Kind.name_from_config`): a
+machine holds one agent per type, named `claude-code` or `codex`, and the CLI
+and every `/api/v1/agents/{uid}/...` route accept the type in place of the uid.
+The kinds whose name is Coffer's own label — `provider`, `channel`, `knowledge`,
+`memory` — also carry an optional display `title`; the three fixed-name kinds
+carry none ([Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md)). The
 `<kind>:<name>` string and the `ResourceRef` type are gone; responses carry
 `uid`, `kind` and `name` as three plain fields. Cross-resource references hold
 uids. The sync document for a resource is `resources/<kind>/<uid>.yaml`.
@@ -208,8 +212,8 @@ frontmatter name rule).
 - A rename is a column write plus, for the kinds that key something else by
   name, their `on_rename` hook ([Kind Plug-in Contract](kind-plugin-contract.md)).
   Two kinds supply one: `knowledge` and `memory` move their directory. A hook
-  failure aborts the rename with nothing changed. `agent`, `provider` and
-  `channel` rename by writing one column. `skill` and `mcp_server` are not
+  failure aborts the rename with nothing changed. `provider` and `channel`
+  rename by writing one column. `skill`, `mcp_server` and `agent` are not
   renamed at all ([Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md)).
 - The CLI keeps taking names and resolves them to uids itself; nobody types a
   uid. The web UI addresses detail pages by uid, and the old name-based routes
@@ -235,6 +239,9 @@ frontmatter name rule).
     new ref for the same ciphertext file), and new refs are random
     ([Credential References](credential-references.md)).
   - 0100 removes the `workflow:` ref spelling from `workflow_runs.template_ref`.
+- Because every reference holds a uid, collapsing agents to one per type
+  (migration 0109) only had to swap a dropped agent's uid for the kept one in
+  reach lists and channel `default_agent`s; the kept row was renamed to its type.
 - The sync bundle's layout schema version was bumped, so a machine on an older
   build refuses the new layout (`domain/sync/manifest.refuse_if_too_new`) and
   asks the user to upgrade instead of misreading it.

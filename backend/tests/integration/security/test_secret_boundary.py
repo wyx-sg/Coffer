@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from coffer.domain.errors import SecretBindingPending
+from coffer.domain.credential_errors import SecretBindingPending
 from coffer.surfaces.cli import _approvals
 from coffer.surfaces.cli.main import app as cli_app
 from tests.support.boundary_daemon import (

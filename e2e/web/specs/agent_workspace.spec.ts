@@ -76,11 +76,14 @@ test("agent workspace tabs render MCP entries, plugins and the Skills-page point
   page,
 }) => {
   const { token, port } = readDaemonToken();
-  const name = `e2e-ws-${Date.now().toString(36)}`;
+  // An agent is one per type and named by it.
+  const name = "codex";
   const configDir = mkSeededConfigDir();
 
   try {
-    // Seed the agent via the daemon API (same approach as shell_agents).
+    // Clear any codex agent the shared e2e DB already holds, then seed ours
+    // via the daemon API (same approach as shell_agents).
+    await deleteAgentByApi(name);
     const createResp = await fetch(`http://127.0.0.1:${port}/api/v1/agents`, {
       method: "POST",
       headers: {
@@ -88,12 +91,7 @@ test("agent workspace tabs render MCP entries, plugins and the Skills-page point
         "X-Coffer-Token": token,
         "X-Coffer-Actor": "e2e",
       },
-      body: JSON.stringify({
-        type: "codex",
-        name,
-        config_dir: configDir,
-        description: "e2e workspace",
-      }),
+      body: JSON.stringify({ type: "codex", config_dir: configDir }),
     });
     expect(createResp.status).toBe(201);
 

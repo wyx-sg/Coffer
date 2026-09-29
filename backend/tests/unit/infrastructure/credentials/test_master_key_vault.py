@@ -13,7 +13,7 @@ import pathlib
 import pytest
 from cryptography.fernet import Fernet
 
-from coffer.domain.errors import CredentialLocked, MasterKeyConflict
+from coffer.domain.credential_errors import CredentialLocked, MasterKeyConflict
 from coffer.infrastructure.credentials.build_identity import keychain_access_group
 from coffer.infrastructure.credentials.master_key import KEYCHAIN_REF, MasterKeyManager
 from coffer.infrastructure.credentials.master_key_backends import (

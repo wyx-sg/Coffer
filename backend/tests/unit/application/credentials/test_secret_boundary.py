@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from coffer.application.credentials.boundary import SecretBoundary
-from coffer.domain.errors import ApprovalNotPending, SecretBindingPending
+from coffer.domain.credential_errors import ApprovalNotPending, SecretBindingPending
 from coffer.domain.secrets import SecretDestination
 from tests.support.secret_boundary import FakeSealedValues, InMemoryBoundaryStore
 

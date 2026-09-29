@@ -25,7 +25,7 @@ pytestmark = pytest.mark.asyncio
 async def _register_claude(bundle, home: pathlib.Path):
     """Register a claude_code agent (default skill_dir under HOME/.claude)."""
     (home / ".claude" / "skills").mkdir(parents=True, exist_ok=True)
-    return await bundle.svc.register(agent_type=AgentType.CLAUDE_CODE, name="cc", actor="cli")
+    return await bundle.svc.register(agent_type=AgentType.CLAUDE_CODE, actor="cli")
 
 
 @pytest.mark.acceptance(spec="agent-registry/claude-code", scenario="list an agent's config files")
@@ -149,7 +149,7 @@ async def test_write_valid_atomic_with_backup_and_audit(agent_bundle, tmp_path, 
     )
     assert len(entries) == 1
     assert entries[0].resource_kind == "agent"
-    assert entries[0].resource_name == "cc"  # the LABEL at the time of the event
+    assert entries[0].resource_name == "claude-code"
     assert entries[0].actor == "cli"
     assert entries[0].details == {"key": "settings"}
 

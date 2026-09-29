@@ -188,6 +188,10 @@ def _build_mcp_app(tmp_path: Any) -> tuple[FastAPI, Any]:
         name="mcp_server",
         display_name="MCP Server",
         config_schema=MCPServerConfig,
+        # As production declares it: a server is shown by its fixed name and
+        # carries no title (spec resource-framework "Carry an optional
+        # editable title on the kinds that have one").
+        titled=False,
     )
     kinds = {"mcp_server": mcp_kind}
 
@@ -364,13 +368,49 @@ def test_mcp_add_neither_flag_exits_2(mcp_daemon: Any) -> None:
     assert result.exit_code == 2
 
 
-def test_mcp_add_over_long_title_registers_nothing(mcp_daemon: Any) -> None:
-    """A refused --title is refused before the server is registered, so the
-    corrected command can simply be run again."""
-    result = _runner.invoke(app, ["mcp", "add", "fs", "--stdio", "cat", "--title", "x" * 81])
-    assert result.exit_code == 6
-    assert "at most 80 characters" in result.output
-    assert _runner.invoke(app, ["mcp", "add", "fs", "--stdio", "cat"]).exit_code == 0
+@pytest.mark.acceptance(spec="resource-framework", scenario="a kind without a title refuses one")
+def test_mcp_add_and_edit_offer_no_title(mcp_daemon: Any) -> None:
+    """`coffer mcp add` and `coffer mcp edit` have no `--title`: each is a usage
+    error, and nothing is registered or changed."""
+    added = _runner.invoke(app, ["mcp", "add", "fs", "--stdio", "cat", "--title", "Files"])
+    assert added.exit_code == 2, added.output
+    listed = json.loads(_runner.invoke(app, ["mcp", "list", "--json"]).output)
+    assert listed == {"resources": []}
+
+    uid = _register_server()
+    edited = _runner.invoke(app, ["mcp", "edit", "fs", "--title", "Files"])
+    assert edited.exit_code == 2, edited.output
+    shown = json.loads(_runner.invoke(app, ["mcp", "show", uid, "--json"]).output)
+    assert (shown["name"], shown["title"]) == ("fs", None)
+
+
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="an MCP server is shown by its name")
+def test_an_mcp_server_is_shown_by_its_name(mcp_daemon: Any) -> None:
+    from coffer.surfaces.cli import _client as _cli_client
+
+    added = _runner.invoke(
+        app, ["mcp", "add", "fs", "--stdio", "cat", "--description", "Local files"]
+    )
+    assert added.exit_code == 0, added.output
+
+    table = _runner.invoke(app, ["mcp", "list"], env={"COLUMNS": "200"})
+    assert table.exit_code == 0, table.output
+    line = next(ln for ln in table.output.splitlines() if "fs" in ln.split())
+    assert "Local files" in line
+    [row] = json.loads(_runner.invoke(app, ["mcp", "list", "--json"]).output)["resources"]
+    assert (row["name"], row["description"]) == ("fs", "Local files")
+
+    shown = _runner.invoke(app, ["mcp", "show", "fs", "--json"])
+    assert shown.exit_code == 0, shown.output
+    data = json.loads(shown.output)
+    assert data["name"] == "fs"
+    assert "title" in data and data["title"] is None
+
+    client, _ = _cli_client.client_or_exit()
+    refused = client.patch(f"/resources/{data['uid']}", json={"title": "Files"})
+    assert refused.status_code == 422, refused.text
+    assert refused.json()["error"]["code"] == "CONFIG_INVALID"
+    assert client.get(f"/resources/{data['uid']}").json()["title"] is None
 
 
 def test_mcp_add_duplicate_exits_5(mcp_daemon: Any) -> None:
@@ -538,14 +578,6 @@ def test_mcp_list_table_names_the_transport(mcp_daemon: Any) -> None:
     assert result.exit_code == 0, result.output
     line = next(ln for ln in result.output.splitlines() if "remote" in ln)
     assert "http" in line
-
-
-def test_mcp_edit_title_keeps_the_name(mcp_daemon: Any) -> None:
-    uid = _register_server()
-    result = _runner.invoke(app, ["mcp", "edit", "fs", "--title", "Files"])
-    assert result.exit_code == 0, result.output
-    shown = json.loads(_runner.invoke(app, ["mcp", "show", uid, "--json"]).output)
-    assert (shown["name"], shown["title"]) == ("fs", "Files")
 
 
 def _config_of(uid: str) -> dict[str, Any]:
@@ -930,13 +962,6 @@ def test_mcp_add_bad_credential_format_exits_2(mcp_daemon: Any) -> None:
     )
     assert result.exit_code == 2, result.output
     assert "credential" in (result.output + (result.stderr or "")).lower()
-
-
-def test_mcp_add_with_a_title(mcp_daemon: Any) -> None:
-    result = _runner.invoke(app, ["mcp", "add", "fs", "--stdio", "cat", "--title", "Files"])
-    assert result.exit_code == 0, result.output
-    shown = json.loads(_runner.invoke(app, ["mcp", "show", "fs", "--json"]).output)
-    assert shown["title"] == "Files"
 
 
 # ---------------------------------------------------------------------------

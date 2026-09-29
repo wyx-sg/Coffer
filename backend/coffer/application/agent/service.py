@@ -21,9 +21,10 @@ from coffer.application.audit_service import AuditService
 from coffer.application.platform_port import PlatformPort, PrivilegedPaths
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.config import AgentConfig
-from coffer.domain.agent.types import AgentType
+from coffer.domain.agent.types import AgentType, parse_agent_ref
 from coffer.domain.errors import (
     AgentConfigDirRegistered,
+    AgentTypeRegistered,
     ConfigValidationError,
     PrivilegedPath,
     ResourceNotFound,
@@ -174,11 +175,20 @@ class AgentService:
         self,
         *,
         agent_type: AgentType,
-        name: str,
         config_dir: str | None = None,
-        description: str | None = None,
+        create_config_dir: bool = False,
         actor: str = "api",
     ) -> Resource:
+        """Register the one agent of ``agent_type`` (spec agent-registry "Keep
+        one agent per type, named by it"), named by its type.
+
+        ``create_config_dir`` is the caller's finding that the type is
+        installed but has never run here (``installed_never_run``) and that
+        ``config_dir`` is its standard location: only then is a missing config
+        directory created — holding nothing but the ``skills`` leaf Coffer
+        delivers to. Every other missing directory is refused, so a typo'd
+        path fails instead of being silently materialised.
+        """
         # Build + validate config (config_dir=None → the type's standard dir).
         try:
             cfg = AgentConfig(
@@ -188,19 +198,22 @@ class AgentService:
         except Exception as e:  # pydantic ValidationError
             raise ConfigValidationError(str(e)) from e
 
-        # Skills are delivered to <config_dir>/skills. Auto-create the skills/
-        # leaf under an EXISTING config dir, then assert it's usable. We refuse
-        # to create a missing config dir (a typo'd path must fail, not be
-        # silently materialised). The one-agent-per-dir check runs first so a
-        # rejected registration touches nothing on disk.
+        # One per type, then one per directory — both before anything is
+        # created on disk, so a rejected registration touches nothing.
+        existing = await self.find_by_type(agent_type)
+        if existing is not None:
+            raise AgentTypeRegistered(agent_type.value, existing.uid)
         await self._assert_config_dir_free(cfg, exclude_uid=None)
+        if create_config_dir and not cfg.resolved_config_dir().exists():
+            assert_not_privileged(cfg.resolved_config_dir(), self._platform.privileged_paths())
+            with contextlib.suppress(OSError):
+                cfg.resolved_config_dir().mkdir(parents=True)
         self._ensure_skill_dir(cfg.resolved_config_dir(), cfg.resolved_skill_dir())
 
         registered = await self._rs.register(
             kind="agent",
-            name=name,
+            name=agent_type.default_name(),
             config=cfg.model_dump(mode="json"),
-            description=description,
             actor=actor,
             allow_lifecycle_kind=True,  # creation seam: config dir detected/validated above
         )
@@ -231,6 +244,25 @@ class AgentService:
     async def list(self) -> list[Resource]:
         return await self._rs.list(kind="agent")
 
+    async def find_by_type(self, agent_type: AgentType) -> Resource | None:
+        """The registered agent of ``agent_type``, or ``None`` — there is at
+        most one, and its name is the type's."""
+        for row in await self.list():
+            if row.name == agent_type.default_name():
+                return row
+        return None
+
+    async def resolve(self, ref: str) -> Resource:
+        """The agent ``ref`` names: its type (``claude-code`` or
+        ``claude_code``) or its uid. Raises ``ResourceNotFound`` otherwise."""
+        agent_type = parse_agent_ref(ref)
+        if agent_type is not None:
+            found = await self.find_by_type(agent_type)
+            if found is None:
+                raise ResourceNotFound(ref)
+            return found
+        return await self.get(ref)
+
     async def get(self, uid: str) -> Resource:
         """One agent row by its uid.
 
@@ -250,7 +282,6 @@ class AgentService:
         uid: str,
         new_config_dir: str | None,
         actor: str = "api",
-        description: str | None = None,
     ) -> Resource:
         existing = await self.get(uid)
         cfg = AgentConfig.model_validate(existing.config)
@@ -266,8 +297,8 @@ class AgentService:
         except Exception as e:  # pydantic ValidationError
             raise ConfigValidationError(str(e)) from e
         # Only run the I/O check (and create the skills subdir) when the
-        # effective dir actually changes — a description-only PATCH must not
-        # fail because the existing dir has become non-writable since register.
+        # effective dir actually changes — re-sending the current directory
+        # must not fail because it has become non-writable since register.
         dir_changed = new_cfg.resolved_config_dir() != cfg.resolved_config_dir()
         if dir_changed:
             await self._assert_config_dir_free(new_cfg, exclude_uid=uid)
@@ -276,7 +307,6 @@ class AgentService:
             uid,
             new_config=new_cfg.model_dump(mode="json"),
             actor=actor,
-            description=description,
             allow_lifecycle_kind=True,  # creation seam: config dir validated above
         )
         # Re-deliver skills to the new location (remove old links, recreate at

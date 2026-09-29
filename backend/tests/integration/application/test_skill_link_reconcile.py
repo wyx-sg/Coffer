@@ -65,7 +65,7 @@ async def test_a_missing_link_is_repaired_with_one_audit_row(tmp_path):
     assert event.event_type == AuditEventType.SKILL_DRIFT_REMEDIATED.value
     assert (event.actor, event.resource_name) == ("system", "s1")
     assert event.details["kind"] == "missing_link"
-    assert event.details["agent"] == "cur"
+    assert event.details["agent"] == "claude-code"
     assert (await graph.run()).results == ()  # converged
     await graph.dispose()
 

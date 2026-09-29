@@ -148,7 +148,7 @@ ChannelNameResolver = Callable[[str], Awaitable[str | None]]
 #: directory of the agent answering for this provider's type —
 #: ``{"CLAUDE_CONFIG_DIR": dir}`` / ``{"CODEX_HOME": dir}`` for a custom one,
 #: ``{}`` for the default (spec chat "Ship Claude Code and Codex subprocess
-#: providers"). A narrow seam so chat never imports the agent kind; the
+#: providers on the type's one agent"). A narrow seam so chat never imports the agent kind; the
 #: composition root builds it over the agent registry.
 HomeEnvResolver = Callable[[], Awaitable[dict[str, str]]]
 

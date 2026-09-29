@@ -44,7 +44,12 @@ def refuse_fixed_name(kind_def: Kind, resource: Resource, new_name: str) -> None
     is not fixed, passes.
     """
     if kind_def.name_fixed and new_name != resource.name:
-        raise NameImmutable(resource.kind, resource.name, kind_def.name_fixed_resets)
+        raise NameImmutable(
+            resource.kind,
+            resource.name,
+            kind_def.name_fixed_resets,
+            derived=kind_def.name_from_config is not None,
+        )
 
 
 async def rename(

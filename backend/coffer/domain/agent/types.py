@@ -13,7 +13,9 @@ one config directory.
 from __future__ import annotations
 
 import pathlib
+from collections.abc import Mapping
 from enum import StrEnum
+from typing import Any
 
 
 class AgentType(StrEnum):
@@ -29,12 +31,9 @@ class AgentType(StrEnum):
         return descriptor_for(self).display_name
 
     def default_name(self) -> str:
-        """Stable default resource name when the user does not supply one.
-
-        Mirrors auto-detect naming so a manually-added agent with a blank
-        name lands on the same identifier auto-detection would have used:
-        underscores become hyphens (e.g. ``claude_code`` -> ``claude-code``).
-        """
+        """The name of this type's one agent: underscores become hyphens
+        (``claude_code`` -> ``claude-code``). There is no other name an agent
+        may carry (spec agent-registry "Keep one agent per type, named by it")."""
         return self.value.replace("_", "-")
 
     def default_skill_dir(self) -> pathlib.Path:
@@ -54,3 +53,30 @@ class AgentType(StrEnum):
         from coffer.domain.agent.descriptor import descriptor_for
 
         return descriptor_for(self).default_config_dir()
+
+
+def parse_agent_ref(ref: str) -> AgentType | None:
+    """The type ``ref`` spells — its name (``claude-code``) or its value
+    (``claude_code``) — or ``None`` when it spells none, e.g. a uid.
+
+    An agent is one per type and named by it (spec agent-registry "Keep one
+    agent per type, named by it"), so a type is enough to address it.
+    """
+    for agent_type in AgentType:
+        if ref in (agent_type.value, agent_type.default_name()):
+            return agent_type
+    return None
+
+
+def agent_display_name(config: Mapping[str, Any], fallback: str) -> str:
+    """The product name to show for an agent row's ``config`` ("Claude Code"),
+    or ``fallback`` — its name — when the config names no supported type.
+
+    An agent carries no title (spec agent-registry "Keep one agent per type,
+    named by it"), so a surface that labels one for a person reads its type.
+    """
+    agent_type = config.get("type")
+    try:
+        return AgentType(agent_type).display_name if isinstance(agent_type, str) else fallback
+    except ValueError:
+        return fallback

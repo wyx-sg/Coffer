@@ -80,6 +80,9 @@ class KindVerbs:
     resource-framework "Treat a resource's name as a mutable label"), which a
     missing option could not.
 
+    ``titled`` is ``False`` for a kind that carries no display title
+    (``mcp_server``, ``skill``): ``edit`` then offers no ``--title``.
+
     ``edit_description`` is ``False`` for a kind whose description is not a
     field of the resource — a knowledge collection's comes from its README
     (spec knowledge "Read a collection's description from its README") — so
@@ -90,6 +93,7 @@ class KindVerbs:
     noun: str
     verbs: frozenset[str] = DEFAULT_VERBS
     name_fixed: bool = False
+    titled: bool = True
     edit_description: bool = True
     columns: tuple[Column, ...] = ()
     edit_flags: EditFlags | None = None
@@ -98,7 +102,7 @@ class KindVerbs:
 
 def label(resource: dict[str, Any]) -> str:
     """The title where one is set, the name where it is not (spec
-    resource-framework "Carry an optional editable title on every resource").
+    resource-framework "Carry an optional editable title on the kinds that have one").
     A daemon that predates ``title`` sends none, which reads as unset."""
     return str(resource.get("title") or resource["name"])
 
@@ -247,23 +251,23 @@ def _edit(spec: KindVerbs) -> Callable[..., None]:
         _param("ref", str, typer.Argument(..., metavar="NAME", help="Name or uid")),
     ]
     name_help = (
-        "Refused: this kind's name is fixed once registered (use --title)"
-        if spec.name_fixed
-        else "New name"
+        "Refused: this kind's name is fixed once registered" if spec.name_fixed else "New name"
     )
     base.append(_param("new_name", str | None, typer.Option(None, "--name", help=name_help)))
-    base += [
-        _param(
-            "title",
-            str | None,
-            typer.Option(None, "--title", help="Display title (≤80 chars); empty clears it"),
-        ),
-    ]
+    if spec.titled:
+        base.append(
+            _param(
+                "title",
+                str | None,
+                typer.Option(None, "--title", help="Display title (≤80 chars); empty clears it"),
+            )
+        )
     if spec.edit_description:
         base.append(_param("description", str | None, typer.Option(None, "--description")))
     base.append(_param("wait", bool, WAIT_OPTION))
     edit.__signature__ = inspect.Signature([*base, *extra])  # type: ignore[attr-defined]
-    edit.__doc__ = spec.help.get("edit", f"Change a {spec.noun}'s title, description or settings.")
+    what = "title, description or settings" if spec.titled else "description or settings"
+    edit.__doc__ = spec.help.get("edit", f"Change a {spec.noun}'s {what}.")
     return edit
 
 

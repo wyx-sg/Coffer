@@ -149,13 +149,13 @@ A static `env` or `headers` value that looks like a secret — starting with `Be
 The **Add MCP server** paste dialog reads an HTTP server's (`"url": …`) `headers` object and reviews each value for secrets exactly as it does `env`: a value whose name or content looks like a secret (an `Authorization` header, for example) is pre-marked **Secret**, stored in the credential store and cited from `credential_refs`; the rest stay in the transport's `headers`. An `env` object on an HTTP server is sent as headers too; when both name the same key, the `headers` value wins.
 :::
 
-## Server names and titles
+## Server names and descriptions
 
 A server name is a label of letters, digits, `.`, `_` and `-`, at most 24 characters, unique among MCP servers. The cap keeps the name a client shows for each tool, `mcp__coffer__<server>__<tool>`, within the 64 characters model provider APIs accept; a server registered before the cap keeps its longer name. It may not contain `__`, because the gateway splits `<server>__<tool>` on the first `__`. Avoid `coffer`, the prefix of Coffer's own tools.
 
 The name is fixed once the server is registered, because it is the prefix of every tool name `<server>__<tool>` an agent sees, and agents' permission rules and skills quote those names. A request to change it is refused with `NAME_IMMUTABLE`. To use a different name, delete the server and register it again, which resets its capability toggles and its reach. The decision is recorded in the ADR "names-visible-to-agents-are-fixed".
 
-A **title** is the optional display name for everything Coffer shows you: up to 80 characters of free text, shown in the web UI and the CLI in place of the name when it is set. Agents never see it. Set it at registration with `coffer mcp add … --title`, change it later with `coffer mcp edit <name> --title "…"` (an empty value clears it), or edit it in the web UI.
+A server has no separate display title: Coffer's pages and the CLI show its name. Next to the name sits an optional **description**, your own note about what the server is for. Agents never see it. Set it at registration with `coffer mcp add … --description`, change it later with `coffer mcp edit <name> --description "…"`, or edit it in the web UI.
 
 After each discovery, Coffer measures the name a client like Claude Code shows for every tool, `mcp__coffer__<server>__<tool>`. The server's **Tools** tab and `coffer mcp cap list` flag a tool whose name is over 64 characters, the limit model provider APIs accept; Cursor already drops tools above 60. A flagged tool stays enabled and listed. The fix is on the upstream side (a shorter tool name) or a shorter server name for a new registration.
 
@@ -164,7 +164,7 @@ After each discovery, Coffer measures the name a client like Claude Code shows f
 | Task | Web UI | CLI |
 | --- | --- | --- |
 | Inspect | **MCP servers** → the server → **Overview** | `coffer mcp show <name>` |
-| Change the title or description | **Edit** | `coffer mcp edit <name> --title … --description …` |
+| Change the description | **Edit** | `coffer mcp edit <name> --description …` |
 | Change config, timeouts, credentials | **Edit** | `PATCH /api/v1/resources/{uid}` |
 | Re-query its tools, resources and prompts, then check the server answers | **Refresh capabilities**, **Test connection** | `coffer mcp test <name>` (exit 7 on failure) |
 | Enable or disable the whole server | **Reach** control → **Disabled** | `coffer mcp disable <name>` (and `enable`) |

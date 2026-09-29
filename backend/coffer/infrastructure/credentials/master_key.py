@@ -35,7 +35,8 @@ from typing import Literal, Protocol
 
 from cryptography.fernet import Fernet
 
-from coffer.domain.errors import CredentialLocked, MasterKeyConflict, MasterKeyMissing
+from coffer.domain.credential_errors import MasterKeyConflict
+from coffer.domain.errors import CredentialLocked, MasterKeyMissing
 from coffer.infrastructure.credentials.master_key_backends import MasterKeyBackend
 
 KEYCHAIN_REF = "master-key"

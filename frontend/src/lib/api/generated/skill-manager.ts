@@ -478,8 +478,6 @@ export interface components {
             scope: components["schemas"]["ScopeOut"] | null;
             /** Source */
             source: components["schemas"]["LocalImportSourceOut"] | components["schemas"]["BuiltinSourceOut"];
-            /** Title */
-            title: string | null;
             /** Uid */
             uid: string;
             /**

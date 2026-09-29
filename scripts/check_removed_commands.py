@@ -109,6 +109,9 @@ REMOVED: tuple[tuple[str, str], ...] = (
     # the master key (spec credentials "Return no plaintext on any route,
     # command or tool").
     ("coffer sync key export", "export a key backup in the Coffer desktop app"),
+    # Removed by the OpenSpec change one-agent-per-type-and-no-titles: a skill
+    # has a fixed name and no title, and its description is SKILL.md's.
+    ("coffer skill edit", "edit SKILL.md under coffer path skill <name>"),
     ("coffer__recall", "grep the memory root (coffer path memory)"),
     ("coffer__diagnose", "coffer log audit|mcp|daemon, coffer path logs"),
 )

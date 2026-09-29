@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-06-21
 **Deciders**: Yuxing Wu
-**Related**: [Coffer Model Is an Internal Engine](coffer-model-is-an-internal-engine.md); spec chat ("Ship Claude Code and Codex subprocess providers", "Keep each agent adapter self-contained", "End every adapter stream with a terminal event", "Retry a forgotten resume id once as a fresh session", "Express a turn as typed events");
+**Related**: [Coffer Model Is an Internal Engine](coffer-model-is-an-internal-engine.md); spec chat ("Ship Claude Code and Codex subprocess providers on the type's one agent", "Keep each agent adapter self-contained", "End every adapter stream with a terminal event", "Retry a forgotten resume id once as a fresh session", "Express a turn as typed events");
 [Managed Agents Run With Full Permissions](managed-agents-run-with-full-permissions.md), [Chat Is a Single-Owner Live Mirror](chat-single-owner-live-mirror.md),
 [Channel Attachments](channel-attachments.md), [Channel Live Surface Strategy](channel-live-surface-strategy.md),
 [Model Catalogue Read From the Agent](model-catalogue-read-from-the-agent.md), [Session Subprocess Model](session-subprocess-model.md);

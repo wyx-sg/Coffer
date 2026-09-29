@@ -121,7 +121,11 @@ serialized without the key, and a document that carries no `title` MUST leave
 the receiving machine's title empty, so a machine running an older version,
 which writes no `title`, and a newer one converge on the same resource. Setting,
 changing or clearing a title on one machine MUST reach every other machine as a
-modification of that one document.
+modification of that one document. A kind that carries no title (`agent`,
+`mcp_server`, `skill` — [resource-framework](../resource-framework/spec.md) "Carry
+an optional editable title on the kinds that have one") MUST apply a document
+that still carries one, from an older build, with the title ignored rather than
+refuse it.
 
 #### Scenario: a resource document is identity, description and config
 - **GIVEN** a registered resource with a description, a config and a reach of its own
@@ -145,6 +149,11 @@ modification of that one document.
 - **GIVEN** a resource document that carries no `title` key
 - **WHEN** a machine applies it
 - **THEN** the resource is registered or updated with an empty title and every other field the document carries
+
+#### Scenario: a title on a kind without one is ignored on apply
+- **GIVEN** a document for an MCP server that carries a `title` key, written by an older build
+- **WHEN** a machine applies it
+- **THEN** the server is registered or updated from the document with no title, and the round reports no failure for it
 
 ### Requirement: Key resource documents by uid
 A resource document MUST be stored at a path keyed by the resource's **uid**,

@@ -61,9 +61,8 @@ def _agents(c: httpx.Client, only: str | None, *, verbose: bool) -> list[dict[st
     return [a for a in agents if a["uid"] == uid]
 
 
-#: What a candidate that cannot be added yet is told instead of the add command.
+#: What a candidate that cannot be added is told instead of the add command.
 _NOT_ADDABLE = {
-    "installed_never_run": "installed but never run — start it once to create {dir}",
     "config_only": "not installed — {dir} is left from an earlier install",
 }
 
@@ -74,11 +73,15 @@ def _agent_detail(cand: dict[str, Any]) -> str:
     hint = _NOT_ADDABLE.get(cand["state"])
     if hint is not None:
         return f"{head} — {hint.format(dir=cand['config_dir'])}"
-    add = f"coffer agent add {cand['type']}"
-    if cand["suggested_name"] != cand["type"].replace("_", "-"):
-        # A directory named by CLAUDE_CONFIG_DIR / CODEX_HOME, not the standard one.
-        add += f" --name {cand['suggested_name']} --config-dir {cand['config_dir']}"
-    return f"{head} — register: {add}"
+    add = f"coffer agent add {cand['name']}"
+    if cand["config_dir"] != cand["standard_config_dir"]:
+        add += f" --config-dir {cand['config_dir']}"
+    if cand["state"] == "installed_never_run":
+        head += " (never run — adding it creates the directory)"
+    detail = f"{head} — register: {add}"
+    if cand.get("other_config_dir"):
+        detail += f" (also seen: {cand['other_config_dir']}, via --config-dir)"
+    return detail
 
 
 def _agent_rows(c: httpx.Client, *, verbose: bool) -> list[dict[str, Any]]:
@@ -87,13 +90,14 @@ def _agent_rows(c: httpx.Client, *, verbose: bool) -> list[dict[str, Any]]:
     return [
         {
             "kind": "agent",
-            "agent": cand["suggested_name"],
-            "ref": cand["type"],
+            "agent": cand["name"],
+            "ref": cand["name"],
             "detail": _agent_detail(cand),
             "config_dir": cand["config_dir"],
-            "suggested_name": cand["suggested_name"],
+            "standard_config_dir": cand["standard_config_dir"],
             "state": cand["state"],
             "version": cand.get("version"),
+            "addable": cand["addable"],
         }
         for cand in r.json()["candidates"]
     ]

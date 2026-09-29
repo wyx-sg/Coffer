@@ -13,8 +13,11 @@ the agent lifecycle", "Report an agent's Coffer connection part by part").
 The connection, config, plugin, transcript and model commands live in sibling
 modules, attached below (backend file-size cap).
 
-Every command takes the agent's NAME and resolves it once, through ``_resolve``,
-to the uid the routes address (ADR resource-identity-is-an-immutable-uid).
+There is one agent per type and it is named by the type (spec agent-registry
+"Keep one agent per type, named by it"), so every command takes the TYPE —
+``claude-code`` or ``codex`` (``claude_code`` also reads) — and resolves it
+once, through ``_resolve``, to the uid the routes address (ADR
+resource-identity-is-an-immutable-uid). A uid is accepted too.
 """
 
 from __future__ import annotations
@@ -36,8 +39,6 @@ from coffer.surfaces.cli import agent_plugin_cmd as _plugins
 from coffer.surfaces.cli import agent_transcript_cmd as _transcripts
 from coffer.surfaces.cli._kind_verbs import (
     KindVerbs,
-    check_title_arg,
-    label,
     register_kind_verbs,
     verbose_of,
 )
@@ -46,16 +47,12 @@ from coffer.surfaces.cli._resolve import resolve_ref
 app = typer.Typer(help="Manage registered AI agents")
 _console = Console()
 
-_NAME = typer.Argument(..., metavar="NAME", help="Agent name or uid")
+_NAME = typer.Argument(..., metavar="TYPE", help="Agent type (claude-code | codex) or uid")
 
 
 def _record(resource: dict[str, Any], agent: dict[str, Any]) -> dict[str, Any]:
-    """The agent's own record, with the kind-agnostic fields beside it."""
-    return {
-        **agent,
-        "title": resource.get("title"),
-        "enabled": resource.get("enabled", True),
-    }
+    """The agent's own record, with the kind-agnostic ``enabled`` beside it."""
+    return {**agent, "enabled": resource.get("enabled", True)}
 
 
 @app.command("list")
@@ -77,50 +74,36 @@ def list_cmd(
         typer.echo(_json.dumps({"resources": items}, indent=2))
         return
     table = Table(title="Agents")
-    for col in ("Name", "Type", "Enabled", "Config Dir"):
+    for col in ("Type", "Agent", "Enabled", "Config Dir"):
         table.add_column(col)
     for it in items:
-        table.add_row(label(it), it["type"], "yes" if it["enabled"] else "no", it["config_dir"])
+        table.add_row(
+            it["name"], it["display_name"], "yes" if it["enabled"] else "no", it["config_dir"]
+        )
     _console.print(table)
 
 
 @app.command("add")
 def add(
     ctx: typer.Context,
-    agent_type: str = typer.Argument(..., help="claude_code | codex"),
-    name: str | None = typer.Option(
-        None, "--name", "-n", help="Resource name (defaults to a per-type name, e.g. claude-code)."
-    ),
+    agent_type: str = typer.Argument(..., metavar="TYPE", help="claude-code | codex"),
     config_dir: str | None = typer.Option(
-        None, "--config-dir", help="Override config directory (default: ~/.claude etc.)."
+        None, "--config-dir", help="Config directory other than the standard one (~/.claude etc.)."
     ),
-    title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
-    description: str | None = typer.Option(None, "--description"),
 ) -> None:
-    """Register an agent.
+    """Register the agent of TYPE — one per type, named by it.
 
-    ``--name`` is optional — when omitted the daemon derives a stable
-    per-type default (``claude_code`` → ``claude-code``).
+    Without ``--config-dir`` it is registered at the type's standard
+    directory; an agent installed but never run gets that directory created.
+    To move a registered agent, use ``coffer agent edit TYPE --config-dir``.
     """
     verbose = verbose_of(ctx)
-    body: dict[str, Any] = {
-        "type": agent_type,
-        "config_dir": config_dir,
-        "description": description,
-    }
-    # Only send `name` when provided so the server applies its per-type default.
-    if name is not None:
-        body["name"] = name
-    check_title_arg(title)
+    body: dict[str, Any] = {"type": agent_type.replace("-", "_"), "config_dir": config_dir}
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.post("/agents", json=body)
         _cli_client.check(r, verbose=verbose)
-        registered = r.json().get("name", name) if r.content else name
-        if title:
-            t = c.patch(f"/resources/{r.json()['uid']}", json={"title": title})
-            _cli_client.check(t, verbose=verbose)
-    typer.echo(f"registered: agent {registered}")
+    typer.echo(f"registered: agent {r.json()['name']}")
 
 
 def _optional_read(c: httpx.Client, path: str, **kw: Any) -> tuple[Any, str | None]:
@@ -159,10 +142,9 @@ def show(
     if output_json:
         typer.echo(_json.dumps(data, indent=2))
         return
-    typer.echo(label(data))
-    for k in ("name", "title", "uid", "type", "config_dir", "description"):
-        if k in ("name", "uid", "type", "config_dir") or data.get(k):
-            typer.echo(f"{k}: {data[k]}")
+    typer.echo(data["display_name"])
+    for k in ("name", "uid", "type", "config_dir"):
+        typer.echo(f"{k}: {data[k]}")
     typer.echo(f"enabled: {'yes' if data['enabled'] else 'no'}")
     # "(unbound)" is a real state, not a missing value: an unbound agent runs
     # on its own default model.
@@ -179,12 +161,9 @@ def show(
 def edit(
     ctx: typer.Context,
     ref: str = _NAME,
-    new_name: str | None = typer.Option(None, "--name", help="New name"),
-    title: str | None = typer.Option(
-        None, "--title", help="Display title (≤80 chars); empty clears it"
+    config_dir: str | None = typer.Option(
+        None, "--config-dir", help="Use a different config directory"
     ),
-    description: str | None = typer.Option(None, "--description"),
-    config_dir: str | None = typer.Option(None, "--config-dir"),
     model: str | None = typer.Option(None, "--model", help="Model this agent answers with"),
     fast_model: str | None = typer.Option(
         None, "--fast-model", help="Small/fast model slot (anthropic wire only)"
@@ -194,19 +173,18 @@ def edit(
         None, "--wire-api", help="Codex wire api; `responses` is the only value it still loads"
     ),
 ) -> None:
-    """Change an agent's name, title, description, config dir or model binding.
+    """Change an agent's config directory or model binding.
 
-    The model binding lives on the agent, not on the connection: an unbound
-    agent projects no model and runs on its own default. A change here takes
-    effect on disk the next time that agent's connection is activated
-    (`coffer provider switch <name>`), which is what re-projects the config.
+    An agent's name is its type and it carries no title or description, so
+    these are the whole of what can change. The model binding lives on the
+    agent, not on the connection: an unbound agent projects no model and runs
+    on its own default. A change here takes effect on disk the next time that
+    agent's connection is activated (`coffer provider switch <name>`), which is
+    what re-projects the config.
 
     \f
-    Two routes: the agent's own fields go to ``PATCH /agents/{uid}`` (the
-    generic config PATCH refuses a kind that owns its lifecycle), the name and
-    title to ``PATCH /resources/{uid}`` — last, so a refused field leaves the
-    name alone. ``--clear-fast-model`` sends an explicit null, which the route
-    tells apart from an absent field.
+    One route, ``PATCH /agents/{uid}``. ``--clear-fast-model`` sends an
+    explicit null, which the route tells apart from an absent field.
     """
     if fast_model is not None and clear_fast_model:
         typer.echo("give either --fast-model or --clear-fast-model, not both", err=True)
@@ -215,7 +193,6 @@ def edit(
         k: v
         for k, v in (
             ("config_dir", config_dir),
-            ("description", description),
             ("model", model),
             ("fast_model", fast_model),
             ("wire_api", wire_api),
@@ -224,23 +201,16 @@ def edit(
     }
     if clear_fast_model:
         agent_body["fast_model"] = None
-    resource_body = {k: v for k, v in (("name", new_name), ("title", title)) if v is not None}
-    if not agent_body and not resource_body:
+    if not agent_body:
         typer.echo("nothing to change: name at least one option", err=True)
         raise typer.Exit(2)
     verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
         current = resolve_ref(c, "agent", ref, verbose=verbose)
-        shown = label(current)
-        if agent_body:
-            r = c.patch(f"/agents/{current['uid']}", json=agent_body)
-            _cli_client.check(r, verbose=verbose)
-        if resource_body:
-            r = c.patch(f"/resources/{current['uid']}", json=resource_body)
-            _cli_client.check(r, verbose=verbose)
-            shown = label(r.json())
-    typer.echo(f"updated: agent {shown}")
+        r = c.patch(f"/agents/{current['uid']}", json=agent_body)
+        _cli_client.check(r, verbose=verbose)
+    typer.echo(f"updated: agent {current['name']}")
 
 
 register_kind_verbs(

@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 
 from coffer.application.credentials.presence import PresenceGrants, derive_grant_key, sign_grant
-from coffer.domain.errors import PresenceGrantInvalid
+from coffer.domain.credential_errors import PresenceGrantInvalid
 
 _KEY = b"ZmFrZS1tYXN0ZXIta2V5LWZvci10ZXN0cy0wMDAwMDA="
 
