@@ -137,3 +137,16 @@ def test_the_first_line_is_read_as_plain_words() -> None:
     assert first_line('<mention-tag target="x"/> - item one') == "item one"
     assert first_line("\n\n```\ncode\n```\nafter") == "code"
     assert len(first_line("x" * 300)) == 120
+
+
+@pytest.mark.acceptance(spec="channels", scenario="a long turn that waits on the owner pings")
+async def test_a_long_turn_ending_on_a_question_pings_needs_you() -> None:
+    adapter = _streaming()  # no buttons: the question stays in the streamed reply
+
+    await _run(
+        adapter,
+        [TextDelta(text="Ready to apply.\n\nNEEDS YOU: Apply to live? (yes / no)"), _DONE],
+        duration=200.0,
+    )
+
+    assert adapter.texts()[1:] == ["❓ Needs you · 3m 20s — Apply to live?"]

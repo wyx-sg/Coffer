@@ -39,6 +39,7 @@ from coffer.application.channel.store_ports import (
 )
 from coffer.application.channel.turn_finish import TurnOutcome
 from coffer.application.channel.turn_render import TurnRenderer
+from coffer.domain.channel.envelopes import ChoiceButton
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.errors import CofferError
 
@@ -287,12 +288,24 @@ class TurnDriver:
                 reply_to_message_id=item.reply_to_message_id,
             )
 
+        async def _send_card(message: str, buttons: Sequence[ChoiceButton]) -> None:
+            await self._safe_send(
+                binding,
+                peer.chat_id,
+                message,
+                buttons=buttons,
+                thread_id=item.thread_id,
+                chat_kind=item.chat_kind,
+                reply_to_message_id=item.reply_to_message_id,
+            )
+
         renderer = TurnRenderer(
             channel=binding.resource.name,
             adapter=adapter,
             chat_id=peer.chat_id,
             conversation_id=conversation_id,
             send=_send,
+            send_card=_send_card,
             thread_id=item.thread_id,
             chat_kind=item.chat_kind,
             mention_user_id=item.mention_user_id,
@@ -315,9 +328,11 @@ class TurnDriver:
             if session.render_task is asyncio.current_task():
                 session.render_task = None
                 session.running_conversation_id = None
-        # Mark how it ended on the user's message: done, failed or stopped.
+        # Mark how it ended on the user's message: done (a question for the
+        # owner counts as done — the turn finished), failed or stopped.
         marks = adapter.capabilities.reactions
-        await self._react(binding, peer, item, getattr(marks, outcome))
+        mark = {"failed": marks.failed, "stopped": marks.stopped}.get(outcome, marks.done)
+        await self._react(binding, peer, item, mark)
 
     async def _react(
         self, binding: ChannelBinding, peer: ChannelPeer, item: QueuedInbound, emoji: str

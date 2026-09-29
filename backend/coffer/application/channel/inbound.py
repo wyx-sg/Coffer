@@ -19,6 +19,7 @@ from __future__ import annotations
 import contextlib
 import logging
 from collections.abc import Callable, Sequence
+from datetime import UTC, datetime
 
 from coffer.application.audit_service import AuditService
 from coffer.application.channel.commands import ChannelCommands
@@ -121,6 +122,7 @@ class InboundProcessor:
             safe_send=safe_send,
             stop_chat_sessions=self._stop_chat_sessions,
             session=self._session,
+            submit_reply=self._submit_reply,
         )
 
     # -- runtime registry ------------------------------------------------
@@ -284,6 +286,29 @@ class InboundProcessor:
             self._threads, binding, cb.chat_id, chat_kind=cb.chat_kind, thread_id=cb.thread_id
         )
         await self._events.on_callback(binding, cb, conversation_thread_id=conv_thread)
+
+    async def _submit_reply(
+        self, binding: ChannelBinding, cb: InboundCallback, answer: str
+    ) -> None:
+        """A tapped answer, sent as if the owner had typed it where the card is
+        (see "Turn a question for the owner into buttons"): through
+        ``on_message``, so the owner gate, the burst window and the turn queue
+        treat it exactly like a typed reply."""
+        del binding  # ``on_message`` finds the binding by the callback's channel
+        await self.on_message(
+            InboundMessage(
+                channel=cb.channel,
+                chat_id=cb.chat_id,
+                sender_display="",
+                text=answer,
+                platform_message_id="",
+                timestamp=datetime.now(tz=UTC),
+                sender_id=cb.sender_id,
+                chat_kind=cb.chat_kind,
+                addressed=True,
+                thread_id=cb.thread_id,
+            )
+        )
 
     async def on_lifecycle(self, event: InboundLifecycle) -> None:
         """The bot's standing in a chat changed — removed from a group, or the

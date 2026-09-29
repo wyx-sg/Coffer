@@ -157,6 +157,53 @@ driven by the transport's declared capabilities, never its type:
 - **THEN** no message holds half a fence, and an oversized fence is closed and
   reopened with its language
 
+### Requirement: Turn a question for the owner into buttons
+A reply whose last line is `NEEDS YOU: <question> (a / b)` — the sentinel the
+channel note offers the agent beside `MEDIA:` — MUST lose that line, and on a
+transport that `supports_buttons` the question MUST follow the answer as its own
+message, `❓ <question>`, with one button per option: the options in
+parentheses or brackets separated by `/` or `|`, Yes and No when none are
+given, and no buttons when more than four are. Each button's value is
+`reply:<option>`, clipped to the tightest callback budget any transport has. A
+transport without buttons keeps the question at the end of the reply,
+`❓ <question> (a / b)`. Only a clean turn is read for the sentinel. A turn that
+ends on a question counts as done for its reactions, and its ping reads `❓ Needs
+you · <elapsed> — <question>` — unless the question already went out as a
+message with buttons, which notifies by itself.
+
+A tap MUST be owner-gated exactly like any card tap (see "Offer choices and
+actions as owner-gated cards"): anyone else's tap in a group is refused in the
+group and changes nothing. The owner's tap is sent into the conversation as the
+owner's own message — the option's text, through the ordinary inbound path, so
+it is queued, gated and answered like a typed reply, and an agent's rule that a
+yes must come from the user in this conversation still holds. The card is
+rewritten to `Answered: <option>` with nothing left to tap, so a second tap
+cannot send the answer twice.
+
+#### Scenario: a question the agent ends on becomes buttons
+- **GIVEN** a transport with buttons and a reply ending `NEEDS YOU: Apply this
+  change? (yes / no)`
+- **WHEN** the turn ends
+- **THEN** the answer is delivered without that line, then `❓ Apply this change?`
+  with the buttons `yes` and `no` carrying `reply:yes` and `reply:no`
+
+#### Scenario: a tap is sent as the owner's own reply
+- **GIVEN** that question card in the owner's chat
+- **WHEN** the owner taps `yes`
+- **THEN** `yes` enters the conversation as the owner's next message, and the card
+  now reads `Answered: yes` with no option left to tap
+
+#### Scenario: a non-owner's tap is refused
+- **GIVEN** a question card in a paired group
+- **WHEN** a member who is not the owner taps an option
+- **THEN** the group is told they are not authorised and nothing enters the
+  conversation
+
+#### Scenario: a long turn that waits on the owner pings
+- **GIVEN** a long turn on a persisting surface of a transport without buttons
+- **WHEN** it ends on a `NEEDS YOU:` line
+- **THEN** the ping reads `❓ Needs you · <elapsed> — <question>`
+
 ## RENAMED Requirements
 
 - FROM: `### Requirement: Summarise only a turn that did not end normally`

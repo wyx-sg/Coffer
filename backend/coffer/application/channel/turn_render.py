@@ -29,6 +29,8 @@ from typing import Any
 
 from coffer.application.channel.ports import ChannelAdapter
 from coffer.application.channel.turn_finish import (
+    Delivered,
+    SendCard,
     TurnEnd,
     TurnOutcome,
     deliver_reply,
@@ -67,6 +69,9 @@ class TurnRenderer:
     chat_id: str
     conversation_id: str
     send: Callable[[str], Awaitable[None]]  # owner-bound safe send
+    # The same, for a message with buttons — the question a turn ends on (see
+    # "Turn a question for the owner into buttons"); None keeps it as text.
+    send_card: SendCard | None = None
     now: Callable[[], float] = time.monotonic  # injectable clock (turn duration)
     # Where in the chat this turn's reply belongs: non-empty ``thread_id``
     # threads the progress alongside the eventual reply; ``chat_kind`` tells a
@@ -145,7 +150,7 @@ class TurnRenderer:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await ticker
         end = TurnEnd(stop_reason, error, len(tool_ids), self.now() - started, tokens)
-        body, in_place = await deliver_reply(
+        delivered = await deliver_reply(
             adapter=self.adapter,
             chat_id=self.chat_id,
             thread_id=self.thread_id,
@@ -155,25 +160,29 @@ class TurnRenderer:
             mention=self._with_mention,
             text=self._reply.full(),
             end=end,
+            send_card=self.send_card,
         )
-        if self._ping_due(end, in_place):
+        if self._ping_due(end, delivered):
             # One new message where the answer's own message was created when
             # the turn began — it replaces the summary of an abnormal ending.
-            await self.send(self._with_mention(ping_line(end, body)))
+            line = ping_line(end, delivered.body, delivered.question)
+            await self.send(self._with_mention(line))
         elif not end.clean:
             await self.send(summary_line(end))
-        return end.outcome
+        return "waiting" if delivered.question is not None and end.clean else end.outcome
 
-    def _ping_due(self, end: TurnEnd, in_place: bool) -> bool:
+    def _ping_due(self, end: TurnEnd, delivered: Delivered) -> bool:
         """A long turn whose answer finished a message that PERSISTS from the
         turn's start (a SeaTalk stream): finishing it notifies nobody, so the
         end is said once more, in a new message. An answer that went out as a
-        new message (Telegram, or a stream that died) already notified."""
+        new message (Telegram, or a stream that died) already notified, and so
+        did a question sent with buttons."""
         return (
             self.notify_after_seconds > 0
             and end.duration >= self.notify_after_seconds
             and self._surface.persisted
-            and in_place
+            and delivered.in_place
+            and not delivered.question_sent
         )
 
     def _close_segment(self) -> None:
