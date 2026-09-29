@@ -474,13 +474,13 @@ spec owns the Skills page.
 - **Curate now drains.** The manual trigger runs passes until nothing is pending, one at a time and
   each bounded to eight writes as the sweep's are, showing *n of m* and stopping at the first
   failure so one broken item does not hide behind a success count. The sweep keeps its global
-  interval (60 s by default, Settings › General), so the trigger is for "now", not for "at all".
+  interval (60 minutes by default, Settings › General), so the trigger is for "now", not for "at all".
 - **One word: Curate (整理).** "Merge" named the same act on some boards; one name per act, as for
   surfaces. Inbox entries are items in the UI; the spec keeps *material* as its internal term.
 - **Only one quiet trigger**, in the Inbox view and in Recent changes, where waiting items are
   visible; the header carries a status line instead of a button. Without Coffer's model material
   is promoted on arrival, so there is nothing to curate and no control is shown.
-- **Add a note is an item.** Writing something down goes through the inbox like every other
+- **Add a document is an item.** Writing something down goes through the inbox like every other
   entrance, so no route creates a document at a path.
 - **History is the vault's git.** The vault is always a git repository in 1.0, each pass one commit
   naming its writer, so the History tab and whole-pass undo read and revert commits; the old

@@ -135,7 +135,7 @@ unarchived until that implementation lands.
   zip-slip, symlinks and size before they are read into the store. There is no create-from-scratch.
 - **Knowledge:** Curate now drains a collection pass by pass with progress, stopping at the first
   failure; one term, Curate / Curation (整理), everywhere; an Inbox node with a count, a header
-  status line, Add a note (an item, not a document), a body-only editor with Reload / Compare on a
+  status line, Add a document (an item, not a document), a body-only editor with Reload / Compare on a
   stale save, and no curation controls without Coffer's model. Every document has a History tab
   and every pass can be undone as a whole from a cross-collection Recent changes view, on the
   vault's git history. Leftover "disabled collection" wording is removed.
@@ -176,7 +176,7 @@ unarchived until that implementation lands.
   requirement no longer names a Settings page; a switched-off feature's notice says it is off, and
   its pages and objects leave the command palette.
 - `knowledge`: the manual trigger drains until nothing is pending; the web UI terms, Inbox,
-  status line, Add a note and editor; document history and whole-pass undo; no disabled
+  status line, Add a document and editor; document history and whole-pass undo; no disabled
   collection anywhere.
 - `internal-engine`: the engine's settings are shown in the Coffer's model section of Settings ›
   General, with a provider-then-model picker and a Test action for the engine and for speech to
