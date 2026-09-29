@@ -45,7 +45,8 @@ acceptance(
     // makes "and only those" true: the loop alone let the sidebar grow — Chat,
     // Memory and Sync were all absent from it while shipping — so a fence with
     // no upper bound is not a fence. Adding a sidebar entry means adding it
-    // here. See `frontend/src/components/SidebarNav.tsx`'s NAV_GROUPS.
+    // here. See `frontend/src/components/SidebarNav.tsx`'s NAV_GROUPS. An
+    // experimental feature's entry carries its marker in its name.
     const SIDEBAR_LABELS = [
       // Agents
       /^Agents$/i,
@@ -53,13 +54,13 @@ acceptance(
       // Resources — one per resource kind with a list UI
       /^MCP servers$/i,
       /^Skills$/i,
-      /^Knowledge$/i,
-      /^Memory$/i,
+      /^Knowledge Experimental$/i,
+      /^Memory Experimental$/i,
       /^Model providers$/i,
       /^Channels$/i,
       // System
       /^Activity$/i,
-      /^Sync$/i,
+      /^Sync Experimental$/i,
       /^Settings$/i,
     ];
     // Scoped to the sidebar's own <nav>, reached through the labelled <aside>

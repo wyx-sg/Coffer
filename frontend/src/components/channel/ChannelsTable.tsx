@@ -47,6 +47,7 @@ import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { reachFilter } from "@/lib/reachFilter";
 import type { ResourceOut } from "@/lib/api/resources";
 import { agentDisplayName } from "./agentLabels";
+import { MachineBindingHelp } from "./ChannelMachineSelect";
 import { HealthCell, MachineCell, PairedCell } from "./ChannelRowCells";
 
 /** The row's platform. Defaults to telegram: a channel config without a type
@@ -117,7 +118,13 @@ export function ChannelsTable({
     },
     {
       key: "runs-on",
-      header: t("channels.cols.runsOn"),
+      // The rebind is offered here too, so what it costs is explained here too.
+      header: (
+        <span className="inline-flex items-center gap-1">
+          {t("channels.cols.runsOn")}
+          <MachineBindingHelp />
+        </span>
+      ),
       className: "whitespace-nowrap",
       cell: (r) => (
         // Like the reach cell, the control must not fall through to the row's

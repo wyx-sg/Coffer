@@ -67,7 +67,13 @@ function group(label: string): [string, string | null][] {
   const container = heading!.parentElement!;
   return within(container)
     .getAllByRole("link")
-    .map((link) => [link.textContent ?? "", link.getAttribute("href")]);
+    .map((link) => [entryName(link), link.getAttribute("href")]);
+}
+
+/** A row's name without the experimental marker some rows carry beside it. */
+function entryName(link: HTMLElement): string {
+  const marker = link.querySelector('[data-testid^="nav-experimental-"]');
+  return (link.textContent ?? "").replace(marker?.textContent ?? "", "");
 }
 
 describe("SidebarNav", () => {
@@ -255,5 +261,31 @@ describe("a switched-off experimental feature", () => {
     expect(queryByTestId("nav-dot-sync")).toBeNull();
     expect(syncStatus).toHaveBeenCalled();
     for (const [enabled] of syncStatus.mock.calls) expect(enabled).toBe(false);
+  });
+});
+
+// --- spec experimental-features "Mark an experimental feature's sidebar entry" ---
+
+describe("an experimental feature's entry", () => {
+  acceptance(
+    "experimental-features",
+    "a switched-on feature's entry says it is experimental",
+    () => {
+      const { getByTestId, queryByTestId } = renderNav();
+
+      for (const id of ["knowledge", "memory", "sync"]) {
+        expect(getByTestId(`nav-experimental-${id}`)).toHaveTextContent("Experimental");
+      }
+      for (const id of ["agents", "chat", "mcp-servers", "skills", "channels", "settings"]) {
+        expect(queryByTestId(`nav-experimental-${id}`)).toBeNull();
+      }
+    },
+  );
+
+  test("a collapsed rail leaves the marker to the tooltip, as it does the label", () => {
+    const { queryByTestId, getByRole } = renderNav("/", true);
+
+    expect(queryByTestId("nav-experimental-knowledge")).toBeNull();
+    expect(getByRole("link", { name: "Knowledge" })).toBeInTheDocument();
   });
 });

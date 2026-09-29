@@ -2,11 +2,12 @@
 //
 // The channel operating surface (spec channels, User Stories 2 + 8). Data hooks
 // and the generic resource mutations are mocked so the test asserts the
-// page's own rendering: status (peer + inbound state), pairing-code generation,
-// the machine card (which machine runs the adapter, and rebinding it), and
-// the header reach control's wiring.
+// page's own rendering: the one overview card's status strip (adapter, inbound
+// state, the machine that runs the adapter and rebinding it), its account
+// section (paired owner, pairing-code generation), its one-button test
+// delivery, and the header reach control's wiring.
 //
-// The machine card and the reach control are deliberately tested apart: they
+// The machine picker and the reach control are deliberately tested apart: they
 // sit a header away from each other and answer different questions — which
 // MACHINE runs the adapter, and which AGENTS the channel may drive — and a
 // test that conflated them would be the first place the UI does too.
@@ -34,7 +35,7 @@ vi.mock("@/lib/hooks/useChannels", () => ({
   useRebindChannel: vi.fn(),
   useNotifyChannel: vi.fn(),
 }));
-// The machine card joins the binding against the registry and this machine's
+// The status strip joins the binding against the registry and this machine's
 // id. Both are stubbed: the page renders without a QueryClientProvider, and
 // the four binding states are set up directly rather than through a daemon.
 vi.mock("@/lib/hooks/useMachines", () => ({ useMachines: vi.fn(), useThisMachineId: vi.fn() }));
@@ -218,8 +219,10 @@ acceptance("channels", "channel status reports runtime, pairing, and callback de
   expect(screen.getByText("Yuxing")).toBeInTheDocument();
   expect(screen.getByText("chat-77")).toBeInTheDocument();
   expect(screen.getByText("conv-1")).toBeInTheDocument();
-  expect(screen.getByText("SeaTalk connection")).toBeInTheDocument();
-  expect(screen.getByText("Error")).toBeInTheDocument();
+  // The connection is one badge on the status strip, beside the adapter's.
+  const strip = screen.getByTestId("channel-status-strip");
+  expect(within(strip).getByText("SeaTalk connection")).toBeInTheDocument();
+  expect(within(strip).getByText("Error")).toBeInTheDocument();
   expect(screen.getByText("register failed: invalid app secret")).toBeInTheDocument();
   expect(screen.queryByText(/listener|tunnel|callback url/i)).not.toBeInTheDocument();
 });
@@ -246,6 +249,39 @@ describe("ChannelDetailPage", () => {
     renderPage();
 
     expect(screen.getByText(/not paired/i)).toBeInTheDocument();
+    // Unpaired, the section is a call to act: one line saying what to do and
+    // the primary button that starts it — there is nothing to re-pair yet.
+    expect(screen.getByText(/send it to the bot from the account/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /generate pairing code/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^re-pair$/i })).not.toBeInTheDocument();
+  });
+
+  test("a paired account leads with its name, keeps its ids quiet, and offers a re-pair", () => {
+    stubResource();
+    stubStatus({
+      peer: {
+        chat_id: "chat-9",
+        display_name: "Yuxing",
+        paired_at: "2026-06-12T08:00:00Z",
+        active_conversation_id: null,
+      },
+    });
+    const mutate = stubPairing();
+    renderPage();
+
+    expect(screen.getByText("Yuxing")).toHaveClass("font-medium");
+    expect(screen.getByText("chat-9")).toBeInTheDocument();
+    expect(screen.getByText(/no active conversation/i)).toBeInTheDocument();
+    expect(screen.queryByText(/not paired/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /generate pairing code/i })).toBeNull();
+
+    // Re-pairing issues a new code through the same mutation; what it does to
+    // the current owner is behind the heading's "?", not printed inline.
+    fireEvent.click(screen.getByRole("button", { name: /^re-pair$/i }));
+    expect(mutate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/replaces the previous one/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /about pairing/i }));
+    expect(screen.getByText(/replaces the previous one/i)).toBeInTheDocument();
   });
 
   test("the pairing button issues a code and the code is shown large", () => {
@@ -308,14 +344,14 @@ describe("ChannelDetailPage", () => {
     stubPairing();
     renderPage();
 
-    // Card title, field label and button each say their own thing — "Send
-    // test message" no longer appears three times over.
+    // One row, one button — no message to compose.
     expect(screen.getByText("Test delivery")).toBeInTheDocument();
-    expect(screen.getByLabelText(/^message$/i)).toBeDisabled();
-    expect(screen.getByRole("button", { name: /^send$/i })).toBeDisabled();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^send test message$/i })).toBeDisabled();
+    expect(screen.getByText(/pair the channel first/i)).toBeInTheDocument();
   });
 
-  test("sending a test message calls notify with the typed text", () => {
+  test("sending a test message delivers the fixed text", () => {
     stubResource();
     stubStatus({
       peer: {
@@ -328,9 +364,23 @@ describe("ChannelDetailPage", () => {
     stubPairing();
     renderPage();
 
-    fireEvent.change(screen.getByLabelText(/^message$/i), { target: { value: "ping" } });
-    fireEvent.click(screen.getByRole("button", { name: /^send$/i }));
-    expect(notify.mutate).toHaveBeenCalledWith("ping");
+    fireEvent.click(screen.getByRole("button", { name: /^send test message$/i }));
+    expect(notify.mutate).toHaveBeenCalledWith("Test message from Coffer — delivery works.");
+  });
+
+  test("everything sits in one card, and the SeaTalk hint paragraph is gone", () => {
+    stubResource();
+    stubStatus({ inbound: { websocket_state: "connected", websocket_error: null } });
+    stubPairing();
+    renderPage();
+
+    const card = screen.getByTestId("channel-overview-card");
+    expect(within(card).getByTestId("channel-status-strip")).toBeInTheDocument();
+    expect(within(card).getByText("Test delivery")).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: /generate pairing code/i })).toBeVisible();
+    expect(within(card).getByText("Connected")).toBeInTheDocument();
+    expect(screen.queryByText(/dials out to SeaTalk/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   test("the header carries the platform chip, a back link, and a stopped adapter reads as attention", () => {
@@ -372,13 +422,13 @@ describe("ChannelDetailPage", () => {
 });
 
 describe("ChannelDetailPage — the machine that runs the channel", () => {
-  /** The picker, by its accessible name. It is a row of the status card: the
-   *  binding is the other half of that card's "Running" headline, not a
-   *  separate subject needing its own heading. */
+  /** The picker, by its accessible name. It sits on the status strip: the
+   *  binding is the other half of the strip's "Running" badge, not a separate
+   *  subject needing its own heading. */
   const picker = () =>
     screen.getByRole("combobox", { name: new RegExp(`machine running ${ST.name}`, "i") });
 
-  test("the binding is a row of the status card, naming this machine", () => {
+  test("the binding sits on the status strip, naming this machine", () => {
     stubResource();
     stubStatus({ runs_on: HERE, runs_here: true });
     stubPairing();
@@ -386,7 +436,7 @@ describe("ChannelDetailPage — the machine that runs the channel", () => {
 
     // Next to the adapter's own state, because "Running" is only believable
     // once you know which machine it is running on.
-    const card = screen.getByTestId("channel-status-card");
+    const card = screen.getByTestId("channel-status-strip");
     expect(within(card).getByText(/^runs on$/i)).toBeInTheDocument();
     expect(
       within(card).getByRole("combobox", {
@@ -432,10 +482,10 @@ describe("ChannelDetailPage — the machine that runs the channel", () => {
     stubPairing();
     renderPage();
 
-    // The status card renders the daemon's diagnostic verbatim …
+    // The strip renders the daemon's diagnostic verbatim …
     expect(screen.getByText(/This channel is not bound to a machine\./)).toBeInTheDocument();
-    // … and the machine card says the same thing next to the control that
-    // fixes it, which is the only place the user can act on it.
+    // … and says the same thing in its own words right under the control
+    // that fixes it, which is the only place the user can act on it.
     expect(screen.getByText(/no daemon starts it and the bot never answers/i)).toBeInTheDocument();
     expect(picker()).toHaveTextContent(/not bound/i);
   });
@@ -457,19 +507,18 @@ describe("ChannelDetailPage — the machine that runs the channel", () => {
     });
   });
 
-  test("the rebind menu states the handover timing and that this is not reach", () => {
+  test("the machine label's help states the handover timing and that this is not reach", () => {
     // Both are things the user cannot see and would otherwise meet as a bug:
     // a rebind that is not instant on the far side, and a reach control one
-    // row away that answers an entirely different question. They live in the
-    // menu now rather than in prose beside it — this is the moment the choice
-    // is actually made.
+    // row away that answers an entirely different question. They sit behind
+    // the "?" beside the picker's label — on the surface, off the page.
     stubResource();
     stubStatus();
     stubPairing();
     renderPage();
 
-    // jsdom has no PointerEvent; open the Radix listbox from the keyboard.
-    fireEvent.keyDown(picker(), { key: "ArrowDown" });
+    expect(screen.queryByText(/needs no restart/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /about the machine binding/i }));
 
     expect(screen.getByText(/needs no restart/i)).toBeInTheDocument();
     expect(screen.getByText(/which agents this channel may drive/i)).toBeInTheDocument();
