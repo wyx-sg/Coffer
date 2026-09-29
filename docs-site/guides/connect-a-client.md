@@ -162,8 +162,9 @@ The identity is self-reported, not cryptographically verified. Any local process
 1. **Check the entry.**
 
    ```sh
-   coffer agent connection claude-code
-   # claude-code: connected
+   coffer agent show claude-code
+   # ...
+   # coffer_connection: connected
    #   gateway MCP entry: installed (/Users/you/.coffer/bin/coffer-mcp-shim)
    ```
 

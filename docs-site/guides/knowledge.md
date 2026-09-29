@@ -160,7 +160,7 @@ Coffer saves the attachment into that collection through the same upload path an
 
 Writing, editing or deleting a Markdown file in the collection folder with any editor is a complete way to change knowledge. There is no import step. The change is live on the next read, and the next curation sweep notices the edit (by its modification time) and carries it through to the rest of the collection.
 
-On the Knowledge page, choose a document and use **Edit** to change it in place, or **Open in editor** or **Reveal in Finder** to jump to the file. **Edit** rewrites the document's body and keeps its frontmatter. A save that finds the file changed on disk since the page loaded it is refused as a conflict, and the page offers to reload. The saved file counts as your edit, exactly like one made in your own editor. From the CLI, `coffer knowledge save <path> <body-file>` does the same (`-` reads the body from stdin).
+On the Knowledge page, choose a document and use **Edit** to change it in place, or **Open in editor** or **Reveal in Finder** to jump to the file. **Edit** rewrites the document's body and keeps its frontmatter. A save that finds the file changed on disk since the page loaded it is refused as a conflict, and the page offers to reload. The saved file counts as your edit, exactly like one made in your own editor. From the CLI, edit the file under `coffer path knowledge <collection>` with your own editor.
 
 Agents may do the same thing with their own file tools: the `coffer-guide` skill tells them they can correct or extend a document they have read by editing it.
 

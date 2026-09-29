@@ -135,14 +135,15 @@ def test_no_memory_route_is_undocumented(
     )
 
 
-def test_the_management_plane_is_nine_routes(spec_doc: dict[str, Any]) -> None:
-    """The contract's own ``info.description`` says nine routes and that this
+def test_the_management_plane_is_eight_routes(spec_doc: dict[str, Any]) -> None:
+    """The contract's own ``info.description`` says eight routes and that this
     is the whole management plane (see "Cover memory management on REST and the
-    CLI"). A tenth arriving is a decision, not an accident, so the count is
+    CLI"). A ninth arriving is a decision, not an accident, so the count is
     pinned. It was twelve until the three delivery routes left for the agent's
     Coffer connection (spec agent-registry "Connect an agent to Coffer in one
-    action")."""
-    assert len(_declared_operations(spec_doc)) == 9
+    action"), and nine until the per-partition distil route left, because
+    Update memory already distils every partition that gained entries."""
+    assert len(_declared_operations(spec_doc)) == 8
 
 
 def test_deleting_a_partition_is_not_on_this_surface(spec_doc: dict[str, Any]) -> None:

@@ -1,6 +1,6 @@
 ---
 title: Agents
-description: Register Claude Code and Codex with Coffer, install Coffer's MCP entry into them, and manage their config files, MCP entries, plugins, models, memory and transcripts.
+description: Register Claude Code and Codex with Coffer, connect them to Coffer, and manage their config files, MCP entries, plugins, models, memory and transcripts.
 ---
 
 # Agents
@@ -42,13 +42,13 @@ Coffer scans for each supported type's config directory and offers what it finds
 ```sh
 coffer scan
 # lists detected agents that are not registered (kind "agent"), with their type as the ref
+# and the command that registers each one
 
-coffer adopt agent codex          # register a detected agent under its suggested name
-coffer agent add codex            # or register by type yourself
+coffer agent add codex            # register a detected agent under its suggested name
 # registered: agent codex
 ```
 
-`--name` is optional on both. Without it, the name defaults to the type with underscores turned into hyphens: `claude-code`, `codex`.
+`--name` is optional. Without it, the name defaults to the type with underscores turned into hyphens: `claude-code`, `codex`.
 
 ### Manually, with a custom config directory
 
@@ -110,10 +110,7 @@ coffer agent connect claude-code
 #   gateway MCP entry: installed (/Users/you/.coffer/bin/coffer-mcp-shim)
 #   memory delivery hook: installed (: coffer-memory; coffer memory context --agent-uid …)
 
-coffer agent connection claude-code          # add --json for the raw answer
-# claude-code: connected
-
-coffer agent show claude-code                # the same report, beside the agent's record
+coffer agent show claude-code                # the connection, beside the agent's record (--json for the raw answer)
 # ...
 # coffer_connection: connected
 #   gateway MCP entry: installed (/Users/you/.coffer/bin/coffer-mcp-shim)

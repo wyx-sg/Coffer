@@ -1,7 +1,7 @@
 """The lifecycle-verb factory (``surfaces/cli/_kind_verbs.py``).
 
 Registered on a throwaway Typer tree over the ``in_proc_daemon`` fixture's two
-test kinds: ``fake_kind`` (no reach) and ``fake_scoped`` (reach, generic add).
+test kinds: ``fake_kind`` (no reach) and ``fake_scoped`` (reach).
 What is under test is the factory — that every group it builds offers the same
 verbs over the kind-agnostic routes — not any real kind.
 """
@@ -122,6 +122,10 @@ def test_every_group_offers_the_same_verbs_and_disable_takes_name_or_uid(
 
     for group in ("knowledge", "memory"):
         assert not {"enable", "disable"} & _commands(cli_app, group)
+    # `add` is never generated: only a kind that registers its own offers it,
+    # and a partition is created only by aggregation.
+    assert "add" not in _commands(app, "scoped")
+    assert "add" not in _commands(cli_app, "memory")
 
     uid = _register("fake_kind", "alpha", {"foo": 1})
     by_name = _runner.invoke(app, ["fake", "disable", "alpha"])
@@ -207,13 +211,14 @@ def test_rm_confirms_unless_told_not_to(in_proc_daemon: Any) -> None:
     assert _client().get(f"/resources/{uid}").status_code == 404
 
 
-def test_generic_add_registers_through_the_kind_agnostic_route(in_proc_daemon: Any) -> None:
-    app = _tree()
-    added = _runner.invoke(app, ["scoped", "add", "gamma", "--config", '{"x": 1}'])
-    assert added.exit_code == 0, added.output
-    rows = _client().get("/resources", params={"kind": "fake_scoped"}).json()["resources"]
-    assert [(r["name"], r["config"]) for r in rows] == [("gamma", {"x": 1})]
-    assert _runner.invoke(app, ["scoped", "add", "bad", "--config", "[1]"]).exit_code == 2
+def test_the_factory_generates_no_add() -> None:
+    """Creation is a per-kind seam (spec resource-framework "Keep creation a
+    per-kind seam"): asking the factory for ``add`` is a programming error."""
+    assert "add" not in ALL_VERBS
+    with pytest.raises(ValueError, match="add"):
+        register_kind_verbs(
+            typer.Typer(), KindVerbs(kind="fake_kind", noun="fake", verbs=frozenset({"add"}))
+        )
 
 
 @pytest.mark.acceptance(

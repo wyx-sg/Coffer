@@ -109,7 +109,6 @@ A change applies without a restart. The shortest interval is 60 seconds.
 
 ```sh [CLI]
 coffer memory sync                    # update memory: read every agent, then distil
-coffer memory distil payments-api     # distil one partition
 ```
 
 ```text [Web UI]
@@ -119,7 +118,7 @@ Memory → choose the partition → Update memory
 
 :::
 
-**Update memory** (`coffer memory sync`, `POST /api/v1/memory/sync`) runs both passes in one action: it reads every registered agent's latest memory, then distils every partition that gained new entries. It reports how many entries it read across how many partitions, any sources that failed to parse, and which partitions it distilled. A partition whose distil pass is already running is reported as skipped rather than failing the update. The button is the same on the partitions page and on a partition's page. Only one distil pass runs per partition at a time; a request while one is running is refused with `UPKEEP_ALREADY_RUNNING`. `coffer daemon status` shows what is running now.
+**Update memory** (`coffer memory sync`, `POST /api/v1/memory/sync`) runs both passes in one action: it reads every registered agent's latest memory, then distils every partition that gained new entries. It reports how many entries it read across how many partitions, any sources that failed to parse, and which partitions it distilled. A partition whose distil pass is already running is reported as skipped rather than failing the update. The button is the same on the partitions page and on a partition's page. Only one distil pass runs per partition at a time. `coffer daemon status` shows what is running now.
 
 ## How agents receive memory
 
@@ -131,7 +130,7 @@ Delivery goes through each agent's own hook mechanism. The hook is one part of t
 
 ```sh [CLI]
 coffer agent connect claude-code
-coffer agent connection claude-code         # lists the hook with the other parts
+coffer agent show claude-code               # lists the hook with the other parts
 coffer agent disconnect codex
 ```
 
@@ -248,9 +247,9 @@ coffer memory rm payments-api
 
 **A partition is empty or missing.** Check that the agent is registered and enabled, then run `coffer memory sync` and read its report. Entries learned outside a git repository do not get a partition of their own.
 
-**An agent is not given its memory at session start.** Run `coffer agent connection <agent>` to confirm the memory delivery hook is installed for that agent (connect it again if it reads **needs repair**), then `coffer log audit --event-type memory_delivery_fired` to see whether it fires. Run `coffer memory context --agent-uid <uid> --cwd <repo>` to see what would be delivered.
+**An agent is not given its memory at session start.** Run `coffer agent show <agent>` to confirm the memory delivery hook is installed for that agent (connect it again if it reads **needs repair**), then `coffer log audit --event-type memory_delivery_fired` to see whether it fires. Run `coffer memory context --agent-uid <uid> --cwd <repo>` to see what would be delivered.
 
-**Notes read like copies of the source, one per entry.** Coffer's model is not configured, so distil is running mechanically. Configure it under **Settings → Coffer's model**, then run `coffer memory distil <partition>`.
+**Notes read like copies of the source, one per entry.** Coffer's model is not configured, so distil is running mechanically. Configure it under **Settings → Coffer's model**; entries distilled after that, by `coffer memory sync` or the next sweep, go through the model.
 
 ## Related
 

@@ -207,9 +207,9 @@ class MemoryService:
         browsing it, and its directory name is only a slug (see "Identify a partition by
         its repository").
 
-        Refusing a second concurrent pass over one partition (see "Run one distil pass
-        per partition at a time") is the surface's, not this method's: the record is
-        per-daemon and lives in the shared upkeep-runs registry, which the HTTP layer
+        Keeping a second concurrent pass off one partition (see "Run one distil pass
+        per partition at a time") is the callers', not this method's: the record is
+        per-daemon and lives in the shared upkeep-runs registry, which Update memory
         and the worker both already go through — both keyed on this uid.
         """
         row = await self._resources.get(uid)

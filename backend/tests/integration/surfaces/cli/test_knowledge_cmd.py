@@ -244,21 +244,6 @@ def test_write_takes_no_folder(knowledge_cli_daemon):
         assert result.exit_code == 2, result.output
 
 
-def test_save_replaces_a_body_and_keeps_the_frontmatter(knowledge_cli_daemon, tmp_path):
-    """``coffer knowledge save`` reads the fingerprint itself, then saves ("Save a
-    document edited in the web UI")."""
-    _make_collection("shopee")
-    path = _write("shopee", "Session", body="old")
-    body_file = tmp_path / "new-body.md"
-    body_file.write_text("account.session owns login state\n", encoding="utf-8")
-
-    saved = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "save", path, str(body_file)])
-    assert saved.exit_code == 0, saved.output
-
-    out = _daemon().get("/knowledge/file", params={"path": path}).json()
-    assert (out["title"], out["body"].strip()) == ("Session", "account.session owns login state")
-
-
 @pytest.mark.acceptance(
     spec="knowledge", scenario="an unknown collection is an error, never auto-created"
 )
@@ -495,7 +480,6 @@ _KNOWLEDGE_COMMANDS = [
     "add",
     "edit",
     "rm",
-    "save",
     "write",
     "upload",
     "curate",

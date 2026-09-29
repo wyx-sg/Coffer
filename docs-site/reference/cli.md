@@ -401,19 +401,6 @@ coffer adopt [OPTIONS] COMMAND [ARGS]...
 
 Bring one scanned item under Coffer's management
 
-### adopt agent
-
-```sh
-coffer adopt agent [OPTIONS] TYPE
-```
-
-Register a detected agent under its suggested name and config directory.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `TYPE` | argument | text | required | The agent type the scan printed |
-| `--name` | option | text |  | Register under this name instead |
-
 ### adopt skill
 
 ```sh
@@ -448,18 +435,6 @@ coffer discard [OPTIONS] COMMAND [ARGS]...
 ```
 
 Remove one scanned item from the agent that holds it
-
-### discard agent
-
-```sh
-coffer discard agent [OPTIONS] TYPE
-```
-
-Refused: a detected agent was not put there by Coffer, so Coffer does not remove it.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `TYPE` | argument | text | required |  |
 
 ### discard skill
 
@@ -860,19 +835,6 @@ Switch an agent off: its delivered skills are reclaimed.
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Name or uid |
-
-### agent connection
-
-```sh
-coffer agent connection [OPTIONS] NAME
-```
-
-Report whether this agent is connected to Coffer, part by part.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name or uid |
-| `--json` | option | flag |  | JSON output |
 
 ### agent connect
 
@@ -1427,21 +1389,6 @@ Remove a collection and its directory.
 | `NAME` | argument | text | required | Name or uid |
 | `--force, --yes, -f, -y` | option | flag |  | Do not ask |
 
-### knowledge save
-
-```sh
-coffer knowledge save [OPTIONS] PATH BODY_FILE
-```
-
-Replace a document's body, keeping its frontmatter.
-
-Reads the document first and saves with the fingerprint that read carried, so a file changed in between is refused rather than overwritten (spec knowledge "Save a document edited in the web UI").
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `PATH` | argument | text | required | Document path, e.g. payments/gateway.md |
-| `BODY_FILE` | argument | text | required | File holding the new body, or - for stdin |
-
 ### knowledge write
 
 ```sh
@@ -1561,20 +1508,6 @@ Every partition left holding undistilled entries is distilled in the same call; 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `--json` | option | flag |  |  |
-
-### memory distil
-
-```sh
-coffer memory distil [OPTIONS] PARTITION
-```
-
-Run the distil pass by hand over one partition.
-
-Only one pass per partition runs at a time, whoever started it: a request made while the unattended sweep already holds this partition is refused rather than queued.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `PARTITION` | argument | text | required | Partition to distil |
 
 ### memory context
 

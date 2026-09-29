@@ -114,7 +114,9 @@ def test_locate_a_collections_documents(daemon: TestClient, tmp_path: pathlib.Pa
     [root] = _lines(_run("knowledge").output)
     assert root == str((tmp_path / "knowledge").resolve())
     assert _run("knowledge", "nope").exit_code == 4
-    assert not {"collections", "create", "ls", "read", "delete"} & _group_commands("knowledge")
+    assert not {"collections", "create", "ls", "read", "save", "delete"} & _group_commands(
+        "knowledge"
+    )
 
 
 @pytest.mark.acceptance(spec="memory", scenario="locate a partition's notes from the command line")
@@ -131,8 +133,8 @@ def test_locate_a_partitions_notes(daemon: TestClient, tmp_path: pathlib.Path) -
     assert pathlib.Path(directory).parent == pathlib.Path(root)
     as_json = extract_json(_run("memory", name, "--json").output)
     assert as_json == {"memory": root, "partition": directory}
-    removed = {"partitions", "notes", "note", "retired", "ls", "read"}
-    removed |= {"delivery-install", "delivery-remove"}
+    removed = {"partitions", "notes", "note", "retired", "ls", "read", "distil"}
+    removed |= {"delivery", "delivery-install", "delivery-remove"}
     assert not removed & _group_commands("memory")
     # `context` is what an installed session-start hook runs: same name, same
     # options (its behaviour is pinned in test_memory_cmd.py).

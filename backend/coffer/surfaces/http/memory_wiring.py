@@ -72,7 +72,7 @@ from coffer.surfaces.http.memory.dependencies import (
     set_memory_delivery_service,
     set_memory_service,
 )
-from coffer.surfaces.http.memory.distil_state import DistilRunner, set_distil_runner
+from coffer.surfaces.http.memory.distil_state import DistilRunner
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -204,11 +204,6 @@ def wire_memory_kind(
     )
     set_memory_delivery_service(delivery_service)
 
-    # The route and the worker start the same bound method, so both get the
-    # Resource row's repository path and the one ``memory_distilled`` audit
-    # record the service writes — with whichever actor asked.
-    set_distil_runner(service.distil)
-
     app.state.kinds[KIND_MEMORY] = make_memory_kind(service)
     return MemoryWiring(
         service=service,
@@ -332,8 +327,8 @@ def start_distil_worker(
     Returns the task; the lifespan cancels it at shutdown."""
 
     async def _list_partitions() -> list[str]:
-        # Uids, not names: the sweep and the page's Distil button are two
-        # writers over one directory and claim the same upkeep-runs key, so
+        # Uids, not names: the sweep and Update memory are two writers over
+        # one directory and claim the same upkeep-runs key, so
         # both must spell the partition the way that cannot change between
         # them reading it ("Run one distil pass per partition at a time", ADR
         # resource-identity-is-an-immutable-uid).

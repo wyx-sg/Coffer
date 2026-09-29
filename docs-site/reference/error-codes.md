@@ -58,7 +58,7 @@ give the status each code is actually sent with.
 | `SCOPE_INVALID` | 422 | A reach (activation scope) payload is invalid, or the kind has no reach. | Send an agent allow-list, or use the kind's `scope` command (for example `coffer skill scope <name> --agents a,b`) on a kind that supports it. See [reach](/architecture/resource-framework#reach). |
 | `RESOURCE_PROTECTED` | 409 | The resource is managed by Coffer itself (for example a skill Coffer generates) and cannot be taken over or deleted. | Leave it; Coffer maintains it. |
 | `RESOURCE_NOT_TOGGLEABLE` | 409 | The resource's kind cannot be enabled or disabled: every knowledge collection and memory partition is always served. | Delete the resource if it should no longer be served. |
-| `UPKEEP_ALREADY_RUNNING` | 409 | An upkeep pass (memory organising, knowledge curation) is already running for this target. | Wait for the running pass; the UI shows it. |
+| `UPKEEP_ALREADY_RUNNING` | 409 | A knowledge curation pass is already running for this collection. | Wait for the running pass; the UI shows it. |
 | `UNKNOWN_PRUNABLE_TABLE` | 404 | A retention request named a table that has no retention policy. | List valid tables with `coffer config list retention.`. |
 
 ## Credentials

@@ -9,7 +9,7 @@ only by aggregation ("Provision partitions only from aggregation"), and no
 ``/memory/partitions``, which counts each partition's notes and names the
 repository it is keyed on. ``sync`` updates memory — aggregation, then a
 distil pass over every partition that gained entries ("Update memory in one
-action") — and ``distil`` runs one pass over one partition. The session-start
+action"). The session-start
 hook in an agent's own settings file is part of that agent's Coffer
 connection (``coffer agent connect``), not a command of this group.
 A partition's notes, index, retirement record and file tree are plain files,
@@ -48,7 +48,6 @@ from rich.table import Table
 from coffer.infrastructure.daemon.bootstrap import live_daemon
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._kind_verbs import KindVerbs, label, register_kind_verbs
-from coffer.surfaces.cli._resolve import resolve_uid
 
 #: The registry kind the partition-addressing commands resolve a name against.
 #: Spelled here rather than imported from ``application.memory.service`` so a
@@ -117,28 +116,6 @@ def sync(ctx: typer.Context, output_json: bool = typer.Option(False, "--json")) 
         r = c.post("/memory/sync")
         _cli_client.check(r, verbose=_verbose(ctx))
     typer.echo(_json.dumps(r.json(), indent=2) if output_json else r.text)
-
-
-@app.command("distil")
-def distil(
-    ctx: typer.Context,
-    partition: str = typer.Argument(..., help="Partition to distil"),
-) -> None:
-    """Run the distil pass by hand over one partition.
-
-    Only one pass per partition runs at a time, whoever started it: a request
-    made while the unattended sweep already holds this partition is refused
-    rather than queued.
-    \f
-    Refused with ``UPKEEP_ALREADY_RUNNING`` ("Run one distil pass per partition
-    at a time").
-    """
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, _KIND_MEMORY, partition, verbose=_verbose(ctx))
-        r = c.post(f"/memory/partitions/{uid}/distil")
-        _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(_json.dumps(r.json(), indent=2))
 
 
 @app.command("context")

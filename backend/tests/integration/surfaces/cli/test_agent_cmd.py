@@ -582,7 +582,7 @@ def test_agent_group_offers_the_new_commands_only():
     group = typer.main.get_command(cli_app).commands["agent"]  # type: ignore[attr-defined]
     assert set(group.commands) == {
         "list", "show", "add", "edit", "rm", "enable", "disable",
-        "connect", "disconnect", "connection", "transcript", "models", "config", "plugin",
+        "connect", "disconnect", "transcript", "models", "config", "plugin",
     }  # fmt: skip
 
 

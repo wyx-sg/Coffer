@@ -1,8 +1,10 @@
 """``coffer scan`` / ``adopt`` / ``discard`` over the real app.
 
 One row of each kind — a detected agent, a hand-placed skill folder, a direct
-MCP entry in an agent's own config — is listed, adopted by the ref the scan
-printed, and (skill, mcp) discarded; a detected agent refuses discard.
+MCP entry in an agent's own config — is listed. A skill or mcp row is adopted
+by the ref the scan printed, and discarded; a detected agent is registered with
+``coffer agent add``, which its row names, and neither ``adopt`` nor
+``discard`` offers an ``agent`` command.
 """
 
 from __future__ import annotations
@@ -98,22 +100,28 @@ def _mcp_entries(home: pathlib.Path) -> pathlib.Path:
 @pytest.mark.acceptance(
     spec="resource-framework", scenario="an unknown or undiscardable row is refused"
 )
-def test_a_detected_agent_is_adopted_and_never_discarded(
+def test_a_detected_agent_is_registered_with_agent_add_and_never_discarded(
     daemon: TestClient, tmp_path: pathlib.Path
 ) -> None:
     (tmp_path / ".codex").mkdir()
 
     rows = [r for r in _rows() if r["kind"] == "agent"]
     codex = next(r for r in rows if r["ref"] == "codex")
+    assert "coffer agent add codex" in codex["detail"]
     assert daemon.get("/resources", params={"kind": "agent"}).json()["resources"] == []
 
+    import typer.main
+
+    groups = typer.main.get_command(cli_app).commands  # type: ignore[attr-defined]
+    assert "agent" not in groups["adopt"].commands
+    assert "agent" not in groups["discard"].commands
     refused = _run("discard", "agent", "codex")
-    assert refused.exit_code != 0 and "cannot be discarded" in refused.output
+    assert refused.exit_code != 0
     unknown = _run("adopt", "skill", "no-such-ref")
     assert unknown.exit_code != 0 and "names no skill row" in unknown.output
     assert daemon.get("/resources", params={"kind": "agent"}).json()["resources"] == []
 
-    adopted = _run("adopt", "agent", "codex")
+    adopted = _run("agent", "add", "codex")
     assert adopted.exit_code == 0, adopted.output
     [agent] = daemon.get("/resources", params={"kind": "agent"}).json()["resources"]
     assert agent["name"] == codex["suggested_name"]

@@ -35,8 +35,7 @@ export function listPartitions(): Promise<PartitionListOut> {
 /** Update memory now (spec memory "Update memory in one action"): run
  * aggregation — the manual trigger for the background worker that otherwise
  * reads every registered agent's native memory on an interval — and then a
- * distil pass over every partition that gained raw entries. The per-partition
- * distil route exists for the CLI; the UI only ever asks for both at once. */
+ * distil pass over every partition that gained raw entries. */
 export function sync(): Promise<AggregationResultOut> {
   return call<AggregationResultOut>(`${ROOT}/sync`, { method: "POST" });
 }

@@ -164,7 +164,7 @@ A kind's own route and the generic route call the same service method, so a refu
 
 A kind that belongs to a switched-off experimental feature is refused on these routes with `404 FEATURE_DISABLED` and left out of lists; its rows are untouched. Kinds also mount their own routers (`/api/v1/skills`, `/api/v1/channels`, …) for behaviour the framework does not own.
 
-The CLI mirrors the generic surface with names instead of uids. Every kind's group carries the same lifecycle verbs — `list`, `show`, `add`, `edit`, `rm`, `enable`, `disable` and `scope` — generated from the kind's descriptor by one factory ([`surfaces/cli/_kind_verbs.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/_kind_verbs.py)). A verb the kind cannot support is left out rather than refused at run time: `scope` needs `supports_scope`, `enable` and `disable` need `toggleable` (so `knowledge` and `memory` have neither), and `memory` has no `add` because only aggregation creates a partition.
+The CLI mirrors the generic surface with names instead of uids. One factory ([`surfaces/cli/_kind_verbs.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/cli/_kind_verbs.py)) generates each kind's lifecycle verbs from its descriptor, and every group offers `list`, `show`, `edit` and `rm`. The rest appear only where they apply, and a verb the kind cannot support is left out rather than refused at run time: `enable` and `disable` only on a `toggleable` kind (so `knowledge` and `memory` have neither), `scope` only on a kind with `supports_scope` (`mcp`, `skill`, `channel`, `provider`), and `add` only where the kind registers an `add` of its own, because creating each kind takes something different (`memory` has none, because only aggregation creates a partition). Some groups write their own `list` or `show` too, where the kind's record is served by its own routes.
 
 ```sh
 coffer mcp list
@@ -255,7 +255,7 @@ The registered policies, their defaults and the worker's cadence are listed in [
 
 ## Passes in flight
 
-Long, model-driven rewrites — knowledge curation over a collection, memory distillation over a partition — are tracked in an in-process registry ([`application/upkeep_runs.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/upkeep_runs.py)) keyed by kind and name, so a second start on the same target is refused with `UPKEEP_ALREADY_RUNNING` whichever surface asked. There is no table and no lease: a daemon restart ends every pass, and a persisted claim that outlived its runner would wedge its target forever. Read it with `GET /api/v1/upkeep/runs` or `coffer daemon status`.
+Long, model-driven rewrites — knowledge curation over a collection, memory distillation over a partition — are tracked in an in-process registry ([`application/upkeep_runs.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/upkeep_runs.py)) keyed by kind and name, so a second pass never starts on the same target: a curation request is refused with `UPKEEP_ALREADY_RUNNING`, and Update memory and the timers skip a busy target. There is no table and no lease: a daemon restart ends every pass, and a persisted claim that outlived its runner would wedge its target forever. Read it with `GET /api/v1/upkeep/runs` or `coffer daemon status`.
 
 ## Trade-offs and alternatives
 

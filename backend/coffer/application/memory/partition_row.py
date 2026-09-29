@@ -62,7 +62,7 @@ class PartitionSummary:
     """
 
     #: The partition's identity — what a surface addresses it by, and what the
-    #: distil sweep and the Distil button both claim, so neither can be aimed
+    #: distil sweep and Update memory both claim, so neither can be aimed
     #: at a different partition by a label that moved in between.
     uid: str
     name: str

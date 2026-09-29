@@ -22,9 +22,9 @@ may turn it off or re-time it in Settings; the whole pass also stands still whil
 ``memory`` experimental feature is off.
 
 **One pass per partition, whoever started it (see "Run one distil pass per partition at
-a time").** The timer and the Distil button are two writers over one directory, so both
-claim the same upkeep-runs key: whichever arrives first holds it, the button's route is
-refused with ``UPKEEP_ALREADY_RUNNING`` and this worker simply skips the partition. Busy
+a time").** The timer and Update memory are two writers over one directory, so both
+claim the same upkeep-runs key: whichever arrives first holds it, and the other skips
+the partition — Update memory reports it as skipped, this worker passes it by. Busy
 is an ordinary state of a partition, not a failure, so it is logged at debug and the
 next sweep comes round to it.
 """
@@ -56,8 +56,8 @@ DistilCallable = Callable[..., Awaitable[object]]
 EnabledCheck = Callable[[], Awaitable[bool]]
 #: Yields the **uids** of the partitions to sweep. A pass spends a model and rewrites
 #: every note in a directory, so it is aimed at the identity rather than at a label the
-#: user can edit while it runs — and the Distil button sends the same uid, which is what
-#: lets the claim below and the route's claim collide the way "Run one distil pass per
+#: user can edit while it runs — and Update memory claims the same uid, which is what
+#: lets the claim below and its claim collide the way "Run one distil pass per
 #: partition at a time" needs them to without either side translating.
 PartitionLister = Callable[[], Awaitable[list[str]]]
 

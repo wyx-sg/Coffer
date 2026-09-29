@@ -1,14 +1,15 @@
-"""``coffer agent connect | disconnect | connection`` — an agent's Coffer connection.
+"""``coffer agent connect | disconnect`` — an agent's Coffer connection.
 
 The CLI half of ``/api/v1/agents/{uid}/coffer-connection`` (spec agent-registry
-"Connect an agent to Coffer in one action", "Report an agent's Coffer connection
-part by part", "Disconnect an agent from Coffer"). Kept out of ``agent_cmd`` for
-the file-size budget; attached onto the same typer.
+"Connect an agent to Coffer in one action", "Disconnect an agent from Coffer").
+The report of "Report an agent's Coffer connection part by part" is printed by
+``coffer agent show``, as its ``coffer_connection``, through :func:`echo_parts`
+below. Kept out of ``agent_cmd`` for the file-size budget; attached onto the
+same typer.
 """
 
 from __future__ import annotations
 
-import json as _json
 from typing import Any
 
 import typer
@@ -55,20 +56,6 @@ def echo_parts(data: dict[str, Any]) -> None:
         typer.echo(f"  {label}: {mark}{detail}")
 
 
-def connection(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., metavar="NAME", help="Agent name or uid"),
-    output_json: bool = typer.Option(False, "--json", help="JSON output"),
-) -> None:
-    """Report whether this agent is connected to Coffer, part by part."""
-    data = _call(ctx, name, "GET")
-    if output_json:
-        typer.echo(_json.dumps(data, indent=2))
-        return
-    typer.echo(f"{name}: {state_label(data['state'])}")
-    echo_parts(data)
-
-
 def connect(
     ctx: typer.Context,
     name: str = typer.Argument(..., metavar="NAME", help="Agent name or uid"),
@@ -89,7 +76,6 @@ def disconnect(
 
 
 def attach(app: typer.Typer) -> None:
-    """Register the three commands on ``agent_cmd``'s typer."""
-    app.command("connection")(connection)
+    """Register the two commands on ``agent_cmd``'s typer."""
     app.command("connect")(connect)
     app.command("disconnect")(disconnect)

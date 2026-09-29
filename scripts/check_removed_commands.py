@@ -94,7 +94,14 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer memory delivery-remove", "coffer agent disconnect <agent>"),
     # The delivery hook is a part of the agent's Coffer connection (spec
     # agent-registry "Connect an agent to Coffer in one action").
-    ("coffer memory delivery", "coffer agent connect|disconnect|connection <agent>"),
+    ("coffer memory delivery", "coffer agent connect|disconnect <agent>, coffer agent show <agent>"),
+    # Trimmed by the OpenSpec change trim-redundant-cli-commands: each repeated
+    # another command or guarded nothing.
+    ("coffer adopt agent", "coffer agent add <type>"),
+    ("coffer discard agent", "coffer agent add <type> to register it; Coffer never removes a detected agent"),
+    ("coffer agent connection", "coffer agent show <name> (field coffer_connection)"),
+    ("coffer knowledge save", "edit the file under coffer path knowledge <collection>"),
+    ("coffer memory distil", "coffer memory sync"),
     ("coffer sync rollback", "coffer sync restore"),
     ("coffer sync remote show", "coffer sync status"),
     ("coffer sync machine remove", "coffer sync machine rm"),

@@ -90,7 +90,7 @@ machine, exactly like a route the build does not have. The tables below mark tho
 
 ## Routes
 
-The daemon mounts 166 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 165 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -108,7 +108,7 @@ The daemon mounts 166 operations in 20 groups. Groups follow the order the daemo
 | [skills](#skills) | 9 |
 | [mcp](#mcp) | 10 |
 | [knowledge](#knowledge) | 9 |
-| [memory](#memory) | 9 |
+| [memory](#memory) | 8 |
 | [agent-providers](#agent-providers) | 2 |
 | [models](#models) | 3 |
 | [chat](#chat) | 16 |
@@ -325,7 +325,6 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `memory` 
 | --- | --- | --- |
 | `GET` | `/api/v1/memory/partitions` | List Partitions |
 | `POST` | `/api/v1/memory/sync` | Update memory: aggregate every registered, enabled agent's native memory, then distil every partition it left with undistilled raw entries ("Update memory in one action"; see ``application/memory/update.py``). |
-| `POST` | `/api/v1/memory/partitions/{uid}/distil` | Turn one partition's raw entries into notes, and rewrite its index. |
 | `GET` | `/api/v1/memory/partitions/{uid}/notes` | Every note in one partition, read from ``notes/`` at call time. |
 | `GET` | `/api/v1/memory/partitions/{uid}/notes/{slug}` | One note, whole. |
 | `GET` | `/api/v1/memory/partitions/{uid}/retired` | ``RETIRED.md``, read back — newest first. |

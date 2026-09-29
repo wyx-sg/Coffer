@@ -226,10 +226,11 @@ export interface paths {
          *     and no lease, so a daemon restart ends any pass it was running and this
          *     list comes back empty. That is the truth, not a lost record.
          *
-         *     Starting a pass is the kind's own route
-         *     (`POST /memory/partitions/{uid}/distil`,
-         *     `POST /knowledge/collections/{uid}/curate`); each refuses a second
-         *     concurrent pass over the same target with `UPKEEP_ALREADY_RUNNING`.
+         *     Starting a pass is the kind's own route:
+         *     `POST /knowledge/collections/{uid}/curate` refuses a second concurrent
+         *     pass over the same collection with `UPKEEP_ALREADY_RUNNING`, and
+         *     `POST /memory/sync` skips a partition whose pass is already running and
+         *     reports it under `skipped`.
          *     Whether a pass runs on a timer at all is spec internal-engine's.
          *
          *     A pass over a kind whose experimental feature is switched off is left

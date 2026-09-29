@@ -74,20 +74,20 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # What an agent holds that Coffer does not manage yet (spec
     # resource-framework "Scan, adopt and discard what Coffer does not
     # manage"): `scan` is a single command; adopt/discard take the row's kind.
+    # Neither offers `agent`: a detected agent is registered with `agent add`,
+    # which its scan row names, and nothing of Coffer's put it there to discard.
     "scan": set(),
-    "adopt": {"agent", "skill", "mcp"},
-    # `discard agent` exists only to refuse: a detected agent was put there
-    # by nobody Coffer knows, so nothing of Coffer's can remove it.
-    "discard": {"agent", "skill", "mcp"},
+    "adopt": {"skill", "mcp"},
+    "discard": {"skill", "mcp"},
     # `test` re-queries capabilities, then reports health; `cap` toggles one
     # tool, prompt or resource (spec mcp-gateway).
     "mcp": {*_LIFECYCLE, "add", "scope", "test", "cap"},
     "mcp cap": {"list", "enable", "disable"},
     "credentials": {"set", "get", "list", "rm"},
-    # No `scope`: an agent is not reached by agents. `connect`/`disconnect`/
-    # `connection` are its Coffer connection — the gateway entry and the memory
-    # hook as one action (spec agent-registry "Connect an agent to Coffer in
-    # one action"); `transcript [<id>]` reads
+    # No `scope`: an agent is not reached by agents. `connect`/`disconnect`
+    # are its Coffer connection — the gateway entry and the memory hook as one
+    # action (spec agent-registry "Connect an agent to Coffer in one action"),
+    # whose status `show` prints as `coffer_connection`; `transcript [<id>]` reads
     # the agent's history; `models` is the web model picker's list
     # (GET /agent-providers/{agent_key}/models).
     "agent": {
@@ -95,7 +95,6 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "add",
         "connect",
         "disconnect",
-        "connection",
         "transcript",
         "models",
         "config",
@@ -113,17 +112,19 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # by `path skill <name>` rather than listed, printed or written here.
     "skill": {*_LIFECYCLE, "add", "scope", "verify"},
     # Exactly spec knowledge "Cover knowledge management on REST and the
-    # CLI". Documents are listed, read and deleted on disk under `path
-    # knowledge`; `save` is the fingerprint-guarded body write. A collection
+    # CLI". Documents are listed, read, edited and deleted on disk under
+    # `path knowledge`. A collection
     # has no `scope` and no switch (spec knowledge "Serve every collection to
     # every agent"), so no `enable`/`disable`.
-    "knowledge": {*_LIFECYCLE - _SWITCH, "add", "save", "write", "upload", "curate"},
-    # No `add`: partitions are provisioned only by aggregation. `context` is
+    "knowledge": {*_LIFECYCLE - _SWITCH, "add", "write", "upload", "curate"},
+    # No `add`: partitions are provisioned only by aggregation. `sync` updates
+    # memory — aggregation, then a distil pass over every partition that
+    # gained entries (spec memory "Update memory in one action"). `context` is
     # what the installed session-start hook runs and must not move (spec
     # memory "Cover memory management on REST and the CLI"); installing that
     # hook is part of `agent connect`. No switch either (spec memory "Serve
     # every partition to every agent").
-    "memory": {*_LIFECYCLE - _SWITCH, "sync", "distil", "context"},
+    "memory": {*_LIFECYCLE - _SWITCH, "sync", "context"},
     # `builtin` reverts a wire to the agent's own login; the two flags a
     # connection can carry are the keys `engine.provider` and
     # `transcribe.provider`, not commands here.
@@ -226,6 +227,10 @@ _SETTINGS_ROUTE = re.compile(
 _FILE_BACKED_ROUTES: dict[str, str] = {
     "GET /knowledge/tree": "path knowledge [<collection>]",
     "GET /knowledge/file": "path knowledge <collection>",
+    # The web UI's editor saves through it; on the command line a document is
+    # edited on disk like any other file (spec knowledge "Cover knowledge
+    # management on REST and the CLI").
+    "PUT /knowledge/file": "path knowledge <collection>",
     "DELETE /knowledge/file": "path knowledge <collection>",
     "GET /memory/partitions/{uid}/files": "path memory <partition>",
     "GET /memory/partitions/{uid}/files/content": "path memory <partition>",
@@ -250,9 +255,8 @@ _FILE_BACKED_ROUTES: dict[str, str] = {
 #: File-shaped routes that are NOT answered by `coffer path`, because they
 #: change a file through validation and a fingerprint check a text editor
 #: would skip (spec agent-registry "Reject stale config-file writes by
-#: fingerprint", spec knowledge "Save a document edited in the web UI").
+#: fingerprint").
 _FILE_ROUTES_WITH_A_COMMAND: dict[str, str] = {
-    "PUT /knowledge/file": "knowledge save",
     "PUT /agents/{uid}/config-files/{key}": "agent config edit",
     "PUT /agents/{uid}/config-files/{key}/files/{relpath}": "agent config edit",
     "DELETE /agents/{uid}/config-files/{key}/files/{relpath}": "agent config rm",

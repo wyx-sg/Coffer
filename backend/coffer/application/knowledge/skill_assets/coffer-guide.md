@@ -111,10 +111,12 @@ is nothing to approve.
 Coffer keeps three records of what it did: its audit log (what changed), its
 MCP invocation log (every tool call through it) and its daemon log (what
 happened, including what broke). Read them with `coffer log audit`,
-`coffer log mcp` and `coffer log daemon` — each takes `--since` and `--errors`
-— and find the daemon's log files with `coffer path logs`. Reach for them when a Coffer tool
-fails in a way its error text does not explain, not as a debugger for the
-developer's own program.
+`coffer log mcp` and `coffer log daemon`. Each takes `--since` (an age such as
+`1h`, or an ISO 8601 instant) and `--limit`; `coffer log daemon --errors` and
+`coffer log mcp --status error` narrow to failures, and `coffer log audit`
+narrows with `--kind`, `--name` and `--event-type`. `coffer path logs` finds the
+daemon's log files. Reach for them when a Coffer tool fails in a way its error
+text does not explain, not as a debugger for the developer's own program.
 
 <!-- when:knowledge -->
 ## What not to put in

@@ -4,7 +4,7 @@ info:
   version: 0.4.0
   description: |
     REST surface for the one `memory` resource kind (spec memory, "Cover memory
-    management on REST and the CLI"). Nine routes, and that is the whole
+    management on REST and the CLI"). Eight routes, and that is the whole
     management plane.
 
     ## Everything here is derived
@@ -13,7 +13,7 @@ info:
     native memory, read-only, and never writes it
     ([Aggregate Agent Memory, Never Write It](../../../../docs/decisions/aggregate-agent-memory-never-write-it.md)).
     Everything under `~/.coffer/memory/` is derived from those sources: delete
-    it, `POST /sync` and distil, and an **equivalent** set comes back — the same
+    it and `POST /sync`, which aggregates and then distils, and an **equivalent** set comes back — the same
     subjects from the same sources, not necessarily the same wording, because
     what is stored is Coffer's own distillation rather than a copy ("Keep the
     memory tree derived and local", "Write notes in Coffer's own words"). There
@@ -92,11 +92,9 @@ info:
     raises: `RESOURCE_NOT_FOUND` (404, no `memory` Resource by that uid),
     `MEMORY_NOTE_NOT_FOUND` (404), `MEMORY_FILE_NOT_FOUND` (404),
     `MEMORY_UNSAFE_PATH` (400, a path escaping the partition),
-    `MEMORY_DELIVERY_UNSUPPORTED` (the agent type has no hook adapter),
+    `MEMORY_DELIVERY_UNSUPPORTED` (the agent type has no hook adapter) and
     `MEMORY_DELIVERY_CONFIG_INVALID` (its settings file is not a JSON object
-    Coffer can edit) and `UPKEEP_ALREADY_RUNNING` (409, a second distil over a
-    partition already being distilled, see "Run one distil pass per partition at
-    a time").
+    Coffer can edit).
 
 servers:
   - url: http://127.0.0.1:8000
@@ -273,46 +271,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AggregationResultOut"
-
-  /api/v1/memory/partitions/{uid}/distil:
-    post:
-      tags: [memory]
-      operationId: distilMemoryPartition
-      summary: Run the distil pass over one partition.
-      description: |
-        Turns the raw entries aggregation left under `.raw/` into Coffer's own
-        notes, and rewrites the partition's index ("Distil incrementally in two
-        stages"). Two stages, so that no single request carries the partition's
-        bodies: a **routing** request over the new entries, the existing index
-        and `RETIRED.md`, which decides one of four actions per entry — merge
-        into an existing note, open a new one, retire a note it contradicts, or
-        keep nothing — and then one small **writing** request per note actually
-        touched.
-
-        With no internal connection configured, no model is called: each entry
-        becomes a note of its own and the index is still written from their
-        frontmatter ("Distil mechanically with no internal connection"). Only
-        one pass per partition runs at a time; a second request while one is in
-        flight is refused rather than queued ("Run one distil pass per partition
-        at a time"), and the in-flight pass is readable on the shared
-        upkeep-runs surface.
-      parameters:
-        - $ref: "#/components/parameters/PartitionUid"
-      responses:
-        "200":
-          description: What the pass found.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DistilResultOut"
-        "404":
-          $ref: "#/components/responses/NotFound"
-        "409":
-          description: A pass over this partition is already running (`UPKEEP_ALREADY_RUNNING`).
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
 
   /api/v1/memory/context:
     post:
@@ -633,38 +591,6 @@ components:
             Names of the partitions that needed a distil pass but already had
             one running; that pass covers them ("Run one distil pass per
             partition at a time").
-
-    DistilResultOut:
-      type: object
-      required: [partition, merged, opened, retired, dropped, model_used]
-      properties:
-        partition:
-          type: string
-        merged:
-          type: integer
-          description: Raw entries folded into a note that already existed.
-        opened:
-          type: integer
-          description: Notes created for a subject the partition did not cover.
-        retired:
-          type: integer
-          description: |
-            Notes a later entry contradicted, or whose raw entries are all
-            gone, moved to `RETIRED.md` ("Retire a note whose raw entries are
-            all gone").
-        dropped:
-          type: integer
-          description: |
-            Entries the pass kept nothing from. A first-class outcome, not a
-            failure: it is how a scratch directory's incidental material and an
-            agent's transient observations stay out of the store ("Distil
-            incrementally in two stages").
-        model_used:
-          type: boolean
-          description: |
-            False when no internal connection is configured — each entry becomes
-            a note of its own and the index is still written, from their
-            frontmatter ("Distil mechanically with no internal connection").
 
     ContextQuery:
       type: object

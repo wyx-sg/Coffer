@@ -81,11 +81,10 @@ def _partitions(c: TestClient) -> dict[str, dict]:  # type: ignore[type-arg]
 
 
 def _sync_and_distil(c: TestClient, *, headers: dict[str, str] | None = None) -> None:
+    """Update memory: aggregation, then a distil pass over every partition that
+    gained entries ("Update memory in one action")."""
     r = c.post("/api/v1/memory/sync", headers=headers)
     assert r.status_code == 200, r.text
-    for row in _partitions(c).values():
-        r = c.post(f"/api/v1/memory/partitions/{row['uid']}/distil", headers=headers)
-        assert r.status_code == 200, r.text
 
 
 # --- Report unresolvable partitions -------------------------------------------
@@ -130,9 +129,6 @@ def test_a_requested_aggregation_and_distil_each_record_one_event_naming_the_use
     # the same actor ("Update memory in one action").
     distilled_by_sync = sorted(r.json()["distilled"])
     assert "coffer" in distilled_by_sync
-    uid = _partitions(client)["coffer"]["uid"]
-    r = client.post(f"/api/v1/memory/partitions/{uid}/distil", headers=headers)
-    assert r.status_code == 200, r.text
 
     def events(event_type: str) -> list[dict]:  # type: ignore[type-arg]
         r = client.get("/api/v1/audit", params={"event_type": event_type, "limit": 500})
@@ -145,8 +141,8 @@ def test_a_requested_aggregation_and_distil_each_record_one_event_naming_the_use
     distilled = [e for e in events("memory_distilled") if e["actor"] == "alice"]
     assert len(aggregated) == 1
     assert aggregated[0]["details"]["entries_written"] == 2  # the requested pass itself
-    # One per partition the update distilled, plus the one requested by hand.
-    assert sorted(e["resource_name"] for e in distilled) == sorted([*distilled_by_sync, "coffer"])
+    # One per partition the update distilled.
+    assert sorted(e["resource_name"] for e in distilled) == distilled_by_sync
     others = [
         e for e in events("memory_aggregated") + events("memory_distilled") if e["actor"] != "alice"
     ]
