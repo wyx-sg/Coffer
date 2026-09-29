@@ -27,8 +27,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from coffer.domain.errors import SkillStagingNotFound
 from coffer.domain.skill.source import ImportedSource
+from coffer.domain.skill_source_errors import SkillStagingNotFound
 
 #: How long an unconfirmed stage is kept.
 STAGE_TTL_S = 3600.0

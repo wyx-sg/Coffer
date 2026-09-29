@@ -19,16 +19,16 @@ from coffer.application.skill import update_ops
 from coffer.application.skill.source_service import SkillSourceService
 from coffer.application.skill.staging import StagingRegistry
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import (
+from coffer.domain.resource import Resource
+from coffer.domain.skill.config import SkillConfig
+from coffer.domain.skill.content_hash import folder_content_hash
+from coffer.domain.skill.source import GitImportSource
+from coffer.domain.skill_source_errors import (
     SkillNotFromGit,
     SkillSourceRejected,
     SkillSourceUnreachable,
     SkillUpdateConflict,
 )
-from coffer.domain.resource import Resource
-from coffer.domain.skill.config import SkillConfig
-from coffer.domain.skill.content_hash import folder_content_hash
-from coffer.domain.skill.source import GitImportSource
 from coffer.infrastructure.persistence.engine import session_maker
 from coffer.infrastructure.skill.archive_reader import ZipArchiveReader
 from coffer.infrastructure.skill.git_source import GitSource

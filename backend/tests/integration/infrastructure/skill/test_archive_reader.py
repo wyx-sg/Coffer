@@ -14,7 +14,7 @@ import zipfile
 
 import pytest
 
-from coffer.domain.errors import SkillSourceRejected
+from coffer.domain.skill_source_errors import SkillSourceRejected
 from coffer.infrastructure.skill.archive_reader import extract_archive, save_upload
 from tests.support.skill_sources import skill_md, symlink_zip, zip_bytes
 

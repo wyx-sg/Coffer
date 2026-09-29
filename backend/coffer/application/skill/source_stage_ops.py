@@ -18,12 +18,7 @@ from coffer.application.skill.builtin_seed import is_builtin
 from coffer.application.skill.lifecycle_ops import register_from_validated
 from coffer.application.skill.staging import ImportStage, StagedSkill, remove_dir
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import (
-    ResourceAlreadyExists,
-    ResourceProtected,
-    SkillSourceRejected,
-    SkillValidationError,
-)
+from coffer.domain.errors import ResourceAlreadyExists, ResourceProtected, SkillValidationError
 from coffer.domain.resource import Resource
 from coffer.domain.skill.content_hash import folder_content_hash
 from coffer.domain.skill.discovery import NO_SKILL_MD, find_skill_folders, looked_in
@@ -35,6 +30,7 @@ from coffer.domain.skill.source import (
     LocalImportSource,
 )
 from coffer.domain.skill.validator import ValidationFailure, validate_skill_folder
+from coffer.domain.skill_source_errors import SkillSourceRejected
 
 if TYPE_CHECKING:
     from coffer.application.skill.source_service import SkillSourceService

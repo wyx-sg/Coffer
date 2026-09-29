@@ -30,8 +30,8 @@ import pathlib
 import tempfile
 from dataclasses import dataclass
 
-from coffer.domain.errors import SkillSourceUnreachable
 from coffer.domain.skill.git_url import ALLOWED_SCHEMES, display_url
+from coffer.domain.skill_source_errors import SkillSourceUnreachable
 
 DEFAULT_TIMEOUT_S = 180.0
 _PINNED = ("-c", "core.hooksPath=/dev/null", "-c", "core.quotepath=false")

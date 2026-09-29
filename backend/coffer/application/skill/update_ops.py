@@ -18,13 +18,7 @@ from typing import TYPE_CHECKING
 from coffer.application.skill.lifecycle_ops import register_from_validated
 from coffer.application.skill.staging import UpdateStage, remove_dir
 from coffer.domain.audit import AuditEventType
-from coffer.domain.errors import (
-    SkillNotFromGit,
-    SkillSourceRejected,
-    SkillSourceUnreachable,
-    SkillUpdateConflict,
-    SkillValidationError,
-)
+from coffer.domain.errors import SkillValidationError
 from coffer.domain.resource import Resource
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.content_hash import folder_content_hash
@@ -32,6 +26,12 @@ from coffer.domain.skill.folder_diff import FileChange, TextVersion, diff_folder
 from coffer.domain.skill.source import GitImportSource
 from coffer.domain.skill.source_status import SourceStatus
 from coffer.domain.skill.validator import ValidationFailure, validate_skill_folder
+from coffer.domain.skill_source_errors import (
+    SkillNotFromGit,
+    SkillSourceRejected,
+    SkillSourceUnreachable,
+    SkillUpdateConflict,
+)
 
 if TYPE_CHECKING:
     from coffer.application.skill.source_service import SkillSourceService

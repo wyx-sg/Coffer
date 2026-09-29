@@ -26,7 +26,7 @@ import zlib
 from dataclasses import dataclass
 from typing import BinaryIO
 
-from coffer.domain.errors import SkillSourceRejected
+from coffer.domain.skill_source_errors import SkillSourceRejected
 
 #: Entries an archiver adds that are never part of a skill.
 _JUNK_PREFIXES = ("__MACOSX/",)
