@@ -14,6 +14,7 @@ import { EditorView, keymap } from "@codemirror/view";
 import { cn } from "@/lib/utils";
 import { languageForFile, type PreviewLanguage } from "@/lib/preview/language";
 import { languageExtension } from "./codemirrorLang";
+import { codeViewHighlighting, codeViewTheme } from "./codemirrorTheme";
 import { computeMatches, findField, findTheme, setMatchesEffect } from "./findHighlight";
 import { FindWidget } from "./FindWidget";
 import { useFind, type FindEngine } from "./useFind";
@@ -39,19 +40,6 @@ interface CodeViewProps {
   ariaLabel?: string;
   className?: string;
 }
-
-const baseTheme = EditorView.theme({
-  "&": { backgroundColor: "transparent", color: "inherit", fontSize: "0.75rem" },
-  "&.cm-focused": { outline: "none" },
-  ".cm-content": { fontFamily: "var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)" },
-  ".cm-scroller": { lineHeight: "1.5" },
-  ".cm-gutters": {
-    backgroundColor: "transparent",
-    color: "hsl(var(--muted-foreground))",
-    border: "none",
-  },
-  ".cm-cursor": { borderLeftColor: "transparent" },
-});
 
 function makeCmEngine(view: EditorView): FindEngine {
   let matches = computeMatches("", "", false);
@@ -104,7 +92,8 @@ export function CodeView({
     const exts = [
       findField,
       findTheme,
-      baseTheme,
+      codeViewTheme,
+      codeViewHighlighting,
       EditorView.editable.of(false),
       EditorView.contentAttributes.of({ tabindex: "0" }),
       keymap.of([
@@ -130,7 +119,7 @@ export function CodeView({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-md border",
+        "relative overflow-hidden rounded-lg border border-border-subtle bg-code",
         fill && "flex min-h-0 flex-1 flex-col",
         className,
       )}

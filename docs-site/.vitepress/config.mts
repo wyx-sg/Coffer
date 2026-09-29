@@ -103,6 +103,7 @@ const architecture = [
     items: [
       { text: 'Security model', link: '/architecture/security' },
       { text: 'Observability', link: '/architecture/observability' },
+      { text: 'Design system', link: '/architecture/design-system' },
       { text: 'Distribution and releases', link: '/architecture/distribution' },
       { text: 'Decision records', link: '/architecture/decisions' },
     ],

@@ -142,7 +142,7 @@ export function EditChannelDialog({
         onOpenChange(o);
       }}
     >
-      <DialogContent className="max-w-lg">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("channels.edit.title")}</DialogTitle>
           <DialogDescription>{t("channels.edit.subtitle")}</DialogDescription>

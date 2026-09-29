@@ -5,6 +5,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import App from "./App";
 import { queryClient } from "./lib/queryClient";
 import { credentialDesktopHost, followLanguageInShell } from "./lib/tauri";
+import { initTheme } from "./lib/theme";
 import i18n from "./i18n"; // Initialises i18next before render
 import "./index.css";
 import "highlight.js/styles/github.css"; // Code-block syntax theme (chat markdown)
@@ -34,6 +35,8 @@ import "highlight.js/styles/github.css"; // Code-block syntax theme (chat markdo
  * something else refetches them.
  */
 function bootstrap(): void {
+  // Resolve light / dark onto <html data-theme> before the first paint.
+  initTheme();
   void credentialDesktopHost(() => queryClient.invalidateQueries());
   // The desktop tray is labelled in the interface language; it cannot read
   // the choice itself, so the page reports it now and on every switch.

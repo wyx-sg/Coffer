@@ -74,7 +74,7 @@ export function ModelProvidersPage() {
       )}
 
       <Dialog open={adding} onOpenChange={(open) => !open && closeAdd()}>
-        <DialogContent className="max-w-md">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("settings.connections.addTitle")}</DialogTitle>
           </DialogHeader>

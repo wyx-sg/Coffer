@@ -106,7 +106,7 @@ function SelectAllBar({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/20 px-3 py-1.5 text-xs text-muted-foreground">
+    <div className="flex flex-wrap items-center gap-2 rounded-md border bg-surface-sunken px-3 py-1.5 text-xs text-muted-foreground">
       {state === "offer" ? (
         <>
           <span>{t("common.bulk.pageSelected")}</span>

@@ -17,6 +17,74 @@
     "openFailed": "Couldn't open the file in your editor.",
     "revealFailed": "Couldn't reveal the file."
   },
+  "agentBadge": {
+    "label": "{{name}}, {{state}}",
+    "tooltip": "{{name}} · {{state}}",
+    "allAgents": "All agents",
+    "state": {
+      "connected": "Connected",
+      "not-connected": "Not connected to Coffer",
+      "not-installed": "Not installed",
+      "disabled": "Disabled"
+    },
+    "stateInline": {
+      "connected": "connected",
+      "not-connected": "not connected to Coffer",
+      "not-installed": "not installed",
+      "disabled": "disabled"
+    }
+  },
+  "changePreview": {
+    "summary": "{{changes}} in {{agents}}",
+    "changes_one": "{{count}} change",
+    "changes_other": "{{count}} changes",
+    "agents_one": "{{count}} agent",
+    "agents_other": "{{count}} agents",
+    "op": {
+      "add": "Add",
+      "modify": "Modify",
+      "remove": "Remove"
+    },
+    "whatWillHappen": "What will happen",
+    "changesHeading": "Changes · {{count}}",
+    "reassurance": "Only the lines shown change. Everything else in each file is left as it is.",
+    "diffLabel": "Changes to {{path}}",
+    "computing": "Comparing with each agent’s files…",
+    "empty": {
+      "title": "Nothing to change",
+      "body": "Every agent’s files already match Coffer.",
+      "checked": "Checked just now"
+    },
+    "apply": "Apply",
+    "applyCount_one": "Apply {{count}} change",
+    "applyCount_other": "Apply {{count}} changes",
+    "applying": {
+      "title": "Applying changes",
+      "progress": "Applying {{current}} of {{total}}…"
+    },
+    "applied": {
+      "title": "Changes applied",
+      "head_one": "Applied {{count}} change",
+      "head_other": "Applied {{count}} changes",
+      "recorded": "Recorded in Activity",
+      "viewActivity": "View in Activity"
+    },
+    "failed": {
+      "title": "Some changes failed",
+      "head_one": "{{failed}} of {{count}} change failed.",
+      "head_other": "{{failed}} of {{count}} changes failed.",
+      "rest_one": "The other {{count}} was applied and stays applied.",
+      "rest_other": "The other {{count}} were applied and stay applied.",
+      "word": "Failed",
+      "retry_one": "Retry {{count}} change",
+      "retry_other": "Retry {{count}} changes"
+    },
+    "status": {
+      "applied": "Applied",
+      "applying": "Applying",
+      "pending": "Waiting"
+    }
+  },
   "common": {
     "close": "Close",
     "save": "Save",
@@ -430,6 +498,11 @@
       "title": "Preferences",
       "pageSize": "Default rows per page",
       "pageSizeHelp": "The initial page size for every table.",
+      "theme": "Theme",
+      "themeHelp": "Follow the system appearance, or keep Coffer light or dark on this device.",
+      "themeSystem": "System",
+      "themeLight": "Light",
+      "themeDark": "Dark",
       "preferredEditor": "Preferred editor",
       "preferredEditorHelp": "The editor Coffer opens managed files with. Pick a detected editor, or type any app name / launch command. Empty uses the system default.",
       "preferredEditorSystemDefault": "System default",
@@ -1553,7 +1626,11 @@
     }
   },
   "scope": {
-    "subtitle": "Where this is active: which agents can reach it. Out of reach it stays registered, just not exposed or delivered.",
+    "availableTo": "Available to",
+    "disabledSub": "No agent can use it; your ticks are kept",
+    "everywhereSub": "Including agents you add later",
+    "restrictedSub": "Only the ones ticked below",
+    "countOf": "{{selected}} of {{total}} agents",
     "machineLocal": "Reach is set on this machine only — it is not synced, so each machine you use sets its own.",
     "choicesLabel": "Reach",
     "setReach": "Set reach…",

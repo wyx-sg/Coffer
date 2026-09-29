@@ -128,7 +128,7 @@ export function AgentAddDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("agents.addTitle")}</DialogTitle>
           <DialogDescription>{t("agents.addSubtitle")}</DialogDescription>
@@ -146,7 +146,7 @@ export function AgentAddDialog({
                   {added.map((n) => (
                     <li
                       key={n}
-                      className="rounded-md border bg-card/60 px-3 py-2 text-sm font-medium"
+                      className="rounded-md border bg-surface-raised px-3 py-2 text-sm font-medium"
                     >
                       {n}
                     </li>

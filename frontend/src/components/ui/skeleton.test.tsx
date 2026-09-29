@@ -5,12 +5,12 @@ import { render } from "@testing-library/react";
 import { Skeleton } from "./skeleton";
 
 describe("Skeleton", () => {
-  test("renders a pulsing muted block hidden from assistive tech", () => {
+  test("renders a shimmering sunken block hidden from assistive tech", () => {
     const { container } = render(<Skeleton data-testid="sk" />);
     const el = container.firstElementChild as HTMLElement;
     expect(el).toHaveAttribute("aria-hidden", "true");
-    expect(el.className).toContain("animate-pulse");
-    expect(el.className).toContain("bg-muted");
+    expect(el.className).toContain("animate-shimmer");
+    expect(el.className).toContain("bg-surface-sunken");
   });
 
   test("merges the caller's sizing classes", () => {

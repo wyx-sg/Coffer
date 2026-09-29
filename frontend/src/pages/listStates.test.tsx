@@ -51,7 +51,7 @@ acceptance("web-ui", "a list surface shows first-class loading and error states"
   expect(screen.getByRole("heading", { level: 1, name: "MCP servers" })).toBeInTheDocument();
   // Skeleton rows in the real table, not a blank page or a bare "Loading…".
   expect(
-    document.querySelectorAll('[data-slot="skeleton"], .animate-pulse').length,
+    document.querySelectorAll('[data-slot="skeleton"], .animate-shimmer').length,
   ).toBeGreaterThan(0);
   expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
   pending.unmount();

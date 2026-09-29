@@ -12,7 +12,11 @@
 // to it. Nothing needs React, so nothing here imports it.
 import type { TFunction } from "i18next";
 
+import type { AgentOut } from "@/lib/api/agents";
 import type { Scope } from "@/lib/hooks/useScope";
+
+/** The panel's amber line: a scope, or this resource, that reaches nobody. */
+export const WARNING_CLASS = "rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning";
 
 /** Which state the control reads as, and which one the panel will write. */
 export type ReachMode = "disabled" | "everywhere" | "restricted";
@@ -71,4 +75,34 @@ export function reachLabel(t: TFunction, live: ReachMode | null, scope: Scope | 
   const agents = scope?.agents ?? [];
   if (agents.length === 0) return t("scope.noneSelected");
   return t("scope.agentCount", { count: agents.length });
+}
+
+/** One agent the pick-list can offer: what a tick WRITES (the uid), what it
+ *  READS as (the name), and the type its badge is drawn from. */
+export interface PickableAgent {
+  uid: string;
+  name: string;
+  /** Agent type key; unknown or empty draws the neutral mark. */
+  type: string;
+  /** False when detection finds no program on this machine — the only state
+   *  the agent list carries, so the only state word a row can show. */
+  installed: boolean;
+}
+
+/** The pick-list's vocabulary, from the agents registered on this machine. */
+export function pickableAgents(agents: readonly AgentOut[] | undefined): PickableAgent[] {
+  return (agents ?? []).map((a) => ({
+    uid: a.uid,
+    name: a.name,
+    type: a.type ?? "",
+    installed: a.state !== "config_only" && a.state !== "missing",
+  }));
+}
+
+/** The agents a stored scope names, resolved for their badges. A uid this
+ *  vault does not know keeps the neutral mark, as the pick-list keeps its row. */
+export function chosenAgents(scope: Scope | null, registered: PickableAgent[]): PickableAgent[] {
+  return (scope?.agents ?? []).map(
+    (uid) => registered.find((a) => a.uid === uid) ?? { uid, name: uid, type: "", installed: true },
+  );
 }

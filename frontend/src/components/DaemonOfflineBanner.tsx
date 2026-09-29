@@ -58,12 +58,12 @@ export function DaemonOfflineBanner() {
   return (
     <Alert
       variant="warning"
-      className="pointer-events-auto w-full max-w-xl shadow-lg"
+      className="pointer-events-auto w-full max-w-xl shadow-overlay"
       data-testid="daemon-banner"
       data-banner-code={isStale ? "DAEMON_OUT_OF_DATE" : code}
     >
       <AlertCircle className="size-4" />
-      <AlertTitle className="font-serif text-base">
+      <AlertTitle>
         {isStale
           ? t("daemon.offline.outOfDateTitle")
           : isAuthGap
@@ -104,9 +104,7 @@ export function DaemonOfflineBanner() {
                 actually bring it back; the 30s status poll clears the banner. */}
             <p className="text-xs text-foreground/60">
               {t("daemon.offline.webRestartHint")}{" "}
-              <code className="rounded-sm bg-muted px-1 py-0.5 font-mono">
-                coffer daemon start
-              </code>
+              <code className="rounded-sm bg-muted px-1 py-0.5 font-mono">coffer daemon start</code>
             </p>
           </div>
         )}

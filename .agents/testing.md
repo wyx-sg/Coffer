@@ -239,6 +239,8 @@ make verify-contract     # contract tier only
 make verify-benchmark    # the benchmark-marked tests (excluded from verify)
 make verify-e2e          # e2e tier only (Playwright: web + mcp projects)
 make verify-acceptance   # audit spec.md scenarios vs test markers
+make verify-visual       # screenshot baseline: every route, light + dark (not in verify / verify-e2e)
+make visual-update       # re-record this platform's screenshot baseline
 
 make lint                # every static gate (see below) — NOT just ruff + mypy
 make format              # ruff format + ruff --fix + prettier (frontend)
@@ -289,6 +291,33 @@ Two consequences worth internalising:
 | `make verify-e2e`         | `cd e2e && playwright test` — **both** projects: `web` (Chromium over the served UI, `e2e/web/specs/*.spec.ts`) and `mcp` (`e2e/mcp/specs/*.spec.ts`, a real MCP client through the shim to the daemon and upstream servers). | After touching a page, or the daemon ↔ shim ↔ MCP-client boundary.      |
 | `make verify-acceptance`  | `openspec validate --all --strict` (every requirement owns a scenario), then `scripts/audit_acceptance.py` (every scenario has a marker, every marker a scenario).                | Every spec.md edit. Cheap; needs the root `npm install` for the OpenSpec CLI. |
 
+## Visual Baseline
+
+`e2e/playwright.visual.config.ts` (project `visual`, `e2e/visual/specs/`) shoots
+every top-level sidebar route in light and dark — the theme comes from
+`emulateMedia({ colorScheme })` and is checked on `<html data-theme>` — at
+1280×800, DPR 1, locale `en`, timezone UTC. It runs on its own fresh daemon
+(`:18100`, HOME `/tmp/coffer-e2e-visual`, wiped each run) and its own Vite
+(`:5174`), so nothing the functional suite creates shows up in the pixels. It
+is the reference for UI work: a restyle that was not meant to move a page shows
+up here as an image diff.
+
+- `make verify-visual` compares; `make visual-update` re-records.
+- Baselines are per platform — `e2e/visual/specs/__screenshots__/{darwin,linux}/`
+  — because font rasterising differs between them. Locally a missing baseline
+  fails. In CI (`test-e2e`) a missing one is written instead and uploaded as the
+  `visual-baseline-linux` artifact; commit its `linux/` folder to start
+  comparing there.
+- Update only for a deliberate visual change, and commit the new images in the
+  same PR so the reviewer sees the image diff. A diff you did not intend is a
+  regression, not a baseline to refresh.
+- Time-dependent text (`<time>`, relative and absolute timestamps, uptime) is
+  masked; animations, transitions and the caret are frozen, and the Vite-only
+  TanStack Query devtools button is hidden. A page that differs between two runs
+  of the same tree needs a mask or a better wait — never a looser threshold
+  (`maxDiffPixelRatio` 0.001: reruns are pixel-identical, the budget only
+  absorbs glyph anti-aliasing jitter).
+
 ## CI Jobs
 
 `.github/workflows/verify.yml` runs its jobs in parallel; the required checks on `main` are `lint`, `test-unit`, `test-integration`, `test-contract`, `audit-acceptance`, `secrets-scan` (plus the PR-title check `conventional-title`):
@@ -304,7 +333,7 @@ Two consequences worth internalising:
 | `audit-acceptance`                | `openspec validate --all --strict` (needs the root `npm ci`), then `python3 scripts/audit_acceptance.py`. Always runs.      |
 | `secrets-scan`                    | `gitleaks` over the full history (`fetch-depth: 0`) — a committed secret fails the PR even if the final tree is clean. Always runs. |
 | `test-contract`                   | `make verify-contract`                                                                                                     |
-| `test-e2e`                        | `make verify-e2e` (installs Chromium; runs the `web` and `mcp` projects)                                                    |
+| `test-e2e`                        | `make verify-e2e` (installs Chromium; runs the `web` and `mcp` projects), then `make verify-visual`, uploading the linux baselines and diffs as the `visual-baseline-linux` artifact |
 
 The test jobs are skipped only on an explicit `code=false`: if `changes` itself fails they run anyway. A job skipped by its condition reports success, which is how a docs-only PR still shows every required check green.
 

@@ -53,7 +53,7 @@ export function AgentMcpEntryOverview({ entry }: { entry: McpEntryDetailOut }) {
     <div className="space-y-4">
       <Card className="paper-card">
         <CardHeader>
-          <CardTitle className="font-serif text-lg">{t("mcp.server.overview.config")}</CardTitle>
+          <CardTitle className="text-sm font-semibold">{t("mcp.server.overview.config")}</CardTitle>
         </CardHeader>
         <CardContent>
           <dl className="grid gap-3 text-sm sm:grid-cols-[minmax(8rem,auto)_1fr]">
@@ -126,7 +126,7 @@ export function AgentMcpEntryOverview({ entry }: { entry: McpEntryDetailOut }) {
 
       <Card className="paper-card">
         <CardHeader>
-          <CardTitle className="font-serif text-lg">
+          <CardTitle className="text-sm font-semibold">
             {t("agents.workspace.mcp.detail.file")}
           </CardTitle>
         </CardHeader>

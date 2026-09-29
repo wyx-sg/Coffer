@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">
+  <style>
+    .ink { stroke: #16181D; }
+    .dot { stroke: #4353D8; }
+    @media (prefers-color-scheme: dark) {
+      .ink { stroke: #E4E5EA; }
+    }
+  </style>
+  <path class="ink" d="M20 8.5V7a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4v-1.5" fill="none" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle class="dot" cx="12" cy="12" r="1.9" fill="none" stroke-width="2.25"/>
+</svg>

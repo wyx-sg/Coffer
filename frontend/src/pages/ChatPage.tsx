@@ -37,7 +37,7 @@ export function ChatPage() {
       {/* Conversation-list column */}
       <div
         className={cn(
-          "flex-col border-r border-border bg-card/30 transition-all duration-200",
+          "flex-col border-r border-border bg-surface-sidebar transition-all duration-200",
           historyOpen ? "flex w-64" : "hidden w-0",
         )}
       >

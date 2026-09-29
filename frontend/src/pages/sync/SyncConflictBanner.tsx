@@ -22,11 +22,7 @@ export function SyncConflictBanner({ paths, worktree }: Props) {
   const { t } = useTranslation();
 
   return (
-    <Alert
-      className="border-status-warn/40 bg-status-warn/5"
-      data-testid="sync-conflict-banner"
-      role="alert"
-    >
+    <Alert variant="warning" data-testid="sync-conflict-banner" role="alert">
       <GitMerge className="size-4" aria-hidden />
       <AlertTitle>{t("sync.conflict.title")}</AlertTitle>
       <AlertDescription className="space-y-3">

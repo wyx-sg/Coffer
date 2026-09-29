@@ -110,19 +110,23 @@ function NavRow({ item, collapsed, dot }: { item: NavItem; collapsed: boolean; d
       aria-current={isActive ? "page" : undefined}
       aria-label={collapsed ? label : undefined}
       className={cn(
-        "relative flex items-center rounded-md py-2 font-medium transition-colors",
-        collapsed ? "justify-center px-2" : "gap-2.5 px-3",
+        "relative flex h-7 items-center rounded-item text-sm transition-colors duration-fast",
+        collapsed ? "justify-center px-2" : "gap-[9px] px-2.5",
         isActive
-          ? "bg-primary/10 text-primary"
-          : "text-foreground/80 hover:bg-secondary hover:text-foreground",
+          ? "bg-surface-selected font-label text-text"
+          : "font-book text-text-muted hover:bg-surface-hover hover:text-text",
       )}
     >
-      <item.icon className="size-4 shrink-0" strokeWidth={1.75} />
+      <item.icon
+        className={cn("size-[15px] shrink-0", isActive ? "text-accent" : "text-text-subtle")}
+        strokeWidth={1.75}
+        aria-hidden
+      />
       {!collapsed ? <span className="flex-1 truncate">{label}</span> : null}
       {experimental && !collapsed ? (
         <span
           data-testid={`nav-experimental-${item.to.replace(/\//g, "")}`}
-          className="shrink-0 rounded border border-border px-1 text-[10px] font-normal leading-4 text-muted-foreground"
+          className="shrink-0 rounded-xs border border-border px-1 text-[10px] font-normal leading-4 text-text-muted"
         >
           {t("nav.experimental")}
         </span>
@@ -135,7 +139,7 @@ function NavRow({ item, collapsed, dot }: { item: NavItem; collapsed: boolean; d
           data-testid={`nav-dot-${item.to.replace(/\//g, "")}`}
           aria-label={t("nav.needsAttention")}
           className={cn(
-            "size-1.5 shrink-0 rounded-full bg-destructive",
+            "size-1.5 shrink-0 rounded-full bg-danger",
             collapsed ? "absolute right-1.5 top-1.5" : null,
           )}
         />
@@ -173,7 +177,7 @@ export function SidebarNav({ collapsed }: { collapsed: boolean }) {
         <div key={group.labelKey} className="mb-1">
           {collapsed ? (
             i > 0 ? (
-              <div className="mx-1 my-2 border-t border-border" />
+              <div className="mx-1 my-2 border-t border-border-subtle" />
             ) : null
           ) : (
             <div className="nav-group-label">{t(group.labelKey)}</div>

@@ -74,7 +74,7 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
           filename={props.filePath}
           fill
           ariaLabel={t("agents.config.editorLabel", { key: props.editorKey })}
-          className="bg-muted/30"
+          className="bg-surface-sunken"
         />
       </FileEditor>
     </div>

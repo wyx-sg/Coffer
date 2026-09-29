@@ -1,29 +1,68 @@
-// src/components/EmptyState.tsx — the shared "nothing here yet" surface.
-// A centred, bordered card with an optional icon, a title, optional
-// description and an optional call-to-action, so every list / not-found /
-// zero-result screen reads the same.
+// src/components/EmptyState.tsx — the shared "nothing here yet" surface, and the inline error a list shows.
+// A centred column: an icon tile, a title, an optional description and its
+// first step — one primary action, optionally a secondary — so every list /
+// not-found / zero-result screen reads the same (Foundations-Feedback "Empty
+// state"). `tone="error"` is the list's inline error: the same layout with the
+// tile toned danger, its actions a retry and a way to diagnose.
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+
+import { cn } from "@/lib/utils";
 
 interface Props {
   icon?: LucideIcon;
   title: string;
   description?: string;
-  /** Usually a Button (or Button asChild + Link). */
+  /** The first step — usually a primary Button (or Button asChild + Link). */
   action?: ReactNode;
+  /** An optional second, secondary action beside the first. */
+  secondaryAction?: ReactNode;
+  /** "error" tones the tile danger for a list that failed to load. */
+  tone?: "default" | "error";
+  className?: string;
 }
 
-export function EmptyState({ icon: Icon, title, description, action }: Props) {
+export function EmptyState({
+  icon: Icon,
+  title,
+  description,
+  action,
+  secondaryAction,
+  tone = "default",
+  className,
+}: Props) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card px-6 py-12 text-center">
+    <div
+      className={cn(
+        "flex min-h-[200px] flex-col items-center justify-center gap-3 px-6 py-12 text-center",
+        className,
+      )}
+    >
       {Icon ? (
-        <Icon className="mb-3 size-8 text-muted-foreground" strokeWidth={1.5} aria-hidden />
+        <span
+          data-tone={tone}
+          className={cn(
+            "inline-flex size-10 shrink-0 items-center justify-center rounded-lg border",
+            tone === "error"
+              ? "border-transparent bg-danger-soft text-danger"
+              : "border-border-subtle bg-surface-sunken text-text-muted",
+          )}
+        >
+          <Icon className="size-5" strokeWidth={1.75} aria-hidden />
+        </span>
       ) : null}
-      <p className="text-base font-medium text-foreground">{title}</p>
-      {description ? (
-        <p className="mt-1 max-w-prose text-sm text-muted-foreground">{description}</p>
+      <div className="flex max-w-empty flex-col gap-1">
+        <p className="text-md font-semibold text-text">{title}</p>
+        {description ? (
+          <p className="text-sm leading-normal text-text-muted">{description}</p>
+        ) : null}
+      </div>
+      {action || secondaryAction ? (
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {action}
+          {secondaryAction}
+        </div>
       ) : null}
-      {action ? <div className="mt-5">{action}</div> : null}
     </div>
   );
 }

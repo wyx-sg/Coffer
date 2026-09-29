@@ -70,7 +70,7 @@ export function BulkBar({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 px-3 py-2">
+    <div className="flex flex-wrap items-center gap-3 rounded-md border bg-surface-sunken px-3 py-2">
       <span className="text-sm font-medium">{label}</span>
       <div className="flex flex-wrap items-center gap-2">{children}</div>
       <TableActionButton icon={X} label={clearLabel} className="ml-auto" onClick={onClear} />

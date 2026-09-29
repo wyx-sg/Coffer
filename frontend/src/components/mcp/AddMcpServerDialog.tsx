@@ -71,7 +71,7 @@ export function AddMcpServerDialog() {
           <Plus className="mr-1 size-4" /> {t("resources.addServer")}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("mcp.server.addTitle")}</DialogTitle>
           <DialogDescription>{t("mcp.server.addSubtitle")}</DialogDescription>

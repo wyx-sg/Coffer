@@ -145,7 +145,7 @@ describe("ScopeControl", () => {
     seed({ scope: only([GHOST]) });
     render(<ScopeControl kind="mcp_server" uid={FS_UID} enabled />);
     expect(trigger()).toHaveAttribute("title", expect.stringMatching(/names no agent registered/i));
-    expect(trigger().className).toContain("status-warn");
+    expect(trigger().className).toContain("text-warning");
     openPanel();
     expect(screen.getByText(/names no agent registered/i)).toBeInTheDocument();
   });
@@ -153,7 +153,7 @@ describe("ScopeControl", () => {
   test("a scope that excludes nothing raises no note", () => {
     seed({ scope: only([CLAUDE]) });
     render(<ScopeControl kind="mcp_server" uid={FS_UID} enabled />);
-    expect(trigger().className).not.toContain("status-warn");
+    expect(trigger().className).not.toContain("text-warning");
     openPanel();
     expect(screen.queryByText(/inactive/i)).not.toBeInTheDocument();
   });
@@ -230,7 +230,7 @@ describe("ScopeControl", () => {
     render(<ScopeControl kind="mcp_server" uid={FS_UID} enabled={false} />);
 
     expect(trigger()).toHaveTextContent(/^disabled/i);
-    expect(trigger().className).not.toContain("status-warn");
+    expect(trigger().className).not.toContain("text-warning");
     expect(screen.queryByText(/not active here/i)).toBeNull();
   });
 
@@ -240,7 +240,7 @@ describe("ScopeControl", () => {
     seed({ scope: only([GHOST]) });
     render(<ScopeControl kind="mcp_server" uid={FS_UID} enabled />);
 
-    expect(trigger().className).toContain("status-warn");
+    expect(trigger().className).toContain("text-warning");
   });
 
   test("choosing Disabled disables the resource and leaves the scope alone", () => {

@@ -98,7 +98,7 @@ export function HelpTip({ children, label, className }: Props) {
         </button>
       </PopoverTrigger>
       <PopoverContent
-        className="max-w-xs space-y-2 p-3 text-xs leading-relaxed text-muted-foreground"
+        className="space-y-2"
         onOpenAutoFocus={(e) => e.preventDefault()}
         onPointerEnter={clear}
         onPointerLeave={hoverClose}

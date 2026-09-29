@@ -1,5 +1,27 @@
 import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
+
+// tailwind-merge only knows Tailwind's default theme. Teach it the Foundations
+// keys tailwind.config.js adds, so `cn("font-label", "font-mono")` keeps both
+// and `cn("text-sm", "text-display")` keeps only the later size.
+const twMerge = extendTailwindMerge({
+  extend: {
+    theme: {
+      spacing: ["control-sm", "control-md", "control-lg", "row", "setting-row", "sidebar", "rail"],
+      borderRadius: ["item"],
+    },
+    classGroups: {
+      "font-weight": [{ font: ["book", "label", "heavy"] }],
+      "font-size": [{ text: ["2xs", "md", "display"] }],
+      shadow: [{ shadow: ["overlay", "lifted", "knob", "focus"] }],
+      duration: [{ duration: ["fast", "base", "slow"] }],
+      ease: [{ ease: ["out", "in", "standard"] }],
+      z: [{ z: ["sticky", "menu", "dialog", "toast", "tooltip"] }],
+      opacity: [{ opacity: ["disabled", "field-disabled"] }],
+      "max-w": [{ "max-w": ["measure", "form", "content", "empty"] }],
+    },
+  },
+});
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

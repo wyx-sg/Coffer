@@ -158,7 +158,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer(
     <div
       className={cn(
         "border-t border-border bg-background px-4 py-3",
-        dragging && "bg-accent ring-2 ring-inset ring-ring",
+        dragging && "bg-surface-selected ring-2 ring-inset ring-ring",
       )}
       {...dropHandlers}
       data-testid="composer"

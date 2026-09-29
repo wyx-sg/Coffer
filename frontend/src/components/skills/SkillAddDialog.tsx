@@ -46,7 +46,7 @@ export function SkillAddDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("skills.add")}</DialogTitle>
           <DialogDescription>{t("skills.addSubtitle")}</DialogDescription>

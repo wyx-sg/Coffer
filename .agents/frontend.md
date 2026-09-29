@@ -21,7 +21,8 @@ it — do not invent a parallel pattern.
   models; **openapi-fetch** is the typed client over every capability's paths
   (`src/lib/api/types.ts` merges them), and one shared hand-written `call<T>()`
   transport helper serves the modules not yet moved onto it (§4, §9).
-- **shadcn/ui + Radix + Tailwind** for the design system (§6).
+- **shadcn/ui + Radix + Tailwind** for the design system (§6), themed by the
+  Foundations tokens in `src/index.css` (light and dark).
 - **react-hook-form + zod** for forms, **i18next** for copy, **lucide-react**
   for icons.
 
@@ -238,16 +239,25 @@ return useMutation({
 - **File header comment**: first line `// src/path` + one line of purpose.
 - **`cn()`** (`src/lib/utils`) for conditional classes. No inline `style` except
   a documented theming bridge.
-- **Semantic tokens only** (`text-muted-foreground`, `bg-card`, `border-border`).
-  Health/status colour comes only from `src/lib/statusColors.ts`, which maps a
-  tone onto the `status.ok|warn|err` tokens — components never pick a status
-  class themselves, and raw `green/amber/emerald` palette classes do not appear
-  in `src`.
-- **Type scale only** — `text-sm`/`text-xs`/… never `text-[11px]`. Radius from
-  the prescribed set (`rounded-lg` cards, `rounded-md` controls, `rounded-sm`
-  chips). See [`visual-language.md`](./visual-language.md).
-- **Light-only.** Do not add `dark:` variants — there is no dark token set; they
-  are dead styles.
+- **Theme roles only** (`bg-surface-raised`, `text-text-muted`,
+  `border-border-subtle`, `text-danger`; the shadcn names such as
+  `text-muted-foreground` are aliases and still work). No colour literal — hex,
+  `rgb()`/`hsl()`, Tailwind palette classes — outside `src/index.css`;
+  `scripts/check_frontend_colors.py` fails `make lint` on one. `accent` is the
+  indigo (action, focus, selection); hover is `bg-surface-hover`. Health/status
+  colour comes only from `src/lib/statusColors.ts` and the `StatusWord` /
+  `StatusPill` components, which map a tone onto the `success|warning|danger|
+  neutral` roles — components never pick a status colour themselves.
+- **Type and radius from the scale** — `text-2xs`…`text-xl` (13px base; see
+  [`visual-language.md`](./visual-language.md)), never `text-[11px]`; radius
+  from the Foundations set (`rounded-md` controls, `rounded-xl` cards,
+  `rounded-2xl` dialogs, `rounded-sm` chips).
+- **Light and dark, no `dark:` variants.** Roles are re-pointed under
+  `<html data-theme="dark">` (`src/lib/theme.ts` resolves System / Light /
+  Dark), so a component that uses roles is already themed. A `dark:` utility is
+  a bug: it forks one component into two looks.
+- **Show an agent with `AgentBadge`** (its official mark on a neutral tile),
+  never initials or a per-agent colour; list agents in the Agents page's order.
 - Keep files focused; a component growing past a few hundred lines is a signal to
   split. One component per file, test colocated (§8).
 

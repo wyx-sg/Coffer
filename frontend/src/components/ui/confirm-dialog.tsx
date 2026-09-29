@@ -99,15 +99,15 @@ export function ConfirmDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-[420px]">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         {children}
         {failure ? (
-          <div className="flex items-start gap-2 text-sm text-destructive" role="alert">
-            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <div className="flex items-start gap-2 text-sm text-danger" role="alert">
+            <AlertCircle className="mt-0.5 size-[15px] shrink-0" />
             <span>{translateApiError(t, failure)}</span>
           </div>
         ) : null}

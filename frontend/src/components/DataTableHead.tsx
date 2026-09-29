@@ -33,7 +33,7 @@ export function DataTableHead<T>({
 }: Props<T>) {
   return (
     <TableHeader>
-      <TableRow className="hover:bg-muted">
+      <TableRow className="hover:bg-surface-hover">
         {hasSelection ? (
           <SelectAllHeadCell
             checked={allSelected}

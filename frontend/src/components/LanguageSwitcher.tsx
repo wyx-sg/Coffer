@@ -37,7 +37,9 @@ export function LanguageSwitcher() {
               className={cn(
                 "px-2 py-1 text-xs font-medium leading-none transition-colors",
                 idx > 0 ? "border-l border-border" : "",
-                active ? "bg-secondary text-foreground" : "bg-card hover:bg-secondary/60",
+                active
+                  ? "bg-surface-selected text-text"
+                  : "bg-surface-raised hover:bg-surface-hover",
               )}
             >
               {lang.label}

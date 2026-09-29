@@ -7,8 +7,11 @@ set -euo pipefail
 COFFER_E2E_HOME="${COFFER_E2E_HOME:-$(mktemp -d -t coffer-e2e-XXXXXX)}"
 export HOME="${COFFER_E2E_HOME}"
 export COFFER_DB_URL="sqlite+aiosqlite:///${COFFER_E2E_HOME}/coffer.db"
-export COFFER_PORT_RANGE_START=18000
-export COFFER_PORT_RANGE_END=18009
+# COFFER_E2E_PORT lets a second suite (the visual baseline,
+# playwright.visual.config.ts) run its own daemon beside this one.
+COFFER_E2E_PORT="${COFFER_E2E_PORT:-18000}"
+export COFFER_PORT_RANGE_START="${COFFER_E2E_PORT}"
+export COFFER_PORT_RANGE_END="$((COFFER_E2E_PORT + 9))"
 # The browser-driven `web` suite loads the app from the Vite dev server on
 # localhost:5173 and calls the daemon cross-origin. The daemon serves the built
 # web UI itself, so its CORS allowlist is empty (same-origin) by default and
@@ -19,14 +22,15 @@ export COFFER_DEV_CORS=1
 # Make sure the .coffer dir exists so daemon bootstrap can write daemon.json
 mkdir -p "${COFFER_E2E_HOME}/.coffer"
 
-# Persist the chosen home path so _helpers.ts can locate daemon.json
-echo "${COFFER_E2E_HOME}" > "/tmp/coffer-e2e-home.path"
+# Persist the chosen home path so _helpers.ts can locate daemon.json.
+# COFFER_E2E_HOME_FILE moves the pointer so a second suite does not repoint it.
+echo "${COFFER_E2E_HOME}" > "${COFFER_E2E_HOME_FILE:-/tmp/coffer-e2e-home.path}"
 
 # Wait up to 45 s for port 18000 to be truly free (handles TCP TIME_WAIT).
 # macOS TIME_WAIT is 2 * net.inet.tcp.msl = 2 * 15 s = 30 s.
 # We intentionally do NOT use SO_REUSEADDR here — the daemon's port allocator
 # does not set SO_REUSEADDR, so we need the port to be clean before we start.
-WAIT_PORT=18000
+WAIT_PORT="${COFFER_E2E_PORT}"
 WAIT_SECS=45
 _waited=0
 until /usr/bin/python3 -c "

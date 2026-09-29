@@ -9,6 +9,8 @@ import { ArrowLeft } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
+import { cn } from "@/lib/utils";
+
 interface Props {
   /** Optional — list pages carry their kind icon; detail pages usually omit it. */
   icon?: LucideIcon;
@@ -25,24 +27,32 @@ interface Props {
 export function PageHeader({ icon: Icon, title, subtitle, actions, badges, back }: Props) {
   return (
     <header className="flex flex-wrap items-end justify-between gap-4">
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         {back ? (
           <Link
             to={back.to}
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            className="inline-flex items-center gap-1 text-xs text-text-subtle transition-colors duration-fast hover:text-text"
           >
-            <ArrowLeft className="size-4" aria-hidden />
+            <ArrowLeft className="size-3.5" aria-hidden />
             {back.label}
           </Link>
         ) : null}
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="flex items-center gap-3 text-3xl tracking-tight">
-            {Icon ? <Icon className="size-7 text-primary" strokeWidth={1.5} aria-hidden /> : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Page title 18/650; a detail page (it has a back link) 20/650. */}
+          <h1
+            className={cn(
+              "flex min-h-control-md items-center gap-2.5 font-bold tracking-[-0.01em]",
+              back ? "text-xl" : "text-lg",
+            )}
+          >
+            {Icon ? (
+              <Icon className="size-5 text-text-subtle" strokeWidth={1.75} aria-hidden />
+            ) : null}
             {title}
           </h1>
           {badges}
         </div>
-        {subtitle ? <p className="max-w-prose text-sm text-muted-foreground">{subtitle}</p> : null}
+        {subtitle ? <p className="max-w-prose text-sm text-text-subtle">{subtitle}</p> : null}
       </div>
       {actions}
     </header>

@@ -1,3 +1,5 @@
+// src/components/ui/popover.tsx
+// Popover over @radix-ui/react-popover: a raised 260-wide help/detail box, 6 below its trigger.
 import * as React from "react";
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import { cn } from "@/lib/utils";
@@ -15,8 +17,9 @@ const PopoverContent = React.forwardRef<
       align={align}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 rounded-lg border border-border bg-card text-foreground shadow-lg outline-none",
-        "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+        "z-menu w-[260px] rounded-xl bg-surface-raised p-3 text-xs text-text-muted shadow-overlay outline-none",
+        "data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:duration-base data-[state=open]:ease-out",
+        "data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-fast data-[state=closed]:ease-in",
         className,
       )}
       {...props}

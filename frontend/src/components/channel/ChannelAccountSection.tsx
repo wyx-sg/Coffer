@@ -31,9 +31,9 @@ function PairingCodePanel({ code }: { code: PairingCode }) {
   };
 
   return (
-    <div className="space-y-2 rounded-lg border border-primary/30 bg-accent/30 p-4">
+    <div className="space-y-2 rounded-lg border border-primary/30 bg-accent-soft p-4">
       <div className="flex flex-wrap items-center gap-3">
-        <span className="font-mono text-4xl font-semibold tracking-[0.3em]">{code.code}</span>
+        <span className="font-mono text-display font-semibold tracking-[0.3em]">{code.code}</span>
         <Button size="sm" variant="outline" onClick={copy} aria-label={t("channels.pairing.copy")}>
           <Copy className="mr-1.5 size-3.5" />
           {copied ? t("channels.pairing.copied") : t("channels.pairing.copy")}

@@ -56,3 +56,17 @@ describe("formatBytes", () => {
     expect(formatBytes(Infinity)).toBe("0 B");
   });
 });
+
+describe("cn with the Foundations theme keys", () => {
+  it("treats the added weights as weights, not families", () => {
+    expect(cn("font-label", "font-mono")).toBe("font-label font-mono");
+    expect(cn("font-medium", "font-label")).toBe("font-label");
+  });
+  it("merges the added sizes, shadows and heights", () => {
+    expect(cn("text-sm", "text-2xs")).toBe("text-2xs");
+    expect(cn("text-2xs", "text-text-muted")).toBe("text-2xs text-text-muted");
+    expect(cn("shadow-sm", "shadow-overlay")).toBe("shadow-overlay");
+    expect(cn("h-10", "h-control-md")).toBe("h-control-md");
+    expect(cn("rounded-md", "rounded-item")).toBe("rounded-item");
+  });
+});

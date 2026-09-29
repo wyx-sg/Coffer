@@ -17,6 +17,6 @@ describe("Markdown", () => {
     render(<Markdown>{"use `coffer daemon start`"}</Markdown>);
     const code = screen.getByText("coffer daemon start");
     expect(code.tagName).toBe("CODE");
-    expect(code.className).toContain("text-sm");
+    expect(code.className).toContain("text-xs");
   });
 });

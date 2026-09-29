@@ -29,7 +29,7 @@ export function AgentModelBar({ conversationId, agentKey, agentLabel, disabled =
   const setEffort = useSetAgentEffort();
 
   return (
-    <div className="flex items-center gap-3 border-b border-border bg-card/50 px-4 py-2">
+    <div className="flex items-center gap-3 border-b border-border bg-surface-raised px-4 py-2">
       {/* Agent label — sourced from the registry via the agents API. */}
       <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
         <Bot className="size-4 shrink-0 text-primary" strokeWidth={1.75} />

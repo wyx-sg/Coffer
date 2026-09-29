@@ -73,7 +73,7 @@ export function ConversationList({
                   className={cn(
                     "rounded-sm px-2.5 py-1 text-xs font-medium transition-colors",
                     selected
-                      ? "bg-background text-foreground shadow-sm"
+                      ? "bg-surface-raised text-text shadow-lifted"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >

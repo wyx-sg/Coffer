@@ -140,7 +140,7 @@ export function AddChannelDialog({
         onOpenChange(o);
       }}
     >
-      <DialogContent className="max-w-lg">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("channels.dialog.title")}</DialogTitle>
           <DialogDescription>{t("channels.dialog.subtitle")}</DialogDescription>

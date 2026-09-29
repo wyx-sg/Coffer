@@ -17,6 +17,74 @@
     "openFailed": "无法在编辑器中打开该文件。",
     "revealFailed": "无法显示该文件。"
   },
+  "agentBadge": {
+    "label": "{{name}}，{{state}}",
+    "tooltip": "{{name}} · {{state}}",
+    "allAgents": "所有智能体",
+    "state": {
+      "connected": "已连接",
+      "not-connected": "未连接到 Coffer",
+      "not-installed": "未安装",
+      "disabled": "已停用"
+    },
+    "stateInline": {
+      "connected": "已连接",
+      "not-connected": "未连接到 Coffer",
+      "not-installed": "未安装",
+      "disabled": "已停用"
+    }
+  },
+  "changePreview": {
+    "summary": "{{agents}}，共 {{changes}}",
+    "changes_one": "{{count}} 项改动",
+    "changes_other": "{{count}} 项改动",
+    "agents_one": "{{count}} 个智能体",
+    "agents_other": "{{count}} 个智能体",
+    "op": {
+      "add": "新增",
+      "modify": "修改",
+      "remove": "删除"
+    },
+    "whatWillHappen": "将会发生什么",
+    "changesHeading": "改动 · {{count}}",
+    "reassurance": "只改动显示出来的这些行，每个文件的其余内容保持不变。",
+    "diffLabel": "{{path}} 的改动",
+    "computing": "正在与各智能体的文件比对…",
+    "empty": {
+      "title": "无需改动",
+      "body": "各智能体的文件已与 Coffer 一致。",
+      "checked": "刚刚检查过"
+    },
+    "apply": "应用",
+    "applyCount_one": "应用 {{count}} 项改动",
+    "applyCount_other": "应用 {{count}} 项改动",
+    "applying": {
+      "title": "正在应用改动",
+      "progress": "正在应用第 {{current}} 项，共 {{total}} 项…"
+    },
+    "applied": {
+      "title": "改动已应用",
+      "head_one": "已应用 {{count}} 项改动",
+      "head_other": "已应用 {{count}} 项改动",
+      "recorded": "已记录到活动",
+      "viewActivity": "在活动中查看"
+    },
+    "failed": {
+      "title": "部分改动失败",
+      "head_one": "{{count}} 项改动中有 {{failed}} 项失败。",
+      "head_other": "{{count}} 项改动中有 {{failed}} 项失败。",
+      "rest_one": "其余 {{count}} 项已应用，并保持不变。",
+      "rest_other": "其余 {{count}} 项已应用，并保持不变。",
+      "word": "失败",
+      "retry_one": "重试 {{count}} 项改动",
+      "retry_other": "重试 {{count}} 项改动"
+    },
+    "status": {
+      "applied": "已应用",
+      "applying": "正在应用",
+      "pending": "等待中"
+    }
+  },
   "common": {
     "close": "关闭",
     "save": "保存",
@@ -430,6 +498,11 @@
       "title": "偏好",
       "pageSize": "每页默认行数",
       "pageSizeHelp": "所有表格的初始每页行数。",
+      "theme": "主题",
+      "themeHelp": "跟随系统外观，或在本设备上固定为浅色或深色。",
+      "themeSystem": "跟随系统",
+      "themeLight": "浅色",
+      "themeDark": "深色",
       "preferredEditor": "首选编辑器",
       "preferredEditorHelp": "Coffer 打开受管文件所用的编辑器。可选一个检测到的编辑器，或直接填入应用名 / 启动命令；留空则用系统默认。",
       "preferredEditorSystemDefault": "系统默认",
@@ -1553,7 +1626,11 @@
     }
   },
   "scope": {
-    "subtitle": "这项资源对哪些 Agent 生效。不在生效范围内时它依然保持注册，只是不会被暴露或分发。",
+    "availableTo": "可用于",
+    "disabledSub": "任何智能体都用不了；你勾选的会保留",
+    "everywhereSub": "包括以后添加的智能体",
+    "restrictedSub": "只有下面勾选的",
+    "countOf": "{{selected}} / {{total}} 个智能体",
     "machineLocal": "生效范围只在本机设置——它不参与同步，你用的每台机器都要各自设置。",
     "choicesLabel": "生效范围",
     "setReach": "设置生效范围…",

@@ -174,7 +174,7 @@ export function MessageThread({
             type="button"
             variant="outline"
             size="sm"
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-xl shadow-md"
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-xl shadow-overlay"
             onClick={scroll.jumpToLatest}
           >
             <ArrowDown className="mr-1 size-3.5" aria-hidden />

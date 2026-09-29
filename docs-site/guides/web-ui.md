@@ -70,13 +70,17 @@ Settings has five tabs, in this order. Every field saves as you change it; there
 
 | Tab | Route | What it holds |
 | --- | --- | --- |
-| **General** | `/settings/general` | **Preferences**: **Default rows per page** and **Preferred editor** (the app Coffer opens managed files with). **Coffer's daemon**: **Start at login** (macOS). **Experimental features**: switch Sync, Knowledge and Memory on or off for this machine. |
+| **General** | `/settings/general` | **Preferences**: **Theme**, **Default rows per page** and **Preferred editor** (the app Coffer opens managed files with). **Coffer's daemon**: **Start at login** (macOS). **Experimental features**: switch Sync, Knowledge and Memory on or off for this machine. |
 | **Coffer's model** | `/settings/engine` | The model provider and model Coffer uses for its own passes, **Speech to text** for voice messages, and **Automatic upkeep** — the passes Coffer runs by itself and how often. |
 | **Data** | `/settings/data` | **Data retention** per table — **Keep forever** or a number of days — and **Clear expired data now**. |
 | **Security** | `/settings/security` | **Credential encryption**: whether the master key lives in a file beside the database or in the OS keychain. |
 | **About** | `/settings/about` | Version, license and source, and **Copy diagnostics**. |
 
-The page size and preferred editor are stored in your browser and never sent to the daemon, except as the target when you open a file. Stopping the daemon and rotating its token are CLI-only (`coffer daemon stop`, `coffer daemon rotate-token`): stopping the daemon from the page would take the page down with it.
+The theme, page size and preferred editor are stored in your browser and never sent to the daemon, except as the target when you open a file. Stopping the daemon and rotating its token are CLI-only (`coffer daemon stop`, `coffer daemon rotate-token`): stopping the daemon from the page would take the page down with it.
+
+## Light and dark
+
+The UI follows your system's light or dark appearance, and switches with it as it changes. To pick one yourself, set **Settings → General → Theme** to **Light** or **Dark**; **System** goes back to following the system. The choice applies at once and is kept in `localStorage` under `coffer.theme`, so each browser and the desktop app keep their own. See [Design system](/architecture/design-system) for how the two themes are built.
 
 ## Language
 

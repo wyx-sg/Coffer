@@ -45,8 +45,8 @@ export function ConfigFileTree({
               className={cn(
                 "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
                 selectedKey === f.key && !selectedChild
-                  ? "bg-primary/10 text-primary"
-                  : "hover:bg-secondary hover:text-foreground",
+                  ? "bg-surface-selected text-text"
+                  : "hover:bg-surface-hover hover:text-text",
               )}
             >
               {expandedDirs[f.key] ? (
@@ -77,8 +77,8 @@ export function ConfigFileTree({
                         className={cn(
                           "flex w-full items-center gap-2 rounded-md py-1 pl-9 pr-2 text-left transition-colors",
                           selectedKey === f.key && selectedChild === c.relpath
-                            ? "bg-primary/10 text-primary"
-                            : "hover:bg-secondary hover:text-foreground",
+                            ? "bg-surface-selected text-text"
+                            : "hover:bg-surface-hover hover:text-text",
                         )}
                       >
                         <FileText className="size-3.5 shrink-0 opacity-70" />
@@ -98,8 +98,8 @@ export function ConfigFileTree({
               className={cn(
                 "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors",
                 selectedKey === f.key && !selectedChild
-                  ? "bg-primary/10 text-primary"
-                  : "hover:bg-secondary hover:text-foreground",
+                  ? "bg-surface-selected text-text"
+                  : "hover:bg-surface-hover hover:text-text",
                 !f.exists && selectedKey !== f.key && "opacity-55",
               )}
             >

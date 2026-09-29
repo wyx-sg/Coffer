@@ -54,6 +54,12 @@ A hook or gate must stay fast: a slow one trains people to bypass it. That is wh
   value on the descriptor or the mechanism in a facet instead
   ([Agent facets](../docs-site/architecture/agent-facets.md)). Its own tests
   are `backend/tests/integration/harness/test_agent_type_gate.py`.
+- `scripts/check_frontend_colors.py` (also `make lint`) fails on a colour
+  literal — a hex value, an `rgb()` / `hsl()` value that does not read a token,
+  or a Tailwind palette class — in `frontend/src/` outside `index.css`, which
+  holds the theme tokens for light and dark
+  ([Design system](../docs-site/architecture/design-system.md)). Its own tests
+  are `backend/tests/integration/harness/test_frontend_colors_gate.py`.
 
 ## How it is tested
 
