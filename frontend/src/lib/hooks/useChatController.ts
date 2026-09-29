@@ -118,12 +118,12 @@ export function useChatController() {
 
   const startDraft = () => {
     setDraftConfig({ ...effectiveDraft });
-    navigate("/chat");
+    navigate("/conversations");
   };
 
   const selectConversation = (id: string) => {
     setDraftConfig(null);
-    navigate(`/chat/${id}`);
+    navigate(`/conversations/${id}`);
   };
 
   // Resolves whether the conversation was created; a failed create keeps the
@@ -147,7 +147,7 @@ export function useChatController() {
           onSuccess: (created) => {
             setPendingFirst({ convId: created.id, text, attachments });
             setDraftConfig(null);
-            navigate(`/chat/${created.id}`);
+            navigate(`/conversations/${created.id}`);
             resolve(true);
           },
           onError: () => resolve(false),
@@ -161,7 +161,7 @@ export function useChatController() {
     deleteConv.mutate(id, {
       onSuccess: () => {
         setDeletingId(null);
-        if (routeId === id) navigate("/chat");
+        if (routeId === id) navigate("/conversations");
       },
     });
   };
@@ -172,7 +172,7 @@ export function useChatController() {
     archiveConv.mutate(id, {
       onSuccess: () => {
         setArchivingId(null);
-        if (routeId === id) navigate("/chat");
+        if (routeId === id) navigate("/conversations");
       },
     });
   };

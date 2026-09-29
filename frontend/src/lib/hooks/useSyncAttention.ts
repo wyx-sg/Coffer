@@ -18,11 +18,11 @@
 // "Seen" is per browser and deliberately not synced: it is a fact about this
 // person's attention, not about the vault.
 import { useEffect } from "react";
-import { useMatch } from "react-router-dom";
 
 import type { ConvergeRound, RoundStatus, SyncStatus } from "@/lib/api/sync";
 import { useSyncStatus } from "@/lib/hooks/useSync";
 import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
+import { usePageLocation } from "@/lib/settingsModal";
 
 const SEEN_KEY = "coffer.sync.attentionSeen";
 
@@ -111,7 +111,9 @@ function writeSeen(marker: string): void {
  * on the very page that explains it would be noise.
  */
 export function useSyncAttention(): boolean {
-  const onSyncPage = useMatch("/sync") !== null;
+  // The page the user is on — the one under the Settings modal while it is
+  // open, so opening Settings over Sync does not raise the dot.
+  const onSyncPage = usePageLocation().pathname === "/sync";
   // Switching `vault_sync` off stops every sync attention mark (spec
   // experimental-features "Withdraw what a switched-off feature put in front
   // of agents") — and asks nothing, so a switched-off feature is not polled.

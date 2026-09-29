@@ -4,13 +4,17 @@
 // tabs — Overview, Files. We mock the skill hooks so the page doesn't depend
 // on a running daemon.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { SkillDetailPage } from "./SkillDetailPage";
 import type { SkillOut } from "@/lib/api/skills";
 
+// The page is addressed by the skill's NAME and resolves it to the uid against
+// the skills list — `listed` is what that list holds.
+let listed: SkillOut[] = [];
 vi.mock("@/lib/hooks/useSkills", () => ({
+  useSkills: vi.fn(() => ({ data: listed, isPending: false, error: null })),
   useSkill: vi.fn(),
   useRemoveSkill: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useSkillFiles: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
@@ -42,8 +46,8 @@ vi.mock("@/lib/hooks/useResourceMutations", () => ({
 const skillHooks = await import("@/lib/hooks/useSkills");
 const useSkillMock = vi.mocked(skillHooks.useSkill);
 
-// Both identities, kept apart: the uid is what the route carries and what the
-// disable below is addressed to, "hello" is only the heading.
+// Both identities, kept apart: the name "hello" is what the route carries and
+// the heading, the uid is what the disable below is addressed to.
 const SKILL_UID = "sk-0a3e";
 
 const LOCAL_SKILL: SkillOut = {
@@ -63,6 +67,7 @@ const LOCAL_SKILL: SkillOut = {
 };
 
 function mockSkill(skill: SkillOut) {
+  listed = [skill];
   useSkillMock.mockReturnValue({
     data: skill,
     isPending: false,
@@ -70,13 +75,30 @@ function mockSkill(skill: SkillOut) {
   } as unknown as ReturnType<typeof skillHooks.useSkill>);
 }
 
-function renderAt(search = "") {
+/** Where the router is now — path and query — for the addressing tests. */
+const where = { url: "" };
+function Probe() {
+  const loc = useLocation();
+  where.url = loc.pathname + loc.search;
+  return null;
+}
+
+/** Render `/skills/<key><suffix>`; the key defaults to the listed skill's name. */
+function renderAt(suffix = "", key = listed[0]?.name ?? "hello") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[`/skills/${SKILL_UID}${search}`]}>
+      <MemoryRouter initialEntries={[`/skills/${key}${suffix}`]}>
         <Routes>
-          <Route path="/skills/:uid" element={<SkillDetailPage />} />
+          <Route
+            path="/skills/:name/:tab?"
+            element={
+              <>
+                <SkillDetailPage />
+                <Probe />
+              </>
+            }
+          />
           <Route path="/skills" element={<div>skills list</div>} />
         </Routes>
       </MemoryRouter>
@@ -84,7 +106,11 @@ function renderAt(search = "") {
   );
 }
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  listed = [LOCAL_SKILL];
+});
+listed = [LOCAL_SKILL];
 
 describe("SkillDetailPage", () => {
   test("renders the header and the two tabs", () => {
@@ -183,7 +209,7 @@ describe("SkillDetailPage", () => {
       refetch: vi.fn(),
     } as unknown as ReturnType<typeof skillHooks.useSkillFileContent>);
 
-    renderAt("?tab=files");
+    renderAt("/files");
     fireEvent.click(screen.getByRole("button", { name: "SKILL.md" }));
 
     expect(screen.queryByRole("button", { name: /^edit$/i })).not.toBeInTheDocument();
@@ -204,5 +230,61 @@ describe("SkillDetailPage", () => {
     } as unknown as ReturnType<typeof skillHooks.useSkill>);
     renderAt();
     expect(screen.getByText(/failed to load skills/i)).toBeInTheDocument();
+  });
+
+  // revise-web-ui-ia: web-ui "a detail tab lives in the path"
+  test("the open tab lives in the path, under the skill's name", () => {
+    mockSkill(LOCAL_SKILL);
+    renderAt("/files");
+    expect(screen.getByRole("tab", { name: /files/i })).toHaveAttribute("aria-selected", "true");
+    // The REST reads still go by uid.
+    expect(useSkillMock).toHaveBeenLastCalledWith(SKILL_UID);
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /overview/i }));
+    expect(where.url).toBe("/skills/hello");
+    fireEvent.mouseDown(screen.getByRole("tab", { name: /files/i }));
+    expect(where.url).toBe("/skills/hello/files");
+  });
+
+  // revise-web-ui-ia: web-ui "an old query-tab address redirects to the path"
+  test("an old ?tab=files address redirects to the path", async () => {
+    mockSkill(LOCAL_SKILL);
+    renderAt("?tab=files");
+    await waitFor(() => expect(where.url).toBe("/skills/hello/files"));
+    expect(screen.getByRole("tab", { name: /files/i })).toHaveAttribute("aria-selected", "true");
+  });
+
+  // revise-web-ui-ia: web-ui "an old uid address redirects to the name"
+  test("an old uid address redirects to the name address, keeping the tab", async () => {
+    mockSkill(LOCAL_SKILL);
+    renderAt("?tab=files", SKILL_UID);
+    await waitFor(() => expect(where.url).toBe("/skills/hello/files"));
+    expect(screen.getByRole("heading", { name: "hello" })).toBeInTheDocument();
+  });
+
+  test("shows the loading state while the skills list loads", () => {
+    vi.mocked(skillHooks.useSkills).mockReturnValueOnce({
+      data: undefined,
+      isPending: true,
+      error: null,
+    } as unknown as ReturnType<typeof skillHooks.useSkills>);
+    useSkillMock.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      error: null,
+    } as unknown as ReturnType<typeof skillHooks.useSkill>);
+    renderAt();
+    expect(screen.getByText(/loading/i)).toBeInTheDocument();
+  });
+
+  test("a name no skill has shows the load-failed card", () => {
+    mockSkill(LOCAL_SKILL);
+    useSkillMock.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      error: null,
+    } as unknown as ReturnType<typeof skillHooks.useSkill>);
+    renderAt("", "nope");
+    expect(screen.getByText(/failed to load skills/i)).toBeInTheDocument();
+    expect(useSkillMock).toHaveBeenLastCalledWith("");
   });
 });

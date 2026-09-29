@@ -1,6 +1,11 @@
 // frontend/src/pages/McpServerDetailPage.tsx
+// One MCP server's detail page. Addressed by the server's NAME (fixed at
+// creation, unique among MCP servers) with the open tab in the path
+// (`/mcp-servers/<name>/tools`); the REST API addresses a server by uid, so
+// the name is resolved against the MCP servers list, and an old uid address
+// redirects to the name address.
 import { useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Server } from "lucide-react";
@@ -9,7 +14,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { translateApiError } from "@/lib/api/errors";
-import { useResource } from "@/lib/hooks/useResources";
+import { canonicalDetailPath, resolveByName } from "@/lib/detailTabs";
+import { useResource, useResources } from "@/lib/hooks/useResources";
 import { useDeleteResource } from "@/lib/hooks/useResourceMutations";
 import { useMcpCapabilities } from "@/lib/hooks/useMcpCapabilities";
 import { useMcpServerStatus } from "@/lib/hooks/useMcpServerStatus";
@@ -19,16 +25,21 @@ import type { components } from "@/lib/api/types";
 import { type HealthState } from "@/components/mcp/HealthBadge";
 import { McpServerDetailHeader } from "@/components/mcp/McpServerDetailHeader";
 import { McpServerDetailTabs } from "@/components/mcp/McpServerDetailTabs";
+import { MCP_SERVER_TABS } from "@/components/mcp/mcpServerTabs";
 
 type TestResult = components["schemas"]["McpTestResultOut"];
 
 export function McpServerDetailPage() {
   const { t } = useTranslation();
-  const { uid = "" } = useParams<{ uid: string }>();
+  const { name: nameParam = "", tab: pathTab } = useParams<{ name: string; tab?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const list = useResources("mcp_server");
+  const match = resolveByName(list.data, nameParam);
+  const uid = match?.item.uid ?? "";
   // When navigated here from an agent's MCP servers tab, location.state carries
   // a return target, so "← back" leads to that agent rather than the list.
-  const backState = useLocation().state as { backTo?: string; backLabel?: string } | null;
+  const backState = location.state as { backTo?: string; backLabel?: string } | null;
   const back = backState?.backTo
     ? { to: backState.backTo, label: t("common.backTo", { label: backState.backLabel ?? "" }) }
     : { to: "/mcp-servers", label: t("mcp.server.backToResources") };
@@ -73,7 +84,24 @@ export function McpServerDetailPage() {
     del.mutate({ kind: "mcp_server", uid }, { onSuccess: () => navigate("/mcp-servers") });
   };
 
-  if (isPending) {
+  // An old uid address: go to the same tab of the name address.
+  if (match?.byUid) {
+    return (
+      <Navigate
+        replace
+        state={location.state}
+        to={canonicalDetailPath(
+          `/mcp-servers/${encodeURIComponent(match.item.name)}`,
+          pathTab,
+          location.search,
+          MCP_SERVER_TABS,
+          "overview",
+        )}
+      />
+    );
+  }
+
+  if (list.isPending || (!!uid && isPending)) {
     return (
       <Card className="paper-card">
         <CardContent className="py-12 text-center text-muted-foreground">
@@ -82,11 +110,12 @@ export function McpServerDetailPage() {
       </Card>
     );
   }
-  if (error || !resource) {
+  if (list.error || error || !resource) {
     // The translated error is the title when it says more than "not found";
     // a plain not-found is not repeated as its own description.
+    const failure = list.error ?? error;
     const title = t("errors.RESOURCE_NOT_FOUND");
-    const message = error ? translateApiError(t, error) : null;
+    const message = failure ? translateApiError(t, failure) : null;
     return (
       <EmptyState
         icon={Server}
@@ -130,6 +159,7 @@ export function McpServerDetailPage() {
 
       <McpServerDetailTabs
         serverUid={uid}
+        basePath={`/mcp-servers/${encodeURIComponent(nameParam)}`}
         capabilities={capabilities}
         capsError={capsError}
         config={resource.config}

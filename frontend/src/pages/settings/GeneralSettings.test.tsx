@@ -5,14 +5,11 @@ import { GeneralSettings } from "./GeneralSettings";
 import { DataTable, type Column } from "@/components/DataTable";
 import { acceptance } from "@/test/acceptance";
 
-// The daemon-residency and experimental-features cards have their own tests
-// (and their own daemon routes); stub them so these stay about the preferences
-// this page actually owns, and need no query client.
-vi.mock("./DaemonResidencySettings", () => ({
-  DaemonResidencySettings: () => null,
-}));
-vi.mock("./ExperimentalFeaturesSettings", () => ({
-  ExperimentalFeaturesSettings: () => null,
+// The Coffer's model section has its own tests (and its own daemon routes);
+// stub it so these stay about the preferences this page owns, and need no
+// query client.
+vi.mock("./EngineSettings", () => ({
+  EngineSettings: () => null,
 }));
 
 // The picker lists editors the daemon detected as installed; stub that out so

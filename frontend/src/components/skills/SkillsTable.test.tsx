@@ -113,8 +113,8 @@ function selectStatus(optionName: string) {
 }
 
 // Every fixture carries BOTH identities, deliberately unlike each other: the
-// uid is what the row navigates to and what a delete/enable/disable is
-// addressed to, the name is what the reader sees. A fixture whose uid equalled
+// uid is what a delete/enable/disable is addressed to, the name is what the
+// row navigates to (a skill's name is fixed, so it is the detail address). A fixture whose uid equalled
 // its name would let a request built from the label pass these tests.
 const SAMPLE: SkillOut[] = [
   {
@@ -307,10 +307,10 @@ describe("SkillsTable", () => {
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     expect(navigateMock).not.toHaveBeenCalled();
 
-    // …while the row itself still navigates — to the uid, which is what the
-    // detail route is keyed on now, not to the label the row prints.
+    // …while the row itself still navigates — to the skill's fixed name,
+    // which is what the detail route is keyed on (revise-web-ui-ia).
     fireEvent.click(screen.getByText("Greets the user"));
-    expect(navigateMock).toHaveBeenCalledWith("/skills/sk-7f31");
+    expect(navigateMock).toHaveBeenCalledWith("/skills/hello-skill");
   });
 
   test("the status filter narrows the rows by reach", () => {

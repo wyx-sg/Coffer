@@ -16,12 +16,12 @@ const getApiClientMock = vi.mocked(getApiClient);
 /**
  * Stands in for the server's detail page and echoes the segment the router
  * matched, so the assertions can check WHICH identifier the dialog followed.
- * The route is `:uid`: there is no name→uid redirect any more, so a dialog that
- * navigated to the name would land on a page that resolves nothing.
+ * The route is `:name`: an MCP server's name is fixed at creation and unique
+ * among servers, so it is the detail page's address.
  */
 function DetailProbe() {
-  const { uid } = useParams<{ uid: string }>();
-  return <div data-testid="detail-page">{uid}</div>;
+  const { name } = useParams<{ name: string }>();
+  return <div data-testid="detail-page">{name}</div>;
 }
 
 function wrap() {
@@ -31,7 +31,7 @@ function wrap() {
       <MemoryRouter initialEntries={["/mcp-servers"]}>
         <Routes>
           <Route path="/mcp-servers" element={<AddMcpServerDialog />} />
-          <Route path="/mcp-servers/:uid" element={<DetailProbe />} />
+          <Route path="/mcp-servers/:name/:tab?" element={<DetailProbe />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>
@@ -67,7 +67,7 @@ describe("AddMcpServerDialog", () => {
     expect(screen.getByLabelText("MCP server JSON")).toBeInTheDocument();
   });
 
-  test("imports a pasted server and navigates to its detail page BY UID", async () => {
+  test("imports a pasted server and navigates to its detail page by name", async () => {
     const postMock = vi.fn().mockResolvedValue({
       data: {
         uid: "u-filesystem",
@@ -89,10 +89,10 @@ describe("AddMcpServerDialog", () => {
     openAndReview();
     fireEvent.click(await screen.findByRole("button", { name: /import/i }));
 
-    // The pasted document called it "fs"; the URL has to carry the uid the
-    // registration answered with, which is what survives a later rename.
+    // revise-web-ui-ia: the pasted document called it "fs", which is the
+    // server's fixed name and so its detail address.
     await waitFor(() => {
-      expect(screen.getByTestId("detail-page")).toHaveTextContent("u-filesystem");
+      expect(screen.getByTestId("detail-page")).toHaveTextContent(/^fs$/);
     });
   });
 
@@ -150,7 +150,7 @@ describe("AddMcpServerDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /continue/i }));
     fireEvent.click(await screen.findByRole("button", { name: /import/i }));
     await waitFor(() => {
-      expect(screen.getByTestId("detail-page")).toHaveTextContent("u-github");
+      expect(screen.getByTestId("detail-page")).toHaveTextContent(/^gh$/);
     });
 
     // Resource is registered before the credential store is written (no orphans).
@@ -206,7 +206,7 @@ describe("AddMcpServerDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /continue/i }));
     fireEvent.click(await screen.findByRole("button", { name: /import/i }));
     await waitFor(() => {
-      expect(screen.getByTestId("detail-page")).toHaveTextContent("u-example-api");
+      expect(screen.getByTestId("detail-page")).toHaveTextContent(/^api$/);
     });
 
     // HttpTransport has no `env` field; a non-secret env value must be
@@ -253,7 +253,7 @@ describe("AddMcpServerDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /continue/i }));
     fireEvent.click(await screen.findByRole("button", { name: /import/i }));
     await waitFor(() => {
-      expect(screen.getByTestId("detail-page")).toHaveTextContent("u-example-api");
+      expect(screen.getByTestId("detail-page")).toHaveTextContent(/^api$/);
     });
 
     const resourceCall = postMock.mock.calls.find((c) => c[0] === "/resources");

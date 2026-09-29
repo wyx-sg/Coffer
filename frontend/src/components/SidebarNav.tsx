@@ -1,149 +1,60 @@
-// src/components/SidebarNav.tsx — the sidebar's navigation groups and rows.
-// Layout owns the rail (width, collapse state, brand, footer); this file owns
-// what goes in it: the information architecture and one row's rendering.
+// src/components/SidebarNav.tsx — the sidebar's navigation: Overview, then the five groups and their rows.
+// Layout owns the rail (width, collapse state, brand, search, footer); this
+// file owns what goes in it — the entries of `lib/navigation.ts`, filtered by
+// the experimental switches — and one row's rendering.
 import { useTranslation } from "react-i18next";
-import { Link, useMatch } from "react-router-dom";
-import {
-  Bot,
-  Boxes,
-  Brain,
-  MessageSquare,
-  Library,
-  Radio,
-  RefreshCw,
-  Server,
-  ScrollText,
-  Settings as SettingsIcon,
-  Sparkles,
-  type LucideIcon,
-} from "lucide-react";
+import { Link, matchPath } from "react-router-dom";
+
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useSyncAttention } from "@/lib/hooks/useSyncAttention";
+import { AttentionDot } from "@/components/shell/AttentionDot";
+import { useAttentionSignals } from "@/lib/hooks/useAttentionSignals";
 import { useFeatureEnabled, type FeatureKey } from "@/lib/hooks/useFeatures";
+import { NAV_GROUPS, type NavEntry } from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
-interface NavItem {
-  to: string;
-  labelKey: string;
-  icon: LucideIcon;
-  /** The experimental feature the entry belongs to; while it is not switched
-   *  on the entry is left out (spec experimental-features "Close every surface
-   *  of a switched-off feature"). */
-  feature?: FeatureKey;
+interface RowProps {
+  entry: NavEntry;
+  collapsed: boolean;
+  active: boolean;
+  dot: boolean;
 }
 
-interface NavGroup {
-  labelKey: string;
-  items: NavItem[];
-}
-
-/**
- * Sidebar navigation — a role-based information architecture (ADR sidebar-grouped-by-role):
- *
- * - **Agents** — the consumers: the agents you use (Claude Code, Codex), and
- *   Chat with them. Agents are NOT vault assets, so they are not under
- *   Resources.
- * - **Resources** — the assets agents draw on, one entry per resource kind
- *   that has a list UI: MCP servers, skills, knowledge, memory, model
- *   providers and channels. A channel is a credentialed transport the vault
- *   owns, so it belongs here rather than beside the agents that happen to
- *   answer on it.
- * - **System** — cross-cutting tooling: Activity (the three records Coffer
- *   keeps, a tab and a table each) and Settings. Observability (system health
- *   / metrics) is a reserved future surface and is not Activity: a record of
- *   what happened is not a measurement of how the system is doing.
- *
- * Sidebar policy (ADR sidebar-grouped-by-role): show only what ships today — no "soon"
- * placeholders, and no entry outliving its feature.
- *
- * Every entry matches by path prefix (segment-aware), so a detail page keeps
- * its list's entry highlighted: /agents/codex lights up Agents.
- */
-const NAV_GROUPS: NavGroup[] = [
-  {
-    labelKey: "nav.group.agents",
-    items: [
-      // Agents first: the agents are the subject, and a chat is one thing you
-      // do with one of them.
-      { to: "/agents", labelKey: "nav.agents", icon: Bot },
-      { to: "/chat", labelKey: "nav.chat", icon: MessageSquare },
-    ],
-  },
-  {
-    // One entry per resource kind with a list UI — mcp_server, skill,
-    // knowledge, memory, provider, channel. Keeping that one-to-one is the
-    // whole rule; Model providers and Channels were the two that had drifted
-    // out of it.
-    labelKey: "nav.group.resources",
-    items: [
-      { to: "/mcp-servers", labelKey: "nav.mcpServers", icon: Server },
-      { to: "/skills", labelKey: "nav.skills", icon: Sparkles },
-      { to: "/knowledge", labelKey: "nav.knowledge", icon: Library, feature: "knowledge" },
-      { to: "/memory", labelKey: "nav.memory", icon: Brain, feature: "memory" },
-      { to: "/model-providers", labelKey: "nav.modelProviders", icon: Boxes },
-      { to: "/channels", labelKey: "nav.channels", icon: Radio },
-    ],
-  },
-  {
-    labelKey: "nav.group.system",
-    items: [
-      { to: "/activity", labelKey: "nav.activity", icon: ScrollText },
-      { to: "/sync", labelKey: "nav.sync", icon: RefreshCw, feature: "vault_sync" },
-      { to: "/settings", labelKey: "nav.settings", icon: SettingsIcon },
-    ],
-  },
-];
-
-function NavRow({ item, collapsed, dot }: { item: NavItem; collapsed: boolean; dot: boolean }) {
+function NavRow({ entry, collapsed, active, dot }: RowProps) {
   const { t } = useTranslation();
-  const label = t(item.labelKey);
+  const label = t(entry.labelKey);
   // An experimental feature's entry says so, so nobody takes it for a
   // finished part of the product (spec experimental-features "Mark an
   // experimental feature's sidebar entry").
-  const experimental = item.feature !== undefined;
-  // A plain Link + useMatch rather than NavLink: NavLink's className callback
-  // cannot pass through TooltipTrigger's Slot (it stringifies functions).
-  const isActive = useMatch({ path: item.to, end: false }) !== null;
+  const experimental = entry.feature !== undefined;
+  const slug = entry.to === "/" ? "overview" : entry.to.replace(/\//g, "");
   const link = (
     <Link
-      to={item.to}
-      aria-current={isActive ? "page" : undefined}
+      to={entry.to}
+      aria-current={active ? "page" : undefined}
       aria-label={collapsed ? label : undefined}
       className={cn(
         "relative flex h-7 items-center rounded-item text-sm transition-colors duration-fast",
         collapsed ? "justify-center px-2" : "gap-[9px] px-2.5",
-        isActive
+        active
           ? "bg-surface-selected font-label text-text"
           : "font-book text-text-muted hover:bg-surface-hover hover:text-text",
       )}
     >
-      <item.icon
-        className={cn("size-[15px] shrink-0", isActive ? "text-accent" : "text-text-subtle")}
+      <entry.icon
+        className={cn("size-[15px] shrink-0", active ? "text-accent" : "text-text-subtle")}
         strokeWidth={1.75}
         aria-hidden
       />
       {!collapsed ? <span className="flex-1 truncate">{label}</span> : null}
       {experimental && !collapsed ? (
         <span
-          data-testid={`nav-experimental-${item.to.replace(/\//g, "")}`}
+          data-testid={`nav-experimental-${slug}`}
           className="shrink-0 rounded-xs border border-border px-1 text-[10px] font-normal leading-4 text-text-muted"
         >
           {t("nav.experimental")}
         </span>
       ) : null}
-      {/* A dot, not a count: what is waiting is one situation to look at, and
-          a number here would be the number of times the timer re-raised it.
-          On a collapsed rail it rides the icon, which is all there is. */}
-      {dot ? (
-        <span
-          data-testid={`nav-dot-${item.to.replace(/\//g, "")}`}
-          aria-label={t("nav.needsAttention")}
-          className={cn(
-            "size-1.5 shrink-0 rounded-full bg-danger",
-            collapsed ? "absolute right-1.5 top-1.5" : null,
-          )}
-        />
-      ) : null}
+      {dot ? <AttentionDot entry={entry.to} collapsed={collapsed} /> : null}
     </Link>
   );
   if (!collapsed) return link;
@@ -157,12 +68,16 @@ function NavRow({ item, collapsed, dot }: { item: NavItem; collapsed: boolean; d
   );
 }
 
-export function SidebarNav({ collapsed }: { collapsed: boolean }) {
+interface Props {
+  collapsed: boolean;
+  /** The path of the page the user is on — the one under the Settings modal
+   *  while it is open, so opening Settings never un-marks the current page. */
+  pathname: string;
+}
+
+export function SidebarNav({ collapsed, pathname }: Props) {
   const { t } = useTranslation();
-  // A held or failed vault stops converging and stops backing up, and the one
-  // surface that says so is the page a user has no reason to open. The dot is
-  // what gets them there; going there is what clears it.
-  const syncNeedsAttention = useSyncAttention();
+  const signals = useAttentionSignals();
   // An entry whose feature is off — or not known yet — is left out rather
   // than flashed in and taken away again: on a stable build the three are off.
   const on: Record<FeatureKey, boolean> = {
@@ -170,24 +85,41 @@ export function SidebarNav({ collapsed }: { collapsed: boolean }) {
     knowledge: useFeatureEnabled("knowledge") === true,
     memory: useFeatureEnabled("memory") === true,
   };
-  const shown = (item: NavItem) => item.feature === undefined || on[item.feature];
+  const shown = (entry: NavEntry) => entry.feature === undefined || on[entry.feature];
+  // Every entry matches by path prefix (segment-aware), so a detail page keeps
+  // its list's entry marked: /agents/codex marks Agents. Overview is the index
+  // and matches only itself.
+  const isActive = (entry: NavEntry) =>
+    matchPath({ path: entry.to, end: entry.to === "/" }, pathname) !== null;
+
+  const groups = NAV_GROUPS.map((group) => ({ ...group, entries: group.entries.filter(shown) }))
+    // A group whose every entry is left out leaves its heading out too, so no
+    // heading stands over nothing.
+    .filter((group) => group.entries.length > 0);
+
   return (
-    <nav className="flex-1 overflow-y-auto px-3 py-3 text-sm">
-      {NAV_GROUPS.map((group, i) => (
-        <div key={group.labelKey} className="mb-1">
-          {collapsed ? (
+    <nav className="flex-1 overflow-y-auto px-2.5 pb-3 text-sm" aria-label={t("nav.aria.primary")}>
+      {groups.map((group, i) => (
+        <div
+          key={group.labelKey ?? "ungrouped"}
+          className="mb-1"
+          role="group"
+          aria-label={group.labelKey ? t(group.labelKey) : undefined}
+        >
+          {group.labelKey === null ? null : collapsed ? (
             i > 0 ? (
               <div className="mx-1 my-2 border-t border-border-subtle" />
             ) : null
           ) : (
             <div className="nav-group-label">{t(group.labelKey)}</div>
           )}
-          {group.items.filter(shown).map((item) => (
+          {group.entries.map((entry) => (
             <NavRow
-              key={item.to}
-              item={item}
+              key={entry.to}
+              entry={entry}
               collapsed={collapsed}
-              dot={item.to === "/sync" && syncNeedsAttention}
+              active={isActive(entry)}
+              dot={signals[entry.to] === true}
             />
           ))}
         </div>

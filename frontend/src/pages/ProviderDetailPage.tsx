@@ -4,10 +4,12 @@
 // the body in two tabs (as on the agent detail page) — Overview, the read-only
 // Configuration card the Edit dialog owns every change of, and Models, the
 // table deciding which of the endpoint's models this connection offers at all.
-// The open tab lives in the URL (`?tab=models`) so a refresh, a deep link or
-// the back button lands on the same tab (.agents/frontend.md §3).
+// The page is addressed by the connection's uid (a provider is renamable) and
+// the open tab lives in the path (`/model-providers/<uid>/models`) so a
+// refresh, a deep link or the back button lands on the same tab
+// (.agents/frontend.md §3); an old `?tab=models` address redirects to it.
 import { useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Boxes } from "lucide-react";
 
@@ -21,26 +23,26 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
+import { useDetailTab } from "@/lib/detailTabs";
 import { useDeleteProvider, useProvider } from "@/lib/hooks/useProviders";
 import { displayName } from "@/lib/resourceTitle";
 
 const TABS = ["overview", "models"] as const;
-type Tab = (typeof TABS)[number];
 
 export function ProviderDetailPage() {
   const { t } = useTranslation();
   const { uid = "" } = useParams<{ uid: string }>();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const { data: provider, isPending, error } = useProvider(uid);
   const del = useDeleteProvider();
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const back = { to: "/model-providers", label: t("settings.connections.detail.back") };
-  const rawTab = searchParams.get("tab");
-  const tab: Tab = TABS.includes(rawTab as Tab) ? (rawTab as Tab) : "overview";
-  const setTab = (next: string) =>
-    setSearchParams(next === "overview" ? {} : { tab: next }, { replace: true });
+  const [tab, setTab] = useDetailTab(
+    TABS,
+    "overview",
+    `/model-providers/${encodeURIComponent(uid)}`,
+  );
 
   if (isPending) {
     return (

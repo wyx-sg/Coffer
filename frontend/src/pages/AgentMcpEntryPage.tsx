@@ -127,7 +127,7 @@ export function AgentMcpEntryPage() {
           open
           onOpenChange={setAdoptOpen}
           onAdopted={(created) =>
-            navigate(created.uid ? `/mcp-servers/${encodeURIComponent(created.uid)}` : back.to)
+            navigate(created.name ? `/mcp-servers/${encodeURIComponent(created.name)}` : back.to)
           }
         />
       ) : null}

@@ -4,6 +4,11 @@
 // machine (spec experimental-features "List and switch the features on the
 // General tab").
 //
+// No longer mounted: the Settings modal carries no Experimental features card
+// (change revise-web-ui-ia task 3.2). The file and its test stay only until
+// that change is archived, when the requirement above is removed with its
+// acceptance marker (task 7.12) and both are deleted.
+//
 // One row per registered feature, in the daemon's registry order: its name,
 // what it is, whether it is on, and which layer decided that — a
 // `COFFER_FEATURES` pin, this machine's own setting, or the build channel's
