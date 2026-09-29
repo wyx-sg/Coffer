@@ -1616,7 +1616,7 @@
         "title": "回复",
         "showSteps": "工作时显示步骤",
         "showStepsHelpLabel": "关于步骤列表",
-        "showStepsHelp": "回合进行时，实时状态行会在标题（如「⏳ Working · 2m 14s · 7 steps」）下逐条列出每一步（工具调用）。关闭后只保留标题和 Agent 最新的一句说明，适合消息多的群。",
+        "showStepsHelp": "回合进行时，实时状态行会在标题（如「⏳ Working · 2m 14s · 7 steps」）下逐条列出每一步（工具调用）。关闭后只保留标题和智能体最新的一句说明，适合消息多的群。",
         "notifyAfter": "回合超过多久时提醒",
         "notifyAfterHint": "设为 0 则不提醒。",
         "notifyAfterHelpLabel": "关于完成提醒",
