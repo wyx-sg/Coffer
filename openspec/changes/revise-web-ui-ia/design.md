@@ -266,8 +266,12 @@ agent's native config"), so all nine tabs are in 1.0.
 
 **The Agents list is two fixed rows** — Claude Code and Codex, the supported types — found
 automatically each time the page loads. A row is not installed (with the install command to
-copy), not added (Add), or added with its Coffer state (Connect, Repair). Add registers the agent
-under its default config directory and connects it; Add, Connect and Repair each preview every
+copy), config left behind with its program not found (with the reinstall command), not added
+(Add) — including installed but never run, whose config directory Add creates with only Coffer's
+entries — or added with its Coffer state (Connect, Repair). Add registers the agent under its
+default config directory and connects it; feature/rearch's rule that only `installed_active`
+can be added is relaxed for `installed_never_run`, because a first-run user who has installed
+Codex but not opened it yet should not have to run it once before Coffer can set it up; Add, Connect and Repair each preview every
 file they will write before writing. A different config directory is the exception, so it is a
 row-menu item. First run, with neither added, offers Add both. *Rejected:* a Detect agents button
 and an Add agent dialog with type, name and title fields — the types are fixed, detection is
@@ -322,6 +326,9 @@ credential-supplier module as Restart and the skew check and rendered only on Ab
 
 ## Risks
 
+- **A scenario name that no longer matches its body.** agent-registry "show a leftover config
+  directory as not installed" keeps its name because OpenSpec refuses to drop a scenario from a
+  MODIFIED requirement; its body says the row reads as config left behind, program not found.
 - **The registry still allows more than a row per type.** Agents keep a renamable name, a title
   and, per type, any number of config directories ("Manage the agent lifecycle", "Allow one agent
   per name and per config directory"). The Agents list and the `/agents/<type>` paths assume one

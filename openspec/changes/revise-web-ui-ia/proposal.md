@@ -68,7 +68,7 @@ unarchived until that implementation lands.
   ships (`GET /api/v1/agents/{uid}/hooks`).
 - The **Agents list** shows exactly two rows, Claude Code and Codex, detected automatically: no
   Detect agents button and no Add agent dialog. A row offers Add (with a change preview), Connect
-  or Repair as its state calls for, the install command when the agent is not installed, and
+  or Repair as its state calls for (Add also for an agent installed but never run, creating its config directory with only Coffer's entries), the install command when the agent is not installed, the reinstall command when only its config is left behind, and
   "Use a different config directory…" in its menu; first run offers Add both.
 - `/` renders the Overview page in place instead of redirecting to `/agents`. Overview's content
   is specified separately.
