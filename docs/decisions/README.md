@@ -112,7 +112,8 @@ in the code or spec the decision is enforced.>
 
 ## Index
 
-Grouped by area. Every ADR here is `Accepted` and states the live design.
+Grouped by area. Every ADR here is `Accepted` and states the live design,
+except those under Proposed, which are drafted and not yet in effect.
 
 
 ### Resource framework & persistence
@@ -206,3 +207,12 @@ Grouped by area. Every ADR here is `Accepted` and states the live design.
 | [`envelope-encrypted-credential-store`](envelope-encrypted-credential-store.md) | Envelope-Encrypted Credential Store |
 | [`credential-references`](credential-references.md) | Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use |
 | [`credentials-across-machines`](credentials-across-machines.md) | Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository |
+
+### Proposed
+
+| ADR | Decision |
+| --- | --- |
+| [`one-level-triggered-reconciler-compares-parameters`](one-level-triggered-reconciler-compares-parameters.md) | One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters |
+| [`agent-mechanisms-are-optional-facets-on-the-descriptor`](agent-mechanisms-are-optional-facets-on-the-descriptor.md) | Agent Mechanisms Are Optional Facets on the Descriptor, and Projection Is One Registry |
+| [`wire-contract-generated-from-the-pydantic-models`](wire-contract-generated-from-the-pydantic-models.md) | The Wire Contract Is Generated From the Pydantic Models, and the Frontend Client From the Contract |
+| [`platform-differences-live-behind-one-platform-port`](platform-differences-live-behind-one-platform-port.md) | Platform Differences Live Behind One Platform Port; Only macOS Ships |
