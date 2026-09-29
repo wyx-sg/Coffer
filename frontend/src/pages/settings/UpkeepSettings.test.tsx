@@ -5,7 +5,7 @@
 // the interval are independent, and an interval nobody chose is shown as the
 // default rather than as a blank.
 //
-// The third pass is `curate`: it merges new material into a collection's
+// The third pass is `curate`: it curates new items into a collection's
 // documents and carries a person's edit through the rest (spec knowledge
 // "Curate through a fenced four-tool pass"), which is why it ships ON and why its note is about
 // what switching it OFF costs.
@@ -51,7 +51,7 @@ vi.mock("@/lib/hooks/useMachines", () => ({
 
 const hooks = await import("@/lib/hooks/useInternalEngine");
 
-const CURATE_SWITCH = "Merge new knowledge into documents";
+const CURATE_SWITCH = "Curate new knowledge into documents";
 
 const CONFIG: InternalEngineConfig = {
   model: "some-model",
@@ -61,7 +61,7 @@ const CONFIG: InternalEngineConfig = {
   upkeep: {
     aggregate: { enabled: true, interval_s: null, default_interval_s: 3600 },
     distil: { enabled: true, interval_s: 900, default_interval_s: 21600 },
-    // On: curation is what merges new material into the documents an agent
+    // On: curation is what curates new items into the documents an agent
     // reads, so a vault where it never runs leaves that material unread.
     curate: { enabled: true, interval_s: null, default_interval_s: 21600 },
   },
@@ -102,17 +102,17 @@ describe("UpkeepSettings", () => {
 
     expect(screen.getByText(/reads your agents' own memory files/i)).toBeInTheDocument();
     expect(screen.getByText(/turns the entries read from your agents into/i)).toBeInTheDocument();
-    expect(screen.getByText(/merges new material/i)).toBeInTheDocument();
+    expect(screen.getByText(/curates new items/i)).toBeInTheDocument();
     expect(screen.getByText(/carries a document you edited through/i)).toBeInTheDocument();
   });
 
   test("says what switching curation off costs", () => {
-    // The consequence worth a warning: off, new material waits unmerged and an
+    // The consequence worth a warning: off, new items wait uncurated and an
     // edit is not carried through.
     stub(CONFIG);
     renderCard();
 
-    expect(screen.getByText(/new material waits unmerged/i)).toBeInTheDocument();
+    expect(screen.getByText(/new items wait in the inbox/i)).toBeInTheDocument();
   });
 
   test("an interval nobody chose reads as the default, with its real value", () => {
