@@ -75,8 +75,9 @@ function renderPage() {
   );
 }
 
+// An experimental entry's name carries its marker after the label.
 const sidebarLink = (name: string) =>
-  within(screen.getByRole("navigation")).queryByRole("link", { name });
+  within(screen.getByRole("navigation")).queryByRole("link", { name: new RegExp(`^${name}\\b`) });
 
 beforeEach(() => {
   getMock.mockReset();

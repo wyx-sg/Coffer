@@ -861,3 +861,46 @@ async def test_a_repository_already_pointing_at_the_configured_remote_is_adopted
         text=True,
     )
     assert out.stdout.strip() == str(remote)
+
+
+@pytest.mark.asyncio
+async def test_the_newest_snapshot_is_the_one_taken_last(
+    worktree: pathlib.Path, remote: pathlib.Path
+) -> None:
+    """A snapshot's age is when the round took it, not its commit's date.
+
+    The later snapshot here tags the OLDER commit — what a round does whenever
+    the vault it snapshots has not moved — and it must still come first, or a
+    rollback lands on an earlier round's state and deletes what that round
+    had not seen yet (spec vault-sync "Snapshot before applying and roll back
+    from it")."""
+    from coffer.application.sync.convergence_ops import SNAPSHOT_PREFIX, snapshot
+
+    mirror = GitMirror(worktree)
+    await mirror.ensure_repo(remote_url=str(remote), branch="main")
+
+    def commit_at(name: str, date: str) -> str:
+        (worktree / name).write_text(name)
+        env = {**os.environ, "GIT_COMMITTER_DATE": date, "GIT_AUTHOR_DATE": date}
+        git = ["git", "-C", str(worktree)]
+        subprocess.run([*git, "add", "-A"], check=True, capture_output=True)
+        subprocess.run(
+            [*git, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", name],
+            check=True,
+            capture_output=True,
+            env=env,
+        )
+        out = subprocess.run(
+            [*git, "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+        )
+        return out.stdout.strip()
+
+    old = commit_at("old.txt", "2020-01-01T00:00:00Z")
+    new = commit_at("new.txt", "2030-01-01T00:00:00Z")
+
+    await snapshot(mirror, new)
+    await snapshot(mirror, old)
+
+    tags = await mirror.tags(SNAPSHOT_PREFIX)
+    assert len(tags) == 2, "two snapshots in quick succession must not share a name"
+    assert await mirror.resolve_revision(tags[0]) == old

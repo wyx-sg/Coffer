@@ -107,6 +107,8 @@
     "chat": "Chat",
     "modelProviders": "Model providers",
     "sync": "Sync",
+    "experimental": "Experimental",
+    "experimentalLabel": "{{label}} (experimental)",
     "needsAttention": "Needs your attention"
   },
   "resources": {
@@ -515,8 +517,7 @@
           "title": "Move the master key to a file beside the database?",
           "body": "Coffer re-stores the key in a file next to its database; keychain prompts stop."
         },
-        "confirmMove": "Move key",
-        "syncLink": "Export or import the key on the Sync page"
+        "confirmMove": "Move key"
       }
     },
     "models": {
@@ -530,9 +531,13 @@
       "editTitle": "Edit model provider",
       "empty": "No model providers yet.",
       "active": "Active",
-      "activeHint": "This provider powers Coffer's own model (Settings → Coffer's model).",
-      "transcribe": "Speech to text",
-      "transcribeHint": "Coffer transcribes voice messages on this provider (Settings → Speech to text). Only one provider carries it, and nothing falls back to another.",
+      "activeHint": "An agent is switched to this provider right now (the Switch action).",
+      "cofferUse": {
+        "engine": "Coffer · background model",
+        "engineHint": "Coffer itself runs its own background work on this provider, such as organising memory — not your agents (Settings → Coffer's model). Only one provider carries it.",
+        "transcribe": "Coffer · speech to text",
+        "transcribeHint": "Coffer itself turns voice messages into text on this provider before your agent sees them (Settings → Coffer's model → Speech to text). Only one provider carries it, and nothing falls back to another."
+      },
       "reachHint": "Which agents this provider reaches is set with the reach control — on the provider's row in the list, or on its own page.",
       "protocols": {
         "anthropic": "Anthropic",
@@ -1693,7 +1698,8 @@
     "subtitle": "Converge this vault with a git repository you own, so every machine you work on holds the same knowledge, skills and configuration.",
     "tabs": {
       "runs": "Runs",
-      "setup": "Setup"
+      "setup": "Setup",
+      "machines": "Machines"
     },
     "title": "Sync",
     "toast": {
