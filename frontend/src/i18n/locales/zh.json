@@ -767,6 +767,30 @@
         "version": "版本",
         "license": "许可证",
         "source": "源代码"
+      },
+      "updates": {
+        "title": "更新",
+        "upToDate": "Coffer 已是最新版本",
+        "notChecked": "尚未检查",
+        "available": "Coffer {{version}} 可用",
+        "availableHelp": "Coffer 会下载它，然后重启；各智能体会自动重新连接。",
+        "released": "发布于 {{date}}",
+        "lastChecked": "上次检查：{{time}}。",
+        "neverChecked": "Coffer 会在启动时检查。",
+        "failed": "无法检查更新",
+        "installFailed": "无法安装更新",
+        "youAreOn": "当前版本 {{version}}。",
+        "check": "检查更新",
+        "checking": "正在检查…",
+        "tryAgain": "重试",
+        "download": "下载并重启",
+        "downloading": "正在下载… {{pct}}",
+        "installing": "正在安装…",
+        "whatsNew": "新内容",
+        "auto": "自动检查",
+        "autoHelp": "在启动时以及每 6 小时检查一次，安装前会先征得你的同意。",
+        "browser": "更新由 Coffer 桌面应用安装。在浏览器中使用时，请安装新版本的命令行工具来更新 Coffer。",
+        "unconfigured": "此版本构建时没有更新密钥，因此不会检查更新。新版本发布在 GitHub Releases 页面。"
       }
     },
     "security": {

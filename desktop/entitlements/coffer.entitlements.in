@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for every binary a signed release carries: Coffer.app's own
+  executable and the three frozen binaries (coffer, coffer-daemon,
+  coffer-mcp-shim), both inside the app and in the CLI archive.
+
+  A template: scripts/release_signing.sh render-entitlements replaces the Team
+  ID placeholder in the access group below with the APPLE_TEAM_ID secret. The group it names is the one
+  scripts/stamp_build_identity.py stamps into build_identity.py, so the daemon
+  and the shell look for the master key where this entitlement lets them
+  (ADR master-key-lives-in-the-macos-keychain).
+
+  Deliberately absent: com.apple.security.get-task-allow (a same-user debugger
+  could attach and read decrypted secrets), and every cs.* exception
+  (allow-jit, allow-unsigned-executable-memory, disable-library-validation,
+  allow-dyld-environment-variables). PyInstaller signs each library it collects
+  with the same Developer ID, so library validation holds without them.
+-->
+<plist version="1.0">
+<dict>
+  <key>keychain-access-groups</key>
+  <array>
+    <string>@TEAM_ID@.coffer</string>
+  </array>
+</dict>
+</plist>

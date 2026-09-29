@@ -95,6 +95,69 @@ jobs:
           npm run codegen
           npm run build
 
+      # --- signing (RELEASING.md) --------------------------------------------
+      # Every signing step below is gated on the credentials it needs. The plan
+      # step sees only whether each secret is SET (never its value), logs one
+      # annotation per step saying whether it runs and what is missing, and
+      # answers the `if:`s. Without any of them the release builds unsigned and
+      # the run stays green — the state of this repository until the owner has
+      # a Developer Program membership and an updater key.
+      - name: plan release signing
+        id: plan
+        shell: bash
+        env:
+          HAS_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE != '' }}
+          HAS_APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
+          HAS_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID != '' }}
+          HAS_APPLE_API_KEY: ${{ secrets.APPLE_API_KEY != '' }}
+          HAS_APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID != '' }}
+          HAS_APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER != '' }}
+          HAS_TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+          HAS_COFFER_UPDATER_PUBKEY: ${{ vars.COFFER_UPDATER_PUBKEY != '' }}
+        run: python3 scripts/release_plan.py
+
+      # The Developer ID Application certificate, into a temporary keychain
+      # deleted at the end of the job. Exports APPLE_SIGNING_IDENTITY (which
+      # `tauri build` signs the app with) and COFFER_CODESIGN_IDENTITY (which
+      # the PyInstaller specs sign the frozen binaries with).
+      - name: import the Developer ID identity
+        if: steps.plan.outputs.codesign == 'true'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash scripts/release_signing.sh import-identity
+
+      # The keychain access group the master key lives in, `<TEAM_ID>.coffer`
+      # (ADR master-key-lives-in-the-macos-keychain): stamped into
+      # build_identity.py before PyInstaller freezes it, handed to the shell's
+      # compile as COFFER_KEYCHAIN_ACCESS_GROUP, and granted by the
+      # `keychain-access-groups` entitlement every binary is signed with. An
+      # unsigned build is never stamped and keeps the development fallback.
+      - name: stamp the keychain access group and render the entitlements
+        if: steps.plan.outputs.codesign == 'true'
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+        run: |
+          set -euo pipefail
+          python3 scripts/stamp_build_identity.py "$APPLE_TEAM_ID"
+          bash scripts/release_signing.sh render-entitlements "$RUNNER_TEMP/coffer.entitlements"
+          {
+            echo "COFFER_ENTITLEMENTS_FILE=$RUNNER_TEMP/coffer.entitlements"
+            echo "COFFER_KEYCHAIN_ACCESS_GROUP=$APPLE_TEAM_ID.coffer"
+          } >> "$GITHUB_ENV"
+          # Optional: the entitlement may need a Developer ID provisioning
+          # profile embedded in the app (see RELEASING.md).
+          if [ -n "${APPLE_PROVISIONING_PROFILE:-}" ]; then
+            echo "$APPLE_PROVISIONING_PROFILE" | base64 --decode > "$RUNNER_TEMP/coffer.provisionprofile"
+            echo "COFFER_PROVISIONING_PROFILE=$RUNNER_TEMP/coffer.provisionprofile" >> "$GITHUB_ENV"
+          else
+            echo "::notice::No APPLE_PROVISIONING_PROFILE: the app is signed without an embedded profile"
+          fi
+
       # Only a tagged release is `stable`: every other build keeps the
       # repository's `dev` and has every experimental feature on (spec
       # experimental-features "Stamp every build with a release channel").
@@ -116,6 +179,31 @@ jobs:
       - name: post-build smoke test
         shell: bash
         run: bash scripts/smoke_test_bundle.sh dist
+
+      # PyInstaller signed each binary (and every library it collected) with
+      # the Developer ID under the hardened runtime; prove it before shipping.
+      - name: verify the frozen binaries' signatures
+        if: steps.plan.outputs.codesign == 'true'
+        shell: bash
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash scripts/release_signing.sh verify dist/coffer dist/coffer-daemon dist/coffer-mcp-shim
+
+      # A bare Mach-O cannot carry a stapled ticket, so the CLI binaries are
+      # notarised (Gatekeeper then finds the ticket online) but not stapled.
+      - name: notarize the CLI binaries
+        if: steps.plan.outputs.notarize == 'true'
+        shell: bash
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cli-notary"
+          cp dist/coffer dist/coffer-daemon dist/coffer-mcp-shim "$RUNNER_TEMP/cli-notary/"
+          ditto -c -k "$RUNNER_TEMP/cli-notary" "$RUNNER_TEMP/coffer-cli.zip"
+          bash scripts/release_signing.sh notarize "$RUNNER_TEMP/coffer-cli.zip"
 
       # The CLI download tier (the documented main road): every binary
       # build_binaries.sh produced,
@@ -167,9 +255,47 @@ jobs:
       # The npm-published CLI, not `cargo install tauri-cli` — the latter
       # compiles for several minutes on every cold cache to produce a tool we
       # invoke exactly once.
+      #
+      # Signing: APPLE_SIGNING_IDENTITY (exported above) makes Tauri sign the
+      # app and its embedded binaries under the hardened runtime with the
+      # rendered entitlements; with the App Store Connect key present it also
+      # notarises and staples the .app before building the .dmg and the
+      # updater archive from it. Updater: with the updater key present Tauri
+      # writes Coffer.app.tar.gz and signs it (.sig); COFFER_UPDATER_PUBKEY is
+      # compiled into the shell as the key it verifies updates against. Each
+      # is merged in through --config only when its credentials exist, so an
+      # unsigned build is exactly the build it was before.
       - name: build the desktop app
         working-directory: desktop
-        run: npx --yes @tauri-apps/cli@^2 build --target ${{ matrix.triple }}
+        shell: bash
+        env:
+          HAS_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE != '' }}
+          HAS_APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD != '' }}
+          HAS_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID != '' }}
+          HAS_TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+          HAS_COFFER_UPDATER_PUBKEY: ${{ vars.COFFER_UPDATER_PUBKEY != '' }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          COFFER_UPDATER_PUBKEY: ${{ steps.plan.outputs.updater == 'true' && vars.COFFER_UPDATER_PUBKEY || '' }}
+          APPLE_API_ISSUER: ${{ steps.plan.outputs.notarize == 'true' && secrets.APPLE_API_ISSUER || '' }}
+          APPLE_API_KEY: ${{ steps.plan.outputs.notarize == 'true' && secrets.APPLE_API_KEY_ID || '' }}
+          APPLE_API_KEY_B64: ${{ steps.plan.outputs.notarize == 'true' && secrets.APPLE_API_KEY || '' }}
+        run: |
+          set -euo pipefail
+          # An unset variable must not reach the compile as an empty key.
+          [ -n "$COFFER_UPDATER_PUBKEY" ] || unset COFFER_UPDATER_PUBKEY
+          if [ -n "$APPLE_API_KEY_B64" ]; then
+            export APPLE_API_KEY_PATH="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+            echo "$APPLE_API_KEY_B64" | base64 --decode > "$APPLE_API_KEY_PATH"
+          else
+            unset APPLE_API_ISSUER APPLE_API_KEY
+          fi
+          unset APPLE_API_KEY_B64
+          python3 ../scripts/release_plan.py tauri-config "$RUNNER_TEMP/tauri.release.json" \
+            ${COFFER_ENTITLEMENTS_FILE:+--entitlements "$COFFER_ENTITLEMENTS_FILE"} \
+            ${COFFER_PROVISIONING_PROFILE:+--profile "$COFFER_PROVISIONING_PROFILE"}
+          npx --yes @tauri-apps/cli@^2 build --target ${{ matrix.triple }} \
+            --config "$RUNNER_TEMP/tauri.release.json"
 
       # NOTE: a missing bundle dir here is signal, not noise — fail rather than
       # publish a release whose .dmg silently went missing.
@@ -185,11 +311,70 @@ jobs:
             ls -laR "desktop/target/$triple/release/bundle" >&2 || true
             exit 1
           fi
-          # No Developer ID exists yet, so the app is neither signed nor
-          # notarised. Say so in the filename: a downloader should know before
-          # Gatekeeper tells them.
-          cp "$dmg" "artifacts/Coffer-unsigned-${triple}.dmg"
-          echo "collected: artifacts/Coffer-unsigned-${triple}.dmg"
+          # An unsigned build says so in the filename: a downloader should know
+          # before Gatekeeper tells them.
+          if [ "${{ steps.plan.outputs.codesign }}" = "true" ]; then
+            name="Coffer-${triple}.dmg"
+          else
+            name="Coffer-unsigned-${triple}.dmg"
+          fi
+          cp "$dmg" "artifacts/$name"
+          echo "DMG_ARTIFACT=artifacts/$name" >> "$GITHUB_ENV"
+          echo "collected: artifacts/$name"
+
+      # Tauri notarised and stapled the .app inside; the .dmg around it gets
+      # its own ticket so a downloaded image opens offline too.
+      - name: notarize and staple the .dmg
+        if: steps.plan.outputs.notarize == 'true'
+        shell: bash
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          codesign --force --timestamp --sign "$APPLE_SIGNING_IDENTITY" "$DMG_ARTIFACT"
+          bash scripts/release_signing.sh notarize "$DMG_ARTIFACT"
+          bash scripts/release_signing.sh staple "$DMG_ARTIFACT"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG_ARTIFACT"
+
+      # The desktop updater's feed (spec desktop-app "Check for updates
+      # against a signed release manifest"): the archive Tauri signed, its
+      # signature, and latest.json naming the version, the archive's URL on
+      # this tag's release and the signature. The shell reads latest.json from
+      # the newest release and refuses an archive whose signature does not
+      # verify against the public key compiled into it.
+      - name: collect the updater archive and write latest.json
+        if: steps.plan.outputs.updater == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          triple="${{ matrix.triple }}"
+          dir="desktop/target/$triple/release/bundle/macos"
+          archive="$(find "$dir" -maxdepth 1 -name '*.app.tar.gz' -type f | head -n 1)"
+          if [ -z "$archive" ] || [ ! -f "$archive.sig" ]; then
+            echo "error: no signed updater archive under $dir" >&2
+            ls -la "$dir" >&2 || true
+            exit 1
+          fi
+          name="Coffer_${triple}.app.tar.gz"
+          cp "$archive" "artifacts/$name"
+          cp "$archive.sig" "artifacts/$name.sig"
+          version="$(python3 -c 'import json; print(json.load(open("desktop/tauri.conf.json"))["version"])')"
+          tag="${GITHUB_REF_NAME}"
+          case "$tag" in v*) ;; *) tag="v$version" ;; esac
+          python3 scripts/make_update_manifest.py \
+            --version "$version" \
+            --platform darwin-aarch64 \
+            --url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/${name}" \
+            --signature-file "artifacts/$name.sig" \
+            --out artifacts/latest.json
+          cat artifacts/latest.json
+
+      - name: delete the signing keychain
+        if: always() && steps.plan.outputs.codesign == 'true'
+        shell: bash
+        run: bash scripts/release_signing.sh cleanup
 
       # Generate SHA-256 checksums so downloaders can verify archive integrity
       # without trusting the GitHub Release UI alone. Cross-platform shim:
@@ -269,17 +454,20 @@ jobs:
 
           ### Desktop app
 
-          `Coffer-unsigned-<platform>.dmg` is the same web UI in a native
-          window, with a Dock icon and a tray item, and it starts the daemon
-          for you. It carries the same three binaries and deploys them into
-          `~/.coffer/bin/` on first launch, so installing the app installs the
-          CLI too.
+          `Coffer-<platform>.dmg` (`Coffer-unsigned-<platform>.dmg` when the
+          release was built without a Developer ID) is the same web UI in a
+          native window, with a Dock icon and a menu bar item, and it starts
+          the daemon for you. It carries the same three binaries and deploys
+          them into `~/.coffer/bin/` on first launch, so installing the app
+          installs the CLI too. Once installed, the app checks this page for a
+          newer signed release at launch and every six hours, and installs it
+          from Settings › About when you choose Download and restart.
 
           Verify downloads against `SHA256SUMS`.
 
-          > **macOS builds are unsigned and un-notarised** (a Developer ID is
-          > pending). macOS blocks downloaded binaries until the quarantine
-          > flag is cleared:
+          > **An unsigned build** (a file named `Coffer-unsigned-…`, or a
+          > release without a Developer ID) is not notarised, and macOS blocks
+          > downloaded binaries until the quarantine flag is cleared:
           > `xattr -dr com.apple.quarantine <extracted-directory>`, or
           > `xattr -dr com.apple.quarantine /Applications/Coffer.app` after
           > dragging the app across. A binary installed with the one-line

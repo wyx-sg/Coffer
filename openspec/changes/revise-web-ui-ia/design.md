@@ -297,6 +297,9 @@ names it is one more thing to get wrong.
 
 ### 10. Auto-update
 
+(Built by `add-desktop-tray-and-updater`, whose design records how; this section is the
+reasoning for bringing it into scope.)
+
 A new version reached a desktop user only if they downloaded a new `.dmg`, and the desktop spec
 listed auto-update as out of scope. It is now in scope for 1.0. The shell checks at launch and
 every six hours through the Tauri updater against a manifest the release workflow publishes on

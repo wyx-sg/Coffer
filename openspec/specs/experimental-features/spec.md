@@ -153,7 +153,8 @@ boots with `memory` off MUST likewise leave no hook in any agent. Switching
 catalogue, and a channel `/save` MUST answer that knowledge is switched off
 without saving; switching it on MUST restore the catalogue. Switching
 `vault_sync` off MUST stop every sync attention mark — the web sidebar's and the
-desktop shell's — and remove the tray's Sync item. The MCP handshake
+desktop shell's, which are the menu bar's dot and the sync problem its "needs
+you" entry names, and the Dock badge. The MCP handshake
 instructions and the `coffer-guide` skill MUST name only the tools the tool
 list carries and only the directories a switched-on feature serves: while
 `knowledge` is off neither names `coffer__write` nor the knowledge root, and

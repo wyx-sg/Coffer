@@ -68,7 +68,7 @@ What each box is:
 | `coffer-mcp-shim` | A small stdio-to-HTTP forwarder the agent launches as an MCP server. It finds (or starts) the daemon and relays JSON-RPC to `/mcp`, stamping the agent's identity onto the handshake. |
 | `coffer` CLI | A Typer application. Every command is an HTTP call to the daemon; the CLI never opens the database or the credential store itself. |
 | Web UI | A React single-page app, built to static files that the daemon serves from its own origin. |
-| Desktop shell | A Tauri 2 app that hosts the same built frontend in a native window with a tray icon. It supplies the page its daemon address and token over IPC and starts the daemon when none is running. |
+| Desktop shell | A Tauri 2 app that hosts the same built frontend in a native window with a menu bar item. It supplies the page its daemon address and token over IPC, starts the daemon when none is running, and updates itself from a signed release manifest. |
 | HTTP API | FastAPI routes under `/api/v1/*`: the management plane every client uses. |
 | MCP gateway | The `/mcp` endpoint. It aggregates every enabled upstream MCP server behind one endpoint, adds Coffer's builtin tools, and filters what each agent sees by reach. See [MCP gateway](/architecture/mcp-gateway). |
 | Resource framework and kinds | The kind-agnostic core that gives every user-managed thing — an MCP server, a skill, a channel — one identity, lifecycle, audit trail and reach, plus the seven kinds plugged into it. See [Resource framework](/architecture/resource-framework). |
@@ -164,7 +164,7 @@ Versions are the ones pinned in [`backend/uv.lock`](https://github.com/wyx-sg/Co
 | UI kit | Tailwind CSS 3, shadcn/ui over Radix primitives, lucide-react | Components and styling. |
 | API client | openapi-typescript, openapi-fetch | Wire types generated from each spec's OpenAPI contract. |
 | i18n | i18next, react-i18next | English and Simplified Chinese interface. |
-| Desktop | Tauri 2 (Rust 2021) | The native shell and tray. |
+| Desktop | Tauri 2 (Rust 2021) | The native shell, menu bar item and updater. |
 | Packaging | PyInstaller | Frozen `coffer-daemon`, `coffer-mcp-shim` and `coffer` binaries. |
 
 ## Reading guide

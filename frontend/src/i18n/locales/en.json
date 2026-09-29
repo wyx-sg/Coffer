@@ -767,6 +767,30 @@
         "version": "Version",
         "license": "License",
         "source": "Source"
+      },
+      "updates": {
+        "title": "Updates",
+        "upToDate": "Coffer is up to date",
+        "notChecked": "Not checked yet",
+        "available": "Coffer {{version}} is available",
+        "availableHelp": "Coffer downloads it, then restarts; agents reconnect on their own.",
+        "released": "Released {{date}}",
+        "lastChecked": "Last checked {{time}}.",
+        "neverChecked": "Coffer checks at launch.",
+        "failed": "Couldn't check for updates",
+        "installFailed": "Couldn't install the update",
+        "youAreOn": "You are on {{version}}.",
+        "check": "Check for updates",
+        "checking": "Checking…",
+        "tryAgain": "Try again",
+        "download": "Download and restart",
+        "downloading": "Downloading… {{pct}}",
+        "installing": "Installing…",
+        "whatsNew": "What's new",
+        "auto": "Check automatically",
+        "autoHelp": "Checks at launch and every 6 hours, and asks before installing.",
+        "browser": "Updates are installed by the Coffer desktop app. In a browser, Coffer is updated by installing a new version of the command-line tools.",
+        "unconfigured": "This build was made without an update key, so it does not check for updates. New versions are on the GitHub Releases page."
       }
     },
     "security": {
