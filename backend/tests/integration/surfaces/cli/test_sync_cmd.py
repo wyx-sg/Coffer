@@ -393,6 +393,9 @@ def test_sync_now_publishes_the_vault_and_says_what_it_did(fleet: Fleet) -> None
     assert "ok" in result.output
     assert "applied here: nothing" in result.output
     assert "published: added" in result.output
+    # The summary is tallies only; the per-path list is not dumped inline.
+    assert "changes" not in result.output
+    assert "'path'" not in result.output
     assert "commit:" in result.output
     assert "knowledge/notes/one.md" in fleet.run(fleet.a.remote_paths())
 

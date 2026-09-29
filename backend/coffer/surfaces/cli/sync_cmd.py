@@ -46,7 +46,9 @@ def _verbose(ctx: typer.Context) -> bool:
 
 
 def _counts(label: str, counts: dict[str, Any]) -> str:
-    parts = [f"{k} {v}" for k, v in counts.items() if v]
+    # Only the tallies: a round's summary also carries the per-path ``changes``
+    # list, which belongs to the history view, not to a one-line count.
+    parts = [f"{k} {v}" for k, v in counts.items() if isinstance(v, int) and v]
     return f"{label}: {', '.join(parts)}" if parts else f"{label}: nothing"
 
 

@@ -3,6 +3,7 @@
 //
 // Split out of CapabilityList.tsx to keep that file within its size budget.
 import type { components } from "@/lib/api/types";
+import { declaresParameters } from "./declaresParameters";
 
 type ToolView = components["schemas"]["MCPToolView"];
 type ResourceView = components["schemas"]["MCPResourceView"];
@@ -34,14 +35,17 @@ export const CLIENT_NAME_LIMIT = 64;
 
 export function toRows(props: CapabilityLists): RowDescriptor[] {
   if (props.kind === "tool" && props.tools) {
-    return props.tools.map((t) => ({
-      key: t.original_name,
-      prefixed: t.prefixed_name,
-      description: t.description,
-      enabled: t.enabled,
-      schema: t.input_schema as Record<string, unknown> | undefined,
-      clientNameLength: t.client_name_length,
-    }));
+    return props.tools.map((t) => {
+      const schema = t.input_schema as Record<string, unknown> | undefined;
+      return {
+        key: t.original_name,
+        prefixed: t.prefixed_name,
+        description: t.description,
+        enabled: t.enabled,
+        schema: declaresParameters(schema) ? schema : undefined,
+        clientNameLength: t.client_name_length,
+      };
+    });
   }
   if (props.kind === "resource" && props.resources) {
     return props.resources.map((r) => ({

@@ -202,7 +202,8 @@
       "searchPlaceholder": "Search by name",
       "statusFilter": "Status",
       "toggleAria": "Toggle {{kind}} {{key}}",
-      "noSchema": "No input schema.",
+      "noSchema": "This tool declares no parameters.",
+      "fromCache": "This upstream is disabled or can't be reached, so this is the last recorded on/off list; enable it, let it connect and click Refresh to see descriptions and parameters.",
       "schemaLabel": "Input schema",
       "header": {
         "name": "Name",
