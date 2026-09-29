@@ -56,7 +56,18 @@ Coffer reports every supported type, registered or not, in one of these states:
 
 For each type Coffer looks at its standard directory and, when the daemon's environment sets the type's own variable (`CLAUDE_CONFIG_DIR` for Claude Code, `CODEX_HOME` for Codex), at the directory that names. That second directory is never a second agent: when the standard one exists it is offered as **use a different config directory** for the one agent, and when only the named one exists it is the directory Add registers. Coffer does not search the rest of your disk; to use any other directory, see [Use a different config directory](#use-a-different-config-directory). A type already registered is not offered again.
 
-**Web UI:** open **Agents** and click **Add agent**. The dialog lists each type that is not registered yet, at most once, with its state and version. An installed type, including one that has never run, can be added; one that is not installed is listed with that state and cannot be.
+**Web UI:** the **Agents** page always has exactly two rows, Claude Code then Codex, whether or not each is installed or added. Detection is automatic — when the page opens, when the window regains focus, and every few minutes — so there is no Detect button and no Add-agent dialog. Each row reads one state and offers the one action it calls for:
+
+| Row reads | Meaning | Action |
+| --- | --- | --- |
+| **Detected, not added** | installed, config directory present | **Add** |
+| **Installed, never run** | installed, directory not created yet (marked *not created*) | **Add** — the preview names the directory it creates |
+| **Config left behind** | a directory with no program on `PATH` | **Copy command** (the reinstall command); a notice under the row offers **Reveal folder** |
+| **Not installed** | neither | **Copy command** (the install command) |
+| **Connected** / **Not connected** / **Needs repair** | added; its Coffer connection is complete, absent or partial | **Disconnect** / **Connect** / **Repair** |
+| **Disabled** | added and switched off | **Enable** |
+
+**Add** registers the agent at its standard directory and connects it. It first opens a preview — every file it will write and the entries it adds — and writes nothing until you apply it. On a first run with both agents installed and neither added, **Add both** previews and adds the two in one confirmation. A registered row also shows its model and how many skills, MCP servers and plugins reach it, and opens the agent's page.
 
 **CLI:**
 
@@ -85,7 +96,7 @@ For an agent that is already registered, move it:
 coffer agent edit claude-code --config-dir ~/work/.claude
 ```
 
-**Web UI:** the **Add agent** dialog and the agent's **Edit** dialog both take a config directory, chosen with the folder picker.
+**Web UI:** choose **Use a different config directory…** from the row's **⋯** menu (or the agent page's). Pick the folder with the native folder dialog (an in-app browser only where the host has none); the dialog lists which of the type's usual files are there. For an agent that is not added yet, this registers it at that directory.
 
 Before accepting the directory, Coffer creates `<config_dir>/skills`, then checks that the directory exists, is a directory, is writable, and is not a system location (`/etc`, `/usr`, `/var` outside `/var/folders/`, `/System`, `C:\Windows`, `C:\Program Files` and similar). A rejected registration leaves nothing behind. A directory other than the standard one must already exist; only the standard directory of an installed, never-run agent is created for you. Moving an agent re-delivers its skills to the new directory.
 
@@ -99,14 +110,14 @@ coffer agent disable claude-code
 coffer agent rm claude-code
 ```
 
-In the web UI, the agent's detail page has **Edit** (config directory) and **Delete** in its header.
+In the web UI, the **⋯** menu on an agent's row and on its page carries **Use a different config directory…**, **Reveal config directory**, **Copy uid**, **Disconnect**, **Disable** / **Enable** and **Remove from Coffer**.
 
 - **Edit** changes the config directory or the [model binding](#models). The name is the type and cannot change. Everything that refers to an agent — reach lists, a channel's default agent, the installed MCP entry — holds the agent's immutable `uid`.
-- **Disable** makes Coffer stop writing into and reading from the agent: its delivered skills are removed, its native memory is not aggregated, and its config no longer feeds the model catalogue. Enabling it again restores what the skills grant. This switch is on the CLI and REST API only.
+- **Disable** makes Coffer stop writing into and reading from the agent: its delivered skills are removed, its native memory is not aggregated, and its config no longer feeds the model catalogue. Enabling it again restores what the skills grant. In the web UI it is **Disable** in the ⋯ menu; a disabled agent's page offers **Enable**.
 - **Remove** deletes the registration and removes the skills Coffer delivered. The agent stays installed, and `coffer scan` offers it again for as long as its program or its config directory is there.
 
 ::: warning Removing an agent leaves Coffer's entries in place
-Removing an agent does not disconnect it. The `coffer` MCP entry keeps reporting a `uid` no registered agent has, so its sessions see only servers that reach every agent. Run `coffer agent disconnect <type>` before removing, or connect again after registering the agent again.
+On the command line and REST API, removing an agent does not disconnect it. The `coffer` MCP entry keeps reporting a `uid` no registered agent has, so its sessions see only servers that reach every agent. Run `coffer agent disconnect <type>` before removing, or connect again after registering the agent again. **Remove from Coffer** in the web UI disconnects first, then removes.
 :::
 
 ## Connect an agent to Coffer
@@ -120,7 +131,7 @@ Connecting writes everything Coffer needs into the agent's own config, in one ac
 
 Disconnecting removes both, and only Coffer's own entries; everything else in those files stays as it was.
 
-**Web UI:** on the agent's detail page, click **Connect to Coffer** (the **?** beside it lists the parts and which are in place). On the **Agents** list you can select several agents and use the bulk **Connect to Coffer** or **Disconnect from Coffer** action. The **Coffer** column reads **Connected**, **Not connected**, or **Needs repair** when only some parts are in place; connecting again puts the rest back.
+**Web UI:** the agent page's header offers **Connect to Coffer** when the agent is not connected or its connection is partial (reads **Needs repair**); the Overview tab's **Connection** card shows each part — the MCP entry and the memory hook, with the file each lives in and whether it is current. On the **Agents** list the **Coffer** column reads **Connected**, **Not connected** or **Needs repair**, with **Connect** or **Repair** on the row. Every connect, repair and disconnect opens the same **Review changes** preview first: a repair lists only the missing parts, a disconnect only the lines it removes. If a write fails partway, the preview says which change failed, keeps the ones that applied, and offers to retry only the failed one.
 
 **CLI:**
 
@@ -254,7 +265,7 @@ Every read returns a fingerprint of the content. The editor and `coffer agent co
 
 ## Manage the agent's own MCP entries
 
-Agents often carry MCP servers configured directly in their own files. The **MCP servers** tab shows both groups: **Via Coffer gateway** (what Coffer serves) and **Direct servers** (entries in the agent's files, labelled with the file they came from).
+Agents often carry MCP servers configured directly in their own files. The **MCP servers** tab lists both in one table: Coffer's servers (served through the gateway entry) and the agent's own entries, each row marked with its owner and the file it lives in. The owner filter — **All**, **Coffer’s**, **The agent’s own** — narrows it and is kept in the address (`?owner=`). An own entry offers **Adopt**; one that duplicates a registered MCP server offers **Remove duplicate**, which takes it out of the agent's file because the gateway already serves it.
 
 | Type | Direct entries are read from |
 | --- | --- |
@@ -281,7 +292,7 @@ When the entry's environment or headers carry a non-empty value under a secret-l
 
 ## Plugins
 
-The **Plugins** tab lists installed plugins with their marketplace (and the marketplace's source), enabled state and an uninstall action. A plugin whose cache directory is gone is marked **Cache missing**; Coffer does not try to repair it.
+The **Plugins** tab lists installed plugins (all the agent's own; the owner filter is the same as on the other list tabs) with their version, marketplace, enabled switch and **Uninstall**. A plugin whose cache directory is gone is marked **Cache missing**; Coffer does not try to repair it.
 
 Click a plugin's name to open its detail page. It shows the plugin's `<name>@<marketplace>` id, version, author, description and homepage, the marketplace it came from, and the directory it is installed in, with **Open in editor** and **Reveal** buttons. Below that it lists everything the plugin contributes, read from its package's default locations:
 
@@ -313,7 +324,7 @@ Claude Code's own inventory files are never written by Coffer. When the `claude`
 
 ## Hooks
 
-The **Hooks** tab shows every hook the agent will run, grouped by event, read straight from the agent's files: each hook's matcher, its command and where it comes from — one of the agent's own settings files, or a plugin (by name). Only plugins that are switched on are included, since a disabled plugin's hooks do not run. Hooks set in a project's own settings are not shown, because Coffer does not know which repositories you use the agent in.
+The **Hooks** tab lists every hook the agent will run in one table (owner filter as above), read straight from the agent's files: each hook's matcher, its command and where it comes from — one of the agent's own settings files, or a plugin (by name). Only plugins that are switched on are included, since a disabled plugin's hooks do not run. Hooks set in a project's own settings are not shown, because Coffer does not know which repositories you use the agent in.
 
 | | Claude Code | Codex |
 | --- | --- | --- |
@@ -331,7 +342,7 @@ For Codex it also says whether Codex will run the hook. Codex skips a hook you h
 
 It also shows when the hook last fired, from the [audit log](/guides/activity). "Never fired" on an agent you use every day is the sign that the agent is not running the hook.
 
-Everything else on the tab is read only: Coffer never edits another tool's hooks. To change one, open the file it comes from.
+Everything else on the tab is read only: Coffer never edits another tool's hooks. Each row's **Open file** opens the file that declares it in your editor.
 
 ```sh
 coffer agent hooks claude-code
@@ -370,7 +381,13 @@ coffer agent edit codex --model gpt-5.5 --wire-api responses
 
 For Codex, `responses` is the only accepted `--wire-api` value; Codex refuses to load a `config.toml` with any other. A change takes effect on disk the next time the agent's provider is switched.
 
-## Native memory and conversations
+## Model, native memory and sessions in the web UI
+
+The agent page is addressed by the agent's type (`/agents/claude_code`, `/agents/codex`) and has nine tabs, each at its own address: **Overview** (`/agents/<type>`), **Model**, **Skills**, **MCP servers**, **Plugins**, **Hooks**, **Config files**, **Memory** and **Sessions** (`/agents/<type>/model`, `…/skills`, `…/mcp-servers`, `…/plugins`, `…/hooks`, `…/config`, `…/memory`, `…/sessions`). Overview shows the Coffer connection, one summary row per installed kind (each opening its tab), the model, the details — type, config directory, uid, registered — and the recent sessions; an agent's name is its type, so there is no name or title to edit. Old addresses (by uid, `?tab=`, the former Conversations tab) redirect.
+
+The **Model** tab is the one place an agent's provider is switched: the built-in login or a compatible connection, the model, the effort levels that model reports, and — for Claude Code on a connection — the model per tier (Opus, Sonnet, Haiku, and Fable when the connection lists one), prefilled with suggestions. A connection must pass **Test connection** first; the review pane lists what Coffer will write before **Confirm switch**.
+
+### Native memory and sessions
 
 The **Memory** tab lists the agent's own memory stores, read-only:
 
@@ -379,7 +396,7 @@ The **Memory** tab lists the agent's own memory stores, read-only:
 
 Opening a row shows the store's files with a read-only preview. The memory delivery hook is part of the agent's [Coffer connection](#connect-an-agent-to-coffer), not this tab.
 
-The **Conversations** tab lists the agent's local transcripts (`<config_dir>/projects/**/*.jsonl` for Claude Code, `<config_dir>/sessions/**/*.jsonl` for Codex) with title, project, message count and activity times, searchable and sortable. Opening one renders the session as a conversation with a **Contents** list of your prompts; the harness's own injected blocks are folded under **Harness context**.
+The **Sessions** tab lists the agent's own CLI sessions — its local transcripts (`<config_dir>/projects/**/*.jsonl` for Claude Code, `<config_dir>/sessions/**/*.jsonl` for Codex) with title, project, message count and activity times, searchable and sortable. Choosing one opens it beside the list as a conversation with a **Contents** list of your prompts; the harness's own injected blocks are folded under **Harness context**.
 
 ```sh
 coffer path agent claude-code memory                   # the native memory stores
@@ -394,7 +411,7 @@ Transcript text is secret-scrubbed before it is shown, long turns are cut and fl
 
 ## Skills on an agent
 
-The **Skills** tab shows the skills Coffer delivers to the agent (**Managed by Coffer**) and any **Unmanaged skills** sitting in the agent's skill folders, which you can open to preview, adopt into Coffer's library or delete. Which skills reach the agent is decided per skill; see [Skills](/guides/skills).
+The **Skills** tab lists, in one table with the owner filter, the skills Coffer delivers to the agent and the skill folders of its own that Coffer does not manage. An own folder opens a read-only preview and offers **Adopt** into Coffer's library; one named like a skill Coffer delivers offers **Remove duplicate**, which deletes the agent's copy after a confirmation. Which skills reach the agent is decided per skill; see [Skills](/guides/skills).
 
 ## Troubleshooting
 
