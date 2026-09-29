@@ -1,8 +1,8 @@
 // src/components/agents/detail/AgentDetailTabs.tsx — the agent page's nine tabs, each at its own path.
 //
 // Overview · Model · Skills · MCP servers · Plugins · Hooks · Config files ·
-// Memory · Sessions (spec agent-registry, "the agent detail page carries nine
-// tabs"). The open tab is the path segment (`useDetailTab`); only the open
+// Memory · Sessions (spec agent-registry "Expose every agent operation
+// through REST, CLI and the Agents page"). The open tab is the path segment (`useDetailTab`); only the open
 // tab is mounted, so a tab reads its data when it is opened. The list tabs
 // carry their count, read from the same queries the tabs make. Leaving Config
 // files with an unsaved draft asks first.

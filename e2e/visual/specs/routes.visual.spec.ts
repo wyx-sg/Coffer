@@ -107,9 +107,12 @@ function timeDependent(page: Page): Locator[] {
 function runDependent(page: Page): Locator[] {
   return [
     // An installed program's version ("v2.1.281", "Installed · v0.41.0").
-    page.getByText(/\bv?\d+\.\d+\.\d+\b/),
-    // A uid minted by this run's daemon.
-    page.getByText(/^[a-z]{0,4}_?[0-9A-HJKMNP-TV-Z]{20,}$/),
+    // Exactly three parts, so an address like 127.0.0.1 is not taken for one.
+    page.getByText(/(?<![\d.])v?\d+\.\d+\.\d+(?![.\d])/),
+    // A uid minted by this run's daemon (32 hex digits).
+    page.getByText(/^[0-9a-f]{32}$/),
+    // A date on its own ("Registered 2026-09-29").
+    page.getByText(/^\d{4}-\d{2}-\d{2}$/),
   ];
 }
 
