@@ -22,7 +22,7 @@ than a number written down here.
 | -------- | ------------------------------------ | ----------------------------------------------- |
 | `0002`   | `20260521_0002_mcp_tables.py`        | `mcp_capability_preferences`, `mcp_invocations` |
 | `0003`   | `20260522_0003_mcp_server_health.py` | `mcp_server_health`                             |
-| `0110`   | `20260930_0110_mcp_invocations_agent_uid.py` | `mcp_invocations.agent_uid` and its index |
+| `0112`   | `20260930_0112_mcp_invocations_agent_uid.py` | `mcp_invocations.agent_uid` and its index |
 
 ## What this kind contributes to the framework
 
@@ -183,7 +183,7 @@ CREATE TABLE mcp_invocations (
     status           TEXT      NOT NULL,                    -- 'ok' | 'error' | 'timeout' | 'denied'
     error_message    TEXT,
     session_id       TEXT,
-    agent_uid        TEXT                                   -- the calling agent's uid as its session reported it; NULL when none (0110)
+    agent_uid        TEXT                                   -- the calling agent's uid as its session reported it; NULL when none (0112)
 );
 CREATE INDEX idx_invocations_resource ON mcp_invocations(resource_uid, timestamp DESC);
 CREATE INDEX idx_invocations_time     ON mcp_invocations(timestamp DESC);

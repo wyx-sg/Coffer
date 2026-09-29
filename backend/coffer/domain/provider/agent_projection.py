@@ -3,14 +3,13 @@ agent-mechanisms-are-optional-facets-on-the-descriptor).
 
 One :class:`ProviderProjection` per agent that can be put on a connection. It
 names the agent it serves, the allowlisted file the projection lands in, the
-wire protocols the agent's native config speaks (which may be none), and the
-translation: pure functions from a connection to that file's new text. Which
-agents a connection reaches is its scope; nothing here maps a protocol to an
-agent.
+wire protocols the agent's native config speaks, and the translation: pure
+functions from a connection plus the agent's binding to that file's new text.
+Which agents a connection reaches is its scope; nothing here maps a protocol
+to an agent.
 
-Pure, like the transforms it composes (``projection.py``): the application
-layer reads the file, asks for a :class:`ProjectionPlan`, and performs its
-writes in order.
+Pure, like the transforms it composes: the application layer reads the file,
+asks for a :class:`ProjectionPlan`, and performs its writes in order.
 """
 
 from __future__ import annotations
@@ -21,10 +20,12 @@ import tomllib
 from dataclasses import dataclass
 from typing import Protocol as _Protocol
 
+from coffer.domain.agent.tiers import is_claude_model_id, suggest_tier_models
 from coffer.domain.agent.types import AgentType
-from coffer.domain.provider.api_key_helper import anthropic_api_key_helper
+from coffer.domain.provider.codex_projection import CodexAuthCommand
 from coffer.domain.provider.codex_shell_env import CODEX_SHELL_ENV_POLICY_KEY
 from coffer.domain.provider.config import Protocol
+from coffer.domain.provider.model_binding import ModelBinding, ProjectedModel, find_model
 from coffer.domain.provider.projection import (
     apply_anthropic_settings,
     apply_codex_provider,
@@ -41,16 +42,28 @@ class ProviderProjectionRequest:
 
     connection_uid: str
     connection_name: str
+    agent_uid: str
+    #: Where the agent sends its requests: the local model proxy's route for
+    #: its wire.
     base_url: str
+    #: Claude Code's ``apiKeyHelper`` command line.
+    key_helper: str
+    #: Codex's provider ``auth`` command; ``None`` falls back to ``env_key``.
+    codex_auth: CodexAuthCommand | None
     #: The agent's own binding (spec provider-switching "Take projected model
-    #: keys from the agent's binding"); ``None`` projects no model.
-    model: str | None
-    fast_model: str | None
+    #: keys from the agent's binding").
+    binding: ModelBinding
     wire_api: str | None
-    #: The connection's curated text models, in order.
-    text_models: tuple[str, ...]
-    #: Where the ``coffer`` CLI is, for a key helper line.
-    coffer_cli: str
+    #: The connection's curated text models, in order, with their facts.
+    models: tuple[ProjectedModel, ...] = ()
+    #: The connection is a model runtime on this machine.
+    local: bool = False
+    #: ``base_url`` is the loopback proxy (``NO_PROXY`` must cover it).
+    loopback_proxy: bool = False
+
+    @property
+    def model_ids(self) -> tuple[str, ...]:
+        return tuple(m.id for m in self.models)
 
 
 @dataclass(frozen=True)
@@ -92,7 +105,12 @@ class ProviderProjection(_Protocol):
         self, text: str, req: ProviderProjectionRequest, config_file: pathlib.Path
     ) -> ProjectionPlan: ...
 
-    def remove(self, text: str, config_file: pathlib.Path) -> ProjectionPlan: ...
+    def remove(
+        self, text: str, config_file: pathlib.Path, binding: ModelBinding | None = None
+    ) -> ProjectionPlan:
+        """``binding`` is what Coffer projected: a model or effort still equal
+        to it is Coffer's to remove, anything else is the user's."""
+        ...
 
     def is_present(self, text: str) -> bool:
         """Whether Coffer's keys are in ``text``. Raises on a document that
@@ -100,10 +118,18 @@ class ProviderProjection(_Protocol):
         ...
 
 
+def claude_tiers(req: ProviderProjectionRequest) -> dict[str, str]:
+    """The tier pins a projection writes: the binding's own, or — when the
+    agent has none stored — Coffer's suggestion for its model, so no tier ever
+    sends a Claude id to an endpoint that does not serve one."""
+    if req.binding.tier_models:
+        return dict(req.binding.tier_models)
+    return suggest_tier_models(req.binding.model, req.model_ids, local=req.local)
+
+
 @dataclass(frozen=True)
 class ClaudeCodeProviderProjection:
-    """``settings.json``: an ``apiKeyHelper`` naming the connection by uid, and
-    the ``ANTHROPIC_*`` env vars."""
+    """``settings.json``: ``apiKeyHelper``, the base URL, the model keys."""
 
     agent_type: AgentType = AgentType.CLAUDE_CODE
     config_key: str = "settings"
@@ -112,22 +138,34 @@ class ClaudeCodeProviderProjection:
     def apply(
         self, text: str, req: ProviderProjectionRequest, config_file: pathlib.Path
     ) -> ProjectionPlan:
+        chosen = find_model(req.models, req.binding.model)
         return ProjectionPlan(
             apply_anthropic_settings(
                 text,
                 base_url=req.base_url,
-                model=req.model,
-                fast_model=req.fast_model,
-                # The uid, so the helper keeps reading this connection's key
-                # after a rename.
-                api_key_helper=anthropic_api_key_helper(
-                    req.connection_uid, coffer_cli=req.coffer_cli
-                ),
+                api_key_helper=req.key_helper,
+                model=req.binding.model,
+                effort=req.binding.effort,
+                tier_models=claude_tiers(req),
+                picker_models=req.model_ids,
+                # Replace Claude Code's built-in rows only where they would
+                # fail: an endpoint that serves no Claude ids.
+                replace_builtin_picker=not any(is_claude_model_id(m) for m in req.model_ids),
+                local=req.local,
+                local_context_window=chosen.context_window if chosen else None,
+                loopback_proxy=req.loopback_proxy,
             )
         )
 
-    def remove(self, text: str, config_file: pathlib.Path) -> ProjectionPlan:
-        return ProjectionPlan(remove_anthropic_settings(text))
+    def remove(
+        self, text: str, config_file: pathlib.Path, binding: ModelBinding | None = None
+    ) -> ProjectionPlan:
+        binding = binding or ModelBinding()
+        return ProjectionPlan(
+            remove_anthropic_settings(
+                text, managed_model=binding.model, managed_effort=binding.effort
+            )
+        )
 
     def is_present(self, text: str) -> bool:
         if not text.strip():
@@ -149,33 +187,41 @@ class CodexProviderProjection:
         self, text: str, req: ProviderProjectionRequest, config_file: pathlib.Path
     ) -> ProjectionPlan:
         catalog_path = codex_model_catalog_path(config_file.parent)
-        catalog = codex_model_catalog_json(req.text_models)
+        catalog = codex_model_catalog_json(req.models)
+        chosen = find_model(req.models, req.binding.model)
+        # Only a level the chosen model records: without levels Codex sends no
+        # reasoning effort whatever the key says, so writing one would only
+        # make the file claim something that is not happening.
+        effort = req.binding.effort
+        if chosen is None or effort not in chosen.effort_levels:
+            effort = None
         new_text = apply_codex_provider(
             text,
             base_url=req.base_url,
-            model=req.model,
+            model=req.binding.model,
             wire_api=req.wire_api or "responses",
             # The label Codex shows in its own picker — the name, not the uid.
             display_name=f"Coffer ({req.connection_name})",
+            effort=effort,
+            auth=req.codex_auth,
             catalog_path=catalog_path if catalog is not None else None,
         )
         if catalog is not None:
-            # Written before config.toml points at it.
             return ProjectionPlan(new_text, before=(ProjectedFile(catalog_path, catalog),))
-        # No curated set: the pointer is gone, so retire the file too.
         return ProjectionPlan(new_text, after=(ProjectedFile(catalog_path, None),))
 
-    def remove(self, text: str, config_file: pathlib.Path) -> ProjectionPlan:
+    def remove(
+        self, text: str, config_file: pathlib.Path, binding: ModelBinding | None = None
+    ) -> ProjectionPlan:
+        binding = binding or ModelBinding()
         return ProjectionPlan(
-            remove_codex_provider(text),
+            remove_codex_provider(text, managed_effort=binding.effort),
             after=(ProjectedFile(codex_model_catalog_path(config_file.parent), None),),
         )
 
     def is_present(self, text: str) -> bool:
         """``shell_environment_policy`` is left out of the comparison: its
-        ``exclude`` entry only hides the key from shell commands and selects no
-        provider, so one left behind by a hand-removed provider block is not a
-        projection (a de-projection removes it)."""
+        ``exclude`` entry selects no provider."""
         if not text.strip():
             return False
         before = tomllib.loads(text)
@@ -198,4 +244,5 @@ __all__ = [
     "ProjectionPlan",
     "ProviderProjection",
     "ProviderProjectionRequest",
+    "claude_tiers",
 ]

@@ -5,21 +5,25 @@ Domain errors propagate to the app-wide handler in ``surfaces/http/errors.py``.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from coffer.application.provider.service import ProviderService
 from coffer.application.provider.targets import scoped_targets
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.types import AgentType
-from coffer.domain.provider.config import CuratedModel, Protocol, ProviderConfig
+from coffer.domain.provider.config import CuratedModel, ProviderConfig
 from coffer.domain.resource import Resource
+from coffer.infrastructure.provider import local_runtime
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_resource_service
 from coffer.surfaces.http.provider_dependencies import get_provider_service
 from coffer.surfaces.http.provider_schemas import (
     ActivateOut,
-    ActiveKeyOut,
     DeactivateOut,
+    DetectLocalIn,
+    DetectLocalOut,
+    LocalModelOut,
+    LocalRuntimeOut,
     ProviderCreate,
     ProviderListOut,
     ProviderModel,
@@ -38,7 +42,17 @@ def _curated(models: list[ProviderModel] | None) -> list[CuratedModel] | None:
     """Wire entries → the domain's curated set (``None`` leaves the set alone)."""
     if models is None:
         return None
-    return [CuratedModel(id=m.id, modality=m.modality) for m in models]
+    return [
+        CuratedModel(
+            id=m.id,
+            modality=m.modality,
+            context_window=m.context_window,
+            effort_levels=m.effort_levels,
+            default_effort=m.default_effort,
+            price=m.price,
+        )
+        for m in models
+    ]
 
 
 def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
@@ -72,8 +86,19 @@ def _provider_out(resource: Resource, agents: list[Resource]) -> ProviderOut:
         # connection the user has switched off. Folding ``enabled`` in here
         # instead made those chips empty on disable, which reads as erased data.
         compatible_agents=scoped_targets(resource, cfg, agents),
-        models=[ProviderModel(id=m.id, modality=m.modality) for m in cfg.models],
+        models=[
+            ProviderModel(
+                id=m.id,
+                modality=m.modality,
+                context_window=m.context_window,
+                effort_levels=m.effort_levels,
+                default_effort=m.default_effort,
+                price=m.price,
+            )
+            for m in cfg.models
+        ],
         is_active=cfg.is_active,
+        local_runtime=cfg.local_runtime,
         internal_default=cfg.internal_default,
         transcribe_default=cfg.transcribe_default,
         enabled=resource.enabled,
@@ -97,6 +122,35 @@ async def list_providers(
     return ProviderListOut(providers=[_provider_out(r, registry) for r in rows])
 
 
+@router.post("/detect-local", response_model=DetectLocalOut)
+async def detect_local(body: DetectLocalIn) -> DetectLocalOut:
+    """Which local model runtime answers where (spec provider-switching
+    "Detect a local model runtime without changing it"). Read-only probes of
+    loopback addresses only; nothing is pulled or loaded. A non-loopback URL
+    is refused as 422."""
+    try:
+        if body.base_url:
+            hit = await local_runtime.detect(body.base_url)
+            found = [hit] if hit is not None else []
+        else:
+            found = await local_runtime.detect_defaults()
+    except local_runtime.NotLoopbackError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return DetectLocalOut(
+        found=[
+            LocalRuntimeOut(
+                base_url=d.base_url,
+                runtime=d.runtime,
+                models=[
+                    LocalModelOut(id=m.id, context_window=m.context_window, tools=m.tools)
+                    for m in d.models
+                ],
+            )
+            for d in found
+        ]
+    )
+
+
 @router.post("", response_model=ProviderOut, status_code=status.HTTP_201_CREATED)
 async def create_provider(
     body: ProviderCreate,
@@ -113,39 +167,10 @@ async def create_provider(
         credential_ref=body.credential_ref,
         models=_curated(body.models),
         description=body.description,
+        local_runtime=body.local_runtime,
         actor=actor,
     )
     return _provider_out(resource, await resources.list(kind="agent"))
-
-
-@router.get("/active-key/{wire}", response_model=ActiveKeyOut)
-async def active_provider_key(
-    wire: Protocol,
-    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
-) -> ActiveKeyOut:
-    """Back-compat: the decrypted key of the connection active for ``wire``'s
-    agent (legacy ``--wire`` helper). 404 when none. New projections use
-    ``GET /{uid}/key`` instead, which names the connection directly."""
-    return ActiveKeyOut(value=await svc.resolve_active_key(wire))
-
-
-@router.get("/{uid}/key", response_model=ActiveKeyOut)
-async def connection_key(
-    uid: str,
-    svc: ProviderService = Depends(get_provider_service),  # noqa: B008
-) -> ActiveKeyOut:
-    """The decrypted key of a SPECIFIC connection — what Claude Code's projected
-    ``apiKeyHelper`` (``coffer provider key --connection-uid <uid>``) fetches, so
-    the agent always reads exactly the activated connection's key (no wire+active
-    mismatch).
-
-    The helper cites the UID rather than the name for the reason this kind has
-    no rename route any more: what Coffer writes into another tool's config file
-    has to survive the user relabelling the connection, and only the uid does
-    (ADR resource-identity-is-an-immutable-uid). 404 when the connection is
-    absent, or reaches no agent — disabled, scoped to no agent, or keyless
-    (ollama): ``NO_ACTIVE_PROVIDER``, as the wire form answers."""
-    return ActiveKeyOut(value=await svc.resolve_connection_key(uid))
 
 
 @router.get("/{uid}", response_model=ProviderOut)

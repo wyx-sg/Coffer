@@ -322,26 +322,34 @@ class AgentService:
         *,
         uid: str,
         model: str | None = None,
-        fast_model: str | None = None,
-        clear_fast_model: bool = False,
+        effort: str | None = None,
+        clear_effort: bool = False,
+        tier_models: dict[str, str] | None = None,
+        clear_tiers: bool = False,
         wire_api: str | None = None,
         actor: str = "api",
     ) -> Resource:
-        """Persist this agent's per-agent model binding (spec provider-switching
-        "Take projected model keys from the agent's binding"). ``None`` fields are
-        left unchanged; ``clear_fast_model`` explicitly removes the fast slot. The
-        new model takes effect on disk the next time the agent's connection is
-        (re-)activated — the caller re-runs ``activate`` to re-project, mirroring
-        how the connection-model PATCH worked before."""
+        """Persist this agent's per-agent model binding (spec agent-registry
+        "Carry the model binding on the agent record"). ``None`` fields are left
+        unchanged; ``clear_effort`` / ``clear_tiers`` explicitly unbind. A
+        ``tier_models`` given replaces the whole mapping — the Model tab sends
+        every tier at once, and a partial merge could keep a tier the user
+        reset. The new binding reaches the agent's native config through the
+        projection reconcile target, which compares every key Coffer owns
+        there with what the binding now asks for."""
         existing = await self.get(uid)
         cfg = AgentConfig.model_validate(existing.config)
         overrides: dict[str, object] = {}
         if model is not None:
             overrides["model"] = model
-        if clear_fast_model:
-            overrides["fast_model"] = None
-        elif fast_model is not None:
-            overrides["fast_model"] = fast_model
+        if clear_effort:
+            overrides["effort"] = None
+        elif effort is not None:
+            overrides["effort"] = effort
+        if clear_tiers:
+            overrides["tier_models"] = None
+        elif tier_models is not None:
+            overrides["tier_models"] = tier_models
         if wire_api is not None:
             overrides["wire_api"] = wire_api
         if not overrides:

@@ -60,13 +60,13 @@ class RetentionService:
         Idempotent — rows already in the DB are left alone (so user-set
         values survive daemon restarts).
         """
-        for table in self._registry.all():
+        for table in self._registry.policies():
             if not await self._repo.exists(table.name):
                 await self._repo.upsert(table.name, table.default_retention_days)
 
     async def list_policies(self) -> list[RetentionPolicyView]:
         result: list[RetentionPolicyView] = []
-        for table in self._registry.all():
+        for table in self._registry.policies():
             try:
                 policy = await self._repo.get(table.name)
             except UnknownPrunableTable:
@@ -84,7 +84,9 @@ class RetentionService:
     async def set_retention(self, table_name: str, days: int | None, actor: str) -> None:
         # Validate via registry FIRST; the registry's UnknownPrunableTable is
         # the user-facing error class.
-        self._registry.get(table_name)
+        if not self._registry.get(table_name).owns_policy:
+            # A follower has no window of its own to set; its leader's is it.
+            raise UnknownPrunableTable(f"{table_name!r} follows another table's policy")
         if days is not None and days <= 0:
             raise ValueError(f"retention_days must be None or positive, got {days}")
         await self._repo.update_retention(table_name, days)
@@ -103,12 +105,14 @@ class RetentionService:
         """Run prune on one or all registered tables. Returns {table: rows_deleted}."""
         clock_now = now or datetime.now(tz=UTC)
         if table_name is not None:
-            tables = [self._registry.get(table_name)]
+            target = self._registry.get(table_name)
+            # Pruning a policy prunes the tables that follow it, too.
+            tables = [target, *self._registry.followers(target.name)]
         else:
             tables = self._registry.all()
         result: dict[str, int] = {}
         for table in tables:
-            policy = await self._repo.get(table.name)
+            policy = await self._repo.get(table.policy_key)
             if policy.retention_days is None:
                 result[table.name] = 0
                 continue
@@ -126,7 +130,10 @@ class RetentionService:
                 affected = await self._repo.delete_older_than(
                     table.sql_table, table.timestamp_column, cutoff
                 )
-            await self._repo.touch_pruned(table.name, affected)
+            if table.owns_policy:
+                # A follower's rows are not its leader's: leave the leader's
+                # "last pruned" count to the leader's own table.
+                await self._repo.touch_pruned(table.name, affected)
             result[table.name] = affected
         # The media dirs are not registered tables; sweep them alongside a full
         # prune (never on a single-table request). Failures are logged and

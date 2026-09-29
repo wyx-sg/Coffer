@@ -58,7 +58,7 @@ async def test_list_models(client) -> None:  # type: ignore[no-untyped-def]
     assert r.status_code == 200
     # Each id comes back with a modality GUESSED from its name, so the
     # connection's model table pre-fills a kind the user can correct.
-    assert r.json()["models"] == [
+    assert [{"id": m["id"], "modality": m["modality"]} for m in r.json()["models"]] == [
         {"id": "gpt-4o", "modality": "text"},
         {"id": "gpt-4o-mini", "modality": "text"},
         {"id": "text-embedding-3-small", "modality": "embedding"},

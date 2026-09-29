@@ -12,8 +12,8 @@ ones: the per-agent read is newest-first over one agent's rows.
 Not a foreign key, like ``resource_uid``: a deleted agent's calls stay in the
 history.
 
-Revision ID: 0110
-Revises: 0109
+Revision ID: 0112
+Revises: 0111
 Create Date: 2026-09-30
 """
 
@@ -24,8 +24,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0110"
-down_revision: str | None = "0109"
+revision: str = "0112"
+down_revision: str | None = "0111"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
