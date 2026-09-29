@@ -23,9 +23,12 @@ infrastructure `ConfigFileStore` into both, which satisfies both ports
 structurally. This module never opens a config file on its own path.
 
 The actual JSON edit is delegated to `coffer.domain.memory.delivery` (the
-marker and the pure text transform) through one `DeliveryAdapter` per agent
-type in `coffer.infrastructure.memory.delivery` — which event, which config
-key, and, for Codex, the once-per-session guard. `record_fired` is the other
+marker and the pure text transform) through the delivery-hook entry of each
+agent's projection facet — a `DeliveryAdapter` from
+`coffer.infrastructure.memory.delivery` bound at the composition root (ADR
+agent-mechanisms-are-optional-facets-on-the-descriptor): which event, which
+config key, and, for Codex, the once-per-session guard. An agent whose
+projection has no delivery hook raises `DeliveryUnsupported`. `record_fired` is the other
 half of "Audit every delivery fire": it is called by whatever actually serves the context (the
 `coffer memory context` CLI), never by this service itself, so each audited
 fire is a real one.
@@ -40,6 +43,7 @@ from typing import Protocol
 from coffer.application.audit_service import AuditService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import ConfigFileSpec, spec_for
+from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.memory.delivery import (
@@ -49,16 +53,6 @@ from coffer.domain.memory.delivery import (
     MalformedDeliveryConfig,
 )
 from coffer.domain.resource import Resource
-from coffer.infrastructure.memory.delivery import CLAUDE_CODE_ADAPTER, CODEX_ADAPTER
-
-#: One adapter per agent type Coffer knows how to deliver into (spec memory
-#: "Install delivery hooks explicitly and removably" covers exactly the two agents
-#: Coffer already reads native memory from). A type with no entry here raises
-#: `DeliveryUnsupported`.
-_ADAPTERS: dict[AgentType, DeliveryAdapter] = {
-    AgentType.CLAUDE_CODE: CLAUDE_CODE_ADAPTER,
-    AgentType.CODEX: CODEX_ADAPTER,
-}
 
 
 class AgentConfigWriter(Protocol):
@@ -101,10 +95,12 @@ class DeliveryService:
         agent_service: _AgentLookup,
         audit: AuditService,
         store: AgentConfigWriter,
+        catalog: AgentCatalog,
     ) -> None:
         self._agents = agent_service
         self._audit = audit
         self._store = store
+        self._catalog = catalog
 
     async def _agent(self, agent_uid: str) -> tuple[Resource, AgentConfig]:
         """The agent row and its parsed config, together.
@@ -117,12 +113,11 @@ class DeliveryService:
         resource = await self._agents.get(agent_uid)
         return resource, AgentConfig.model_validate(resource.config)
 
-    @staticmethod
-    def _adapter(agent_type: AgentType) -> DeliveryAdapter:
-        try:
-            return _ADAPTERS[agent_type]
-        except KeyError:
-            raise DeliveryUnsupported(agent_type.value) from None
+    def _adapter(self, agent_type: AgentType) -> DeliveryAdapter:
+        adapter = self._catalog.delivery_hook(agent_type)
+        if adapter is None:
+            raise DeliveryUnsupported(agent_type.value)
+        return adapter
 
     def _spec(self, cfg: AgentConfig, adapter: DeliveryAdapter) -> ConfigFileSpec:
         # ConfigFileNotAllowed would mean the allowlist and this module
@@ -160,10 +155,9 @@ class DeliveryService:
             event=adapter.event,
         )
 
-    @staticmethod
-    def supports(agent_type: AgentType) -> bool:
-        """Whether Coffer has a hook adapter for `agent_type`."""
-        return agent_type in _ADAPTERS
+    def supports(self, agent_type: AgentType) -> bool:
+        """Whether the agent's projection has a delivery hook."""
+        return self._catalog.delivery_hook(agent_type) is not None
 
     async def status(self, agent_uid: str) -> DeliveryStatus:
         """Whether the hook is installed for one agent. Writes nothing."""
@@ -219,7 +213,7 @@ class DeliveryService:
                 cfg = AgentConfig.model_validate(resource.config)
             except Exception:
                 continue
-            if cfg.type not in _ADAPTERS:
+            if not self.supports(cfg.type):
                 continue
             try:
                 status = await self._status_for(resource, cfg)
@@ -248,7 +242,7 @@ class DeliveryService:
                 cfg = AgentConfig.model_validate(resource.config)
             except Exception:
                 continue
-            if cfg.type not in _ADAPTERS:
+            if not self.supports(cfg.type):
                 continue
             try:
                 if not (await self._status_for(resource, cfg)).installed:

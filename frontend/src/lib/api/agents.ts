@@ -20,6 +20,10 @@ export type AgentType = Schemas["AgentType"];
 
 type ConfigFileFormat = Schemas["ConfigFileFormat"];
 
+/** `installed_active` (program + config dir), `installed_never_run` (program
+ *  only), `config_only` (dir only — not installed), `missing` (neither). */
+export type DetectionState = Schemas["DetectionState"];
+
 /**
  * Hand-written rather than the contract's `ConfigFileInfo`: the contract makes
  * `folder_path` and `kind` required and `size` / `modified_at` optional; the
@@ -83,6 +87,12 @@ export interface AgentOut {
   model?: string | null;
   fast_model?: string | null;
   wire_api?: string | null;
+  /** Two-signal detection (program on PATH + config directory). Optional here
+   *  like the binding above: older fixtures and daemons leave it out, and an
+   *  absent state reads as installed. */
+  state?: DetectionState;
+  /** What the agent's program reports as its version; null when not found. */
+  version?: string | null;
 }
 
 /** `GET /agents` — an inline shape in the contract. */
@@ -114,6 +124,12 @@ export interface AgentPatch {
 }
 
 export type AgentCandidatesOut = Schemas["AgentCandidatesOut"];
+export type AgentCandidate = Schemas["AgentCandidate"];
+
+/** Every hook in the agent's native config, plus Coffer's own hook's health. */
+export type AgentHooksOut = Schemas["AgentHooksOut"];
+export type NativeHook = Schemas["NativeHook"];
+export type CofferHook = Schemas["CofferHook"];
 
 // Agent workspace wire types (MCP entries / plugins / unmanaged skills) live in
 // agents-workspace.ts for the file-size budget; re-exported so existing
@@ -172,6 +188,9 @@ export const agentsApi = {
       method: "PUT",
       body,
     }),
+
+  // Read-only: every hook the agent's own files and enabled plugins declare.
+  hooks: (uid: string) => call<AgentHooksOut>(`/agents/${enc(uid)}/hooks`),
 
   connection: (uid: string) => call<CofferConnection>(`/agents/${enc(uid)}/coffer-connection`),
   connect: (uid: string) =>

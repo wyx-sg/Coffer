@@ -52,6 +52,7 @@ export const agentMcpEntriesKey = (uid: string) => ["agents", uid, "mcp-entries"
  *  listing (a remove, an adopt) refreshes the detail too. */
 export const agentMcpEntryKey = (uid: string, entry: string, source: string) =>
   ["agents", uid, "mcp-entries", entry, source] as const;
+export const agentHooksKey = (uid: string) => ["agents", uid, "hooks"] as const;
 export const agentPluginsKey = (uid: string) => ["agents", uid, "plugins"] as const;
 /** One plugin's detail — under the listing's key, so a toggle or uninstall that
  *  invalidates the listing refreshes the detail page too. */

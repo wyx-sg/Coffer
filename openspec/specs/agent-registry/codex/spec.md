@@ -8,12 +8,12 @@ This child of [`agent-registry`](../spec.md) says how the `codex` agent type rea
 ## Requirements
 
 ### Requirement: Locate Codex at ~/.codex
-The `codex` type's standard config directory MUST be `~/.codex/`, which is the value `config_dir` defaults to under [agent-registry](../spec.md) "Validate agent configuration against the agent schema". The presence of that directory MUST be the install marker [agent-registry](../spec.md) "Discover installed agents as candidates without registering them"'s discovery scans for, and [agent-registry](../spec.md) "Allow one agent per name and per config directory"'s one-agent-per-config-directory rule follows from it: Codex is registrable once unless the user overrides the path. An overridden `config_dir` is the directory Codex is run against through its `CODEX_HOME` environment variable — the only way Codex reads a home other than `~/.codex`, and the root of its `config.toml`, `auth.json`, sessions and memories. Every Codex process Coffer itself starts for such an agent — a chat or channel turn, per [chat](../../chat/spec.md) "Ship Claude Code and Codex subprocess providers", and the `model/list` probe of "Read Codex models from model/list and config.toml" — MUST carry `CODEX_HOME=<config_dir>`; for the default `~/.codex` the variable is left unset.
+The `codex` type's standard config directory MUST be `~/.codex/`, which is the value `config_dir` defaults to under [agent-registry](../spec.md) "Validate agent configuration against the agent schema". That directory and the `codex` program on the agent's `PATH` MUST be the two signals of [agent-registry](../spec.md) "Detect an agent by its program and its config directory" — the version is what `codex --version` prints (`codex-cli 0.155.1`) — and [agent-registry](../spec.md) "Allow one agent per name and per config directory"'s one-agent-per-config-directory rule follows from it: Codex is registrable once unless the user overrides the path. An overridden `config_dir` is the directory Codex is run against through its `CODEX_HOME` environment variable — the only way Codex reads a home other than `~/.codex`, and the root of its `config.toml`, `auth.json`, sessions and memories. Every Codex process Coffer itself starts for such an agent — a chat or channel turn, per [chat](../../chat/spec.md) "Ship Claude Code and Codex subprocess providers", and the `model/list` probe of "Read Codex models from model/list and config.toml" — MUST carry `CODEX_HOME=<config_dir>`; for the default `~/.codex` the variable is left unset.
 
 #### Scenario: discover Codex by its config directory
-- **GIVEN** a home directory containing `~/.codex/` and no agent registered
+- **GIVEN** a home directory containing `~/.codex/`, the `codex` program on the agent's `PATH`, and no agent registered
 - **WHEN** the user runs discovery
-- **THEN** a `codex` candidate is reported whose `config_dir` is `~/.codex`
+- **THEN** a `codex` candidate is reported in state `installed_active` whose `config_dir` is `~/.codex`
 - **AND** a `codex` agent registered without a `config_dir` resolves to `~/.codex`
 
 ### Requirement: Allowlist exactly Codex's config, instructions and hooks files
@@ -134,3 +134,11 @@ The internal-state tables this type keeps in `config.toml` — `[marketplaces.*]
 - **GIVEN** a registered `codex` agent whose `config.toml` carries `[marketplaces.*]`, `[hooks.state.*]` and `[projects.*]` tables beside a plugin and a direct MCP entry
 - **WHEN** Coffer installs its MCP, toggles the plugin, uninstalls the plugin and removes the MCP entry
 - **THEN** after each write the text of those three tables is byte-identical to the original
+
+### Requirement: Read Codex's hooks from hooks.json
+The hooks of [agent-registry](../spec.md) "List every hook in the agent's native config" MUST be read, for `codex`, from the config directory's `hooks.json` (source `user`) — the file Codex's hooks feature reads, in the same event-keyed shape as Claude Code's — and from the `hooks/hooks.json` of each enabled installed plugin, where one exists. Coffer's own delivery hook sits on `UserPromptSubmit` in `hooks.json`.
+
+#### Scenario: read Codex hooks from hooks.json
+- **GIVEN** a Codex agent whose `hooks.json` carries Coffer's marked hook
+- **WHEN** the user lists its hooks
+- **THEN** the hook is listed from `hooks.json` with source `user` and marked as Coffer's

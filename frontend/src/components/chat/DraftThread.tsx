@@ -58,7 +58,7 @@ export function DraftThread({
   // A Coffer LLM connection is an OPTIONAL override, not a prerequisite: chat
   // shells out to the agent's own runtime (Claude Agent SDK / codex app-server),
   // which runs on the agent's OWN login when nothing is projected (spec
-  // provider-switching "Revert an agent to its built-in login"). So we never
+  // provider-switching "Revert an agent type to its built-in login"). So we never
   // block the draft on "no connection" — the composer is always available and
   // the turn runs on the built-in model.
 

@@ -41,6 +41,7 @@ from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.provider_dependencies import get_provider_service
 from coffer.surfaces.http.provider_routes import router as provider_router
 from coffer.surfaces.http.resource_routes import router as resource_router
+from tests.support.facets import agent_catalog
 
 _runner = CliRunner()
 _TOKEN = "test-token-011-cli"
@@ -113,6 +114,7 @@ def provider_daemon(tmp_path, monkeypatch):
         )
     loop.close()
     provider_svc = ProviderService(
+        agent_catalog=agent_catalog(),
         resources=resources,
         credentials=store,
         config_store=ConfigFileStore(),
@@ -279,29 +281,35 @@ def test_cli_key_by_connection_uid_refuses_a_disabled_connection(provider_daemon
 )
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="switch a wire back to the agent built-in login",
+    scenario="switch an agent back to its built-in login",
 )
-def test_cli_builtin_reverts_a_wire_to_the_agents_own_login(provider_daemon):
+def test_cli_builtin_reverts_an_agent_to_its_own_login(provider_daemon):
     """`switch`'s other half: a terminal-only user can take an agent off a
     Coffer connection again."""
     _add("acme")
     assert _runner.invoke(cli_app, ["provider", "switch", "acme"]).exit_code == 0
 
-    reverted = _runner.invoke(cli_app, ["provider", "builtin", "anthropic"])
+    reverted = _runner.invoke(cli_app, ["provider", "builtin", "claude_code"])
     assert reverted.exit_code == 0, reverted.output
     assert "acme" in reverted.output
 
-    # The connection is no longer active for its wire.
+    # The connection is no longer active for that agent type.
     assert _show("acme")["config"]["is_active"] is False
 
     # Idempotent: nothing is active now, and a second revert still succeeds.
-    again = _runner.invoke(cli_app, ["provider", "builtin", "anthropic"])
+    again = _runner.invoke(cli_app, ["provider", "builtin", "claude_code"])
     assert again.exit_code == 0, again.output
     assert "nothing was active" in again.output
 
 
-def test_cli_builtin_rejects_a_wire_that_is_not_one(provider_daemon):
-    """An unknown wire is a usage error the user can read, not a traceback."""
+def test_cli_builtin_rejects_what_is_not_an_agent_type(provider_daemon):
+    """A wire or an unknown name is a usage error the user can read, not a
+    traceback."""
+    for bad_arg in ("smoke-signals", "anthropic"):
+        bad = _runner.invoke(cli_app, ["provider", "builtin", bad_arg])
+        combined = bad.output + (bad.stderr or "")
+        assert bad.exit_code == 6, combined
+        assert "not an agent type" in combined, combined
     bad = _runner.invoke(cli_app, ["provider", "builtin", "smoke-signals"])
     combined = bad.output + (bad.stderr or "")
     assert bad.exit_code == 6, combined
@@ -357,14 +365,14 @@ def test_cli_edit_refuses_to_move_the_wire_while_the_connection_is_live(provider
     combined = refused.output + (refused.stderr or "")
     assert refused.exit_code == 5, combined
     assert "Traceback" not in combined, combined
-    assert "coffer provider builtin anthropic" in combined, combined
+    assert "coffer provider builtin claude_code" in combined, combined
     shown = _show("acme")
     # A refused wire change renames nothing either.
     assert shown["name"] == "acme"
     assert shown["config"]["protocol"] == "anthropic"
 
     # The way out works: revert, edit, and the wire moves.
-    assert _runner.invoke(cli_app, ["provider", "builtin", "anthropic"]).exit_code == 0
+    assert _runner.invoke(cli_app, ["provider", "builtin", "claude_code"]).exit_code == 0
     ok = _runner.invoke(cli_app, ["provider", "edit", "acme", "--protocol", "openai"])
     assert ok.exit_code == 0, ok.output
     assert _show("acme")["config"]["protocol"] == "openai"

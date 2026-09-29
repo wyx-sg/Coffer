@@ -23,6 +23,7 @@ from coffer.domain.features import feature_for_path
 from coffer.surfaces.http import daemon_routes
 from coffer.surfaces.http.agent_config_routes import router as agent_config_router
 from coffer.surfaces.http.agent_connection_routes import router as agent_connection_router
+from coffer.surfaces.http.agent_hooks_routes import router as agent_hooks_router
 from coffer.surfaces.http.agent_native_memory_routes import (
     router as agent_native_memory_router,
 )
@@ -80,6 +81,7 @@ def include_all_routers(app: FastAPI) -> None:
         agent_router,
         agent_config_router,
         agent_connection_router,
+        agent_hooks_router,
         agent_workspace_router,
         agent_native_memory_router,
         agent_transcript_router,

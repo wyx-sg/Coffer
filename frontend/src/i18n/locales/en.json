@@ -871,6 +871,7 @@
       "skills": "Skills",
       "mcpServers": "MCP servers",
       "plugins": "Plugins",
+      "hooks": "Hooks",
       "memory": "Memory",
       "conversations": "Conversations",
       "mcp": {
@@ -1050,6 +1051,35 @@
     "health": {
       "available": "Available",
       "missing": "Not found"
+    },
+    "detection": {
+      "notInstalled": "Not installed",
+      "neverRunHint": "Installed but never run — run it once to create its config directory."
+    },
+    "hooksTab": {
+      "allMatcher": "all",
+      "cofferBadge": "Coffer",
+      "sourceUser": "User",
+      "sourcePlugin": "Plugin {{id}}",
+      "parseError": "Some hook files could not be read:",
+      "emptyTitle": "No hooks",
+      "emptyBody": "Neither this agent's config nor its enabled plugins declare any hooks.",
+      "cofferHook": {
+        "title": "Coffer's hook",
+        "health": {
+          "current": "Current",
+          "stale": "Out of date",
+          "missing": "Missing"
+        },
+        "lastFired": "Last fired {{time}}",
+        "neverFired": "Never fired",
+        "repair": "Repair",
+        "repaired": "Coffer's hook reinstalled",
+        "helpLabel": "About Coffer's hook",
+        "help": "Coffer delivers memory to this agent through a {{event}} hook in:",
+        "expected": "The command Coffer installs:",
+        "installed": "The command installed now:"
+      }
     },
     "noneDetected": "No agents were detected on this machine. Add one manually below.",
     "removeConfirmTitle": "Remove {{name}}?",

@@ -2,12 +2,9 @@
 
 ``protocol`` is mutable on purpose — the probe that guessed the wire can be
 wrong, and the fix must not cost the user their key. But the wire is not inert
-the way the docstrings once claimed. Two things read it:
-
-- ``targets.scoped_targets`` returns nothing for ``ollama`` BEFORE scope is
-  consulted, so a keyless connection covers no agent at all; and
-- ``service._AGENT_FOR_WIRE`` is how ``use-builtin <wire>`` finds the agent to
-  put back on its own login.
+the way the docstrings once claimed: ``targets.scoped_targets`` returns nothing
+for ``ollama`` BEFORE scope is consulted, so a keyless connection covers no
+agent at all.
 
 So patching the wire of a connection that is currently projected would strand
 that projection: the native config Coffer already wrote stays behind while
@@ -105,7 +102,7 @@ def test_patch_refuses_to_move_the_wire_of_a_live_connection(tmp_path, monkeypat
         # uid in it would be a dead end. This is the same assertion as before —
         # only now it is the one place in the exchange the label appears.
         assert "acme" in envelope["message"]
-        assert "coffer provider builtin anthropic" in envelope["message"]
+        assert "coffer provider builtin claude_code" in envelope["message"]
 
         # Nothing moved: not the stored wire, not the file the agent reads.
         assert c.get(f"/api/v1/providers/{uid}").json()["protocol"] == "anthropic"
@@ -184,9 +181,9 @@ def test_the_wire_moves_again_once_the_agents_are_back_on_their_own_login(tmp_pa
         c.post(f"/api/v1/providers/{uid}/activate")
         assert c.patch(f"/api/v1/providers/{uid}", json={"protocol": "openai"}).status_code == 409
 
-        # ``use-builtin`` still takes the WIRE, not a connection: it puts that
-        # wire's agents back on their own login whichever connection was on it.
-        assert c.post("/api/v1/providers/use-builtin/anthropic").status_code == 200
+        # ``use-builtin`` takes the AGENT type, not a connection: it puts that
+        # type's agents back on their own login whichever connection was on it.
+        assert c.post("/api/v1/providers/use-builtin/claude_code").status_code == 200
         ok = c.patch(f"/api/v1/providers/{uid}", json={"protocol": "openai"})
         assert ok.status_code == 200, ok.text
         assert ok.json()["protocol"] == "openai"

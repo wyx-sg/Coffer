@@ -111,8 +111,13 @@ text, analogous to `domain/agent/mcp_install.py`'s `apply_install`.
   `None` when there is nothing honest to write; `codex_model_catalog_path(dir)`
 - `anthropic_api_key_helper(connection_uid) -> str` — the only helper Coffer
   writes; it cites the connection's uid, so the line survives a rename
-- `ProjectionTarget`, `target_for_agent(agent_type)`, `wire_for_agent(agent_type)`
-  — the writer is chosen by AGENT type, never by protocol
+
+Each agent's provider projection facet (`domain/provider/agent_projection.py`:
+`ClaudeCodeProviderProjection`, `CodexProviderProjection`) composes these into a
+`ProjectionPlan {text, before, after}` from a `ProviderProjectionRequest`, names
+its `config_key`, declares the `protocols` its native config speaks (possibly
+none) and answers `is_present(text)`. The writer is chosen by AGENT, never by
+protocol, and nothing maps a protocol to one agent.
 - Constants: `CODEX_PROVIDER_ID`, `CODEX_ENV_KEY`, `CODEX_MODEL_CATALOG_FILENAME`,
   `CODEX_MODEL_CATALOG_KEY`, `CODEX_CATALOG_TRUNCATION_LIMIT`,
   `MANAGED_API_KEY_HELPER_PREFIX`
@@ -270,7 +275,7 @@ curated set, `0063` took it back off, and `0061` forced the agent binding's
 
 | Value | When emitted |
 |---|---|
-| `provider_switched` | a successful `POST /providers/{uid}/activate` or `POST /providers/use-builtin/{wire}`; details `{from, to, protocol, agents}` |
+| `provider_switched` | a successful `POST /providers/{uid}/activate` (details `{from, to, protocol, agents}`) or `POST /providers/use-builtin/{agent_type}` (details `{from, to: null, agent_type, agents}`) |
 | `provider_internal_default_set` | a successful `POST /providers/{uid}/internal-default`; details `{from, to}` |
 | `provider_transcribe_default_set` | a successful `POST /providers/{uid}/transcribe-default`; details `{from, to}` |
 | `provider_projection_refused` | a native-config write refused because the file changed under Coffer |
@@ -291,10 +296,10 @@ kind declares no redactor because its config holds no secret).
 | `update(uid, patch, secret_value?)` | Partial update; rotates the vault entry when a secret is supplied. |
 | `delete(uid)` | Guard the owned credential via `find_credential_citations`, remove it when unowned elsewhere, delete the resource. |
 | `activate(uid) -> ActivateResult` | Clear-then-set for the per-agent-type invariant; project into every agent the scope reaches; de-project the agents the previous connection covered and this one does not; emit `provider_switched`. |
-| `deactivate(wire) -> DeactivateResult` | Revert the agent behind that wire to its built-in login; idempotent. |
-| `resolve_connection_key(uid) -> str` | That connection's key — what the projected `apiKeyHelper` calls, by uid. Raises `NoActiveProvider` when the connection reaches no agent (disabled, scoped to no agent, or keyless), by the same reach test the wire form uses. |
+| `deactivate(agent_type) -> DeactivateResult` | Revert every agent of that type to its built-in login, switching the connection covering it off as a unit; idempotent. |
+| `resolve_connection_key(uid) -> str` | That connection's key — what the projected `apiKeyHelper` calls, by uid. Raises `NoActiveProvider` when the connection reaches no agent (disabled, scoped to no agent, or keyless), by the same reach test the legacy wire form uses. |
 | `resolve_active_key_for_agent(agent_type) -> str` | The key of the connection active for that agent (what Codex's env var is filled from). |
-| `resolve_active_key(wire) -> str` | The legacy wire-keyed form, resolving through the wire's agent. |
+| `resolve_active_key(wire) -> str` | The legacy wire-keyed form, resolving through the agents whose provider facet declares that wire. |
 | `set_internal_default(uid) -> Resource` | The global flag: clear-then-set, the audit event, and the notification that lets the engine apply its own drop rule. |
 | `set_transcribe_default(uid) -> Resource` | The global speech-to-text flag, the same three steps against its own field and its own event. Independent of the one above. |
 

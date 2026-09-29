@@ -81,11 +81,11 @@ coffer agent edit claude-code --model sonnet --fast-model haiku
 coffer provider switch deepseek
 # switched to deepseek [openai] → claude_code, codex
 
-coffer provider builtin anthropic   # Claude Code back on its own login
-coffer provider builtin openai      # Codex back on its own login
+coffer provider builtin claude_code   # Claude Code back on its own login
+coffer provider builtin codex         # Codex back on its own login
 ```
 
-`builtin` takes the wire of the agent to revert: `anthropic` for Claude Code, `openai` for Codex. It is idempotent. Because a provider's active flag covers every agent it was switched into, reverting one wire reverts the provider as a unit.
+`builtin` takes the type of the agent to revert, `claude_code` or `codex` — not a wire, because a provider reaches agents through its reach, and a wire does not name an agent. It is idempotent. Because a provider's active flag covers every agent it was switched into, reverting one agent type reverts the provider as a unit.
 
 At most one provider is active per agent type. Switching to a new one takes the agents it reaches over from the previous one and removes the previous projection from any agent the new one does not cover. If no agent the provider reaches is registered, the switch still marks it active and reports the skipped types.
 
@@ -173,7 +173,7 @@ coffer provider rm deepseek
 - **Title** is an optional display name (up to 80 characters) that Coffer's pages and the CLI show in place of the name; an empty `--title` clears it.
 
 - **Rotating** the key overwrites the stored secret at the same ref; nothing that cites it changes.
-- **Changing the protocol** is refused with `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` while the provider is switched on. Run `coffer provider builtin <wire>`, edit, then switch again.
+- **Changing the protocol** is refused with `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` while the provider is switched on. Run `coffer provider builtin <agent_type>` for each agent type it reaches (the refusal names them), edit, then switch again.
 - **Renaming** changes only the label. The uid, the credential ref and the projected `apiKeyHelper` stay as they are; Codex's `name = "Coffer (<name>)"` label updates on the next switch.
 - **Deleting** removes the provider and deletes its credential if nothing else cites it.
 

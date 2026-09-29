@@ -2,7 +2,7 @@
 
 The ``AgentType`` enum is the stable identity (persisted value + API contract +
 registration whitelist). All *per-type behaviour* — display name, config dir,
-detect marker, skill dir — lives in the capability manifest
+skill dir — lives in the capability manifest
 (:mod:`coffer.domain.agent.descriptor`); these methods delegate to it via a lazy
 import so the manifest can reference ``AgentType`` without an import cycle.
 
@@ -47,12 +47,6 @@ class AgentType(StrEnum):
         from coffer.domain.agent.descriptor import descriptor_for
 
         return descriptor_for(self).default_skill_dir()
-
-    def detect_marker(self) -> pathlib.Path:
-        """Path checked during auto-detection (usually the config directory)."""
-        from coffer.domain.agent.descriptor import descriptor_for
-
-        return descriptor_for(self).detect_marker()
 
     def config_dir(self) -> pathlib.Path:
         """Root the config-file allowlist resolves against (``~/.claude``,

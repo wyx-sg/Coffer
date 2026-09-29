@@ -30,6 +30,7 @@ from rich.table import Table
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli import agent_config_cmd as _config
 from coffer.surfaces.cli import agent_connection_cmd as _connection
+from coffer.surfaces.cli import agent_hooks_cmd as _hooks
 from coffer.surfaces.cli import agent_models_cmd as _models
 from coffer.surfaces.cli import agent_plugin_cmd as _plugins
 from coffer.surfaces.cli import agent_transcript_cmd as _transcripts
@@ -264,3 +265,4 @@ _connection.attach(app)
 _plugins.attach(app)
 _transcripts.attach(app)
 _models.attach(app)
+_hooks.attach(app)

@@ -12,7 +12,7 @@ Code and Codex providers) and in tests (fakes).
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Sequence
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeVar
 
 from coffer.domain.chat.attachment import Attachment, UploadedAttachment
 from coffer.domain.chat.events import AgentEvent
@@ -78,6 +78,31 @@ class AgentProvider(Protocol):
     async def availability(self) -> bool:
         """Whether this agent can currently be picked for a new conversation."""
         ...
+
+
+_DepsT = TypeVar("_DepsT", contravariant=True)
+
+
+class AgentDriver(Protocol[_DepsT]):
+    """The driver facet of an agent (ADR agent-mechanisms-are-optional-facets-
+    on-the-descriptor): how Coffer runs a turn on it.
+
+    Bound to the agent's descriptor at the composition root — the driver says
+    which agent it serves by ``agent_key`` (the agent type's value) — and asked
+    by the chat composition to ``build`` the ``AgentProvider`` once the chat
+    kind's own dependencies (``_DepsT``) exist. Drivers are direct: the Claude
+    Agent SDK for Claude Code, ``codex app-server`` for Codex.
+    """
+
+    @property
+    def agent_key(self) -> str: ...
+
+    @property
+    def display_name(self) -> str:
+        """The name the agent picker shows."""
+        ...
+
+    def build(self, deps: _DepsT) -> AgentProvider: ...
 
 
 class CatalogueModel(Protocol):

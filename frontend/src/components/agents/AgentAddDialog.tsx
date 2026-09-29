@@ -1,7 +1,8 @@
 // frontend/src/components/agents/AgentAddDialog.tsx — spec agent-registry.
 // One combined "Add agent" dialog. On open it auto-runs candidate detection
-// (discovery + confirm: nothing is registered silently) and lists installed-
-// but-unregistered agents as a checklist, default all ticked. Below that, an
+// (discovery + confirm: nothing is registered silently) and lists unregistered
+// agents as a checklist (AgentCandidateList) — the addable ones default ticked,
+// each registered with its own config directory and suggested name. Below that, an
 // "Add manually" disclosure (AgentManualAddForm) reveals the manual form. Both
 // paths register via one useRegisterAgent here; the footer is a single
 // right-aligned row — Cancel plus whichever primary action applies (Add
@@ -11,9 +12,9 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 
+import { AgentCandidateList } from "@/components/agents/AgentCandidateList";
 import { AgentManualAddForm } from "@/components/agents/AgentManualAddForm";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { AgentCreate } from "@/lib/api/agents";
+import { isAddableCandidate } from "@/lib/agents/display";
 import { translateApiError } from "@/lib/api/errors";
 import { useAgentCandidates, useRegisterAgent } from "@/lib/hooks/useAgents";
 
@@ -45,7 +47,8 @@ export function AgentAddDialog({
   const candidates = useAgentCandidates(open);
   const register = useRegisterAgent();
 
-  // Which candidate types are ticked (default: all). Keyed by agent type.
+  // Which candidates are ticked (default: every addable one). Keyed by
+  // config_dir — one type can be found in more than one directory.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [manualOpen, setManualOpen] = useState(false);
   // Once the user confirms an add (either path), we switch to a result view.
@@ -59,12 +62,13 @@ export function AgentAddDialog({
   const submittingRef = useRef(false);
 
   const list = candidates.data ?? [];
+  const addable = list.filter(isAddableCandidate);
   const busy = submitting || register.isPending;
 
-  // Default-select every candidate as it loads.
+  // Default-select every addable candidate as it loads.
   useEffect(() => {
     if (candidates.data) {
-      setSelected(new Set(candidates.data.map((c) => c.type)));
+      setSelected(new Set(candidates.data.filter(isAddableCandidate).map((c) => c.config_dir)));
     }
   }, [candidates.data]);
 
@@ -77,11 +81,11 @@ export function AgentAddDialog({
     }
   }, [open]);
 
-  const toggle = (type: string) =>
+  const toggle = (dir: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(type)) next.delete(type);
-      else next.add(type);
+      if (next.has(dir)) next.delete(dir);
+      else next.add(dir);
       return next;
     });
 
@@ -90,12 +94,18 @@ export function AgentAddDialog({
     submittingRef.current = true;
     setSubmitting(true);
     setErrorMsg(null);
-    const chosen = list.filter((c) => selected.has(c.type));
+    const chosen = addable.filter((c) => selected.has(c.config_dir));
     const ok: string[] = [];
     try {
-      // Register each chosen candidate under its suggested per-type name.
+      // Register each chosen candidate with its own directory and suggested
+      // name, so a directory CLAUDE_CONFIG_DIR / CODEX_HOME named registers as
+      // itself rather than as the type's standard one.
       for (const c of chosen) {
-        await register.mutateAsync({ type: c.type, name: c.suggested_name });
+        await register.mutateAsync({
+          type: c.type,
+          name: c.suggested_name,
+          config_dir: c.config_dir,
+        });
         ok.push(c.suggested_name);
       }
       setAdded(ok);
@@ -173,24 +183,7 @@ export function AgentAddDialog({
               ) : (
                 <div className="space-y-2">
                   <p className="text-sm text-muted-foreground">{t("agents.detectDialog.found")}</p>
-                  <ul className="space-y-1">
-                    {list.map((c) => (
-                      <li key={c.type}>
-                        <label className="flex cursor-pointer items-center gap-3 rounded-md border bg-card/60 px-3 py-2 text-sm">
-                          <Checkbox
-                            checked={selected.has(c.type)}
-                            onChange={() => toggle(c.type)}
-                          />
-                          <span className="flex-1">
-                            <span className="font-medium">{c.display_name}</span>
-                            <span className="block font-mono text-xs text-muted-foreground">
-                              {c.config_dir}
-                            </span>
-                          </span>
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
+                  <AgentCandidateList candidates={list} selected={selected} onToggle={toggle} />
                 </div>
               )}
             </section>
@@ -217,7 +210,7 @@ export function AgentAddDialog({
                 <Button type="submit" form={MANUAL_FORM_ID} disabled={busy}>
                   {busy ? t("common.saving") : t("agents.register")}
                 </Button>
-              ) : list.length > 0 ? (
+              ) : addable.length > 0 ? (
                 <Button type="button" onClick={addSelected} disabled={busy || selected.size === 0}>
                   {busy
                     ? t("common.saving")

@@ -17,9 +17,9 @@ class ActivateResult:
 
 @dataclass(frozen=True)
 class DeactivateResult:
-    """Outcome of switching a wire back to the agent's built-in login: which
+    """Outcome of switching an agent type back to its built-in login: which
     agents had Coffer's projection removed, and the connection that was active."""
 
-    protocol: str
+    agent_type: str
     deprojected: list[str]
     previous: str | None

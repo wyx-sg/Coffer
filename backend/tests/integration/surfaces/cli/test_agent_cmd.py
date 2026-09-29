@@ -43,6 +43,7 @@ from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
+from coffer.domain.agent.types import AgentType
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
@@ -65,6 +66,7 @@ from coffer.surfaces.http.audit_routes import router as audit_router
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_audit_service, get_resource_service
 from coffer.surfaces.http.resource_routes import router as resource_router
+from tests.support.facets import agent_catalog, installed
 
 _runner = CliRunner()
 _TOKEN = "test-token-agent-cli"
@@ -88,7 +90,10 @@ def agent_cli_daemon(tmp_path, monkeypatch):
     kinds = {"agent": make_agent_kind(on_delete=None)}
     resource_svc = ResourceService(kinds=kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit)
     agent_svc = AgentService(platform=HostPlatform(), resource_service=resource_svc, audit=audit)
-    detect_svc = AutoDetectService(agent_service=agent_svc)
+    detect_svc = AutoDetectService(
+        agent_service=agent_svc,
+        catalog=agent_catalog({AgentType.CODEX: installed("0.155.1")}),
+    )
 
     app = FastAPI()
     err_handlers.register(app)
@@ -574,6 +579,8 @@ def test_scan_lists_the_candidate_and_registers_nothing(agent_cli_daemon):
     assert result.exit_code == 0, result.output
     rows = {r["ref"]: r for r in json.loads(result.output)["rows"] if r["kind"] == "agent"}
     assert rows["codex"]["config_dir"] == str(agent_cli_daemon / ".codex")
+    assert (rows["codex"]["state"], rows["codex"]["version"]) == ("installed_active", "0.155.1")
+    assert "coffer agent add codex" in rows["codex"]["detail"]
     assert _listed() == []
 
 
@@ -583,7 +590,7 @@ def test_agent_group_offers_the_new_commands_only():
     group = typer.main.get_command(cli_app).commands["agent"]  # type: ignore[attr-defined]
     assert set(group.commands) == {
         "list", "show", "add", "edit", "rm", "enable", "disable",
-        "connect", "disconnect", "transcript", "models", "config", "plugin",
+        "connect", "disconnect", "transcript", "models", "config", "plugin", "hooks",
     }  # fmt: skip
 
 

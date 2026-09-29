@@ -39,6 +39,8 @@ const CODEX = {
   config_dir: "/home/u/.codex",
   default_skill_dir: "/home/u/.codex/skills",
   suggested_name: "codex",
+  state: "installed_active",
+  version: "codex-cli 0.40.0",
 };
 
 function stub(opts: {
@@ -128,7 +130,11 @@ describe("AgentAddDialog — detected section", () => {
     fireEvent.click(screen.getByRole("button", { name: /add selected/i }));
 
     await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(1));
-    expect(mutateAsync).toHaveBeenCalledWith({ type: "codex", name: "codex" });
+    expect(mutateAsync).toHaveBeenCalledWith({
+      type: "codex",
+      name: "codex",
+      config_dir: "/home/u/.codex",
+    });
     // Result view lists what was added + onCreated refreshes the agents list.
     await waitFor(() => expect(screen.getByText(/added:/i)).toBeInTheDocument());
     expect(screen.getByText("codex")).toBeInTheDocument();
@@ -148,6 +154,74 @@ describe("AgentAddDialog — detected section", () => {
     renderDialog(<AgentAddDialog open onOpenChange={onOpenChange} onCreated={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+});
+
+describe("AgentAddDialog — two-signal candidates", () => {
+  const NEVER_RUN = {
+    ...CODEX,
+    type: "claude_code",
+    display_name: "Claude Code",
+    config_dir: "/home/u/.claude",
+    suggested_name: "claude-code",
+    state: "installed_never_run",
+    version: "2.0.1 (Claude Code)",
+  };
+  const CONFIG_ONLY = {
+    ...CODEX,
+    config_dir: "/home/u/.codex-old",
+    suggested_name: "codex-codex-old",
+    state: "config_only",
+    version: null,
+  };
+  // A directory CLAUDE_CONFIG_DIR names in the daemon's environment.
+  const ENV_NAMED = {
+    type: "claude_code",
+    display_name: "Claude Code",
+    config_dir: "/home/u/claude-work",
+    default_skill_dir: "/home/u/claude-work/skills",
+    suggested_name: "claude-code-claude-work",
+    state: "installed_active",
+    version: "2.0.1 (Claude Code)",
+  };
+
+  test("only an installed_active candidate can be ticked; the others say why", () => {
+    stub({ data: [CODEX, NEVER_RUN, CONFIG_ONLY] });
+    renderDialog(<AgentAddDialog open onOpenChange={() => {}} onCreated={() => {}} />);
+    // One checkbox: the installed + run Codex.
+    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+    expect(screen.getByText(/installed but never run/i)).toBeInTheDocument();
+    expect(screen.getByText("Not installed")).toBeInTheDocument();
+    // Versions ride beside the names.
+    expect(screen.getByText("codex-cli 0.40.0")).toBeInTheDocument();
+    expect(screen.getByText("2.0.1 (Claude Code)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add selected \(1\)/i })).toBeEnabled();
+  });
+
+  test("with nothing addable there is no Add selected", () => {
+    stub({ data: [NEVER_RUN, CONFIG_ONLY] });
+    renderDialog(<AgentAddDialog open onOpenChange={() => {}} onCreated={() => {}} />);
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add selected/i })).not.toBeInTheDocument();
+  });
+
+  test("an environment-named directory registers with its own config_dir and name", async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({});
+    stub({ data: [CODEX, ENV_NAMED, CONFIG_ONLY], mutateAsync });
+    renderDialog(<AgentAddDialog open onOpenChange={() => {}} onCreated={() => {}} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /add selected \(2\)/i }));
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalledTimes(2));
+    expect(mutateAsync).toHaveBeenCalledWith({
+      type: "claude_code",
+      name: "claude-code-claude-work",
+      config_dir: "/home/u/claude-work",
+    });
+    // The config-only directory is never registered.
+    expect(mutateAsync).not.toHaveBeenCalledWith(
+      expect.objectContaining({ config_dir: "/home/u/.codex-old" }),
+    );
   });
 });
 

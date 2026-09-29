@@ -4,10 +4,11 @@ See spec memory "Install delivery hooks explicitly and removably". Which
 config-file key holds it, which event it sits on, and how to build/find/remove
 the installed entry.
 
-`application.memory.delivery.DeliveryService` composes against these two
-singletons by `AgentType`, through the `domain.memory.delivery.DeliveryAdapter`
-Protocol — it never opens a settings file itself, and never imports
-`claude_code`/`codex` by name past this module.
+Each adapter declares the agent it serves; the composition root binds them to
+the agents' projection facets (ADR agent-mechanisms-are-optional-facets-on-the-
+descriptor), and `application.memory.delivery.DeliveryService` asks the facet,
+through the `domain.memory.delivery.DeliveryAdapter` Protocol — it never opens
+a settings file itself, and never names an agent.
 """
 
 from __future__ import annotations
@@ -15,4 +16,6 @@ from __future__ import annotations
 from coffer.infrastructure.memory.delivery.claude_code import ADAPTER as CLAUDE_CODE_ADAPTER
 from coffer.infrastructure.memory.delivery.codex import ADAPTER as CODEX_ADAPTER
 
-__all__ = ["CLAUDE_CODE_ADAPTER", "CODEX_ADAPTER"]
+DELIVERY_ADAPTERS = (CLAUDE_CODE_ADAPTER, CODEX_ADAPTER)
+
+__all__ = ["CLAUDE_CODE_ADAPTER", "CODEX_ADAPTER", "DELIVERY_ADAPTERS"]

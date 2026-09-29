@@ -61,12 +61,11 @@ class ProviderPatch(BaseModel):
     can be wrong, so it is corrected in place rather than by re-entering the
     connection, key and all.
 
-    Two things DO key off the wire, though, so that correction is refused with
+    The wire DOES decide one thing, though, so that correction is refused with
     409 ``PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`` while the connection is
     ``is_active``: an ``ollama`` connection covers no agent whatever its scope
-    says, and ``use-builtin <wire>`` reaches an agent through the wire. Moving
-    the wire under a live projection would leave the native config already
-    written with nothing that would ever take it off. Revert the agents to their
+    says. Moving the wire under a live projection would leave the native config
+    already written with nothing that would ever take it off. Revert the agents to their
     built-in login, patch, then re-activate. An inactive connection patches
     freely.
 
@@ -144,9 +143,9 @@ class ActivateOut(BaseModel):
 
 
 class DeactivateOut(BaseModel):
-    """Result of switching a wire back to the agent's own built-in login."""
+    """Result of switching an agent type back to its own built-in login."""
 
-    protocol: Protocol
+    agent_type: AgentType
     deprojected: list[str]
     previous: str | None = None
 

@@ -191,10 +191,12 @@ export function useAgentConnectionDraft(agent: AgentOut) {
   };
 
   // Confirm = persist the per-agent binding, then activate so projection reads it.
-  // Built-in confirm reverts the agent to its own login (no model override).
+  // Built-in confirm reverts the agent to its own login (no model override) —
+  // addressed by the agent's own type, not a wire: a connection reaches agents
+  // through its scope, so no protocol names an agent.
   const confirm = () => {
     if (draftConn === BUILTIN) {
-      useBuiltin.mutate(wire);
+      useBuiltin.mutate(agent.type);
       return;
     }
     const body: AgentPatch = { model: draftModel };

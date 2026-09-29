@@ -90,7 +90,7 @@ machine, exactly like a route the build does not have. The tables below mark tho
 
 ## Routes
 
-The daemon mounts 165 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 166 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -103,7 +103,7 @@ The daemon mounts 165 operations in 20 groups. Groups follow the order the daemo
 | [settings](#settings) | 2 |
 | [sync](#sync) | 19 |
 | [internal-engine](#internal-engine) | 6 |
-| [agents](#agents) | 34 |
+| [agents](#agents) | 35 |
 | [fs](#fs) | 5 |
 | [skills](#skills) | 9 |
 | [mcp](#mcp) | 10 |
@@ -225,7 +225,7 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 | --- | --- | --- |
 | `GET` | `/api/v1/agents` | List Agents |
 | `POST` | `/api/v1/agents` | Register Agent |
-| `GET` | `/api/v1/agents/candidates` | Discover installed agents that aren't registered yet (read-only). |
+| `GET` | `/api/v1/agents/candidates` | Discover the agents on this machine that aren't registered yet (read-only). |
 | `GET` | `/api/v1/agents/{uid}` | Get Agent |
 | `PATCH` | `/api/v1/agents/{uid}` | Update Agent |
 | `DELETE` | `/api/v1/agents/{uid}` | Delete Agent |
@@ -238,6 +238,7 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 | `GET` | `/api/v1/agents/{uid}/coffer-connection` | Connection Status |
 | `POST` | `/api/v1/agents/{uid}/coffer-connection` | Connect |
 | `DELETE` | `/api/v1/agents/{uid}/coffer-connection` | Disconnect |
+| `GET` | `/api/v1/agents/{uid}/hooks` | Every hook the agent's own files and enabled plugins declare, with Coffer's own marked and its health. |
 | `GET` | `/api/v1/agents/{uid}/mcp-entries` | List Mcp Entries |
 | `GET` | `/api/v1/agents/{uid}/mcp-entries/{entry}` | Get Mcp Entry |
 | `DELETE` | `/api/v1/agents/{uid}/mcp-entries/{entry}` | Delete Mcp Entry |
@@ -388,6 +389,6 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `memory` 
 | `PATCH` | `/api/v1/providers/{uid}` | Partially update a provider profile. |
 | `DELETE` | `/api/v1/providers/{uid}` | Delete a provider profile (404 if absent). |
 | `POST` | `/api/v1/providers/{uid}/activate` | Switch: make this profile active for its wire format and project it. |
-| `POST` | `/api/v1/providers/use-builtin/{wire}` | Switch this wire's agent(s) back to their OWN built-in login: remove Coffer's projection from the native config and clear the active connection. |
+| `POST` | `/api/v1/providers/use-builtin/{agent_type}` | Switch every agent of this type back to its OWN built-in login: remove Coffer's projection from the native config and clear the active connection covering it. |
 | `POST` | `/api/v1/providers/{uid}/internal-default` | Make this connection Coffer's internal-engine default (≤1 globally). |
 | `POST` | `/api/v1/providers/{uid}/transcribe-default` | Make this connection the one Coffer transcribes speech on (≤1 globally). |

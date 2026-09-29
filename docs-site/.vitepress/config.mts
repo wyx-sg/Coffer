@@ -76,6 +76,7 @@ const architecture = [
       { text: 'Resource framework', link: '/architecture/resource-framework' },
       { text: 'Layering and code layout', link: '/architecture/layering' },
       { text: 'Platform port', link: '/architecture/platform' },
+      { text: 'Agent facets', link: '/architecture/agent-facets' },
     ],
   },
   {

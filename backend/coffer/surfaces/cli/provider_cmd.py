@@ -114,8 +114,8 @@ def edit(
     any projection into an agent stay where they are.
 
     A wire change is refused while the connection is switched on, because the
-    wire decides which agents a connection can cover and which
-    `coffer provider builtin <wire>` reverts. Run `builtin` first, edit, then
+    wire decides whether a connection can cover any agent at all. Run
+    `coffer provider builtin <agent_type>` first, edit, then
     `coffer provider switch <name>` again.
 
     \f
@@ -184,31 +184,31 @@ def switch(
 
 def builtin(
     ctx: typer.Context,
-    wire: str = typer.Argument(..., help="Wire format: anthropic | openai"),
+    agent_type: str = typer.Argument(..., help="Agent type: claude_code | codex"),
 ) -> None:
-    """Switch's other half: put this wire's agent(s) back on their OWN login.
+    """Switch's other half: put every agent of this type back on its OWN login.
 
     Removes Coffer's projection from the native config and clears the active
-    connection. Idempotent — a no-op when the agent already runs built-in.
+    connection covering it. Idempotent — a no-op when the agent already runs
+    built-in.
 
     \f
-    Only the two wires that reach an agent are listed. `ollama` and `unknown`
-    are accepted by the route (they are `Protocol` values) but map to no agent
-    type, so the call reports nothing undone — naming them here would offer a
-    command that cannot do anything.
+    Takes the agent type the route is keyed by, the same vocabulary as
+    ``coffer agent models``. A connection reaches agents through its scope, so
+    no wire names an agent.
     """
     verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        r = c.post(f"/providers/use-builtin/{wire}")
+        r = c.post(f"/providers/use-builtin/{agent_type}")
         if r.status_code in (400, 422):
-            typer.echo(f"not a wire format: {wire!r}", err=True)
+            typer.echo(f"not an agent type: {agent_type!r}", err=True)
             raise typer.Exit(6)
         _cli_client.check(r, verbose=verbose)
     data = r.json()
     deprojected = ", ".join(data["deprojected"]) or "(no matching agent)"
     previous = data["previous"] or "(nothing was active)"
-    typer.echo(f"{data['protocol']} back on its built-in login, was {previous} → {deprojected}")
+    typer.echo(f"{data['agent_type']} back on its built-in login, was {previous} → {deprojected}")
 
 
 def key(

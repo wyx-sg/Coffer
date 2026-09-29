@@ -2,13 +2,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
+import type { AgentType } from "@/lib/api/agents";
 import { translateApiError } from "@/lib/api/errors";
-import {
-  providersApi,
-  type ProviderCreate,
-  type ProviderPatch,
-  type Protocol,
-} from "@/lib/api/providers";
+import { providersApi, type ProviderCreate, type ProviderPatch } from "@/lib/api/providers";
 import { useToast } from "@/components/ui/toast";
 import { providerKey, providersKey } from "@/lib/api/queryKeys";
 
@@ -92,13 +88,13 @@ export function useActivateProvider() {
   });
 }
 
-/** Switch a wire's agent(s) back to their own built-in login (clears the active
- * connection + removes Coffer's projection). */
+/** Switch an agent type back to its own built-in login (clears the connection
+ * active for it + removes Coffer's projection). */
 export function useUseBuiltinProvider() {
   const qc = useQueryClient();
   const onError = useProviderToastError();
   return useMutation({
-    mutationFn: (wire: Protocol) => providersApi.useBuiltin(wire),
+    mutationFn: (agentType: AgentType) => providersApi.useBuiltin(agentType),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: providersKey });
     },

@@ -89,7 +89,8 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # action (spec agent-registry "Connect an agent to Coffer in one action"),
     # whose status `show` prints as `coffer_connection`; `transcript [<id>]` reads
     # the agent's history; `models` is the web model picker's list
-    # (GET /agent-providers/{agent_key}/models).
+    # (GET /agent-providers/{agent_key}/models); `hooks` lists every hook in
+    # the agent's native config (GET /agents/{uid}/hooks).
     "agent": {
         *_LIFECYCLE,
         "add",
@@ -99,6 +100,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "models",
         "config",
         "plugin",
+        "hooks",
     },
     # Writes to the agent's own config files; reading them is `path agent
     # <name> config` (see _FILE_BACKED_ROUTES).

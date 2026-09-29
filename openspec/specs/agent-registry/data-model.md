@@ -28,18 +28,42 @@ adapter only when the agent introduces a genuinely new shape).
 Skills are delivered to `<config_dir>/skills`. `claude_desktop` (the separate Claude chat app) remains out
 of scope.
 
-`AgentDescriptor` carries: `type`, `display_name`, `config_subpath`,
-`config_files` (allowlist builder), `mcp` (`McpInjectionSpec | None`),
-`mcp_source_keys`, `skill_subpath` and `plugins` (`PluginCapability | None`),
-plus `default_config_dir()` and `detect_marker()`. There is no per-type
-`enabled` flag: discovery scans every `AgentType`, and withdrawing a type means
-removing it from the enum and the manifest. Each enum value still exposes:
+`AgentDescriptor` carries the per-type values: `type`, `display_name`,
+`config_subpath`, `config_files` (allowlist builder), `mcp`
+(`McpInjectionSpec | None`), `mcp_source_keys`, `skill_subpath`, `home_env_var`,
+`plugins` (`PluginCapability | None`), `hook_source_keys` (the allowlist keys of
+the files that carry hooks: `settings` and `settings_local` for Claude Code,
+`hooks` for Codex) and `program` (the executable detection looks for: `claude`,
+`codex`), plus `default_config_dir()`. It also names four optional mechanism
+facets — `projection`, `driver`, `memory_reader`, `dependency_probe` — which are
+`None` in the pure table and bound to their implementations at the composition
+root into an `AgentCatalog` (`domain/agent/facets.py`; ADR
+agent-mechanisms-are-optional-facets-on-the-descriptor). The projection facet
+is a registry of `ProjectionEntry(asset, landing, config_key | subpath)` rows —
+assets `mcp_server`, `skill`, `provider`, `delivery_hook`; landings `user`,
+`project`, `shared` — and every entry of the two shipped agents lands at `user`.
+There is no per-type `enabled` flag: discovery looks at every `AgentType`, and
+withdrawing a type means removing it from the enum and the manifest. Each enum
+value still exposes:
 
 - `display_name: str`
 - `default_name() -> str` (stable per-type default resource name — underscores become hyphens, e.g. `claude_code` → `claude-code`; used when the user registers without an explicit name)
 - `config_dir() -> Path` (the type's standard config directory, computed per host platform — `~/.claude` / `~/.codex`; used when the user registers without an explicit `config_dir`)
 - `default_skill_dir() -> Path` (`<config_dir()>/skills`, the default skills-delivery directory a discovery candidate reports)
-- `detect_marker() -> Path` (the path checked during discovery; the standard config directory itself)
+
+### Detection (`domain/agent/detection.py`)
+
+`DetectionState` is `installed_active` | `installed_never_run` | `config_only` |
+`missing`, from `classify(ProgramInfo, config_dir_exists)`; `ProgramInfo` is
+`{path | None, version | None}`, what the dependency probe found. Neither is
+stored: candidates and the agent read model compute them per request.
+
+### Hooks (`domain/agent/hooks.py`)
+
+`HookRow {event, matcher, command, type, timeout}` parsed from the
+`{"hooks": {event: [{matcher, hooks: [{type, command, timeout}]}]}}` shape both
+agents use; `HookSource` is `user` | `plugin`; `HookHealth` is `current` |
+`stale` | `missing`. Read only; nothing stored.
 
 The config-file allowlist and the skills-delivery target (`<config_dir>/skills`) both resolve against the agent's resolved `config_dir`.
 
@@ -245,15 +269,24 @@ Every method is keyword-only and addresses an agent by its immutable `uid`
 
 ### `AutoDetectService`
 
-| Method                               | Purpose                                                                                                                                                                                                                                                                                                                         |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `discover() -> list[AgentCandidate]` | Read-only scan: check each `AgentType`'s install marker; for any type whose marker is present but which is not already registered in `resources`, emit an `AgentCandidate`. Registers nothing and writes nothing. NOT called on daemon startup; invoked on demand by `GET /api/v1/agents/candidates` and `coffer agent detect`. |
+| Method | Purpose |
+| --- | --- |
+| `discover() -> list[AgentCandidate]` | Read-only scan with two signals: for each agent in the bound catalogue, ask its dependency probe for the program and version, and look at its standard config directory plus the directory its environment variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) names in the daemon's environment. Every such directory with either signal that no registered agent holds is an `AgentCandidate`. Registers nothing and writes nothing. NOT called on daemon startup; invoked on demand by `GET /api/v1/agents/candidates` and `coffer scan`. |
+| `detect(agent_type, config_dir) -> AgentDetection` | The detection state and version of one agent at one directory — what the agent read model carries. |
 
 `AgentCandidate` is a derived value object (not a SQLite entity, never stored):
-an installed-but-unregistered agent the user can confirm to register. Fields:
-`type` (`AgentType`), `display_name`, `config_dir` (the type's default config
-directory, as a string), `default_skill_dir` (the type's default skill
-directory, as a string), and `suggested_name` (the type's `default_name()`).
+an agent seen on this machine that is not registered. Fields: `type`
+(`AgentType`), `display_name`, `config_dir` (the directory looked at, as a
+string), `default_skill_dir` (`<config_dir>/skills`), `suggested_name` (the
+type's `default_name()`, suffixed with the directory's name for an
+environment-named directory), `state` (`DetectionState`) and `version`. Only an
+`installed_active` candidate is addable.
+
+### `AgentHooksService`
+
+| Method | Purpose |
+| --- | --- |
+| `list_hooks(uid) -> AgentHooks` | Every hook in the agent's hook-carrying files and its enabled plugins' `hooks/hooks.json`, Coffer's own marked, plus Coffer's hook health (`current` / `stale` / `missing`, by the delivery hook's marker-and-command comparison) and its last `memory_delivery_fired`. Writes nothing. |
 A removed agent re-appears as a candidate on the next scan — there is no
 suppression list.
 

@@ -53,6 +53,7 @@ from coffer.infrastructure.platform import HostPlatform
 from coffer.surfaces.http import daemon_routes, middleware, webui
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_connection_wiring import wire_agent_connection
+from coffer.surfaces.http.agent_facet_wiring import build_agent_catalog
 from coffer.surfaces.http.agent_skill_wiring import (
     run_claude_mcp_home_migration,
     run_skill_drift_boot_heal,
@@ -189,6 +190,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # application service that needs an OS answer is handed this instance.
     platform = HostPlatform()
     set_platform(platform)
+    # The agent descriptors with their mechanism facets bound (ADR
+    # agent-mechanisms-are-optional-facets-on-the-descriptor); every kind that
+    # needs an agent-specific mechanism is handed this catalogue.
+    agent_catalog = build_agent_catalog()
 
     # Build the shared built-in tool registry; each kind contributes its tools.
     # Created before kind wiring so skill + knowledge can register into it.
@@ -208,6 +213,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         credential_resolver=credential_resolver,
         sync=sync_contributions,
         platform=platform,
+        agent_catalog=agent_catalog,
     )
 
     # Wire the chat feature (spec chat) after the kinds: the agent service is
@@ -219,6 +225,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         credential_store,
         kinds.agent_skill.agent_service,
         resource_svc,
+        agent_catalog,
         compose_memory_context=memory_context_composer(kinds.memory.service, features),
     )
     # Kept on app.state: an integration test asserts the registry's contents.

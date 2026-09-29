@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from coffer.application.agent.auto_detect import AutoDetectService
 from coffer.application.agent.service import AgentService
 from coffer.domain.agent.config import AgentConfig
+from coffer.domain.agent.detection import DetectionState
 from coffer.domain.agent.types import AgentType
 from coffer.domain.resource import Resource
 from coffer.surfaces.http.agent_dependencies import get_agent_service, get_auto_detect_service
@@ -82,6 +83,12 @@ class AgentOut(BaseModel):
     model: str | None
     fast_model: str | None
     wire_api: str | None
+    # Two-signal detection (spec agent-registry "Detect an agent by its
+    # program and its config directory"): the program on the agent's real
+    # PATH, and the config directory on disk. Read at request time.
+    state: DetectionState
+    # The version the agent's program reports, when it was found and answered.
+    version: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -98,14 +105,19 @@ class AgentCandidate(BaseModel):
     config_dir: str
     default_skill_dir: str
     suggested_name: str
+    # ``installed_active`` (addable), ``installed_never_run`` (run it once to
+    # create its directory) or ``config_only`` (the program is not installed).
+    state: DetectionState
+    version: str | None
 
 
 class AgentCandidatesOut(BaseModel):
     candidates: list[AgentCandidate]
 
 
-def _to_out(r: Resource) -> AgentOut:
+async def _to_out(r: Resource, detect: AutoDetectService) -> AgentOut:
     cfg = AgentConfig.model_validate(r.config)
+    detection = await detect.detect(cfg.type, cfg.resolved_config_dir())
     return AgentOut(
         uid=r.uid,
         name=r.name,
@@ -116,6 +128,8 @@ def _to_out(r: Resource) -> AgentOut:
         model=cfg.model,
         fast_model=cfg.fast_model,
         wire_api=cfg.wire_api,
+        state=detection.state,
+        version=detection.version,
         created_at=r.created_at,
         updated_at=r.updated_at,
     )
@@ -124,15 +138,17 @@ def _to_out(r: Resource) -> AgentOut:
 @router.get("", response_model=AgentListOut)
 async def list_agents(
     svc: AgentService = Depends(get_agent_service),  # noqa: B008
+    detect: AutoDetectService = Depends(get_auto_detect_service),  # noqa: B008
 ) -> AgentListOut:
     items = await svc.list()
-    return AgentListOut(items=[_to_out(r) for r in items])
+    return AgentListOut(items=[await _to_out(r, detect) for r in items])
 
 
 @router.post("", response_model=AgentOut, status_code=status.HTTP_201_CREATED)
 async def register_agent(
     body: AgentCreate,
     svc: AgentService = Depends(get_agent_service),  # noqa: B008
+    detect: AutoDetectService = Depends(get_auto_detect_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> AgentOut:
     r = await svc.register(
@@ -142,7 +158,7 @@ async def register_agent(
         description=body.description,
         actor=actor,
     )
-    return _to_out(r)
+    return await _to_out(r, detect)
 
 
 # Declared before GET /{uid} so "candidates" isn't captured as an agent uid.
@@ -150,9 +166,11 @@ async def register_agent(
 async def list_candidates(
     svc: AutoDetectService = Depends(get_auto_detect_service),  # noqa: B008
 ) -> AgentCandidatesOut:
-    """Discover installed agents that aren't registered yet (read-only).
+    """Discover the agents on this machine that aren't registered yet (read-only).
 
-    The user reviews these and chooses which to add — nothing is registered
+    Each candidate carries its detection state and version (spec agent-registry
+    "Detect an agent by its program and its config directory"). The user
+    reviews these and adds the installed ones — nothing is registered
     automatically (discovery + confirm).
     """
     found = await svc.discover()
@@ -164,6 +182,8 @@ async def list_candidates(
                 config_dir=c.config_dir,
                 default_skill_dir=c.default_skill_dir,
                 suggested_name=c.suggested_name,
+                state=c.state,
+                version=c.version,
             )
             for c in found
         ]
@@ -174,8 +194,9 @@ async def list_candidates(
 async def get_agent(
     uid: str,
     svc: AgentService = Depends(get_agent_service),  # noqa: B008
+    detect: AutoDetectService = Depends(get_auto_detect_service),  # noqa: B008
 ) -> AgentOut:
-    return _to_out(await svc.get(uid))
+    return await _to_out(await svc.get(uid), detect)
 
 
 @router.patch("/{uid}", response_model=AgentOut)
@@ -183,6 +204,7 @@ async def update_agent(
     uid: str,
     body: AgentPatch,
     svc: AgentService = Depends(get_agent_service),  # noqa: B008
+    detect: AutoDetectService = Depends(get_auto_detect_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> AgentOut:
     # `model_fields_set` distinguishes "field absent from the PATCH body"
@@ -209,7 +231,7 @@ async def update_agent(
             wire_api=body.wire_api if "wire_api" in sent else None,
             actor=actor,
         )
-    return _to_out(r)
+    return await _to_out(r, detect)
 
 
 @router.delete("/{uid}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

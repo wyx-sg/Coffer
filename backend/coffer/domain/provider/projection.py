@@ -5,9 +5,10 @@ file, calls one of these to produce new text, and writes it back through the
 atomic store (``ConfigFileStore.write_text_atomic`` → atomic + ``.bak``). This
 mirrors ``domain/agent/mcp_install.py``'s ``apply_install``.
 
-Coffer supports exactly two agent types, and BOTH are projection targets — one
-transform pair (apply/remove) per agent (``ollama`` is the only wire that
-projects into none: it is internal-only, used by Coffer's own engine):
+One transform pair (apply/remove) per agent that can be put on a connection;
+each agent's projection facet (``agent_projection.py``) composes its pair and
+says which file it lands in. ``ollama`` is the only wire that projects into
+nothing: it is internal-only, used by Coffer's own engine.
 
 - Claude Code → ``~/.claude/settings.json`` (JSON): top-level ``apiKeyHelper``
   (the key is fetched on demand, never written) plus ``env.ANTHROPIC_BASE_URL`` /
@@ -33,12 +34,9 @@ from __future__ import annotations
 import json
 import pathlib
 from collections.abc import MutableMapping, Sequence
-from dataclasses import dataclass
 
 import tomlkit
 
-from coffer.domain.agent.config_files import ConfigFileFormat
-from coffer.domain.agent.types import AgentType
 from coffer.domain.connection import CODEX_ENV_KEY as _CODEX_ENV_KEY
 from coffer.domain.provider.api_key_helper import (
     anthropic_api_key_helper as anthropic_api_key_helper,
@@ -48,7 +46,6 @@ from coffer.domain.provider.codex_shell_env import (
     drop_shell_env_exclude,
     exclude_from_shell_env,
 )
-from coffer.domain.provider.config import Protocol
 
 # --- Codex provider-block identity --------------------------------------------
 
@@ -80,51 +77,6 @@ CODEX_MODEL_CATALOG_KEY = "model_catalog_json"
 #: harness rather than the endpoint — which is why Coffer can mirror the built-in
 #: value here instead of guessing one for a third-party endpoint.
 CODEX_CATALOG_TRUNCATION_LIMIT = 10_000
-
-
-@dataclass(frozen=True)
-class ProjectionTarget:
-    """Where a connection projects: the agent type + its native config file."""
-
-    agent_type: AgentType
-    config_key: str
-    format: ConfigFileFormat
-
-
-_TARGETS: dict[Protocol, ProjectionTarget] = {
-    Protocol.ANTHROPIC: ProjectionTarget(AgentType.CLAUDE_CODE, "settings", ConfigFileFormat.JSON),
-    Protocol.OPENAI: ProjectionTarget(AgentType.CODEX, "config", ConfigFileFormat.TOML),
-}
-
-#: The native-config target per AGENT type. The projection writer is chosen by
-#: which agent the connection is compatible with — NOT by the connection's wire —
-#: so an openai-compatible endpoint routed to Claude Code writes Claude's
-#: ``settings.json`` (anthropic shape), and vice versa.
-_AGENT_TARGETS: dict[AgentType, ProjectionTarget] = {
-    AgentType.CLAUDE_CODE: ProjectionTarget(
-        AgentType.CLAUDE_CODE, "settings", ConfigFileFormat.JSON
-    ),
-    AgentType.CODEX: ProjectionTarget(AgentType.CODEX, "config", ConfigFileFormat.TOML),
-}
-
-
-def wire_for_agent(agent_type: AgentType) -> Protocol | None:
-    """The wire whose ``deactivate`` covers ``agent_type`` — the inverse of the
-    wire→agent correspondence ``_TARGETS`` encodes. ``None`` for a type no wire
-    maps onto, so callers stay total.
-    """
-    for wire, target in _TARGETS.items():
-        if target.agent_type is agent_type:
-            return wire
-    return None
-
-
-def target_for_agent(agent_type: AgentType) -> ProjectionTarget | None:
-    """The native-config target for an agent TYPE (the file + format its writer
-    touches). Every SUPPORTED agent type is a projection target, so this returns
-    a target for every member of ``AgentType``; the optional return is kept only
-    so callers stay total against a hand-built/unknown value."""
-    return _AGENT_TARGETS.get(agent_type)
 
 
 def apply_anthropic_settings(

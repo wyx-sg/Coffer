@@ -21,11 +21,10 @@ class ProviderProtocolLockedWhileActive(CofferError):  # noqa: N818
     """A connection's wire may be corrected, but not while it is switched on.
 
     The wire is not inert: an ``ollama`` connection covers no agent whatever its
-    scope says (``application.provider.targets.scoped_targets``), and
-    ``coffer provider builtin <wire>`` finds the agent to revert through the
-    wire→agent map in ``application.provider.service``. Moving the wire of a connection that is
-    currently projected would therefore leave the native config Coffer already
-    wrote standing with nothing left that would ever take it off again.
+    scope says (``application.provider.targets.scoped_targets``). Moving the
+    wire of a connection that is currently projected would therefore leave the
+    native config Coffer already wrote standing with nothing left that would
+    ever take it off again.
 
     Refusing is the fix rather than de-projecting silently: the user asked to
     change a field, not to take their agents off a gateway. Maps to 409 — the
@@ -34,11 +33,14 @@ class ProviderProtocolLockedWhileActive(CofferError):  # noqa: N818
 
     code = "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE"
 
-    def __init__(self, name: str, protocol: str) -> None:
+    def __init__(self, name: str, protocol: str, agent_types: list[str]) -> None:
+        how = " and ".join(f"`coffer provider builtin {t}`" for t in agent_types) or (
+            "`coffer provider builtin <agent_type>`"
+        )
         super().__init__(
             f"connection {name!r} is switched on, so its wire format cannot change — "
             f"put its agents back on their built-in login first "
-            f"(`coffer provider builtin {protocol}`), then edit the wire, "
+            f"({how}), then edit the wire, "
             f"then switch the connection on again"
         )
         self.name = name

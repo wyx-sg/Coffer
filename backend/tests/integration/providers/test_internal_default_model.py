@@ -36,6 +36,7 @@ from coffer.infrastructure.persistence.engine import (
     session_maker,
 )
 from coffer.infrastructure.persistence.repos import SqlAlchemyAuditRepo, SqlAlchemyResourceRepo
+from tests.support.facets import agent_catalog
 
 
 class _DictStore:
@@ -106,6 +107,7 @@ async def _env(tmp_path: pathlib.Path, *, model: str | None, wire_engine: bool =
     )
     singleton = _ModelSingleton(model)
     providers = ProviderService(
+        agent_catalog=agent_catalog(),
         resources=resources,
         credentials=store,
         config_store=ConfigFileStore(),

@@ -63,6 +63,7 @@ from coffer.application.memory.distil_worker import WORKER_ACTOR, DistilWorker
 from coffer.application.memory.kind import make_memory_kind
 from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.domain.agent.config import AgentConfig
+from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.internal_engine_config import AGGREGATE, DISTIL
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
@@ -166,12 +167,15 @@ def wire_memory_kind(
     models: ModelSelectorPort,
     credential_resolver: Callable[[str], str],
     agent_service: AgentService,
+    agent_catalog: AgentCatalog,
 ) -> MemoryWiring:
     """Wire the ``memory`` kind into the app; return what it built."""
     service = MemoryService(
         resources=resource_svc,
         audit=audit,
         agent_source_resolver=_agent_source,
+        # The agents' memory-reader facets.
+        readers=agent_catalog.memory_readers(),
         # The distil pass's model half. All three travel together or not at
         # all: a completion port with no credential resolver behind it reaches
         # the provider and is refused the key, which "Distil mechanically with no
@@ -199,8 +203,10 @@ def wire_memory_kind(
         )
     )
 
+    # The hook adapters are the delivery-hook entries of the agents'
+    # projection facets.
     delivery_service = DeliveryService(
-        agent_service=agent_service, audit=audit, store=ConfigFileStore()
+        agent_service=agent_service, audit=audit, store=ConfigFileStore(), catalog=agent_catalog
     )
     set_memory_delivery_service(delivery_service)
 

@@ -79,6 +79,7 @@ _PROVIDERS: list[_Provider] = [
         "_agent_plugin_service",
         "_agent_native_memory_service",
         "_agent_transcript_service",
+        "_agent_hooks_service",
     ),
     # skill kind
     *_pairs(skill_deps, "_skill_service"),

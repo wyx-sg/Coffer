@@ -1,5 +1,5 @@
-"""The switch itself: activate one connection, or put a wire's agent back on
-its own built-in login (spec provider-switching).
+"""The switch itself: activate one connection, or put an agent back on its own
+built-in login (spec provider-switching).
 
 Both halves of one invariant — at most one active connection PER AGENT TYPE —
 so they live together rather than beside the CRUD they are not. Each projects
@@ -26,15 +26,6 @@ from coffer.domain.resource import Resource
 
 if TYPE_CHECKING:
     from coffer.application.provider.service import ProviderService
-
-# Maps a back-compat wire (the ``use-builtin/{wire}`` route, the legacy
-# ``--wire`` key helper) to the agent it stands for. Activation, de-projection
-# and key resolution are keyed by AGENT type; this is the only place the old
-# wire vocabulary is translated.
-AGENT_FOR_WIRE: dict[Protocol, AgentType] = {
-    Protocol.ANTHROPIC: AgentType.CLAUDE_CODE,
-    Protocol.OPENAI: AgentType.CODEX,
-}
 
 
 async def activate(service: ProviderService, uid: str, *, actor: str) -> ActivateResult:
@@ -99,24 +90,29 @@ async def activate(service: ProviderService, uid: str, *, actor: str) -> Activat
     )
 
 
-async def deactivate(service: ProviderService, wire: Protocol, *, actor: str) -> DeactivateResult:
-    """Put the agent behind ``wire`` back on its own built-in login."""
-    agent_type = AGENT_FOR_WIRE.get(wire)
+async def deactivate(
+    service: ProviderService, agent_type: AgentType, *, actor: str
+) -> DeactivateResult:
+    """Put every agent of ``agent_type`` back on its own built-in login.
+
+    Named by agent, not by wire: which agents a connection reaches is its
+    scope, so no protocol stands for an agent. The active connection covering
+    this type is switched off as a unit — its single ``is_active`` flag is
+    all-or-nothing — so it is also de-projected from the other types it reached.
+    """
     agents = await service._agents.list()
-    deprojected: list[str] = []
     previous: Resource | None = None
-    if agent_type is not None:
-        deprojected = await deproject_connection(service, agents, agent_type, actor=actor)
-        for r in await service.list():
-            rc = service._cfg(r)
-            compat = service._compat(r, agents)
-            if not rc.is_active or agent_type not in compat:
-                continue
-            for at in compat:
-                if at is not agent_type:
-                    await deproject_connection(service, agents, at, actor=actor, connection=r)
-            await service._set_active(r, active=False, actor=actor)
-            previous = r
+    deprojected = await deproject_connection(service, agents, agent_type, actor=actor)
+    for r in await service.list():
+        rc = service._cfg(r)
+        compat = service._compat(r, agents)
+        if not rc.is_active or agent_type not in compat:
+            continue
+        for at in compat:
+            if at is not agent_type:
+                await deproject_connection(service, agents, at, actor=actor, connection=r)
+        await service._set_active(r, active=False, actor=actor)
+        previous = r
 
     if previous is not None or deprojected:
         # Filed under the connection that was switched off, or under no resource
@@ -131,15 +127,15 @@ async def deactivate(service: ProviderService, wire: Protocol, *, actor: str) ->
             details={
                 "from": previous.name if previous is not None else None,
                 "to": None,
-                "protocol": wire.value,
+                "agent_type": agent_type.value,
                 "agents": deprojected,
             },
         )
     return DeactivateResult(
-        protocol=wire.value,
+        agent_type=agent_type.value,
         deprojected=deprojected,
         previous=previous.name if previous is not None else None,
     )
 
 
-__all__ = ["AGENT_FOR_WIRE", "activate", "deactivate"]
+__all__ = ["activate", "deactivate"]

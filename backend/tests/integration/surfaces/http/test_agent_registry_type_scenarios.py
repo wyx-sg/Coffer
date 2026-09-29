@@ -19,6 +19,7 @@ from starlette.testclient import TestClient
 
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from tests.support.facets import put_programs_on_path
 
 TOKEN = "test-token-agent-type-scenarios"
 
@@ -84,10 +85,13 @@ def test_native_memory_scan_without_layout_on_disk_is_empty_and_unaudited(tmp_pa
 )
 def test_claude_code_is_found_and_defaults_to_dot_claude(tmp_path, monkeypatch):
     (tmp_path / ".claude").mkdir()
+    put_programs_on_path(monkeypatch, tmp_path / "bin", {"claude": "2.1.281 (Claude Code)"})
     app = _app(tmp_path, monkeypatch, 61110)
     with _client(app) as c:
         cands = {x["type"]: x for x in c.get("/api/v1/agents/candidates").json()["candidates"]}
         assert cands["claude_code"]["config_dir"] == str(tmp_path / ".claude")
+        assert cands["claude_code"]["state"] == "installed_active"
+        assert cands["claude_code"]["version"]
 
         uid = _register(c, "claude_code", "cc")
         files = {f["key"]: f for f in c.get(f"/api/v1/agents/{uid}/config-files").json()["items"]}
@@ -312,10 +316,12 @@ def _codex_fixture(tmp_path: pathlib.Path, config: str = _CODEX_CONFIG) -> pathl
 )
 def test_codex_is_found_and_defaults_to_dot_codex(tmp_path, monkeypatch):
     (tmp_path / ".codex").mkdir()
+    put_programs_on_path(monkeypatch, tmp_path / "bin", {"codex": "codex-cli 0.155.1"})
     app = _app(tmp_path, monkeypatch, 61200)
     with _client(app) as c:
         cands = {x["type"]: x for x in c.get("/api/v1/agents/candidates").json()["candidates"]}
         assert cands["codex"]["config_dir"] == str(tmp_path / ".codex")
+        assert cands["codex"]["state"] == "installed_active"
 
         uid = _register(c, "codex", "cx")
         files = {f["key"]: f for f in c.get(f"/api/v1/agents/{uid}/config-files").json()["items"]}

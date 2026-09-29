@@ -28,9 +28,7 @@ which is exactly the kind of surprise this module exists to avoid.
 
 from __future__ import annotations
 
-import json
 import pathlib
-import tomllib
 from collections.abc import Awaitable, Callable
 from typing import Protocol as _Protocol
 
@@ -38,15 +36,9 @@ from coffer.application.provider.projector import ProviderProjector
 from coffer.application.provider.targets import projection_targets
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
+from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.agent.types import AgentType
-from coffer.domain.provider.codex_shell_env import CODEX_SHELL_ENV_POLICY_KEY
-from coffer.domain.provider.config import Protocol, ProviderConfig
-from coffer.domain.provider.projection import (
-    remove_anthropic_settings,
-    remove_codex_provider,
-    target_for_agent,
-    wire_for_agent,
-)
+from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.resource import Resource
 
 
@@ -58,38 +50,10 @@ class _ConfigFileStore(_Protocol):
     def read_text(self, path: pathlib.Path) -> str | None: ...
 
 
-#: ``(wire) -> None`` — ``ProviderService.deactivate``, the one operation that
-#: puts an agent type back on its built-in login (clearing the flag, auditing
-#: the switch, and removing any keys that ARE there).
-Deactivate = Callable[[Protocol], Awaitable[object]]
-
-
-def _projection_present(text: str, agent_type: AgentType) -> bool:
-    """Whether Coffer's keys are in ``text``.
-
-    Asked by removing them and seeing whether anything moved, so the check can
-    never drift from what projection actually writes — the remover is the same
-    pure function ``deproject`` uses. The comparison is on PARSED data, not on
-    the strings: the removers re-serialise, so an untouched file comes back
-    reindented and a textual diff would claim a projection in every file.
-
-    A document neither Coffer nor the remover can parse is not evidence of
-    anything; the caller treats that (via the raised error) as "assume present".
-
-    Codex's ``shell_environment_policy`` is left out of the comparison: its
-    ``exclude`` entry only hides the key from shell commands and selects no
-    provider, so one left behind by a hand-removed provider block is not a
-    projection (the heal's ``deproject`` removes it).
-    """
-    if not text.strip():
-        return False
-    if agent_type is AgentType.CLAUDE_CODE:
-        return bool(json.loads(remove_anthropic_settings(text)) != json.loads(text))
-    before = tomllib.loads(text)
-    after = tomllib.loads(remove_codex_provider(text))
-    before.pop(CODEX_SHELL_ENV_POLICY_KEY, None)
-    after.pop(CODEX_SHELL_ENV_POLICY_KEY, None)
-    return before != after
+#: ``(agent_type) -> None`` — ``ProviderService.deactivate``, the one operation
+#: that puts an agent type back on its built-in login (clearing the flag,
+#: auditing the switch, and removing any keys that ARE there).
+Deactivate = Callable[[AgentType], Awaitable[object]]
 
 
 class ProviderProjectionBootHeal:
@@ -102,7 +66,9 @@ class ProviderProjectionBootHeal:
         agents: _Lister,
         config_store: _ConfigFileStore,
         deactivate: Deactivate,
+        catalog: AgentCatalog,
     ) -> None:
+        self._catalog = catalog
         self._providers = providers
         self._agents = agents
         self._config_store = config_store
@@ -124,11 +90,8 @@ class ProviderProjectionBootHeal:
                 continue
             if self._any_projected(registered, agent_type):
                 continue
-            wire = wire_for_agent(agent_type)
-            if wire is None:  # pragma: no cover — every type maps to a wire
-                continue
             try:
-                await self._deactivate(wire)
+                await self._deactivate(agent_type)
             except Exception as e:
                 notes.append(f"{agent_type.value}: could not clear stale '{connection}': {e}")
                 continue
@@ -180,15 +143,19 @@ class ProviderProjectionBootHeal:
         """True when at least one registered agent of this type really carries
         Coffer's keys. One is enough: the flag is per connection, not per agent,
         so a single projected agent means the activation did take effect."""
-        target = target_for_agent(agent_type)
-        if target is None:  # pragma: no cover — every type has a target
+        facet = self._catalog.provider_projection(agent_type)
+        if facet is None:
+            # Nothing this agent could carry: the flag cannot be contradicted.
             return True
         for agent in agents:
             try:
                 cfg = AgentConfig.model_validate(agent.config)
-                spec = spec_for(cfg.type, target.config_key, cfg.resolved_config_dir())
+                spec = spec_for(cfg.type, facet.config_key, cfg.resolved_config_dir())
                 text = self._config_store.read_text(spec.path) or ""
-                projected = _projection_present(text, agent_type)
+                # Asked of the facet, which removes its keys and compares the
+                # parsed documents — so the check never drifts from what
+                # projection writes. A document that does not parse raises.
+                projected = facet.is_present(text)
             except Exception:
                 # Unreadable or unparseable: assume projected. Guessing "absent"
                 # from a file we could not inspect would clear a flag on no

@@ -8,7 +8,6 @@ import tomllib
 
 import pytest
 
-from coffer.domain.agent.types import AgentType
 from coffer.domain.connection import CODEX_ENV_KEY
 from coffer.domain.provider.projection import (
     CODEX_PROVIDER_ID,
@@ -20,7 +19,6 @@ from coffer.domain.provider.projection import (
     is_managed_api_key_helper,
     remove_anthropic_settings,
     remove_codex_provider,
-    target_for_agent,
 )
 
 #: ``apply_anthropic_settings`` takes no default helper any more (only the
@@ -226,15 +224,6 @@ def test_remove_codex_drops_only_its_own_exclude_entry() -> None:
     assert "shell_environment_policy" not in tomllib.loads(remove_codex_provider(bare))
 
 
-def test_target_for_agent_maps_agent_to_config() -> None:
-    # The projection writer is now chosen by AGENT type, not protocol — so an
-    # openai-wire connection routed to Claude Code writes settings.json.
-    cc = target_for_agent(AgentType.CLAUDE_CODE)
-    assert cc is not None and cc.config_key == "settings"
-    cx = target_for_agent(AgentType.CODEX)
-    assert cx is not None and cx.config_key == "config"
-
-
 def test_per_connection_api_key_helper_is_written_and_removed() -> None:
     # The helper names the connection by UID, which is what makes a rename cost
     # nothing: the line Coffer writes into somebody else's config file goes on
@@ -287,18 +276,6 @@ def test_a_user_owned_helper_is_never_claimed(helper: str) -> None:
     assert not is_managed_api_key_helper(helper)
     doc = json.dumps({"apiKeyHelper": helper})
     assert json.loads(remove_anthropic_settings(doc)) == {"apiKeyHelper": helper}
-
-
-# --- supported-agent invariant -------------------------------------------------
-
-
-# Coffer supports exactly the agent types it can project a provider into: every
-# member of ``AgentType`` MUST have a native-config projection target. This locks
-# the invariant so a newly added agent type cannot silently ship without a
-# projection writer (and so a removed one cannot leave a dangling target).
-@pytest.mark.parametrize("agent_type", list(AgentType))
-def test_every_supported_agent_is_a_projection_target(agent_type: AgentType) -> None:
-    assert target_for_agent(agent_type) is not None
 
 
 # --- Codex model catalogue (``model_catalog_json``) -----------------------------

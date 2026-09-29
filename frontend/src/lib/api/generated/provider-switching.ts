@@ -204,8 +204,10 @@ export interface paths {
         };
         /**
          * Resolve the active provider's API key for a wire format
-         * @description Returns the decrypted API key of the connection active for the agent
-         *     behind `wire`, over the local token-protected daemon API. The legacy
+         * @description Returns the decrypted API key of the connection active for an agent
+         *     whose native config speaks `wire` (the protocols each agent declares;
+         *     the first such agent type with an active connection answers), over
+         *     the local token-protected daemon API. The legacy
          *     form, kept for `settings.json` files written before the projected
          *     helper named the connection
          *     (`apiKeyHelper = "coffer provider key --wire anthropic"`); new
@@ -259,29 +261,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/providers/use-builtin/{wire}": {
+    "/providers/use-builtin/{agent_type}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Wire whose agent(s) to switch back to built-in. `ollama` and `unknown` map to no agent, so they answer 200 with nothing undone. */
-                wire: components["schemas"]["Protocol"];
+                /** @description The agent type whose agents to switch back to built-in. A wire is not accepted: a connection reaches agents through its scope, so no protocol names an agent. */
+                agent_type: components["schemas"]["AgentType"];
             };
             cookie?: never;
         };
         get?: never;
         put?: never;
         /**
-         * Switch a wire's agent(s) back to their built-in login
-         * @description Removes Coffer's projected keys from every ENABLED matching agent's
-         *     native config (the inverse of activate) and clears `is_active` on the
-         *     wire's active connection, so the agent runs on its OWN built-in
-         *     model/login. A Coffer LLM connection is an optional override, not a
-         *     prerequisite (spec provider-switching "Revert an agent to its built-in
-         *     login").
+         * Switch an agent type back to its built-in login
+         * @description Removes Coffer's projected keys from every ENABLED agent of this type
+         *     (the inverse of activate) and clears `is_active` on the connection
+         *     active for it — de-projecting that connection from the other types it
+         *     reached too, because its single flag is all-or-nothing — so the agent
+         *     runs on its OWN built-in model/login. A Coffer LLM connection is an
+         *     optional override, not a prerequisite (spec provider-switching "Revert
+         *     an agent type to its built-in login").
          *
-         *     Idempotent — a no-op when nothing is active for the wire. Emits a
-         *     `PROVIDER_SWITCHED` audit event `{from, to: null, protocol, agents}`
+         *     Idempotent — a no-op when nothing is active for the type. Emits a
+         *     `PROVIDER_SWITCHED` audit event `{from, to: null, agent_type, agents}`
          *     only when something changed.
          */
         post: operations["useBuiltinProvider"];
@@ -409,10 +412,10 @@ export interface components {
          *     preset fills it, or the user picks it). It does NOT choose the agent a
          *     connection projects into — that is the framework per-agent `scope`,
          *     and the writer is chosen by agent type. The wire drives how the
-         *     endpoint is introspected, whether a key is required, the scope a NEW
-         *     connection starts with, and the wire→agent mapping of `use-builtin`
-         *     and the legacy `active-key` route (`anthropic` → Claude Code,
-         *     `openai` → Codex):
+         *     endpoint is introspected, whether a key is required and the scope a NEW
+         *     connection starts with; the legacy `active-key` route resolves a wire
+         *     through the agents whose native config declares it (`anthropic` —
+         *     Claude Code, `openai` — Codex):
          *     - `ollama` → internal-only; reaches NO agent and cannot be activated.
          *       Used solely by Coffer's internal engine when this connection is the
          *       internal default. Has no API key, so its `credential_ref` is absent.
@@ -471,7 +474,7 @@ export interface components {
             /** @description Free text stored on the resource row. */
             description?: string | null;
         };
-        /** @description All fields optional. `credential_ref` is immutable — it is the vault address the connection owns — but `protocol` is not: the probe that guessed the wire can be wrong. Two things key off it: the ollama internal-only rule, and the wire→agent mapping `use-builtin` and the legacy `active-key` route take — which is why it cannot move while the connection is active (409 `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`). Re-targeting which agents the connection projects into is a SCOPE edit (`PUT /api/v1/resources/{uid}/scope`), not a patch field — re-target then re-activate to re-project. No CHOSEN model is on the connection (spec provider-switching "Take projected model keys from the agent's binding"); `models` only curates which of the endpoint's models it offers. */
+        /** @description All fields optional. `credential_ref` is immutable — it is the vault address the connection owns — but `protocol` is not: the probe that guessed the wire can be wrong. The ollama internal-only rule keys off it — which is why it cannot move while the connection is active (409 `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`). Re-targeting which agents the connection projects into is a SCOPE edit (`PUT /api/v1/resources/{uid}/scope`), not a patch field — re-target then re-activate to re-project. No CHOSEN model is on the connection (spec provider-switching "Take projected model keys from the agent's binding"); `models` only curates which of the endpoint's models it offers. */
         ProviderPatchRequest: {
             protocol?: components["schemas"]["Protocol"];
             base_url?: string | null;
@@ -497,9 +500,9 @@ export interface components {
             /** @description Agent types in the connection's reach that have no enabled registered agent here to project into. Not an error — the profile is still activated. (A genuine native-config write failure aborts the switch with a 5xx and leaves the registry unchanged, rather than skipping.) */
             skipped: string[];
         };
-        /** @description Result of switching a wire back to the agent's built-in login. */
+        /** @description Result of switching an agent type back to its built-in login. */
         DeactivateOut: {
-            protocol: components["schemas"]["Protocol"];
+            agent_type: components["schemas"]["AgentType"];
             /** @description Agent names whose Coffer projection was removed. */
             deprojected: string[];
             /** @description The connection that was active before, or null if none. */
@@ -886,8 +889,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Wire whose agent(s) to switch back to built-in. `ollama` and `unknown` map to no agent, so they answer 200 with nothing undone. */
-                wire: components["schemas"]["Protocol"];
+                /** @description The agent type whose agents to switch back to built-in. A wire is not accepted: a connection reaches agents through its scope, so no protocol names an agent. */
+                agent_type: components["schemas"]["AgentType"];
             };
             cookie?: never;
         };
@@ -903,6 +906,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            422: components["responses"]["UnprocessableEntity"];
             500: components["responses"]["InternalError"];
         };
     };

@@ -20,6 +20,7 @@ from starlette.testclient import TestClient
 from typer.testing import CliRunner
 
 from coffer.surfaces.cli.main import app as cli_app
+from tests.support.facets import put_programs_on_path
 
 from ._real_app import audit, boot, extract_json
 
@@ -101,12 +102,14 @@ def _mcp_entries(home: pathlib.Path) -> pathlib.Path:
     spec="resource-framework", scenario="an unknown or undiscardable row is refused"
 )
 def test_a_detected_agent_is_registered_with_agent_add_and_never_discarded(
-    daemon: TestClient, tmp_path: pathlib.Path
+    daemon: TestClient, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     (tmp_path / ".codex").mkdir()
+    put_programs_on_path(monkeypatch, tmp_path / "bin", {"codex": "codex-cli 0.155.1"})
 
     rows = [r for r in _rows() if r["kind"] == "agent"]
     codex = next(r for r in rows if r["ref"] == "codex")
+    assert codex["state"] == "installed_active"
     assert "coffer agent add codex" in codex["detail"]
     assert daemon.get("/resources", params={"kind": "agent"}).json()["resources"] == []
 

@@ -53,9 +53,12 @@ export interface paths {
         };
         /**
          * Discover installed-but-unregistered agents
-         * @description Read-only discovery: scans known install markers for each supported
-         *     agent type and returns the ones that are installed but not yet
-         *     registered, as candidates. Registers nothing — the user reviews the
+         * @description Read-only discovery with two signals: for each supported type, the
+         *     program on the agent's real PATH (and its version) and the config
+         *     directory — the standard one, plus the one `CLAUDE_CONFIG_DIR` /
+         *     `CODEX_HOME` names in the daemon's environment. Every directory with
+         *     either signal that no registered agent holds is a candidate carrying
+         *     its detection state. Registers nothing — the user reviews the
          *     candidates and chooses which to add (discovery + confirm). A removed
          *     agent re-appears here on the next scan; there is no suppression list.
          */
@@ -296,6 +299,37 @@ export interface paths {
          *     `agent_mcp_entry_adopted`.
          */
         post: operations["adoptAgentMcpEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{uid}/hooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List every hook in the agent's native config
+         * @description Read only (spec agent-registry "List every hook in the agent's native
+         *     config"): every command hook the agent's own hook-carrying files and
+         *     its enabled plugins' hook files declare, each with its event, matcher,
+         *     command and source file. Coffer's own delivery hook is marked, and
+         *     `coffer_hook` reports its health — `current` when the installed
+         *     command is exactly the one Coffer would write now, `stale` when
+         *     Coffer's marker carries another command, `missing` when it is not
+         *     there — and the last recorded fire. Writes nothing, records no audit
+         *     event; an unparseable file is a `parse_errors` entry.
+         */
+        get: operations["listAgentHooks"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -691,21 +725,32 @@ export interface components {
             model: string | null;
             fast_model: string | null;
             wire_api: string | null;
+            state: components["schemas"]["DetectionState"];
+            /** @description The version the agent's program reports (`claude --version`, `codex --version`); null when the program is not found or did not answer in time. */
+            version: string | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             updated_at: string;
         };
-        /** @description An installed-but-unregistered agent surfaced by discovery. Derived at scan time, never stored; the user confirms it to register. */
+        /**
+         * @description Two-signal detection: the agent's program on its real PATH, and its config directory. `installed_active` — both; `installed_never_run` — the program without its directory yet; `config_only` — the directory without the program (shown as not installed); `missing` — neither, only ever reported for a registered agent.
+         * @enum {string}
+         */
+        DetectionState: "installed_active" | "installed_never_run" | "config_only" | "missing";
+        /** @description An agent seen on this machine that is not registered, surfaced by discovery. Derived at scan time, never stored; the user confirms an `installed_active` one to register it. */
         AgentCandidate: {
             type: components["schemas"]["AgentType"];
             display_name: string;
-            /** @description The type's standard config directory on disk (~/.claude, ~/.codex). */
+            /** @description The config directory looked at: the type's standard one (~/.claude, ~/.codex), or the one CLAUDE_CONFIG_DIR / CODEX_HOME names in the daemon's environment. */
             config_dir: string;
             /** @description Where skills are delivered for this candidate: <config_dir>/skills. */
             default_skill_dir: string;
-            /** @description Default resource name (e.g. claude-code). */
+            /** @description Default resource name (e.g. claude-code; claude-code-<dir> for an environment-named directory). */
             suggested_name: string;
+            state: components["schemas"]["DetectionState"];
+            /** @description The version the agent's program reports, when found. */
+            version: string | null;
         };
         AgentCandidatesOut: {
             candidates: components["schemas"]["AgentCandidate"][];
@@ -776,6 +821,42 @@ export interface components {
             path: string;
             /** @description Parser error message. */
             error: string;
+        };
+        /**
+         * @description Where a hook is declared: a file in the agent's config directory, or an enabled plugin's hook file.
+         * @enum {string}
+         */
+        HookSource: "user" | "plugin";
+        /** @enum {string} */
+        HookHealth: "current" | "stale" | "missing";
+        NativeHook: {
+            event: string;
+            matcher: string | null;
+            command: string;
+            type: string;
+            timeout: number | null;
+            source: components["schemas"]["HookSource"];
+            /** @description The file that declares the hook. */
+            path: string;
+            /** @description The contributing plugin's id. */
+            plugin: string | null;
+            /** @description Whether this is Coffer's own delivery hook. */
+            coffer: boolean;
+        };
+        CofferHook: {
+            event: string;
+            path: string;
+            health: components["schemas"]["HookHealth"];
+            installed_command: string | null;
+            expected_command: string;
+            /** Format: date-time */
+            last_fired_at: string | null;
+        };
+        AgentHooksOut: {
+            items: components["schemas"]["NativeHook"][];
+            /** @description Coffer's own delivery hook; null when the agent type has none. */
+            coffer_hook: components["schemas"]["CofferHook"] | null;
+            parse_errors: components["schemas"]["ParseError"][];
         };
         /** @description One MCP server entry as configured in the agent's own file — derived at read time, never stored. Env/header VALUES never cross HTTP; only key names are exposed. */
         McpEntry: {
@@ -1574,6 +1655,31 @@ export interface operations {
                 };
             };
             422: components["responses"]["UnprocessableEntity"];
+        };
+    };
+    listAgentHooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentHooksOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     listAgentPlugins: {

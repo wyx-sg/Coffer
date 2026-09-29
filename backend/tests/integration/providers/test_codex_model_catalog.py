@@ -25,6 +25,7 @@ from coffer.domain.provider.modality import Modality
 from coffer.domain.provider.projection import CODEX_MODEL_CATALOG_FILENAME
 from coffer.domain.resource import Resource
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
+from tests.support.facets import agent_catalog
 
 _NOW = datetime(2026, 9, 11, tzinfo=UTC)
 
@@ -73,7 +74,7 @@ def _connection(models: list[CuratedModel]) -> tuple[Resource, ProviderConfig]:
 
 
 def _projector() -> ProviderProjector:
-    return ProviderProjector(ConfigFileStore())
+    return ProviderProjector(ConfigFileStore(), agents=agent_catalog())
 
 
 def _catalog(config_dir: pathlib.Path) -> pathlib.Path:

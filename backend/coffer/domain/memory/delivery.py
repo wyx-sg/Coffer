@@ -147,8 +147,15 @@ class DeliveryAdapter(Protocol):
     `application.memory.delivery.DeliveryService` composes against this
     Protocol, never against a specific agent module — a third agent is one
     more adapter under `infrastructure.memory.delivery`, not a change to the
-    service.
+    service. It is the delivery-hook entry of the agent's projection facet
+    (ADR agent-mechanisms-are-optional-facets-on-the-descriptor), bound to the
+    agent it declares at the composition root.
     """
+
+    @property
+    def agent_type(self) -> str:
+        """The agent type's value this adapter serves (``claude_code``)."""
+        ...
 
     @property
     def config_key(self) -> str:
@@ -181,6 +188,11 @@ class DeliveryAdapter(Protocol):
         """The installed command, or `None` if Coffer has no entry."""
         ...
 
+    def is_coffer_command(self, command: str) -> bool:
+        """Whether a hook command found in the agent's config is Coffer's own
+        (by the marker, never by the arguments)."""
+        ...
+
 
 def _parse(text: str) -> dict[str, Any]:
     if not text.strip():
@@ -205,7 +217,7 @@ def _is_coffer_leaf(leaf: Any) -> bool:
     if not isinstance(leaf, dict):
         return False
     cmd = leaf.get("command")
-    return isinstance(cmd, str) and cmd.startswith(f": {MARKER}")
+    return isinstance(cmd, str) and is_marked(cmd)
 
 
 def _is_coffer_entry(entry: Any) -> bool:
@@ -289,6 +301,11 @@ def find_command(text: str, *, event: str) -> str | None:
             if _is_coffer_leaf(leaf):
                 return str(leaf.get("command"))
     return None
+
+
+def is_marked(command: str) -> bool:
+    """Whether a hook command carries Coffer's marker."""
+    return command.startswith(f": {MARKER}")
 
 
 def is_installed(text: str, *, event: str) -> bool:

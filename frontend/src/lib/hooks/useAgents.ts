@@ -15,6 +15,7 @@ import {
   agentConfigChildKey,
   agentConfigFileKey,
   agentConfigFilesKey,
+  agentHooksKey,
   agentKey,
   agentMcpEntriesKey,
   agentConnectionKey,
@@ -134,6 +135,8 @@ export function useAgentConnect(uid: string) {
       connect ? agentsApi.connect(uid) : agentsApi.disconnect(uid),
     onSuccess: (data) => {
       qc.setQueryData(agentConnectionKey(uid), data);
+      // Connecting (re)installs Coffer's hook, whose health the Hooks tab shows.
+      void qc.invalidateQueries({ queryKey: agentHooksKey(uid) });
     },
     onError,
   });
@@ -183,6 +186,16 @@ export function useAdoptMcpEntry(agentUid: string) {
       qc.invalidateQueries({ queryKey: agentMcpEntriesKey(agentUid) });
       qc.invalidateQueries({ queryKey: resourcesByKindKey("mcp_server") });
     },
+  });
+}
+
+// --- Hooks (spec agent-registry "List every hook in the agent's native config") — read-only ---
+
+export function useAgentHooks(uid: string) {
+  return useQuery({
+    queryKey: agentHooksKey(uid),
+    queryFn: () => agentsApi.hooks(uid),
+    enabled: !!uid,
   });
 }
 
