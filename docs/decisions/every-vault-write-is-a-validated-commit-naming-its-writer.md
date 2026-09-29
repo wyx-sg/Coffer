@@ -3,7 +3,7 @@
 **Status**: Proposed
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Sync Merges Outside the Vault With `git merge-tree`, Then Guards, Then Checks Out](sync-merges-outside-the-vault-then-checks-out.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Knowledge Curation Merges New Material Into the Documents](knowledge-curation.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), spec knowledge "Keep direct file edits a complete way to change knowledge", spec knowledge "Save a document edited in the web UI", spec knowledge "Let newer statements win and a person's edit stand", spec skill-manager "Save an existing skill file conditionally", spec vault-sync "Snapshot before applying and roll back from it"
+**Related**: [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label](identity-is-the-uid-inside-the-file.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Standalone Secrets Are Named `coffer://secret/` References, Injected Only Into One Child Process](standalone-secrets-are-named-references-injected-into-one-child.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Knowledge Curation Merges New Material Into the Documents](knowledge-curation.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), spec knowledge "Keep direct file edits a complete way to change knowledge", spec knowledge "Save a document edited in the web UI", spec knowledge "Let newer statements win and a person's edit stand", spec skill-manager "Save an existing skill file conditionally", spec vault-sync "Snapshot before applying and roll back from it"
 
 ## Context
 
@@ -64,7 +64,7 @@ and whose trailers carry `Coffer-Writer: human|daemon|sync`, `Coffer-Actor:`
   person reads locally is the history the remote holds; the sync round no
   longer serializes local state before merging, because local state is
   already committed; the pointer can be the repository's own `HEAD`
-  ([Sync Merges Outside the Vault](sync-merges-outside-the-vault-then-checks-out.md)).
+  ([Sync Only Pulls and Pushes the Vault Repository](sync-applies-clean-merges-and-stops-on-any-conflict.md)).
   The first consumer is a skill's History tab — versions with their writer, a
   diff, and restore — at no storage cost beyond git's.
 - **Cons.** Coffer requires git for every user, not only for sync users: on
@@ -250,7 +250,7 @@ carries credentials.
 
 - The sync round loses its serialize step and its pointer table; the
   reconciler reads the committed tree
-  ([Sync Merges Outside the Vault](sync-merges-outside-the-vault-then-checks-out.md)).
+  ([Sync Only Pulls and Pushes the Vault Repository](sync-applies-clean-merges-and-stops-on-any-conflict.md)).
 - Every vault-writing API takes an expected hash; the skill content route's
   unconditional mode and the knowledge save's unlocked check are replaced by
   the shared protocol. `_align_mtime` and the curated-at mtime comparison are

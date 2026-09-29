@@ -221,5 +221,5 @@ except those under Proposed, which are drafted and not yet in effect.
 | [`identity-is-the-uid-inside-the-file`](identity-is-the-uid-inside-the-file.md) | A Resource's Identity Is the `uid` Inside Its File; Path and Name Are Location and Label |
 | [`every-vault-file-carries-its-format-version`](every-vault-file-carries-its-format-version.md) | Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades |
 | [`every-vault-write-is-a-validated-commit-naming-its-writer`](every-vault-write-is-a-validated-commit-naming-its-writer.md) | Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer |
-| [`sync-merges-outside-the-vault-then-checks-out`](sync-merges-outside-the-vault-then-checks-out.md) | Sync Merges Outside the Vault With `git merge-tree`, Then Guards, Then Checks Out |
+| [`sync-applies-clean-merges-and-stops-on-any-conflict`](sync-applies-clean-merges-and-stops-on-any-conflict.md) | Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person |
 | [`reach-is-a-machine-local-predicate-over-a-context`](reach-is-a-machine-local-predicate-over-a-context.md) | Reach Is a Machine-Local Predicate Over an Extensible Context |

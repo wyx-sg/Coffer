@@ -3,7 +3,7 @@
 **Status**: Proposed
 **Date**: 2026-09-29
 **Deciders**: Yuxing Wu
-**Related**: [Resource Identity Is an Immutable `uid`, Not the Name](resource-identity-is-an-immutable-uid.md), [Names Visible to Agents Are Fixed; Every Resource Carries an Editable Title](names-visible-to-agents-are-fixed.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Sync Merges Outside the Vault With `git merge-tree`, Then Guards, Then Checks Out](sync-merges-outside-the-vault-then-checks-out.md), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), spec resource-framework "Address every resource by an immutable uid through one kind-agnostic surface", spec resource-framework "Treat a resource's name as a mutable label", spec vault-sync "Key resource documents by uid", spec knowledge "Use the file path as a document's identity", PR #406, PR #409
+**Related**: [Resource Identity Is an Immutable `uid`, Not the Name](resource-identity-is-an-immutable-uid.md), [Names Visible to Agents Are Fixed; Every Resource Carries an Editable Title](names-visible-to-agents-are-fixed.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Every Vault File Carries Its Own Format Version; One Owner Machine Commits Layout Upgrades](every-vault-file-carries-its-format-version.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [A Sync Round That Would Lose Too Much Is Held, in Both Directions, Counting Losses Not Moves](sync-deletion-breaker.md), [One Level-Triggered Reconciler Converges What Coffer Writes Outside Its Database, Comparing Parameters](one-level-triggered-reconciler-compares-parameters.md), spec resource-framework "Address every resource by an immutable uid through one kind-agnostic surface", spec resource-framework "Treat a resource's name as a mutable label", spec vault-sync "Key resource documents by uid", spec knowledge "Use the file path as a document's identity", PR #406, PR #409
 
 ## Context
 
@@ -183,7 +183,7 @@ roots, and copying a resource into the own vault mints a new uid and records
 - The deletion breaker counts **lost uids** for resource files: a path that
   disappears while its uid reappears elsewhere in the same diff is a move by
   construction, with no similarity judgement
-  ([Sync Merges Outside the Vault](sync-merges-outside-the-vault-then-checks-out.md)).
+  ([Sync Only Pulls and Pushes the Vault Repository](sync-applies-clean-merges-and-stops-on-any-conflict.md)).
 - The reconciler's `Changed(kind, uid, rev)` hint takes the blob id of the
   file as `rev`, so the `rev` column the reconciler ADR asked for is not
   needed once resources are files.
