@@ -4,7 +4,8 @@
 // channel already points at, so a rotation never re-pairs or re-registers —
 // re-bind the default agent (SeaTalk also exposes its app id), and set when
 // the bot answers in a group (EditChannelGroupFields), and how long a burst of
-// messages is held before it runs as one turn (EditChannelBurstFields). The bound
+// messages is held before it runs as one turn (EditChannelBurstFields), and the
+// folders /dir may switch into (EditChannelDirectoriesField). The bound
 // agent's models all stay available; the model is switched in chat with
 // /model. Apply plumbing (secrets-first write, then config PATCH) lives in
 // editChannel.ts.
@@ -28,12 +29,16 @@ import type { ResourceOut } from "@/lib/api/resources";
 import { EditChannelSecretFields, type ChannelEditDraft } from "./EditChannelSecretFields";
 import { EditChannelGroupFields, type ChannelGroupDraft } from "./EditChannelGroupFields";
 import { EditChannelBurstFields, type ChannelBurstDraft } from "./EditChannelBurstFields";
+import { EditChannelDirectoriesField } from "./EditChannelDirectoriesField";
 import {
   burstDraftValid,
+  directoriesDraftValid,
   honoursRequireMention,
   parseBurstWait,
+  parseDirectories,
   planChannelEdit,
   storedBurstWait,
+  storedDirectories,
 } from "./editChannel";
 
 function strField(config: Record<string, unknown>, key: string): string {
@@ -92,7 +97,10 @@ export function EditChannelDialog({
   });
   const [burst, setBurst] = useState<ChannelBurstDraft>(storedBurst);
   const patchBurst = (patch: Partial<ChannelBurstDraft>) => setBurst((b) => ({ ...b, ...patch }));
-  const burstValid = burstDraftValid(burst);
+  // The /dir allow-list, one path per line.
+  const storedDirs = () => storedDirectories(config).join("\n");
+  const [dirs, setDirs] = useState(storedDirs);
+  const formValid = burstDraftValid(burst) && directoriesDraftValid(dirs);
 
   const reset = () => {
     setDefaultAgent(strField(config, "default_agent"));
@@ -100,12 +108,13 @@ export function EditChannelDialog({
     setSecrets(storedSecrets());
     setGroup(storedGroup());
     setBurst(storedBurst());
+    setDirs(storedDirs());
   };
 
   const seatalk = channelType === "seatalk";
 
   const submit = () => {
-    if (!burstValid) return;
+    if (!formValid) return;
     const nextTitle = titlePatchValue(title);
     const plan = planChannelEdit({
       uid: resource.uid,
@@ -121,6 +130,7 @@ export function EditChannelDialog({
         ignore_other_mentions: group.ignoreOtherMentions,
         wait_after_text_seconds: parseBurstWait(burst.waitAfterText) ?? undefined,
         wait_after_forward_seconds: parseBurstWait(burst.waitAfterForward) ?? undefined,
+        directories: parseDirectories(dirs).directories,
       },
     });
     update.mutate(plan, {
@@ -184,11 +194,13 @@ export function EditChannelDialog({
 
           <EditChannelBurstFields draft={burst} onChange={patchBurst} />
 
+          <EditChannelDirectoriesField value={dirs} onChange={setDirs} />
+
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t("common.cancel")}
             </Button>
-            <Button type="submit" disabled={update.isPending || !burstValid}>
+            <Button type="submit" disabled={update.isPending || !formValid}>
               {update.isPending ? t("common.saving") : t("channels.edit.save")}
             </Button>
           </div>

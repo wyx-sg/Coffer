@@ -98,7 +98,7 @@ async def test_one_bot_runs_different_agents_in_different_threads(env: ChannelEn
     resource, adapter = await env.paired_channel(sender_id="owner-1")
 
     # Thread A switches to codex; thread B keeps the channel default (builtin).
-    await env.processor.on_message(_group_msg("th-A", "/agent codex"))
+    await env.processor.on_message(_group_msg("th-A", "/new codex"))
     await wait_until(lambda: any("codex" in t.lower() for t in adapter.texts()))
     await env.processor.on_message(_group_msg("th-B", "hello"))
     await wait_until(lambda: "Hello world" in adapter.texts())

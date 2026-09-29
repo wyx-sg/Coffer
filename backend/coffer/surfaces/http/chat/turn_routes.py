@@ -20,19 +20,22 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
 from fastapi import APIRouter, Depends, Response, status
 from sse_starlette.sse import EventSourceResponse
 
 from coffer.application.chat.attachments import ChatAttachmentService
+from coffer.application.chat.ports import ChannelMirrorPort
 from coffer.application.chat.service import ChatService
 from coffer.application.chat.turn_orchestrator import TurnOrchestrator
+from coffer.domain.chat.attachment import Attachment
 from coffer.domain.chat.events import AgentEvent
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.chat.dependencies import (
     get_attachment_service,
+    get_channel_mirror,
     get_chat_service,
     get_turn_orchestrator,
 )
@@ -63,6 +66,7 @@ async def send_message(
     svc: ChatService = Depends(get_chat_service),  # noqa: B008
     orchestrator: TurnOrchestrator = Depends(get_turn_orchestrator),  # noqa: B008
     attachments_svc: ChatAttachmentService = Depends(get_attachment_service),  # noqa: B008
+    mirror: ChannelMirrorPort | None = Depends(get_channel_mirror),  # noqa: B008
 ) -> SendMessageAck:
     """Start a turn for the message, or enqueue it behind the in-flight one.
 
@@ -75,17 +79,35 @@ async def send_message(
     persists as references after the text exactly as it does a channel's media
     (spec chat "Send uploaded files with a web message"); an id naming no
     upload is ``AttachmentNotFound`` (422) and nothing is persisted or queued.
+
+    On a conversation a channel drives, the reply also goes to that chat first
+    (spec chat "Mirror a web reply into the channel it came from"), and the
+    turn is queued with the sink that delivers its answer there; ``mirror`` in
+    the ack says whether it was sent, is pending, or stays in Coffer.
     """
-    await svc.get_conversation(id)  # a missing path answers before a bad body
+    conv = await svc.get_conversation(id)  # a missing path answers before a bad body
     attachments = await attachments_svc.resolve(body.attachment_ids)
     text = attachments_svc.message_text(body.text, attachments)
+    outcome = None
+    if conv.channel_uid is not None and mirror is not None:
+        outcome = await mirror.mirror(id, conv.channel_uid, _mirror_text(body.text, attachments))
     queued = await orchestrator.enqueue_message(
         id,
         text,
         attachments=attachments,
         title_hint=attachments_svc.title_hint(body.text, attachments),
+        on_start=outcome.on_start if outcome is not None else None,
     )
-    return SendMessageAck(queued=queued)
+    return SendMessageAck(queued=queued, mirror=outcome.state if outcome is not None else None)
+
+
+def _mirror_text(text: str, attachments: Sequence[Attachment]) -> str:
+    """What the chat is told about a web reply: its text, or for a files-only
+    message a short note (the files themselves stay in Coffer)."""
+    if text.strip() or not attachments:
+        return text
+    count = len(attachments)
+    return f"sent {count} file{'s' if count != 1 else ''}"
 
 
 @router.post(

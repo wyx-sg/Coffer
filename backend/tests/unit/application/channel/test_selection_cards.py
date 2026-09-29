@@ -1,6 +1,6 @@
 """The selection cards' pure rendering rules (spec channels "Switch the model
-and reasoning effort from chat", "Offer command choices as owner-gated
-selection cards").
+and reasoning effort from chat", "Offer choices and actions as owner-gated
+cards").
 
 The model card is built from the agent's whole model catalogue — 29 entries for
 ``claude_code`` — but a card is a window onto that list, not the list: SeaTalk
@@ -12,14 +12,19 @@ from __future__ import annotations
 
 from coffer.application.channel.selection_cards import (
     CALLBACK_MAX_BYTES,
+    COMMAND_ACTIONS,
+    KEEP_EFFORT,
     MAX_CARD_BUTTONS,
     PAGE_SIZE,
     SelectionCard,
-    agent_card,
     collection_card,
+    command_card,
+    dir_card,
+    effort_card,
     is_page_turn,
     model_card,
     parse_page_turn,
+    resume_card,
 )
 
 
@@ -36,11 +41,11 @@ def _nav(card: SelectionCard) -> list[str]:
 
 
 class TestShortListsAreNotPaged:
-    def test_the_agent_card_carries_no_navigation_chrome(self):
-        # /agent has two choices and must look exactly as it always has.
-        card = agent_card(current="builtin", choices=[("builtin", "Builtin"), ("codex", "Codex")])
+    def test_the_dir_card_carries_no_navigation_chrome(self):
+        card = dir_card(current="/src/app", directories=["/src/app", "/src/lib"])
 
-        assert _values(card) == ["agent:builtin", "agent:codex"]
+        assert _values(card) == ["dir:0", "dir:1", "dir:default"]
+        assert [b.label for b in card.buttons] == ["app ✓", "lib", "Default"]
         assert card.pages == 1
         assert "Page" not in card.text
 
@@ -124,17 +129,17 @@ class TestPaging:
 
         assert "/model <name>" in card.text
 
-    def test_the_agent_card_pages_by_the_same_rule(self):
+    def test_the_resume_card_pages_by_the_same_rule(self):
         # Pagination is not a model special case: the rule lives in one place.
-        choices = [(f"a{i}", f"Agent {i}") for i in range(20)]
+        entries = [(f"c{i}", f"Conversation {i}") for i in range(20)]
 
-        card = agent_card(current="a0", choices=choices, page=1)
+        card = resume_card(header="list", entries=entries, active="c0", page=1)
 
-        assert _choices(card) == [f"agent:a{i}" for i in range(PAGE_SIZE, 2 * PAGE_SIZE)]
-        assert _nav(card) == ["page:agent:0", "page:agent:2"]
+        assert _choices(card) == [f"resume:c{i}" for i in range(PAGE_SIZE, 2 * PAGE_SIZE)]
+        assert _nav(card) == ["page:resume:0", "page:resume:2"]
 
     def test_the_collection_card_pages_by_the_same_rule_too(self):
-        # spec channels "Save a sent document into a collection": a `/save`
+        # spec channels "Save a sent document into a collection": a `/kb`
         # card is a third instance of the same rule, not a special case —
         # including its own navigation namespace.
         choices = [f"c{i}" for i in range(20)]
@@ -210,8 +215,11 @@ class TestNavigationPayloads:
 
     def test_navigation_is_parsed_apart_from_a_choice(self):
         assert parse_page_turn("page:model:3") == ("model", 3)
-        assert parse_page_turn("page:agent:0") == ("agent", 0)
         assert parse_page_turn("page:collection:2") == ("collection", 2)
+        assert parse_page_turn("page:resume:1") == ("resume", 1)
+        assert parse_page_turn("page:dir:0") == ("dir", 0)
+        # The agent card is gone, and so is its page namespace.
+        assert parse_page_turn("page:agent:0") is None
 
     def test_a_choice_never_parses_as_navigation(self):
         # Including a model whose own id starts with the navigation word.
@@ -232,3 +240,34 @@ def test_a_model_set_by_name_that_is_not_in_the_catalogue_gets_no_false_locator(
     assert card.pages > 1
     assert "Current model: sonnet" in card.text
     assert "is on page" not in card.text
+
+
+class TestTheEffortStep:
+    def test_the_levels_come_with_a_keep_button(self):
+        card = effort_card(current="high", levels=["low", "high"], model="Opus")
+
+        assert _values(card) == ["effort:low", "effort:high", f"effort:{KEEP_EFFORT}"]
+        assert card.buttons[-1].label == "Keep high"
+        assert "Model: Opus" in card.text
+
+    def test_keep_names_the_default_when_nothing_is_pinned(self):
+        card = effort_card(current=None, levels=["low"])
+
+        assert card.buttons[-1].label == "Keep default"
+        assert [b for b in card.buttons if b.selected] == []
+
+
+class TestTheCommandCard:
+    def test_it_carries_the_five_actions(self):
+        card = command_card(title="Deploy check", text="Agent: Codex")
+
+        assert _values(card) == [f"cmd:{name}" for _label, name in COMMAND_ACTIONS]
+        assert [b.label for b in card.buttons] == ["Stop", "New", "Model", "Resume", "Dir"]
+        assert card.title == "Deploy check"
+
+
+def test_a_resume_button_is_cut_to_fit_and_ticks_the_current_one() -> None:
+    card = resume_card(header="h", entries=[("c1", "x" * 80), ("c2", "short")], active="c2")
+
+    assert len(card.buttons[0].label) <= 32
+    assert card.buttons[1].label == "2. short ✓"

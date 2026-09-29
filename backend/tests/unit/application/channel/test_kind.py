@@ -191,7 +191,7 @@ def test_update_skips_when_default_agent_absent():
 # -- per-agent scope (ADR per-agent-resource-scope) ----------------------------------------------
 # Read the other way round from every other kind: a channel is an inbound
 # surface no agent consumes, so its scope names the agents the channel may
-# DRIVE. ``default_agent`` is held inside it on every write path; the `/agent`
+# DRIVE. ``default_agent`` is held inside it on every write path; the `/new <agent>`
 # narrowing is covered in test_agent_routing.py.
 
 

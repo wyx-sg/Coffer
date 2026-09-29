@@ -8,7 +8,7 @@
 ## Context
 
 Several surfaces let the owner choose which model an agent runs on: the web
-Chat picker, a channel's `/model` and `/effort` cards, the agent detail page,
+Chat picker, a channel's `/model` card, the agent detail page,
 and the note an agent is told at turn time about which model it is on. They
 must all offer the same list, or a model picked on the phone is missing on the
 web.

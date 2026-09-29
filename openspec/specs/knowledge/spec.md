@@ -114,7 +114,7 @@ What this layer serves is **files on disk**, and the system MUST describe it as 
 - **AND** it names no Coffer tool as the way to read a document
 
 ### Requirement: Submit every entrance's input as material
-Every entrance Coffer serves — `coffer__write`, the CLI's `write` and its route `POST /api/v1/knowledge/material`, an upload, and a channel's `/save` — MUST **submit material** into the named collection's `.inbox/` rather than write a document. What becomes of material is curation's to decide (see "Curate through a fenced four-tool pass"): which document it belongs in, what in it is new, and what it corrects. The one exception is "Promote material directly when no model is configured", where no model is configured to decide and the material becomes a document as it stands.
+Every entrance Coffer serves — `coffer__write`, the CLI's `write` and its route `POST /api/v1/knowledge/material`, an upload, and a channel's `/kb` — MUST **submit material** into the named collection's `.inbox/` rather than write a document. What becomes of material is curation's to decide (see "Curate through a fenced four-tool pass"): which document it belongs in, what in it is new, and what it corrects. The one exception is "Promote material directly when no model is configured", where no model is configured to decide and the material becomes a document as it stands.
 
 #### Scenario: the CLI and the material route leave material in the inbox
 - **GIVEN** a `shopee` collection and an internal model connection configured
@@ -167,7 +167,7 @@ A document sent to a Coffer channel MUST be ingestible into a collection through
 
 #### Scenario: a document forwarded to a channel lands in a collection
 - **GIVEN** a paired channel whose owner has just sent `note.txt` as an attachment, and one existing collection named `research`
-- **WHEN** the owner follows it with the plain text `/save research`
+- **WHEN** the owner follows it with the plain text `/kb research`
 - **THEN** the ingest service is called exactly once — that collection, that file name, those bytes, `actor` `user` and the channel's own default agent — and the channel replies with a confirmation naming both the file and the collection
 
 ### Requirement: Bound uploads and leave nothing behind on failure

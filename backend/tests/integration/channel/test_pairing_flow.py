@@ -30,11 +30,13 @@ async def test_sending_the_code_pairs_the_chat_and_consumes_the_code(env: Channe
     assert peer.chat_id == "chat-1"
     assert peer.display_name == "Alice"
 
-    assert len(adapter.sent) == 1
+    # The confirmation, then the commands once (as text here: no buttons).
+    assert len(adapter.sent) == 2
     chat_id, text = adapter.sent[0]
     assert chat_id == "chat-1"
-    assert text.startswith("✅ Paired.")
-    assert "/help" in text  # the confirmation carries the command list
+    assert text == "✅ Paired. This chat now controls Coffer channel 'tg'."
+    assert adapter.sent[1][0] == "chat-1"
+    assert "/help" in adapter.sent[1][1]
 
     entries = await env.audit_entries("channel_paired", resource)
     assert len(entries) == 1
@@ -45,7 +47,7 @@ async def test_sending_the_code_pairs_the_chat_and_consumes_the_code(env: Channe
     peer = await env.peers.owner_peer(resource.id)
     assert peer is not None
     assert peer.chat_id == "chat-1"
-    assert len(adapter.sent) == 1  # no confirmation for the second chat
+    assert len(adapter.sent) == 2  # no confirmation for the second chat
     assert len(await env.audit_entries("channel_paired", resource)) == 1
 
 
@@ -164,8 +166,8 @@ async def test_re_pairing_from_the_same_account_keeps_its_groups(env: ChannelEnv
     code, _ = env.pairing.issue("tg")
     await env.processor.on_message(inbound("tg", "old-dm-2", code, sender_id="old-1"))
 
-    assert adapter.sent[-1][0] == "old-dm-2"
-    assert adapter.sent[-1][1].startswith("✅ Paired.")
+    assert adapter.sent[-2][0] == "old-dm-2"
+    assert adapter.sent[-2][1].startswith("✅ Paired.")
     peers = await env.peers.list_by_resource(resource.id)
     assert sorted((p.chat_id, p.sender_id) for p in peers) == [
         ("grp-1", "old-1"),

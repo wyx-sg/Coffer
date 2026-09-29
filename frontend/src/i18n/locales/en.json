@@ -1478,6 +1478,18 @@
       "tooLarge": "Over the 20 MB limit",
       "tooMany": "At most 10 files per message",
       "listLabel": "Attached files"
+    },
+    "mirror": {
+      "alsoSends": "Also sends to {{target}}",
+      "staysInCoffer": "Replies stay in Coffer",
+      "reason": {
+        "group_main": "This conversation is a group's main chat, which never receives replies sent from here.",
+        "not_located": "This conversation is not linked to a chat thread Coffer can write to.",
+        "chat_kind_unknown": "This conversation is not linked to a chat thread Coffer can write to.",
+        "channel_deleted": "The channel this conversation came from has been deleted."
+      },
+      "notDelivered": "Not delivered to {{platform}} yet",
+      "notDeliveredHelp": "Coffer will send it, and the agent's answer, when the channel is running again."
     }
   },
   "channels": {
@@ -1545,7 +1557,7 @@
     },
     "edit": {
       "title": "Edit channel",
-      "subtitle": "Change the bound agent, rotate a secret, set when the bot answers in a group, or how long it waits for more messages. Leave a secret field blank to keep the current value.",
+      "subtitle": "Change the bound agent, rotate a secret, set when the bot answers in a group, how long it waits for more messages, or the folders /dir can switch to. Leave a secret field blank to keep the current value.",
       "agent": "Default agent",
       "agentHint": "New conversations on this channel start on this agent.",
       "newBotToken": "New bot token",
@@ -1568,6 +1580,13 @@
         "waitAfterForward": "Wait after a forward or files",
         "waitAfterForwardHint": "A forwarded chat record or files without text are rarely the whole question, so wait longer for what follows.",
         "invalid": "Enter a number of seconds from {{min}} to {{max}}."
+      },
+      "directories": {
+        "label": "Directories for /dir",
+        "help": "The only folders a chat can switch the agent into with /dir. Each also allows its subfolders.",
+        "placeholder": "One absolute path per line, e.g. /Users/me/projects",
+        "notAbsolute": "\"{{path}}\" is not an absolute path — start it with /.",
+        "tooMany": "List at most {{max}} directories."
       }
     },
     "test": {

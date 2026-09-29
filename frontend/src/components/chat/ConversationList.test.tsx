@@ -121,7 +121,7 @@ acceptance("chat", "a channel's conversation is listed beside the web's with a b
     conv("web", "Started on the web"),
     {
       ...conv("im", "Started on the phone"),
-      channel_binding: { channel_uid: "ch-1", channel: "telegram", chat_id: "c-9" },
+      channel_binding: { channel_uid: "ch-1", channel: "telegram", chat_id: "c-9", mirror: null },
     },
   ]);
 

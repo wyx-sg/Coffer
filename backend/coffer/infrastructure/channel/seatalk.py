@@ -175,10 +175,10 @@ class SeaTalkAdapter:
                     str(body.get("plain_text", "")), body.get("mentioned_list")
                 )
             message_id = str(message.get("message_id", ""))
-            # A group reply must land in a thread, never the main chat. A thread's
-            # id == its root message_id, so an in-thread @mention already carries it
-            # and a main-chat one ("") roots a fresh thread here — fall back to this id.
-            reply_thread_id = str(message.get("thread_id", "")) or message_id
+            # A group reply lands in a thread: an in-thread @mention carries its root id, a
+            # main-chat one ("") roots a thread at itself and is marked (spec channels/seatalk
+            # "Mark a main-chat mention as the group's main chat").
+            in_thread = str(message.get("thread_id", ""))
             await self._callbacks.on_message(
                 InboundMessage(
                     channel=self._name,
@@ -203,7 +203,8 @@ class SeaTalkAdapter:
                     mentions_others=mentions_others(
                         (message.get("text") or {}).get("mentioned_list")
                     ),
-                    thread_id=reply_thread_id,
+                    thread_id=in_thread or message_id,
+                    group_main=not in_thread,
                     quoted_message_id=str(message.get("quoted_message_id") or ""),
                     forwarded=tag == "combined_forwarded_chat_history",
                     attachments=await media_attachments(

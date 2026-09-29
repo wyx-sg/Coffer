@@ -69,7 +69,12 @@ describe("ConversationListItem channel badge", () => {
       // The binding stores the channel's uid; the name beside it is resolved
       // when the conversation is read. The chip is for a person, so it is the
       // name that has to appear — and the uid that must not.
-      channel_binding: { channel_uid: "ch-4b12", channel: "telegram", chat_id: "c-9" },
+      channel_binding: {
+        channel_uid: "ch-4b12",
+        channel: "telegram",
+        chat_id: "c-9",
+        mirror: null,
+      },
     });
     expect(screen.getByText(/via telegram/i)).toBeInTheDocument();
     expect(screen.queryByText(/ch-4b12/)).toBeNull();
@@ -81,7 +86,7 @@ describe("ConversationListItem channel badge", () => {
     // only thing left that is true rather than going blank.
     renderItem({
       ...base,
-      channel_binding: { channel_uid: "ch-4b12", channel: null, chat_id: "c-9" },
+      channel_binding: { channel_uid: "ch-4b12", channel: null, chat_id: "c-9", mirror: null },
     });
     expect(screen.getByText(/via ch-4b12/i)).toBeInTheDocument();
   });

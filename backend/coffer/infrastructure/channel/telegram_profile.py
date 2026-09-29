@@ -7,8 +7,10 @@ Two halves of the same start-up conversation with Telegram:
   privacy mode leaves it able to read group messages (spec channels/telegram "Report privacy mode
   that defeats the group configuration").
 * :func:`register_profile` pushes Coffer's command roster into the platform's
-  command menu and fills an empty profile so a first-time user does not open a
-  blank chat ("Register the bot's command menu and profile from one roster").
+  command menus — one per chat scope and language (spec channels/telegram
+  "Register command menus per chat scope and language") — and fills an empty
+  profile so a first-time user does not open a blank chat ("Register the bot's
+  command menu and profile from one roster").
 
 A helper module beside ``telegram.py`` so that file stays inside the size cap.
 Every call here is best-effort: a bot that cannot describe itself still works.
@@ -21,7 +23,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from coffer.domain.channel.commands import COMMAND_ROSTER
+from coffer.domain.channel.commands import menu_entries
 
 __all__ = ["BotIdentity", "menu_commands", "probe_identity", "register_profile"]
 
@@ -37,8 +39,9 @@ _SHORT_DESCRIPTION_LIMIT = 120
 _DESCRIPTION = (
     "Coffer bridges this chat to the AI coding agents on your own machine. "
     "Pair once, then talk normally — send text, photos, or files and the "
-    "agent answers here. /agent switches which agent replies, /model switches "
-    "its model, and each group topic keeps its own conversation."
+    "agent answers here. /new starts a fresh conversation (or switches the "
+    "agent), /model sets the model, /dir the working directory, /status shows "
+    "what is running, and each group topic keeps its own conversation."
 )
 _SHORT_DESCRIPTION = "Talk to the AI coding agents on your own machine."
 
@@ -78,36 +81,57 @@ async def probe_identity(call: Call) -> BotIdentity:
     )
 
 
-def menu_commands() -> list[dict[str, Any]]:
-    """The command roster in Telegram's ``BotCommand`` shape.
+def menu_commands(
+    *, group: bool = False, knowledge: bool = True, chinese: bool = False
+) -> list[dict[str, Any]]:
+    """One menu in Telegram's ``BotCommand`` shape.
 
-    Every handled command is listed — the menu is generated from the same
-    roster the help text is, so the two cannot drift apart.
+    Generated from the same roster the help text is, so the two cannot drift
+    apart: every command in a private chat, the group subset in a group, and
+    ``/kb`` only while knowledge is on (``/start`` is an alias, never listed).
+    ``chinese`` picks each entry's Chinese line for the ``zh`` menu.
 
-    An asker-only command is registered as ephemeral ("Keep non-answer chatter private in a
-    group"): typing it in a
-    group does not put it in front of everyone, and it hands the bot the handle
-    it needs to answer that member privately without being an administrator.
+    An asker-only command is registered as ephemeral ("Keep non-answer chatter
+    private in a group"): typing it in a group does not put it in front of
+    everyone, and it hands the bot the handle it needs to answer that member
+    privately without being an administrator.
     """
     return [
         {
             "command": entry.name,
-            "description": entry.description,
+            "description": entry.description_zh if chinese else entry.description,
             "is_ephemeral": entry.group_private,
         }
-        for entry in COMMAND_ROSTER
+        for entry in menu_entries(group=group, knowledge=knowledge)
     ]
 
 
-async def register_profile(call: Call) -> None:
-    """Register the command menu and fill an empty profile.
+#: ``(scope, group)`` for every menu registered: the default scope (no
+#: ``scope`` at all) carries the private list so a client that predates scoped
+#: menus still shows one.
+_SCOPES: tuple[tuple[dict[str, str] | None, bool], ...] = (
+    (None, False),
+    ({"type": "all_private_chats"}, False),
+    ({"type": "all_group_chats"}, True),
+)
 
-    The command menu is Coffer's functional contract and is always written.
+
+async def register_profile(call: Call, *, knowledge_enabled: bool = True) -> None:
+    """Register the command menus and fill an empty profile.
+
+    The command menus are Coffer's functional contract and are always written —
+    each scope once in English (no ``language_code``, Telegram's fallback for
+    every language) and once for ``zh``.
     The prose profile is only *filled in*, never overwritten: the name and any
     description the owner set in BotFather are their branding decision, so a
     bot that already describes itself is left exactly as it is.
     """
-    await _try(call, "setMyCommands", commands=menu_commands())
+    for scope, group in _SCOPES:
+        where = {} if scope is None else {"scope": scope}
+        for chinese in (False, True):
+            language = {"language_code": "zh"} if chinese else {}
+            commands = menu_commands(group=group, knowledge=knowledge_enabled, chinese=chinese)
+            await _try(call, "setMyCommands", commands=commands, **where, **language)
     # A menu button showing the command list is strictly better than the
     # default blank one, and carries no copy of its own to overwrite.
     await _try(call, "setChatMenuButton", menu_button={"type": "commands"})

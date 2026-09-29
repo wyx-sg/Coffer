@@ -86,6 +86,10 @@ export interface paths {
         /**
          * Get Conversation
          * @description Get a single conversation by id.  Returns 404 if not found.
+         *
+         *     A conversation a channel drives also says where a reply typed here would go
+         *     (``channel_binding.mirror``, spec chat "Mirror a web reply into the channel
+         *     it came from") — read here only, so the list stays one query.
          */
         get: operations["get_conversation_api_v1_chat_conversations__id__get"];
         put?: never;
@@ -244,6 +248,11 @@ export interface paths {
          *     persists as references after the text exactly as it does a channel's media
          *     (spec chat "Send uploaded files with a web message"); an id naming no
          *     upload is ``AttachmentNotFound`` (422) and nothing is persisted or queued.
+         *
+         *     On a conversation a channel drives, the reply also goes to that chat first
+         *     (spec chat "Mirror a web reply into the channel it came from"), and the
+         *     turn is queued with the sink that delivers its answer there; ``mirror`` in
+         *     the ack says whether it was sent, is pending, or stays in Coffer.
          */
         post: operations["send_message_api_v1_chat_conversations__id__messages_post"];
         delete?: never;
@@ -393,6 +402,29 @@ export interface components {
             channel_uid: string;
             /** Chat Id */
             chat_id: string;
+            mirror: components["schemas"]["ChannelMirrorOut"] | null;
+        };
+        /**
+         * ChannelMirrorOut
+         * @description Where a reply typed here will also be sent (spec chat "Show where a reply
+         *     will also be sent").
+         *
+         *     ``deliverable`` is False when a reply stays in Coffer; ``reason`` then says
+         *     why: ``group_main`` (a group's main chat), ``not_located`` / ``chat_kind_unknown``
+         *     (no chat to write to is known), ``channel_deleted``. ``target`` is the label
+         *     shown before sending, e.g. ``SeaTalk · 🧵#1 deploy check``.
+         */
+        ChannelMirrorOut: {
+            /** Deliverable */
+            deliverable: boolean;
+            /** Platform */
+            platform: string;
+            /** Reason */
+            reason: string | null;
+            /** Target */
+            target: string;
+            /** Undelivered */
+            undelivered: components["schemas"]["UndeliveredReplyOut"][];
         };
         /**
          * ChatAttachmentOut
@@ -593,9 +625,15 @@ export interface components {
          *     (ADR chat-single-owner-live-mirror).
          *
          *     ``queued`` is True when the message was enqueued behind an in-flight turn,
-         *     False when its turn started immediately.
+         *     False when its turn started immediately. ``mirror`` says what became of
+         *     the reply in the channel the conversation came from (spec chat "Mirror a
+         *     web reply into the channel it came from"): ``sent`` to the chat, ``pending``
+         *     until the channel can send, ``kept`` in Coffer only; null for a conversation
+         *     no channel drives.
          */
         SendMessageAck: {
+            /** Mirror */
+            mirror: ("sent" | "pending" | "kept") | null;
             /** Queued */
             queued: boolean;
         };
@@ -615,6 +653,26 @@ export interface components {
              * @default
              */
             text?: string;
+        };
+        /**
+         * UndeliveredReplyOut
+         * @description A message Coffer still owes the channel chat: a web ``reply`` or the
+         *     agent's ``answer`` to it (spec chat "Mirror a web reply into the channel it
+         *     came from").
+         */
+        UndeliveredReplyOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "reply" | "answer";
+            /** Text */
+            text: string;
         };
     };
     responses: never;

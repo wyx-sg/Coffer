@@ -71,7 +71,7 @@ Gates act at request time, on every surface:
 - **Agent-facing side effects** follow the switch through subscribers: `memory`
   off removes the memory delivery hook from every agent and on reinstalls it;
   `knowledge` off rewrites `coffer-guide` without its catalogue and makes a
-  channel `/save` answer that knowledge is off (spec experimental-features
+  channel `/kb` answer that knowledge is off (spec experimental-features
   "Withdraw what a switched-off feature put in front of agents").
 
 Pros: one branch; the owner's installed `dev` build has everything and a tagged

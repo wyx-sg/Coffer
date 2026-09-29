@@ -1478,6 +1478,18 @@
       "tooLarge": "超过 20 MB 上限",
       "tooMany": "每条消息最多 10 个文件",
       "listLabel": "已添加的附件"
+    },
+    "mirror": {
+      "alsoSends": "同时发送到 {{target}}",
+      "staysInCoffer": "回复只留在 Coffer",
+      "reason": {
+        "group_main": "这个对话是群的主聊天，从这里发的回复不会发到群主聊天里。",
+        "not_located": "这个对话没有关联到 Coffer 能写入的聊天线程。",
+        "chat_kind_unknown": "这个对话没有关联到 Coffer 能写入的聊天线程。",
+        "channel_deleted": "这个对话来自的渠道已被删除。"
+      },
+      "notDelivered": "尚未送达 {{platform}}",
+      "notDeliveredHelp": "渠道恢复运行后，Coffer 会发送这条消息以及 Agent 的回答。"
     }
   },
   "channels": {
@@ -1545,7 +1557,7 @@
     },
     "edit": {
       "title": "编辑消息渠道",
-      "subtitle": "更换绑定的 Agent、轮换密钥，设置机器人在群聊中何时回复，或它等待后续消息的时长。密钥字段留空则保留当前值。",
+      "subtitle": "更换绑定的 Agent、轮换密钥，设置机器人在群聊中何时回复、它等待后续消息的时长，或 /dir 可切换的目录。密钥字段留空则保留当前值。",
       "agent": "默认 Agent",
       "agentHint": "该消息渠道上的新会话将使用此 Agent。",
       "newBotToken": "新的机器人 token",
@@ -1568,6 +1580,13 @@
         "waitAfterForward": "转发记录或附件后等待",
         "waitAfterForwardHint": "转发的聊天记录、不带文字的文件很少是完整的问题，所以多等一会儿。",
         "invalid": "请输入 {{min}} 到 {{max}} 之间的秒数。"
+      },
+      "directories": {
+        "label": "/dir 可用目录",
+        "help": "聊天里用 /dir 只能把 Agent 切换到这些目录。每个目录也包括它的子目录。",
+        "placeholder": "每行一个绝对路径，例如 /Users/me/projects",
+        "notAbsolute": "“{{path}}”不是绝对路径——请以 / 开头。",
+        "tooMany": "最多列出 {{max}} 个目录。"
       }
     },
     "test": {

@@ -1,6 +1,7 @@
 """Start-up introspection and self-description (spec channels "Probe platform
 capabilities and latch off rejected ones", "Register the bot's command menu and
-profile from one roster")."""
+profile from one roster"; spec channels/telegram "Register command menus per
+chat scope and language")."""
 
 from __future__ import annotations
 
@@ -40,6 +41,20 @@ class _Calls:
 
     def methods(self) -> list[str]:
         return [name for name, _ in self.made]
+
+    def menus(self) -> dict[tuple[str, str], dict[str, str]]:
+        """``(scope type or "default", language or "") -> {command: description}``."""
+        out: dict[tuple[str, str], dict[str, str]] = {}
+        for name, params in self.made:
+            if name != "setMyCommands":
+                continue
+            key = (
+                (params.get("scope") or {}).get("type", "default"),
+                params.get("language_code", ""),
+            )
+            assert key not in out, f"{key} registered twice"
+            out[key] = {c["command"]: c["description"] for c in params["commands"]}
+        return out
 
 
 # -- probe_identity -----------------------------------------------------------
@@ -82,20 +97,65 @@ async def test_a_non_dict_get_me_degrades_to_an_empty_identity() -> None:
 # -- register_profile ---------------------------------------------------------
 
 
+_PRIVATE = {"new", "stop", "model", "dir", "status", "resume", "thread", "kb", "help"}
+_GROUP = {"new", "stop", "model", "status", "resume", "help"}
+
+
+@pytest.mark.acceptance(
+    spec="channels/telegram",
+    scenario="private chats get every command and groups the group set, in English and Chinese",
+)
 @pytest.mark.asyncio
-async def test_command_menu_and_menu_button_are_registered() -> None:
+async def test_menus_are_registered_per_scope_and_language() -> None:
     call = _Calls({"getMyDescription": {"description": "x"}})
     await register_profile(call)
-    registered = {entry["command"] for entry in call.params_for("setMyCommands")["commands"]}
-    assert {"new", "agent", "model", "stop", "status", "help"} <= registered
+    menus = call.menus()
+    # Spelled out rather than read from the roster, so a wrong roster fails here.
+    assert set(menus) == {
+        (scope, lang)
+        for scope in ("default", "all_private_chats", "all_group_chats")
+        for lang in ("", "zh")
+    }
+    for lang in ("", "zh"):
+        assert set(menus[("all_private_chats", lang)]) == _PRIVATE
+        assert set(menus[("default", lang)]) == _PRIVATE
+        assert set(menus[("all_group_chats", lang)]) == _GROUP
+    # /start is what the start button sends — typed, never listed.
+    assert all("start" not in menu for menu in menus.values())
+    assert menus[("all_private_chats", "")]["help"] == "List the commands"
+    assert menus[("all_private_chats", "zh")]["help"] == "列出所有命令"
     assert call.params_for("setChatMenuButton")["menu_button"] == {"type": "commands"}
+
+
+@pytest.mark.asyncio
+async def test_asker_only_commands_stay_ephemeral_in_every_menu() -> None:
+    call = _Calls({"getMyDescription": {"description": "x"}})
+    await register_profile(call)
+    for name, params in call.made:
+        if name == "setMyCommands":
+            flags = {c["command"]: c["is_ephemeral"] for c in params["commands"]}
+            assert flags["status"] is True and flags["new"] is False
+
+
+@pytest.mark.acceptance(
+    spec="channels/telegram", scenario="/kb leaves the menu while knowledge is off"
+)
+@pytest.mark.asyncio
+async def test_kb_is_left_out_of_every_menu_while_knowledge_is_off() -> None:
+    call = _Calls({"getMyDescription": {"description": "x"}})
+    await register_profile(call, knowledge_enabled=False)
+    menus = call.menus()
+    assert len(menus) == 6
+    assert all("kb" not in menu for menu in menus.values())
+    assert set(menus[("all_private_chats", "zh")]) == _PRIVATE - {"kb"}
 
 
 @pytest.mark.asyncio
 async def test_an_empty_description_is_filled() -> None:
     call = _Calls({"getMyDescription": {"description": ""}, "getMyShortDescription": {}})
     await register_profile(call)
-    assert "Coffer" in call.params_for("setMyDescription")["description"]
+    description = call.params_for("setMyDescription")["description"]
+    assert "Coffer" in description and "/new" in description and "/agent" not in description
     assert len(call.params_for("setMyShortDescription")["short_description"]) <= 120
 
 

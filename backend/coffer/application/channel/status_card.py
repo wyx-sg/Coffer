@@ -1,0 +1,92 @@
+"""`/status` and `/help` — the two cards that end in the five actions (spec
+channels "Report the chat's state as a status card" and "Offer the commands as
+a help card").
+
+`/status` names things, never ids: the conversation's title (or a parallel
+thread's mark), then the agent, model, effort and directory by the names a
+person reads, and whether a turn is running or queued. In a direct chat it also
+lists the chat's parallel threads (spec channels "Open parallel conversations
+beside a direct chat"). In a SeaTalk group's main chat it reports the group's
+defaults and the group's running threads instead (spec channels "Set a group's
+defaults from its main chat"). Both cards carry Stop, New, Model, Resume and
+Dir as ``cmd:`` buttons; a transport without buttons, or one that refuses the
+card, gets the same body as text.
+
+Application layer only: no infrastructure import here.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from coffer.application.channel.command_text import agent_display, model_display
+from coffer.application.channel.parallel_threads import thread_lines
+from coffer.application.channel.selection_cards import command_card
+from coffer.domain.channel.commands import help_text
+
+if TYPE_CHECKING:
+    from coffer.application.channel.command_context import CommandContext
+
+__all__ = ["cmd_help", "cmd_status"]
+
+
+async def cmd_help(ctx: CommandContext, _text: str = "") -> None:
+    """The roster as text, with the five actions where the transport has buttons."""
+    body = help_text(knowledge=ctx.commands._knowledge_enabled())
+    await ctx.answer(command_card(title="Coffer", text=body), body)
+
+
+def _state(running: bool, queued: int) -> str:
+    if running:
+        return f"running, {queued} queued" if queued else "running"
+    return f"{queued} queued" if queued else "idle"
+
+
+async def cmd_status(ctx: CommandContext, _text: str = "") -> None:
+    if ctx.group_main:
+        await ctx.say(await _group_status(ctx))
+        return
+    settings = await ctx.settings()
+    row = await ctx.commands._threads.get(ctx.resource_id, ctx.chat_id, ctx.conversation_thread_id)
+    bound = row.active_conversation_id if row is not None else None
+    conversation = settings.conversation
+    mark = row.parallel_mark if row is not None else None
+    title = mark or (str(conversation.title).strip() if conversation is not None else "")
+    title = title or (
+        "Untitled conversation" if conversation is not None else "No conversation yet"
+    )
+    running = ctx.session is not None and ctx.session.running_conversation_id is not None
+    # The queue is the conversation's own (spec chat "Queue messages sent during
+    # a turn") — the same one the web's pending chips show.
+    queued = len(ctx.commands._turns.pending(bound)) if bound is not None else 0
+    lines = [
+        f"Agent: {agent_display(ctx.commands._agents, settings.agent)}",
+        f"Model: {await model_display(ctx.commands, settings.agent, settings.model)}",
+        f"Effort: {settings.effort or 'default'}",
+        f"Directory: {settings.cwd or 'default'}",
+        f"State: {_state(running, queued)}",
+    ]
+    if ctx.chat_kind != "group":
+        lines += await thread_lines(ctx)
+    body = "\n".join(lines)
+    await ctx.answer(command_card(title=title, text=body), f"{title}\n{body}")
+
+
+async def _group_status(ctx: CommandContext) -> str:
+    """A SeaTalk group's main chat: its defaults and what its threads are running."""
+    settings = await ctx.settings()
+    model = await model_display(ctx.commands, settings.agent, settings.model)
+    lines = [
+        "Defaults for new threads in this group:",
+        f"Agent: {agent_display(ctx.commands._agents, settings.agent)}",
+        f"Model: {model}",
+        f"Effort: {settings.effort or 'default'}",
+        f"Directory: {settings.cwd or 'default'}",
+    ]
+    running = await ctx.commands.running_titles(ctx.binding, ctx.peer)
+    if running:
+        lines.append(f"Running in this group ({len(running)}):")
+        lines += [f"• {title}" for title in running]
+    else:
+        lines.append("Nothing is running in this group.")
+    return "\n".join(lines)

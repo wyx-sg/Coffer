@@ -134,35 +134,28 @@ async def test_a_group_command_answer_goes_to_the_asker_alone(env: ChannelEnv) -
     _resource, adapter = await _telegram_channel(env, fake, owner_chat=str(_OWNER_ID))
     mention = [{"type": "mention", "offset": 0, "length": len("@mybot")}]
     try:
-        # The owner sent /status as an ephemeral command, which is what gives
-        # the bot an ephemeral_message_id to answer privately against.
+        # The owner sent /model <level> as an ephemeral command, which is what
+        # gives the bot an ephemeral_message_id to answer privately against.
         await fake.update_batches.put(
-            [_group_message(1, "@mybot /status", entities=mention, ephemeral_message_id=77)]
+            [_group_message(1, "@mybot /model high", entities=mention, ephemeral_message_id=77)]
         )
         await wait_until(lambda: len(fake.calls_for("sendMessage")) >= 1)
-        status = fake.calls_for("sendMessage")[0]
-        assert status["chat_id"] == str(_GROUP_ID)
-        assert status["ephemeral_message_parameters"] == {"receiver_user_id": _OWNER_ID}
-        assert status["reply_parameters"]["ephemeral_message_id"] == 77
-        assert "Conversation" in status["text"] or "conversation" in status["text"]
+        answer = fake.calls_for("sendMessage")[0]
+        assert answer["chat_id"] == str(_GROUP_ID)
+        assert answer["ephemeral_message_parameters"] == {"receiver_user_id": _OWNER_ID}
+        assert answer["reply_parameters"]["ephemeral_message_id"] == 77
+        assert "Effort set to high" in answer["text"]
 
-        # /agent with no argument renders a selection card in the same group.
+        # /status is the asker's own business too: it goes privately, as text —
+        # a card with buttons would be an ordinary message the room sees.
         await fake.update_batches.put(
-            [_group_message(2, "@mybot /agent", entities=mention, ephemeral_message_id=78)]
+            [_group_message(2, "@mybot /status", entities=mention, ephemeral_message_id=78)]
         )
-
-        def _card() -> dict[str, Any] | None:
-            for method, params in fake.calls:
-                if method in ("sendMessage", "sendRichMessage") and "reply_markup" in params:
-                    return params
-            return None
-
-        await wait_until(lambda: _card() is not None)
-        card = _card()
-        assert card is not None
-        # A card must be rewritable after the tap, so it stays an ordinary
-        # message: no ephemeral addressing at all.
-        assert "ephemeral_message_parameters" not in card
+        await wait_until(lambda: len(fake.calls_for("sendMessage")) >= 2)
+        status = fake.calls_for("sendMessage")[1]
+        assert status["ephemeral_message_parameters"] == {"receiver_user_id": _OWNER_ID}
+        assert "reply_markup" not in status
+        assert "Agent:" in status["text"]
     finally:
         await adapter.stop()
 

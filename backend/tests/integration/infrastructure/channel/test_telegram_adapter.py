@@ -232,7 +232,7 @@ async def test_poll_loop_dispatches_and_commits_offset_after_dispatch(
     assert fake_telegram.calls[0][0] == "getMe"
     # The command menu is still registered, just off the startup path.
     registered = {c["command"] for c in fake_telegram.calls_for("setMyCommands")[0]["commands"]}
-    assert registered >= {"new", "agent", "model", "stop", "status", "help"}
+    assert registered >= {"new", "model", "dir", "stop", "status", "help"}
 
     msg = recorder.messages[0]
     assert (msg.channel, msg.chat_id, msg.text) == ("tg", "555", "hello")
@@ -816,34 +816,40 @@ async def test_live_text_stops_writing_once_the_platform_rejects_an_update(
 
 
 async def test_start_registers_the_full_command_menu(fake_telegram: FakeTelegram) -> None:
-    """The menu the platform shows lists every command that exists.
+    """The menus the platform shows list every command that exists.
 
-    See spec channels "Register the bot's command menu and profile from one roster".
+    See spec channels "Register the bot's command menu and profile from one roster"
+    and spec channels/telegram "Register command menus per chat scope and language".
     """
     adapter = make_telegram_adapter(fake_telegram)
     await adapter.start(RecordingCallbacks().as_callbacks())
     try:
         # Registration runs off the startup path, so the reconciler is not held
         # up by calls nothing depends on — wait for it rather than racing it.
-        await wait_until(lambda: len(fake_telegram.calls_for("setMyCommands")) == 1)
         await wait_until(lambda: bool(fake_telegram.calls_for("setChatMenuButton")))
         registered = fake_telegram.calls_for("setMyCommands")
-        assert len(registered) == 1
-        names = {entry["command"] for entry in registered[0]["commands"]}
+        # Three scopes (default, private, group) times two languages (English, zh).
+        assert len(registered) == 6
+        private = next(
+            c
+            for c in registered
+            if (c.get("scope") or {}).get("type") == "all_private_chats"
+            and "language_code" not in c
+        )
+        names = {entry["command"] for entry in private["commands"]}
         # Spelled out rather than read from the roster: a test that asserts the
         # menu matches the list the menu is built from would pass however wrong
         # both are. This list is the independent statement of what a user can
         # type, and adding a command means adding it here on purpose.
         assert names == {
             "new",
-            "agent",
-            "model",
-            "effort",
             "stop",
+            "model",
+            "dir",
             "status",
-            "save",
+            "resume",
             "thread",
-            "threads",
+            "kb",
             "help",
         }
         assert fake_telegram.calls_for("setChatMenuButton")[0]["menu_button"] == {
@@ -851,6 +857,52 @@ async def test_start_registers_the_full_command_menu(fake_telegram: FakeTelegram
         }
     finally:
         await adapter.stop()
+
+
+async def test_knowledge_off_keeps_kb_out_of_the_registered_menus(
+    fake_telegram: FakeTelegram,
+) -> None:
+    """The adapter hands its knowledge switch to the menu registration (spec
+    channels/telegram "Register command menus per chat scope and language")."""
+    adapter = make_telegram_adapter(fake_telegram, knowledge_enabled=False)
+    await adapter.start(RecordingCallbacks().as_callbacks())
+    try:
+        await wait_until(lambda: bool(fake_telegram.calls_for("setChatMenuButton")))
+        registered = fake_telegram.calls_for("setMyCommands")
+        assert len(registered) == 6
+        assert all(
+            "kb" not in {entry["command"] for entry in call["commands"]} for call in registered
+        )
+    finally:
+        await adapter.stop()
+
+
+async def test_a_group_command_naming_this_bot_arrives_as_the_bare_command(
+    fake_telegram: FakeTelegram,
+) -> None:
+    """``/model@cofferbot`` reaches the core as ``/model`` and addressed; another bot's
+    command is not addressed to us (spec channels/telegram "Treat a command addressed
+    to this bot by name as the command")."""
+    fake_telegram.results["getMe"] = {"id": 4242, "username": "CofferBot"}
+    updates = []
+    for update_id, text in ((30, "/model@cofferbot opus"), (31, "/model@otherbot opus")):
+        update = _message_update(update_id, text=text)
+        update["message"]["chat"] = {"id": -100, "type": "supergroup", "title": "Ops"}
+        update["message"]["entities"] = [
+            {"type": "bot_command", "offset": 0, "length": len(text.split()[0])}
+        ]
+        updates.append(update)
+    await fake_telegram.update_batches.put(updates)
+    adapter = make_telegram_adapter(fake_telegram)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await wait_until(lambda: len(recorder.messages) == 2)
+    finally:
+        await adapter.stop()
+    ours, theirs = recorder.messages
+    assert (ours.text, ours.addressed) == ("/model opus", True)
+    assert (theirs.text, theirs.addressed) == ("/model@otherbot opus", False)
 
 
 async def test_start_probes_identity_including_privacy_mode(

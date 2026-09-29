@@ -324,4 +324,37 @@ describe("EditChannelDialog", () => {
       });
     });
   });
+
+  describe("directories for /dir", () => {
+    const dirsField = () => screen.getByLabelText(/directories for \/dir/i);
+
+    acceptance(
+      "channels",
+      "the channel's directories are edited from the Channels page and the CLI",
+      async () => {
+        const api = installApi(mockApiClient());
+        renderDialog();
+
+        fireEvent.change(dirsField(), {
+          target: { value: "  /Users/me/projects/ \n\n/srv/app\n" },
+        });
+        save();
+
+        await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+        const config = (api.PATCH.mock.calls[0][1] as { body: { config: Record<string, unknown> } })
+          .body.config;
+        expect(config.directories).toEqual(["/Users/me/projects", "/srv/app"]);
+      },
+    );
+
+    test("a relative path blocks Save with an inline error", () => {
+      const api = installApi(mockApiClient());
+      renderDialog();
+
+      fireEvent.change(dirsField(), { target: { value: "/srv/app\nprojects" } });
+      expect(screen.getByRole("alert")).toHaveTextContent(/"projects" is not an absolute path/);
+      expect(screen.getByRole("button", { name: /save changes/i })).toBeDisabled();
+      expect(api.PATCH).not.toHaveBeenCalled();
+    });
+  });
 });

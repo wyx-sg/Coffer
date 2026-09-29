@@ -33,7 +33,7 @@ shaped to prevent:
   endpoint it points at.
 
 * ``efforts()`` — the levels for ONE chosen model, the second half of the same
-  choice, asked by the web effort picker and the channel `/effort` card.
+  choice, asked by the web effort picker and the channel `/model` card's effort step.
 
 Neither is a validator. A model NAME typed anywhere is passed to the CLI
 verbatim: it accepts aliases the catalogue never carries and models newer than
@@ -159,7 +159,7 @@ class AgentModelCatalogueService:
         Served to the web pickers over ``GET
         /api/v1/agent-providers/{agent_key}/models`` (the chat kind takes this
         method as its ``ModelCatalogPort``) and read in-process by a channel's
-        ``/model`` and ``/effort`` cards, so the two cannot answer differently.
+        ``/model`` card's model and effort steps, so the two cannot answer differently.
 
         An ACTIVE connection answers outright: its curated ids ARE the list, in
         the user's order, and the agent's catalogue is not consulted. The
@@ -201,7 +201,7 @@ class AgentModelCatalogueService:
     async def efforts(self, agent_key: str, model: str | None) -> list[str]:
         """The reasoning levels the conversation's CURRENT model can be run at.
 
-        Satisfies the channel ``ModelSuggestionPort``, so an `/effort` card
+        Satisfies the channel ``ModelSuggestionPort``, so the `/model` card's effort step
         offers exactly what the web picker beside the model does — including the
         rule for "no model pinned": the agent then runs a default it never names
         to us, so the FIRST offered entry stands in for it. That stand-in could

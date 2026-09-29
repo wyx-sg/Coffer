@@ -60,7 +60,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class KnowledgeWiring:
     """What the knowledge kind hands back: the directory service and its
-    consumers (the channel ``/save`` card takes the first two), the
+    consumers (the channel ``/kb`` card takes the first two), the
     internal-model selector the curation pass shares, and the renderer for
     Coffer's own skill, which the pass re-runs whenever the corpus changes."""
 

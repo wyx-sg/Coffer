@@ -43,7 +43,9 @@ def test_a_shared_state_command_answers_the_room() -> None:
 
 
 def test_a_command_with_arguments_is_still_matched() -> None:
-    assert target_for_command(_message(text="/agent codex"), "/agent codex") is not None
+    assert target_for_command(_message(text="/model opus"), "/model opus") is not None
+    # Matched by roster name, so the case the platform keyboard typed does not matter.
+    assert target_for_command(_message(text="/Model opus"), "/Model opus") is not None
 
 
 def test_without_an_ephemeral_handle_the_answer_is_said_aloud() -> None:
@@ -57,9 +59,9 @@ def test_without_a_sender_id_the_answer_is_said_aloud() -> None:
     assert target_for_command(_message(sender_id=""), "/status") is None
 
 
-def test_an_unrecognised_command_answers_privately() -> None:
-    # "Unknown command /nope" is the least useful thing to broadcast to a room.
-    assert target_for_command(_message(text="/nope"), "/nope") is not None
+def test_a_did_you_mean_answer_is_private() -> None:
+    # A correction ("Did you mean /stop?") is the least useful thing to broadcast.
+    assert target_for_command(_message(text="/stpo"), "/stpo") is not None
 
 
 def test_private_send_pins_the_target() -> None:

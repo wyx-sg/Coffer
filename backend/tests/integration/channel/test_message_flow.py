@@ -107,14 +107,6 @@ async def test_empty_message_with_no_attachments_gets_an_unsupported_notice(
     assert await env.chat.list_conversations() == []
 
 
-async def test_unknown_command_gets_a_pointer_at_help(env: ChannelEnv) -> None:
-    _resource, adapter = await env.paired_channel()
-
-    await env.processor.on_message(inbound("tg", "owner", "/frobnicate now"))
-
-    assert adapter.texts() == ["Unknown command /frobnicate. /help"]
-
-
 async def test_help_lists_the_channel_commands(env: ChannelEnv) -> None:
     _resource, adapter = await env.paired_channel()
 
@@ -133,10 +125,14 @@ async def test_status_reports_conversation_agent_and_queue(env: ChannelEnv) -> N
 
     assert len(adapter.texts()) == 1
     status = adapter.texts()[0]
-    assert "Conversation: none yet" in status
-    assert "Agent: builtin" in status
-    assert "Turn running: no" in status
-    assert "Queued: 0" in status
+    assert status.splitlines() == [
+        "No conversation yet",
+        "Agent: Coffer Assistant",
+        "Model: default model",
+        "Effort: default",
+        "Directory: default",
+        "State: idle",
+    ]
 
 
 async def test_dangling_active_conversation_is_recreated_on_next_message(

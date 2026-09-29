@@ -319,7 +319,7 @@ def make_channel_kind(
         # (ADR per-agent-resource-scope). Elsewhere scope names the agents a resource is
         # DELIVERED to; a channel is not consumed by an agent at all — it is an
         # inbound surface — so its scope names **the agents this channel may
-        # drive**. Two enforcement seams: `/agent` lists, offers and accepts
+        # drive**. Two enforcement seams: `/new <agent>` lists and accepts
         # only agents inside the scope, and ``default_agent`` is held inside it
         # on every write path — config (``on_update_config``) and scope
         # (``validate_scope_for``) alike. An empty allow-list is dormant: the

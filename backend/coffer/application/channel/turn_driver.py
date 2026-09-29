@@ -118,10 +118,10 @@ class Session:
     # The renderer draining that turn's events into the chat.
     render_task: asyncio.Task[None] | None = None
     # The most recently received document/attachment for this (channel, chat, thread),
-    # held for a `/save` that follows (spec channels "Save a sent document into a
+    # held for a `/kb` that follows (spec channels "Save a sent document into a
     # collection"). It rides alongside the ordinary turn — an attachment still reaches
     # the agent exactly as before; this is ONLY the channel's own memory of what a later
-    # `/save` acts on. Replaced by the next attachment that arrives here, and cleared
+    # `/kb` acts on. Replaced by the next attachment that arrives here, and cleared
     # once a save is attempted (succeeding or not — retrying the same bytes against the
     # same failure is never useful).
     pending_document: Attachment | None = None
@@ -181,7 +181,12 @@ class TurnDriver:
 
         try:
             conversation_id = await ensure_conversation(
-                self._conversations, self._threads, binding, peer, item.conversation_thread_id
+                self._conversations,
+                self._threads,
+                binding,
+                peer,
+                item.conversation_thread_id,
+                chat_kind=item.chat_kind,
             )
         except CofferError as e:
             # e.g. the channel's default agent is unknown/misconfigured — the
@@ -210,6 +215,23 @@ class TurnDriver:
             )
         except CofferError as e:
             await _say(f"⚠️ {e} [{e.code}]")
+
+    def render_sink(
+        self,
+        binding: ChannelBinding,
+        peer: ChannelPeer,
+        item: QueuedInbound,
+        conversation_id: str,
+    ) -> Callable[[asyncio.Queue[Any]], None]:
+        """An ``on_start`` sink that renders the turn into ``item``'s chat/thread
+        exactly like a channel-driven turn — for a turn another surface queued on
+        a channel's conversation (spec chat "Mirror a web reply into the channel
+        it came from")."""
+
+        def on_start(queue: asyncio.Queue[Any]) -> None:
+            self._spawn_render(binding, peer, item, conversation_id, queue)
+
+        return on_start
 
     def _spawn_render(
         self,

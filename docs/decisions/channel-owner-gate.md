@@ -72,7 +72,7 @@ whose sender id differs from the stored one is ignored silently too.
 **Scope, read inverted.** For every other kind, a resource's per-agent scope
 says which agents it is delivered to; for a channel it says which agents the
 channel **may drive** ([Per-Agent Resource Scope](per-agent-resource-scope.md)).
-`/agent` lists, offers as a card and validates only agents inside the scope
+`/new <agent>` lists and validates only agents inside the scope
 (`application/channel/agent_routing.py`); a thread's sticky agent that falls
 outside a narrowed scope falls back to the default. The default agent must lie
 inside a non-empty scope — both the config write path and the scope write path
@@ -168,7 +168,7 @@ chat, anything not from the owner is ignored silently. In a group, the bot acts
 only on an addressed message (`require_mention`, default on; optionally
 `ignore_other_mentions`) whose sender id is proven to be the owner's; an
 unproven or foreign sender is refused with a "Not authorized" reply. A
-channel's scope is the set of agents it may drive: it narrows `/agent`, bounds
+channel's scope is the set of agents it may drive: it narrows `/new <agent>`, bounds
 the sticky agent, must contain the default agent, and a channel whose scope
 admits nothing it can route to does not run.
 

@@ -1,9 +1,9 @@
 # Channel Switches: the Agent Opens a New Conversation, Model and Effort Apply Next Turn
 
-**Status**: Accepted
+**Status**: Accepted (amended 2026-09-30: the switches are now `/new <agent>` and `/model [name] [level]`, all four settings stick per thread, and `/dir` reaches an allow-list — see Decision)
 **Date**: 2026-09-15
 **Deciders**: Yuxing Wu
-**Related**: spec channels ("Switch the conversation's agent from chat", "Switch the model and reasoning effort from chat", "Drive every managed agent from one bot", "Key conversation identity by channel, chat and thread", "Offer command choices as owner-gated selection cards");
+**Related**: spec channels ("Switch the agent with /new", "Switch the model and reasoning effort from chat", "Keep a chat's settings across its conversations", "Choose the working directory from chat", "Drive every managed agent from one bot", "Key conversation identity by channel, chat and thread", "Offer choices and actions as owner-gated cards");
 spec chat ("Record the agent on each conversation", "Let the owner set agent, model and reasoning level");
 [Channel Conversation Identity and Context](channel-conversation-identity-and-context.md), [Channel Owner Gate](channel-owner-gate.md),
 [Driving Agents Through the SDK and App-Server](driving-agents-through-sdk-and-app-server.md), [Model Catalogue Read From the Agent](model-catalogue-read-from-the-agent.md);
@@ -13,8 +13,9 @@ PRs #245, #385
 
 From a phone the owner needs to change three things about the agent they are
 talking to: **which agent** (Claude Code or Codex), **which model**, and **how
-hard it reasons** (effort). The commands are `/agent`, `/model` and `/effort`,
-each with a selection card where the platform has buttons.
+hard it reasons** (effort). The commands were first `/agent`, `/model` and
+`/effort`, each with a selection card where the platform has buttons; they are
+now `/new <agent>` and `/model [name] [level]`.
 
 These three dimensions are not the same kind of thing to the turn platform:
 
@@ -149,12 +150,17 @@ agent itself; the channel does not need to be a second way.
 
 ## Decision
 
-The agent is a structural dimension: `/agent` validates against the channel's
-scope, stores the choice per `(channel, chat, thread)` in
+The agent is a structural dimension: `/new <agent>` validates against the
+channel's scope, stores the choice per `(channel, chat, thread)` in
 `channel_thread_conversations.preferred_agent`, and opens a fresh conversation.
-Model and effort are parametric: `/model` and `/effort` set the current
-conversation's `AgentConfig` and take effect on the next turn, passing any
-value through to the agent's CLI unvalidated. There is no `/cwd`.
+Model and effort are parametric: `/model <name>`, `/model <level>` and
+`/model <name> <level>` set the current conversation's `AgentConfig` and take
+effect on the next turn, passing any model name through to the agent's CLI
+unvalidated; `/model default` clears both. Model, effort and working directory
+are sticky per thread beside the agent, so `/new` keeps them. The working
+directory is structural too: `/dir` opens a fresh conversation, but only in a
+directory on the channel's own allow-list — the boundary Option F said a
+remote-reachable directory switch needs.
 
 Rules a future change must respect:
 
@@ -166,11 +172,11 @@ Rules a future change must respect:
 
 ## Consequences
 
-- The command roster (`domain/channel/commands.py`) describes `/agent` as
-  "opens a fresh conversation" and `/model`, `/effort` as "next turn", and the
+- The command roster (`domain/channel/commands.py`) describes `/new` and
+  `/dir` as opening a fresh conversation and `/model` as "next turn", and the
   platform command menus are generated from that one roster.
 - A web user switching agent on the Chat page and a phone user switching with
-  `/agent` get the same behaviour, because both go through conversation
+  `/new <agent>` get the same behaviour, because both go through conversation
   creation.
 - Narrowing a channel's scope takes effect on the next conversation: a sticky
   agent outside the scope falls back to the default.

@@ -246,7 +246,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     curation_pass = wire_curation(kinds.knowledge.models, credential_resolver, kinds.guide)
 
     # Wire the channel kind (spec channels) AFTER wire_chat: the inbound processor
-    # drives turns through the chat platform's handles, and `/save` through the
+    # drives turns through the chat platform's handles, and `/kb` through the
     # knowledge kind's.
     channel_runtime = wire_channel_kind(
         app, resource_svc, audit, sm, credential_store, chat, kinds.knowledge, sync_contributions
