@@ -66,7 +66,7 @@ on:
   Overview         /                  — the landing page
  AGENTS
   Agents           /agents            — the consumers (Bot icon)
-  Model providers  /model-providers   — the endpoints agents' models are served from, and Coffer's own model
+  Model providers  /model-providers   — the endpoints agents' models are served from
  RUN
   Chat             /chat              — a conversation with an agent
   Channels         /channels          — the IM bots agents answer on
@@ -166,8 +166,10 @@ Settings — the modal of "Open Settings as a modal from the sidebar footer" —
 MUST carry exactly five tabs, in this order, grouped by what they manage rather
 than by how Coffer is built, and MUST open on General:
 
-- **General** (`/settings/general`) — display preferences: the default page size
-  and the preferred external editor.
+- **General** (`/settings/general`) — display preferences (the default page size
+  and the preferred external editor) and the **Coffer's model** section: the
+  model Coffer's own engine runs on and the speech-to-text model (see "Choose
+  Coffer's model in Settings › General").
 - **Security** (`/settings/security`) — what is about this machine only: where
   the master encryption key lives, beside the database or in the OS keychain.
   It lists and edits no stored secret; those are on the Secrets page (see
@@ -178,8 +180,7 @@ than by how Coffer is built, and MUST open on General:
 - **About** (`/settings/about`) — version, license, source, and whether a newer
   version is available (see "Check for and install updates on Settings › About").
 
-Coffer's own model is not a Settings tab: it sits beside the providers it is
-chosen from (see "Show Coffer's model beside Model providers"). Clicking a tab
+Clicking a tab
 swaps the modal's right pane without a full page reload and without closing the
 modal.
 
@@ -320,26 +321,42 @@ never stands down on its own.
 - **AND** the card offers no idle-window or stand-down control
 - **AND** when the request fails, the switch goes back to off and the error is shown beside it
 
-### Requirement: Show Coffer's model beside Model providers
-The Model providers page MUST carry two tabs: **Providers** (the list, and the
-default) and **Coffer's model** (`/model-providers?tab=coffer-model`), which
-holds what configures Coffer's own machinery — the internal model, speech to
-text and the automatic upkeep passes (spec
-[internal-engine](../internal-engine/spec.md) "Show and change the engine on the Coffer's model tab").
-Coffer's model is a choice among the providers listed beside it, so it lives
-where those providers are, not in Settings. The legacy `/settings/engine` path
-MUST redirect to it rather than resolve to a "page not found" view.
+### Requirement: Choose Coffer's model in Settings › General
+Settings › General MUST carry a **Coffer's model** section that sets what Coffer's
+own machinery runs on (spec [internal-engine](../internal-engine/spec.md) "Show and change Coffer's model in Settings › General").
+It is machine-level configuration of Coffer itself rather than of any agent, so
+it is a Settings section, not a tab of the Model providers page. The section
+MUST carry two pickers — **Engine model** and **Speech to text** — each choosing
+a provider first and then a model from that provider's list, and a **Test**
+action for each that tries the chosen pair and shows the result beside it. Each
+picker MUST show its state inline: *not set* (saying what Coffer does without
+it — no internal pass runs; voice messages reach the agent as audio files),
+*set*, or *failing* (the last test or call failed, with the error). The Model
+providers page MUST carry no Coffer's model tab. The legacy `/settings/engine`
+and `/settings/embedding` paths MUST open the Settings modal on General rather
+than resolve to a "page not found" view.
 
-#### Scenario: Coffer's model opens beside the providers
-- **GIVEN** the user opens `/model-providers`
-- **WHEN** the page renders
-- **THEN** it shows the Providers tab selected and a Coffer's model tab beside it
-- **AND** choosing Coffer's model rewrites the URL to `/model-providers?tab=coffer-model` and shows the engine's cards
+#### Scenario: coffer's model is chosen in settings general
+- **GIVEN** two connections, each with a list of models
+- **WHEN** the user opens `/settings/general` and, in the Engine model picker, chooses a provider and then one of its models
+- **THEN** the model list offers only the chosen provider's models, and the choice is saved without a Save button
+- **AND** the Model providers page shows no Coffer's model tab
 
-#### Scenario: the old Coffer's model address redirects
+#### Scenario: an unset picker says what coffer does without it
+- **GIVEN** no speech-to-text model chosen
+- **WHEN** the Coffer's model section renders
+- **THEN** the Speech to text picker reads as not set and says voice messages reach the agent as audio files
+
+#### Scenario: testing a picker shows a failing pair inline
+- **GIVEN** an engine model chosen on a connection whose endpoint rejects the key
+- **WHEN** the user chooses Test beside the Engine model picker
+- **THEN** the picker reads as failing with the endpoint's error beside it
+- **AND** the chosen pair is kept as it was
+
+#### Scenario: the old coffer's model address opens settings general
 - **GIVEN** a user follows an old bookmark to `/settings/engine`
 - **WHEN** the route resolves
-- **THEN** the app lands on `/model-providers?tab=coffer-model` and no "page not found" view is shown
+- **THEN** the Settings modal opens on General and no "page not found" view is shown
 
 ### Requirement: Show the daemon's state in the shell footer
 The shell MUST show the daemon's state at all times in a footer at the bottom of

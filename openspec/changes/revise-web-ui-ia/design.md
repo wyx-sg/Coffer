@@ -34,7 +34,7 @@ hooks.
   Overview         /                        (ungrouped)                 总览
  AGENTS                                                                智能体
   Agents           /agents                                              智能体
-  Model providers  /model-providers         Providers | Coffer's model  模型提供商
+  Model providers  /model-providers                                     模型提供商
  RUN                                                                   运行
   Chat             /chat                                                聊天
   Channels         /channels                                            消息渠道
@@ -66,8 +66,9 @@ rules is deferred — so no Rules entry is specified here.
 - **Chat and Channels stay two entries** in one group: Chat is daily conversation, Channels is
   occasional bot setup, and a channel's conversations already appear in Chat's list.
 - **Model providers sits with Agents**: it is each agent's model configuration, chosen on the
-  agent's Model tab; Coffer's model is a tab of it because it is a choice among the same
-  connections.
+  agent's Model tab. The page is one table of connections; which agent runs on a connection is
+  read on that connection's detail page (Used by, read-only) and changed only on the agent's
+  Model tab, so there is one place to switch.
 - **Secrets sits in System**: it is shared infrastructure data cited by MCP servers, providers,
   skills and channels (decision 8).
 - **A group with no entry left hides its heading** — switching off both Knowledge and Memory
@@ -144,13 +145,19 @@ cannot have.
 - **Security becomes machine-level only.** It keeps the master-key location; stored secrets move
   to their own page (decision 8), because a secret is data the user manages, not a preference,
   and it is cited by resources of four kinds.
-- **Coffer's model leaves Settings** for a tab on Model providers. It picks one of the providers
-  listed there, and the curation and speech-to-text choices are provider choices; keeping it in
-  Settings put a provider picker two sections away from the providers. *Rejected:* a Settings tab
-  linking out to providers (two places to look), and a separate sidebar entry (a fourteenth entry
-  for a page with three cards).
-- The legacy `/settings/engine` redirects to `/model-providers?tab=coffer-model`, following the
-  convention that a tab lives in `?tab=` and the default tab leaves it out.
+- **Coffer's model is a section of General.** It configures Coffer itself — the model its own
+  engine runs on and the speech-to-text model — which is machine-level configuration like the
+  rest of Settings, not an agent's model. Two pickers, each choosing a provider and then a model
+  from that provider's list, bring the provider choice to where it is needed, so it does not
+  have to sit beside the provider table; a Test action and inline not-set / failing states say
+  whether the pair works without a trip to Activity. The call bound sits beside the engine picker
+  and the upkeep passes below the pickers. *Rejected:* a Coffer's model tab on Model providers,
+  which made the provider page carry Coffer's configuration beside the agents'; and a separate
+  Settings tab, one more tab for two pickers.
+- **Model providers loses its tabs.** A "who runs on what" view repeated what each agent's Model
+  tab shows and offered a second place to switch. It is dropped: a provider's detail page lists
+  its users read-only, each linking to where it is changed.
+- The legacy `/settings/engine` opens the Settings modal on General.
 
 ### 5. Daemon visibility
 
@@ -296,8 +303,8 @@ credential-supplier module as Restart and the skew check and rendered only on Ab
 - **Attention hook.** Generalise `useSyncAttention` into a per-entry signal map; Sync keeps its
   seen-key behaviour behind it.
 - **Legacy redirects.** Keep `/settings/llm-connections`, `/settings/models`,
-  `/settings/providers` and `/settings/embedding`; point `/settings/embedding` at the new Coffer's
-  model address rather than at `/settings/engine`.
+  `/settings/providers` and `/settings/embedding`; point `/settings/engine` and
+  `/settings/embedding` at `/settings/general`.
 
 ## Risks
 
@@ -316,10 +323,6 @@ credential-supplier module as Restart and the skew check and rendered only on Ab
   shell, so a lost private key means no update can be verified; the key is kept in the
   repository's secrets with an offline backup.
 
-- **Coffer's model behind a provider switch.** If a later change puts Model providers behind an
-  experimental switch that is off on the stable channel, Coffer's model becomes unreachable in
-  that build. That change must either keep the Coffer's model tab reachable or gate the engine's
-  settings with it.
 - **Token rotation strands other clients.** A second open tab or a client with a literal token
   fails until it re-reads the token. The confirmation says so; the offline banner already reads a
   `401` as "not ready" and a reload recovers a daemon-served page.

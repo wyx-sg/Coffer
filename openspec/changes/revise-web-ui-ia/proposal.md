@@ -28,7 +28,7 @@ Eight decisions change that architecture:
   a terminal. The daemon's state becomes visible at all times; starting it stays automatic.
 - **Settings regrouped, and out of the sidebar.** The daemon gets its own tab, the Experimental
   features card leaves with the switches it held (every flag graduates at 1.0), and Coffer's own
-  model moves beside the providers it is chosen from. Settings
+  model becomes a section of General: machine-level configuration of Coffer itself. Settings
   is machine-level and visited rarely, so it leaves the sidebar for a modal opened from a gear in
   the sidebar footer or with ⌘,, still addressable at `/settings/<tab>`.
 - **Updates found by the app.** A desktop user learns of a new version only by downloading a new
@@ -68,8 +68,13 @@ unarchived until that implementation lands.
 - Settings has five tabs: **General, Security, Data, Daemon, About**. The Experimental features
   card leaves General and no tab replaces it; the Start at login card moves from General to
   Daemon; Security holds machine-level items only.
-- **Coffer's model** leaves Settings and becomes a tab of the Model providers page
-  (`/model-providers?tab=coffer-model`); `/settings/engine` redirects there.
+- **Coffer's model** becomes a section of Settings › General: two pickers (Engine model, Speech
+  to text), each choosing a provider and then one of its models, a Test action each, and inline
+  not-set / failing states. `/settings/engine` opens Settings › General.
+- **Model providers** is one connection table with no tabs: no Coffer's model tab and no view of
+  which agent runs on what. A provider's detail page lists **Used by** read-only (agents with
+  their model, linking to each agent's Model tab; Coffer's engine and Speech to text, linking to
+  Settings › General); switching an agent's provider happens only on its Model tab.
 - The sidebar footer shows the daemon's state (connecting, running with its port, stopping,
   offline) and opens **Settings → Daemon**, which shows status, the host's restart, the port (read
   only, with the command that changes it), Start at login and a Rotate token control. Stopping the
@@ -95,7 +100,7 @@ unarchived until that implementation lands.
   Settings moved to a footer gear and a route-addressable modal), the update check on Settings ›
   About, one
   name per surface with the zh glossary, the Secrets page, landing on Overview, five Settings
-  tabs with Security machine-level only, Coffer's model beside Model providers, the daemon footer and Settings → Daemon, the command
+  tabs with Security machine-level only, Coffer's model in Settings › General, the daemon footer and Settings → Daemon, the command
   palette, sidebar attention dots; the daemon-invisibility requirement is removed and daemon
   shutdown alone stays CLI-only.
 - `daemon`: the status probe is the one source of the state the shell shows; the port is shown on
@@ -107,14 +112,16 @@ unarchived until that implementation lands.
 - `experimental-features`: the web UI's Experimental features card is removed and the switch
   requirement no longer names a Settings page; a switched-off feature's notice says it is off, and
   its pages and objects leave the command palette.
-- `internal-engine`: the engine's settings are shown on the Coffer's model tab of Model providers
-  instead of in Settings.
+- `internal-engine`: the engine's settings are shown in the Coffer's model section of Settings ›
+  General, with a provider-then-model picker and a Test action for the engine and for speech to
+  text.
 - `agent-registry`: the Agents entry heads the Agents group; the agent detail page's six tabs,
   with the Installed tab's sections and instructions files under Config files.
 - `skill-manager`: unmanaged skills are reached from the Skills section of the agent's Installed
   tab.
-- `provider-switching`: Model providers sits in the Agents group, and per-agent connection and
-  model selection moves to the agent's Model tab.
+- `provider-switching`: Model providers sits in the Agents group as one table with no tabs,
+  per-agent connection and model selection moves to the agent's Model tab, and a provider's
+  detail page lists what uses it read-only.
 
 ## Impact
 
@@ -143,7 +150,7 @@ unarchived until that implementation lands.
   (Proposed; on acceptance it supersedes
   [Sidebar Grouped by Role](../../../docs/decisions/sidebar-grouped-by-role.md)), docs-site guides
   (`web-ui`, `agents`, `credentials`, `desktop-app`, `daemon`, `experimental-features`,
-  `providers`, and the pages naming Settings → General or Settings → Coffer's model), the ADR
+  `providers`, and the pages naming Settings → General or Settings → Coffer's model, which now name Settings › General), the ADR
   [Experimental Features Instead of a Release Branch](../../../docs/decisions/experimental-features-instead-of-a-release-branch.md)
   that cites a renamed requirement, the Proposed ADR
   [Standalone Secrets Are Named `coffer://secret/` References](../../../docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md)

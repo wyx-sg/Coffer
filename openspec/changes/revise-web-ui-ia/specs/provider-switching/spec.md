@@ -21,11 +21,13 @@ The web surfaces:
 
 - **Model providers** (route `/model-providers`, in the sidebar's AGENTS group, beside the agents whose models it serves; the old
   `/settings/models`, `/settings/providers` and `/settings/llm-connections` routes redirect there) is
-  the connection library: a table of name / vendor / base URL / reach, an Add action and Delete per
-  row. It has no per-row switch, because activation is per agent. A row MUST say what Coffer ITSELF
+  the connection library: one table of name / vendor / base URL / reach, an Add action and Delete per
+  row, and no tabs — no view of which agent runs on what and no Coffer's model tab, because an
+  agent's connection is shown and switched on that agent's Model tab and Coffer's own is chosen in
+  Settings › General. It has no per-row switch, because activation is per agent. A row MUST say what Coffer ITSELF
   uses the connection for: the `internal_default` connection carries a "Coffer · background model"
   badge and the `transcribe_default` connection a "Coffer · speech to text" badge, each with a hint
-  naming where it is changed, and the connection's detail header repeats them. The labels lead with
+  naming Settings › General as where it is changed, and the connection's detail header repeats them. The labels lead with
   Coffer because a bare "Speech to text" reads as a capability of the provider rather than a job
   Coffer gives it; the "Active" badge is a different fact — an agent is switched to the connection —
   and its hint says so. The
@@ -39,7 +41,10 @@ The web surfaces:
   secret.
 - The connection detail page splits into Overview and Models tabs. Its header carries the shared
   scope control — the single place the connection's reach and its enabled state are both shown and
-  changed.
+  changed. Overview carries a read-only **Used by** list: each agent switched to the connection,
+  with the model it runs, opening that agent's Model tab; and Coffer's engine and Speech to text
+  when the connection is flagged for them, each opening `/settings/general`. Used by carries no
+  switch, activate or revert control: an agent's connection is switched only on its Model tab.
 - Per-agent connection and model selection lives on the agent detail page's Model tab, filtered to
   the connections that reach that agent and narrowed by `enabled`. Picking a connection or a model
   there is a DRAFT: it activates nothing and PATCHes nothing. Picking a non-built-in connection
@@ -69,3 +74,14 @@ The web surfaces:
 - **GIVEN** connection A is the internal-engine default, connection B is the speech-to-text default, and connection C carries neither flag
 - **WHEN** the Model providers library is opened
 - **THEN** A's row carries the "Coffer · background model" badge, B's row the "Coffer · speech to text" badge, and C's row neither (TypeScript acceptance test)
+
+#### Scenario: the provider library has no tabs
+- **GIVEN** the Model providers page
+- **WHEN** it renders
+- **THEN** it shows the connection table only, with no tab strip, no view of which agent runs on which connection and no Coffer's model tab (TypeScript acceptance test)
+
+#### Scenario: a provider's used-by list is read-only
+- **GIVEN** a connection that Claude Code is switched to with a chosen model, and that is flagged `internal_default`
+- **WHEN** its detail page's Overview renders
+- **THEN** Used by lists Claude Code with its model, opening Claude Code's Model tab, and Coffer's engine, opening `/settings/general`
+- **AND** Used by carries no switch, activate or revert control (TypeScript acceptance test)
