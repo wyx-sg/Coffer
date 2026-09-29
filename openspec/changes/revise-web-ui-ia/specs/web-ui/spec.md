@@ -27,10 +27,11 @@ status" is deleted with this requirement.
 "the index opens the Agents page" moves to "the index opens Overview".
 
 ### Requirement: Leave daemon controls to the CLI
-**Reason**: Token rotation moves into Settings → Daemon now that the daemon is visible; only
-stopping the daemon stays on the command line.
-**Migration**: See "Keep daemon shutdown on the command line" and "Show and manage the daemon on
-Settings → Daemon". The acceptance marker for "settings drops the confusing controls" moves to
+**Reason**: Token rotation moves into Settings › Security and the port becomes editable on
+Settings → Daemon now that the daemon is visible; only stopping the daemon stays on the command
+line.
+**Migration**: See "Keep daemon shutdown on the command line", "Show and manage the daemon on
+Settings → Daemon" and "Show, copy and rotate the access token on Settings › Security". The acceptance marker for "settings drops the confusing controls" moves to
 "settings offers no shutdown control".
 
 ### Requirement: Let the user choose when the daemon runs
@@ -183,14 +184,16 @@ than by how Coffer is built, and MUST open on General:
   model Coffer's own engine runs on and the speech-to-text model (see "Choose
   Coffer's model in Settings › General").
 - **Security** (`/settings/security`) — what is about this machine only: where
-  the master encryption key lives, beside the database or in the OS keychain.
-  It lists and edits no stored secret; those are on the Secrets page (see
+  the master encryption key lives, beside the database or in the OS keychain,
+  and the daemon's access token (see "Show, copy and rotate the access token on
+  Settings › Security"). It lists and edits no stored secret; those are on the Secrets page (see
   "Manage stored secrets on the Secrets page").
 - **Data** (`/settings/data`) — retention policy and manual prune.
 - **Daemon** (`/settings/daemon`) — the daemon's state and the controls a user
   needs for it (see "Show and manage the daemon on Settings → Daemon").
-- **About** (`/settings/about`) — version, license, source, and whether a newer
-  version is available (see "Check for and install updates on Settings › About").
+- **About** (`/settings/about`) — version, license, source, whether a newer
+  version is available (see "Check for and install updates on Settings › About"),
+  and a small **Copy diagnostics** action beside the version.
 
 Clicking a tab
 swaps the modal's right pane without a full page reload and without closing the
@@ -206,7 +209,7 @@ modal.
 #### Scenario: the security tab keeps only machine-level settings
 - **GIVEN** stored secrets cited by a registered MCP server and a model provider
 - **WHEN** the user opens `/settings/security`
-- **THEN** the tab shows where the master key lives and its move control
+- **THEN** the tab shows where the master key lives and its move control, and the access token's Show, Copy and Rotate controls
 - **AND** it lists no stored secret and offers no control that adds, reveals or deletes one
 
 ### Requirement: Add MCP servers from one paste box
@@ -410,6 +413,39 @@ at the top").
 
 ## ADDED Requirements
 
+### Requirement: Show, copy and rotate the access token on Settings › Security
+Settings › Security MUST be the one place in the web UI that shows the daemon's access token. It
+MUST be hidden until **Show** is chosen, offer **Copy**, and offer **Rotate**, which asks for
+confirmation — saying that clients configured with the old token stop working — then calls
+`POST /api/v1/daemon/rotate-token` (spec [daemon](../daemon/spec.md) "Rotate the token from REST or
+the command line"). The page MUST install the token the call returns and carry on without a
+reload; the confirmation MUST close only on success, and a failed rotation MUST leave the dialog
+open with the error and the old token in use. While the daemon cannot be reached, the controls are
+disabled.
+
+#### Scenario: rotating the token from settings security keeps the page working
+- **GIVEN** Settings › Security open on a running daemon
+- **WHEN** the user rotates the token and confirms
+- **THEN** one `POST /api/v1/daemon/rotate-token` is sent and the dialog closes
+- **AND** the page's next requests carry the new token and succeed, with no reload
+
+#### Scenario: a failed rotation from settings security keeps the old token
+- **GIVEN** Settings › Security open, and a rotation that the daemon answers with `503`
+- **WHEN** the user confirms the rotation
+- **THEN** the dialog stays open with a readable error
+- **AND** the page keeps using the old token, and its next request succeeds
+
+#### Scenario: the token is hidden until shown
+- **GIVEN** Settings › Security open
+- **WHEN** it renders, and then the user chooses Show and Copy
+- **THEN** the token is masked until Show, and Copy puts it on the clipboard
+
+#### Scenario: copy diagnostics carries no secret
+- **GIVEN** Settings › About open
+- **WHEN** the user chooses Copy diagnostics beside the version
+- **THEN** the clipboard holds the version, channel, host, daemon state and port and the enabled features, and no token or secret value
+
+
 ### Requirement: Group the sidebar by what the user comes to do
 The sidebar MUST be grouped by what the user comes to Coffer to do, so that each
 heading names one intent and a new entry has one obvious home. There are five
@@ -517,8 +553,11 @@ daemon from the web kills the very page it was asked from, and recovery then nee
 a terminal anyway, where `coffer daemon stop` already is. Restarting is not
 stopping — the desktop shell's restart waits for the replacement and hands the
 page its connection (spec [desktop-app](../desktop-app/spec.md) "Restart by stopping the running daemon first").
-The About tab MUST show version, license, source and the update check of "Check
-for and install updates on Settings › About" only, with no language picker (the
+The About tab MUST show version, license, source, the update check of "Check
+for and install updates on Settings › About" and **Copy diagnostics** only —
+which copies the version, release channel, host, daemon state and port, and
+the enabled experimental features as plain text, and never a token or a
+secret — with no language picker (the
 sidebar already switches language) and no installed-resource-kind list
 (developer detail). Remaining jargon is rewritten in plain language (e.g.
 "prune" is phrased as clearing expired data).
@@ -527,7 +566,7 @@ sidebar already switches language) and no installed-resource-kind list
 - **GIVEN** the user opens the Settings tabs
 - **WHEN** each tab is fully rendered
 - **THEN** no tab exposes a "Shutdown daemon" or "Stop daemon" control
-- **AND** the About tab shows version / license / source and the update check only — no language picker, no resource-kind list
+- **AND** the About tab shows version / license / source, the update check and Copy diagnostics only — no language picker, no resource-kind list
 
 ### Requirement: Set when the daemon runs on the Daemon tab
 The Daemon tab MUST carry a card for when Coffer's daemon runs, with one control: a **Start at
@@ -638,23 +677,24 @@ for it, and nothing that stops it:
   restart (spec [desktop-app](../desktop-app/spec.md) "Restart by stopping the running daemon first");
   in a browser, the `coffer daemon restart` command to copy, because a page the
   daemon serves cannot start the daemon that replaces it.
-- **Port** — the port the daemon answers on, shown and not editable, beside the
-  command that changes it (`coffer config set daemon.port <n>`, then
-  `coffer daemon restart`), because the port is fixed before the database opens
-  and is set where a taken port is diagnosed (spec [daemon](../daemon/spec.md) "Bind a fixed, settable port").
+- **Port** — the port the daemon answers on, editable (spec [daemon](../daemon/spec.md) "Bind a fixed, settable port"):
+  a value MUST be a whole number from 1024 to 65535 and a port no other process
+  holds, each refused in place otherwise; saving writes it to the pre-database
+  daemon config and the row then reads **takes effect after restart**, with
+  **Restart now** in the desktop shell and the `coffer daemon restart` command
+  to copy in a browser. Until the restart, the status keeps showing the port the
+  daemon answers on.
 - **Start at login** — see "Set when the daemon runs on the Daemon tab".
-- **Token** — a Rotate token control that asks for confirmation, saying that
-  clients configured with the old token stop working, then calls
-  `POST /api/v1/daemon/rotate-token` (spec [daemon](../daemon/spec.md) "Rotate the token from REST or the command line").
-  The page MUST install the token the call returns and carry on without a reload;
-  the confirmation MUST close only on success, and a failed rotation MUST leave the
-  dialog open with the error and the old token in use.
+
+The tab has no token row (the token is on Settings › Security) and no
+Troubleshooting section: the daemon log is read on Activity's Daemon tab, and
+Copy diagnostics is on Settings › About.
 
 While the status has not yet answered, the tab MUST keep its layout over
 skeleton rows. While the daemon cannot be reached, the status card MUST read
 offline and name the host's recovery — the Restart control in the desktop shell,
 the `coffer daemon start` command in a browser — and the Start at login and
-Rotate token controls MUST be disabled.
+Port controls MUST be disabled.
 
 #### Scenario: the settings daemon tab shows the running daemon
 - **GIVEN** a running daemon
@@ -668,23 +708,21 @@ Rotate token controls MUST be disabled.
 - **THEN** the browser shows the `coffer daemon restart` command to copy and no restart button
 - **AND** the desktop shell shows a Restart control that runs the shell's restart
 
-#### Scenario: the settings daemon tab shows the port without editing it
-- **GIVEN** a daemon answering on port 8123
-- **WHEN** the Daemon tab renders
-- **THEN** it shows port 8123 and the `coffer config set daemon.port` command beside it
-- **AND** no control on the tab edits the port
+#### Scenario: saving a valid port leaves it pending until restart
+- **GIVEN** a daemon answering on port 8000, opened in the desktop shell
+- **WHEN** the user sets the port to 8123 on the Daemon tab and saves
+- **THEN** `~/.coffer/daemon-config.json` carries 8123, the row reads takes effect after restart with Restart now, and the status still shows 8000
+- **AND** in a browser the row shows the `coffer daemon restart` command instead of Restart now
 
-#### Scenario: rotating the token from the settings daemon tab keeps the page working
+#### Scenario: a port in use is rejected
+- **GIVEN** another process holding port 9000
+- **WHEN** the user enters 9000, and then 80, on the Daemon tab
+- **THEN** each is refused in place — 9000 as taken, naming what holds it, and 80 as outside 1024–65535 — and nothing is written
+
+#### Scenario: the daemon tab has no token row and no troubleshooting section
 - **GIVEN** the Daemon tab open on a running daemon
-- **WHEN** the user rotates the token and confirms
-- **THEN** one `POST /api/v1/daemon/rotate-token` is sent and the dialog closes
-- **AND** the page's next requests carry the new token and succeed, with no reload
-
-#### Scenario: a failed rotation from the settings daemon tab keeps the old token
-- **GIVEN** the Daemon tab open, and a rotation that the daemon answers with `503`
-- **WHEN** the user confirms the rotation
-- **THEN** the dialog stays open with a readable error
-- **AND** the page keeps using the old token, and its next request succeeds
+- **WHEN** it renders
+- **THEN** it carries no token control, no daemon-log link and no Copy diagnostics
 
 #### Scenario: the settings daemon tab keeps its layout while status loads
 - **GIVEN** the Daemon tab opened before the status probe has answered
@@ -695,7 +733,7 @@ Rotate token controls MUST be disabled.
 - **GIVEN** the daemon cannot be reached
 - **WHEN** the user opens the Daemon tab
 - **THEN** the status card reads offline and names the host's recovery
-- **AND** the Start at login and Rotate token controls are disabled
+- **AND** the Start at login and Port controls are disabled
 
 ### Requirement: Jump to any page or object from a command palette
 The shell MUST offer a command palette, opened with ⌘K on macOS and Ctrl+K

@@ -48,13 +48,19 @@ registry, typed validation, `unset` returns a key to its default) — `coffer co
 prints the configured port or the 8000 default, `coffer config set daemon.port <n>` pins one, and
 `coffer config unset daemon.port` returns to 8000. Those three MUST read and write the pre-bind file
 directly and MUST work with no daemon running, because a daemon that cannot bind its port is exactly
-the state the setting has to be fixable from. It MUST NOT have a REST endpoint or a control in the
-UI that changes it: the escape hatch belongs where a squatted port is diagnosed, and a route the
-daemon would have to serve is useless exactly when the port cannot be bound; `daemon.port` is
-therefore the one `coffer config` key no route stores. The web UI's Settings → Daemon MUST show the
-port the daemon answers on, read from the status probe, beside the command that changes it, and
-nothing more. A change takes effect at the next start, which `coffer daemon restart` applies in one
-command. This setting is deliberately outside the audit obligation every kind inherits: it is
+the state the setting has to be fixable from — the CLI stays the escape hatch where a squatted port
+is diagnosed. The running daemon MUST also accept a new port from the web UI's Settings → Daemon,
+through `PUT /api/v1/daemon/port`: the value MUST be a whole number from 1024 to 65535 and a port no
+other process holds — the port the daemon itself answers on counts as free — and is otherwise
+refused with the reason, naming the holder of a taken port. The route MUST write the pre-bind file
+exactly as `coffer config set daemon.port` does and answer that the change is pending: the daemon
+keeps answering on its current port. A change takes effect at the next start, which
+`coffer daemon restart` — or the desktop shell's Restart — applies in one step. After a restart on a
+new port the daemon records it in `~/.coffer/daemon.json`, so the desktop shell, the CLI and the MCP
+shim find it by the discovery file as they find any daemon, and the first reconcile after the
+start MUST re-project every connected agent's Coffer entries that name the daemon's address — its
+MCP entry and its memory delivery hook — to the new port, so every agent reconnects without a
+manual step. This setting is deliberately outside the audit obligation every kind inherits: it is
 neither a resource nor a capability but process configuration read before the database opens, and
 the CLI that owns it must work with no daemon running — so the audit table is unreachable on
 exactly the path that matters most, and recording a change only when a daemon happens to be up
@@ -80,3 +86,14 @@ would be less honest than recording none.
 - **WHEN** the user runs `coffer config get daemon.port`, then `coffer config set daemon.port 8123`, then `coffer config get daemon.port`, then `coffer config unset daemon.port`,
 - **THEN** the first prints the 8000 default, the set writes 8123 into `~/.coffer/daemon-config.json`, the second get prints 8123, and the unset leaves the file carrying no port so the default applies again,
 - **AND** no daemon is spawned, no database is opened and no audit entry is recorded.
+
+#### Scenario: a port set from the settings page is pending until restart
+- **GIVEN** a running daemon on port 8000
+- **WHEN** `PUT /api/v1/daemon/port` is sent with 8123, and then with a port another process holds
+- **THEN** the first answers that 8123 is pending, `~/.coffer/daemon-config.json` carries 8123 and the daemon still answers on 8000
+- **AND** the second is refused naming the process that holds the port, and the file is unchanged
+
+#### Scenario: after a restart on a new port every agent reconnects
+- **GIVEN** a daemon configured for 8123 while answering on 8000, and Claude Code and Codex connected to Coffer
+- **WHEN** the daemon is restarted
+- **THEN** it binds 8123 and records it in `~/.coffer/daemon.json`, the first reconcile rewrites each agent's Coffer MCP entry and delivery hook to 8123, and the desktop shell, the CLI and an MCP shim reach the daemon on 8123

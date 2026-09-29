@@ -99,8 +99,10 @@ unarchived until that implementation lands.
   their model, linking to each agent's Model tab; Coffer's engine and Speech to text, linking to
   Settings › General); switching an agent's provider happens only on its Model tab.
 - The sidebar footer shows the daemon's state (connecting, running with its port, stopping,
-  offline) and opens **Settings → Daemon**, which shows status, the host's restart, the port (read
-  only, with the command that changes it), Start at login and a Rotate token control. Stopping the
+  offline) and opens **Settings → Daemon**, which shows status, the host's restart, an editable port (validated,
+  taking effect after a restart, after which every connected agent is re-projected to it) and Start
+  at login. The access token is shown, copied and rotated only on Settings › Security; Copy
+  diagnostics sits on Settings › About; the Daemon tab has no troubleshooting section. Stopping the
   daemon stays CLI-only.
 - The MCP servers page has one **Add server** action. Its dialog opens on a paste box that
   recognises an `mcpServers` JSON block or server object, Codex TOML `[mcp_servers.<name>]`
@@ -180,8 +182,9 @@ unarchived until that implementation lands.
   palette, sidebar attention dots, one Add server action whose paste box recognises JSON, Codex
   TOML, a command line or a URL; the daemon-invisibility requirement is removed and daemon
   shutdown alone stays CLI-only.
-- `daemon`: the status probe is the one source of the state the shell shows; the port is shown on
-  Settings → Daemon and still changed only from the CLI.
+- `daemon`: the status probe is the one source of the state the shell shows; the port is also set from
+  Settings → Daemon through a new route writing the same pre-database file, pending until restart,
+  and the first reconcile after a restart re-projects every connected agent to the new port.
 - `desktop-app`: the Restart control and version-skew warning are also rendered on Settings →
   Daemon, and a restart chosen there is the same restart; the shell checks for and installs
   signed updates, a third sanctioned host affordance rendered on Settings › About. The Purpose

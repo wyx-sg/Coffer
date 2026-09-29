@@ -174,22 +174,32 @@ and the user had no in-app way to rotate a token or restart outside the offline 
   stopping, offline — and opens Settings → Daemon. It reads only the unauthenticated status probe,
   which the shell already polls for the offline banner, so it adds no route and no second poll.
   The footer and the banner must agree: the footer never reads running while the banner is up.
-- **Settings → Daemon.** Status (from the probe), restart, port, Start at login and Rotate token.
+- **Settings → Daemon.** Status (from the probe), restart, an editable port and Start at login; no token row and no troubleshooting section.
   - *Restart is host-dependent.* In the desktop shell it is the shell's restart (the same IPC the
     tray and banner use). In a browser the tab shows `coffer daemon restart` to copy: a page the
     daemon serves cannot start the daemon that replaces it, and the login service restarts only
     on an unsuccessful exit. *Rejected:* a daemon self-restart route, which is new backend for a
     browser-only affordance and would still leave the page reconnecting blind.
-  - *The port is shown, not edited.* [daemon](../../specs/daemon/spec.md) "Bind a fixed, settable
-    port" keeps the port off REST because it is set when the daemon cannot bind; the tab shows the
-    bound port and the CLI command beside it.
-  - *Token rotation moves into the UI.* The route already exists and returns the new token, so the
+  - *The port is edited here, and the CLI stays the escape hatch.* A new `PUT /api/v1/daemon/port`
+    validates 1024–65535 and that no other process holds the port, writes the same pre-database
+    `daemon-config.json` the CLI writes, and reports the change as pending; Restart now (desktop) or
+    the copied command (browser) applies it. After the restart the discovery file carries the new
+    port, and the first reconcile re-projects every connected agent's Coffer MCP entry and delivery
+    hook to it, so nothing needs reconnecting by hand. A port the daemon cannot bind is still fixed
+    from `coffer config set daemon.port`, which works with no daemon running. *Rejected:* keeping
+    the port read-only in the UI, which left a person who never opened a terminal no way to move it.
+  - *The token lives on Settings › Security, with rotation.* It is a credential, so it sits with
+    the master key rather than with the daemon's process settings; Show, Copy and Rotate are there,
+    and the Daemon tab has no token row. The route already exists and returns the new token, so the
     page installs it and continues without a reload. The confirmation names the consequence:
     other open pages recover on reload (the daemon injects the new token), the desktop shell
     re-handshakes from `daemon.json` on its next restart, and a client configured with a literal
     token stops working. *Rejected:* keeping rotation CLI-only, which the old rule justified as
     "needed maybe once ever"; with the daemon visible, a user who suspects a leaked token should
     not need a terminal to act on it.
+  - *No troubleshooting section.* The daemon log is read on Activity's Daemon tab and Copy
+    diagnostics (version, channel, host, daemon state, port, enabled features; never a token) is a
+    small action on Settings › About beside the version, so the Daemon tab does not repeat either.
   - *Stop stays CLI-only.* Stopping from the page kills the page, and recovery needs a terminal.
 - **Starting stays automatic.** Every surface that needs a daemon still starts one; the footer
   and tab report state, they do not ask the user to act on a healthy system.
