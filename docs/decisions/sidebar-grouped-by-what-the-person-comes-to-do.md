@@ -21,7 +21,8 @@ spec web-ui "List only shipped surfaces in the sidebar",
 spec web-ui "Call a surface by one name everywhere",
 spec web-ui "Manage stored secrets on the Secrets page",
 spec web-ui "Open Settings as a modal from the sidebar footer",
-spec chat "Show every conversation on the Chat page",
+spec chat "Show every conversation on the Conversations page",
+research note `conversations-ia-research.md` (rearchitecture working notes, 2026-09-30),
 spec provider-switching "Offer every connection operation on REST, CLI and web",
 spec credentials "Refuse to delete a credential still in use",
 the change `openspec/changes/revise-web-ui-ia/`
@@ -66,8 +67,8 @@ counted here because the grouping must already have room for it.
 Five placement questions have to be answered by whatever grouping wins, because each was
 contested while the rebuild was designed:
 
-- **Chat and Channels.** Both put a person in a conversation with an agent; should they be one
-  entry?
+- **Conversations and Channels.** Both put a person in a conversation with an agent; should they
+  be one entry, and where does a channel's history live?
 - **Model providers.** Is a provider an asset like an MCP server, a setting, or part of setting
   up an agent?
 - **Secrets.** A secret is cited by MCP servers, model providers, channels and skills; where does
@@ -106,17 +107,17 @@ criterion; the one-big-group shape is exactly what the other options try to fix.
 
 ### Option B — intent groups for the verbs, one Resources group for the nouns
 
-Group what the user *does* by intent — a Run group (Chat, Channels, later Workflows) and System
+Group what the user *does* by intent — a Run group (Conversations, Channels, later Workflows) and System
 — and keep one Resources group for everything that is configured: Agents, Model providers, MCP
 servers, Custom tools, Skills, CLIs, Knowledge, Memory, Secrets.
 
 | Group | 1.0 | At ~18 |
 | --- | --- | --- |
-| Run | Chat, Channels (2) | + Workflows (3) |
+| Run | Conversations, Channels (2) | + Workflows (3) |
 | Resources | Agents, Model providers, MCP servers, Custom tools, Skills, CLIs, Knowledge, Memory, Secrets (9) | + Rules, Sources (11) |
 | System | Activity, Usage, Sync (3) | 3 |
 
-Pros: Chat and Channels sit together, where a user looks for "talking to an agent"; three
+Pros: Conversations and Channels sit together, where a user looks for "talking to an agent"; three
 headings stay easy to learn. Cons: it moves the problem rather than solving it — Resources is
 nine, then eleven — and it puts Agents, the subject of the whole product, in the middle of
 a list of the things agents use, the mislabelling the role ADR rejected as its own Option B.
@@ -130,13 +131,13 @@ intent:
 | Group | What the user comes to do | 1.0 | At ~18 |
 | --- | --- | --- | --- |
 | Agents | set up the agents and the models they run on | Agents, Model providers (2) | 2 |
-| Run | put an agent to work, directly or through an IM bot | Chat, Channels (2) | + Workflows (3) |
+| Run | put an agent to work, directly or through an IM bot | Conversations, Channels (2) | + Workflows (3) |
 | Capabilities | give agents things they can do | MCP servers, Custom tools, Skills, CLIs (4) | + Rules, Sources (6) |
 | Context | give agents things they know | Knowledge, Memory (2) | 2 |
 | System | look after Coffer and what every part shares | Secrets, Activity, Usage, Sync (4) | 4 |
 
-The group is named **Run** rather than "Work": it is where an agent is set running — a chat, a
-bot's conversations, later a workflow and its runs — and "work" reads as the user's own job,
+The group is named **Run** rather than "Work": it is where an agent is set running — a
+conversation, from Coffer or from an IM bot, later a workflow and its runs — and "work" reads as the user's own job,
 which every group serves.
 
 Pros: it passes the criterion at 1.0 — no group is over four — and the growth that is "more of
@@ -158,7 +159,7 @@ heading a single intent; the cost is a few lines of heading today, paid back as 
 
 ### Option D — one flat list, ordered by how often each entry is used
 
-No headings: the fifteen entries in one list, most-used first (Chat, Agents, Skills, MCP
+No headings: the fifteen entries in one list, most-used first (Conversations, Agents, Skills, MCP
 servers, …), Sync last.
 
 | Group | 1.0 | At ~18 |
@@ -188,7 +189,7 @@ Pros: the shortest possible sidebar; growth adds tabs, never entries. Cons: it p
 tabs — Activity already has three, Settings five, Model providers two, and every detail page its
 own — so the user reads two tab strips to find one table, and an address becomes
 `/system?tab=activity&view=calls`. A tab strip hides its siblings behind a click where a
-sidebar shows them; attention dots would need a second rendering on tabs; and Chat is a
+sidebar shows them; attention dots would need a second rendering on tabs; and Conversations is a
 full-height workspace with its own conversation list that cannot sit as a tab beside Channels
 without giving up the screen it needs. It also merges pages with nothing in common but a heading
 (Secrets and Usage) under one page header. **Loses**: it meets the size criterion only by
@@ -196,15 +197,25 @@ moving the groups one level down, where they cost more to use.
 
 ### Placement questions, answered under C'
 
-**Chat and Channels are two entries.** Chat is the daily page: a person opens it many times a
-day to hold a conversation. Channels is setup: pairing a bot, choosing its default agent,
-checking its transport — done once per bot and revisited rarely. Merging them would put an
-occasional configuration page in the path of the daily one, or bury bot setup behind a Chat
-tab. A merged page would gain nothing either, because the conversations a channel carries are
-already listed on the Chat page beside the web's own, with a badge naming the channel (spec
-chat "Show every conversation on the Chat page"). They share a group because both are how work
-with an agent happens; they are two entries because the user comes to each for a different
-reason.
+**Conversations and Channels are two entries, and history lives in Conversations.** Conversations
+is the daily page: every conversation Coffer runs — from SeaTalk, Telegram and Coffer's own UI,
+which is modelled as a built-in "Coffer" source — in one list with a source badge and filters, each
+opening on its full exchange with a reply box that continues it (spec chat "Show every
+conversation on the Conversations page"). Channels is setup only: pairing a bot, choosing its
+default agent, checking its connection — done once per bot and revisited rarely — with a link to
+Conversations filtered to that channel. The research behind this (`conversations-ia-research.md`,
+a survey of OpenClaw, Hermes Agent, cc-connect, claude-code-telegram, kimaki, Claude Code Channels,
+Happy, Omnara, Botpress and Chatwoot, 2026-09-30) found that no product puts conversation history
+inside its channel or config page: history is one global list with a channel badge and filter,
+the channel page holds only configuration and connection status (Hermes, Chatwoot), and every
+product with a UI lets the user send from it, with its own web chat modelled as just another
+channel (OpenClaw's WebChat, Botpress's Webchat, Chatwoot's live chat). A separate "Chat" page
+beside a channel history (Hermes's split) was the weaker pattern, because it puts history in two
+places; so the entry is named Conversations, not Chat, and Coffer's own UI is a source, not a
+second kind of conversation. They share a group because both are how work with an agent happens;
+they are two entries because the user comes to each for a different reason. Whether a reply sent
+from Coffer into a channel-opened conversation is also delivered back to that channel is left
+open (see the change's design).
 
 **Model providers belongs with Agents.** A provider is the endpoint and key an agent's model is
 served from, and a connection and model are chosen per agent, on that agent's page (spec
@@ -270,7 +281,7 @@ heading:
   Agents                   智能体
   Model providers          模型提供商
  RUN                      运行
-  Chat                     聊天
+  Conversations            对话
   Channels                 消息渠道
  CAPABILITIES             能力
   MCP servers              MCP 服务器
@@ -319,8 +330,8 @@ Rules a future change must respect:
 - Secrets becomes a page of its own (spec web-ui "Manage stored secrets on the Secrets page"),
   and Settings › Security narrows to machine-level items; the credential store's behaviour behind
   the page is specified by its own change.
-- A user of the eleven-entry sidebar finds Model providers under Agents, Channels under Run and
-  Settings behind the footer gear. Routes do not move, so no bookmark breaks.
+- A user of the eleven-entry sidebar finds Model providers under Agents, Chat renamed
+  Conversations (`/chat` redirects) and Channels under Run, and Settings behind the footer gear. Routes do not move, so no bookmark breaks.
 - The router carries a background location so the Settings modal can be opened over any page
   and closed back to it; that is the price of keeping every Settings tab linkable.
 - Three headings hold two entries each until the planned entries land; that is the accepted price

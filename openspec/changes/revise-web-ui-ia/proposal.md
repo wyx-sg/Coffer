@@ -46,7 +46,7 @@ unarchived until that implementation lands.
 ## What Changes
 
 - The sidebar becomes an ungrouped **Overview** entry above five groups — **Agents** (Agents,
-  Model providers), **Run** (Chat, Channels), **Capabilities** (MCP servers, Custom tools,
+  Model providers), **Run** (Conversations, Channels), **Capabilities** (MCP servers, Custom tools,
   Skills, CLIs), **Context** (Knowledge, Memory), **System** (Secrets, Activity, Usage, Sync) —
   fifteen entries. Usage's page is specified with the change that meters use.
 - A **Custom tools** page (`/custom-tools`) manages HTTP API tools in groups: a group has a fixed
@@ -63,7 +63,7 @@ unarchived until that implementation lands.
   logged in. Experimental switches hide entries exactly as before, and a group left with no entry
   hides its heading. Routes do not move.
 - One name per surface in both languages, with the zh glossary fixed: 总览 · 智能体（智能体、模型提供商）
-  · 运行（聊天、消息渠道）· 能力（MCP 服务器、自定义工具、技能、命令行工具）· 上下文（知识、记忆）· 系统（密钥、活动、用量、同步）,
+  · 运行（对话、消息渠道）· 能力（MCP 服务器、自定义工具、技能、命令行工具）· 上下文（知识、记忆）· 系统（密钥、活动、用量、同步）,
   and Settings is 设置;
   an agent is 智能体 everywhere in the zh UI.
 - A **Secrets** page (`/secrets`) lists every stored secret with its presence and what uses it,
@@ -146,6 +146,12 @@ unarchived until that implementation lands.
 - The **Memory overview** lists each agent's deliveries, memories read and last delivery over seven
   days. The delivery hook's state is shown only on the agent detail page (Hooks tab and Overview
   connection block); the agent's Memory tab shows only its native memory stores.
+- **Conversations** (`/conversations`, `/chat` redirecting) replaces Chat: every conversation Coffer
+  runs, from channels and from Coffer's own UI (a built-in "Coffer" source), with a source badge
+  and filters, each continued from a reply box; New conversation is secondary, and there is no
+  welcome page and no web voice input. **Channels** keeps setup, status and settings and links to
+  Conversations filtered by channel. The agent detail's Conversations tab is renamed **Sessions**
+  (`/agents/<type>/sessions`).
 - A **command palette** (⌘K / Ctrl+K) jumps to any page or object. It carries no action that
   changes state.
 - A sidebar entry carries an **attention dot** while its kind's attention signal is raised; Sync's
@@ -185,6 +191,10 @@ unarchived until that implementation lands.
   collection anywhere.
 - `memory`: a partition's page has Memories (with a Retired group and learned-from agents, none of
   the agents' own sources) and Delivered tabs; provenance stays in the data and CLI.
+- `chat`: the Conversations page lists every conversation with a source badge and filters,
+  continues any of them, and has no welcome page or voice input; `/conversations` URLs.
+- `channels`: the management surface holds setup, status and settings and links to
+  Conversations filtered by channel.
 - `internal-engine`: the engine's settings are shown in the Coffer's model section of Settings ›
   General, with a provider-then-model picker and a Test action for the engine and for speech to
   text.

@@ -35,7 +35,7 @@ behind the Secrets page (uncited secrets, the migration assistant).
   Agents           /agents                                              智能体
   Model providers  /model-providers                                     模型提供商
  RUN                                                                   运行
-  Chat             /chat                                                聊天
+  Conversations    /conversations           (/chat redirects)           对话
   Channels         /channels                                            消息渠道
  CAPABILITIES                                                          能力
   MCP servers      /mcp-servers                                         MCP 服务器
@@ -66,8 +66,10 @@ Capabilities would reach six, so the change that brings both Rules and Sources r
 agents, channels, custom tools and ADE targets are rows inside existing pages. Rules is not in 1.0 — projecting
 rules is deferred — so no Rules entry is specified here.
 
-- **Chat and Channels stay two entries** in one group: Chat is daily conversation, Channels is
-  occasional bot setup, and a channel's conversations already appear in Chat's list.
+- **Conversations and Channels stay two entries** in one group: Conversations lists every
+  conversation Coffer runs, from channels and from Coffer's own UI (a built-in "Coffer" source),
+  and continues any of them; Channels is setup, connection status and settings only, linking to
+  Conversations filtered by channel (decision 18).
 - **Model providers sits with Agents**: it is each agent's model configuration, chosen on the
   agent's Model tab. The page is one table of connections; which agent runs on a connection is
   read on that connection's detail page (Used by, read-only) and changed only on the agent's
@@ -389,6 +391,15 @@ the gateway's registration rules (fixed names, the 24-character limit) are uncha
   shell, so a lost private key means no update can be verified; the key is kept in the
   repository's secrets with an offline backup.
 
+- **Open: does a reply from Coffer reach the channel?** When the user replies from the
+  Conversations page in a conversation a channel opened, the chat spec says the page and the
+  channel are "two windows onto one timeline", and the conversation keeps the channel binding as a
+  return address ([Chat Is a Single-Owner Live Mirror](../../../docs/decisions/chat-single-owner-live-mirror.md)).
+  The current runtime does **not** deliver that reply to the channel: a channel renders only the
+  turns its own inbound messages start (`TurnDriver` spawns a `TurnRenderer` from the orchestrator's
+  `on_start` sink for a channel message), so a web-sent turn is seen in Coffer only, and the IM side
+  sees nothing until its next message. Whether a web reply should also be sent to the channel is
+  not decided here; the Conversations page must not claim it is.
 - **Token rotation strands other clients.** A second open tab or a client with a literal token
   fails until it re-reads the token. The confirmation says so; the offline banner already reads a
   `401` as "not ready" and a reload recovers a daemon-served page.
@@ -500,3 +511,20 @@ spec owns the Skills page.
   The agents' own memory files — native paths, their original text, `.raw/`, `MEMORY.md`,
   `RETIRED.md`, a file tree — are sources, not what the user came to read, so the page leaves them
   out; they stay in provenance, on the REST routes and in the CLI.
+
+### 18. Conversations, Channels and agent Sessions
+
+- **One list of conversations.** The Run group is Conversations · Channels. Conversations
+  (`/conversations`, `/chat` redirecting) lists every conversation Coffer runs with a source badge
+  — SeaTalk, Telegram, or Coffer for its own UI — and filters by source and agent; a conversation
+  opens on its full exchange with a reply box, and New conversation is a secondary action. There is
+  no welcome or suggestions page and no web voice input: voice reaches an agent through a channel,
+  which transcribes it. (No web voice-input requirement exists in the specs or the code, so there
+  is nothing to remove; the Conversations requirement states the absence.) The research basis —
+  every surveyed product keeps history in one global list and its channel page for setup only — is
+  in the sidebar ADR.
+- **Channels is setup.** A channel's page holds its setup, connection status and settings, and
+  links to Conversations filtered to it; it shows no history.
+- **The agent's own history is Sessions.** The agent detail tab that lists the agent's own CLI
+  transcripts is renamed Sessions (`/agents/<type>/sessions`), so "conversation" means only a
+  conversation Coffer runs.

@@ -76,7 +76,7 @@ on:
   Agents           /agents            — the consumers (Bot icon)
   Model providers  /model-providers   — the endpoints agents' models are served from
  RUN
-  Chat             /chat              — a conversation with an agent
+  Conversations    /conversations     — every conversation Coffer runs, from channels and from Coffer itself
   Channels         /channels          — the IM bots agents answer on
  CAPABILITIES
   MCP servers      /mcp-servers       — the aggregated upstream servers
@@ -100,13 +100,13 @@ on:
 - **WHEN** they navigate to `http://localhost:5173/` in a real browser
 - **THEN** the index renders the Overview page at `/`, with the sidebar and main content area, within 2 seconds
 - **AND** the main content shows the Overview page (no generic error card)
-- **AND** the sidebar lists exactly Coffer's operational surfaces — Overview; Agents, Model providers; Chat, Channels; MCP servers, Custom tools, Skills, CLIs; Knowledge, Memory; Secrets, Activity, Usage, Sync — with Overview under no heading and the rest grouped under "Agents", "Run", "Capabilities", "Context" and "System" headings, with no other entry
+- **AND** the sidebar lists exactly Coffer's operational surfaces — Overview; Agents, Model providers; Conversations, Channels; MCP servers, Custom tools, Skills, CLIs; Knowledge, Memory; Secrets, Activity, Usage, Sync — with Overview under no heading and the rest grouped under "Agents", "Run", "Capabilities", "Context" and "System" headings, with no other entry
 - **AND** no sidebar entry is Settings; the sidebar footer carries the Settings gear beside the daemon status
 
 #### Scenario: a switched-off feature leaves the sidebar
 - **GIVEN** `knowledge` and `vault_sync` switched off
 - **WHEN** the app shell is rendered
-- **THEN** the sidebar lists Overview; Agents, Model providers; Chat, Channels; MCP servers, Custom tools, Skills, CLIs; Memory; Secrets, Activity, Usage — with no Knowledge and no Sync entry
+- **THEN** the sidebar lists Overview; Agents, Model providers; Conversations, Channels; MCP servers, Custom tools, Skills, CLIs; Memory; Secrets, Activity, Usage — with no Knowledge and no Sync entry
 
 ### Requirement: Give every scoped resource kind its own list surface
 Every scoped resource kind MUST have its own list surface, so the navigation and
@@ -130,7 +130,7 @@ nothing else:
 | Agents (group and entry) | 智能体 |
 | Model providers | 模型提供商 |
 | Run (group) | 运行 |
-| Chat | 聊天 |
+| Conversations | 对话 |
 | Channels | 消息渠道 |
 | Capabilities (group) | 能力 |
 | MCP servers | MCP 服务器 |
@@ -404,8 +404,8 @@ groups, under headings in this order:
 - **AGENTS** — set up the agents and the models they run on: Agents, then Model
   providers. Agents come first because they are the subject of the product; a
   provider is the endpoint and key each agent's model is served from.
-- **RUN** — put an agent to work, directly or through an IM bot: Chat, then
-  Channels.
+- **RUN** — put an agent to work, directly or through an IM bot: Conversations,
+  then Channels.
 - **CAPABILITIES** — give agents things they can do: MCP servers, Custom tools,
   Skills, then CLIs.
 - **CONTEXT** — give agents things they know: Knowledge, then Memory.
@@ -431,7 +431,7 @@ nothing. The decision and the options it was weighed against are in
 - **GIVEN** the app shell is rendered with every experimental feature switched on
 - **WHEN** the sidebar lists its entries
 - **THEN** Overview comes first, under no heading, and the rest sit under five headings in the order Agents, Run, Capabilities, Context, System
-- **AND** Agents holds Agents then Model providers, Run holds Chat then Channels, Capabilities holds MCP servers, Custom tools, Skills and CLIs, Context holds Knowledge then Memory, and System holds Secrets, Activity, Usage and Sync
+- **AND** Agents holds Agents then Model providers, Run holds Conversations then Channels, Capabilities holds MCP servers, Custom tools, Skills and CLIs, Context holds Knowledge then Memory, and System holds Secrets, Activity, Usage and Sync
 
 #### Scenario: a group with every entry switched off leaves the sidebar
 - **GIVEN** `knowledge` and `memory` both switched off
@@ -450,10 +450,12 @@ word a user navigates by:
   agent's model is served from, and the connection and model are chosen per
   agent on that agent's page (spec
   [provider-switching](../provider-switching/spec.md) "Offer every connection operation on REST, CLI and web").
-- **Channels** is filed under Run, beside Chat and not merged into it: Chat is
-  where a person holds conversations every day, a channel is an IM bot set up
-  once and revisited rarely, and the conversations a channel carries are already
-  listed on the Chat page (spec [chat](../chat/spec.md) "Show every conversation on the Chat page").
+- **Channels** is filed under Run, beside Conversations and not merged into it:
+  Conversations is where a person reads and continues every conversation, a
+  channel is an IM bot set up once and revisited rarely, and the conversations a
+  channel carries are listed on the Conversations page with its badge (spec
+  [chat](../chat/spec.md) "Show every conversation on the Conversations page");
+  the Channels page holds setup, status and settings only.
 - **MCP servers** and **Skills** are filed under Capabilities; **Knowledge** and
   **Memory** under Context.
 - **Custom tools** are `mcp_server` resources of the HTTP API transport, one per
@@ -1076,7 +1078,7 @@ and a remembered width that no longer fits the window is clamped to the bounds.
 - **THEN** the tree keeps the width it was dragged to, on that page only
 
 #### Scenario: a divider cannot be dragged past a pane's minimum
-- **GIVEN** the Chat page with its conversation list beside the thread
+- **GIVEN** the Conversations page with its list beside the conversation
 - **WHEN** the user drags the divider towards the list until the list would be narrower than 240px, and then the other way until the thread would be narrower than 480px or the list wider than half the window
 - **THEN** the divider stops at 240px, and at whichever of the other two bounds comes first
 
