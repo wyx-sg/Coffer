@@ -116,7 +116,7 @@ Connecting writes everything Coffer needs into the agent's own config, in one ac
 | Part | What it does | When |
 | --- | --- | --- |
 | Gateway MCP entry | A `coffer` stdio MCP server entry pointing at `coffer-mcp-shim`. The agent reaches every enabled upstream server, Coffer's own tools, and its delivered knowledge through it. | Always |
-| Memory delivery hook | A session-start hook that hands the agent its memory index. See [Memory](/guides/memory#at-session-start-through-a-hook). | While the `memory` feature is on |
+| Memory delivery hook | Four hook entries — session start, each prompt, and before and after each shell command — through which Coffer hands the agent its memory. See [Memory](/guides/memory#install-the-hook). | While the `memory` feature is on |
 
 Disconnecting removes both, and only Coffer's own entries; everything else in those files stays as it was.
 
@@ -128,7 +128,7 @@ Disconnecting removes both, and only Coffer's own entries; everything else in th
 coffer agent connect claude-code
 # connected agent claude-code to Coffer
 #   gateway MCP entry: installed (/Users/you/.coffer/bin/coffer-mcp-shim)
-#   memory delivery hook: installed (: coffer-memory; coffer memory context --agent-uid …)
+#   memory delivery hook: installed (: coffer-memory; coffer memory hook --agent-uid …)
 
 coffer agent show claude-code                # the connection, beside the agent's record (--json for the raw answer)
 # ...
@@ -171,7 +171,7 @@ command = "/Users/you/.coffer/bin/coffer-mcp-shim"
 args = ["--agent-uid", "9a006a32d0bf5787955c43d54e4b44e9"]
 ```
 
-The memory hook's entry is described in [Filesystem](/reference/filesystem).
+The memory hook's four entries are described in [Filesystem](/reference/filesystem).
 
 Connecting is idempotent: connecting again rewrites each entry in place and never adds a second one. Disconnecting when nothing is installed succeeds and changes nothing. Every write is backed up and audited by part (`agent_mcp_installed` / `agent_mcp_uninstalled`, `memory_delivery_installed` / `memory_delivery_removed`). The connection status is read from the files each time; Coffer does not store it.
 
@@ -319,15 +319,15 @@ The **Hooks** tab shows every hook the agent will run, grouped by event, read st
 | --- | --- | --- |
 | Agent's own files | `settings.json`, `settings.local.json` | `hooks.json` |
 | Plugins | each enabled plugin's `hooks/hooks.json` | each enabled plugin's `hooks/hooks.json`, where it has one |
-| Coffer's own hook | `SessionStart` in `settings.json` | `SessionStart` in `hooks.json` |
+| Coffer's own hook | `SessionStart`, `UserPromptSubmit`, `PreToolUse` and `PostToolUse` in `settings.json` | the same four events in `hooks.json` |
 
-Coffer's own hook — the [memory delivery hook](/guides/memory#at-session-start-through-a-hook) — is marked, and a line above the table says how it is doing:
+Coffer's own hook — the [memory delivery hook](/guides/memory#install-the-hook) — is marked on each of its four entries and reported as one hook, and a line above the table says how it is doing:
 
-- **Current** — installed with exactly the command this version of Coffer writes.
-- **Out of date** — Coffer's hook is there but carries a command an older version wrote. The daemon rewrites it at start-up; **Repair** does it now.
+- **Current** — installed on exactly the four events, each with exactly the command this version of Coffer writes.
+- **Out of date** — Coffer's hook is there but carries a command an older version wrote, or sits on another set of events (an older build installed one `SessionStart` entry). The daemon rewrites it on its next reconcile pass; **Repair** does it now.
 - **Missing** — no Coffer hook. **Repair** connects the agent to Coffer again, which installs it (while the `memory` feature is on).
 
-For Codex it also says whether Codex will run the hook. Codex skips a hook you have not approved, so **Needs approval in Codex** (or **Needs re-approval in Codex**, after a Coffer update changed the command) means the hook is installed but not running. Open Codex, run `/hooks` and trust Coffer's hook. Coffer does not approve it for you.
+For Codex it also says whether Codex will run the hook. Codex skips an entry you have not approved, and Coffer's hook counts as trusted only when all four entries are, so **Needs approval in Codex** (or **Needs re-approval in Codex**, after a Coffer update changed the command) means at least one entry is installed but not running. Open Codex, run `/hooks` and trust each of Coffer's four entries. Coffer does not approve them for you.
 
 It also shows when the hook last fired, from the [audit log](/guides/activity). "Never fired" on an agent you use every day is the sign that the agent is not running the hook.
 
@@ -335,10 +335,13 @@ Everything else on the tab is read only: Coffer never edits another tool's hooks
 
 ```sh
 coffer agent hooks claude-code
-# * SessionStart [startup|resume|clear|compact]  (user)  : coffer-memory; coffer memory context …
+# * SessionStart [startup|resume|clear|compact]  (user)  : coffer-memory; coffer memory hook …
+# * UserPromptSubmit  (user)  : coffer-memory; coffer memory hook …
+# * PreToolUse [Bash]  (user)  : coffer-memory; coffer memory hook …
 #   PreToolUse [Bash]  (user)  ./lint.sh
+# * PostToolUse [Bash]  (user)  : coffer-memory; coffer memory hook …
 #   SessionStart  (plugin formatter@acme)  ./plug.sh
-# coffer hook: current on SessionStart, last fired 2026-09-29T08:12:03Z
+# coffer hook: current on PostToolUse,PreToolUse,SessionStart,UserPromptSubmit, last fired 2026-09-29T08:12:03Z
 
 coffer agent hooks claude-code --json   # the full answer, with each hook's file
 ```

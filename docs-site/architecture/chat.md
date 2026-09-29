@@ -229,7 +229,7 @@ The appends an agent receives on top of its own system prompt are composed in on
 2. For a channel-driven conversation, the [memory](/architecture/memory) index. The composition root builds the composer (`memory_wiring.memory_context_composer`) and hands it to both providers through `wire_chat`. It returns nothing while the `memory` feature is off, when the index is empty, or when the tree cannot be read. See [Channel turns](/architecture/memory#channel-turns).
 3. On every turn, a model note naming the model Coffer put the agent on, or saying the agent's own default is in use, with a few alternatives. An agent cannot see Coffer's choice and invents one when asked, so the note says it outranks the agent's own guess.
 
-A turn from the web Chat page, like a session you start yourself in a terminal, gets memory through the agent's own session-start hook, when the agent is connected to Coffer. No turn gets it both ways.
+A turn from the web Chat page, like a session you start yourself in a terminal, gets memory through the agent's own memory hook, when the agent is connected to Coffer. No turn gets it both ways.
 
 ## Attachments and document extraction
 

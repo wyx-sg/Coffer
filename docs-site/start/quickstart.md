@@ -69,7 +69,7 @@ connected agent claude-code to Coffer
   gateway MCP entry: installed (/Users/you/.coffer/bin/coffer-mcp-shim)
 ```
 
-This adds one entry to `mcpServers` in `~/.claude.json` (and, while the `memory` feature is on, a session-start hook to `~/.claude/settings.json` — see [Memory](/guides/memory)). Coffer writes the file atomically and keeps a `.bak` of the previous version:
+This adds one entry to `mcpServers` in `~/.claude.json` (and, while the `memory` feature is on, Coffer's memory hook — four entries, from session start to each shell command — to `~/.claude/settings.json` — see [Memory](/guides/memory)). Coffer writes the file atomically and keeps a `.bak` of the previous version:
 
 ```json
 {

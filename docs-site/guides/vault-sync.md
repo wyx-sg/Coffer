@@ -114,7 +114,7 @@ Without the key, sync still works, but credentials that arrived are reported as 
 | Travels | Stays on each machine |
 | --- | --- |
 | Knowledge files under `~/.coffer/knowledge/` | `coffer.db` itself, logs, `daemon.json`, `daemon-config.json` |
-| The master skill store under `~/.coffer/skills/` | **Reach**: each resource's enabled flag and agent scope |
+| The master skill store under `~/.coffer/skills/`, and the memory triggers you wrote or armed (`~/.coffer/vault/memory-triggers/`) | **Reach**: each resource's enabled flag and agent scope |
 | Definitions of MCP servers, agents, skills, knowledge collections, providers and channels (one YAML document each, keyed by uid) | The `coffer-guide` skill, which each machine generates from its own build and feature switches |
 | MCP capability preferences, Coffer's model settings, the agent plugin inventory, channel pairings | Memory (`~/.coffer/memory/` and its partitions), which each machine derives from its own agents |
 | Credential ciphertext, with `--with-credentials` | Conversations, the audit log, MCP invocation records |

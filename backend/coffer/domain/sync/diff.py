@@ -22,6 +22,7 @@ from enum import StrEnum
 _AREA_PREFIXES = (
     ("knowledge/", "knowledge"),
     ("skills/", "skills"),
+    ("memory-triggers/", "memory-triggers"),
     ("resources/", "resources"),
     ("state/", "state"),
     ("credentials/", "credentials"),

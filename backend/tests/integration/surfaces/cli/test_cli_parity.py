@@ -135,12 +135,15 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     },
     # No `add`: partitions are provisioned only by aggregation. `sync` updates
     # memory — aggregation, then a distil pass over every partition that
-    # gained entries (spec memory "Update memory in one action"). `context` is
-    # what the installed session-start hook runs and must not move (spec
-    # memory "Cover memory management on REST and the CLI"); installing that
-    # hook is part of `agent connect`. No switch either (spec memory "Serve
-    # every partition to every agent").
-    "memory": {*_LIFECYCLE - _SWITCH, "sync", "context"},
+    # gained entries (spec memory "Update memory in one action"). `hook` is
+    # what every installed memory hook entry runs and must not move (spec
+    # memory "Cover memory management on REST and the CLI"); installing those
+    # entries is part of `agent connect`. `context` is what an older build's
+    # hook runs until the reconciler rewrites it. `trigger` manages the authored guards in
+    # vault/memory-triggers/; `delivered` prints the delivery views. No switch
+    # either (spec memory "Serve every partition to every agent").
+    "memory": {*_LIFECYCLE - _SWITCH, "sync", "context", "hook", "delivered", "trigger"},
+    "memory trigger": {"list", "add", "arm", "disarm", "delete"},
     # `builtin` reverts a wire to the agent's own login; the two flags a
     # connection can carry are the keys `engine.provider` and
     # `transcribe.provider`, not commands here.

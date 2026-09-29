@@ -20,7 +20,7 @@ from coffer.domain.agent.hooks import HookHealth, HookSource
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.hook_trust import HookTrust
-from coffer.domain.memory.delivery import MARKER, DeliveryAdapter
+from coffer.domain.memory.delivery import DELIVERY_EVENTS, MARKER, DeliveryAdapter, events_label
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.memory.delivery.codex import current_hash, trust_key
 from tests.integration.application.conftest import AgentTestBundle
@@ -128,8 +128,9 @@ async def test_hooks_from_settings_and_plugins_with_coffers_own_current(
     assert plugin_hook.source is HookSource.PLUGIN and plugin_hook.plugin == "p@m"
     assert ("Stop", "never.sh") not in rows, "a disabled plugin's hooks do not run"
     mine = [h for h in out.items if h.coffer]
-    assert [h.event for h in mine] == ["SessionStart"]
+    assert sorted(h.event for h in mine) == sorted(DELIVERY_EVENTS)
     assert out.coffer_hook is not None
+    assert out.coffer_hook.event == events_label(DELIVERY_EVENTS)
     assert out.coffer_hook.health is HookHealth.CURRENT
     assert out.coffer_hook.trust is HookTrust.NOT_REQUIRED
     assert out.coffer_hook.last_fired_at is None
@@ -199,22 +200,29 @@ async def test_codex_trust_is_read_from_config_toml_and_never_written(
 
     out = await _service(agent_bundle).list_hooks(agent.uid)
     assert out.coffer_hook is not None
-    assert out.coffer_hook.event == "SessionStart"
+    assert out.coffer_hook.event == events_label(DELIVERY_EVENTS)
     assert out.coffer_hook.health is HookHealth.CURRENT
     assert out.coffer_hook.trust is HookTrust.UNTRUSTED
 
-    # The user approves it in Codex's /hooks: Codex records the hash.
-    hook = adapter.find(hooks_path.read_text())
-    assert hook is not None
-    key = trust_key(str(hooks_path), hook)
-    approved = f'model = "gpt-5"\n\n[hooks.state."{key}"]\ntrusted_hash = "{current_hash(hook)}"\n'
+    # The user approves each entry in Codex's /hooks: Codex records each hash.
+    hooks = adapter.find_all(hooks_path.read_text())
+    assert len(hooks) == len(DELIVERY_EVENTS)
+    states = [
+        f'[hooks.state."{trust_key(str(hooks_path), h)}"]\ntrusted_hash = "{current_hash(h)}"\n'
+        for h in hooks
+    ]
+    # Approving only some of the four still leaves Coffer's hook untrusted.
+    config.write_text('model = "gpt-5"\n\n' + "\n".join(states[:-1]))
+    out = await _service(agent_bundle).list_hooks(agent.uid)
+    assert out.coffer_hook is not None and out.coffer_hook.trust is HookTrust.UNTRUSTED
+    approved = 'model = "gpt-5"\n\n' + "\n".join(states)
     config.write_text(approved)
     out = await _service(agent_bundle).list_hooks(agent.uid)
     assert out.coffer_hook is not None and out.coffer_hook.trust is HookTrust.TRUSTED
 
-    # A later build changes the command: the approval no longer matches.
+    # A later build changes one entry's command: that approval no longer matches.
     hooks_path.write_text(
-        hooks_path.read_text().replace("--hook-event SessionStart", "--hook-event SessionStart ")
+        hooks_path.read_text().replace('--cwd \\"$PWD\\"', '--cwd \\"$PWD\\" ', 1)
     )
     out = await _service(agent_bundle).list_hooks(agent.uid)
     assert out.coffer_hook is not None and out.coffer_hook.trust is HookTrust.MODIFIED

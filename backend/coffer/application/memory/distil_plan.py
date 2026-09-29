@@ -115,6 +115,8 @@ class Counts:
     opened: int = 0
     retired: int = 0
     dropped: int = 0
+    #: ``(slug, command, unless)`` for each trigger the writing stage proposed.
+    proposals: list[tuple[str, str, str]] = field(default_factory=list)
 
 
 def _index_view(live: dict[str, Note], plan: Plan) -> list[routing.IndexEntry]:

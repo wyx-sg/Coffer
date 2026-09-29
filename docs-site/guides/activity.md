@@ -56,7 +56,7 @@ The **actor** is one of:
 | `system` | Coffer | The daemon acting on its own, such as a background pass. |
 | `sync` | sync | A converge round applying what another machine changed. |
 | `channel` | Channel | An action taken from a chat channel. |
-| an agent's name | the name | An agent's own action, such as its session-start memory hook firing (`memory_delivery_fired`). |
+| an agent's name | the name | An agent's own action, such as its memory hook delivering a note (`memory_delivery_fired`, whose details name the moment, the session and the notes). |
 
 Not every event is audited. The log keeps changes that land outside Coffer (a file written into an agent's configuration), that are irreversible or security-sensitive (a deletion, a credential read, a master-key export), or that current state cannot reveal later (a retention window). Routine runtime events are log lines, not audit rows. Every audited event is also written to the daemon log under the same event name, so you can search either one for it.
 
