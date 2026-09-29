@@ -50,14 +50,22 @@ _memory_trigger_service: TriggerService | None = None
 _memory_stats_service: DeliveryStatsService | None = None
 
 
-def set_memory_hook_services(
-    hook: MemoryHookService, triggers: TriggerService, stats: DeliveryStatsService
-) -> None:
+def set_memory_hook_service(svc: MemoryHookService) -> None:
     """Called by the composition root once on startup."""
-    global _memory_hook_service, _memory_trigger_service, _memory_stats_service
-    _memory_hook_service = hook
-    _memory_trigger_service = triggers
-    _memory_stats_service = stats
+    global _memory_hook_service
+    _memory_hook_service = svc
+
+
+def set_memory_trigger_service(svc: TriggerService) -> None:
+    """Called by the composition root once on startup."""
+    global _memory_trigger_service
+    _memory_trigger_service = svc
+
+
+def set_memory_stats_service(svc: DeliveryStatsService) -> None:
+    """Called by the composition root once on startup."""
+    global _memory_stats_service
+    _memory_stats_service = svc
 
 
 def get_memory_hook_service() -> MemoryHookService:

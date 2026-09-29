@@ -80,8 +80,10 @@ from coffer.infrastructure.memory import paths as memory_paths
 from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
 from coffer.surfaces.http.memory.dependencies import (
     set_memory_delivery_service,
-    set_memory_hook_services,
+    set_memory_hook_service,
     set_memory_service,
+    set_memory_stats_service,
+    set_memory_trigger_service,
 )
 from coffer.surfaces.http.memory.distil_state import DistilRunner
 
@@ -219,24 +221,24 @@ def wire_memory_kind(
     )
     set_memory_delivery_service(delivery_service)
 
-    # The three moments after session start: prompt-time retrieval, the
-    # once-per-session guard on authored triggers, and the delivery views.
+    # Prompt-time retrieval, the once-per-session guard and the delivery views.
     triggers = TriggerService(audit=audit)
     ledger = SessionLedger()
     retrieval = RetrievalService(service, ledger)
-    set_memory_hook_services(
+    set_memory_hook_service(
         MemoryHookService(
             memory=service,
             delivery=delivery_service,
             retrieval=retrieval,
             triggers=triggers,
             ledger=ledger,
-        ),
-        triggers,
-        DeliveryStatsService(memory=service, delivery=delivery_service, audit=audit),
+        )
     )
-    # Distil may propose a trigger for a note it judges a known trap; the
-    # proposal lands unarmed and only a person arms it.
+    set_memory_trigger_service(triggers)
+    set_memory_stats_service(
+        DeliveryStatsService(memory=service, delivery=delivery_service, audit=audit)
+    )
+    # Distil proposes triggers unarmed; only a person arms one.
     service.set_trigger_proposer(triggers.propose)
 
     app.state.kinds[KIND_MEMORY] = make_memory_kind(service)
