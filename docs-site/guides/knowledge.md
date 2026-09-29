@@ -199,7 +199,7 @@ A pass can only retire a document whose content it has already written elsewhere
 
 ### When curation runs
 
-Curation runs on a background sweep, every 60 seconds by default, starting about a minute after the daemon starts. Each sweep takes inbox material first, oldest first, then edited documents.
+Curation runs on a background sweep, every hour by default, starting about a minute after the daemon starts. New material is therefore merged within the hour; to have it merged now, run a pass by hand (below). Each sweep takes inbox material first, oldest first, then edited documents.
 
 Change the switch or the interval under **Settings → Coffer's model → Automatic upkeep → Merge new knowledge into documents**, or on the CLI:
 

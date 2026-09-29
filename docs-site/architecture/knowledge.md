@@ -266,7 +266,7 @@ Every pass that ran, cut off or not, records one `knowledge_curated` audit event
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Waiting: start, 60 s delay
+  [*] --> Waiting: start, 60 s start delay
   Waiting --> Refresh: tick
   Refresh --> Gate: re-render coffer-guide
   Gate --> Waiting: off, not owner, or round held
@@ -282,7 +282,7 @@ On each tick the worker does the following:
 2. **Checks the gate** (`curation_may_run`). The `knowledge` feature must be on, `auto_curate_enabled` must be on (the default), and `curate_owner_machine_id` must name this machine or be unset. With the `vault_sync` feature on, the pass also does not run while a converge round is waiting on the user for a held deletion or an unresolved conflict. With `vault_sync` off, only the pass's own switch is read, because a single-machine vault has nobody to duplicate its work.
 3. **Takes the vault-write lock**, the same `asyncio.Lock` a converge round holds. See [Locking with sync](#locking-with-sync).
 4. **Drains each collection**, identified by uid. Pending items are all inbox material, oldest first, then edited documents, oldest first. The worker claims the collection in the in-process upkeep-run registry and skips it if a manual pass holds it. It re-reads the pending list inside the claim, pushes items cut off last time behind the rest, and runs at most five passes (`MAX_PASSES_PER_SWEEP`). `no_model` or `failed` ends that collection's sweep. `truncated` does not, so one stubborn item cannot starve the rest.
-5. **Waits for the next tick.** The interval defaults to 60 seconds. It is re-read while the wait runs, so a change made with `coffer config set engine.upkeep.curate.interval` or in Settings applies within a slice rather than after a wait committed at boot.
+5. **Waits for the next tick.** The interval defaults to one hour; the Curate button runs a pass at once when something is wanted sooner. It is re-read while the wait runs, so a change made with `coffer config set engine.upkeep.curate.interval` or in Settings applies within a slice rather than after a wait committed at boot.
 
 A failed sweep is logged and never ends the loop. Shutdown cancels the task without waiting on a pass. The watermark makes a sweep idempotent, so the next boot picks up whatever was left.
 

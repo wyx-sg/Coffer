@@ -26,7 +26,12 @@ from collections.abc import Awaitable, Callable
 from coffer.application.knowledge.curate import pending_items
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.upkeep_runs import UPKEEP_RUNS, UpkeepRunRegistry
-from coffer.application.upkeep_schedule import IntervalReader, wait_for_next_pass
+from coffer.application.upkeep_schedule import (
+    DEFAULT_INTERVALS,
+    IntervalReader,
+    wait_for_next_pass,
+)
+from coffer.domain.internal_engine_config import CURATE
 from coffer.domain.knowledge.entry import Pending
 
 logger = logging.getLogger(__name__)
@@ -34,10 +39,9 @@ logger = logging.getLogger(__name__)
 #: Long enough that a boot storm has settled before the first sweep.
 DEFAULT_START_DELAY_S = 60.0
 
-#: Short, because material a person just added should be readable by an agent
-#: in the same sitting. One pass is one small model call, so a sweep that finds
-#: nothing pending costs a directory walk.
-DEFAULT_INTERVAL_S = 60.0
+#: The pass's own cadence, kept in one place with the other passes' so the
+#: settings surface labels "default" with the number the worker really waits.
+DEFAULT_INTERVAL_S = DEFAULT_INTERVALS[CURATE]
 
 #: Passes one sweep may run per collection. A freshly migrated vault has
 #: dozens of pending items; draining them a few at a time keeps any single
