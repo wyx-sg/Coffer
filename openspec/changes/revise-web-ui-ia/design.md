@@ -394,3 +394,17 @@ the gateway's registration rules (fixed names, the 24-character limit) are uncha
   `401` as "not ready" and a reload recovers a daemon-served page.
 - **Acceptance markers.** Renamed scenarios break their markers until the tests follow; the tasks
   list each one.
+
+### 13. Skills page and skill detail
+
+- **The Skills page lists managed skills only.** An agent's own skills belong to that agent: they
+  are found on its disk, adopted from its Skills tab, and a list mixing them with Coffer's made
+  the Skills page answer two questions. The empty state links to the agents' Skills tabs but
+  lists nothing from them. The REST routes and CLI commands for unmanaged skills are unchanged.
+- **Four tabs, Files first.** Files · Delivery · Requires · History. `SKILL.md` is the skill, so
+  the page opens on it, rendered, inside Files rather than on a tab of its own that repeats one
+  file of the tree; Preview / Source and Edit use the conditional save that already exists.
+  Delivery takes what the old Overview tab held (description, source, version, reach) plus
+  where the skill is delivered. Requires links each declared command to the CLIs page; History
+  shows the vault history of the folder. Tabs stay in `?tab=` as today; `?tab=overview` opens
+  Delivery. There is no SKILL.md tab address in the router to redirect.

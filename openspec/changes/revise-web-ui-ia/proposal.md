@@ -108,6 +108,10 @@ unarchived until that implementation lands.
   Streamable HTTP; one server opens the prefilled form, several open the review step (secrets to
   the credential store, names normalised and correctable, reach), and unreadable input says so
   and offers a manual type choice. Import from agents is a link in the same dialog.
+- The **Skills page** lists only the skills Coffer manages; an agent's own skills and adopting
+  them live on that agent's Skills tab, and the empty state only links there. A skill's detail
+  page has four tabs — **Files · Delivery · Requires · History** — with no separate SKILL.md tab:
+  Files opens with `SKILL.md` selected and rendered, a Preview / Source toggle and Edit.
 - A **command palette** (⌘K / Ctrl+K) jumps to any page or object. It carries no action that
   changes state.
 - A sidebar entry carries an **attention dot** while its kind's attention signal is raised; Sync's
@@ -149,8 +153,9 @@ unarchived until that implementation lands.
   the owner filter and per-kind actions, instructions files under Config files; the Agents list's
   two fixed rows with automatic detection, previewed Add / Connect / Repair, Add both and the
   row menu's config directory.
-- `skill-manager`: unmanaged skills are reached from the agent's Skills
-  tab.
+- `skill-manager`: unmanaged skills are reached and adopted only from the agent's Skills tab, and
+  the Skills page lists managed skills only; a skill's detail page has Files (opening on a
+  rendered `SKILL.md` with Preview / Source and Edit), Delivery, Requires and History tabs.
 - `provider-switching`: Model providers sits in the Agents group as one table with no tabs,
   per-agent connection and model selection moves to the agent's Model tab, and a provider's
   detail page lists what uses it read-only.
