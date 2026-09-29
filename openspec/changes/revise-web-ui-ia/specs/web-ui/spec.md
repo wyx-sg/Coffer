@@ -9,6 +9,9 @@
 - FROM: `### Requirement: Keep the sidebar to its eleven entries`
 - TO: `### Requirement: Keep the sidebar to its fifteen entries`
 
+- FROM: `### Requirement: Keep retention and prune on the Data tab`
+- TO: `### Requirement: Group the Data tab by what kind of data it is`
+
 ## REMOVED Requirements
 
 ### Requirement: Keep the daemon out of the user's view
@@ -188,7 +191,8 @@ than by how Coffer is built, and MUST open on General:
   and the daemon's access token (see "Show, copy and rotate the access token on
   Settings › Security"). It lists and edits no stored secret; those are on the Secrets page (see
   "Manage stored secrets on the Secrets page").
-- **Data** (`/settings/data`) — retention policy and manual prune.
+- **Data** (`/settings/data`) — what Coffer stores, by kind: Vault, Local content, History
+  and Rebuildable cache (see "Group the Data tab by what kind of data it is").
 - **Daemon** (`/settings/daemon`) — the daemon's state and the controls a user
   needs for it (see "Show and manage the daemon on Settings → Daemon").
 - **About** (`/settings/about`) — version, license, source, whether a newer
@@ -410,6 +414,47 @@ at the top").
 - **WHEN** the user opens `/activity`
 - **THEN** the failing record's tab renders a readable error
 - **AND** the other two tabs still render their rows
+
+### Requirement: Group the Data tab by what kind of data it is
+The Data tab MUST show what Coffer stores in four blocks, one per kind of data
+([Storage Is Five Classes by Nature](../../../docs/decisions/storage-is-five-classes-by-nature.md)),
+and no other — in particular no "This Mac only" block, since what is true of this
+machine only is a setting shown on the tab it belongs to:
+
+- **Vault** — the synced git repository of the user's configuration, skills and
+  knowledge: its size, how many versions it holds, and **Open folder**.
+- **Local content** — what is not synced and the user must back up themselves:
+  chat and channel attachments and media only, with their size and **Open
+  folder**, and a line saying so.
+- **History** — the retention of each record kind — changes, MCP calls and
+  conversations — Keep forever or a number of days, cleaned up nightly, with a
+  **Clear expired now** action; a saved value survives a reload.
+- **Rebuildable cache** — Coffer's memory tree and the agents' model catalogues,
+  which Coffer rebuilds on its own: one **Clear** action, behind a confirmation
+  saying that memory is rebuilt from the agents' own memory on the next update
+  and that notes whose sources are gone do not come back.
+
+Edits auto-save, like every settings surface: there is no Save button.
+
+#### Scenario: retention period persists across reload
+- **GIVEN** the user opens the Data settings tab
+- **WHEN** they turn off "Keep forever" for a record kind in History, set a specific number of retention days, and commit the field (blur or Enter), which auto-saves
+- **THEN** reloading the page shows the same retention-days value that was saved
+
+#### Scenario: the data tab shows four blocks and no this-mac block
+- **GIVEN** a vault with versions, chat media on disk, and memory partitions
+- **WHEN** the user opens `/settings/data`
+- **THEN** it shows Vault (size, versions, Open folder), Local content (attachments and media, size, Open folder, not synced), History (retention for changes, MCP calls and conversations with Clear expired now) and Rebuildable cache (memory tree and model catalogues with Clear), and no This Mac only block
+
+#### Scenario: clear expired now removes what retention has passed
+- **GIVEN** MCP calls kept for 7 days and calls older than that
+- **WHEN** the user chooses Clear expired now
+- **THEN** the older calls are removed and the rest remain, as the nightly cleanup would have done
+
+#### Scenario: clearing the cache is confirmed and rebuilt
+- **GIVEN** memory partitions with notes
+- **WHEN** the user chooses Clear in Rebuildable cache and confirms
+- **THEN** the memory tree and the model catalogues are cleared, and the next memory update rebuilds the partitions from the agents' own memory, with no vault or local content touched
 
 ## ADDED Requirements
 

@@ -135,7 +135,7 @@ cannot have.
 | --- | --- | --- |
 | General | `/settings/general` | Default page size, preferred external editor |
 | Security | `/settings/security` | Master-key location (machine-level items only) |
-| Data | `/settings/data` | Retention per log table, clear expired data |
+| Data | `/settings/data` | Vault, Local content, History (retention, clear expired), Rebuildable cache |
 | Daemon | `/settings/daemon` | Status, restart, port, Start at login, token rotation |
 | About | `/settings/about` | Version, license, source, update check (desktop shell) |
 
@@ -362,11 +362,17 @@ the gateway's registration rules (fixed names, the 24-character limit) are uncha
 
 - **Settings contents gated until later work.** The tab set is final, but some contents arrive
   with later changes:
-  - *Data regroup.* The Data tab carries retention and clear-expired-data now. Vault file
-    locations, backup and export join it with the vault-files work; until then it holds only what
-    ships. The plan's interim idea of parking retention on General is not taken: retention already
-    ships and the Data tab exists, so moving it twice buys nothing.
-  - *Secrets.* The Security tab carries the master-key location only. Credential management
+  - *Data by kind.* The Data tab shows four blocks — Vault (size, versions, Open folder), Local
+    content (chat and channel media only; not synced, the user backs it up), History (retention
+    per record kind, nightly cleanup, Clear expired now) and Rebuildable cache (memory tree and
+    model catalogues, one Clear). The memory tree is rebuildable because memory's own spec makes
+    it derived ("Keep the memory tree derived and local"): deleting it and re-running aggregation
+    and distil reproduces an equivalent set from the agents' own memory, and a note whose sources
+    are gone would be retired on the next pass anyway. That puts memory in the storage ADR's
+    derived class, not its content class; the ADR's Proposed table still lists memory under
+    content and follows this at acceptance. There is no search index to list: FTS was dropped
+    with the knowledge rewrite. There is no "This Mac only" block.
+  - *Secrets.* The Security tab carries the master-key location and the access token only. Credential management
     lives on the Secrets page (decision 8), whose deeper behaviour arrives with the secrets
     change.
 - **Footer data.** Reuse the status poll behind `DaemonOfflineBanner`; do not add a second timer.
