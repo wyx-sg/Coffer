@@ -31,7 +31,7 @@ from coffer.application.agent.plugin_service import AgentPluginService
 from coffer.application.agent.plugin_uninstall import cache_dir_for
 from coffer.application.audit_service import AuditService
 from coffer.domain.agent.config_files import FileStat, spec_for
-from coffer.domain.agent.plugin_bundle import PluginDetail
+from coffer.domain.agent.plugin_bundle import PluginComponent, PluginContents, PluginDetail
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceNotFound
@@ -177,13 +177,23 @@ async def audit_svc() -> AuditService:
 class FakeDetailReader:
     """Maps install paths to PluginDetail and records which paths were read."""
 
-    def __init__(self, by_path: dict[str, PluginDetail]) -> None:
+    def __init__(
+        self,
+        by_path: dict[str, PluginDetail],
+        contents: dict[str, PluginContents] | None = None,
+    ) -> None:
         self._by_path = by_path
+        self._contents = contents or {}
         self.calls: list[str] = []
+        self.contents_calls: list[str] = []
 
     def read(self, install_path: str) -> PluginDetail | None:
         self.calls.append(install_path)
         return self._by_path.get(install_path)
+
+    def read_contents(self, install_path: str) -> PluginContents | None:
+        self.contents_calls.append(install_path)
+        return self._contents.get(install_path)
 
 
 class FakeCliRunner:
@@ -845,3 +855,60 @@ def test_cache_dir_for_refuses_ids_that_escape_the_cache_root():
     assert cache_dir_for(cfg_dir, "..") is None
     assert cache_dir_for(cfg_dir, "../../../etc@npm") is None
     assert cache_dir_for(cfg_dir, "npm/lint-tool@..") is None
+
+
+# ---------------------------------------------------------------------------
+# get_plugin — one plugin's detail page
+# ---------------------------------------------------------------------------
+
+
+async def test_get_plugin_returns_row_source_and_contents(store, audit_svc):
+    store._files[_CODEX_CONFIG] = _CODEX_TOML_WITH_PLUGINS
+    name_dir = _CODEX_CONFIG_DIR / "plugins" / "cache" / "npm" / "lint-tool"
+    contents = PluginContents(
+        root=str(name_dir / "1.0.0"),
+        skills=(PluginComponent("lint", "Lint the tree"),),
+        commands=(PluginComponent("fix"),),
+        agents=(PluginComponent("reviewer", "Reviews diffs"),),
+        hooks=("PreToolUse",),
+        mcp_servers=("linter",),
+    )
+    reader = FakeDetailReader(
+        {str(name_dir): PluginDetail(version="1.0.0")}, {str(name_dir): contents}
+    )
+    svc = _make_svc(store, audit_svc, cache_dirs={name_dir}, detail_reader=reader)
+
+    d = await svc.get_plugin(_CX_UID, "lint-tool@npm")
+
+    assert d.plugin.id == "lint-tool@npm"
+    assert d.plugin.version == "1.0.0"
+    assert d.marketplace_source_type == "npm"
+    assert d.marketplace_source == "https://registry.npmjs.org"
+    # The install path reported is the directory actually read (the version
+    # dir), not the cache parent the reader was handed.
+    assert d.install_path == str(name_dir / "1.0.0")
+    assert reader.contents_calls == [str(name_dir)]
+    assert d.contents == contents
+    assert d.can_uninstall is True  # Codex uninstalls by editing its config
+
+
+async def test_get_plugin_without_cache_reads_no_contents(store, audit_svc):
+    store._files[_CODEX_CONFIG] = _CODEX_TOML_WITH_PLUGINS
+    reader = FakeDetailReader({})
+    svc = _make_svc(store, audit_svc, detail_reader=reader)
+
+    d = await svc.get_plugin(_CX_UID, "format-tool@pypi")
+
+    assert d.plugin.cache_present is False
+    assert d.install_path is None
+    assert d.contents is None
+    assert reader.contents_calls == []
+
+
+async def test_get_plugin_unknown_id_is_not_found(store, audit_svc):
+    store._files[_CODEX_CONFIG] = _CODEX_TOML_WITH_PLUGINS
+    svc = _make_svc(store, audit_svc)
+
+    with pytest.raises(PluginNotFound):
+        await svc.get_plugin(_CX_UID, "ghost@npm")
+    assert store._writes == []

@@ -4,11 +4,13 @@
 // not a per-marketplace section — so it reads like the other resource surfaces.
 // Each row has name, marketplace (+ source), an enabled Switch, a cache-status
 // badge, and an uninstall action (codex only — claude_code agents must use the
-// `claude plugin` CLI to uninstall).
+// `claude plugin` CLI to uninstall). Rows do not expand: a plugin's name opens
+// its own detail page (pages/AgentPluginPage), which carries the manifest
+// detail and everything the plugin contributes.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 
-import { PluginDetailRow } from "@/components/agents/AgentPluginDetail";
 import { AgentPluginsBulkActions } from "@/components/agents/AgentPluginsBulkActions";
 import { DataTable, type Column } from "@/components/DataTable";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -38,6 +40,7 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
 
   // marketplace name → source (e.g. "jarrodwatts/claude-hud"), so the
   // marketplace column can show the origin alongside the name.
+  const pluginsTabPath = `/agents/${encodeURIComponent(agent.uid)}?tab=plugins`;
   const sourceOf = new Map(marketplaces.map((m) => [m.name, m.source ?? ""]));
 
   const columns: Column<PluginOut>[] = [
@@ -45,7 +48,17 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
       key: "name",
       header: t("resources.cols.name"),
       className: "whitespace-nowrap",
-      cell: (p) => <span className="font-medium">{p.name}</span>,
+      cell: (p) => (
+        <Link
+          to={`/agents/${encodeURIComponent(agent.uid)}/plugins/${encodeURIComponent(p.id)}`}
+          // The detail page returns here — to this agent's Plugins tab — rather
+          // than to its default, which the page would otherwise have to guess.
+          state={{ backTo: pluginsTabPath, backLabel: t("agents.workspace.plugins") }}
+          className="font-medium text-foreground underline-offset-2 hover:text-primary hover:underline"
+        >
+          {p.name}
+        </Link>
+      ),
     },
     {
       key: "marketplace",
@@ -154,7 +167,6 @@ export function AgentPluginsTab({ agent }: { agent: AgentOut }) {
                 />
               ),
             }}
-            getRowDetail={(p) => <PluginDetailRow plugin={p} />}
             emptyMessage={t("agents.workspace.pluginsTab.empty")}
           />
         )}

@@ -43,6 +43,14 @@ export type PluginOut = Schemas["Plugin"];
  * PATH). */
 export type PluginsResponse = Schemas["PluginsOut"];
 
+/** One plugin's detail page: its listing row (`plugin`), marketplace source,
+ * the directory its package was read from, `can_uninstall`, and the skills /
+ * commands / subagents (with descriptions), hook events and MCP servers it
+ * contributes. */
+export type PluginDetailOut = Schemas["PluginDetail"];
+
+export type PluginComponentOut = Schemas["PluginComponent"];
+
 /** `location` is the scan location the entry was found in — `skills` is
  * `<config_dir>/skills`, `agents_dir` the agent product's secondary standard
  * location. Taken from the contract, so it is the two names and not `string`. */

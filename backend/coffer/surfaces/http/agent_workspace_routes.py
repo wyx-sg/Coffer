@@ -17,9 +17,10 @@ from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel, Field
 
 from coffer.application.agent.mcp_entry_service import McpEntryDetail, ParseErrorInfo
-from coffer.application.agent.plugin_views import PluginView
+from coffer.application.agent.plugin_views import PluginDetailView, PluginView
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.mcp_entries import McpEntry, masked_extra, secret_env_keys
+from coffer.domain.agent.plugin_bundle import PluginComponent
 from coffer.domain.agent.plugin_state import MarketplaceInfo
 from coffer.domain.errors import ResourceAlreadyExists
 from coffer.surfaces.http.agent_dependencies import get_agent_service
@@ -134,6 +135,27 @@ class PluginsOut_(BaseModel):  # noqa: N801 — avoids clashing with the service
     # Whether in-app uninstall is available for this agent now (capability + CLI
     # presence for CLI-strategy agents). Drives the UI's uninstall affordance.
     can_uninstall: bool = False
+
+
+class PluginComponentOut(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class PluginDetailOut(BaseModel):
+    """One plugin's detail page (spec agent-registry "Read one installed plugin's
+    detail read-only"): the listing row, where it came from, and what it adds."""
+
+    plugin: PluginOut
+    marketplace_source_type: str | None
+    marketplace_source: str | None
+    install_path: str | None
+    can_uninstall: bool
+    skills: list[PluginComponentOut]
+    commands: list[PluginComponentOut]
+    agents: list[PluginComponentOut]
+    hooks: list[str]
+    mcp_servers: list[str]
 
 
 class PluginPatch(BaseModel):
@@ -284,6 +306,32 @@ async def list_plugins(
         marketplaces=[_marketplace_out(m) for m in out.marketplaces],
         parse_errors=[_parse_error_out(p) for p in out.parse_errors],
         can_uninstall=out.can_uninstall,
+    )
+
+
+@router.get("/{uid}/plugins/{plugin_id}", response_model=PluginDetailOut)
+async def get_plugin(
+    uid: str,
+    plugin_id: str,
+    svc: Any = Depends(get_agent_plugin_service),  # noqa: B008
+) -> PluginDetailOut:
+    d: PluginDetailView = await svc.get_plugin(uid, plugin_id)
+    c = d.contents
+
+    def comps(items: tuple[PluginComponent, ...]) -> list[PluginComponentOut]:
+        return [PluginComponentOut(name=i.name, description=i.description) for i in items]
+
+    return PluginDetailOut(
+        plugin=_plugin_out(d.plugin),
+        marketplace_source_type=d.marketplace_source_type,
+        marketplace_source=d.marketplace_source,
+        install_path=d.install_path,
+        can_uninstall=d.can_uninstall,
+        skills=comps(c.skills) if c else [],
+        commands=comps(c.commands) if c else [],
+        agents=comps(c.agents) if c else [],
+        hooks=list(c.hooks) if c else [],
+        mcp_servers=list(c.mcp_servers) if c else [],
     )
 
 
