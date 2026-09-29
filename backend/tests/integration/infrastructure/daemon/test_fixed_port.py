@@ -24,6 +24,10 @@ from coffer.infrastructure.daemon import bootstrap
 from coffer.infrastructure.daemon import config as daemon_config
 from coffer.infrastructure.daemon.port_alloc import PortInUse
 
+# These tests bind real ports picked a moment earlier; under xdist another
+# worker can take the same port in between, so they run on one worker.
+pytestmark = pytest.mark.xdist_group("daemon-ports")
+
 # High, out of the way of both the real 8000 and the ranges other tests in this
 # suite pin for themselves.
 _FIXED_PORT = 59650
