@@ -45,7 +45,7 @@ from coffer.domain.skill.validator import (
 )
 
 if TYPE_CHECKING:
-    from coffer.application.skill.unmanaged_ops import UnmanagedView
+    from coffer.application.skill.unmanaged_ops import UnmanagedDetail, UnmanagedView
 
 logger = logging.getLogger(__name__)
 
@@ -255,6 +255,16 @@ class SkillService:
 
         self._require_unmanaged_deps()
         return await list_unmanaged(service=self, agent_uid=agent_uid)
+
+    async def get_unmanaged(
+        self, *, agent_uid: str, skill_name: str, location: str
+    ) -> UnmanagedDetail:
+        from coffer.application.skill.unmanaged_ops import get_unmanaged
+
+        self._require_unmanaged_deps()
+        return await get_unmanaged(
+            service=self, agent_uid=agent_uid, skill_name=skill_name, location=location
+        )
 
     async def adopt_unmanaged(
         self, *, agent_uid: str, skill_name: str, location: str, actor: str = "api"

@@ -93,7 +93,6 @@ async def test_read_existing(agent_bundle, tmp_path, monkeypatch):
     assert out.content == '{"a": 1}'
     assert out.format.value == "json"
     assert out.fingerprint != ""
-    assert out.memory_block is False
     # The content view carries the file's absolute path + containing folder so
     # the read-only viewer can open/reveal (see "Open config files in an external
     # editor or reveal them").

@@ -107,6 +107,8 @@
     "chat": "Chat",
     "modelProviders": "Model providers",
     "sync": "Sync",
+    "experimental": "Experimental",
+    "experimentalLabel": "{{label}} (experimental)",
     "needsAttention": "Needs your attention"
   },
   "resources": {
@@ -189,7 +191,8 @@
       "searchPlaceholder": "Search by name",
       "statusFilter": "Status",
       "toggleAria": "Toggle {{kind}} {{key}}",
-      "noSchema": "No input schema.",
+      "noSchema": "This tool declares no parameters.",
+      "fromCache": "This upstream is disabled or can't be reached, so this is the last recorded on/off list; enable it, let it connect and click Refresh to see descriptions and parameters.",
       "schemaLabel": "Input schema",
       "header": {
         "name": "Name",
@@ -514,8 +517,7 @@
           "title": "Move the master key to a file beside the database?",
           "body": "Coffer re-stores the key in a file next to its database; keychain prompts stop."
         },
-        "confirmMove": "Move key",
-        "syncLink": "Export or import the key on the Sync page"
+        "confirmMove": "Move key"
       }
     },
     "models": {
@@ -529,9 +531,13 @@
       "editTitle": "Edit model provider",
       "empty": "No model providers yet.",
       "active": "Active",
-      "activeHint": "This provider powers Coffer's own model (Settings → Coffer's model).",
-      "transcribe": "Speech to text",
-      "transcribeHint": "Coffer transcribes voice messages on this provider (Settings → Speech to text). Only one provider carries it, and nothing falls back to another.",
+      "activeHint": "An agent is switched to this provider right now (the Switch action).",
+      "cofferUse": {
+        "engine": "Coffer · background model",
+        "engineHint": "Coffer itself runs its own background work on this provider, such as organising memory — not your agents (Settings → Coffer's model). Only one provider carries it.",
+        "transcribe": "Coffer · speech to text",
+        "transcribeHint": "Coffer itself turns voice messages into text on this provider before your agent sees them (Settings → Coffer's model → Speech to text). Only one provider carries it, and nothing falls back to another."
+      },
       "reachHint": "Which agents this provider reaches is set with the reach control — on the provider's row in the list, or on its own page.",
       "protocols": {
         "anthropic": "Anthropic",
@@ -922,7 +928,6 @@
       "notCreated": "not created",
       "editorLabel": "Contents of {{key}}",
       "selectFile": "Select a file to view.",
-      "memoryBlockNotice": "This file contains a legacy Coffer memory block (the native-projection feature was removed) — it is no longer used and is safe to delete.",
       "directoryHint": "This is a directory — select a file inside it, or create a new one.",
       "emptyDir": "No files yet.",
       "desc": {
@@ -972,6 +977,14 @@
       "managedHint": "Coffer delivers these skills. Which ones reach this agent is decided on the Skills page, by each skill's enable state and its reach.",
       "openSkillsPage": "Open the Skills page",
       "unmanagedTitle": "Unmanaged skills",
+      "unmanagedBadge": "Unmanaged",
+      "unmanagedDetail": {
+        "invalidTitle": "Not a valid skill — Coffer can't adopt this folder as it is",
+        "path": "Path",
+        "location": "Location",
+        "readOnlyHint": "Coffer doesn't manage this folder, so this preview is read-only. Adopt it to manage it in Coffer, or open the folder to change it yourself.",
+        "notFound": "This unmanaged skill is no longer in the agent's skill locations."
+      },
       "adopt": "Adopt",
       "adoptDisabledInvalid": "SKILL.md is invalid — cannot adopt",
       "adoptDisabledForeign": "Foreign symlink — cannot adopt",
@@ -1692,7 +1705,8 @@
     "subtitle": "Converge this vault with a git repository you own, so every machine you work on holds the same knowledge, skills and configuration.",
     "tabs": {
       "runs": "Runs",
-      "setup": "Setup"
+      "setup": "Setup",
+      "machines": "Machines"
     },
     "title": "Sync",
     "toast": {

@@ -14,6 +14,7 @@ from a direct ``domain.agent`` import, which Contract 5c forbids.
 from __future__ import annotations
 
 import logging
+import pathlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -50,6 +51,20 @@ class UnmanagedView:
     foreign_link: bool
 
 
+@dataclass(frozen=True)
+class UnmanagedDetail:
+    """One unmanaged skill as its detail page shows it.
+
+    ``folder`` is the entry's path as found in the agent's location — for a
+    foreign link, the link itself; the file readers resolve it, so a preview
+    shows what the agent would load and stays confined to that folder.
+    """
+
+    view: UnmanagedView
+    description: str | None
+    folder: pathlib.Path
+
+
 def _label(index: int) -> str:
     return _LOC_PRIMARY if index == 0 else _LOC_SECONDARY
 
@@ -81,30 +96,55 @@ def _find(
     raise UnmanagedSkillNotFound(skill_name)
 
 
+def _view(service: SkillService, label: str, u: UnmanagedSkill) -> tuple[UnmanagedView, str | None]:
+    """The API view of one scanned entry, plus its SKILL.md description.
+
+    The description is only known when the folder validates — an invalid
+    folder's frontmatter is exactly what could not be read — so it is ``None``
+    whenever ``valid`` is false.
+    """
+    description: str | None = None
+    if u.foreign_link:
+        valid, reason = False, FOREIGN_LINK_REASON
+    else:
+        result = validate_skill_folder(u.path, size_limit_bytes=service._size_limit)
+        if isinstance(result, ValidationOk):
+            valid, reason = True, None
+            description = result.frontmatter.description
+        else:
+            valid, reason = False, result.reason
+    view = UnmanagedView(
+        name=u.name,
+        path=str(u.path),
+        location=label,
+        valid=valid,
+        reason=reason,
+        foreign_link=u.foreign_link,
+    )
+    return view, description
+
+
 async def list_unmanaged(*, service: SkillService, agent_uid: str) -> list[UnmanagedView]:
     """Discover unmanaged skills across the agent's scan locations."""
     agent = await service._rs.get(agent_uid)
-    views: list[UnmanagedView] = []
-    for label, u in _scan(service, agent):
-        if u.foreign_link:
-            valid, reason = False, FOREIGN_LINK_REASON
-        else:
-            result = validate_skill_folder(u.path, size_limit_bytes=service._size_limit)
-            if isinstance(result, ValidationOk):
-                valid, reason = True, None
-            else:
-                valid, reason = False, result.reason
-        views.append(
-            UnmanagedView(
-                name=u.name,
-                path=str(u.path),
-                location=label,
-                valid=valid,
-                reason=reason,
-                foreign_link=u.foreign_link,
-            )
-        )
-    return views
+    return [_view(service, label, u)[0] for label, u in _scan(service, agent)]
+
+
+async def get_unmanaged(
+    *, service: SkillService, agent_uid: str, skill_name: str, location: str
+) -> UnmanagedDetail:
+    """One unmanaged entry, found by the same scan the list runs (see "Preview
+    an unmanaged skill read-only").
+
+    Looking the folder up through the scan — rather than joining the name onto
+    a location path — is what confines every read to a folder the list would
+    have shown: a ``..`` or a slash in ``skill_name`` simply matches no entry
+    and is a 404, and a managed link is never an unmanaged entry to begin with.
+    """
+    agent = await service._rs.get(agent_uid)
+    entry = _find(_scan(service, agent), skill_name=skill_name, location=location)
+    view, description = _view(service, location, entry)
+    return UnmanagedDetail(view=view, description=description, folder=entry.path)
 
 
 async def adopt_unmanaged(

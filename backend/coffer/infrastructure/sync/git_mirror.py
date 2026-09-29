@@ -249,7 +249,11 @@ class GitMirror:
         await self._git("tag", "-f", name, revision)
 
     async def tags(self, prefix: str) -> list[str]:
-        out = await self._git("tag", "--list", f"{prefix}*", "--sort=-creatordate")
+        # Newest first by NAME: a snapshot's name is its fixed-width UTC stamp,
+        # while ``creatordate`` on a lightweight tag is the tagged commit's date —
+        # unrelated to when the round ran, and a tie within one second fell back
+        # to the older name, so a rollback could land on the wrong snapshot.
+        out = await self._git("tag", "--list", f"{prefix}*", "--sort=-refname")
         return [line.strip() for line in out.stdout.splitlines() if line.strip()]
 
     async def delete_tag(self, name: str) -> None:

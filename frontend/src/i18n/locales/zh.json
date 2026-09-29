@@ -107,6 +107,8 @@
     "chat": "聊天",
     "modelProviders": "模型提供商",
     "sync": "同步",
+    "experimental": "实验",
+    "experimentalLabel": "{{label}}（实验）",
     "needsAttention": "有待处理的事项"
   },
   "resources": {
@@ -189,7 +191,8 @@
       "searchPlaceholder": "搜索名称",
       "statusFilter": "状态",
       "toggleAria": "切换 {{kind}} {{key}}",
-      "noSchema": "无输入结构。",
+      "noSchema": "该工具未声明参数。",
+      "fromCache": "这个上游已停用或暂时连不上，下面是上次记录的开关；启用并连上后点「刷新功能列表」才会显示描述和参数。",
       "schemaLabel": "输入结构",
       "header": {
         "name": "名称",
@@ -514,8 +517,7 @@
           "title": "把主密钥移到数据库旁的文件？",
           "body": "Coffer 会把主密钥重新保存到数据库旁的文件中，之后不再有钥匙串授权弹窗。"
         },
-        "confirmMove": "移动主密钥",
-        "syncLink": "在同步页面导出或导入主密钥"
+        "confirmMove": "移动主密钥"
       }
     },
     "models": {
@@ -529,9 +531,13 @@
       "editTitle": "编辑模型提供商",
       "empty": "暂无模型提供商。",
       "active": "使用中",
-      "activeHint": "该提供商驱动 Coffer 自用模型（设置 → Coffer 自用模型）。",
-      "transcribe": "语音转文字",
-      "transcribeHint": "Coffer 在该提供商上把语音消息转成文字（设置 → 语音转文字）。全局只有一个提供商承担这件事，也不会回退到别的提供商。",
+      "activeHint": "当前有 Agent 切换到了这个提供商（通过「切换」操作）。",
+      "cofferUse": {
+        "engine": "Coffer 自用 · 后台模型",
+        "engineHint": "Coffer 自己在这个提供商上跑后台任务（比如整理记忆），不是给你的 Agent 用的（设置 → Coffer 自用模型）。全局只有一个提供商承担这件事。",
+        "transcribe": "Coffer 自用 · 语音转写",
+        "transcribeHint": "Coffer 自己在这个提供商上把语音消息转成文字，再交给 Agent（设置 → Coffer 自用模型 → 语音转文字）。全局只有一个提供商承担这件事，也不会回退到别的提供商。"
+      },
       "reachHint": "此提供商对哪些 Agent 生效，由「生效范围」控件设置——在列表中该提供商所在行，或在它自己的详情页。",
       "protocols": {
         "anthropic": "Anthropic",
@@ -922,7 +928,6 @@
       "notCreated": "未创建",
       "editorLabel": "{{key}} 的内容",
       "selectFile": "选择一个文件查看。",
-      "memoryBlockNotice": "此文件包含旧版 Coffer 记忆区块（原生投影功能已移除）——已不再使用，可安全删除。",
       "directoryHint": "这是一个目录——请选择其中的文件，或新建一个。",
       "emptyDir": "暂无文件。",
       "desc": {
@@ -972,6 +977,14 @@
       "managedHint": "这些技能由 Coffer 投递。哪些技能能到达该 Agent，由技能页面上每个技能的启用状态及其生效范围决定。",
       "openSkillsPage": "打开技能页面",
       "unmanagedTitle": "非托管技能",
+      "unmanagedBadge": "未托管",
+      "unmanagedDetail": {
+        "invalidTitle": "不是有效的技能——该文件夹目前无法纳入托管",
+        "path": "路径",
+        "location": "位置",
+        "readOnlyHint": "Coffer 未托管该文件夹，此处仅供只读预览。纳入托管后即可在 Coffer 中管理，或打开文件夹自行修改。",
+        "notFound": "该非托管技能已不在 Agent 的技能目录中。"
+      },
       "adopt": "纳入托管",
       "adoptDisabledInvalid": "SKILL.md 无效，无法纳入",
       "adoptDisabledForeign": "外部符号链接，无法纳入",
@@ -1692,7 +1705,8 @@
     "subtitle": "把本机金库与一个你自己的 git 仓库收敛到一致，让你用的每一台机器都持有同样的知识、技能与配置。",
     "tabs": {
       "runs": "记录",
-      "setup": "配置"
+      "setup": "配置",
+      "machines": "机器"
     },
     "title": "同步",
     "toast": {

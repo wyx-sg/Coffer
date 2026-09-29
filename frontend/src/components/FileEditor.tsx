@@ -10,9 +10,16 @@
 // Cancel. Cancelling a dirty draft asks first (the edits are otherwise gone
 // with one click), and a save that lands says so with a toast — the pane only
 // swaps back to the rendered view, which is easy to miss.
+//
+// Given the file's on-disk `filePath`, the editor renders the open-in-editor /
+// reveal actions (<FileActions>) itself, on the left of its one action row, with
+// Edit — or Save and Cancel — on the right. Every in-app editor therefore shows
+// all of a file's controls on a single row; a caller never stacks its own
+// FileActions bar above the editor.
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { FileActions } from "@/components/FileActions";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { useToast } from "@/components/ui/toast";
@@ -39,6 +46,9 @@ export interface FileEditorProps {
    *  partial read would cut the file short on disk. */
   readOnlyReason?: string | null;
   ariaLabel: string;
+  /** Absolute on-disk path of the file. When set, the open-in-editor / reveal
+   *  actions render at the start of the action row, left of Edit / Save / Cancel. */
+  filePath?: string | null;
   /** Rendered in place of the textarea when not editing. */
   children: React.ReactNode;
 }
@@ -63,23 +73,26 @@ export function FileEditor(props: FileEditorProps) {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-end gap-2">
-        {props.readOnlyReason ? (
-          <span className="text-xs text-muted-foreground">{props.readOnlyReason}</span>
-        ) : props.editing ? (
-          <>
-            <Button variant="ghost" size="sm" onClick={cancel} disabled={props.saving}>
-              {t("common.cancel")}
+      <div data-testid="file-editor-actions" className="flex flex-wrap items-center gap-2">
+        {props.filePath ? <FileActions filePath={props.filePath} /> : null}
+        <div className="ml-auto flex items-center gap-2">
+          {props.readOnlyReason ? (
+            <span className="text-xs text-muted-foreground">{props.readOnlyReason}</span>
+          ) : props.editing ? (
+            <>
+              <Button variant="ghost" size="sm" onClick={cancel} disabled={props.saving}>
+                {t("common.cancel")}
+              </Button>
+              <Button size="sm" onClick={props.onSave} disabled={!props.dirty || props.saving}>
+                {props.saving ? t("common.saving") : t("common.save")}
+              </Button>
+            </>
+          ) : (
+            <Button variant="outline" size="sm" onClick={props.onEdit}>
+              {t("common.edit")}
             </Button>
-            <Button size="sm" onClick={props.onSave} disabled={!props.dirty || props.saving}>
-              {props.saving ? t("common.saving") : t("common.save")}
-            </Button>
-          </>
-        ) : (
-          <Button variant="outline" size="sm" onClick={props.onEdit}>
-            {t("common.edit")}
-          </Button>
-        )}
+          )}
+        </div>
       </div>
 
       {props.error ? (

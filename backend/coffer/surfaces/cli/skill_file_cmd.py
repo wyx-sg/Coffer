@@ -10,6 +10,12 @@ Its own module for the backend 400-line file cap; ``attach`` registers the
 commands on ``skill_cmd``'s typer so the tree stays ``coffer skill ...``. Like
 its siblings it takes the skill's NAME and resolves it once to the uid the
 routes address (ADR resource-identity-is-an-immutable-uid).
+
+``files`` and ``cat`` also read an UNMANAGED skill folder when given
+``--agent`` (spec skill-manager "Preview an unmanaged skill read-only"): the
+name is then the folder name the agent's scan reports, and the reads go to
+``/api/v1/agents/{uid}/unmanaged-skills/{name}/files``. There is no write
+counterpart — an unmanaged folder is previewed, never edited, by Coffer.
 """
 
 from __future__ import annotations
@@ -49,17 +55,34 @@ def _lines(node: dict[str, Any]) -> list[str]:
     return out
 
 
+_AGENT_HELP = "Read the agent's UNMANAGED skill folder of this name instead of a managed skill."
+_LOCATION_HELP = "With --agent: where the folder was discovered, skills | agents_dir."
+
+
+def _files_base(
+    c: Any, name: str, agent: str | None, location: str, *, verbose: bool
+) -> tuple[str, dict[str, str]]:
+    """The files route prefix and extra query params for a managed skill, or
+    for an agent's unmanaged folder when ``agent`` is given."""
+    if agent is None:
+        return f"/skills/{resolve_uid(c, 'skill', name, verbose=verbose)}/files", {}
+    agent_uid = resolve_uid(c, "agent", agent, verbose=verbose)
+    return f"/agents/{agent_uid}/unmanaged-skills/{name}/files", {"location": location}
+
+
 def files(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Skill name"),
     output_json: bool = typer.Option(False, "--json", help="JSON output"),
+    agent: str | None = typer.Option(None, "--agent", help=_AGENT_HELP),
+    location: str = typer.Option("skills", "--location", help=_LOCATION_HELP),
 ) -> None:
-    """List a skill's master folder as a file tree."""
+    """List a skill's master folder (or, with --agent, an unmanaged folder) as a file tree."""
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        uid = resolve_uid(c, "skill", name, verbose=verbose)
-        r = c.get(f"/skills/{uid}/files")
+        base, params = _files_base(c, name, agent, location, verbose=verbose)
+        r = c.get(base, params=params)
         _cli_client.check(r, verbose=verbose)
     data = r.json()
     if output_json:
@@ -77,8 +100,10 @@ def cat(
     output_json: bool = typer.Option(
         False, "--json", help="The whole read: content, fingerprint, size, binary, truncated"
     ),
+    agent: str | None = typer.Option(None, "--agent", help=_AGENT_HELP),
+    location: str = typer.Option("skills", "--location", help=_LOCATION_HELP),
 ) -> None:
-    """Print one file of a skill's master folder.
+    """Print one file of a skill's master folder (or, with --agent, an unmanaged folder).
 
     A file past the read cap prints its first part and exits 1 with a note on
     stderr, so a script never mistakes the part for the file; --json exits 0
@@ -86,8 +111,8 @@ def cat(
     verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        uid = resolve_uid(c, "skill", name, verbose=verbose)
-        r = c.get(f"/skills/{uid}/files/content", params={"path": path})
+        base, params = _files_base(c, name, agent, location, verbose=verbose)
+        r = c.get(f"{base}/content", params={**params, "path": path})
         _cli_client.check(r, verbose=verbose)
     data = r.json()
     if output_json:
