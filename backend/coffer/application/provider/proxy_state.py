@@ -57,9 +57,11 @@ async def _member(
     key: str | None = None
     if cfg.credential_ref is not None:
         try:
-            key = await service._key_of(cfg, label=resource.name)
+            key = await service._key_of(cfg, label=resource.name, uid=resource.uid)
         except Exception:
-            return None  # a missing secret is no member; the attention list says why
+            # A missing secret, or a key whose base URL nobody approved yet, is
+            # no member: the proxy never holds a key it may not send.
+            return None
     if key is None and not cfg.is_local:
         return None
     auth = UpstreamAuth.NONE

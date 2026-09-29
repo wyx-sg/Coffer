@@ -152,7 +152,7 @@ The vocabulary is a closed enumeration, `AuditEventType` in `backend/coffer/doma
 | Resources | `resource_created`, `resource_updated`, `resource_enabled`, `resource_disabled`, `resource_deleted`, `resource_renamed`, `resource_scope_updated` |
 | MCP capabilities | `capability_enabled`, `capability_disabled` |
 | Daemon | `token_rotated`, `daemon_residency_updated`, `retention_updated`, `internal_engine_model_set` |
-| Credentials | `credential_set`, `credential_read`, `credential_deleted`, `credential_migrated`, `master_key_relocated` |
+| Credentials | `credential_set`, `credential_revealed`, `credential_deleted`, `credential_migrated`, `master_key_relocated`, `secret_resolved`, `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected`, `secret_imported` |
 | Agents | `agent_config_file_written`, `agent_config_file_deleted`, `agent_mcp_installed`, `agent_mcp_uninstalled`, `agent_mcp_entry_removed`, `agent_mcp_entry_adopted`, `agent_plugin_toggled`, `agent_plugin_uninstalled` |
 | Skills | `skill_imported`, `skill_updated`, `skill_bound`, `skill_unbound`, `skill_relinked`, `skill_drift_remediated`, `skill_adopted`, `skill_unmanaged_deleted` |
 | Knowledge | `knowledge_written`, `knowledge_edited`, `knowledge_deleted`, `knowledge_curated` |
@@ -161,7 +161,15 @@ The vocabulary is a closed enumeration, `AuditEventType` in `backend/coffer/doma
 | Vault sync | `sync_run`, `sync_confirmed`, `sync_rejected`, `sync_rolled_back`, `sync_machine_removed`, `master_key_exported`, `master_key_imported` |
 | Providers | `provider_switched`, `provider_internal_default_set`, `provider_transcribe_default_set`, `provider_projection_refused` |
 
-`credential_read` is recorded when a secret value is read out through the management API (`GET /api/v1/credentials/{ref}`), with the reference only — never the value. Decrypting a secret to spawn an upstream is not an audit event.
+No credential event carries a secret value; each records the ref, the standalone secret's name or the destination only.
+
+- `credential_revealed` — a person revealed or copied a value in the desktop app, behind a presence check. It is the only way a value is shown, since no route, command or tool returns one.
+- `secret_resolved` — `coffer run` resolved a standalone secret into one child process. The row names the secret, the program and the working directory, never the value or the rest of the command line.
+- `secret_approval_requested`, `secret_approval_approved`, `secret_approval_rejected` — a secret waited to be sent somewhere new (or a value in use waited to be replaced, or the protection waited to be switched off), and a person answered. See [Secrets](/guides/secrets#approvals).
+- `secret_imported` — `coffer credentials import` moved a plaintext secret from a file into the store.
+- `master_key_exported` — the desktop app wrote a key backup, behind a presence check. No command or route exports the key.
+
+`credential_read`, which the old plaintext read route recorded, is no longer written: that route is gone. Decrypting a secret to spawn an upstream is not an audit event.
 
 You read the audit log from the **Changes** tab of the Activity page, with `coffer log audit` (`--kind`, `--name`, `--event-type`, `--since`, `--limit`, `--json`), or through `GET /api/v1/audit`. See [Activity and audit](/guides/activity).
 

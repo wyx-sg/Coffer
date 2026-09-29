@@ -304,3 +304,40 @@ Rules a future change must respect:
 - **Docs.** Install, FAQ, daemon guide, troubleshooting (keychain prompts),
   security and distribution pages drop `master.key` as a file and explain the
   export backup.
+
+## Open questions
+
+Recorded 2026-09-30, when the storage port and the access-group backend were
+built (OpenSpec change `add-secret-boundary`, design D6):
+
+- **The access-group spike is still owed.** Nobody has yet shown that a
+  Developer-ID-signed **bare** `coffer-daemon` — the frozen binary the CLI
+  archive ships, outside an app bundle — can use the `keychain-access-groups`
+  entitlement. It may need a provisioning profile, which only an app bundle
+  carries. "To prove before acceptance" above stands; if the spike fails, the
+  daemon runs from inside the signed app bundle and this ADR and the
+  distribution ADR are revised to say so.
+- **The backend is tested only with an injected fake.** The data-protection
+  Keychain backend (service `coffer`, account `master-key`, the stamped access
+  group, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, no access-control
+  flag) sits behind the master-key storage port, selected by an access group
+  the release pipeline stamps into a frozen, signed build. Its Keychain calls
+  are exercised only through a fake; on an unsigned build the real calls fail
+  with a missing-entitlement error, and they have not been run against a real
+  Keychain.
+- **Until the signed build exists, the development fallback is what runs.** A
+  build without the stamp keeps the key in the `0600` file (or the legacy
+  login-keychain item, opt-in), exactly as before, and reports itself as a
+  development build. "There is no fallback to a file" and "never a plaintext
+  file" therefore hold for **signed releases only**; in a development build any
+  same-user process can read the key, and the presence grant of
+  [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)
+  can be forged. The "test-only key backend that release builds do not contain"
+  is, as built, that development arrangement rather than a separate backend.
+- **As built, the backup is written by the daemon, not the app.** The desktop
+  app runs the presence check and signs a grant; the daemon writes the backup
+  into the folder the person picked (`coffer-master-key-<fingerprint>.key`,
+  mode `0600`, never over an existing file) and returns only the path and the
+  fingerprint. Import stays `coffer sync key import` and the Sync page's
+  import, open to every surface, since whoever holds the file holds the key;
+  moving import into the desktop app is not built.

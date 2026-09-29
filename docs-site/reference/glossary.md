@@ -37,10 +37,20 @@ The [upkeep pass](#upkeep-pass) that reads every enabled agent's
 [native memory](#native-memory) into Coffer's memory as [raw entries](#raw-entry). Coffer
 never writes back into an agent's own memory. See [Memory](/architecture/memory#the-aggregation-pass).
 
+### Approval
+
+A change that would widen where a secret goes, held until a person answers it in the desktop
+app: a secret cited from a new [destination](#destination) or sent to a new
+[target](#target), a replaced value that something already receives, or switching the
+protection off. Approving takes a [presence grant](#presence-grant); rejecting does not, and
+works from any surface (`coffer credentials reject`). A command whose change waits prints
+"waiting for approval in the Coffer app" and exits `9`. See
+[Secrets](/guides/secrets#approvals).
+
 ### Audit log
 
 The append-only record of every change to Coffer's state: resource lifecycle events,
-credential reads, config writes, provider switches, pairings. Each entry names the
+secrets revealed or resolved, approvals, config writes, provider switches, pairings. Each entry names the
 [actor](#actor). See [Activity and audit](/guides/activity) and
 [Observability](/architecture/observability#the-audit-log).
 
@@ -93,6 +103,14 @@ The skill Coffer ships and maintains itself. It is Coffer's manual for agents, f
 the path, title and description of every document in every
 [collection](#collection). Coffer regenerates it from the running build and refuses to
 delete it. See [Skills](/guides/skills).
+
+### `coffer run`
+
+The command that hands [standalone secrets](#standalone-secret) to one child process:
+`coffer run --secret NAME -- cmd`. The values are set only in that child's environment and
+masked as `***` in its output, and each resolve is audited as `secret_resolved`. It keeps a
+secret out of files and transcripts by accident; it does not hide it from an agent that runs
+the command, which is the child's parent. See [Secrets](/guides/secrets#run-a-command-with-a-secret).
 
 ### Connection
 
@@ -148,6 +166,14 @@ See [Vault sync](/architecture/vault-sync#the-deletion-guard).
 Getting something Coffer holds into an agent: a [skill](#skill) by [binding](#binding), and
 [memory](#partition) by a session-start hook Coffer installs in the agent's settings. See
 [Memory](/guides/memory).
+
+### Destination
+
+A place Coffer sends a secret's plaintext: an MCP server's environment variable or HTTP
+header, a channel's credential, the sync remote's push token. Each destination has a
+[target](#target), the thing that actually receives the value. A secret reaches a new
+destination, or a destination's new target, only after an [approval](#approval). See
+[Security model](/architecture/security#a-secret-goes-somewhere-new-only-with-your-approval).
 
 ### Detect-or-spawn
 
@@ -210,10 +236,11 @@ machine. [Vault sync](#vault-sync) uses it to tell machines apart, and a channel
 
 ### Master key
 
-The key that decrypts every stored credential. It lives in `master.key` beside the database
-(mode `0600`) by default, or in the OS keychain if you move it there. It never syncs; move it
-between machines with `coffer sync key export` and `coffer sync key import`. See
-[Credentials](/guides/credentials).
+The key that decrypts every stored credential. A signed release keeps it in a Keychain item
+only Coffer's signed binaries can read; a development build keeps it in `master.key` beside the
+database (mode `0600`), or in the OS keychain if you move it there. It never syncs. Back it up
+in the desktop app, which writes a key file behind a presence check, and install it on another
+machine with `coffer sync key import`. See [Credentials](/guides/credentials#where-the-master-key-lives).
 
 ### Master store
 
@@ -284,6 +311,15 @@ is joining. See [Vault sync](/architecture/vault-sync#the-pointer-the-retry-set-
 A git tag Coffer places before applying a [converge round](#converge-round), so the round
 can be rolled back with `coffer sync restore`. See [Vault sync](/architecture/vault-sync#recovery).
 
+### Presence grant
+
+The proof that a person was at the Mac. The desktop app runs Touch ID or the login password
+for one operation — reveal a secret, write a key backup, approve an approval — then signs a
+one-time challenge from the daemon, bound to that operation and its target, with a key
+derived from the master key. The daemon acts only on a grant that verifies; a grant is used
+once and expires within two minutes. It holds only in a signed release. See
+[Security model](/architecture/security#plaintext-reaches-only-a-present-human).
+
 ### Projection
 
 Writing a [connection's](#connection) endpoint and key reference into an agent's own config
@@ -340,6 +376,13 @@ with `enabled` it forms the resource's [reach](#reach). For a [channel](#channel
 read the other way round: it names the agents the channel may drive. Set with
 the kind's `scope` command, such as `coffer skill scope <name> --agents a,b`. See [Resource framework](/architecture/resource-framework#reach).
 
+### Secret boundary
+
+The line Coffer holds against a prompt-injected agent running as you: a secret's plaintext
+reaches only a person present at the desktop app, and a secret goes to a new
+[destination](#destination) only after that person's [approval](#approval). Agents may still
+read and change Coffer's configuration. See [Security model](/architecture/security).
+
 ### Session
 
 One MCP client connection to the gateway. Each session gets its own upstream server
@@ -359,7 +402,21 @@ A folder with a `SKILL.md` that teaches an agent a task. Coffer keeps managed sk
 [master store](#master-store) and [binds](#binding) each to the agents in its reach. A skill
 is a [resource](#resource) of kind `skill`. See [Skills](/guides/skills).
 
+### Standalone secret
+
+A secret that belongs to no resource, stored as `secret/<name>` (`coffer credentials set
+secret/<name>`) and cited from skills and env files as `coffer://secret/<name>`. Commands use
+it through [`coffer run`](#coffer-run). Its name is fixed once created. See
+[Secrets](/guides/secrets).
+
 ## T
+
+### Target
+
+What receives a secret at a [destination](#destination), written so a person can read it in
+an [approval](#approval): a stdio server's full command line with its working directory and
+other environment, an HTTP server's URL, a git remote's URL, a channel's bot or app. Changing
+the target asks again. See [Secrets](/guides/secrets#approvals).
 
 ### Tiering
 

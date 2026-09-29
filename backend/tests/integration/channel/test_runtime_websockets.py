@@ -21,7 +21,7 @@ from .conftest import StubWebSocketController, channel_row
 _ST = "uid-of-st"
 
 
-async def _materialize(refs: dict[str, str]) -> dict[str, str]:
+async def _materialize(refs: dict[str, str], destination: Any = None) -> dict[str, str]:
     return {k: f"secret::{v}" for k, v in refs.items()}
 
 
@@ -87,7 +87,7 @@ async def test_stops_the_connection_when_the_channel_is_disabled_or_deleted():
 async def test_a_steady_state_does_not_touch_the_credential_store_again():
     calls: list[dict[str, str]] = []
 
-    async def counting(refs: dict[str, str]) -> dict[str, str]:
+    async def counting(refs: dict[str, str], destination: Any = None) -> dict[str, str]:
         calls.append(dict(refs))
         return {k: f"secret::{v}" for k, v in refs.items()}
 
@@ -117,7 +117,7 @@ async def test_start_failure_is_latched_not_raised():
 
 
 async def test_materialize_failure_is_latched_not_raised():
-    async def boom(refs: dict[str, str]) -> dict[str, str]:
+    async def boom(refs: dict[str, str], destination: Any = None) -> dict[str, str]:
         raise RuntimeError("store down")
 
     ws = StubWebSocketController()

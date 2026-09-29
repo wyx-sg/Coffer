@@ -16,14 +16,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.resource_service import ResourceService
+from coffer.domain.mcp.secret_target import mcp_destination
 from coffer.domain.mcp.server_config import HttpTransport, MCPServerConfig, StdioTransport
 from coffer.infrastructure.mcp.http_client import HttpUpstreamConnection
 from coffer.infrastructure.mcp.persistence import MCPServerHealthRepo
 from coffer.infrastructure.mcp.subprocess import StdioUpstreamConnection
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.credential_composition import get_credential_store
+from coffer.surfaces.http.credential_composition import boundary_resolver, get_credential_store
 from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.mcp.dependencies import get_health_repo, require_mcp_server
 from coffer.surfaces.http.schemas import McpTestResultOut
@@ -54,14 +54,15 @@ async def test_mcp_server(
 
     config = MCPServerConfig.model_validate(resource.config)
 
-    resolver = CredentialResolver(credential_store)
+    resolver = boundary_resolver(credential_store)
+    destination = mcp_destination(resource.uid, resource.name, config)
 
     start = time.monotonic()
     try:
         if isinstance(config.transport, StdioTransport):
             # Offload the blocking credential-store read off the event loop.
             overlay = await asyncio.to_thread(
-                resolver.materialize, config.transport.credential_refs
+                resolver.materialize, config.transport.credential_refs, destination
             )
             conn: StdioUpstreamConnection | HttpUpstreamConnection = StdioUpstreamConnection(
                 transport=config.transport,
@@ -75,7 +76,7 @@ async def test_mcp_server(
             )
         elif isinstance(config.transport, HttpTransport):
             overlay = await asyncio.to_thread(
-                resolver.materialize, config.transport.credential_refs
+                resolver.materialize, config.transport.credential_refs, destination
             )
             conn = HttpUpstreamConnection(
                 transport=config.transport,

@@ -282,10 +282,11 @@ def test_adopt_mcp_entry(tmp_path, monkeypatch, fake_keyring):
         assert "fetcher" not in data["mcp_servers"]
 
         # The secret value landed in the encrypted credential store under the
-        # ref (read back through the audited API — never via the keychain).
-        r = c.get(f"/api/v1/credentials/{ref}")
-        assert r.status_code == 200, r.text
-        assert r.json() == {"value": SECRET_VALUE}
+        # ref. No route returns a value, so it is read from the daemon's own
+        # store — never via the keychain.
+        from coffer.surfaces.http.credential_composition import get_credential_store
+
+        assert get_credential_store().get(ref) == SECRET_VALUE
 
 
 @pytest.mark.acceptance(spec="agent-registry", scenario="reject adoption on resource name conflict")

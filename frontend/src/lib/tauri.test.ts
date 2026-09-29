@@ -20,6 +20,14 @@ import {
   daemonVersionMatches,
   followLanguageInShell,
   setShellLanguage,
+  presenceAvailable,
+  presenceMode,
+  revealSecret,
+  exportMasterKeyBackup,
+  approvePending,
+  onApprovalsEvent,
+  APPROVALS_EVENT,
+  PresenceUnavailableError,
 } from "./tauri";
 import { getCofferBaseUrl, getCofferToken } from "./auth";
 import { getApiClient, resetApiClient } from "./api/client";
@@ -30,6 +38,12 @@ import { acceptance } from "@/test/acceptance";
 const invokeMock = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => invokeMock(...args),
+}));
+
+// `@tauri-apps/api/event` likewise, for the approvals signal.
+const listenMock = vi.fn();
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: (...args: unknown[]) => listenMock(...args),
 }));
 
 const TAURI_KEY = "__TAURI_INTERNALS__";
@@ -286,5 +300,85 @@ describe("followLanguageInShell", () => {
     followLanguageInShell(fakeI18n("en"), report);
     await vi.waitFor(() => expect(err).toHaveBeenCalled());
     err.mockRestore();
+  });
+});
+
+describe("presence-gated actions", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+    listenMock.mockReset();
+  });
+  afterEach(() => leaveTauri());
+
+  test("presence is available only inside the shell", () => {
+    leaveTauri();
+    expect(presenceAvailable()).toBe(false);
+    enterTauri();
+    expect(presenceAvailable()).toBe(true);
+  });
+
+  test("outside the shell every action rejects, naming the desktop app, and invokes nothing", async () => {
+    leaveTauri();
+    for (const run of [
+      () => presenceMode(),
+      () => revealSecret("mcp_server/abc/TOKEN"),
+      () => exportMasterKeyBackup(),
+      () => approvePending("apr-1"),
+    ]) {
+      const attempt = run();
+      await expect(attempt).rejects.toBeInstanceOf(PresenceUnavailableError);
+      await expect(attempt).rejects.toThrow(/only available in the Coffer desktop app/i);
+    }
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  test("inside the shell each action invokes its command with camelCase args", async () => {
+    enterTauri();
+    invokeMock.mockResolvedValueOnce({ development: true });
+    await expect(presenceMode()).resolves.toEqual({ development: true });
+    expect(invokeMock).toHaveBeenLastCalledWith("presence_mode");
+
+    invokeMock.mockResolvedValueOnce("s3cret");
+    await expect(revealSecret("mcp_server/abc/TOKEN")).resolves.toBe("s3cret");
+    expect(invokeMock).toHaveBeenLastCalledWith("reveal_secret", {
+      secretRef: "mcp_server/abc/TOKEN",
+    });
+
+    const backup = { path: "/Users/me/coffer-master.key", fingerprint: "ab12" };
+    invokeMock.mockResolvedValueOnce(backup);
+    await expect(exportMasterKeyBackup()).resolves.toEqual(backup);
+    expect(invokeMock).toHaveBeenLastCalledWith("export_master_key_backup");
+
+    invokeMock.mockResolvedValueOnce({ id: "apr-1", status: "approved" });
+    await expect(approvePending("apr-1")).resolves.toMatchObject({ status: "approved" });
+    expect(invokeMock).toHaveBeenLastCalledWith("approve_pending", { approvalId: "apr-1" });
+  });
+
+  test("outside the shell the approvals signal is a no-op subscription", () => {
+    leaveTauri();
+    const stop = onApprovalsEvent(vi.fn());
+    expect(() => stop()).not.toThrow();
+    expect(listenMock).not.toHaveBeenCalled();
+  });
+
+  test("inside the shell the approvals signal calls back and unsubscribes", async () => {
+    enterTauri();
+    const unlisten = vi.fn();
+    let handler: (() => void) | undefined;
+    listenMock.mockImplementation((_event: string, cb: () => void) => {
+      handler = cb;
+      return Promise.resolve(unlisten);
+    });
+    const callback = vi.fn();
+    const stop = onApprovalsEvent(callback);
+    await vi.waitFor(() =>
+      expect(listenMock).toHaveBeenCalledWith(APPROVALS_EVENT, expect.any(Function)),
+    );
+    await vi.waitFor(() => expect(handler).toBeDefined());
+    handler?.();
+    expect(callback).toHaveBeenCalledTimes(1);
+    // Whether or not listen() has settled yet, stopping unlistens exactly once.
+    stop();
+    await vi.waitFor(() => expect(unlisten).toHaveBeenCalledTimes(1));
   });
 });

@@ -33,9 +33,10 @@ tauri-build = { version = "2", features = [] }
 # who is not looking at the page. There is no daemon route to prefer here, and
 # no frontend fan-out to recreate — nothing in `frontend/` calls this, and the
 # webview is granted no permission to (see `capabilities/default.json`). It is
-# Rust-side only, driven by `sync_watch.rs`, and it exists because a vault held
-# for a confirmation nobody sees stops converging in silence — the first one in
-# the field stood for four days (spec vault-sync "Say a vault needs a human
+# Rust-side only, driven by `sync_watch.rs` and `approval_watch.rs`, and it
+# exists because a vault held for a confirmation nobody sees stops converging
+# in silence — the first one in the field stood for four days — and a secret
+# approval nobody sees leaves its destination without its secret (spec vault-sync "Say a vault needs a human
 # where the user already is").
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
@@ -47,5 +48,22 @@ log = "0.4"
 # interface language the user chose (`tray_locale.rs`).
 sys-locale = "0.3"
 
+# The presence grant (`presence_grant.rs`): an HMAC-SHA256 over the operation
+# the person approved, keyed by a key derived from the master key.
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+# The presence check and the master key's Keychain item (`presence.rs`,
+# `master_key.rs`): LocalAuthentication through the Objective-C runtime, and the
+# data-protection Keychain through Security.framework. macOS only, like the app.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSString", "NSError"] }
+# `OSX_10_15` for `kSecUseDataProtectionKeychain`: access groups are only
+# enforced in the data-protection keychain.
+security-framework = { version = "3", features = ["OSX_10_15"] }

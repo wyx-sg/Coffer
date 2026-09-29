@@ -26,7 +26,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
-from coffer.application.credentials.resolver import CredentialResolver
 from coffer.application.mcp.discovery import CapabilityDiscovery
 from coffer.application.mcp.gateway import MCPGatewaySession
 from coffer.application.mcp.kind import make_mcp_kind
@@ -42,7 +41,11 @@ from coffer.application.retention_service import (
     CHAT_MEDIA_RESULT_KEY,
     RetentionService,
 )
+from coffer.domain.mcp.secret_target import mcp_destination
+from coffer.domain.mcp.server_config import MCPServerConfig
+from coffer.domain.resource import Resource
 from coffer.domain.retention import MEDIA_RETENTION_DAYS
+from coffer.domain.secrets import SecretDestination
 from coffer.infrastructure.channel.seatalk_media import default_media_dir
 from coffer.infrastructure.chat.media_store import FileChatMediaStore, default_chat_media_dir
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
@@ -53,6 +56,7 @@ from coffer.infrastructure.mcp.persistence import (
     MCPServerHealthRepo,
 )
 from coffer.infrastructure.media_retention import prune_media_dir
+from coffer.surfaces.http.credential_composition import boundary_resolver
 from coffer.surfaces.http.mcp.dependencies import (
     set_capability_discovery,
     set_health_repo,
@@ -60,6 +64,7 @@ from coffer.surfaces.http.mcp.dependencies import (
     set_mcp_session_factory,
     set_preferences_repo,
 )
+from coffer.surfaces.http.secret_boundary_wiring import register_resource_destination
 from coffer.surfaces.http.sync_contributions import SyncContributions
 
 _log = logging.getLogger(__name__)
@@ -107,6 +112,10 @@ def wire_mcp_kind(
     # 3. Build the on_delete-aware Kind and register it
     mcp_kind = make_mcp_kind(session_supervisors)
     app.state.kinds["mcp_server"] = mcp_kind
+    # Where each server's secrets go, for the secret boundary's adoption and
+    # listing (spec credentials "Hold a secret for a new destination until a
+    # person approves it").
+    register_resource_destination("mcp_server", _mcp_secret_destination)
 
     # 4. Build the process-wide supervisor + discovery for REST routes
     #    (management routes: capabilities listing + refresh, via
@@ -114,7 +123,7 @@ def wire_mcp_kind(
     #    routing).
     process_supervisor = SubprocessSupervisor(
         resource_service=resource_svc,
-        credential_resolver=CredentialResolver(credential_store),
+        credential_resolver=boundary_resolver(credential_store),
         upstream_factory=build_upstream,
     )
     process_discovery = CapabilityDiscovery(
@@ -140,7 +149,7 @@ def wire_mcp_kind(
     def mcp_session_factory(session_id: str) -> MCPGatewaySession:
         supervisor = SubprocessSupervisor(
             resource_service=resource_svc,
-            credential_resolver=CredentialResolver(credential_store),
+            credential_resolver=boundary_resolver(credential_store),
             upstream_factory=build_upstream,
         )
         session_supervisors[session_id] = supervisor
@@ -326,3 +335,9 @@ def reaper_kwargs_from_env() -> dict[str, float]:
                 kwarg,
             )
     return reaper_kwargs
+
+
+def _mcp_secret_destination(resource: Resource) -> tuple[SecretDestination, dict[str, str]] | None:
+    config = MCPServerConfig.model_validate(resource.config)
+    refs = dict(config.transport.credential_refs)
+    return (mcp_destination(resource.uid, resource.name, config), refs) if refs else None

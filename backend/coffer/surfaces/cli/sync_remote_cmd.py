@@ -15,6 +15,7 @@ from rich.console import Console
 
 from coffer.domain.sync.backup import DEFAULT_BRANCH, DEFAULT_INTERVAL_SECONDS
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli._approvals import WAIT_OPTION, pending_ids, settle_ids
 from coffer.surfaces.cli._options import ExitCode
 
 remote_app = typer.Typer(help="The one git remote this vault converges with")
@@ -88,6 +89,7 @@ def remote_set(
         "--worktree",
         help="Absolute path of the git working tree, outside the vault (default ~/.coffer/sync)",
     ),
+    wait: bool = WAIT_OPTION,
 ) -> None:
     """Configure the remote. It is probed before being accepted.
 
@@ -113,6 +115,12 @@ def remote_set(
             worktree_path=worktree,
         )
         r = c.put("/sync/remote", json=body)
+        # An existing push token pointed at a new URL is the token going
+        # somewhere new: nothing is saved until the Coffer app approves it.
+        waiting = pending_ids(r)
+        if waiting:
+            settle_ids(c, waiting, wait=wait, verbose=verbose)
+            r = c.put("/sync/remote", json=body)
         _cli_client.check(r, verbose=verbose)
         print_remote(r.json())
 

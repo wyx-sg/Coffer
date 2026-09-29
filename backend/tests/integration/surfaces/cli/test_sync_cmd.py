@@ -23,7 +23,6 @@ import asyncio
 import dataclasses
 import json
 import pathlib
-import stat
 from collections.abc import Awaitable, Iterator
 from datetime import UTC
 from datetime import datetime as dt
@@ -883,16 +882,17 @@ def test_key_fingerprint_prints_the_short_hash(fleet: Fleet) -> None:
     assert fingerprint in result.output
 
 
-def test_key_export_writes_a_private_file_the_import_reads_back(fleet: Fleet, tmp_path) -> None:
-    target = tmp_path / "carried" / "master.key"
-
-    exported = fleet.ok("sync", "key", "export", str(target))
-
-    assert "mode 0600" in exported.output
-    assert stat.S_IMODE(target.stat().st_mode) == 0o600
+def test_key_import_reads_a_key_file_and_there_is_no_export(fleet: Fleet, tmp_path) -> None:
+    """A key backup is written only by the desktop app (spec credentials "Release
+    plaintext only to a present human in the desktop app"); the CLI imports."""
     key = fleet.a.master_key.export_key()
     assert key is not None
-    assert target.read_text(encoding="utf-8") == key.decode("utf-8")
+    target = tmp_path / "carried" / "master.key"
+    target.parent.mkdir(parents=True)
+    target.write_text(key.decode("utf-8"), encoding="utf-8")
+
+    refused = _runner.invoke(cli_app, ["sync", "key", "export", str(target)])
+    assert refused.exit_code == 2
 
     imported = fleet.ok("sync", "key", "import", str(target))
 
@@ -1006,7 +1006,6 @@ def test_the_sync_group_offers_every_command_and_option_it_owes() -> None:
         ("sync", "machine", "list"): {"--json"},
         ("sync", "machine", "rename"): set(),
         ("sync", "machine", "rm"): set(),
-        ("sync", "key", "export"): set(),
         ("sync", "key", "import"): set(),
         ("sync", "key", "fingerprint"): set(),
     }
@@ -1024,7 +1023,6 @@ def test_the_sync_group_offers_every_command_and_option_it_owes() -> None:
             ("sync", "remote", "set"),
             ("sync", "machine", "rename"),
             ("sync", "machine", "rm"),
-            ("sync", "key", "export"),
             ("sync", "key", "import"),
         )
     }
@@ -1032,5 +1030,10 @@ def test_the_sync_group_offers_every_command_and_option_it_owes() -> None:
     # `restore` takes its revision as an option only, so a bare `restore` is
     # the undo of the last applied round.
     assert [p for p in tree[("sync", "restore")].params if p.param_type_name == "argument"] == []
-    for gone in (("sync", "rollback"), ("sync", "remote", "show"), ("sync", "machine", "remove")):
+    for gone in (
+        ("sync", "rollback"),
+        ("sync", "remote", "show"),
+        ("sync", "machine", "remove"),
+        ("sync", "key", "export"),
+    ):
         assert gone not in tree, f"still offered: coffer {' '.join(gone)}"

@@ -101,7 +101,7 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 185 operations in 24 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 196 operations in 24 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -112,9 +112,9 @@ The daemon mounts 185 operations in 24 groups. Groups follow the order the daemo
 | [upkeep](#upkeep) | 1 |
 | [reconcile](#reconcile) | 3 |
 | [events](#events) | 1 |
-| [credentials](#credentials) | 5 |
-| [settings](#settings) | 2 |
-| [sync](#sync) | 19 |
+| [credentials](#credentials) | 15 |
+| [settings](#settings) | 4 |
+| [sync](#sync) | 18 |
 | [internal-engine](#internal-engine) | 6 |
 | [agents](#agents) | 36 |
 | [fs](#fs) | 5 |
@@ -196,10 +196,20 @@ The daemon mounts 185 operations in 24 groups. Groups follow the order the daemo
 
 | Method | Path | Summary |
 | --- | --- | --- |
-| `GET` | `/api/v1/credentials` | Every credential ref a registered resource cites, with its presence. |
+| `GET` | `/api/v1/credentials/approvals` | Approvals, newest first — brought up to the configuration first, so a change saved a moment ago is already on the list. |
+| `GET` | `/api/v1/credentials/approvals/{approval_id}` | Get Approval |
+| `POST` | `/api/v1/credentials/approvals/{approval_id}/approve` | Apply a pending approval, against a presence grant for exactly this id. |
+| `POST` | `/api/v1/credentials/approvals/{approval_id}/reject` | Refuse a pending approval. |
+| `GET` | `/api/v1/credentials/presence/status` | Presence Status |
+| `POST` | `/api/v1/credentials/presence/challenge` | A one-time nonce for one operation on one target; the shell signs it. |
+| `POST` | `/api/v1/credentials/presence/reveal` | A secret's value, for the present human the desktop app just checked. |
+| `POST` | `/api/v1/credentials/presence/master-key-export` | Write the master key backup into the directory the person picked. |
+| `POST` | `/api/v1/credentials/secrets/resolve` | Standalone secrets for one `coffer run` child — never a resource's secret. |
+| `POST` | `/api/v1/credentials/scan` | Plaintext secrets in ``~/.coffer/secrets/`` and the skill master store. |
+| `POST` | `/api/v1/credentials/import` | Move plaintext findings into the store, replacing each with its reference. |
+| `GET` | `/api/v1/credentials` | Every stored ref and every ref a resource cites, with who references it. |
 | `POST` | `/api/v1/credentials` | Store `value` under `ref` in the encrypted credential store. |
 | `GET` | `/api/v1/credentials/{ref}/exists` | Report whether a secret is stored under `ref`. |
-| `GET` | `/api/v1/credentials/{ref}` | Return the secret value stored under `ref`. |
 | `DELETE` | `/api/v1/credentials/{ref}` | Remove `ref` from the credential store. |
 
 ### settings
@@ -208,6 +218,8 @@ The daemon mounts 185 operations in 24 groups. Groups follow the order the daemo
 | --- | --- | --- |
 | `GET` | `/api/v1/settings/credentials` | Report where the master key currently lives. |
 | `PUT` | `/api/v1/settings/credentials` | Relocate the master key. |
+| `GET` | `/api/v1/settings/secret-boundary` | Whether a secret waits for approval before it goes somewhere new. |
+| `PUT` | `/api/v1/settings/secret-boundary` | Turn the approval requirement on (at once) or off (after approval). |
 
 ### sync
 
@@ -234,7 +246,6 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 | `PATCH` | `/api/v1/sync/machines/self` | Rename this machine. |
 | `DELETE` | `/api/v1/sync/machines/{machine_id}` | Retire Machine |
 | `GET` | `/api/v1/sync/key/fingerprint` | Key Fingerprint |
-| `POST` | `/api/v1/sync/key/export` | Export Key |
 | `POST` | `/api/v1/sync/key/import` | Import Key |
 
 ### internal-engine

@@ -18,6 +18,7 @@ import { translateApiError } from "@/lib/api/errors";
 import { syncApi, type ConvergeRound, type JoinChoice, type SyncRemoteInput } from "@/lib/api/sync";
 import { useToast } from "@/components/ui/toast";
 import { roundToast } from "@/lib/syncRoundToast";
+import { exportMasterKeyBackup } from "@/lib/tauri";
 import {
   agentsKey,
   knowledgeKey,
@@ -235,15 +236,16 @@ export function useKeyFingerprint() {
 }
 
 /**
- * Hand this machine's key back to the page so it can be downloaded as a file.
- * The material crosses only the loopback origin the user is already
- * authenticated against; it is never written into the repository.
+ * Write a master key backup through the desktop shell, which runs a presence
+ * check first and writes the file itself: the key never reaches the page, the
+ * page only learns where it went and its fingerprint. Outside the shell this
+ * rejects; the card offers "Open in Coffer app" there instead of calling it.
  */
-export function useExportMasterKey() {
+export function useExportMasterKeyBackup() {
   const { t } = useTranslation();
   const { toast } = useToast();
   return useMutation({
-    mutationFn: () => syncApi.exportKey(),
+    mutationFn: () => exportMasterKeyBackup(),
     onError: (error) => toast.error(translateApiError(t, error)),
   });
 }

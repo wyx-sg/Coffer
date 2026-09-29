@@ -11,6 +11,9 @@ import indexHtml from "../../index.html?raw";
 import { Layout } from "./Layout";
 
 vi.mock("./DaemonOfflineBanner", () => ({ DaemonOfflineBanner: () => null }));
+// Tested where it lives; here it would only put an approvals poll behind every
+// shell assertion.
+vi.mock("./credentials/PendingApprovalsSheet", () => ({ PendingApprovalsSheet: () => null }));
 // The palette has its own tests; here it only has to open.
 vi.mock("./palette/CommandPalette", () => ({
   CommandPalette: ({ open }: { open: boolean }) =>

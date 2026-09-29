@@ -21,9 +21,17 @@ import coffer.surfaces.cli._client as _cli_client
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.credential_composition import get_credential_store
 from tests.fixtures.keyring import InMemoryKeyring, install_in_memory_keyring
 
 TOKEN = "test-token-credentials-contract"
+
+
+def _value(ref: str) -> str | None:
+    """Read a value straight from the daemon's own store: no route returns one."""
+    return get_credential_store().get(ref)
+
+
 _runner = CliRunner()
 
 
@@ -113,25 +121,6 @@ def test_storing_a_credential_answers_204_and_audits_the_ref_only(daemon: _Daemo
     assert "ghp_store_me_42" not in json.dumps(entries[0])
 
 
-@pytest.mark.acceptance(
-    spec="credentials", scenario="reading a credential returns its value and audits the read"
-)
-def test_reading_a_credential_returns_its_value_and_audits_the_read(daemon: _Daemon) -> None:
-    daemon.client.post("/api/v1/credentials", json={"ref": "gh/token", "value": "ghp_read_me_42"})
-    assert daemon.audit("credential_read") == []
-
-    r = daemon.client.get("/api/v1/credentials/gh/token")
-    assert r.status_code == 200, r.text
-    assert r.json()["value"] == "ghp_read_me_42"
-
-    reads = daemon.audit("credential_read")
-    assert len(reads) == 1
-    assert "gh/token" in json.dumps(reads[0]["details"])
-    assert "ghp_read_me_42" not in json.dumps(reads[0])
-
-    assert daemon.client.get("/api/v1/credentials/never/stored").status_code == 404
-
-
 @pytest.mark.acceptance(spec="credentials", scenario="the presence probe records no audit entry")
 def test_the_presence_probe_records_no_audit_entry(daemon: _Daemon) -> None:
     daemon.client.post("/api/v1/credentials", json={"ref": "gh/token", "value": "ghp_probe"})
@@ -150,10 +139,10 @@ def test_the_presence_probe_records_no_audit_entry(daemon: _Daemon) -> None:
 def test_credential_audit_events_carry_the_ref_only(daemon: _Daemon) -> None:
     secret = "sk-audit-must-never-carry-this"
     daemon.client.post("/api/v1/credentials", json={"ref": "svc/key", "value": secret})
-    assert daemon.client.get("/api/v1/credentials/svc/key").json()["value"] == secret
+    assert _value("svc/key") == secret
     assert daemon.client.delete("/api/v1/credentials/svc/key").status_code == 204
 
-    for event in ("credential_set", "credential_read", "credential_deleted"):
+    for event in ("credential_set", "credential_deleted"):
         entries = daemon.audit(event)
         assert len(entries) == 1, event
         payload = json.dumps(entries[0])
@@ -190,7 +179,7 @@ def test_read_and_change_the_master_key_location(cli: _Daemon) -> None:
     assert not (daemon.home / "master.key").exists()
     assert any(daemon.keyring._data.values())
 
-    assert daemon.client.get("/api/v1/credentials/kept/key").json()["value"] == "v-survives"
+    assert _value("kept/key") == "v-survives"
 
 
 @pytest.mark.acceptance(

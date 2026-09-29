@@ -106,6 +106,10 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer sync rollback", "coffer sync restore"),
     ("coffer sync remote show", "coffer sync status"),
     ("coffer sync machine remove", "coffer sync machine rm"),
+    # Removed by the OpenSpec change add-secret-boundary: no command hands out
+    # the master key (spec credentials "Return no plaintext on any route,
+    # command or tool").
+    ("coffer sync key export", "export a key backup in the Coffer desktop app"),
     # Removed by the OpenSpec change one-agent-per-type-and-no-titles: a skill
     # has a fixed name and no title, and its description is SKILL.md's.
     ("coffer skill edit", "edit SKILL.md under coffer path skill <name>"),

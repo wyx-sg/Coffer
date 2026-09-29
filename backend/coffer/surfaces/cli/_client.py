@@ -235,6 +235,8 @@ def render_http_error(
 
         if code_name in ("CREDENTIAL_MISSING", "CREDENTIAL_LOCKED"):
             exit_code = ExitCode.CREDENTIAL_ISSUE
+        if code_name == "SECRET_BINDING_PENDING":
+            exit_code = ExitCode.APPROVAL_PENDING
     elif isinstance(err, httpx.TransportError):
         # Refused, reset, closed without a response or timed out: from the
         # CLI's side each is the daemon not answering.

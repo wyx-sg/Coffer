@@ -2,17 +2,19 @@
 // writes (edit, batch import, test connection). Enable/disable/delete are
 // kind-agnostic and live in useResourceMutations.ts.
 //
-// None of these toast on error: each caller renders the failure inline where
+// None of these toast on error (a saved edit whose secret waits for approval
+// toasts that, since it is not a failure): each caller renders the failure inline where
 // the user acted (the edit dialog's alert, the import dialog's callout, the
 // detail page's test-failure banner), and a toast would repeat the same text.
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
 import { getApiClient } from "@/lib/api/client";
-import { resourcesKey } from "@/lib/api/queryKeys";
+import { pendingApprovalsKey, resourcesKey } from "@/lib/api/queryKeys";
 import type { components } from "@/lib/api/types";
 import { saveMcpServerEdit, type SaveArgs } from "@/components/mcp/editMcpServerSave";
 import { importMcpServers, type ImportMcpServersArgs } from "@/components/mcp/importMcpServers";
+import { useToast } from "@/components/ui/toast";
 
 type TestResult = components["schemas"]["McpTestResultOut"];
 
@@ -21,10 +23,17 @@ type TestResult = components["schemas"]["McpTestResultOut"];
 export function useSaveMcpServerEdit() {
   const qc = useQueryClient();
   const { t } = useTranslation();
+  const { toast } = useToast();
   return useMutation({
     mutationFn: (args: Omit<SaveArgs, "t">) => saveMcpServerEdit({ ...args, t }),
-    onSuccess: () => {
+    onSuccess: ({ awaitingApproval }) => {
       void qc.invalidateQueries({ queryKey: resourcesKey });
+      // Saved, but a replaced secret keeps its old value until someone
+      // approves in the Coffer app — say so, since the dialog just closes.
+      if (awaitingApproval) {
+        void qc.invalidateQueries({ queryKey: pendingApprovalsKey });
+        toast.info(t("credentials.savedAwaitingApproval"));
+      }
     },
   });
 }

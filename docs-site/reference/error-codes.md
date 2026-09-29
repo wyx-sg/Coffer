@@ -72,7 +72,14 @@ give the status each code is actually sent with.
 | `CREDENTIAL_LOCKED` | 503 | The OS keychain is locked or unavailable, or a keychain write could not be verified. | Unlock the keychain (log in to the desktop session) and retry. |
 | `CREDENTIAL_UNREADABLE` | 500 | A stored secret cannot be decrypted with the current master key. | Restore the matching master key, or re-enter the secret. See [Credentials](/guides/credentials). |
 | `MASTER_KEY_MISSING` | 503 | Encrypted credentials exist but the master key is in neither the key file nor the keychain. Raised while the daemon starts. | Restore `master.key` beside the database (or import it with `coffer sync key import`), or re-enter your secrets. |
-| `MASTER_KEY_FILE_INVALID` | 422 | A master-key file to import is missing or is not a valid key. | Point the import at the exported key file. |
+| `MASTER_KEY_FILE_INVALID` | 422 | A master-key file to import is missing or is not a valid key. | Point the import at the key backup the desktop app wrote. |
+| `SECRET_BINDING_PENDING` | 409 | A secret would go to a destination, or a target, no person has approved. Nothing was sent. `details.approval_ids` names the waiting approvals. | Approve it in the Coffer desktop app, or reject it with `coffer credentials reject <id>`. See [Secrets → Approvals](/guides/secrets#approvals). |
+| `APPROVAL_PENDING` | 202 | The change was saved as a pending approval instead of being applied: a replaced value that is in use, or switching the protection off. | Approve it in the Coffer desktop app. |
+| `APPROVAL_NOT_FOUND` | 404 | No approval has that id. | List them with `coffer credentials approvals --all`. |
+| `APPROVAL_NOT_PENDING` | 409 | The approval was already approved, rejected or superseded. | Nothing to do; a new change raises a new approval. |
+| `PRESENCE_GRANT_INVALID` | 403 | A reveal, key backup or approval came without a valid presence grant: missing, expired, already used, for another operation or target, or not signed by the desktop app. | Do it in the Coffer desktop app, which runs the presence check and signs the grant. |
+| `SECRET_NAME_INVALID` | 422 | A standalone secret name is not one segment of `[A-Za-z0-9_.-]` of at most 64 characters. | Pick a valid name, such as `orders-db`. |
+| `SECRET_NOT_FOUND` | 404 | `coffer run` named a standalone secret the store does not hold. Only `secret/<name>` values can be resolved this way; a resource's secret never can. | Store it: `coffer credentials set secret/<name>`. |
 
 ## MCP servers and the gateway
 
@@ -252,6 +259,7 @@ mapped by status.
 | `6` | Invalid input | The daemon answered `400` or `422`. |
 | `7` | Upstream test failed | `coffer mcp test` could not initialize the upstream server. |
 | `8` | Credential issue | The error code was `CREDENTIAL_MISSING` or `CREDENTIAL_LOCKED`. |
+| `9` | Waiting for approval | The change was saved but a secret in it waits for approval in the Coffer desktop app (`SECRET_BINDING_PENDING`, or a `202` naming a pending approval). The command printed `waiting for approval in the Coffer app` and the approval's id. Approve it in the app, or rerun with `--wait`. See [Secrets → Approvals](/guides/secrets#approvals). |
 
 Pass `--verbose` (`coffer -v …`) to print the full traceback and HTTP context on error.
 

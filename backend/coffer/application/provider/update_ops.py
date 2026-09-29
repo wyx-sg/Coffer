@@ -34,9 +34,9 @@ how ``ResourceService`` delegates its own long paths.
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
+from coffer.application.provider.secret_gate import write_key
 from coffer.domain.provider.config import Protocol, ProviderConfig
 from coffer.domain.provider.errors import (
     ProviderCredentialSourceInvalid,
@@ -86,5 +86,7 @@ async def update(
         ref = config.get("credential_ref")
         if not ref:
             raise ProviderCredentialSourceInvalid()
-        await asyncio.to_thread(service._credentials.set, str(ref), secret_value)
+        # A key some approved destination receives is replaced only after a
+        # person approves it in the desktop app (``secret_gate``).
+        await write_key(service, str(ref), secret_value, actor=actor)
     return await service._resources.update_config(uid, validated, actor, description=description)

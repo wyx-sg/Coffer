@@ -691,10 +691,10 @@ async def _build_env(tmp_path: Any) -> ChannelEnv:
 
     resolver = CredentialResolver(keyring)
 
-    async def materialize(refs: dict[str, str]) -> dict[str, str]:
+    async def materialize(refs: dict[str, str], destination: Any = None) -> dict[str, str]:
         # The real resolver, so failures raise CredentialMissing exactly as
         # production wiring does.
-        return resolver.materialize(refs)
+        return resolver.materialize(refs, destination)
 
     websockets = StubWebSocketController()
     runtime = ChannelRuntime(

@@ -39,6 +39,7 @@ from coffer.surfaces.http.chat.agent_provider_routes import router as agent_prov
 from coffer.surfaces.http.chat.attachment_routes import router as chat_attachment_router
 from coffer.surfaces.http.chat.conversation_routes import router as chat_conversation_router
 from coffer.surfaces.http.chat.turn_routes import router as chat_turn_router
+from coffer.surfaces.http.credential_boundary_routes import router as credential_boundary_router
 from coffer.surfaces.http.credential_routes import router as credential_router
 from coffer.surfaces.http.event_routes import router as event_router
 from coffer.surfaces.http.feature_dependencies import require_feature
@@ -82,6 +83,9 @@ def include_all_routers(app: FastAPI) -> None:
         reconcile_router,  # the unified reconciler's plan + apply (cross-kind)
         attention_router,  # the Overview's "needs you" list (cross-kind)
         event_router,  # the daemon-wide change feed (cross-kind)
+        # Before the ref routes: their `{ref:path}` would otherwise match
+        # `/approvals/...` for a DELETE nobody meant.
+        credential_boundary_router,
         credential_router,
         settings_router,
         sync_router,  # spec vault-sync (experimental: vault_sync)
