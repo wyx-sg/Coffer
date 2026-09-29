@@ -64,8 +64,8 @@ unarchived until that implementation lands.
   one owner filter and the kind's own actions (adopt, remove duplicate, uninstall plugin, open
   file); Overview's summary rows open those tabs and its details carry no Title or Name; Config
   files includes the instructions files (`CLAUDE.md`, `AGENTS.md`); Model holds the per-agent
-  connection and model choice that sat on Overview. The Hooks tab arrives with the read of an
-  agent's hooks.
+  connection and model choice that sat on Overview. Hooks reads the hooks listing that already
+  ships (`GET /api/v1/agents/{uid}/hooks`).
 - The **Agents list** shows exactly two rows, Claude Code and Codex, detected automatically: no
   Detect agents button and no Add agent dialog. A row offers Add (with a change preview), Connect
   or Repair as its state calls for, the install command when the agent is not installed, and
@@ -152,8 +152,8 @@ unarchived until that implementation lands.
   repository secret and publishes it with its manifest beside the `.dmg`.
 - Backend and contracts: none; every screen reads routes that already exist
   (`/daemon/status`, `/daemon/residency`, `/daemon/rotate-token`, `/daemon/features`,
-  `/credentials`, the kind list routes). Listing uncited secrets, the migration assistant and an
-  agent's hooks read arrive with their own changes.
+  `/credentials`, the kind list routes, `/agents/{uid}/hooks`). Listing uncited secrets and the
+  migration assistant arrive with their own changes.
 - Tests: web-ui, experimental-features, internal-engine, desktop-app, agent-registry,
   skill-manager and provider-switching acceptance markers for the new and renamed scenarios; e2e shell specs (`shell_cold_start`, `shell_settings`) and new ones
   for the palette, footer, Settings modal, Daemon tab and About tab's update states; the shell's

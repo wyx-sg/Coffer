@@ -20,13 +20,14 @@ The detail is available from the REST API (`GET /agents/{uid}/mcp-entries/{entry
 - **AND** the back link returns to the agent's MCP servers tab
 
 ### Requirement: Expose every agent operation through REST, CLI and the Agents page
-Every management operation — register/list/view/update/remove, config-file write and delete (including directory children), Coffer connect/disconnect/connection status, MCP entry list/view/remove/adopt, plugin list/detail/toggle/uninstall, transcript listing and single-session read, and the model catalogue — MUST be available through (a) the REST API and (b) the `coffer` CLI, each command calling the corresponding REST endpoint:
+Every management operation — register/list/view/update/remove, config-file write and delete (including directory children), Coffer connect/disconnect/connection status, MCP entry list/view/remove/adopt, plugin list/detail/toggle/uninstall, the hooks listing, transcript listing and single-session read, and the model catalogue — MUST be available through (a) the REST API and (b) the `coffer` CLI, each command calling the corresponding REST endpoint:
 
 - the lifecycle verbs of "Manage the agent lifecycle" under `coffer agent`;
 - `coffer agent config edit` and `coffer agent config rm` for config-file writes and deletes;
 - `coffer agent connect` and `coffer agent disconnect` for the agent's Coffer connection ("Connect an agent to Coffer in one action"), whose status `coffer agent show [--json]` carries as `coffer_connection`;
 - `coffer scan --agent <name>`, `coffer scan --ref <agent>:<entry>`, `coffer adopt mcp` and `coffer discard mcp` for direct MCP entries;
 - `coffer agent plugin list|show|enable|disable|rm` for plugins, where `rm` is the uninstall of "Uninstall a plugin by the type's own strategy";
+- `coffer agent hooks <name> [--json]` for the hooks of "List every hook in the agent's native config";
 - `coffer agent transcript <name>` to list an agent's sessions, with the listing's search, project, sort and paging options, and `coffer agent transcript <name> <id>` to read one session in the bounded windows of "Read one transcript session in bounded windows";
 - `coffer agent models` for the model catalogue.
 
@@ -38,7 +39,7 @@ The Agents page in the web UI MUST expose all of these, config-file content writ
 - The agent detail page has nine tabs, in this order — **Overview**, **Model**, **Skills**, **MCP servers**, **Plugins**, **Hooks**, **Config files**, **Memory** and **Conversations** — each addressable by its own path (`/agents/<type>` for Overview, `/agents/<type>/model`, `/agents/<type>/skills`, `/agents/<type>/mcp-servers`, `/agents/<type>/plugins`, `/agents/<type>/hooks`, `/agents/<type>/config`, `/agents/<type>/memory`, `/agents/<type>/conversations`), so a page opened from a tab returns to it:
   - **Overview** carries the agent's details — its type, config directory and Coffer connection, and no Title or Name field, because an agent's name is fixed to its type — and one summary row each for Skills, MCP servers, Plugins and Hooks, counting Coffer's entries and the agent's own, each row opening its tab.
   - **Model** holds the agent's connection and model selection (see [provider-switching](../provider-switching/spec.md) "Offer every connection operation on REST, CLI and web"); it is the only place an agent's provider is switched.
-  - **Skills**, **MCP servers**, **Plugins** and **Hooks** each list both Coffer-managed entries and the agent's own, filtered by one owner filter (see "Filter an agent's installed kinds by owner"). The Hooks tab lists the hooks the agent's own configuration declares, Coffer's own marked, and appears with the change that reads an agent's hooks; until then the page carries eight tabs.
+  - **Skills**, **MCP servers**, **Plugins** and **Hooks** each list both Coffer-managed entries and the agent's own, filtered by one owner filter (see "Filter an agent's installed kinds by owner"). The Hooks tab is read only apart from its row actions: it groups the agent's hooks by event with each one's matcher, command and source (from "List every hook in the agent's native config"), marks Coffer's own with its health and last fire, and offers Repair — the Coffer connection's install — when Coffer's hook is stale or missing.
   - **Config files** lists every allowlisted config file of "Define a curated config-file allowlist per type" in one list — the settings files and the human-authored instructions files (`CLAUDE.md`, `AGENTS.md`) alike, because an instructions file is configuration the person wrote, not something installed.
   - The Plugins tab acts on the agent (enable / disable / uninstall), and a plugin's name opens that plugin's own detail page — the table has no expandable rows. The detail page shows the plugin's version, author, description, homepage, marketplace and its source, the directory it is installed in (with open / reveal), its enabled switch and uninstall (which returns to the Plugins tab), and everything it contributes — skills, commands and subagents with their descriptions, hook events and MCP servers — from "Read one installed plugin's detail read-only". Its back link returns to the agent's Plugins tab. Memory and Conversations are read-only views of the agent's own stores; the memory delivery hook is installed and removed with the agent's Coffer connection in the page header ("Show the Coffer connection on the agent pages").
 - A direct server's name on the MCP servers tab opens that entry's own read-only detail page ("Show one direct MCP entry's full configuration without its secrets"), whose header carries the same two writes as the row — adopt and delete — and whose way back returns to the MCP servers tab.
@@ -85,22 +86,22 @@ The Agents page in the web UI MUST expose all of these, config-file content writ
 - **AND** the page's back link returns to the agent's Plugins tab, and uninstalling from the page returns there too
 
 #### Scenario: the agent detail page carries nine tabs
-- **GIVEN** a registered Claude Code agent with a managed skill, a direct MCP entry, an installed plugin and a `CLAUDE.md` instructions file, and the change that reads an agent's hooks shipped
+- **GIVEN** a registered Claude Code agent with a managed skill, a direct MCP entry, an installed plugin and a `CLAUDE.md` instructions file
 - **WHEN** the user opens `/agents/claude_code`
 - **THEN** the tabs read Overview, Model, Skills, MCP servers, Plugins, Hooks, Config files, Memory and Conversations, in that order, and opening `/agents/claude_code/skills` selects Skills
 - **AND** Overview shows no Title or Name field, and its Skills, MCP servers and Plugins summary rows each open their tab; Config files lists the instructions file beside the settings files
 
 ### Requirement: Expose agent discovery on every surface
-The system MUST expose a read-only discovery operation listing installed-but-unregistered agents as candidates, available from the REST API (`GET /api/v1/agents/candidates`), the `coffer scan` CLI (as rows of kind `agent`), and the Agents page in the web UI, where a candidate is a row of the list that reads as not added (see "List the supported agents as fixed rows on the Agents page"). Detection is automatic: the page reads the candidates each time it loads and offers no Detect action, and the user adds a candidate with the row's Add, after a preview of what it will write, with no typing of type identifiers, names or paths. On the command line a candidate is registered with `coffer agent add <type>`, which its scan row names.
+The system MUST expose a read-only discovery operation listing the agents seen on this machine that are not registered, as candidates, available from the REST API (`GET /api/v1/agents/candidates`), the `coffer scan` CLI (as rows of kind `agent`), and the Agents page in the web UI, where a candidate is a row of the list that is not added (see "List the supported agents as fixed rows on the Agents page"). Detection is automatic: the page reads the candidates each time it loads and offers no Detect action. The user adds an `installed_active` candidate with the row's Add, after a preview of what it will write, with no typing of type identifiers, names or paths; an `installed_never_run` candidate is shown as installed but never run, and a `config_only` one as not installed, neither with an Add action. On the command line an addable candidate is registered with the `coffer agent add` command its scan row names.
 
 #### Scenario: list discovery candidates from the command line
-- **GIVEN** a supported agent's install marker is present and no agent of that type is registered
+- **GIVEN** a supported agent is installed with its standard config directory present and no agent of that type is registered
 - **WHEN** the user runs `coffer scan`
-- **THEN** the command lists that type as a row of kind `agent` with its default config dir
+- **THEN** the command lists that type as a row of kind `agent` with its config dir, its state and its version
 - **AND** no agent is registered as a result
 
 #### Scenario: the agents page detects candidates without a detect action
-- **GIVEN** a `codex` install marker present and no `codex` agent registered
+- **GIVEN** Codex installed and run once (state `installed_active`) and no `codex` agent registered
 - **WHEN** the user opens the Agents page
 - **THEN** the Codex row reads as not added with an Add action, and the page carries no Detect agents button and no Add agent dialog
 
@@ -136,7 +137,7 @@ The agent detail page's header MUST offer **Connect to Coffer** when the agent i
 ## ADDED Requirements
 
 ### Requirement: List the supported agents as fixed rows on the Agents page
-The Agents page MUST list exactly one row per supported agent type — today two, Claude Code and Codex — whether or not each is installed or added, in that order, so the page reads the same on every machine and a first-time user sees at once what Coffer can manage. Each row is found automatically: an installed type's row reads as added (with its config directory) or not added; a type that is not installed reads as not installed and shows the command that installs it, to copy, and no Add. A row's menu carries **Use a different config directory…** (see "Offer a folder picker for a custom config directory"). On first run, with neither agent added, the page MUST offer **Add both**, which previews and adds every installed, not-added agent in one confirmation. An agent is named by its type everywhere in the web UI; the page offers no field to name or title one.
+The Agents page MUST list exactly one row per supported agent type — today two, Claude Code and Codex — whether or not each is installed or added, in that order, so the page reads the same on every machine and a first-time user sees at once what Coffer can manage. Each row is found automatically from the detection state of "Detect an agent by its program and its config directory": an `installed_active` type's row reads as added (with its config directory and version) or not added; an `installed_never_run` type reads as installed but never run, with no Add until the agent has been run once; a `config_only` or `missing` type reads as not installed and shows the command that installs it, to copy, and no Add. A row's menu carries **Use a different config directory…** (see "Offer a folder picker for a custom config directory"). On first run, with neither agent added, the page MUST offer **Add both**, which previews and adds every installed, not-added agent in one confirmation. An agent is named by its type everywhere in the web UI; the page offers no field to name or title one.
 
 #### Scenario: the agents page shows both supported agents on first run
 - **GIVEN** a fresh Coffer with Claude Code and Codex both installed and neither added
@@ -160,7 +161,7 @@ The agent's Skills, MCP servers, Plugins and Hooks tabs MUST each list, in one t
 - **Skills** — **Adopt** an agent's own skill ([skill-manager](../skill-manager/spec.md) "Adopt an unmanaged skill"), and **Remove duplicate** on an agent's own skill folder that has the same name as a skill Coffer delivers to that agent, which deletes the agent's copy behind a confirmation.
 - **MCP servers** — **Adopt** a direct entry ("Adopt a direct MCP entry into Coffer"), and **Remove duplicate** on a direct entry that `matches_resource` a registered MCP server, which removes it from its source file ("Remove a direct MCP entry from its source file") because Coffer's gateway already serves it.
 - **Plugins** — enable, disable and **Uninstall** ("Uninstall a plugin by the type's own strategy").
-- **Hooks** — **Open file**, which opens the configuration file that declares the hook in the external editor ("Open config files in an external editor or reveal them").
+- **Hooks** — **Open file**, which opens the configuration file that declares the hook in the external editor ("Open config files in an external editor or reveal them"), and **Repair** on Coffer's own hook when it is stale or missing.
 
 #### Scenario: the owner filter narrows an installed-kind tab
 - **GIVEN** an agent with one Coffer-managed skill and two of its own skill folders

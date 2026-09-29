@@ -12,7 +12,7 @@ available over REST (`PATCH /api/v1/providers/{uid}`: `base_url`, `protocol`, `m
 (`coffer provider edit <name> [--name <new>] [--title <text>] [--description <text>] [--protocol <wire>] [--base-url <url>] [--secret <value>]`)
 and from its detail page, including correcting the wire. `coffer provider add <name> --protocol <p>
 --base-url <url> [--secret <value> | --credential-ref <ref>]` takes no model. Reverting is
-`coffer provider builtin <wire>`: a surface that can put an agent onto a Coffer connection and
+`coffer provider builtin <agent_type>`: a surface that can put an agent onto a Coffer connection and
 not take it off again is half an operation. Which connection the internal engine and speech-to-text
 run on is set through `coffer config` (see "Set the internal-engine default" and "Keep an
 independent speech-to-text default"), not through a `provider` subcommand.
@@ -62,9 +62,9 @@ The web surfaces:
 - **THEN** only that field is updated, `credential_ref` is unchanged, and `resource_updated` is audited.
 #### Scenario: the command line covers create, list, switch and revert
 - **GIVEN** the daemon is running,
-- **WHEN** the user runs `coffer provider add`, `coffer provider list --json`, `coffer provider switch` and `coffer provider builtin <wire>` from the CLI,
+- **WHEN** the user runs `coffer provider add`, `coffer provider list --json`, `coffer provider switch` and `coffer provider builtin <agent_type>` from the CLI,
 - **THEN** each operation succeeds with the same effect as the HTTP API and `list --json` returns machine-readable output,
-- **AND** after the revert the connection is no longer active for its wire, so a terminal-only user can undo the switch they made.
+- **AND** after the revert the connection is no longer active for that agent type, so a terminal-only user can undo the switch they made.
 #### Scenario: the connections page lists profiles and their compatible agents
 - **GIVEN** the connections page is rendered with two mock connections whose reach differs,
 - **WHEN** the page renders,

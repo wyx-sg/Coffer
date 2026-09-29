@@ -34,7 +34,7 @@
 
 ## 5. Agent detail tabs
 
-- [ ] 5.1 `pages/AgentDetailPage.tsx`: nine tabs Overview, Model, Skills, MCP servers, Plugins, Hooks, Config files, Memory, Conversations; the Hooks tab waits for the change that reads an agent's hooks
+- [ ] 5.1 `pages/AgentDetailPage.tsx`: nine tabs Overview, Model, Skills, MCP servers, Plugins, Hooks, Config files, Memory, Conversations; Hooks reads `GET /api/v1/agents/{uid}/hooks`
 - [ ] 5.2 Overview: details (type, config directory, Coffer connection) with no Title or Name field; summary rows for Skills, MCP servers, Plugins and Hooks with Coffer / own counts, each opening its tab
 - [ ] 5.3 Skills, MCP servers, Plugins tabs from `AgentSkillsTab`, `AgentMcpServersTab`, `AgentPluginsTab`: Coffer's and the agent's own entries in one table, one owner filter kept in the URL; Adopt and Remove duplicate on Skills and MCP servers (a direct entry that `matches_resource`, an own skill folder named like a delivered skill), enable / disable / Uninstall on Plugins; Hooks rows open their file
 - [ ] 5.4 Model tab: move the connection and model selection from `AgentOverviewTab`; Config files lists the instructions files beside the settings files

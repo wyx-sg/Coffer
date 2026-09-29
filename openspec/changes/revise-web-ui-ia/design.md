@@ -23,8 +23,7 @@ brings auto-update into the desktop shell.
 
 Overview's own content is specified by a separate change, as are the Activity page's refresh
 control, the new experimental switches for providers, chat and channels, the secrets behaviour
-behind the Secrets page (uncited secrets, the migration assistant) and the read of an agent's
-hooks.
+behind the Secrets page (uncited secrets, the migration assistant).
 
 ## Decisions
 
@@ -262,9 +261,8 @@ pages opened from a tab (a direct MCP entry, a plugin, an unmanaged skill) retur
 *Rejected:* one Installed tab with a section per kind, which put four tables with different
 actions on one scrolling page and hid the Hooks table below three others.
 
-The Hooks tab needs a read of an agent's hooks that does not exist yet; it appears with the
-change that adds it, and until then the page has eight tabs ("List only shipped surfaces in the
-sidebar" applies in spirit).
+The Hooks tab reads the hooks listing that already ships (agent-registry "List every hook in the
+agent's native config"), so all nine tabs are in 1.0.
 
 **The Agents list is two fixed rows** — Claude Code and Codex, the supported types — found
 automatically each time the page loads. A row is not installed (with the install command to
