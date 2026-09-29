@@ -1344,12 +1344,14 @@ Manage skills (AgentSkills standard)
 coffer skill files [OPTIONS] NAME
 ```
 
-List a skill's master folder as a file tree.
+List a skill's master folder (or, with --agent, an unmanaged folder) as a file tree.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Skill name |
 | `--json` | option | flag |  | JSON output |
+| `--agent` | option | text |  | Read the agent's UNMANAGED skill folder of this name instead of a managed skill. |
+| `--location` | option | text | `skills` | With --agent: where the folder was discovered, skills \| agents_dir. |
 
 ### skill cat
 
@@ -1357,7 +1359,7 @@ List a skill's master folder as a file tree.
 coffer skill cat [OPTIONS] NAME PATH
 ```
 
-Print one file of a skill's master folder.
+Print one file of a skill's master folder (or, with --agent, an unmanaged folder).
 
 A file past the read cap prints its first part and exits 1 with a note on stderr, so a script never mistakes the part for the file; --json exits 0 and carries `truncated` for the caller to judge.
 
@@ -1366,6 +1368,8 @@ A file past the read cap prints its first part and exits 1 with a note on stderr
 | `NAME` | argument | text | required | Skill name |
 | `PATH` | argument | text | required | Path inside the skill folder, e.g. SKILL.md |
 | `--json` | option | flag |  | The whole read: content, fingerprint, size, binary, truncated |
+| `--agent` | option | text |  | Read the agent's UNMANAGED skill folder of this name instead of a managed skill. |
+| `--location` | option | text | `skills` | With --agent: where the folder was discovered, skills \| agents_dir. |
 
 ### skill write
 

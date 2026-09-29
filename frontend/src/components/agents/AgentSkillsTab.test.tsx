@@ -10,7 +10,8 @@
 //     button, no per-row toggle, no status filter
 //   - the unmanaged-skills section: hidden when empty, rows with location /
 //     foreign-link badges and invalid reasons, adopt (disabled w/ hint when
-//     invalid or foreign), open-folder and delete-with-confirm actions
+//     invalid or foreign) and delete-with-confirm actions; a row click opens
+//     the folder's detail page, and no row carries an open-folder button
 //   - en/zh key parity for agents.skillsTab
 //
 // The unmanaged-skill routes are addressed by the agent's `uid`, so the fixture
@@ -22,6 +23,7 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { AgentSkillsTab } from "./AgentSkillsTab";
+import { acceptance } from "@/test/acceptance";
 import { ToastProvider } from "@/components/ui/toast";
 import type { AgentOut, UnmanagedSkillOut } from "@/lib/api/agents";
 import en from "@/i18n/locales/en.json";
@@ -34,8 +36,8 @@ vi.mock("react-router-dom", async (importOriginal) => ({
   useNavigate: () => navigateMock,
 }));
 
-// The open-folder action goes through useFsActions → fsApi.open (the loopback
-// daemon); mock the wire layer, like the agents API below.
+// The open-folder action moved to the detail page; the wire layer stays mocked
+// so a test can prove the table never calls it.
 vi.mock("@/lib/api/fs", () => ({
   fsApi: { open: vi.fn(), reveal: vi.fn() },
 }));
@@ -106,8 +108,8 @@ function renderTab(agent: AgentOut = AGENT) {
   // The unmanaged section's bulk actions run via useBulkMutate, which reads the
   // QueryClient — provide one.
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  // ToastProvider is mounted so failure toasts (e.g. a failed open-folder)
-  // actually render instead of hitting useToast's no-op fallback.
+  // ToastProvider is mounted so toasts actually render instead of hitting
+  // useToast's no-op fallback.
   return render(
     <QueryClientProvider client={qc}>
       <ToastProvider>
@@ -213,30 +215,31 @@ describe("AgentSkillsTab", () => {
       ).toBeInTheDocument();
     });
 
-    test("open folder asks the daemon to open the skill's path with the OS default", async () => {
-      stub([UNMANAGED_GOOD]);
+    test("rows carry no open-folder button — that action lives on the detail page", async () => {
+      stub([UNMANAGED_GOOD, UNMANAGED_INVALID]);
       renderTab();
 
       const section = await screen.findByTestId("unmanaged-skills");
-      fireEvent.click(
-        within(section).getByRole("button", { name: en.agents.skillsTab.openFolder }),
-      );
-      // Empty `withApp` → no `with` on the wire, so the OS picks the handler
-      // (the file manager, for a directory).
-      await waitFor(() => expect(fs.open).toHaveBeenCalledWith("/x/skills/good", undefined));
+      expect(
+        within(section).queryByRole("button", { name: en.agents.skillsTab.openFolder }),
+      ).not.toBeInTheDocument();
+      expect(fs.open).not.toHaveBeenCalled();
     });
 
-    test("a failed open surfaces an error toast", async () => {
-      stub([UNMANAGED_GOOD]);
-      fs.open.mockRejectedValue(new Error("nope"));
-      renderTab();
+    acceptance(
+      "skill-manager",
+      "open an unmanaged skill's detail page from the agent's Skills tab",
+      async () => {
+        stub([UNMANAGED_GOOD, UNMANAGED_FOREIGN]);
+        renderTab();
 
-      const section = await screen.findByTestId("unmanaged-skills");
-      fireEvent.click(
-        within(section).getByRole("button", { name: en.agents.skillsTab.openFolder }),
-      );
-      expect(await screen.findByText(en.agents.skillsTab.openFolderFailed)).toBeInTheDocument();
-    });
+        const section = await screen.findByTestId("unmanaged-skills");
+        fireEvent.click(within(section).getByText("linked"));
+        expect(navigateMock).toHaveBeenCalledWith(
+          "/agents/u-cc/skills/unmanaged/agents_dir/linked",
+        );
+      },
+    );
 
     test("adopt calls the API with the agent uid, skill name and location", async () => {
       stub([UNMANAGED_GOOD]);
@@ -247,6 +250,8 @@ describe("AgentSkillsTab", () => {
       await waitFor(() =>
         expect(api.adoptUnmanagedSkill).toHaveBeenCalledWith("u-cc", "good", "skills"),
       );
+      // The row navigates on click; its action buttons must not.
+      expect(navigateMock).not.toHaveBeenCalled();
     });
 
     test("delete asks for confirmation, then calls the API with the location", async () => {

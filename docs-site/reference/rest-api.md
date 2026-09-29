@@ -90,7 +90,7 @@ machine, exactly like a route the build does not have. The tables below mark tho
 
 ## Routes
 
-The daemon mounts 163 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 166 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -103,7 +103,7 @@ The daemon mounts 163 operations in 20 groups. Groups follow the order the daemo
 | [settings](#settings) | 2 |
 | [sync](#sync) | 19 |
 | [internal-engine](#internal-engine) | 6 |
-| [agents](#agents) | 29 |
+| [agents](#agents) | 32 |
 | [fs](#fs) | 5 |
 | [skills](#skills) | 9 |
 | [mcp](#mcp) | 10 |
@@ -249,8 +249,11 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 | `GET` | `/api/v1/agents/{uid}/transcripts` | List an agent's transcript sessions with search, filter, and sort. |
 | `GET` | `/api/v1/agents/{uid}/transcripts/session` | Render one of the agent's conversations: its summary and a page of turns. |
 | `GET` | `/api/v1/agents/{uid}/unmanaged-skills` | List Unmanaged Skills |
-| `POST` | `/api/v1/agents/{uid}/unmanaged-skills/{skill}/adopt` | Adopt Unmanaged Skill |
+| `GET` | `/api/v1/agents/{uid}/unmanaged-skills/{skill}` | One unmanaged skill's metadata (spec skill-manager "Preview an unmanaged skill read-only"). |
 | `DELETE` | `/api/v1/agents/{uid}/unmanaged-skills/{skill}` | Delete Unmanaged Skill |
+| `GET` | `/api/v1/agents/{uid}/unmanaged-skills/{skill}/files` | The unmanaged folder as a read-only file tree — the same walk, and the same containment, as a managed skill's master folder. |
+| `GET` | `/api/v1/agents/{uid}/unmanaged-skills/{skill}/files/content` | Read one file of an unmanaged folder. |
+| `POST` | `/api/v1/agents/{uid}/unmanaged-skills/{skill}/adopt` | Adopt Unmanaged Skill |
 
 ### fs
 

@@ -114,6 +114,27 @@ Agents → choose the agent → Skills tab → Unmanaged skills
 
 Each entry shows its name, path, location and whether its `SKILL.md` is valid. An invalid entry shows the reason.
 
+### Preview one
+
+Read an unmanaged skill before you decide what to do with it. Nothing here changes the folder.
+
+::: code-group
+
+```sh [CLI]
+coffer skill files pdf-tools --agent codex
+coffer skill cat pdf-tools SKILL.md --agent codex
+# a folder in ~/.agents/skills/
+coffer skill files pdf-tools --agent codex --location agents_dir
+```
+
+```text [Web UI]
+Agents → choose the agent → Skills tab → click the row
+```
+
+:::
+
+The detail page has an **Overview** tab (the `SKILL.md` description, the folder's path and location) and a **Files** tab (the folder's tree and a read-only preview of each file). An invalid folder opens too, with the reason at the top. The page header carries **Open folder** (the folder in your file manager), **Adopt** and **Delete**, and its back link returns to the agent's Skills tab. File reads stay inside the folder, as they do for a managed skill.
+
 ### Adopt one
 
 Adopting moves the folder into `~/.coffer/skills/<name>/`, registers it as a skill, and puts a managed link where the agent expects it.
@@ -129,10 +150,12 @@ coffer skill adopt codex pdf-tools --location agents_dir
 ```
 
 ```text [Web UI]
-Agents → choose the agent → Skills tab → Adopt on the row
+Agents → choose the agent → Skills tab → Adopt on the row, or Adopt on the skill's page
 ```
 
 :::
+
+Adopting from the skill's page takes you on to the new managed skill's page.
 
 - A folder adopted from `<config_dir>/skills/` is replaced in place by the link.
 - A folder adopted from `~/.agents/skills/` is moved out of that directory and the link is placed in `<config_dir>/skills/`. Codex reads both locations, so it keeps seeing the skill.
@@ -152,7 +175,7 @@ coffer skill rm-unmanaged codex old-experiment --force
 ```
 
 ```text [Web UI]
-Agents → choose the agent → Skills tab → select the row → Delete
+Agents → choose the agent → Skills tab → Delete on the row, or Delete on the skill's page
 ```
 
 :::

@@ -24,6 +24,12 @@ what it points at is not vault content, and a link to a file outside the vault
 would otherwise be copied into the working tree and pushed. A nested ``.git``
 is skipped because those are another repository's internals — git will not
 track them, and a working tree that contained them would confuse the merge.
+
+Python bytecode (``__pycache__/`` and ``*.pyc``) is left out of the *source*
+side only. It is a cache the interpreter writes beside a skill's scripts
+whenever they run, so it changes on every machine for reasons that are not
+edits. The destination side still sees it, so bytecode an older build
+published is removed from the working tree by the ordinary deletion pass.
 """
 
 from __future__ import annotations
@@ -34,10 +40,12 @@ from collections.abc import Mapping
 from collections.abc import Set as AbstractSet
 
 _GIT_DIR = ".git"
+_BYTECODE_DIR = "__pycache__"
+_BYTECODE_SUFFIXES = (".pyc", ".pyo")
 
 
 def _tree_files(
-    root: pathlib.Path, skipped: list[str] | None = None
+    root: pathlib.Path, skipped: list[str] | None = None, *, bytecode: bool = True
 ) -> dict[pathlib.Path, pathlib.Path]:
     """rel-path -> absolute path for every regular file under ``root``.
 
@@ -46,11 +54,12 @@ def _tree_files(
     must be able to finish. Symlinks (to files or to
     directories) and anything named ``.git`` are left out and, when ``skipped``
     is given, their root-relative POSIX paths are appended to it so the caller
-    can say so once."""
+    can say so once. ``bytecode=False`` also leaves out Python bytecode caches,
+    without reporting them: that is policy, not a surprise."""
     if not root.exists():
         return {}
     out: dict[pathlib.Path, pathlib.Path] = {}
-    _walk(root, root, out, skipped)
+    _walk(root, root, out, skipped, bytecode)
     return out
 
 
@@ -59,6 +68,7 @@ def _walk(
     directory: pathlib.Path,
     out: dict[pathlib.Path, pathlib.Path],
     skipped: list[str] | None,
+    bytecode: bool,
 ) -> None:
     with os.scandir(directory) as entries:
         listing = sorted(entries, key=lambda e: e.name)
@@ -70,8 +80,11 @@ def _walk(
                 skipped.append(rel.as_posix())
             continue
         if entry.is_dir(follow_symlinks=False):
-            _walk(root, path, out, skipped)
-        elif entry.is_file(follow_symlinks=False):
+            if bytecode or entry.name != _BYTECODE_DIR:
+                _walk(root, path, out, skipped, bytecode)
+        elif entry.is_file(follow_symlinks=False) and (
+            bytecode or not entry.name.endswith(_BYTECODE_SUFFIXES)
+        ):
             out[rel] = path
 
 
@@ -131,7 +144,7 @@ def _mirror_tree(
     """
     dst.mkdir(parents=True, exist_ok=True)
     seen: list[str] = []
-    src_files = _excluding(_tree_files(src, seen), excluded)
+    src_files = _excluding(_tree_files(src, seen, bytecode=False), excluded)
     dst_files = _excluding(_tree_files(dst), excluded)
     skipped = [rel for rel in seen if not _under(rel, excluded)]
     for rel, src_path in src_files.items():

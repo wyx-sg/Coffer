@@ -15,6 +15,7 @@ import { CodeView } from "@/components/preview/CodeView";
 import type { components } from "@/lib/api/types";
 import { useDisableCapability, useEnableCapability } from "@/lib/hooks/useMcpCapabilityMutations";
 import { CapabilityBulkActions } from "./CapabilityBulkActions";
+import { declaresParameters } from "./declaresParameters";
 
 type ToolView = components["schemas"]["MCPToolView"];
 type ResourceView = components["schemas"]["MCPResourceView"];
@@ -32,6 +33,11 @@ interface Props {
   // distinguish them: a failure shows a load-error message, not "nothing
   // discovered" (which would wrongly imply the upstream has no such capability).
   error?: unknown;
+  // Set when the upstream could not be reached and the list was rebuilt from
+  // the stored enable/disable rows. Those rows hold no descriptions or schemas,
+  // so the parameters are unknown rather than absent — say so, and offer no
+  // row detail.
+  fromCache?: boolean;
 }
 
 interface RowDescriptor {
@@ -103,7 +109,7 @@ export function CapabilityList(props: Props) {
       ? t(emptyKey)
       : t("mcp.capabilities.noMatches");
 
-  const hasSchema = rows.some((r) => r.schema);
+  const hasSchema = !props.fromCache && rows.some((r) => r.schema);
 
   const columns: Column<RowDescriptor>[] = [
     {
@@ -145,71 +151,79 @@ export function CapabilityList(props: Props) {
   ];
 
   return (
-    <DataTable
-      rows={rows}
-      columns={columns}
-      rowKey={(row) => row.key}
-      search={{
-        accessor: (row) => row.key,
-        placeholder: t("mcp.capabilities.searchPlaceholder"),
-      }}
-      filters={filters}
-      // Row multi-select with bulk Enable/Disable. The checkbox column coexists
-      // with getRowDetail (DataTable renders it before the expand chevron) and
-      // with the per-row ToggleSwitch; select-all spans the current
-      // search/status-filtered set across pages.
-      selection={{
-        ariaSelectAll: t("common.bulk.selectAll"),
-        ariaSelectRow: (row) => `${t("common.bulk.selectRow")}: ${row.key}`,
-        bulkLabel: (count) => t("common.bulk.selected", { count }),
-        clearLabel: t("common.clear"),
-        renderBulkActions: ({ selectedRows, clear }) => (
-          <CapabilityBulkActions
-            serverUid={serverUid}
-            kind={kind}
-            rows={selectedRows}
-            onDone={clear}
-          />
-        ),
-      }}
-      // Only tools carry an input_schema; expose it as an expandable detail so
-      // a row toggles open to its pretty-printed JSON. Resources/prompts have
-      // no schema, so the table stays flat for those kinds.
-      getRowDetail={
-        hasSchema
-          ? (row) =>
-              row.schema ? (
-                <div className="px-4 py-3">
-                  <CodeView
-                    value={JSON.stringify(row.schema, null, 2)}
-                    language="json"
-                    maxHeight="20rem"
-                    lineNumbers={false}
-                    ariaLabel={t("mcp.capabilities.schemaLabel")}
-                    className="bg-muted/30"
-                  />
-                </div>
-              ) : (
-                <div className="px-4 py-3 text-xs text-muted-foreground">
-                  {t("mcp.capabilities.noSchema")}
-                </div>
-              )
-          : undefined
-      }
-      emptyMessage={emptyMessage}
-    />
+    <div className="space-y-3">
+      {props.fromCache ? (
+        <p className="text-sm text-muted-foreground">{t("mcp.capabilities.fromCache")}</p>
+      ) : null}
+      <DataTable
+        rows={rows}
+        columns={columns}
+        rowKey={(row) => row.key}
+        search={{
+          accessor: (row) => row.key,
+          placeholder: t("mcp.capabilities.searchPlaceholder"),
+        }}
+        filters={filters}
+        // Row multi-select with bulk Enable/Disable. The checkbox column coexists
+        // with getRowDetail (DataTable renders it before the expand chevron) and
+        // with the per-row ToggleSwitch; select-all spans the current
+        // search/status-filtered set across pages.
+        selection={{
+          ariaSelectAll: t("common.bulk.selectAll"),
+          ariaSelectRow: (row) => `${t("common.bulk.selectRow")}: ${row.key}`,
+          bulkLabel: (count) => t("common.bulk.selected", { count }),
+          clearLabel: t("common.clear"),
+          renderBulkActions: ({ selectedRows, clear }) => (
+            <CapabilityBulkActions
+              serverUid={serverUid}
+              kind={kind}
+              rows={selectedRows}
+              onDone={clear}
+            />
+          ),
+        }}
+        // Only tools carry an input_schema; expose it as an expandable detail so
+        // a row toggles open to its pretty-printed JSON. Resources/prompts have
+        // no schema, so the table stays flat for those kinds.
+        getRowDetail={
+          hasSchema
+            ? (row) =>
+                row.schema ? (
+                  <div className="px-4 py-3">
+                    <CodeView
+                      value={JSON.stringify(row.schema, null, 2)}
+                      language="json"
+                      maxHeight="20rem"
+                      lineNumbers={false}
+                      ariaLabel={t("mcp.capabilities.schemaLabel")}
+                      className="bg-muted/30"
+                    />
+                  </div>
+                ) : (
+                  <div className="px-4 py-3 text-xs text-muted-foreground">
+                    {t("mcp.capabilities.noSchema")}
+                  </div>
+                )
+            : undefined
+        }
+        emptyMessage={emptyMessage}
+      />
+    </div>
   );
 }
 
 function toRows(props: Props): RowDescriptor[] {
   if (props.kind === "tool" && props.tools) {
-    return props.tools.map((t) => ({
-      key: t.original_name,
-      prefixed: t.prefixed_name,
-      description: t.description,
-      enabled: t.enabled,
-      schema: t.input_schema as Record<string, unknown> | undefined,
-    }));
+    return props.tools.map((t) => {
+      const schema = t.input_schema as Record<string, unknown> | undefined;
+      return {
+        key: t.original_name,
+        prefixed: t.prefixed_name,
+        description: t.description,
+        enabled: t.enabled,
+        schema: declaresParameters(schema) ? schema : undefined,
+      };
+    });
   }
   if (props.kind === "resource" && props.resources) {
     return props.resources.map((r) => ({

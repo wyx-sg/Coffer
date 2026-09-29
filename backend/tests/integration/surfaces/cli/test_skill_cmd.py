@@ -537,6 +537,42 @@ def test_skill_rm_unmanaged(skill_cli_daemon):
     assert not folder.exists()
 
 
+@pytest.mark.acceptance(
+    spec="skill-manager", scenario="read an unmanaged skill's files from the command line"
+)
+def test_skill_files_and_cat_read_an_unmanaged_folder_with_agent(skill_cli_daemon):
+    """`skill files|cat --agent` read the agent's unmanaged folder, read-only."""
+    skills_dir = _register_agent(skill_cli_daemon, "cur")
+    folder = _write_skill_folder(skills_dir / "loose-skill", name="loose-skill")
+    (folder / "refs").mkdir()
+    (folder / "refs" / "a.txt").write_text("alpha\n", encoding="utf-8")
+
+    r = _runner.invoke(cli_app, ["skill", "files", "loose-skill", "--agent", "cur"])
+    assert r.exit_code == 0, r.output
+    assert "refs/" in r.output
+    assert "refs/a.txt  6 B" in r.output
+    assert "SKILL.md" in r.output
+
+    r = _runner.invoke(
+        cli_app, ["skill", "cat", "loose-skill", "refs/a.txt", "--agent", "cur", "--json"]
+    )
+    assert r.exit_code == 0, r.output
+    data = json.loads(_extract_json(r.output))
+    assert data["content"] == "alpha\n"
+    assert data["path"] == "refs/a.txt"
+
+    # Still unmanaged: reading adopted nothing.
+    r = _runner.invoke(cli_app, ["skill", "unmanaged", "cur", "--json"])
+    assert [i["name"] for i in json.loads(_extract_json(r.output))] == ["loose-skill"]
+
+    # A path leaving the folder is refused; an unknown folder is not found.
+    r = _runner.invoke(cli_app, ["skill", "cat", "loose-skill", "../x", "--agent", "cur"])
+    assert r.exit_code != 0
+    assert "outside the skill folder" in r.output
+    r = _runner.invoke(cli_app, ["skill", "files", "ghost", "--agent", "cur"])
+    assert r.exit_code == 4, r.output
+
+
 # ---------------------------------------------------------------------------
 # skill verify --fix
 # ---------------------------------------------------------------------------

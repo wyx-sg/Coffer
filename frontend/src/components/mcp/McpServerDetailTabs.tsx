@@ -148,6 +148,7 @@ export function McpServerDetailTabs({
           kind="tool"
           tools={capabilities?.tools}
           error={capsError}
+          fromCache={capabilities?.from_cache}
         />
       </TabsContent>
       <TabsContent value="resources" className="pt-6">
@@ -156,6 +157,7 @@ export function McpServerDetailTabs({
           kind="resource"
           resources={capabilities?.resources}
           error={capsError}
+          fromCache={capabilities?.from_cache}
         />
       </TabsContent>
       <TabsContent value="prompts" className="pt-6">
@@ -164,6 +166,7 @@ export function McpServerDetailTabs({
           kind="prompt"
           prompts={capabilities?.prompts}
           error={capsError}
+          fromCache={capabilities?.from_cache}
         />
       </TabsContent>
       <TabsContent value="invocations" className="pt-6">
