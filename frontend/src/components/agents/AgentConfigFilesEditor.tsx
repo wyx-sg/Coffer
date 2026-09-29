@@ -2,10 +2,8 @@
 // Two-pane config editor for one agent: a left "tree" of the curated config
 // files (the allowlist — credential and machine-state files are deliberately
 // excluded), and a right pane showing the selected file's on-disk content,
-// editable behind an explicit Edit. The right pane also carries a FileActions
-// bar (open-in-editor / reveal) for the edits that want a real editor, and the
-// leftover-block notice marks a legacy memory-projection block as safe to
-// delete (see "Annotate a leftover memory-projection block as safe to delete").
+// editable behind an explicit Edit. The right pane also carries the FileActions
+// (open-in-editor / reveal) for the edits that want a real editor.
 //
 // Directory-backed config keys (kind === "directory", e.g. a memory dir)
 // render as expandable nodes whose children come from the list response; a
@@ -123,7 +121,6 @@ export function AgentConfigFilesEditor({ uid, onDirtyChange }: Props) {
             editorKey={s.selectedChild ?? s.selectedKey}
             content={s.activeContent?.content ?? ""}
             loading={s.activeQuery.isPending}
-            memoryBlock={s.memoryBlock}
             draft={s.draft}
             readOnlyMissing={s.readOnlyMissing}
           />

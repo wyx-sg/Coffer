@@ -1,15 +1,14 @@
 // frontend/src/components/agents/ConfigEditorPane.tsx — spec agent-registry.
-// Right pane of the agent config editor: path/format header, the external-file
-// action bar (open-in-editor / reveal), an optional managed-block annotation,
-// and the file's content — readable by default and editable behind an explicit
-// Edit (shared <FileEditor>). Opening it in the user's own editor stays
-// alongside for the edits that want a real editor. Extracted from
+// Right pane of the agent config editor: path/format header, then one action
+// row — the external-file actions (open-in-editor / reveal) on the left and
+// Edit (or Save / Cancel) on the right — and the file's content, readable by
+// default and editable behind that explicit Edit (shared <FileEditor>). Opening
+// it in the user's own editor stays alongside for the edits that want a real
+// editor. Extracted from
 // AgentConfigFilesEditor to keep that file inside the component size cap; all
 // state stays in the parent.
 import { useTranslation } from "react-i18next";
-import { Info } from "lucide-react";
 
-import { FileActions } from "@/components/FileActions";
 import { FileEditor } from "@/components/FileEditor";
 import { FILE_PANE_BODY } from "@/components/filePane";
 import { CodeView } from "@/components/preview/CodeView";
@@ -29,8 +28,6 @@ export interface ConfigEditorPaneProps {
   content: string;
   /** True while the content query is loading (preview renders empty). */
   loading: boolean;
-  /** True when the file carries a Coffer memory-projection block. */
-  memoryBlock: boolean;
   /** Draft/save state for this file, owned by the parent's editor state. */
   draft: ReturnType<typeof useFileDraft>;
   /** Set when the file exists only as an empty read (`exists: false`). */
@@ -53,19 +50,6 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
         <span className="shrink-0 text-xs text-muted-foreground">{props.formatLabel}</span>
       </div>
 
-      {props.filePath ? (
-        <div className="shrink-0">
-          <FileActions filePath={props.filePath} />
-        </div>
-      ) : null}
-
-      {props.memoryBlock ? (
-        <div className="flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1.5 text-xs text-muted-foreground">
-          <Info className="size-3.5 shrink-0" />
-          {t("agents.config.memoryBlockNotice")}
-        </div>
-      ) : null}
-
       <FileEditor
         value={props.loading ? "" : props.draft.value}
         onChange={props.draft.setDraft}
@@ -80,6 +64,7 @@ export function ConfigEditorPane(props: ConfigEditorPaneProps) {
         onDiscardAndReload={() => void props.draft.discardAndReload()}
         readOnlyReason={props.readOnlyMissing ? t("files.readOnlyMissing") : null}
         ariaLabel={t("agents.config.editorLabel", { key: props.editorKey })}
+        filePath={props.filePath}
         fill
       >
         {/* The preview takes the rest of the pane, down to the bottom of the

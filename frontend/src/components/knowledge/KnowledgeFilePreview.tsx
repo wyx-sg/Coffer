@@ -21,7 +21,6 @@
 // answers "has Coffer seen my change yet?" by comparing it with the edit.
 import { useTranslation } from "react-i18next";
 
-import { FileActions } from "@/components/FileActions";
 import { FileEditor } from "@/components/FileEditor";
 import { FILE_PANE_BODY } from "@/components/filePane";
 import { KnowledgeFileDelete } from "@/components/knowledge/KnowledgeFileDelete";
@@ -117,15 +116,11 @@ function KnowledgeDocument({
               : t("knowledge.detail.notCuratedYet")}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <FileActions filePath={data.file_path} />
-          {/* Last, after the actions that take the file elsewhere — the same
-              order every detail page puts delete in. It names the document
-              being previewed, which is the one path the page knows for
-              certain. An inbox item is not the person's to delete: curation
-              drains it. */}
-          {data.inbox ? null : <KnowledgeFileDelete path={data.path} onDeleted={onDeleted} />}
-        </div>
+        {/* Delete names the document being previewed, which is the one path
+            the page knows for certain. An inbox item is not the person's to
+            delete: curation drains it. Open-in-editor and reveal sit on the
+            editor's own action row, beside Edit, as on every file pane. */}
+        {data.inbox ? null : <KnowledgeFileDelete path={data.path} onDeleted={onDeleted} />}
       </div>
       {/* The editor takes the rest of the pane, down to the bottom of the
           window; the rendered body inside it scrolls — both axes, which is
@@ -146,6 +141,7 @@ function KnowledgeDocument({
           onDiscardAndReload={() => void draft.discardAndReload()}
           readOnlyReason={data.inbox ? t("knowledge.detail.inboxReadOnly") : null}
           ariaLabel={t("knowledge.detail.editorLabel", { path: data.path })}
+          filePath={data.file_path}
           fill
         >
           <FindableMarkdown fill>{data.body}</FindableMarkdown>
