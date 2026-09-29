@@ -6,12 +6,13 @@ contract, because the current specs pin the old one — eleven sidebar entries i
 groups, an index that redirects to Agents, five Settings tabs, seven agent detail tabs, no page
 for stored secrets, and a daemon the user is never shown.
 
-Seven decisions change that architecture:
+Eight decisions change that architecture:
 
 - **The sidebar grouped by what the user comes to do.** Three role groups put seven entries
   under Resources as soon as Secrets arrives, and nine once the planned Rules and Sources do.
-  Five intent groups — Agents, Work, Capabilities, Context, System — hold the thirteen entries
-  today and the roughly seventeen the roadmap names without any group passing five
+  Five intent groups — Agents, Run, Capabilities, Context, System — hold the thirteen entries
+  of 1.0 (Usage among them) and the roughly sixteen the roadmap names without any group passing
+  five
   ([The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md)).
 - **A Secrets page.** A stored secret is cited by MCP servers, providers, channels and skills at
   once, and no page lists them or says what uses each. Secrets becomes its own System entry;
@@ -25,8 +26,13 @@ Seven decisions change that architecture:
 - **The daemon made visible.** Hiding the daemon left a user unable to tell "healthy" from "not
   yet known", or to see which build and port are answering and whether it starts at login, without
   a terminal. The daemon's state becomes visible at all times; starting it stays automatic.
-- **Settings regrouped.** Experimental features get their own tab, the daemon gets one, and
-  Coffer's own model moves beside the providers it is chosen from.
+- **Settings regrouped, and out of the sidebar.** Experimental features get their own tab, the
+  daemon gets one, and Coffer's own model moves beside the providers it is chosen from. Settings
+  is machine-level and visited rarely, so it leaves the sidebar for a modal opened from a gear in
+  the sidebar footer or with ⌘,, still addressable at `/settings/<tab>`.
+- **Updates found by the app.** A desktop user learns of a new version only by downloading a new
+  `.dmg`. The shell checks a signed manifest on GitHub Releases at launch and every six hours,
+  and Settings › About shows the result and installs it on request.
 - **A command palette and attention dots.** With thirteen entries and many objects, the user needs
   one keystroke to reach any page or object, and one mark on the entry that needs them.
 
@@ -36,12 +42,13 @@ unarchived until that implementation lands.
 ## What Changes
 
 - The sidebar becomes an ungrouped **Overview** entry above five groups — **Agents** (Agents,
-  Model providers), **Work** (Chat, Channels), **Capabilities** (MCP servers, Skills),
-  **Context** (Knowledge, Memory), **System** (Secrets, Activity, Sync, Settings) — thirteen
-  entries. Experimental switches hide entries exactly as before, and a group left with no entry
+  Model providers), **Run** (Chat, Channels), **Capabilities** (MCP servers, Skills),
+  **Context** (Knowledge, Memory), **System** (Secrets, Activity, Usage, Sync) — thirteen
+  entries. Usage's page is specified with the change that meters use. Experimental switches hide entries exactly as before, and a group left with no entry
   hides its heading. Routes do not move.
 - One name per surface in both languages, with the zh glossary fixed: 总览 · 智能体（智能体、模型提供商）
-  · 工作（聊天、消息渠道）· 能力（MCP 服务器、技能）· 上下文（知识、记忆）· 系统（密钥、活动、同步、设置）;
+  · 运行（聊天、消息渠道）· 能力（MCP 服务器、技能）· 上下文（知识、记忆）· 系统（密钥、活动、用量、同步）,
+  and Settings is 设置;
   an agent is 智能体 everywhere in the zh UI.
 - A **Secrets** page (`/secrets`) lists every stored secret with its presence and what uses it,
   and carries add, replace, reveal (audited), delete (refused while cited) and the entry to the
@@ -53,6 +60,10 @@ unarchived until that implementation lands.
   connection and model choice that sat on Overview.
 - `/` renders the Overview page in place instead of redirecting to `/agents`. Overview's content
   is specified separately.
+- **Settings** is not a sidebar entry: a gear in the sidebar footer, beside the daemon status,
+  and ⌘, / Ctrl+, open it as a large modal over the current page. Each tab keeps its route
+  (`/settings/<tab>`), so deep links, the palette and other pages' links open the modal over the
+  page underneath, and closing it returns there.
 - Settings has six tabs: **General, Features, Security, Data, Daemon, About**. Experimental
   features move from General to Features; the Start at login card moves from General to Daemon;
   Security holds machine-level items only.
@@ -68,13 +79,20 @@ unarchived until that implementation lands.
   existing mark becomes the first user of one shared rule.
 - The desktop shell's Restart control and version-skew warning are rendered on Settings → Daemon
   as well as in the offline banner, and a restart may be chosen from there.
+- **Auto-update.** The desktop shell checks for a newer version at launch and every six hours
+  through the Tauri updater, against a signed manifest the release workflow publishes on GitHub
+  Releases. Settings › About shows the running version, the last check, a Check for updates
+  control and, when a newer version exists, Download and restart; an update whose signature does
+  not verify is refused. In a browser About shows the version only.
 
 ## Capabilities
 
 ### New Capabilities
 
 ### Modified Capabilities
-- `web-ui`: the sidebar entry set and its five intent groups (Overview and Secrets added), one
+- `web-ui`: the sidebar entry set and its five intent groups (Overview, Secrets and Usage added,
+  Settings moved to a footer gear and a route-addressable modal), the update check on Settings ›
+  About, one
   name per surface with the zh glossary, the Secrets page, landing on Overview, six Settings
   tabs with Security machine-level only, Coffer's model beside Model providers, the daemon footer and Settings → Daemon, the command
   palette, sidebar attention dots; the daemon-invisibility requirement is removed and daemon
@@ -82,7 +100,9 @@ unarchived until that implementation lands.
 - `daemon`: the status probe is the one source of the state the shell shows; the port is shown on
   Settings → Daemon and still changed only from the CLI.
 - `desktop-app`: the Restart control and version-skew warning are also rendered on Settings →
-  Daemon, and a restart chosen there is the same restart.
+  Daemon, and a restart chosen there is the same restart; the shell checks for and installs
+  signed updates, a third sanctioned host affordance rendered on Settings › About. The Purpose
+  section's "auto-update is out of scope" is reversed with it.
 - `experimental-features`: features are switched on Settings → Features, and a switched-off
   feature's notice links there and its pages and objects leave the command palette.
 - `internal-engine`: the engine's settings are shown on the Coffer's model tab of Model providers
@@ -102,15 +122,19 @@ unarchived until that implementation lands.
   Model providers tabs), `pages/settings/*` (Features and Daemon tabs, residency card moved),
   `pages/ModelProvidersPage.tsx`, the attention-dot hook generalised from `useSyncAttention`, i18n
   strings in both locales.
-- Desktop: no Rust change; the frontend's credential-supplier module exposes the restart and skew
-  check to the Daemon tab and footer.
+- Desktop: the Tauri updater plugin with its public key in the bundle configuration, a
+  six-hour timer, and IPC commands for check and install; the frontend's credential-supplier
+  module exposes the restart and skew check to the Daemon tab and footer, and the update check to
+  the About tab. Release: the workflow signs the updater archive with the updater key held as a
+  repository secret and publishes it with its manifest beside the `.dmg`.
 - Backend and contracts: none; every screen reads routes that already exist
   (`/daemon/status`, `/daemon/residency`, `/daemon/rotate-token`, `/daemon/features`,
   `/credentials`, the kind list routes). Listing uncited secrets, the migration assistant and an
   agent's hooks read arrive with their own changes.
 - Tests: web-ui, experimental-features, internal-engine, desktop-app, agent-registry,
   skill-manager and provider-switching acceptance markers for the new and renamed scenarios; e2e shell specs (`shell_cold_start`, `shell_settings`) and new ones
-  for the palette, footer and Daemon tab.
+  for the palette, footer, Settings modal, Daemon tab and About tab's update states; the shell's
+  `cargo test` for the update check's schedule and signature refusal.
 - Docs: the new ADR
   [The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md)
   (Proposed; on acceptance it supersedes

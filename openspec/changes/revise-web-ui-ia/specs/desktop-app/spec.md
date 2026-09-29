@@ -1,13 +1,42 @@
+## ADDED Requirements
+
+### Requirement: Check for updates against a signed release manifest
+The shell MUST check for a newer version of Coffer at launch and every six hours while it runs, and on demand from the web UI's Settings › About tab (spec [web-ui](../web-ui/spec.md) "Check for and install updates on Settings › About"), through the Tauri updater against a release manifest published on GitHub Releases. A new version otherwise reaches a user only if they think to download a new `.dmg`, and a desktop user is the one least likely to watch a releases page. The check and the download MUST run in the shell's own process, not in the webview, so the webview's content policy stays loopback and IPC only (see "Restrict the webview to loopback and IPC").
+
+Every update MUST be signed with the project's updater key and verified against the public key built into the shell before it is installed; an update whose signature is missing or does not verify MUST be refused and reported, never installed. The release workflow MUST publish, beside each tag's `.dmg`, the updater archive of the same `.app`, its signature, and the manifest naming the version, the archive's URL and the signature. A check at launch or on the timer MUST NOT interrupt the user: it records its time and result for the About tab to show, and only the user's own Download and restart installs anything. Installing MUST download and verify the archive, replace the `.app`, and relaunch the shell; the relaunched shell finds the previous version's daemon through the version-skew check and replaces it through the one restart (see "Restart by stopping the running daemon first"), so the new version's daemon answers. A check or download that fails — no network, an unreachable manifest, a refused signature — MUST be reported to the About tab and recorded (see "Write the shell's records into the daemon log"), and MUST leave the running version untouched.
+
+#### Scenario: the shell checks at launch and every six hours
+- **GIVEN** the shell launched with a newer signed release on the manifest
+- **WHEN** it starts, and again after six hours of running
+- **THEN** each time it checks the manifest without showing a dialog, and records the check's time and the newer version for the About tab
+- **AND** nothing is downloaded or installed until the user chooses Download and restart
+
+#### Scenario: an update is installed only with a valid signature
+- **GIVEN** a manifest whose archive's signature does not verify against the shell's built-in public key
+- **WHEN** the user chooses Download and restart
+- **THEN** the shell refuses the update, reports the refused signature to the About tab and the daemon log, and keeps running the current version
+
+#### Scenario: installing an update relaunches onto the new version
+- **GIVEN** a newer signed release and a daemon from the running version
+- **WHEN** the user chooses Download and restart and the archive verifies
+- **THEN** the shell replaces the `.app`, relaunches, and restarts the previous version's daemon through the one restart
+- **AND** the About tab and the daemon status both report the new version
+
+#### Scenario: a release publishes the update manifest
+- **GIVEN** a release tag matching `v*` is pushed
+- **WHEN** the release workflow finishes
+- **THEN** the release carries, beside the `.dmg`, the updater archive, its signature and a manifest naming that version, the archive's URL and the signature
+
 ## MODIFIED Requirements
 
 ### Requirement: Consume the one frontend build the daemon serves
-The shell MUST consume the same `frontend/dist` build the daemon serves. It adds a credential *supplier* (see "Supply the page its daemon connection over IPC") and MUST NOT introduce a second frontend code path, a host-conditional branch, or a separate UI build — one artifact is what keeps the two hosts from drifting. Two host-conditional affordances are sanctioned, both reached through the credential supplier's module, because only the shell can offer them: the Restart control, and the version-skew check that warns when the shell has reached a daemon from an earlier app version (see "Find or start a daemon by a fixed resolution order"). Each is rendered in exactly two places — the offline banner and the web UI's Settings → Daemon tab — and the shell footer reads the skew check's answer to show its version warning; in a browser, the same two places name the `coffer daemon start` or `coffer daemon restart` command instead of a Restart control. Outside the shell the skew check always answers "matches", since a browser is served by whichever daemon is running and has no pairing to be out of step with. One host-conditional report is sanctioned beside them, in the same module and rendering nothing: the page tells the shell its interface language so the tray can be labelled in it (see "Host the UI locally in an application window"); outside the shell it does nothing, since a browser has no tray.
+The shell MUST consume the same `frontend/dist` build the daemon serves. It adds a credential *supplier* (see "Supply the page its daemon connection over IPC") and MUST NOT introduce a second frontend code path, a host-conditional branch, or a separate UI build — one artifact is what keeps the two hosts from drifting. Three host-conditional affordances are sanctioned, all reached through the credential supplier's module, because only the shell can offer them: the Restart control, the version-skew check that warns when the shell has reached a daemon from an earlier app version (see "Find or start a daemon by a fixed resolution order"), and the update check and install (see "Check for updates against a signed release manifest"). The first two are each rendered in exactly two places — the offline banner and the web UI's Settings → Daemon tab — and the shell footer reads the skew check's answer to show its version warning; in a browser, the same two places name the `coffer daemon start` or `coffer daemon restart` command instead of a Restart control. The update check and install are rendered in one place, the web UI's Settings › About tab; in a browser that tab says updates are installed by the desktop app and offers no control. Outside the shell the skew check always answers "matches", since a browser is served by whichever daemon is running and has no pairing to be out of step with. One host-conditional report is sanctioned beside them, in the same module and rendering nothing: the page tells the shell its interface language so the tray can be labelled in it (see "Host the UI locally in an application window"); outside the shell it does nothing, since a browser has no tray.
 
 #### Scenario: the shell hosts the one build the daemon serves
 - **GIVEN** the shell's bundle configuration and the daemon's frozen-build recipe,
 - **WHEN** each names the web UI it ships,
 - **THEN** both name the repository's `frontend/dist`, produced by the frontend's single `npm run build`,
-- **AND** outside the credential supplier, the offline banner, the Settings → Daemon tab and the shell footer — which carry the Restart control, the version-skew warning, or the skew check's answer — no frontend module branches on whether it is running inside the shell.
+- **AND** outside the credential supplier, the offline banner, the Settings → Daemon tab, the Settings › About tab and the shell footer — which carry the Restart control, the version-skew warning, the skew check's answer, or the update check — no frontend module branches on whether it is running inside the shell.
 
 ### Requirement: Find or start a daemon by a fixed resolution order
 The shell MUST locate a daemon by a fixed resolution order — a live daemon named by `~/.coffer/daemon.json`, then its own bundle, then `~/.coffer/bin/`, then `PATH` — taking over an already-running daemon rather than spawning a second one. The liveness probe MUST come first: the other three answer which binary to spawn, while it answers whether to spawn at all, and reversing them makes a bundled app race the daemon the user already started for its port. The probe MUST be an HTTP status check rather than a bare TCP connect, so a process squatting the recorded port is not mistaken for a daemon.

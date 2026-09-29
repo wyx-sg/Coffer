@@ -6,8 +6,9 @@ ADR [Sidebar Grouped by Role](../../../docs/decisions/sidebar-grouped-by-role.md
 here, as a contract, before the shell is written. This change replaces the role grouping with
 five intent groups (argued in the Proposed ADR
 [The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md)),
-adds Overview and Secrets, regroups Settings and the agent detail page, makes the daemon visible
-and adds two navigation aids.
+adds Overview, Secrets and Usage, moves Settings out of the sidebar into a modal and regroups
+it, regroups the agent detail page, makes the daemon visible, adds two navigation aids, and
+brings auto-update into the desktop shell.
 
 ## Goals
 
@@ -16,7 +17,8 @@ and adds two navigation aids.
 - Fix the agent detail page's tab set.
 - Land on Overview.
 - Make the daemon's state visible without making starting it the user's job.
-- Regroup Settings by what each tab manages.
+- Regroup Settings by what each tab manages, and open it as a modal rather than a sidebar entry.
+- Let the desktop app find and install its own updates.
 - Specify the command palette and attention dots at the level the shell needs.
 
 Overview's own content is specified by a separate change, as are the Activity page's refresh
@@ -33,7 +35,7 @@ hooks.
  AGENTS                                                                智能体
   Agents           /agents                                              智能体
   Model providers  /model-providers         Providers | Coffer's model  模型提供商
- WORK                                                                  工作
+ RUN                                                                   运行
   Chat             /chat                                                聊天
   Channels         /channels                                            消息渠道
  CAPABILITIES                                                          能力
@@ -45,15 +47,19 @@ hooks.
  SYSTEM                                                                系统
   Secrets          /secrets                                             密钥
   Activity         /activity                                            活动
+  Usage            /usage                                               用量
   Sync             /sync                    experimental: vault_sync    同步
-  Settings         /settings                General | Features | Security | Data | Daemon | About   设置
+ ─────────────────────────────────────────────────────────────────────
+  footer: daemon status · ⚙ Settings (modal)   /settings/<tab>          设置
 ```
 
-Thirteen entries. The grouping — by what the user comes to do, not by role — is argued in full,
+Thirteen entries; Settings is not one of them (decision 4). Usage is in 1.0 — the page that shows
+token use metered at the model proxy and the official remaining quota of subscription agents —
+and its content is specified with the change that meters use; this change fixes only its place. The grouping — by what the user comes to do, not by role — is argued in full,
 against the role groups, one big Resources group, a flat list and fewer entries with tabs, in
 [The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md).
-The criterion it is measured by is that at the ~17 entries the roadmap names (Workflows in Work,
-Rules and Sources in Capabilities, Usage in System) no group passes five; more agents, channels,
+The criterion it is measured by is that at the ~16 entries the roadmap names (Workflows in Run,
+Rules and Sources in Capabilities) no group passes five; more agents, channels,
 custom tools and ADE targets are rows inside existing pages. Rules is not in 1.0 — projecting
 rules is deferred — so no Rules entry is specified here.
 
@@ -98,7 +104,27 @@ product's front door and deserves the root address, and a redirect would put a s
 history for the same page. `/agents` keeps its route; nothing that linked to it breaks. The
 acceptance scenario "the index opens the Agents page" becomes "the index opens Overview".
 
-### 4. Settings tab set
+### 4. Settings: a modal, and its tab set
+
+**Settings leaves the sidebar.** A gear at the bottom of the sidebar, beside the daemon status,
+and ⌘, (Ctrl+, elsewhere) open Settings as a large modal over the current page; the footer's
+daemon state opens it on Daemon. Settings is visited rarely and is about this machine, not about
+the vault's contents, so an entry for it sat in System beside pages used every week; desktop
+applications keep their preferences in a window of their own (macOS apps' Settings under ⌘,,
+VS Code, Linear), and a user reaching for ⌘, finds it where they expect. *Rejected:* keeping
+Settings as the last System entry, which spends a sidebar row on a page opened a few times a
+year and, with Usage in 1.0, would already fill System to five, the ceiling the grouping allows.
+
+**It stays addressable.** Each tab keeps `/settings/<tab>`. The router renders the modal over a
+background location: opening it from a page keeps that page mounted underneath, and closing it
+(close control, Escape, click outside, or Back) returns to that page's route. A fresh load of a
+Settings route, with no page underneath, renders the modal over Overview and closes to `/`. Deep
+links (the feature notice's `/settings/features`, the footer's `/settings/daemon`) and the
+palette's Settings tabs therefore all open the same modal. This routing is the cost of the modal:
+a Settings page was one route per tab, a modal over a background location needs the router to
+carry the page underneath. *Rejected:* a modal with no route, which would break every deep link
+and the palette's Settings tabs; and a separate window in the desktop shell, which a browser host
+cannot have.
 
 | Tab | Route | Holds |
 | --- | --- | --- |
@@ -107,7 +133,7 @@ acceptance scenario "the index opens the Agents page" becomes "the index opens O
 | Security | `/settings/security` | Master-key location (machine-level items only) |
 | Data | `/settings/data` | Retention per log table, clear expired data |
 | Daemon | `/settings/daemon` | Status, restart, port, Start at login, token rotation |
-| About | `/settings/about` | Version, license, source |
+| About | `/settings/about` | Version, license, source, update check (desktop shell) |
 
 - **Features gets its own tab** because it is a per-machine product decision rather than a display
   preference, and the rebuild's release channel starts with more features off; a card buried in
@@ -229,6 +255,30 @@ change that adds it, and until then Installed has three sections ("List only shi
 the sidebar" applies in spirit). *Rejected:* keeping per-kind tabs and adding Hooks and Model,
 nine tabs, more than a tab strip shows at the page's width.
 
+### 10. Auto-update
+
+A new version reached a desktop user only if they downloaded a new `.dmg`, and the desktop spec
+listed auto-update as out of scope. It is now in scope for 1.0. The shell checks at launch and
+every six hours through the Tauri updater against a manifest the release workflow publishes on
+GitHub Releases, and Settings › About shows the running version, the last check, a Check for
+updates control and, when a newer version exists, Download and restart.
+
+- **Signed, and verified by the shell.** The updater archive is signed with an updater key held
+  as a repository secret; the shell carries the public key and refuses anything that does not
+  verify. GitHub Releases is only transport, so a compromised release page cannot push code.
+- **The user installs; the timer only checks.** A background check records its result for About
+  and never interrupts. *Rejected:* installing silently on quit, which changes a running tool
+  under the user without a word, and a system notification per release, which a six-hour timer
+  would repeat.
+- **The daemon follows the app.** After the relaunch the skew check sees the previous version's
+  daemon and the shell replaces it through the one restart, so no second restart path exists.
+- **The check runs in the shell, not the webview**, so the content policy stays loopback and IPC.
+- **In a browser, About shows the version only**: a page the daemon serves cannot replace the
+  application, and the terminal tier updates by reinstalling its archive.
+
+The update check is a third sanctioned host affordance, reached through the same
+credential-supplier module as Restart and the skew check and rendered only on About.
+
 ## Implementation notes
 
 - **Settings contents gated until later work.** The tab set is final, but some contents arrive
@@ -257,7 +307,14 @@ nine tabs, more than a tab strip shows at the page's width.
   unmanaged skill's detail page from the agent's Skills tab". Their bodies say "section of the
   Installed tab"; the names keep their acceptance markers stable.
 - **Relearning the sidebar.** Users of the eleven-entry sidebar find Model providers under
-  Agents and Channels under Work. The palette finds either by name, and routes are unchanged.
+  Agents, Channels under Run, and Settings behind the footer gear. The palette finds each by
+  name, and routes are unchanged.
+- **Auto-update depends on signing.** A replaced `.app` must keep its identity for Gatekeeper
+  and the keychain, so the updater is built after the release is Apple Developer ID signed;
+  the tasks order it that way.
+- **Losing the updater key strands every install.** The public key is built into each shipped
+  shell, so a lost private key means no update can be verified; the key is kept in the
+  repository's secrets with an offline backup.
 
 - **Coffer's model behind a provider switch.** If a later change puts Model providers behind an
   experimental switch that is off on the stable channel, Coffer's model becomes unreachable in

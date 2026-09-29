@@ -55,7 +55,10 @@ sidebar entry".
 
 ### Requirement: Keep the sidebar to its thirteen entries
 The sidebar's entries MUST be exactly these, at these routes: one ungrouped entry
-and five groups — thirteen today, and no fourteenth without a spec change. An
+and five groups — thirteen today, and no fourteenth without a spec change.
+Settings is not an entry: it is a modal opened from the sidebar footer (see
+"Open Settings as a modal from the sidebar footer"). Usage's content is specified
+with the change that meters it; this requirement fixes only its place. An
 entry whose experimental feature is switched off (spec
 [experimental-features](../experimental-features/spec.md) "Close every surface of a switched-off feature")
 MUST be left out — today Knowledge for `knowledge`, Memory for `memory`, Sync for
@@ -67,7 +70,7 @@ on:
  AGENTS
   Agents           /agents            — the consumers (Bot icon)
   Model providers  /model-providers   — the endpoints agents' models are served from, and Coffer's own model
- WORK
+ RUN
   Chat             /chat              — a conversation with an agent
   Channels         /channels          — the IM bots agents answer on
  CAPABILITIES
@@ -79,8 +82,8 @@ on:
  SYSTEM
   Secrets          /secrets           — every stored secret and what uses it
   Activity         /activity          — what changed, what was called, what broke
+  Usage            /usage             — token use and remaining quota per agent
   Sync             /sync              — converging this vault with a git remote
-  Settings         /settings
 ```
 
 #### Scenario: cold-start renders authenticated content
@@ -90,12 +93,13 @@ on:
 - **WHEN** they navigate to `http://localhost:5173/` in a real browser
 - **THEN** the index renders the Overview page at `/`, with the sidebar and main content area, within 2 seconds
 - **AND** the main content shows the Overview page (no generic error card)
-- **AND** the sidebar lists exactly Coffer's operational surfaces — Overview; Agents, Model providers; Chat, Channels; MCP servers, Skills; Knowledge, Memory; Secrets, Activity, Sync, Settings — with Overview under no heading and the rest grouped under "Agents", "Work", "Capabilities", "Context" and "System" headings, with no other entry
+- **AND** the sidebar lists exactly Coffer's operational surfaces — Overview; Agents, Model providers; Chat, Channels; MCP servers, Skills; Knowledge, Memory; Secrets, Activity, Usage, Sync — with Overview under no heading and the rest grouped under "Agents", "Run", "Capabilities", "Context" and "System" headings, with no other entry
+- **AND** no sidebar entry is Settings; the sidebar footer carries the Settings gear beside the daemon status
 
 #### Scenario: a switched-off feature leaves the sidebar
 - **GIVEN** `knowledge` and `vault_sync` switched off
 - **WHEN** the app shell is rendered
-- **THEN** the sidebar lists Overview; Agents, Model providers; Chat, Channels; MCP servers, Skills; Memory; Secrets, Activity, Settings — with no Knowledge and no Sync entry
+- **THEN** the sidebar lists Overview; Agents, Model providers; Chat, Channels; MCP servers, Skills; Memory; Secrets, Activity, Usage — with no Knowledge and no Sync entry
 
 ### Requirement: Give every scoped resource kind its own list surface
 Every scoped resource kind MUST have its own list surface, so the navigation and
@@ -118,7 +122,7 @@ nothing else:
 | Overview | 总览 |
 | Agents (group and entry) | 智能体 |
 | Model providers | 模型提供商 |
-| Work (group) | 工作 |
+| Run (group) | 运行 |
 | Chat | 聊天 |
 | Channels | 消息渠道 |
 | Capabilities (group) | 能力 |
@@ -130,6 +134,7 @@ nothing else:
 | System (group) | 系统 |
 | Secrets | 密钥 |
 | Activity | 活动 |
+| Usage | 用量 |
 | Sync | 同步 |
 | Settings | 设置 |
 
@@ -140,7 +145,7 @@ headings, page titles, buttons, dialogs and prose — never "Agent" or 代理.
 - **GIVEN** the UI in English and then in 中文
 - **WHEN** each sidebar entry's label is compared with the title its page shows
 - **THEN** the two are the same words for every surface in both languages
-- **AND** in 中文 the group headings read 智能体, 工作, 能力, 上下文 and 系统, and no zh string names an agent as "Agent"
+- **AND** in 中文 the group headings read 智能体, 运行, 能力, 上下文 and 系统, and no zh string names an agent as "Agent"
 
 ### Requirement: Show a self-clearing offline banner
 When an authenticated request fails to connect while the app is open, a
@@ -160,8 +165,9 @@ two MUST agree: the footer never reads as running while the banner is shown.
 - **AND** the banner disappears automatically once the daemon becomes reachable again, without a manual page reload
 
 ### Requirement: Organise Settings into six tabs
-Settings MUST carry exactly six tabs, in this order, grouped by what they manage
-rather than by how Coffer is built, and MUST open on General:
+Settings — the modal of "Open Settings as a modal from the sidebar footer" —
+MUST carry exactly six tabs, in this order, grouped by what they manage rather
+than by how Coffer is built, and MUST open on General:
 
 - **General** (`/settings/general`) — display preferences: the default page size
   and the preferred external editor.
@@ -175,18 +181,20 @@ rather than by how Coffer is built, and MUST open on General:
 - **Data** (`/settings/data`) — retention policy and manual prune.
 - **Daemon** (`/settings/daemon`) — the daemon's state and the controls a user
   needs for it (see "Show and manage the daemon on Settings → Daemon").
-- **About** (`/settings/about`) — version, license, source.
+- **About** (`/settings/about`) — version, license, source, and whether a newer
+  version is available (see "Check for and install updates on Settings › About").
 
 Coffer's own model is not a Settings tab: it sits beside the providers it is
 chosen from (see "Show Coffer's model beside Model providers"). Clicking a tab
-swaps the right pane without a full page reload.
+swaps the modal's right pane without a full page reload and without closing the
+modal.
 
 #### Scenario: settings layout uses the redesigned tabbed sidebar
 - **GIVEN** the user navigates to `/settings`
-- **WHEN** the page resolves
-- **THEN** it lands on the General tab
-- **AND** the settings sidebar shows General, Features, Security, Data, Daemon, and About — exactly those six, in that order — with the current route highlighted
-- **AND** clicking a tab swaps the right pane content without a full page reload
+- **WHEN** the route resolves
+- **THEN** the Settings modal opens on the General tab
+- **AND** the modal's tab list shows General, Features, Security, Data, Daemon, and About — exactly those six, in that order — with the current route highlighted
+- **AND** clicking a tab swaps the right pane content without a full page reload and the modal stays open
 
 #### Scenario: the security tab keeps only machine-level settings
 - **GIVEN** stored secrets cited by a registered MCP server and a model provider
@@ -204,12 +212,16 @@ groups, under headings in this order:
 - **AGENTS** — set up the agents and the models they run on: Agents, then Model
   providers. Agents come first because they are the subject of the product; a
   provider is the endpoint and key each agent's model is served from.
-- **WORK** — talk to an agent, directly or through an IM bot: Chat, then
+- **RUN** — put an agent to work, directly or through an IM bot: Chat, then
   Channels.
 - **CAPABILITIES** — give agents things they can do: MCP servers, then Skills.
 - **CONTEXT** — give agents things they know: Knowledge, then Memory.
 - **SYSTEM** — look after Coffer and what every other part shares: Secrets,
-  Activity, Sync, then Settings.
+  Activity, Usage, then Sync.
+
+Settings sits in no group: it is machine-level configuration visited rarely, so
+it opens as a modal from the sidebar footer rather than taking an entry (see
+"Open Settings as a modal from the sidebar footer").
 
 **Overview**, the landing page, MUST sit above the five groups under no heading:
 it summarises all of them, so filing it under one would misname it.
@@ -225,8 +237,8 @@ nothing. The decision and the options it was weighed against are in
 #### Scenario: the sidebar groups entries by what the user comes to do
 - **GIVEN** the app shell is rendered with every experimental feature switched on
 - **WHEN** the sidebar lists its entries
-- **THEN** Overview comes first, under no heading, and the rest sit under five headings in the order Agents, Work, Capabilities, Context, System
-- **AND** Agents holds Agents then Model providers, Work holds Chat then Channels, Capabilities holds MCP servers then Skills, Context holds Knowledge then Memory, and System holds Secrets, Activity, Sync and Settings
+- **THEN** Overview comes first, under no heading, and the rest sit under five headings in the order Agents, Run, Capabilities, Context, System
+- **AND** Agents holds Agents then Model providers, Run holds Chat then Channels, Capabilities holds MCP servers then Skills, Context holds Knowledge then Memory, and System holds Secrets, Activity, Usage and Sync
 
 #### Scenario: a group with every entry switched off leaves the sidebar
 - **GIVEN** `knowledge` and `memory` both switched off
@@ -245,7 +257,7 @@ word a user navigates by:
   agent's model is served from, and the connection and model are chosen per
   agent on that agent's page (spec
   [provider-switching](../provider-switching/spec.md) "Offer every connection operation on REST, CLI and web").
-- **Channels** is filed under Work, beside Chat and not merged into it: Chat is
+- **Channels** is filed under Run, beside Chat and not merged into it: Chat is
   where a person holds conversations every day, a channel is an IM bot set up
   once and revisited rarely, and the conversations a channel carries are already
   listed on the Chat page (spec [chat](../chat/spec.md) "Show every conversation on the Chat page").
@@ -261,7 +273,7 @@ stored secrets on the Secrets page").
 #### Scenario: each listed resource kind has one sidebar entry
 - **GIVEN** the app shell is rendered with every experimental feature switched on
 - **WHEN** the entries for resource kinds are read
-- **THEN** MCP servers, Skills, Knowledge, Memory, Model providers and Channels each appear exactly once, under Capabilities, Capabilities, Context, Context, Agents and Work respectively
+- **THEN** MCP servers, Skills, Knowledge, Memory, Model providers and Channels each appear exactly once, under Capabilities, Capabilities, Context, Context, Agents and Run respectively
 - **AND** no heading reads "Resources"
 
 ### Requirement: Open the app on Overview
@@ -284,8 +296,9 @@ daemon from the web kills the very page it was asked from, and recovery then nee
 a terminal anyway, where `coffer daemon stop` already is. Restarting is not
 stopping — the desktop shell's restart waits for the replacement and hands the
 page its connection (spec [desktop-app](../desktop-app/spec.md) "Restart by stopping the running daemon first").
-The About tab MUST show version, license and source only, with no language picker
-(the sidebar already switches language) and no installed-resource-kind list
+The About tab MUST show version, license, source and the update check of "Check
+for and install updates on Settings › About" only, with no language picker (the
+sidebar already switches language) and no installed-resource-kind list
 (developer detail). Remaining jargon is rewritten in plain language (e.g.
 "prune" is phrased as clearing expired data).
 
@@ -293,7 +306,7 @@ The About tab MUST show version, license and source only, with no language picke
 - **GIVEN** the user opens the Settings tabs
 - **WHEN** each tab is fully rendered
 - **THEN** no tab exposes a "Shutdown daemon" or "Stop daemon" control
-- **AND** the About tab shows version / license / source only — no language picker, no resource-kind list
+- **AND** the About tab shows version / license / source and the update check only — no language picker, no resource-kind list
 
 ### Requirement: Set when the daemon runs on the Daemon tab
 The Daemon tab MUST carry a card for when Coffer's daemon runs, with one control: a **Start at
@@ -342,8 +355,11 @@ name one of four states in plain words — connecting (no answer yet), running,
 stopping (the daemon reports `draining`) or offline (it cannot be reached) — and,
 while running, the port it answers on. In the desktop shell, a daemon from a
 different app version MUST read as running with a version warning. Clicking the
-footer MUST open Settings → Daemon. On the collapsed icon rail the footer MUST
-shrink to a state icon whose tooltip carries the same words. Showing the state
+state MUST open the Settings modal on its Daemon tab over the current page. The
+footer also carries the Settings gear beside the state (see "Open Settings as a
+modal from the sidebar footer"). On the collapsed icon rail the state MUST
+shrink to an icon whose tooltip carries the same words, and the gear stays an
+icon beside it. Showing the state
 MUST NOT make starting the daemon the user's job: every surface that can start
 one still does so without asking.
 
@@ -351,7 +367,7 @@ one still does so without asking.
 - **GIVEN** a daemon answering its status probe with `status: "ready"` on port 8000
 - **WHEN** the shell renders
 - **THEN** the sidebar footer reads that the daemon is running on port 8000
-- **AND** clicking it opens `/settings/daemon`
+- **AND** clicking it opens the Settings modal on its Daemon tab at `/settings/daemon`, over the page the user was on
 
 #### Scenario: the footer says connecting before the first answer
 - **GIVEN** the shell has rendered and the daemon's status probe has not answered yet
@@ -452,7 +468,8 @@ state: no create, delete, enable, reach or run entry.
 It MUST list two groups, filtered together by what the user types:
 
 - **Pages** — every sidebar entry and every Settings tab, by the names the
-  sidebar and the tabs use (see "Call a surface by one name everywhere").
+  sidebar and the tabs use (see "Call a surface by one name everywhere"). A
+  Settings tab opens in the Settings modal over the current page.
 - **Objects** — the agents and the resources of every kind with a list surface,
   matched by title and by name, each opening its detail page.
 
@@ -597,3 +614,97 @@ an error in the sidebar.
 - **GIVEN** the route behind a kind's attention signal failing, or not yet answered
 - **WHEN** the sidebar renders
 - **THEN** that entry carries no dot and the sidebar shows no error
+
+### Requirement: Open Settings as a modal from the sidebar footer
+Settings MUST NOT be a sidebar entry. It MUST open as a large modal over the
+current page from three places: a gear button at the bottom of the sidebar,
+beside the daemon status (see "Show the daemon's state in the shell footer");
+the ⌘, shortcut on macOS and Ctrl+, elsewhere, from any page; and the command
+palette's Settings tabs. The gear and the shortcut open it on General; the
+footer's daemon state opens it on Daemon. Settings is machine-level
+configuration a user visits rarely, so it takes no place in the sidebar
+beside the pages used every day, the convention of desktop applications' own
+preferences windows.
+
+The modal MUST stay addressable by route: each tab is `/settings/<tab>`
+(General, Features, Security, Data, Daemon, About — see "Organise Settings into
+six tabs"), and while it is open the address bar and history carry that route,
+so a deep link, a reload, a link from another page (such as the feature notice's
+link to `/settings/features`) or the palette opens the modal on that tab.
+Opening it from a page MUST keep that page rendered underneath, unchanged.
+Closing it — the close control, Escape, or a click outside it — MUST return to
+the page underneath at that page's own route. A deep link opened with no page
+underneath, as on a fresh load of `/settings/daemon`, MUST render the modal over
+Overview, and closing it lands on `/`. Browser Back from an open modal MUST
+close it and return to the page underneath.
+
+#### Scenario: the gear opens Settings over the current page
+- **GIVEN** the user on `/mcp-servers`
+- **WHEN** they click the Settings gear in the sidebar footer
+- **THEN** the Settings modal opens on General, the URL reads `/settings/general`, and the MCP servers list stays rendered underneath
+- **AND** the sidebar has no Settings entry and marks MCP servers as current
+
+#### Scenario: the keyboard shortcut opens Settings
+- **GIVEN** the app open on any page, with focus outside a text field
+- **WHEN** the user presses ⌘, on macOS or Ctrl+, elsewhere
+- **THEN** the Settings modal opens on General over that page
+
+#### Scenario: closing Settings returns to the page underneath
+- **GIVEN** the Settings modal opened from `/activity` and switched to its Data tab
+- **WHEN** the user presses Escape, and again after reopening it and pressing browser Back
+- **THEN** each time the modal closes and the app is on `/activity`, with the Activity page as it was
+
+#### Scenario: a deep link opens a Settings tab
+- **GIVEN** a fresh load of `/settings/daemon`
+- **WHEN** the route resolves
+- **THEN** the Settings modal opens on its Daemon tab over the Overview page
+- **AND** closing it lands on `/`
+
+#### Scenario: the palette opens a Settings tab over the current page
+- **GIVEN** the user on `/skills`
+- **WHEN** they open the palette, type "features" and press Enter
+- **THEN** the Settings modal opens on its Features tab at `/settings/features`, with the Skills page underneath
+
+### Requirement: Check for and install updates on Settings › About
+In the desktop shell, the About tab MUST show the version running, when updates
+were last checked, a **Check for updates** control, and the result of the
+latest check — up to date, or a newer version available with its version number
+and a **Download and restart** control. The check and the install are the
+shell's (spec [desktop-app](../desktop-app/spec.md) "Check for updates against a signed release manifest"),
+reached through the same module as the shell's other host affordances; the tab
+only renders what the shell reports and asks it to act. While a check or a
+download is running its control MUST show that it is busy and not accept a
+second press; a check or a download that fails MUST show a readable error on
+the tab, keep the last successful check's time, and leave the running version
+untouched. In a browser, About MUST show the version and say that updates are
+installed by the desktop app, with no update control, because a page the
+daemon serves cannot replace the application.
+
+#### Scenario: about shows the version and when updates were last checked
+- **GIVEN** the desktop shell running version 1.0.0, last checked at launch, with no newer release
+- **WHEN** the user opens `/settings/about`
+- **THEN** the tab shows 1.0.0, the time of that check, that Coffer is up to date, and a Check for updates control
+
+#### Scenario: checking by hand finds a newer version
+- **GIVEN** the About tab open in the desktop shell and a newer signed release on the manifest
+- **WHEN** the user chooses Check for updates
+- **THEN** the control shows it is checking, then the tab shows the newer version number and a Download and restart control
+- **AND** the last-checked time moves to now
+
+#### Scenario: download and restart installs the newer version
+- **GIVEN** the About tab showing a newer version available
+- **WHEN** the user chooses Download and restart
+- **THEN** the tab shows the download's progress and the shell installs the update and relaunches
+- **AND** after the relaunch About shows the new version as the one running
+
+#### Scenario: a failed check keeps the last good result
+- **GIVEN** the About tab in the desktop shell with the release manifest unreachable
+- **WHEN** the user chooses Check for updates
+- **THEN** the tab shows a readable error and keeps the time of the last successful check
+- **AND** the running version is unchanged
+
+#### Scenario: about in a browser offers no update control
+- **GIVEN** the web UI opened in a browser
+- **WHEN** the user opens `/settings/about`
+- **THEN** the tab shows the version and says updates are installed by the desktop app
+- **AND** it shows no Check for updates or Download and restart control

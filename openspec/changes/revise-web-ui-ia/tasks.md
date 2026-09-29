@@ -1,17 +1,19 @@
 ## 1. Shell layout and sidebar
 
-- [ ] 1.1 Replace `components/Layout.tsx` and `components/SidebarNav.tsx` with the new shell: Overview ungrouped at the top, then Agents (Agents, Model providers), Work (Chat, Channels), Capabilities (MCP servers, Skills), Context (Knowledge, Memory), System (Secrets, Activity, Sync, Settings); no flag, the old components are deleted
+- [ ] 1.1 Replace `components/Layout.tsx` and `components/SidebarNav.tsx` with the new shell: Overview ungrouped at the top, then Agents (Agents, Model providers), Run (Chat, Channels), Capabilities (MCP servers, Skills), Context (Knowledge, Memory), System (Secrets, Activity, Usage, Sync); no Settings entry; no flag, the old components are deleted
 - [ ] 1.2 Keep the experimental gate on Knowledge, Memory and Sync entries and the experimental marker, unchanged in behaviour; a group whose every entry is switched off renders no heading
 - [ ] 1.3 Keep the collapsible icon rail and its `localStorage` memory, and the language switcher
-- [ ] 1.4 Add the sidebar footer: connecting / running (with port) / stopping / offline from the existing status poll, desktop version warning through the credential-supplier module, click opens `/settings/daemon`, icon with tooltip on the collapsed rail
+- [ ] 1.4 Add the sidebar footer: connecting / running (with port) / stopping / offline from the existing status poll, desktop version warning through the credential-supplier module, click opens the Settings modal at `/settings/daemon`, icon with tooltip on the collapsed rail; the Settings gear beside it
 - [ ] 1.5 Generalise `useSyncAttention` into one attention-dot component and per-entry signal map; Sync keeps its seen-on-visit rule; an unreadable signal renders no dot
 
 ## 2. Routes
 
 - [ ] 2.1 `router.tsx`: `/` renders the Overview page in place (no redirect to `/agents`); `/agents` unchanged
-- [ ] 2.2 Settings routes `/settings/general`, `/settings/features`, `/settings/security`, `/settings/data`, `/settings/daemon`, `/settings/about`; `/settings` opens General
+- [ ] 2.2 Settings routes `/settings/general`, `/settings/features`, `/settings/security`, `/settings/data`, `/settings/daemon`, `/settings/about`, rendered as a modal over a background location; `/settings` opens General; a fresh load renders it over Overview; close control, Escape, outside click and Back return to the page underneath
+- [ ] 2.2a ⌘, / Ctrl+, opens the Settings modal on General from any page (not while typing in a text field)
 - [ ] 2.3 Model providers tabs: Providers (default) and Coffer's model at `?tab=coffer-model`; `/settings/engine` and `/settings/embedding` redirect to `/model-providers?tab=coffer-model`
 - [ ] 2.4 `/secrets` route for the Secrets page
+- [ ] 2.4a `/usage` route for the Usage page; its content lands with the change that meters use
 - [ ] 2.5 Agent detail tab routes (`?tab=` for Overview, Installed, Config files, Conversations, Memory, Model; Installed sections addressable); the old per-kind tab addresses (`?tab=skills`, `?tab=mcp-servers`, `?tab=plugins`) open the matching Installed section
 
 ## 3. Settings tabs
@@ -20,7 +22,8 @@
 - [ ] 3.2 Features: move the Experimental features card from General; the feature notice (`FeatureGate`) links to `/settings/features`
 - [ ] 3.3 Daemon: status card, host-dependent restart (shell Restart control / `coffer daemon restart` to copy), read-only port with the CLI command, Start at login card moved from General, Rotate token with a confirmation that closes only on success and installs the returned token; loading skeleton and offline state
 - [ ] 3.4 Move the engine page (`InternalEngineSettings`) under Model providers → Coffer's model
-- [ ] 3.5 Data and About keep their contents; Security keeps only the master-key card (machine-level items); no stop or shutdown control anywhere
+- [ ] 3.5 Data keeps its contents; About adds the update check (task 3.6); Security keeps only the master-key card (machine-level items); no stop or shutdown control anywhere
+- [ ] 3.6 About: running version, last-checked time, Check for updates, update-available state with Download and restart and download progress, busy and error states, through the credential-supplier module; in a browser the version and a line that the desktop app installs updates
 
 ## 4. Secrets page
 
@@ -42,7 +45,13 @@
 - [ ] 6.2 Navigation only — no entry that sends a mutating request; switched-off features' pages and objects left out
 - [ ] 6.3 Per-group loading and error rows, Pages-only offline state, no-results message; arrow keys, Enter, Escape with focus return
 - [ ] 6.4 en / zh strings for the palette, footer, Daemon and Features tabs, the Coffer's model tab label, the Secrets page and the agent detail tabs
-- [ ] 6.5 i18n glossary: `nav.*` keys for the five group headings and thirteen entries, zh labels 总览 · 智能体（智能体、模型提供商）· 工作（聊天、消息渠道）· 能力（MCP 服务器、技能）· 上下文（知识、记忆）· 系统（密钥、活动、同步、设置）; replace every zh "Agent" naming an agent with 智能体 across `zh.json`; record the en/zh glossary in `.agents/frontend.md`; extend `i18n/surfaceNames.test.ts` to the new entries
+- [ ] 6.5 i18n glossary: `nav.*` keys for the five group headings, thirteen entries and the Settings gear, zh labels 总览 · 智能体（智能体、模型提供商）· 运行（聊天、消息渠道）· 能力（MCP 服务器、技能）· 上下文（知识、记忆）· 系统（密钥、活动、用量、同步）, Settings 设置; replace every zh "Agent" naming an agent with 智能体 across `zh.json`; record the en/zh glossary in `.agents/frontend.md`; extend `i18n/surfaceNames.test.ts` to the new entries
+
+## 6a. Auto-update (after the release is Apple Developer ID signed)
+
+- [ ] 6a.1 Tauri updater plugin in the shell with the updater public key in the bundle configuration; check at launch and every six hours; IPC commands for check (version, last check, result) and install (download with progress, verify, replace, relaunch); failures recorded under `coffer.desktop` in the daemon log
+- [ ] 6a.2 After the relaunch, a previous-version daemon found by the skew check is replaced through the one restart
+- [ ] 6a.3 Release workflow: sign the updater archive with the updater key from repository secrets and publish the archive, its signature and the manifest beside the `.dmg`
 
 ## 7. Tests
 
@@ -59,19 +68,21 @@
 - [ ] 7.11 `acceptance(daemon, "the status probe carries what the shell shows")` on a daemon-route integration test beside the status tests
 - [ ] 7.12 `acceptance(experimental-features, "the features tab switches a feature")` replaces "the general tab switches a feature" (`ExperimentalFeaturesSettings.test.tsx`); `acceptance(experimental-features, "a switched-off feature's page points at the Features tab")` on `FeatureGate.test.tsx`
 - [ ] 7.13 `acceptance(internal-engine, "the Coffer's model tab shows and changes both halves")` replaces "Settings → Coffer's model shows and changes both halves" (`EngineSettings.test.tsx`)
-- [ ] 7.14 `acceptance(desktop-app, "the shell hosts the one build the daemon serves")` updated for the Daemon tab and footer as sanctioned host-conditional places (`test_desktop_shell_surface.py`); the restart scenarios keep their names and markers
+- [ ] 7.14 `acceptance(desktop-app, "the shell hosts the one build the daemon serves")` updated for the Daemon tab, About tab and footer as sanctioned host-conditional places (`test_desktop_shell_surface.py`); the restart scenarios keep their names and markers
+- [ ] 7.14a `acceptance(desktop-app, …)` for "the shell checks at launch and every six hours", "an update is installed only with a valid signature" (`cargo test`), "installing an update relaunches onto the new version" (launching the app) and "a release publishes the update manifest" (release-workflow check)
+- [ ] 7.14b `acceptance(web-ui, …)` for the Settings modal: "the gear opens Settings over the current page", "the keyboard shortcut opens Settings", "closing Settings returns to the page underneath", "a deep link opens a Settings tab", "the palette opens a Settings tab over the current page"; and for About: "about shows the version and when updates were last checked", "checking by hand finds a newer version", "download and restart installs the newer version", "a failed check keeps the last good result", "about in a browser offers no update control"
 - [ ] 7.15 Migrate the e2e shell specs to role and label locators for the new sidebar
 - [ ] 7.16 `acceptance(web-ui, …)` for "the security tab keeps only machine-level settings", "the secrets page lists each secret with what uses it", "a secret in use cannot be deleted from the secrets page" and "revealing a secret is an explicit, audited read"
 - [ ] 7.17 `acceptance(agent-registry, "the agent detail page carries six tabs")` (`AgentDetailPage.test.tsx`); "open a plugin's detail page from the Plugins tab" and "open a direct MCP server's detail page from the agent" follow the Installed sections (`AgentPluginsTab`, `AgentPluginPage`, `AgentMcpEntryPage` tests); skill-manager "open an unmanaged skill's detail page from the agent's Skills tab" and "adopt or delete an unmanaged skill from its detail page" likewise (`AgentSkillsTab`, `UnmanagedSkillDetailPage` tests); provider-switching "the connections page lists profiles and their compatible agents" names the Model tab (`ModelProvidersPage.test.tsx`)
 
 ## 8. Docs
 
-- [ ] 8.1 `docs-site/guides/web-ui.md`: the sidebar table with its five groups, Overview and Secrets, the six Settings tabs, the footer, Settings → Daemon, the command palette and attention dots; rotating the token is now in the UI, stopping stays CLI-only
-- [ ] 8.2 `docs-site/guides/desktop-app.md`: Restart from Settings → Daemon, the footer's version warning, Start at login under Settings → Daemon
+- [ ] 8.1 `docs-site/guides/web-ui.md`: the sidebar table with its five groups, Overview, Secrets and Usage, Settings as a gear and ⌘, modal with its six tabs, the footer, Settings → Daemon, the command palette and attention dots; rotating the token is now in the UI, stopping stays CLI-only
+- [ ] 8.2 `docs-site/guides/desktop-app.md`: Restart from Settings → Daemon, the footer's version warning, Start at login under Settings → Daemon, updates checked at launch and every six hours and installed from Settings › About
 - [ ] 8.3 `docs-site/guides/daemon.md`, `experimental-features.md`, `providers.md`, `channels.md`, `knowledge.md`, `memory.md`, `vault-sync.md`, `troubleshooting.md`, `faq.md`, `start/*`, `reference/configuration.md`, `architecture/distribution.md`: Settings → General → Experimental features becomes Settings → Features; Settings → General → Coffer's daemon becomes Settings → Daemon; Settings → Coffer's model becomes Model providers → Coffer's model
-- [ ] 8.4 `docs-site/guides/agents.md` (six detail tabs, Installed sections, Model tab), `credentials.md` (the Secrets page; Settings › Security machine-level), `providers.md` (Model providers under Agents; per-agent selection on the Model tab), `channels.md` (Channels under Work)
+- [ ] 8.4 `docs-site/guides/agents.md` (six detail tabs, Installed sections, Model tab), `credentials.md` (the Secrets page; Settings › Security machine-level), `providers.md` (Model providers under Agents; per-agent selection on the Model tab), `channels.md` (Channels under Run)
 - [ ] 8.5 ADR [The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md): on acceptance set it Accepted, mark [Sidebar Grouped by Role](../../../docs/decisions/sidebar-grouped-by-role.md) `Superseded by` it (or delete it if nothing it explains is inherited) and move both rows in the README index; ADR [Standalone Secrets Are Named `coffer://secret/` References](../../../docs/decisions/standalone-secrets-are-named-references-injected-into-one-child.md): "the Security page" lists stored secrets becomes the Secrets page; ADR [Experimental Features Instead of a Release Branch](../../../docs/decisions/experimental-features-instead-of-a-release-branch.md): follow the rename of "Leave daemon controls to the CLI"
-- [ ] 8.6 Purpose sections: `web-ui` (grouped by what the user comes to do, Overview above the five groups; drop "grouped by role"), `credentials` (its visual surfaces are the Secrets page and Settings › Security, not Security alone), `desktop-app` (Restart control and skew warning rendered in the banner and on Settings → Daemon), `internal-engine` (Model providers → Coffer's model)
+- [ ] 8.6 Purpose sections: `web-ui` (grouped by what the user comes to do, Overview above the five groups; drop "grouped by role"), `credentials` (its visual surfaces are the Secrets page and Settings › Security, not Security alone), `desktop-app` (Restart control and skew warning rendered in the banner and on Settings → Daemon; drop auto-update from Out of scope; the IPC command list gains the update check and install; the release publishes the updater archive and manifest), `internal-engine` (Model providers → Coffer's model)
 - [ ] 8.7 Code comments citing removed or renamed titles follow them (the list `scripts/check_spec_citations.py` prints): `useFeatures.ts`, `ExperimentalFeaturesSettings.tsx` and its test, `DaemonResidencySettings.tsx`, `InternalEngineSettings.tsx`
 - [ ] 8.8 `.agents/frontend.md`: the palette, footer and attention-dot components as shell conventions, and the en/zh glossary (task 6.5)
 
