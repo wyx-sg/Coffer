@@ -203,6 +203,11 @@ return useMutation({
     mounted over skeleton rows (never a "Loading…" card in the table's place)
     and `emptyAction` for the call-to-action under the empty message. The reach
     column's header key is `resources.cols.reach` on every table.
+  - Every button inside a table — row actions and selection-bar actions
+    alike — is a `TableActionButton` (`components/table/`): small outline
+    button, icon + text label, `destructive` for anything that removes. Row
+    delete is `RowDeleteButton`, bulk delete `BulkDeleteButton`, both built on
+    it. No ghost, solid or text-only buttons in a table.
   - `EmptyState` is the shared "nothing here yet" card (icon, title,
     description, action).
   - `Button` icon sizes are `icon-sm` / `icon-md` (plus the default `icon`);

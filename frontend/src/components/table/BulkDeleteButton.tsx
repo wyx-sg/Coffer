@@ -13,14 +13,8 @@ import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { Button } from "@/components/ui/button";
+import { TableActionButton } from "@/components/table/TableActionButton";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-
-/** The destructive tint every "this removes something" button in a bulk bar
- *  wears. Exported so the few non-delete destructive actions (uninstall a
- *  plugin, delete an unmanaged skill from disk) match it exactly. */
-export const DESTRUCTIVE_ACTION_CLASS =
-  "text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive";
 
 interface Props {
   title: string;
@@ -41,17 +35,13 @@ export function BulkDeleteButton({ title, description, pending = false, onConfir
 
   return (
     <>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className={DESTRUCTIVE_ACTION_CLASS}
+      <TableActionButton
+        icon={Trash2}
+        label={t("common.bulk.delete")}
+        destructive
         disabled={pending}
         onClick={() => setOpen(true)}
-      >
-        <Trash2 className="mr-1.5 size-3.5" />
-        {t("common.bulk.delete")}
-      </Button>
+      />
 
       <ConfirmDialog
         open={open}

@@ -6,9 +6,10 @@
 // destructive and owns its own confirm dialog. Kept in its own file so
 // AgentUnmanagedSkills.tsx stays small.
 import { useTranslation } from "react-i18next";
+import { Import } from "lucide-react";
 
 import { BulkDeleteButton } from "@/components/table/BulkDeleteButton";
-import { Button } from "@/components/ui/button";
+import { TableActionButton } from "@/components/table/TableActionButton";
 import { agentsApi, type UnmanagedSkillOut } from "@/lib/api/agents";
 import { agentKey, agentUnmanagedSkillsKey, skillsKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
@@ -41,14 +42,12 @@ export function AgentUnmanagedSkillsBulkActions({
 
   return (
     <>
-      <Button
-        size="sm"
-        variant="outline"
+      <TableActionButton
+        icon={Import}
+        label={t("agents.skillsTab.adopt")}
         disabled={adoptable.length === 0 || adopt.isPending}
         onClick={() => void adoptAll()}
-      >
-        {t("agents.skillsTab.adopt")}
-      </Button>
+      />
       <BulkDeleteButton
         title={t("common.bulk.delete")}
         description={t("agents.skillsTab.bulkDeleteConfirm", { count: rows.length })}

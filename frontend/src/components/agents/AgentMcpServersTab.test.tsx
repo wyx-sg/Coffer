@@ -206,7 +206,7 @@ describe("AgentMcpServersTab", () => {
     // Toggling an entry is gone; adopt + delete are the two per-row actions.
     expect(screen.queryAllByRole("switch")).toHaveLength(0);
     expect(screen.getAllByRole("button", { name: "Adopt into Coffer" })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^Delete: / })).toHaveLength(2);
   });
 
   test("delete flows through the confirm dialog with the agent uid and the entry's source", async () => {
@@ -215,7 +215,7 @@ describe("AgentMcpServersTab", () => {
     await screen.findByText("github");
 
     // Rows render in items order → the first Delete belongs to "github".
-    fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /^Delete: / })[0]);
     const dialog = await screen.findByRole("dialog");
     expect(
       within(dialog).getByText(
@@ -236,7 +236,7 @@ describe("AgentMcpServersTab", () => {
     renderTab();
     await screen.findByText("github");
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /^Delete: / })[0]);
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -262,7 +262,7 @@ describe("AgentMcpServersTab", () => {
     expect(await screen.findByText(/already in coffer as fetcher/i)).toBeInTheDocument();
     // The hint is informational — the row's own Delete button is the only way
     // to drop the duplicate, so there is no extra inline shortcut.
-    expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: /^Delete: / })).toHaveLength(1);
     expect(screen.queryByRole("button", { name: /duplicate/i })).not.toBeInTheDocument();
   });
 

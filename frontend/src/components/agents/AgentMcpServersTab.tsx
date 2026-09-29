@@ -26,15 +26,17 @@
 //      entries can't be listed, so the banner is the only signal.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Import } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { AgentAdoptMcpDialog } from "@/components/agents/AgentAdoptMcpDialog";
 import { AgentGatewayMcpSection } from "@/components/agents/AgentGatewayMcpSection";
 import { AgentMcpServersBulkActions } from "@/components/agents/AgentMcpServersBulkActions";
 import { DataTable, type Column } from "@/components/DataTable";
+import { RowDeleteButton } from "@/components/table/RowDeleteButton";
+import { TableActionButton } from "@/components/table/TableActionButton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { translateApiError } from "@/lib/api/errors";
@@ -112,17 +114,15 @@ export function AgentMcpServersTab({ agent }: { agent: AgentOut }) {
       className: "text-right",
       cell: (e) => (
         <span className="flex justify-end gap-2">
-          <Button size="sm" variant="outline" onClick={() => setAdoptTarget(e)}>
-            {t("agents.workspace.mcp.adopt")}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => setDeleteTarget(e)}
-          >
-            {t("common.delete")}
-          </Button>
+          <TableActionButton
+            icon={Import}
+            label={t("agents.workspace.mcp.adopt")}
+            onClick={() => setAdoptTarget(e)}
+          />
+          <RowDeleteButton
+            ariaLabel={`${t("common.delete")}: ${e.name}`}
+            onDelete={() => setDeleteTarget(e)}
+          />
         </span>
       ),
     },

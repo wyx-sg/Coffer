@@ -8,8 +8,9 @@
 // *filtered* keys), so "search/filter first, then select-all, then bulk-act"
 // works as documented.
 import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { TableActionButton } from "@/components/table/TableActionButton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TableCell, TableHead } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
@@ -72,9 +73,7 @@ export function BulkBar({
     <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 px-3 py-2">
       <span className="text-sm font-medium">{label}</span>
       <div className="flex flex-wrap items-center gap-2">{children}</div>
-      <Button variant="ghost" size="sm" className="ml-auto" onClick={onClear}>
-        {clearLabel}
-      </Button>
+      <TableActionButton icon={X} label={clearLabel} className="ml-auto" onClick={onClear} />
     </div>
   );
 }
