@@ -278,6 +278,21 @@ and an Add agent dialog with type, name and title fields — the types are fixed
 cheap enough to run on every load, and a name the user types for an agent whose type already
 names it is one more thing to get wrong.
 
+### 11. Adding an MCP server
+
+One **Add server** action replaces the separate paste-JSON button. Its dialog opens on a paste box
+that recognises the forms a README hands out — an `mcpServers` block or one server object, Codex
+TOML `[mcp_servers.<name>]` tables, a command line (`claude mcp add …`, `codex mcp add …` or a
+plain `npx …`), or a URL — so the user never picks a format before pasting. One server opens the
+manual form prefilled, because a single server is easiest to check field by field; several open
+the existing review step, where secrets move to the credential store, names are normalised and can
+be corrected before they become fixed, and reach is chosen. Unreadable input says what it accepts
+and offers the manual type choice rather than a dead end. Import from agents stays a link in the
+same dialog, not a second page action. *Rejected:* a format picker before the paste box, which
+asks the user a question the text already answers. This is a web UI form over
+[mcp-gateway](../../specs/mcp-gateway/spec.md) registration, so the requirements are web-ui's;
+the gateway's registration rules (fixed names, the 24-character limit) are unchanged.
+
 ### 10. Auto-update
 
 A new version reached a desktop user only if they downloaded a new `.dmg`, and the desktop spec

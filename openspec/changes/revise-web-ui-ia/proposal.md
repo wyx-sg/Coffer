@@ -90,6 +90,12 @@ unarchived until that implementation lands.
   offline) and opens **Settings → Daemon**, which shows status, the host's restart, the port (read
   only, with the command that changes it), Start at login and a Rotate token control. Stopping the
   daemon stays CLI-only.
+- The MCP servers page has one **Add server** action. Its dialog opens on a paste box that
+  recognises an `mcpServers` JSON block or server object, Codex TOML `[mcp_servers.<name>]`
+  tables, a command line (`claude mcp add …`, `codex mcp add …` included) as stdio, or a URL as
+  Streamable HTTP; one server opens the prefilled form, several open the review step (secrets to
+  the credential store, names normalised and correctable, reach), and unreadable input says so
+  and offers a manual type choice. Import from agents is a link in the same dialog.
 - A **command palette** (⌘K / Ctrl+K) jumps to any page or object. It carries no action that
   changes state.
 - A sidebar entry carries an **attention dot** while its kind's attention signal is raised; Sync's
@@ -112,7 +118,8 @@ unarchived until that implementation lands.
   About, one
   name per surface with the zh glossary, the Secrets page, landing on Overview, five Settings
   tabs with Security machine-level only, Coffer's model in Settings › General, the daemon footer and Settings → Daemon, the command
-  palette, sidebar attention dots; the daemon-invisibility requirement is removed and daemon
+  palette, sidebar attention dots, one Add server action whose paste box recognises JSON, Codex
+  TOML, a command line or a URL; the daemon-invisibility requirement is removed and daemon
   shutdown alone stays CLI-only.
 - `daemon`: the status probe is the one source of the state the shell shows; the port is shown on
   Settings → Daemon and still changed only from the CLI.

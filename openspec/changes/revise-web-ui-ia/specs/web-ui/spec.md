@@ -1,5 +1,11 @@
 ## RENAMED Requirements
 
+- FROM: `### Requirement: Import MCP servers from pasted JSON`
+- TO: `### Requirement: Add MCP servers from one paste box`
+
+- FROM: `### Requirement: Reject malformed server JSON in the dialog`
+- TO: `### Requirement: Explain unreadable pasted input in the dialog`
+
 - FROM: `### Requirement: Keep the sidebar to its eleven entries`
 - TO: `### Requirement: Keep the sidebar to its thirteen entries`
 
@@ -196,6 +202,126 @@ modal.
 - **WHEN** the user opens `/settings/security`
 - **THEN** the tab shows where the master key lives and its move control
 - **AND** it lists no stored secret and offers no control that adds, reveals or deletes one
+
+### Requirement: Add MCP servers from one paste box
+The MCP servers page MUST carry one **Add server** action, and no separate
+paste-JSON action. It opens a modal whose first step is one paste box that
+recognises what was pasted, so the user can paste whatever an MCP server's
+README gives them:
+
+- an `mcpServers` JSON block, or a single server object, holding one server or
+  many;
+- Codex TOML `[mcp_servers.<name>]` tables, one or many;
+- a command line, including `claude mcp add …` and `codex mcp add …`, which
+  becomes a stdio server — its name, environment (`-e` / `--env`) and command
+  taken from the command, a plain command's name suggested from its package;
+- a URL, which becomes a Streamable HTTP server, its name suggested from the
+  host.
+
+One recognised server MUST open the manual form prefilled with it; several MUST
+open the review step. The same dialog carries **Import from agents** as a link,
+which lists the direct MCP entries in the agents' own config files to adopt
+([agent-registry](../agent-registry/spec.md) "Adopt a direct MCP entry into Coffer"); it is not a
+second button on the page.
+
+The review step covers every server's environment values and, for an HTTP
+server, the values of its `headers` too, read with the same secret detection as
+the environment rather than ignored (a header and an environment entry of the
+same name are one header, the `headers` value winning). The user confirms which
+values are secrets; secrets MUST be lifted into the encrypted credential store
+with only their refs kept in the resource config, and each server MUST be
+registered before its secrets are written, so a failed registration leaves no
+orphan credential entry. The user also chooses the servers' reach there.
+
+The review step MUST show each server's name as the name it will keep: it
+cannot be changed after registration
+([mcp-gateway](../mcp-gateway/spec.md) "Manage MCP servers as resources"). Each
+name is taken from its key, table or command, normalised to the pattern
+mcp-gateway allows — lower case, other characters turned into hyphens — and can
+be corrected in the review before it is added. A name longer than 24
+characters MUST be flagged, before submit, with a message naming the limit, and
+the dialog MUST NOT send that server's registration until the name is shortened.
+
+#### Scenario: MCP server registration round-trip via JSON import
+- **GIVEN** the user opens the Add server dialog from the MCP servers page
+- **WHEN** they paste the standard `mcpServers` JSON holding one server and add it from the prefilled form
+- **THEN** the app posts the server to `/api/v1/resources`, then writes any secret env values to `/api/v1/credentials` (register-first ordering avoids orphan credential entries when registration fails)
+- **AND** on success the dialog closes and the app navigates to the server's detail page `/mcp-servers/<uid>` showing the Overview tab
+- **AND** the new server appears on the MCP servers list with health "unknown" then "healthy" within 10 seconds
+
+#### Scenario: add-server form navigates to detail then back to list shows card
+- **GIVEN** the user completes the Add server dialog for a new MCP server
+- **WHEN** they are taken to the server's detail page and then navigate back to `/mcp-servers`
+- **THEN** the server appears in the MCP servers list
+
+#### Scenario: a pasted HTTP server's headers are reviewed for secrets
+- **GIVEN** the user pastes an `mcpServers` block holding an HTTP server with a `headers` object that carries an `Authorization` value
+- **WHEN** the review step is shown and confirmed
+- **THEN** the header is offered as a secret, its value is written to the credential store, and the registered server keeps only its ref (`credential_refs`), never the value in `headers`
+
+#### Scenario: the import review shows each server's fixed name
+- **GIVEN** the user pastes an `mcpServers` block holding one server keyed `My Server` and one keyed with a 30-character name
+- **WHEN** the review step is shown
+- **THEN** each server's name is shown with a note that it cannot be changed after registration, the first normalised to `my-server`, and the 30-character name is flagged with the 24-character limit
+- **AND** no request is sent to `/api/v1/resources` for the flagged server until its name is shortened in the review
+
+#### Scenario: pasting JSON with three servers opens the review
+- **GIVEN** the Add server dialog open on its paste box
+- **WHEN** the user pastes an `mcpServers` block holding three servers
+- **THEN** the dialog recognises three servers and opens the review step listing all three with their detected secrets and a reach choice
+- **AND** confirming registers the three servers, each before its secrets are written
+
+#### Scenario: pasting a command line prefills a stdio server
+- **GIVEN** the Add server dialog open on its paste box
+- **WHEN** the user pastes `claude mcp add github -e GITHUB_TOKEN=ghp_x -- npx -y @modelcontextprotocol/server-github`
+- **THEN** the manual form opens prefilled as a stdio server named `github` with command `npx`, arguments `-y @modelcontextprotocol/server-github` and `GITHUB_TOKEN` offered as a secret
+
+#### Scenario: pasting a URL prefills a Streamable HTTP server
+- **GIVEN** the Add server dialog open on its paste box
+- **WHEN** the user pastes `https://mcp.example.com/mcp`
+- **THEN** the manual form opens prefilled as a Streamable HTTP server with that URL and a name suggested from the host
+
+#### Scenario: pasting Codex TOML reads its server tables
+- **GIVEN** the Add server dialog open on its paste box
+- **WHEN** the user pastes a `[mcp_servers.docs]` table with a command, arguments and an `env` table
+- **THEN** the manual form opens prefilled as a stdio server named `docs` with that command, arguments and environment, the secret-looking values offered as secrets
+
+#### Scenario: the add dialog links to importing from agents
+- **GIVEN** the MCP servers page
+- **WHEN** it renders and the user opens Add server
+- **THEN** the page carries one Add server action and no separate paste-JSON action, and the dialog carries an Import from agents link
+
+### Requirement: Explain unreadable pasted input in the dialog
+Input the paste box cannot read as any of the recognised forms — malformed
+JSON or TOML, a JSON or TOML document that does not match a server's shape, or
+text that is neither a command line nor a URL — MUST keep the dialog open with a
+readable message saying what was expected and, where it applies, the parse
+location or the failing field, and MUST offer a manual choice of the server's
+type (stdio or Streamable HTTP) that opens the empty form. It MUST NOT send a
+request.
+
+#### Scenario: JSON import shows readable error for malformed JSON
+- **GIVEN** the user opens the Add server dialog
+- **WHEN** they paste a payload that is not valid JSON (or a valid JSON document that does not match the `mcpServers` shape)
+- **THEN** the dialog stays open and renders a readable error explaining what is wrong (parse error location for malformed JSON, or the failing field for shape-mismatch)
+- **AND** no request is sent to `/api/v1/resources` or `/api/v1/credentials`
+- **AND** the dialog never shows the literal text "unexpected error" or `INTERNAL_ERROR`
+
+#### Scenario: unreadable input offers a manual type choice
+- **GIVEN** the Add server dialog open on its paste box
+- **WHEN** the user pastes text that is no recognised form, such as a sentence from a README
+- **THEN** the dialog says it could not read a server from it and what it accepts, and offers stdio and Streamable HTTP as a manual choice
+- **AND** choosing one opens the empty form for that type, and no request is sent
+
+### Requirement: Welcome an empty list with one next action
+A list with nothing in it MUST render a welcome card — a short pitch and one
+primary action — and MUST NOT render an empty table or a placeholder ghost row.
+
+#### Scenario: empty resources list renders a welcome view
+- **GIVEN** the daemon is running and zero resources are registered
+- **WHEN** the user opens `/mcp-servers`
+- **THEN** the page renders a welcome card with a short pitch and a primary "Add server" button
+- **AND** the welcome card does NOT show an empty table or a placeholder ghost row
 
 ## ADDED Requirements
 
