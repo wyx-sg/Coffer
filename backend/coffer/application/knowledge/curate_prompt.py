@@ -8,6 +8,9 @@ caches; the item and its candidates go in the human turn.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import Any
+
 from coffer.application.knowledge.curate_tools import MAX_WRITES_PER_PASS
 
 CURATION_SYSTEM = (
@@ -43,4 +46,38 @@ CURATION_SYSTEM = (
 )
 
 
-__all__ = ["CURATION_SYSTEM"]
+def brief(
+    collection: str,
+    item: Any,
+    *,
+    edited: bool,
+    candidate_bodies: Sequence[Any],
+    every_document: Sequence[Any],
+) -> str:
+    """The one user turn: the item, the candidates, and every title."""
+    lines = [f"The collection is {collection!r}.", "", "## Every document that exists"]
+    if every_document:
+        lines += [f"- {e.path} — {e.title}: {e.description}" for e in every_document]
+    else:
+        lines.append("(none yet — this collection has no documents)")
+    lines += ["", "## Candidate documents, in full"]
+    if candidate_bodies:
+        for found in candidate_bodies:
+            lines += [
+                "",
+                f"### {found.path} — {found.title}",
+                f"_{found.description}_",
+                "",
+                found.body,
+            ]
+    else:
+        lines.append("(no other document mentions anything in this item)")
+    if edited:
+        lines += ["", f"## The document a person edited: {item.path}"]
+    else:
+        lines += ["", "## The new material to absorb"]
+    lines += ["", f"### {item.title}", f"_{item.description}_", "", item.body]
+    return "\n".join(lines)
+
+
+__all__ = ["CURATION_SYSTEM", "brief"]

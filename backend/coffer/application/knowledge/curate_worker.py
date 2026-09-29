@@ -24,6 +24,7 @@ import logging
 from collections.abc import Awaitable, Callable
 
 from coffer.application.knowledge.curate import pending_items
+from coffer.application.knowledge.recording import settle
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.application.upkeep_runs import UPKEEP_RUNS, UpkeepRunRegistry
 from coffer.application.upkeep_schedule import (
@@ -133,6 +134,13 @@ class CurationWorker:
                 await self._deliver()
             except Exception:
                 logger.warning("knowledge.curate_worker.delivery_failed", exc_info=True)
+        # Edits made on disk since the last write become versions of their own
+        # now, whether or not curation runs here (spec knowledge "Keep every
+        # document's history and undo a pass as a whole").
+        try:
+            await settle(getattr(self._service, "history", None))
+        except Exception:
+            logger.warning("knowledge.curate_worker.history_failed", exc_info=True)
         if not await self._is_enabled():
             return
         if self._lock is None:

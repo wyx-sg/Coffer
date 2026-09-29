@@ -51,9 +51,20 @@ class KnowledgeFileConflict(KnowledgeError):  # noqa: N818
 
     code = "KNOWLEDGE_FILE_CONFLICT"
 
-    def __init__(self, path: str) -> None:
-        super().__init__(f"knowledge file changed since it was read: {path!r}")
+    def __init__(
+        self, path: str, *, current_body: str | None = None, current_fingerprint: str = ""
+    ) -> None:
+        super().__init__(f"{path!r} changed on disk since it was opened; your text was not saved")
         self.path = path
+        #: What the editor needs to recover without saving over the file (spec
+        #: knowledge "Save a document edited in the web UI"): the document as it
+        #: is on disk now, so the page can Reload, Compare or Copy my text.
+        self.error_details: dict[str, object] = {
+            "path": path,
+            "saved": False,
+            "current_body": current_body,
+            "current_fingerprint": current_fingerprint,
+        }
 
 
 class UnsafeKnowledgePath(KnowledgeError):  # noqa: N818
@@ -128,3 +139,71 @@ class CurationBoundExceeded(KnowledgeError):  # noqa: N818
     def __init__(self, limit: int) -> None:
         super().__init__(f"a curation pass may write at most {limit} files")
         self.limit = limit
+
+
+class KnowledgeHistoryUnavailable(KnowledgeError):  # noqa: N818
+    """No history can be read: git is not installed, or the knowledge root has
+    no repository it could create.
+
+    Spec knowledge "Keep every document's history and undo a pass as a whole".
+    Writes never fail for this — they are simply not recorded — so only the
+    history reads raise it.
+    """
+
+    code = "KNOWLEDGE_HISTORY_UNAVAILABLE"
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(f"knowledge history is unavailable: {reason}")
+        self.reason = reason
+
+
+class KnowledgeVersionNotFound(KnowledgeError):  # noqa: N818
+    """A version the history does not hold, or one in which the document named
+    does not exist."""
+
+    code = "KNOWLEDGE_VERSION_NOT_FOUND"
+
+    def __init__(self, version: str, path: str | None = None) -> None:
+        where = f" of {path!r}" if path else ""
+        super().__init__(f"no version {version!r}{where} in the knowledge history")
+        self.version = version
+        self.path = path
+
+
+class KnowledgeNotAPass(KnowledgeError):  # noqa: N818
+    """An undo aimed at a change that is not a curation pass. Any single
+    version is restored instead (spec knowledge "Keep every document's history
+    and undo a pass as a whole")."""
+
+    code = "KNOWLEDGE_NOT_A_PASS"
+
+    def __init__(self, version: str) -> None:
+        super().__init__(
+            f"{version!r} is not a curation pass; restore a document's version instead"
+        )
+        self.version = version
+
+
+class KnowledgeUndoConflict(KnowledgeError):  # noqa: N818
+    """Undoing a pass would overwrite a later change to one of its documents.
+
+    Refused, naming the document, rather than overwriting what came after
+    (spec knowledge "Keep every document's history and undo a pass as a
+    whole"). Nothing is written.
+    """
+
+    code = "KNOWLEDGE_UNDO_CONFLICT"
+
+    def __init__(self, version: str, document: str, later: str) -> None:
+        super().__init__(
+            f"cannot undo this curation pass: {document!r} has changed since "
+            "(undo would overwrite that change)"
+        )
+        self.version = version
+        self.document = document
+        self.later = later
+        self.error_details: dict[str, object] = {
+            "version": version,
+            "document": document,
+            "later_version": later,
+        }

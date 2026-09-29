@@ -100,9 +100,9 @@ export function useSaveKnowledgeFile() {
 }
 
 /**
- * Run ONE curation pass over one collection. It rewrites the collection's
- * documents — writing new ones, retiring ones whose content moved — and drains
- * the inbox item it merged (or, with no model, promotes the whole inbox), so
+ * Curate one collection now: a pass per pending item until none is left. It
+ * rewrites the collection's documents — writing new ones, retiring ones whose
+ * content moved — and drains the inbox (or, with no model, promotes it), so
  * every cached level, body and count under `["knowledge"]` is invalidated
  * afterwards.
  *
@@ -124,9 +124,16 @@ export function useCurateCollection(collectionUid: string) {
     mutationFn: (document?: string | null) => curateCollection(collectionUid, document),
     onSuccess: (result) => {
       void qc.invalidateQueries({ queryKey: knowledgeKey });
+      // The run answers every pass it ran; the last one says how it ended.
       // `count` only means something to `no_model`, which reports how much of
       // the inbox it promoted to documents as it stood.
-      toast.success(t(curateToastKey(result), { count: result.promoted.length }));
+      const last = result.passes[result.passes.length - 1];
+      const promoted = result.passes.reduce((sum, p) => sum + p.promoted.length, 0);
+      toast.success(
+        t(last ? curateToastKey(last) : "knowledge.detail.curateStatus.up_to_date", {
+          count: promoted,
+        }),
+      );
     },
     onError: (error) => {
       if (error instanceof ApiError && error.code === "UPKEEP_ALREADY_RUNNING") return;

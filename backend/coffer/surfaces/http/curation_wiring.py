@@ -124,7 +124,9 @@ def start_curation_worker(
         # the value that cannot be edited underneath either of them (ADR
         # resource-identity-is-an-immutable-uid). The worker reads the
         # directory name off the row itself.
-        return [r.uid for r in await resources.list(kind=KIND_KNOWLEDGE, enabled=True)]
+        # Every collection: the kind has no enabled switch (spec knowledge
+        # "Serve every collection to every agent").
+        return [r.uid for r in await resources.list(kind=KIND_KNOWLEDGE)]
 
     async def is_enabled() -> bool:
         # The knowledge feature first: while it is off the sweep skips its

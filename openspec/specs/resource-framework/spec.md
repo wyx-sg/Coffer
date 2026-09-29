@@ -330,7 +330,7 @@ entries each lost.
 
 ### Requirement: Report the passes in flight in one cross-kind read
 The system MUST answer, in one cross-kind read, which long model-driven passes this
-daemon is running right now — each named by its kind, its target and when it started —
+daemon is running right now — each named by its kind, its target and when it started, and, for a run that works through several items one pass at a time, how many of them it has done of how many —
 so that a surface can tell whether a pass is under way without every kind growing a
 near-identical endpoint of its own. The read MUST start nothing, and the registry MUST
 NOT outlive the process: a restart ends any pass it was running and the list comes back

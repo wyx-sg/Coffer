@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import logging
 from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING, Any, Protocol
@@ -43,7 +44,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from coffer.application.engine_ports import ModelSelectorPort
 from coffer.application.engine_timeout import TimeoutReader, resolve_timeout
 from coffer.application.knowledge import candidates
-from coffer.application.knowledge.curate_prompt import CURATION_SYSTEM
+from coffer.application.knowledge.curate_prompt import CURATION_SYSTEM, brief
 from coffer.application.knowledge.curate_settle import (
     MAX_CONSECUTIVE_TRUNCATIONS,
     TruncationLedger,
@@ -59,11 +60,16 @@ from coffer.application.knowledge.curate_tools import (
     build_tools,
     document_count,
 )
+from coffer.application.knowledge.recording import item_author, recording
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.knowledge.entry import Pending
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
+from coffer.domain.knowledge.history import OP_PASS, WRITER_CURATION, ChangeMeta
+from coffer.domain.resource import Resource
 from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
+from coffer.infrastructure.knowledge.history import Transaction
+from coffer.infrastructure.knowledge.inbox import inbox_path
 
 if TYPE_CHECKING:
     from coffer.domain.provider.config import ResolvedConnection
@@ -98,40 +104,6 @@ class AgenticCurationPort(Protocol):
     ) -> dict[str, Any]: ...
 
 
-def _brief(
-    collection: str,
-    item: Any,
-    *,
-    edited: bool,
-    candidate_bodies: Sequence[Any],
-    every_document: Sequence[Any],
-) -> str:
-    """The one user turn: the item, the candidates, and every title."""
-    lines = [f"The collection is {collection!r}.", "", "## Every document that exists"]
-    if every_document:
-        lines += [f"- {e.path} — {e.title}: {e.description}" for e in every_document]
-    else:
-        lines.append("(none yet — this collection has no documents)")
-    lines += ["", "## Candidate documents, in full"]
-    if candidate_bodies:
-        for found in candidate_bodies:
-            lines += [
-                "",
-                f"### {found.path} — {found.title}",
-                f"_{found.description}_",
-                "",
-                found.body,
-            ]
-    else:
-        lines.append("(no other document mentions anything in this item)")
-    if edited:
-        lines += ["", f"## The document a person edited: {item.path}"]
-    else:
-        lines += ["", "## The new material to absorb"]
-    lines += ["", f"### {item.title}", f"_{item.description}_", "", item.body]
-    return "\n".join(lines)
-
-
 async def run_curation(
     service: KnowledgeService,
     collection_uid: str,
@@ -147,36 +119,70 @@ async def run_curation(
 ) -> dict[str, Any]:
     """Fold one pending item into the documents of one collection.
 
-    The collection is named by its **uid**, resolved once here. A pass takes
-    minutes and rewrites a corpus, so the thing it is aimed at has to be the
-    thing that cannot change underneath it: the label is read off the row and
-    used to build paths, and the row itself is what the audit event is tied to.
-
-    ``status`` is ``no_model`` with no internal connection configured — and then every
-    inbox item is promoted to a document as it stands, so material never waits on a
-    connection nobody configured (see "Promote material directly when no model is
-    configured") — ``up_to_date`` when nothing is pending, ``too_large`` for an item
-    past :data:`MAX_SOURCE_CHARS` (never shown to the model: material is promoted
-    as it stands and reported in ``promoted``, an edited document is stamped and
-    reported in ``stamped``), ``failed`` when the loop raised, ``truncated``
-    when the recursion limit cut it off (reported with the same counters as
-    ``ok`` — see "Bound a pass to eight writes"), and ``ok`` otherwise. Only
-    ``ok`` settles the item — except that, given a ``truncations`` ledger, the
-    :data:`MAX_CONSECUTIVE_TRUNCATIONS`-th cut-off in a row of one item gives up on
-    it: ``gave_up`` is true and ``promoted`` names what the material became.
-
-    Every outcome carries ``collection`` as the collection's NAME, because the
-    dict is what a surface renders and a person reads a pass's report by the
-    name they gave the collection, not by its identity.
+    The collection is named by its **uid**, resolved once here: a pass takes
+    minutes, so it is aimed at what a rename cannot move. ``status`` is one of
+    "Report every pass outcome as a status": ``no_model`` (the inbox promoted
+    as it stands), ``up_to_date``, ``too_large`` (never shown to the model;
+    ``promoted`` or ``stamped``), ``failed``, ``truncated`` (``gave_up`` on the
+    :data:`MAX_CONSECUTIVE_TRUNCATIONS`-th cut-off in a row) or ``ok``. Only
+    ``ok`` settles the item. ``collection`` in every outcome is the NAME — the
+    dict is what a surface renders.
     """
-    # Raises ResourceNotFound for an unknown uid and CollectionNotFound for a
-    # disabled row — the two answers the HTTP route turns into a 404.
+    # Raises ResourceNotFound for an unknown uid — the answer the HTTP route
+    # turns into a 404.
     row = await service.collection(collection_uid)
     collection = row.name
+    # One commit for the whole pass, naming Coffer's curation and the item (see
+    # "Keep every document's history and undo a pass as a whole"). Opening it
+    # first commits any edit made on disk, so the pass's commit holds only the
+    # pass — which is what lets it be undone as a whole.
+    meta = ChangeMeta(
+        WRITER_CURATION, OP_PASS, f"Curate {collection}", actor=actor, collection=collection
+    )
+    async with recording(service.history, meta) as tx:
+        result = await _pass(
+            service,
+            row,
+            collection_uid,
+            tx=tx,
+            item=item,
+            actor=actor,
+            agent=agent,
+            models=models,
+            credential_resolver=credential_resolver,
+            recursion_limit=recursion_limit,
+            read_timeout=read_timeout,
+            truncations=truncations,
+        )
+        tx.meta = dataclasses.replace(tx.meta, status=str(result["status"]))
+    return result
 
+
+async def _pass(
+    service: KnowledgeService,
+    row: Resource,
+    collection_uid: str,
+    *,
+    tx: Transaction,
+    item: Pending | None,
+    actor: str,
+    agent: AgenticCurationPort,
+    models: ModelSelectorPort,
+    credential_resolver: Callable[[str], str],
+    recursion_limit: int,
+    read_timeout: TimeoutReader | None,
+    truncations: TruncationLedger | None,
+) -> dict[str, Any]:
+    """The pass itself; every path it writes is touched on ``tx``."""
+    collection = row.name
     model = await models.get_default()
     if model is None:
+        for name in await asyncio.to_thread(inbox.inbox_items, collection):
+            tx.touch(inbox_path(collection, name))
         promoted = await asyncio.to_thread(promote_all, collection)
+        for path in promoted:
+            tx.touch(path)
+        tx.meta = dataclasses.replace(tx.meta, summary=f"Add {len(promoted)} items to {collection}")
         return {"status": "no_model", "collection": collection, "promoted": promoted}
 
     if item is None:
@@ -196,11 +202,24 @@ async def run_curation(
     else:
         found = await asyncio.to_thread(inbox.read_material, collection, item.material or "")
     label = found.path
+    tx.touch(label)
+    tx.meta = dataclasses.replace(
+        tx.meta,
+        summary=f"Curate {found.title}",
+        item=label,
+        # Whose item this was: for material, the author its submission's
+        # ``knowledge_written`` event names; an edited document is a person's.
+        agent=await item_author(service, row, item.material, found.actor)
+        if item.material
+        else None,
+    )
     if len(found.body) > MAX_SOURCE_CHARS:
         # No pass can hold it, so it leaves the queue as it stands rather than
         # being offered to — and refused by — every sweep for ever. Settled,
         # so its cut-off count goes with it.
         shelved = await asyncio.to_thread(shelve_oversized, collection, item)
+        for path in shelved.get("promoted", []):
+            tx.touch(path)
         if truncations is not None:
             truncations.clear(collection_uid, label)
         return {
@@ -222,6 +241,7 @@ async def run_curation(
         collection=collection,
         actor=actor,
         counters=counters,
+        on_touch=tx.touch,
         # The brief carries these in full, so the pass has seen their content.
         shown=[*chosen, *([item.document] if item.document is not None else [])],
     )
@@ -232,7 +252,7 @@ async def run_curation(
             # Rules in the system turn (identical every pass, what a provider
             # caches); the tens-of-kilobytes brief in the human turn.
             system_prompt=CURATION_SYSTEM,
-            user_prompt=_brief(
+            user_prompt=brief(
                 collection,
                 found,
                 edited=edited,
@@ -263,6 +283,8 @@ async def run_curation(
     strikes = truncations.record(collection_uid, label) if truncations and truncated else 0
     gave_up = strikes >= MAX_CONSECUTIVE_TRUNCATIONS
     promoted = await asyncio.to_thread(give_up, collection, item) if gave_up else []
+    for path in promoted:
+        tx.touch(path)
     if not truncated:
         await asyncio.to_thread(settle, collection, item)
     if truncations is not None and (gave_up or not truncated):

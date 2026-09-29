@@ -33,6 +33,7 @@ from coffer.application.builtin_tools import BuiltinToolRegistry
 from coffer.application.engine_ports import ModelSelectorPort
 from coffer.application.knowledge import guide_render
 from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
+from coffer.application.knowledge.history_service import KnowledgeHistoryService
 from coffer.application.knowledge.ingest import IngestService
 from coffer.application.knowledge.kind import make_knowledge_kind
 from coffer.application.knowledge.service import (
@@ -42,10 +43,12 @@ from coffer.application.knowledge.service import (
 )
 from coffer.infrastructure.knowledge import paths
 from coffer.infrastructure.knowledge.converters.registry import default_registry
+from coffer.infrastructure.knowledge.history import KNOWLEDGE_HISTORY
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.surfaces.http.engine_config_composition import read_internal_engine_timeout
 from coffer.surfaces.http.guide_wiring import GuideRenderer
 from coffer.surfaces.http.knowledge.dependencies import (
+    set_history_service,
     set_ingest_service,
     set_knowledge_service,
 )
@@ -92,8 +95,15 @@ def wire_knowledge_kind(
         audit=audit,
         on_catalogue_changed=on_catalogue_changed,
         merge_available=_merge_available,
+        # Every write a commit naming its writer (spec knowledge "Keep every
+        # document's history and undo a pass as a whole"), in the knowledge
+        # root's own repository until the vault is one.
+        history=KNOWLEDGE_HISTORY,
     )
     set_knowledge_service(service)
+    set_history_service(
+        KnowledgeHistoryService(knowledge=service, history=KNOWLEDGE_HISTORY, audit=audit)
+    )
 
     ingest_service = IngestService(
         knowledge=service,

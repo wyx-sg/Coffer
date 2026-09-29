@@ -150,11 +150,10 @@ class SubmissionOut(BaseModel):
 
 
 class CurationRequest(BaseModel):
-    #: One document to carry through, knowledge-root-relative. Omitted, the
-    #: pass takes the oldest pending item — inbox material first, then a
-    #: document edited since curation last stamped it ("Run curation on a sweep
-    #: and on demand") — which is what
-    #: the page's "curate now" button wants.
+    #: One document to curate, knowledge-root-relative: exactly one pass runs,
+    #: over it. Omitted, Curate now runs a pass per pending item — inbox items
+    #: oldest first, then documents edited since curation last stamped them —
+    #: until none is left ("Run curation on a sweep and on demand").
     document: str | None = None
 
 
@@ -206,6 +205,24 @@ class CurationOut(BaseModel):
     #: ``status`` ``too_large`` when the oversized item was a document — there
     #: is nothing to promote, and the stamp stops the sweep re-offering it.
     stamped: str = ""
+
+
+class CurationRunOut(BaseModel):
+    """What Curate now did: every pass it ran, in order (spec knowledge "Report
+    every pass outcome as a status")."""
+
+    #: The collection's NAME, as in each pass's report.
+    collection: str
+    #: ``up_to_date`` — nothing was pending and no pass ran; ``no_model`` — the
+    #: inbox was promoted as it stands; ``failed`` — the run stopped at a pass
+    #: that failed, the rest left pending; ``ok`` — it worked through
+    #: everything that was pending when it started.
+    status: Literal["ok", "failed", "no_model", "up_to_date"]
+    #: How many items were pending when the run started — the *m* of its
+    #: progress, which ``GET /api/v1/upkeep/runs`` reports as it goes.
+    total: int
+    #: Each pass's own outcome, in the order it ran.
+    passes: list[CurationOut]
 
 
 class IngestedDocumentOut(BaseModel):

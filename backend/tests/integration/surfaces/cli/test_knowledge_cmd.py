@@ -9,8 +9,8 @@ collections only deliberately").
 
 The group covers exactly the list in "Cover knowledge management on REST and
 the CLI" and nothing beyond it: the lifecycle verbs (no ``enable``/``disable``,
-since every collection is served to every agent), ``save``, ``write``,
-``upload`` and ``curate``. Documents are plain Markdown under
+since every collection is served to every agent), ``write``, ``upload``,
+``curate`` and the history commands. Documents are plain Markdown under
 ``~/.coffer/knowledge/``, so the group neither lists, prints nor deletes one —
 ``coffer path knowledge`` names the directory (test_path_cmd.py) and a person's
 own tools do the rest.
@@ -360,13 +360,17 @@ def test_cli_curate_reports_why_a_pass_did_nothing(knowledge_cli_daemon):
     _make_collection("shopee")
     _write("shopee", "Session")
 
-    result = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "curate", "shopee"])
+    result = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "curate", "shopee", "--json"])
     assert result.exit_code == 0, result.output
-    outcome = json.loads(_extract_json(result.output))
-    assert outcome["status"] == "no_model"
-    assert outcome["collection"] == "shopee"
+    run = json.loads(_extract_json(result.output))
+    assert run["status"] == "no_model"
+    assert run["collection"] == "shopee"
     # The material was already promoted when it arrived, so nothing was left.
-    assert outcome["promoted"] == []
+    assert [p["promoted"] for p in run["passes"]] == [[]]
+
+    human = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "curate", "shopee"])
+    assert human.exit_code == 0, human.output
+    assert "Coffer's model is not set" in human.output
 
 
 def test_cli_curate_takes_one_document(knowledge_cli_daemon):
@@ -375,9 +379,38 @@ def test_cli_curate_takes_one_document(knowledge_cli_daemon):
     _make_collection("shopee")
     path = _write("shopee", "Session")
 
-    result = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "curate", "shopee", "--document", path])
+    result = _runner.invoke(
+        cli_app, [KIND_KNOWLEDGE, "curate", "shopee", "--document", path, "--json"]
+    )
     assert result.exit_code == 0, result.output
     assert json.loads(_extract_json(result.output))["status"] == "no_model"
+
+
+@pytest.mark.acceptance(spec="knowledge", scenario="curate now reports progress")
+def test_cli_curate_prints_n_of_m_for_each_pass(knowledge_cli_daemon, monkeypatch):
+    """Curate now drains, and the command prints each pass as 1 of 3, 2 of 3,
+    3 of 3 — the same progress the in-flight list reports."""
+    from coffer.infrastructure.knowledge import inbox
+    from coffer.surfaces.http.knowledge import curation_state
+
+    _make_collection("shopee")
+    _hold_material(monkeypatch)
+    for title in ("One", "Two", "Three"):
+        _write("shopee", title)
+
+    async def settle(service, uid, *, item, actor):  # type: ignore[no-untyped-def]
+        inbox.discard_material("shopee", item.material)
+        return {"status": "ok", "collection": "shopee", "item": f"shopee/.inbox/{item.material}"}
+
+    monkeypatch.setattr(curation_state, "_curation_runner", settle)
+    result = _runner.invoke(cli_app, [KIND_KNOWLEDGE, "curate", "shopee"])
+
+    assert result.exit_code == 0, result.output
+    lines = [line for line in result.output.splitlines() if " of 3: ok " in line]
+    assert [line.split(":")[0] for line in lines] == ["1 of 3", "2 of 3", "3 of 3"]
+    items = sorted(line.split()[4].rsplit("/", 1)[-1] for line in lines)
+    assert items == ["one.md", "three.md", "two.md"]
+    assert "shopee: curated 3 of 3" in result.output
 
 
 def test_cli_curate_on_an_unknown_collection_is_an_error(knowledge_cli_daemon):
@@ -473,6 +506,12 @@ _KNOWLEDGE_OPERATIONS = {
     ("POST", "/api/v1/knowledge/upload"),
     ("DELETE", "/api/v1/knowledge/file"),
     ("POST", "/api/v1/knowledge/collections/{uid}/curate"),
+    ("GET", "/api/v1/knowledge/history"),
+    ("GET", "/api/v1/knowledge/history/diff"),
+    ("POST", "/api/v1/knowledge/history/restore"),
+    ("GET", "/api/v1/knowledge/changes"),
+    ("GET", "/api/v1/knowledge/changes/{version}"),
+    ("POST", "/api/v1/knowledge/changes/{version}/undo"),
 }
 _KNOWLEDGE_COMMANDS = [
     "list",
@@ -483,6 +522,10 @@ _KNOWLEDGE_COMMANDS = [
     "write",
     "upload",
     "curate",
+    "history",
+    "restore",
+    "changes",
+    "undo",
 ]
 _FORBIDDEN_ROUTE_WORDS = ("index", "reindex", "source", "embedding", "scope", "reach")
 
@@ -507,6 +550,9 @@ def test_rest_and_cli_cover_every_knowledge_operation(knowledge_cli_daemon):
     group = typer.main.get_command(cli_app).commands[KIND_KNOWLEDGE]  # type: ignore[attr-defined]
     assert list(group.commands) == _KNOWLEDGE_COMMANDS
 
-    for _, path in routes:
+    for method, path in routes:
         tail = path.removeprefix("/api/v1/knowledge").lower()
         assert not any(word in tail for word in _FORBIDDEN_ROUTE_WORDS), path
+        # No route creates a document at a path: Add a document submits
+        # material like every other entrance.
+        assert not (method == "POST" and tail in {"/file", "/document", "/documents"}), path

@@ -108,13 +108,17 @@ def build_tools(
     actor: str,
     counters: Counters,
     shown: Iterable[str] = (),
+    on_touch: Callable[[str], None] | None = None,
 ) -> list[CurationTool]:
     """The four operations, fenced to one collection's documents.
 
     ``shown`` names the documents the pass's brief carries in full (the item
     and its candidates): the pass has their content without reading them.
     The returned tools share per-pass state, so build them once per pass.
+    ``on_touch`` is told every document path a write or retire reaches, so the
+    pass's one commit holds exactly what it wrote.
     """
+    touch = on_touch or (lambda _path: None)
     # Per-pass record of what was written, in order, and of the point in that
     # order at which each document's content was last in front of the model.
     written_paths: list[str] = []
@@ -205,6 +209,8 @@ def build_tools(
                     "corpus is reorganised, so name the subject in prose instead of the file."
                 )
             }
+        if relpath is not None:
+            touch(relpath)
         try:
             written = fs.write_file(
                 directory="/".join([collection, *_folder(folder)]),
@@ -217,6 +223,7 @@ def build_tools(
             )
         except KnowledgeError as exc:
             return {"error": str(exc)}
+        touch(written.path)
         counters.written += 1
         written_paths.append(written.path)
         # What the pass just wrote is content it has in front of it.
@@ -243,6 +250,7 @@ def build_tools(
                     "document that should own them with write_document, then retire it."
                 )
             }
+        touch(relpath)
         try:
             fs.delete_file(relpath)
         except KnowledgeError as exc:
