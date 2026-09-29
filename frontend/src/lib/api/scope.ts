@@ -12,6 +12,7 @@
 // not one per row).
 import { call, enc } from "@/lib/api/call";
 import type { components } from "@/lib/api/types";
+import type { components as ResourceFrameworkWire } from "@/lib/api/generated/resource-framework";
 
 /**
  * A resource's activation scope: the allow-list of agents it reaches.
@@ -28,25 +29,15 @@ import type { components } from "@/lib/api/types";
  * holds it and never converges it with a remote, so it names agents and
  * nothing else — the machine is always the one asking.
  *
- * Structurally the generated `ScopeOut`, and deliberately declared against it:
- * this module is hand-written, so the alias is the one thing that does fail at
- * compile time if the shape ever drifts from the API.
+ * The generated `ScopeOut`.
  */
 export type Scope = NonNullable<components["schemas"]["ScopeOut"]>;
 
 /**
  * GET .../scope response: the current scope (`null` = unscoped, active for
  * every agent) plus whether this kind supports scope at all.
- *
- * Field names here MUST match `ResourceScopeOut` in
- * `backend/coffer/surfaces/http/schemas.py` — these sub-routes are hand-written
- * (the generated client does not cover them), so nothing checks this at compile
- * time. `resourceScopeContract` in useScope.test is the regression guard.
  */
-export interface ResourceScope {
-  scope: Scope | null;
-  supports_scope: boolean;
-}
+export type ResourceScope = ResourceFrameworkWire["schemas"]["ResourceScopeOut"];
 
 type ResourceOut = components["schemas"]["ResourceOut"];
 

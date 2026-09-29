@@ -185,6 +185,27 @@ async def test_list_conversations_newest_first(tmp_path):  # type: ignore[no-unt
         await engine.dispose()
 
 
+async def test_list_pages_by_keyset_with_the_id_as_tie_break(tmp_path):  # type: ignore[no-untyped-def]
+    """The SQL half of the cursor: strictly after ``(updated_at, id)``, newest
+    first, two rows sharing a timestamp ordered by id."""
+    engine, conv_repo, _ = await _setup(tmp_path)
+    try:
+        at = datetime(2026, 9, 1, tzinfo=UTC)
+        rows = [
+            Conversation(id=cid, agent_key="builtin", title=cid, created_at=ts, updated_at=ts)
+            for cid, ts in (("a", at), ("b", at), ("c", at + timedelta(seconds=1)))
+        ]
+        for row in rows:
+            await conv_repo.create(row)
+
+        first = await conv_repo.list(limit=2)
+        assert [c.id for c in first] == ["c", "b"]
+        rest = await conv_repo.list(limit=2, after=(first[-1].updated_at, first[-1].id))
+        assert [c.id for c in rest] == ["a"]
+    finally:
+        await engine.dispose()
+
+
 async def test_rename_conversation(tmp_path):  # type: ignore[no-untyped-def]
     engine, conv_repo, _ = await _setup(tmp_path)
     try:

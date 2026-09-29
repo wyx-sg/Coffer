@@ -3,22 +3,25 @@ import { describe, expect, test } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ToolCallCard } from "./ToolCallCard";
 import type { ContentBlock } from "@/lib/api/chat";
+import { contentBlock } from "@/lib/chat/contentBlock";
 
-const makeToolUse = (overrides?: Partial<ContentBlock>): ContentBlock => ({
-  type: "tool_use",
-  tool_use_id: "tc-1",
-  tool_name: "read_file",
-  tool_input: { path: "/etc/hosts" },
-  ...overrides,
-});
+const makeToolUse = (overrides?: Partial<ContentBlock>): ContentBlock =>
+  contentBlock({
+    type: "tool_use",
+    tool_use_id: "tc-1",
+    tool_name: "read_file",
+    tool_input: { path: "/etc/hosts" },
+    ...overrides,
+  });
 
-const makeToolResult = (overrides?: Partial<ContentBlock>): ContentBlock => ({
-  type: "tool_result",
-  tool_use_id: "tc-1",
-  output: { content: "127.0.0.1 localhost" },
-  error: null,
-  ...overrides,
-});
+const makeToolResult = (overrides?: Partial<ContentBlock>): ContentBlock =>
+  contentBlock({
+    type: "tool_result",
+    tool_use_id: "tc-1",
+    output: { content: "127.0.0.1 localhost" },
+    error: null,
+    ...overrides,
+  });
 
 describe("ToolCallCard", () => {
   test("renders collapsed with tool name visible", () => {

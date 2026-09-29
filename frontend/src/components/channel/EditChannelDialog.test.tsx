@@ -47,6 +47,9 @@ const telegramResource = {
   uid: TG_UID,
   kind: "channel",
   name: "tg",
+  title: null,
+  description: null,
+  scope: null,
   enabled: true,
   toggleable: true,
   config: {

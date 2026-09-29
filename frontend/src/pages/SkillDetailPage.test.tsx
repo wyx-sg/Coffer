@@ -49,6 +49,7 @@ const SKILL_UID = "sk-0a3e";
 const LOCAL_SKILL: SkillOut = {
   uid: SKILL_UID,
   name: "hello",
+  title: null,
   description: "a greeting",
   source: { type: "local_import", original_path: "/tmp/hello" },
   builtin: false,

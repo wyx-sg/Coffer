@@ -24,6 +24,7 @@ import hashlib
 import os
 import pathlib
 from dataclasses import dataclass, field
+from typing import Literal
 
 from coffer.domain.skill.paths import is_within
 
@@ -54,7 +55,7 @@ class FileNode:
 
     name: str
     path: str
-    type: str  # "file" | "dir"
+    type: Literal["file", "dir"]
     size: int | None = None
     children: list[FileNode] = field(default_factory=list)
     # Set on a directory whose descendants were clipped at ``MAX_TREE_DEPTH``.

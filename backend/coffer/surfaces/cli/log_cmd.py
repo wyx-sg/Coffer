@@ -7,6 +7,10 @@ tail (``GET /daemon/logs``), so a terminal sees what the page shows. ``prune``
 is the on-demand retention pass (spec resource-framework "Prune each registered
 log table on its own retention period").
 
+The audit and MCP readers page by the route's cursor: a page with more after
+it ends with the ``--cursor`` value that reads the next one, and ``--json``
+prints the route's answer, ``next_cursor`` included.
+
 ``--since`` takes an ISO 8601 instant or an age such as ``90s``, ``30m``,
 ``1h`` or ``2d``, turned into an instant here so every route receives the one
 form it accepts.
@@ -33,6 +37,7 @@ _AGE = re.compile(r"^(\d+)([smhd])$")
 _UNIT = {"s": "seconds", "m": "minutes", "h": "hours", "d": "days"}
 
 _SINCE_HELP = "ISO 8601 instant, or an age such as 30m, 1h, 2d"
+_CURSOR_HELP = "Read the page after this one: the next_cursor a previous read printed"
 
 
 def since_instant(raw: str | None, *, now: datetime | None = None) -> str | None:
@@ -63,9 +68,10 @@ def audit(
     event_type: str | None = typer.Option(None, "--event-type", help="Only this event type"),
     since: str | None = typer.Option(None, "--since", help=_SINCE_HELP),
     limit: int = typer.Option(50, "--limit", min=1, max=500, help="Most entries to print"),
+    cursor: str | None = typer.Option(None, "--cursor", help=_CURSOR_HELP),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """Read the audit log, newest first."""
+    """Read the audit log, newest first, one page at a time."""
     verbose = _verbose(ctx)
     if name is not None and kind is None:
         typer.echo("--name needs --kind: a name is only unique within a kind", err=True)
@@ -77,6 +83,8 @@ def audit(
         params["event_type"] = event_type
     if since is not None:
         params["since"] = since_instant(since)
+    if cursor is not None:
+        params["cursor"] = cursor
     c, _info = _cli_client.client_or_exit()
     with c:
         if name is not None and kind is not None:
@@ -85,10 +93,12 @@ def audit(
             params["resource_uid"] = resolve_uid(c, kind, name, verbose=verbose)
         r = c.get("/audit", params=params)
         _cli_client.check(r, verbose=verbose)
-    entries = r.json()["entries"]
+    body = r.json()
     if output_json:
-        typer.echo(_json.dumps({"audit_events": entries}, indent=2))
+        # The route's answer as it is: its entries and its next_cursor.
+        typer.echo(_json.dumps(body, indent=2))
         return
+    entries = body["entries"]
     table = Table(title="Audit log")
     for col in ("Time", "Actor", "Event", "Resource"):
         table.add_column(col)
@@ -98,6 +108,7 @@ def audit(
         )
         table.add_row(str(e["timestamp"]), e["actor"], e["event_type"], resource)
     _console.print(table)
+    _next_page_hint(body.get("next_cursor"))
 
 
 @app.command("mcp")
@@ -107,6 +118,7 @@ def mcp(
     status_filter: str | None = typer.Option(None, "--status", help="ok | error"),
     since: str | None = typer.Option(None, "--since", help=_SINCE_HELP),
     limit: int = typer.Option(20, "--limit", min=1, max=500, help="Most calls to print"),
+    cursor: str | None = typer.Option(None, "--cursor", help=_CURSOR_HELP),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
     """Read the MCP invocation log, newest first.
@@ -121,6 +133,8 @@ def mcp(
         params["status"] = status_filter
     if since is not None:
         params["since"] = since_instant(since)
+    if cursor is not None:
+        params["cursor"] = cursor
     c, _info = _cli_client.client_or_exit()
     with c:
         if server is None:
@@ -129,10 +143,12 @@ def mcp(
             uid = resolve_uid(c, "mcp_server", server, verbose=verbose)
             r = c.get(f"/resources/mcp_server/{uid}/invocations", params=params)
         _cli_client.check(r, verbose=verbose)
-    rows = r.json()["invocations"]
+    body = r.json()
     if output_json:
-        typer.echo(_json.dumps({"invocations": rows}, indent=2))
+        # The route's answer as it is: its invocations and its next_cursor.
+        typer.echo(_json.dumps(body, indent=2))
         return
+    rows = body["invocations"]
     table = Table(title=f"{server or 'all servers'} invocations (last {limit})")
     table.add_column("Time")
     if server is None:
@@ -150,6 +166,13 @@ def mcp(
             inv["status"],
         )
     _console.print(table)
+    _next_page_hint(body.get("next_cursor"))
+
+
+def _next_page_hint(next_cursor: str | None) -> None:
+    """End a page that has more after it with the flag that reads the next one."""
+    if next_cursor:
+        typer.echo(f"More entries follow: add --cursor {next_cursor}")
 
 
 @app.command("daemon")

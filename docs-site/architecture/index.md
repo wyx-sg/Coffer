@@ -185,6 +185,7 @@ The rest of the section is organised from the foundations outward.
 - [Daemon and processes](/architecture/daemon) — detect-or-spawn, the discovery file, residency, version skew.
 - [MCP gateway](/architecture/mcp-gateway) — aggregation, per-session upstreams, tiering and tool search.
 - [Chat and turns](/architecture/chat) — the turn platform shared by the Chat page and every channel.
+- [The event stream](/architecture/event-stream) — one daemon-wide stream of invalidation hints that tells a page what changed, resumable across a dropped connection; growing lists page by cursor.
 - [Persistence](/architecture/persistence) — SQLite, migrations, and what lives on disk instead.
 
 **Subsystems** are the three features with the most design behind them.

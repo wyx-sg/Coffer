@@ -20,7 +20,7 @@ from coffer.application.agent.config_file_service import (
     ConfigFileContent,
     ConfigFileInfo,
 )
-from coffer.domain.agent.config_files import ConfigFileFormat
+from coffer.domain.agent.config_files import ConfigFileFormat, ConfigFileKind
 from coffer.surfaces.http.agent_dependencies import get_agent_config_file_service
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor as _actor
@@ -44,7 +44,7 @@ class ConfigFileInfoOut(BaseModel):
     path: str
     folder_path: str
     format: ConfigFileFormat
-    kind: str
+    kind: ConfigFileKind
     exists: bool
     size: int | None
     modified_at: datetime | None
@@ -77,7 +77,7 @@ def _info_out(i: ConfigFileInfo) -> ConfigFileInfoOut:
         path=i.path,
         folder_path=i.folder_path,
         format=i.format,
-        kind=i.kind,
+        kind=ConfigFileKind(i.kind),
         exists=i.exists,
         size=i.size,
         modified_at=i.modified_at,

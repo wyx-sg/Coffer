@@ -34,7 +34,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
-from coffer.domain.agent.transcripts import UnsupportedAgentTypeError
+from coffer.domain.agent.transcripts import SortOrder, TranscriptSort, UnsupportedAgentTypeError
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.errors import error_response
 from coffer.surfaces.http.workspace_dependencies import get_agent_transcript_service
@@ -94,38 +94,47 @@ class TranscriptSessionListResponse(BaseModel):
     """Response for GET /api/v1/agents/{uid}/transcripts.
 
     ``sessions`` is one page; ``total`` is the number of sessions matching the
-    search/filter, so the UI can page and show "N of total".
+    search/filter, so the UI can show "N of total". ``next_cursor`` reads the
+    page after this one and is null on the last page.
     """
 
     sessions: list[TranscriptSessionSummary]
     total: int
     limit: int
-    offset: int
+    next_cursor: str | None
 
 
 @router.get("/{uid}/transcripts", response_model=TranscriptSessionListResponse)
 async def list_transcripts(
     uid: str,
     limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    cursor: str | None = Query(
+        None,
+        description=(
+            "The previous page's next_cursor. Bound to the search, filter and sort "
+            "it was issued with; any other value is 400 CURSOR_INVALID."
+        ),
+    ),
     q: str | None = Query(None, description="Search title or project path."),
     project: str | None = Query(None, description="Filter to this exact project_path."),
-    sort: str = Query("last_activity_at", pattern="^(started_at|last_activity_at|message_count)$"),
-    order: str = Query("desc", pattern="^(asc|desc)$"),
+    sort: TranscriptSort = Query("last_activity_at"),  # noqa: B008
+    order: SortOrder = Query("desc"),  # noqa: B008
     svc: Any = Depends(get_agent_transcript_service),  # noqa: B008
 ) -> TranscriptSessionListResponse:
     """List an agent's transcript sessions with search, filter, and sort.
 
     Searches title + project path (``q``), filters by exact ``project``, and
-    sorts by ``sort``/``order``. Backed by the reader's mtime-aware cache, so an
-    agent with thousands of past sessions stays responsive. Paged by
-    ``limit``/``offset`` against the matched total.
+    sorts by ``sort``/``order`` with ``session_id`` as the tie-break. Backed by
+    the reader's mtime-aware cache, so an agent with thousands of past sessions
+    stays responsive. Paged by ``limit`` and the answer's ``next_cursor``
+    alongside the matched total — a cursor, not an offset, because the agent
+    keeps writing sessions while a reader pages.
     """
     try:
-        total, sessions = await svc.list_sessions(
+        total, page = await svc.list_sessions(
             uid,
             limit=limit,
-            offset=offset,
+            cursor=cursor,
             query=q,
             project=project,
             sort=sort,
@@ -148,11 +157,11 @@ async def list_transcripts(
                 last_activity_at=s.last_activity_at,
                 source_path=s.source_path,
             )
-            for s in sessions
+            for s in page.items
         ],
         total=total,
         limit=limit,
-        offset=offset,
+        next_cursor=page.next_cursor,
     )
 
 

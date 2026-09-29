@@ -170,7 +170,7 @@ def _machine_out(view: MachineView) -> MachineOut:
         os=d.os,
         hostname=d.hostname,
         coffer_version=d.coffer_version,
-        last_converged_on=d.last_converged_on.isoformat() if d.last_converged_on else None,
+        last_converged_on=d.last_converged_on,
         key_matches=view.key_matches,
         agents=list(d.agents),
         is_self=view.is_self,
@@ -193,12 +193,11 @@ def _preview_out(preview: JoinPreview) -> JoinPreviewOut:
             "returning" if preview.kind is JoinKind.RETURNING else "new" if preview.kind else None
         )
     )
-    day = preview.last_converged_on
     return JoinPreviewOut(
         joining=preview.joining,
         case=case,
         base=preview.base,
-        last_converged_on=day.isoformat() if day else None,
+        last_converged_on=preview.last_converged_on,
         remote_changed=preview.remote_changed,
         vault_documents=preview.vault_documents,
     )
@@ -206,7 +205,7 @@ def _preview_out(preview: JoinPreview) -> JoinPreviewOut:
 
 @router.get("/join", response_model=JoinPreviewOut)
 async def preview_join(
-    choice: str | None = Query(default=None, pattern="^keep-local$"),
+    choice: Literal["keep-local"] | None = Query(default=None),
 ) -> JoinPreviewOut:
     """State the join ``/adopt`` would make, applying nothing.
 

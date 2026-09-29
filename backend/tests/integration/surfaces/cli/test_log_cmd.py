@@ -58,9 +58,50 @@ def test_the_command_line_reads_the_audit_log(in_proc_daemon: Any) -> None:
 
     only_kind = _run("log", "audit", "--kind", "fake_kind", "--json")
     assert only_kind.exit_code == 0, only_kind.output
-    entries = json.loads(only_kind.output)["audit_events"]
+    entries = json.loads(only_kind.output)["entries"]
     assert entries and {e["resource_kind"] for e in entries} == {"fake_kind"}
     assert [e["event_type"] for e in entries] == ["resource_disabled", "resource_created"]
+
+
+@pytest.mark.acceptance(
+    spec="resource-framework", scenario="the command line pages the audit log by cursor"
+)
+def test_the_command_line_pages_the_audit_log_by_cursor(in_proc_daemon: Any) -> None:
+    c = _client()
+    made = c.post("/resources", json={"kind": "fake_kind", "name": "paged", "config": {"foo": 1}})
+    uid = made.json()["uid"]
+    assert c.post(f"/resources/{uid}/disable").status_code == 200
+    assert c.post(f"/resources/{uid}/enable").status_code == 200
+
+    first = _run("log", "audit", "--kind", "fake_kind", "--limit", "2", "--json")
+    assert first.exit_code == 0, first.output
+    page = json.loads(first.output)
+    assert [e["event_type"] for e in page["entries"]] == ["resource_enabled", "resource_disabled"]
+    assert page["next_cursor"]
+
+    second = _run(
+        "log",
+        "audit",
+        "--kind",
+        "fake_kind",
+        "--limit",
+        "2",
+        "--cursor",
+        page["next_cursor"],
+        "--json",
+    )
+    assert second.exit_code == 0, second.output
+    rest = json.loads(second.output)
+    assert [e["event_type"] for e in rest["entries"]] == ["resource_created"]
+    assert rest["next_cursor"] is None
+
+    # The table names the flag for the next page when one follows, and not after.
+    table = _run("log", "audit", "--kind", "fake_kind", "--limit", "2")
+    assert f"--cursor {page['next_cursor']}" in table.output
+    last = _run(
+        "log", "audit", "--kind", "fake_kind", "--limit", "2", "--cursor", page["next_cursor"]
+    )
+    assert "--cursor" not in last.output
 
 
 def test_log_audit_name_needs_a_kind(in_proc_daemon: Any) -> None:
@@ -98,6 +139,28 @@ def test_the_command_line_reads_the_invocation_log(mcp_daemon: Any) -> None:  # 
     rows = json.loads(failed.output)["invocations"]
     assert {r["status"] for r in rows} == {"error"}
     assert {r["resource_uid"] for r in rows} == {fs, git, "coffer", "deleted:old"}
+
+
+@pytest.mark.acceptance(spec="mcp-gateway", scenario="the invocation log pages by cursor")
+def test_the_invocation_log_pages_by_cursor(mcp_daemon: Any) -> None:  # noqa: F811
+    fs = _register_server("fs")
+    _seed_rows([(fs, "first", "ok"), (fs, "second", "ok"), (fs, "third", "ok")])
+    c = _client()
+    route = f"/resources/mcp_server/{fs}/invocations"
+
+    first = c.get(route, params={"limit": 2}).json()
+    assert [r["capability_key"] for r in first["invocations"]] == ["third", "second"]
+    rest = c.get(route, params={"limit": 2, "cursor": first["next_cursor"]}).json()
+    assert [r["capability_key"] for r in rest["invocations"]] == ["first"]
+    assert rest["next_cursor"] is None
+
+    # The command line reads the same pages; a cursor issued for one server's
+    # log is refused by the cross-server log, whose filters differ.
+    cli = _run("log", "mcp", "--server", "fs", "--limit", "2", "--cursor", first["next_cursor"])
+    assert cli.exit_code == 0, cli.output
+    assert "first" in cli.output and "third" not in cli.output
+    foreign = _run("log", "mcp", "--limit", "2", "--cursor", first["next_cursor"])
+    assert foreign.exit_code == 6, foreign.output  # 400 CURSOR_INVALID → invalid input
 
 
 @pytest.mark.acceptance(spec="web-ui", scenario="the command-line readers still read the records")

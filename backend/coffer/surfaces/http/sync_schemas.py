@@ -8,7 +8,7 @@ redact.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -73,7 +73,7 @@ class PendingConfirmationOut(BaseModel):
     too much of the remote — the case where this machine is the damaged one.
     """
 
-    direction: str
+    direction: Literal["apply", "publish"]
     breaches: list[BreachOut]
     paths: list[str]
     raised_at: datetime
@@ -93,7 +93,7 @@ class JoinPreviewOut(BaseModel):
     #: The commit a returning machine recovered from its own descriptor.
     base: str | None = None
     #: ISO date this machine last converged with the remote; None when new.
-    last_converged_on: str | None = None
+    last_converged_on: date | None = None
     #: Documents the remote changed since this machine's base — everything it
     #: holds, for a new machine. None when the base is gone.
     remote_changed: int | None = None
@@ -155,7 +155,7 @@ class AdoptIn(BaseModel):
     #: Only for a returning machine whose recorded base is gone from the
     #: remote's history: ``keep-local`` joins as new and publishes this vault's
     #: documents as additions. Absent, that case is refused rather than guessed.
-    choice: str | None = None
+    choice: Literal["keep-local"] | None = None
 
 
 class SyncRemoteIn(BaseModel):
@@ -244,7 +244,7 @@ class MachineOut(BaseModel):
     coffer_version: str
     #: The *day* this machine last converged. A day rather than an instant
     #: because an idle machine must not commit a heartbeat every round.
-    last_converged_on: str | None
+    last_converged_on: date | None
     #: Null when either side has published no fingerprint yet. ``False`` means
     #: that machine's credentials cannot be decrypted here.
     key_matches: bool | None

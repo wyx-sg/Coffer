@@ -18,9 +18,9 @@ it — do not invent a parallel pattern.
 - **TanStack Query v5** for all server state. No Redux / Zustand / MobX.
 - **openapi-typescript** generates wire types from every spec's OpenAPI
   contract, and that contract is itself generated from the backend's Pydantic
-  models; **openapi-fetch** is the typed client for the mcp-gateway paths and
-  one shared hand-written `call<T>()` transport helper covers the rest (§4).
-  The target is a generated client for every capability (§4, §9).
+  models; **openapi-fetch** is the typed client over every capability's paths
+  (`src/lib/api/types.ts` merges them), and one shared hand-written `call<T>()`
+  transport helper serves the modules not yet moved onto it (§4, §9).
 - **shadcn/ui + Radix + Tailwind** for the design system (§6).
 - **react-hook-form + zod** for forms, **i18next** for copy, **lucide-react**
   for icons.
@@ -136,8 +136,9 @@ the chat SSE stream (below).
   mcp-gateway one so `components["schemas"][…]` keeps working. `npm run lint`
   runs `codegen:check` first, so a contract edit without a regenerate fails CI;
   never hand-edit `generated/` (it is prettier-ignored, 4-space indented).
-- **Generated client** (`getApiClient()` over `src/lib/api/client.ts`) for the
-  mcp-gateway paths — full path/response type safety.
+- **Generated client** (`getApiClient()` over `src/lib/api/client.ts`) over
+  every capability's paths (keyed without the `/api/v1` prefix the base URL
+  carries) — full path/response type safety. New request functions use it.
 - **One hand-written helper** — `call<T>(path, { method, body })` in
   `src/lib/api/call.ts` (URL building, headers, 204 → `undefined`,
   `{error:{code,message,details}}` → `ApiError`, `FormData` bodies). Every
@@ -151,9 +152,14 @@ the chat SSE stream (below).
 - **Direction.** Pydantic models → generated `contracts/api.openapi.yaml` →
   generated client (Principles, "II. Spec-as-Truth"; ADR
   `docs/decisions/wire-contract-generated-from-the-pydantic-models.md`). The
-  contract generator, its freshness gate and the lint rule against
-  hand-written wire types arrive with the S-4 work; until then existing
-  hand-written types are debt (§9), migrated per domain, never extended.
+  contracts are regenerated with `make contracts` (models → contracts →
+  `generated/`). `codegen:check` (in `npm run lint`) also runs
+  `scripts/check-wire-types.mjs`: an exported `interface`, or an exported
+  `type` spelling an object shape, in a `src/lib/api/*.ts` module fails unless
+  it carries a `@ui-only` JSDoc tag (it never crosses the wire) or is listed in
+  `scripts/wire-types-allowlist.json` — the pre-generator debt the UI rebuild
+  removes page by page (§9). The gate fails on a stale allow-list entry too.
+  Never add to the allow-list.
 
 All errors converge on `ApiError(code, message)` (`src/lib/api/errors.ts`).
 Surface them with `translateApiError(t, error)`, which maps `errors.<CODE>`
@@ -274,13 +280,13 @@ return useMutation({
 
 When you work near these, migrate toward the target; don't extend the debt:
 
-1. **`src/lib/api/skills.ts` still hand-writes its wire types** although
-   `generated/skill-manager.ts` covers them (`src/lib/api/agents-workspace.ts`
-   already aliases its unmanaged-skill types onto it). Alias them onto the
-   generated schemas instead of re-deriving them.
-   Same for the other hand-written wire types a contract does not match (each is
-   listed in the header comment of the `src/lib/api/x.ts` that keeps one): fix
-   the backend model so the contract describes what is really sent, regenerate,
-   then replace the type with the alias.
+1. **Hand-written wire types on the allow-list.** `scripts/wire-types-allowlist.json`
+   names every wire type still declared by hand in `src/lib/api/`. When a
+   page is rebuilt, replace each of its types with an alias of the generated
+   schema (fixing the backend model first if the contract is not what the wire
+   carries) and delete the entry. The daemon-wide change feed
+   (`GET /api/v1/events`, fetch-read with the token header like the chat
+   stream) is the replacement for per-hook `refetchInterval` polling: a
+   rebuilt page invalidates the query keys an envelope's `kind`/`id` name.
 2. **The `codemirror` vendor chunk (~590 kB)** is one file; split the language
    modes out of it if a page that needs only one mode becomes a landing page.

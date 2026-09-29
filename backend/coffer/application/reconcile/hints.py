@@ -4,12 +4,14 @@ resource row.
 :class:`HintingResourceRepo` wraps the resource repository the
 ``ResourceService`` writes through. After each write that returns the row it
 emits one hint carrying the row's new revision; a delete emits the row's last
-revision plus one. Because every surface — REST, the CLI through the daemon,
-a sync import's appliers — writes through ``ResourceService``, this one seam
-sees them all, and no kind has to remember to announce its own writes.
+revision plus one, marked ``op="delete"``. Because every surface — REST, the
+CLI through the daemon, a sync import's appliers — writes through
+``ResourceService``, this one seam sees them all, and no kind has to remember
+to announce its own writes.
 
-A hint is an accelerator: the sink (:meth:`Reconciler.hint`) only brings the
-next pass forward, never blocks and never raises into the write.
+A hint is an accelerator: the sink (:func:`fan_out` over
+:meth:`Reconciler.hint` and the event broker) only brings the next pass
+forward and announces the write, never blocks and never raises into it.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from collections.abc import Callable
 from typing import Any
 
 from coffer.application.repos import ResourceRepo
-from coffer.domain.reconcile import Changed
+from coffer.domain.reconcile import Changed, ChangeOp
 from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope
 
@@ -35,11 +37,12 @@ class HintingResourceRepo:
         self._inner = inner
         self._sink = sink
 
-    def _emit(self, resource: Resource | None, *, bump: int = 0) -> None:
+    def _emit(self, resource: Resource | None, *, op: ChangeOp = "upsert") -> None:
         if resource is None:
             return
+        rev = resource.rev + 1 if op == "delete" else resource.rev
         try:
-            self._sink(Changed(resource.kind, resource.uid, resource.rev + bump))
+            self._sink(Changed(resource.kind, resource.uid, rev, op))
         except Exception:
             _log.exception("reconcile.hint_failed")
 
@@ -91,7 +94,24 @@ class HintingResourceRepo:
     async def delete(self, uid: str) -> None:
         before = await self._inner.find(uid)
         await self._inner.delete(uid)
-        self._emit(before, bump=1)
+        self._emit(before, op="delete")
 
 
-__all__ = ["HintSink", "HintingResourceRepo"]
+def fan_out(*sinks: HintSink) -> HintSink:
+    """One sink that hands each hint to every one of ``sinks``, in order.
+
+    Each sink is isolated: one that raises is logged and the rest still get
+    the hint, so a failing listener never costs the reconciler its hint.
+    """
+
+    def sink(changed: Changed) -> None:
+        for each in sinks:
+            try:
+                each(changed)
+            except Exception:
+                _log.exception("reconcile.hint_sink_failed")
+
+    return sink
+
+
+__all__ = ["HintSink", "HintingResourceRepo", "fan_out"]

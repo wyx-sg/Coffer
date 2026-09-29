@@ -15,7 +15,7 @@ The standard is simple to state: **a green `make verify` plus `make verify-e2e` 
 | --- | --- | --- | --- | --- |
 | **Unit** | Pure logic: domain functions, value objects, one class. No I/O | `backend/tests/unit/`, plus colocated `frontend/src/**/*.test.ts(x)` | < 100 ms | `make verify-unit` |
 | **Integration** | Several modules with real local infrastructure: real SQLite, real subprocesses, real filesystem, the `keyring` test backend. No network | `backend/tests/integration/` | < 2 s | `make verify-integration` |
-| **Contract** | Wire-format conformance: the hand-written `api.openapi.yaml` files against the Pydantic models and the runtime OpenAPI document | `backend/tests/contract/` | < 1 s | `make verify-contract` |
+| **Contract** | Wire conformance that freshness cannot see: every route the daemon serves has an owning capability, and the MCP endpoint and built-in tools behave as the protocol and the specs say | `backend/tests/contract/` | < 1 s | `make verify-contract` |
 | **E2E** | The assembled product through real surfaces: a browser against the UI, and a real MCP client through the shim and daemon to upstream servers | `e2e/web/specs/`, `e2e/mcp/specs/` | < 30 s | `make verify-e2e` |
 
 The budgets are guidance, not gates. A test that drifts an order of magnitude past its budget is a hint that it belongs in another tier.
@@ -183,6 +183,7 @@ Use **Node 20**, the version CI uses, when you run the frontend suite locally.
 | Gate | What it protects |
 | --- | --- |
 | `scripts/check_file_sizes.py` | File-size limits: backend Python and desktop Rust ≤ 400 lines, frontend page ≤ 200, component ≤ 250, hook and utility ≤ 300. Generated files are excluded |
+| Contract freshness | Each capability's `api.openapi.yaml` is regenerated from the Pydantic models and must equal the checked-in file, and every served route must belong to a capability. Fix with `make contracts` |
 | `scripts/check_response_models.py` | Every FastAPI route declares `response_model=` (or `response_class=` for streaming and file responses), so no route returns an untyped `dict` |
 | `scripts/check_doc_numbering.py` | Specs, ADRs and requirements stay named, not numbered. Links inside `docs/decisions/` resolve, and the ADR index lists exactly the ADRs that exist |
 | `scripts/check_spec_citations.py` | Every `spec <capability> "<Title>"` citation in any tracked file names a real requirement, and retired id forms stay out |
@@ -195,7 +196,7 @@ Use **Node 20**, the version CI uses, when you run the frontend suite locally.
 | `mypy --strict` | Type-checks the whole `coffer` package |
 | `lint-imports` | Import-linter contracts: the layer direction (`surfaces` → `application` → `domain`), a pure `domain`, `keyring` confined to the credentials code, no cross-kind imports between kinds, and specific libraries confined to their adapters |
 | `scripts/dump_i18n_backend_keys.py --check` | Every backend error code and audit event type has an entry in the fixture that the frontend's locale-coverage test reads, so none ships untranslated |
-| `npm run lint` | `codegen:check` (generated API types match the contracts), then ESLint |
+| `npm run lint` | `codegen:check` (generated API types match the contracts, and no wire type in the API modules is written by hand), then ESLint |
 | `npm run typecheck` | `tsc` over the frontend |
 | `npm run knip` | Dead frontend code: unused files, exports and dependencies |
 

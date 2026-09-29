@@ -10,6 +10,7 @@ from coffer.application.retention_service import RetentionService
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor, get_retention_service
 from coffer.surfaces.http.schemas import (
+    PruneRequestIn,
     PruneResultOut,
     RetentionPolicyListOut,
     RetentionPolicyOut,
@@ -77,10 +78,8 @@ async def update_policy(
 
 @router.post("/prune", response_model=PruneResultOut)
 async def prune_now(
-    body: dict[str, object] | None = Body(default=None),  # noqa: B008
+    body: PruneRequestIn | None = Body(default=None),  # noqa: B008
     svc: RetentionService = Depends(get_retention_service),  # noqa: B008
 ) -> PruneResultOut:
-    raw = (body or {}).get("table_name") if body else None
-    table_name: str | None = str(raw) if raw is not None else None
-    result = await svc.prune(table_name=table_name)
+    result = await svc.prune(table_name=body.table_name if body else None)
     return PruneResultOut(tables=result)

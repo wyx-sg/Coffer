@@ -1,11 +1,7 @@
 // frontend/src/lib/api/sync.ts — wire types + requests for /api/v1/sync/*
-// (spec vault-sync). Mirrors `backend/coffer/surfaces/http/sync_schemas.py`,
-// which is the authoritative contract. The vault-sync OpenAPI contract
-// (`generated/vault-sync.ts`) lags it — no `/sync/runs`, a different `RoundOut`
-// (`applied` as a path list, no `published`/`agent_resolved`/`locked_refs`),
-// `MachineOut.last_converged_at` where the backend sends `last_converged_on` —
-// so only the shapes the two agree on (the remote, a path failure) are aliased
-// to it; the rest stay hand-written and must be kept in step by hand.
+// (spec vault-sync). Every wire type is an alias of the vault-sync contract's
+// generated schemas (`generated/vault-sync.ts`), which is generated from
+// `backend/coffer/surfaces/http/sync_schemas.py`.
 //
 // `POST /sync/restore` is deliberately absent, and the absence is the honest
 // answer rather than a gap: it takes a point in the REMOTE's history (a sha, a
@@ -28,31 +24,8 @@ import type { components } from "@/lib/api/generated/vault-sync";
 
 type Schemas = components["schemas"];
 
-/** One document's fate in one round. */
-interface DocChange {
-  path: string;
-  status: "added" | "modified" | "deleted";
-}
-
 /** Per-round change counts for one direction of the diff. */
-export interface DiffCounts {
-  added: number;
-  modified: number;
-  deleted: number;
-  /** Every path this side of the round touched, sorted. The counts are what a
-   *  history row shows; this is what opening the row is for. */
-  changes: DocChange[];
-}
-
-/** One path the round could not apply here, with the reason why. */
-type RoundFailure = Schemas["FailureOut"];
-
-/** One area whose deletion share tripped the circuit breaker. */
-interface GuardBreach {
-  area: string;
-  deleted: number;
-  total: number;
-}
+export type DiffCounts = Schemas["DiffCountsOut"];
 
 /**
  * A round the deletion guard held.
@@ -62,12 +35,7 @@ interface GuardBreach {
  * REMOTE — the case where this machine is the damaged one and confirming would
  * take every other machine down with it.
  */
-export interface PendingConfirmation {
-  direction: "apply" | "publish";
-  breaches: GuardBreach[];
-  paths: string[];
-  raised_at: string;
-}
+export type PendingConfirmation = Schemas["PendingConfirmationOut"];
 
 /**
  * The outcomes a round can end in, taken from the generated contract rather
@@ -78,41 +46,16 @@ export interface PendingConfirmation {
 export type RoundStatus = Schemas["RoundOut"]["status"];
 
 /** One converge round's outcome (`RoundOut`). */
-export interface ConvergeRound {
-  status: RoundStatus;
-  /** `new` or `returning` when this round joined a remote; null otherwise. */
-  join: "new" | "returning" | null;
-  applied: DiffCounts;
-  published: DiffCounts;
-  commit: string | null;
-  conflicts: string[];
-  /** Paths an agent merged — reported whether or not the round succeeded. */
-  agent_resolved: string[];
-  failures: RoundFailure[];
-  /** Paths that can never apply on this machine: held, not retried, and not
-   *  failures. */
-  not_applicable: string[];
-  locked_refs: string[];
-  pending: PendingConfirmation | null;
-  /** On an `awaiting_join` round: the join it detected and did not apply. */
-  join_report: JoinPreview | null;
-  error: string | null;
-}
+export type ConvergeRound = Schemas["RoundOut"];
 
 /**
  * One round as the HISTORY holds it (`RunRecordOut`) — the same report a
  * status round carries, plus when it ran and the id its row is keyed on.
  */
-export interface RunRecord extends ConvergeRound {
-  id: number;
-  started_at: string;
-  finished_at: string;
-}
+export type RunRecord = Schemas["RunRecordOut"];
 
 /** `GET /sync/runs` — every round, newest first. */
-export interface SyncRunList {
-  runs: RunRecord[];
-}
+export type SyncRunList = Schemas["SyncRunListOut"];
 
 /**
  * The join `/adopt` would make, stated before anything is applied
@@ -130,48 +73,17 @@ export type JoinChoice = "keep-local";
 export type SyncRemote = Schemas["SyncRemoteOut"];
 
 /** `GET /sync/status` — the remote, its last round, and this machine's id. */
-export interface SyncStatus {
-  configured: boolean;
-  remote: SyncRemote | null;
-  last_run: ConvergeRound | null;
-  machine_id: string;
-  /** False when the id came from the local fallback file rather than the host,
-   *  which means it does not survive deleting `~/.coffer`. */
-  machine_id_is_derived: boolean;
-  /** False until this machine adopts the remote: until then a round reports
-   *  `awaiting_join` and applies nothing. */
-  joined: boolean;
-  /** Every path recorded as not applicable on this machine. */
-  not_applicable: string[];
-}
+export type SyncStatus = Schemas["SyncStatusOut"];
 
 /** One row of the registry (`GET /sync/machines`). */
-export interface Machine {
-  machine_id: string;
-  name: string;
-  os: string;
-  hostname: string;
-  coffer_version: string;
-  /** The DAY this machine last converged — an idle machine deliberately does
-   *  not stamp every round, so this is never an instant. */
-  last_converged_on: string | null;
-  /** Null when either side has published no fingerprint yet; false means that
-   *  machine's credentials cannot be decrypted here. */
-  key_matches: boolean | null;
-  agents: string[];
-  is_self: boolean;
-}
+export type Machine = Schemas["MachineOut"];
 
-export interface MachineList {
-  machines: Machine[];
-}
+export type MachineList = Schemas["MachineListOut"];
 
-export interface MachineRemoved {
-  removed: boolean;
-}
+export type MachineRemoved = Schemas["MachineRemovedOut"];
 
 /** The remote as it is written: every field but the URL carries a default. */
-export type SyncRemoteInput = Omit<SyncRemote, "worktree_path"> & { worktree_path?: string };
+export type SyncRemoteInput = Schemas["SyncRemoteIn"];
 
 export const syncApi = {
   putRemote: (remote: SyncRemoteInput) =>

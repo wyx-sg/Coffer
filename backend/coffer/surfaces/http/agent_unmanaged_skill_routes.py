@@ -47,7 +47,7 @@ router = APIRouter(
 class UnmanagedSkillOut(BaseModel):
     name: str
     path: str
-    location: str  # "skills" | "agents_dir"
+    location: Location
     valid: bool
     reason: str | None
     foreign_link: bool
@@ -68,7 +68,7 @@ class UnmanagedSkillDetailOut(UnmanagedSkillOut):
 
 
 class AdoptBody(BaseModel):
-    location: str
+    location: Location
 
 
 class SkillRefOut(BaseModel):
@@ -201,7 +201,7 @@ async def adopt_unmanaged_skill(
 async def delete_unmanaged_skill(
     uid: str,
     skill: str,
-    location: str,
+    location: Location,
     svc: Any = Depends(get_skill_service),  # noqa: B008
     actor: str = Depends(_actor),
 ) -> Response:

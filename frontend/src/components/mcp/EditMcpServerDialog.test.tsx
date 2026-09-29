@@ -22,6 +22,8 @@ const stdioResource: ResourceOut = {
   uid: "u-github",
   kind: "mcp_server",
   name: "gh",
+  title: null,
+  scope: null,
   description: "GitHub MCP",
   config: {
     transport: {
@@ -40,6 +42,8 @@ const noCredsResource: ResourceOut = {
   uid: "u-filesystem",
   kind: "mcp_server",
   name: "fs",
+  title: null,
+  scope: null,
   description: "Filesystem MCP",
   config: {
     transport: { type: "stdio", command: "npx" },

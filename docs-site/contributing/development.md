@@ -5,7 +5,7 @@ description: Install Coffer from source, run the daemon and web UI against a thr
 
 # Development setup
 
-This page takes you from a fresh clone to a running daemon and web UI built from your checkout. It also covers every `make` target, frontend codegen, release builds, and working in git worktrees. It is written for contributors on macOS or Linux. The desktop app is built on macOS only.
+This page takes you from a fresh clone to a running daemon and web UI built from your checkout. It also covers every `make` target, contract and frontend codegen, release builds, and working in git worktrees. It is written for contributors on macOS or Linux. The desktop app is built on macOS only.
 
 ## Prerequisites
 
@@ -142,7 +142,7 @@ Run `make help` for the same list.
 | `make verify-all` | `verify` plus `verify-e2e` |
 | `make verify-unit` | The unit-purity check, backend unit tests, then the frontend Vitest suite |
 | `make verify-integration` | Backend integration tests |
-| `make verify-contract` | Backend contract tests (OpenAPI conformance) |
+| `make verify-contract` | Backend contract tests: every served route has an owning capability, and the MCP endpoint behaves as the protocol says |
 | `make verify-e2e` | Both Playwright projects, `web` and `mcp` |
 | `make verify-acceptance` | `openspec validate --all --strict`, then `scripts/audit_acceptance.py` |
 | `make openspec-validate` | Only the OpenSpec strict validation |
@@ -154,7 +154,8 @@ Run `make help` for the same list.
 | `make eval-routing` | Adds the tool-routing suite (needs a local LLM) |
 | `make eval-curate` | Turn captured tool-search queries into labelled golden cases (`ARGS=--dry-run`) |
 | `make lock` | Refresh `backend/uv.lock` from `pyproject.toml` |
-| `make frontend-codegen` | Regenerate the frontend's TypeScript API types from the OpenAPI contracts |
+| `make contracts` | Regenerate every capability's wire contract from the backend's models, then the frontend's types from those contracts |
+| `make frontend-codegen` | Regenerate only the frontend's TypeScript API types from the checked-in contracts |
 | `make docs-reference` | Regenerate the CLI and REST API reference pages of this site |
 | `make bundle-binaries` | Freeze `coffer`, `coffer-daemon` and `coffer-mcp-shim` with PyInstaller into `dist/` |
 | `make desktop` | Build the unsigned `Coffer.app` and `.dmg` (slow: see below) |
@@ -167,15 +168,16 @@ Run `make help` for the same list.
 Its prettier pass rewrites the whole of `frontend/`. Keep formatting-only churn out of an unrelated pull request. The Claude Code hook already formats each file an agent edits.
 :::
 
-## Frontend API codegen
+## Wire contracts and frontend codegen
 
-The wire contract of each capability is a hand-written OpenAPI file, `openspec/specs/<capability>/contracts/api.openapi.yaml`. The frontend's types are generated from those files, not from a running daemon:
+The wire runs in one direction: the backend's Pydantic models are the only hand-written description of the HTTP API. Each capability's OpenAPI file, `openspec/specs/<capability>/contracts/api.openapi.yaml`, is generated from them and checked in, so a change to the wire shows up as a diff in the pull request that causes it. The frontend's types are generated from those files in turn. Change a model, then regenerate both:
 
 ```sh
-make frontend-codegen          # = cd frontend && npm run codegen
+make contracts                 # models → contracts → frontend types
+make frontend-codegen          # only the last step (= cd frontend && npm run codegen)
 ```
 
-`frontend/scripts/codegen.mjs` runs openapi-typescript over each contract listed in its `CONTRACTS` array and writes `frontend/src/lib/api/generated/<capability>.ts`. `npm run lint` starts with `codegen:check`, which regenerates into a temporary directory and fails on any difference. So if you edit a contract and do not regenerate, CI fails. Never hand-edit `generated/`. Rerun codegen after rebasing onto a `main` that changed a contract.
+The contracts are cut from the daemon's own OpenAPI document, built without starting the daemon, and split by which capability owns each route. The output is deterministic, so two people regenerating the same models get the same bytes. `make lint` regenerates the contracts in memory and fails when a checked-in file differs, and when the daemon serves a route that no capability owns. `npm run lint` starts with `codegen:check`, which does the same for the frontend's generated types, and then refuses a wire type written by hand in the frontend's API modules. Never edit a contract or `generated/` by hand. Rerun `make contracts` after rebasing onto a `main` that changed a model.
 
 ## Build the frozen binaries
 

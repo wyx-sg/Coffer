@@ -100,6 +100,7 @@ class MCPInvocationRepoPort(Protocol):
         status: Any | None = None,
         since: datetime | None = None,
         limit: int = 50,
+        after: tuple[datetime, int] | None = None,
     ) -> list[MCPInvocation]: ...
     async def usage_counts(
         self,

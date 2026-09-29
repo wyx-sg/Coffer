@@ -213,16 +213,14 @@ def agent(
 def _transcript_dirs(c: httpx.Client, uid: str, *, verbose: bool) -> list[str]:
     """Every folder holding one of the agent's transcript files, in listing order."""
     dirs: dict[str, None] = {}
-    offset = 0
+    params: dict[str, Any] = {"limit": 500}
     while True:
-        page = _read(
-            c, f"/agents/{uid}/transcripts", feature=None, verbose=verbose, limit=500, offset=offset
-        )
+        page = _read(c, f"/agents/{uid}/transcripts", feature=None, verbose=verbose, **params)
         for s in page["sessions"]:
             dirs.setdefault(str(Path(s["source_path"]).parent), None)
-        offset += len(page["sessions"])
-        if not page["sessions"] or offset >= page["total"]:
+        if not page.get("next_cursor"):
             return list(dirs)
+        params["cursor"] = page["next_cursor"]
 
 
 @app.command("logs")

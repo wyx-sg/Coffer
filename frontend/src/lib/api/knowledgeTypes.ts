@@ -33,35 +33,10 @@ export type FileOut = Schemas["FileOut"];
  *  it is on disk, so none of it is sent. */
 export type FileSave = Schemas["FileSave"];
 
-/**
- * One collection: a top-level folder, described by its own `README.md`.
- *
- * Hand-written rather than the contract's `CollectionOut`: the UI (and its
- * fixtures) model a collection with no README as `description: null`, which
- * the contract types as `string` only.
- */
-export interface CollectionOut {
-  /** The collection Resource's immutable identity — what `curate` takes, and
-   *  what a link to this collection is built from. */
-  uid: string;
-  /** A mutable label, and the collection's directory name under the knowledge
-   *  root. Display it, and build the `path` / `collection` arguments of the
-   *  FILE routes from it: those address a place on disk. */
-  name: string;
-  /** The display title a person chose, shown in place of the name; null when
-   *  none is set. Edited through `PATCH /resources/{uid}`. */
-  title?: string | null;
-  description: string | null;
-  /** Documents an agent can read today, counted recursively. */
-  document_count: number;
-  /** Material still waiting in the inbox to be merged into those documents —
-   *  counted apart because it is exactly what an agent cannot see yet. */
-  pending_count: number;
-}
+/** One collection: a top-level folder, described by its own `README.md`. */
+export type CollectionOut = Schemas["CollectionOut"];
 
-export interface CollectionListOut {
-  collections: CollectionOut[];
-}
+export type CollectionListOut = Schemas["CollectionListOut"];
 
 /** One level of a collection's tree — it descends a level per request. */
 export type TreeOut = Schemas["TreeOut"];

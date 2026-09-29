@@ -27,6 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from coffer.domain.mcp.capability import MCPInvocation
 from coffer.infrastructure.persistence.base import Base
+from coffer.infrastructure.persistence.keyset import newest_first_after
 from coffer.infrastructure.persistence.models import ResourceModel
 
 
@@ -163,9 +164,18 @@ class MCPInvocationRepo:
         status: Literal["ok", "error", "timeout", "denied"] | None = None,
         since: datetime | None = None,
         limit: int = 50,
+        after: tuple[datetime, int] | None = None,
     ) -> list[MCPInvocation]:
         async with self._sm() as session:
-            stmt = select(MCPInvocationModel).order_by(MCPInvocationModel.timestamp.desc())
+            # Newest first, the id breaking ties, so ``after`` (the previous
+            # page's last row) names one place in the order.
+            stmt = select(MCPInvocationModel).order_by(
+                MCPInvocationModel.timestamp.desc(), MCPInvocationModel.id.desc()
+            )
+            if after is not None:
+                stmt = stmt.where(
+                    newest_first_after(MCPInvocationModel.timestamp, MCPInvocationModel.id, after)
+                )
             if resource_uid is not None:
                 stmt = stmt.where(MCPInvocationModel.resource_uid == resource_uid)
             if status is not None:

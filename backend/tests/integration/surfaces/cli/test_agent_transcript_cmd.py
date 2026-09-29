@@ -144,7 +144,7 @@ def _page(sessions: list[dict[str, Any]], total: int | None = None) -> _FakeResp
             "sessions": sessions,
             "total": total if total is not None else len(sessions),
             "limit": 20,
-            "offset": 0,
+            "next_cursor": None,
         },
     )
 
@@ -159,7 +159,7 @@ def test_transcript_list_json(monkeypatch):
         "sessions": [SESSION],
         "total": 3,
         "limit": 20,
-        "offset": 0,
+        "next_cursor": None,
     }
 
 
@@ -212,8 +212,8 @@ def test_transcript_list_forwards_query_sort_and_paging(monkeypatch):
             "asc",
             "--limit",
             "5",
-            "--offset",
-            "10",
+            "--cursor",
+            "CURSOR",
         ],
     )
     assert result.exit_code == 0, result.output
@@ -225,10 +225,10 @@ def test_transcript_list_forwards_query_sort_and_paging(monkeypatch):
             {
                 "params": {
                     "limit": 5,
-                    "offset": 10,
                     "sort": "started_at",
                     "order": "asc",
                     "q": "alpha",
+                    "cursor": "CURSOR",
                 }
             },
         ),

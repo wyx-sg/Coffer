@@ -287,7 +287,11 @@ describe("ChannelDetailPage", () => {
   test("the pairing button issues a code and the code is shown large", () => {
     stubResource();
     stubStatus();
-    const mutate = stubPairing({ code: "ABCD2345", expires_at: "2026-06-12T13:00:00Z" });
+    const mutate = stubPairing({
+      code: "ABCD2345",
+      expires_at: "2026-06-12T13:00:00Z",
+      pair_url: "",
+    });
     renderPage();
 
     fireEvent.click(screen.getByRole("button", { name: /generate pairing code/i }));
@@ -576,7 +580,7 @@ describe("ChannelDetailPage — platform diagnostics and pairing link", () => {
   test("shows only the code when the platform has no pairing link", () => {
     stubResource();
     stubStatus();
-    stubPairing({ code: "ABCD2345", expires_at: "2026-06-12T10:00:00Z" });
+    stubPairing({ code: "ABCD2345", expires_at: "2026-06-12T10:00:00Z", pair_url: "" });
     renderPage();
 
     expect(screen.getByText("ABCD2345")).toBeInTheDocument();

@@ -40,6 +40,7 @@ give the status each code is actually sent with.
 | `DAEMON_NOT_READY` | 503 | The daemon has no active token yet; it is still starting. | Retry after a moment. |
 | `HOST_NOT_LOOPBACK` | 421 | The request's `Host` header does not name a loopback address. Defends against DNS rebinding. | Call `127.0.0.1` or `localhost` directly, not through a proxy or another hostname. |
 | `BAD_REQUEST` | 400 | A route rejected the request (for example an invalid `X-Coffer-Actor` value or malformed JSON on `/mcp`). | Read `message`; fix the request. |
+| `CURSOR_INVALID` | 400 | A `cursor` sent to a paged list (the audit log, the MCP invocation log, an agent's transcript sessions, the chat conversations) does not decode, or was issued for another list or with other filters. | Drop `cursor` to read the first page again, or send the `next_cursor` the same list and filters returned. |
 | `NOT_FOUND` | 404 | No such route or object, raised by a route rather than a domain error. | Check the path against the [REST API reference](/reference/rest-api). |
 | `FORBIDDEN` | 403 | The route refuses the operation. | Read `message`. |
 | `CONFIG_INVALID` | 422 | The request body or query failed validation, or a resource's config is invalid. The submitted values are not echoed back. | Compare the body with the route's schema at `/api/v1/openapi.json`. |

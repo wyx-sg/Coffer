@@ -18,35 +18,17 @@ import type { components } from "@/lib/api/generated/agent-registry";
 
 /** `memory_dir` is the store's real identity on disk — what open/reveal act on;
  * `path` the real project directory, when Coffer could resolve it. */
-export type NativeMemoryStore = components["schemas"]["NativeMemoryStore"];
+export type NativeMemoryStore = components["schemas"]["NativeMemoryStoreOut"];
 
 export type NativeMemoryListOut = components["schemas"]["NativeMemoryListOut"];
 
 /** One entry in a store's tree. `path` is relative to the store directory. */
-export interface NativeMemoryFileNode {
-  name: string;
-  path: string;
-  type: "file" | "dir";
-  size: number | null;
-  /** A directory whose descendants were clipped at the server's depth bound. */
-  truncated: boolean;
-  children: NativeMemoryFileNode[];
-}
+export type NativeMemoryFileNode = components["schemas"]["MemoryFileNodeOut"];
 
-export interface NativeMemoryFileTreeOut {
-  root: NativeMemoryFileNode;
-}
+export type NativeMemoryFileTreeOut = components["schemas"]["MemoryFileTreeOut"];
 
 /** One file's contents. No fingerprint: this surface has no write. */
-export interface NativeMemoryFileContent {
-  path: string;
-  /** Absolute path on disk, so the viewer can open / reveal it. */
-  abs_path: string;
-  content: string;
-  truncated: boolean;
-  binary: boolean;
-  size: number;
-}
+export type NativeMemoryFileContent = components["schemas"]["MemoryFileContentOut"];
 
 export const agentNativeMemoryApi = {
   list: (agentUid: string) => call<NativeMemoryListOut>(`/agents/${enc(agentUid)}/native-memory`),

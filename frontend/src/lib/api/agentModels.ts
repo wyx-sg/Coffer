@@ -20,35 +20,19 @@
 // setting ON a model rather than part of its name, and only the agent knows
 // which of its models take one.
 //
-// The wire type stays hand-written: the contract's `AgentModelOut`
-// marks `label`, `description`, `efforts` and `default_effort` optional, while
-// the backend always sends them and the pickers index `efforts` directly.
+// The wire types are aliases of the agent-registry contract's schemas.
 // Transport via the shared `call` (.agents/frontend.md §4).
 
 import { call, enc } from "@/lib/api/call";
+import type { components as AgentRegistryWire } from "@/lib/api/generated/agent-registry";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export interface AgentModel {
-  /** The id passed VERBATIM to the agent's CLI — never a display name. */
-  id: string;
-  label: string;
-  description: string;
-  /**
-   * The reasoning-effort levels this model can be run at, in the order the
-   * agent named them; empty when it takes no such setting. Codex's entries
-   * carry levels, Claude Code's carry none.
-   */
-  efforts: string[];
-  /** The level the agent would pick itself, or null when it named none. */
-  default_effort: string | null;
-}
+export type AgentModel = AgentRegistryWire["schemas"]["AgentModelOut"];
 
-export interface AgentModelsOut {
-  models: AgentModel[];
-}
+export type AgentModelsOut = AgentRegistryWire["schemas"]["AgentModelsOut"];
 
 // ---------------------------------------------------------------------------
 // API object

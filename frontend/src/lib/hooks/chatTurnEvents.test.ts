@@ -19,6 +19,7 @@ import {
   type PendingEcho,
 } from "@/lib/chat/echoes";
 import { messagesKey } from "@/lib/api/queryKeys";
+import { contentBlock } from "@/lib/chat/contentBlock";
 
 const T0 = Date.parse("2026-01-01T12:00:00Z");
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -29,8 +30,11 @@ function userRow(id: string, seq: number, text: string, createdAt: number): Mess
     conversation_id: "conv-1",
     seq,
     role: "user",
-    content: [{ type: "text", text }],
+    content: [contentBlock({ type: "text", text })],
     status: "complete",
+    prompt_tokens: null,
+    completion_tokens: null,
+    model_id: null,
     created_at: iso(createdAt),
   };
 }
@@ -41,8 +45,11 @@ function assistantRow(id: string, seq: number, text: string): Message {
     conversation_id: "conv-1",
     seq,
     role: "assistant",
-    content: [{ type: "text", text }],
+    content: [contentBlock({ type: "text", text })],
     status: "complete",
+    prompt_tokens: null,
+    completion_tokens: null,
+    model_id: null,
     created_at: iso(T0),
   };
 }
@@ -139,8 +146,8 @@ describe("echoes that carry attachments", () => {
     return {
       ...userRow(id, seq, text, T0 + 50),
       content: [
-        { type: "text", text },
-        ...files.map((f) => ({ type: "attachment" as const, filename: f, mime: "image/png" })),
+        contentBlock({ type: "text", text }),
+        ...files.map((f) => contentBlock({ type: "attachment", filename: f, mime: "image/png" })),
       ],
     };
   }
@@ -148,12 +155,12 @@ describe("echoes that carry attachments", () => {
   test("an echo shows its text then one attachment block per file", () => {
     const echo = createEcho("look", [], T0, [png]);
     expect(echoContent(echo)).toEqual([
-      { type: "text", text: "look" },
-      { type: "attachment", filename: "shot.png", mime: "image/png" },
+      contentBlock({ type: "text", text: "look" }),
+      contentBlock({ type: "attachment", filename: "shot.png", mime: "image/png" }),
     ]);
     // An attachment-only echo carries no empty text block.
     expect(echoContent(createEcho("", [], T0, [png]))).toEqual([
-      { type: "attachment", filename: "shot.png", mime: "image/png" },
+      contentBlock({ type: "attachment", filename: "shot.png", mime: "image/png" }),
     ]);
   });
 

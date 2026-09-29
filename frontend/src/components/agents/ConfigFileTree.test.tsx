@@ -28,8 +28,11 @@ const SETTINGS: ConfigFileInfo = {
   key: "settings",
   display_name: "User settings",
   path: "/home/u/.claude/settings.json",
+  folder_path: "/home/u/.claude",
+  kind: "file",
   format: "json",
   exists: true,
+  files: null,
   size: 17,
   modified_at: "2026-05-22T00:00:00Z",
 };
@@ -43,8 +46,6 @@ describe("ConfigFileTree", () => {
 
   test("does not render the description line in the tree (moved to the pane)", () => {
     renderTree([SETTINGS]);
-    expect(
-      screen.queryByText(en.agents.config.desc.settings),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(en.agents.config.desc.settings)).not.toBeInTheDocument();
   });
 });

@@ -14,7 +14,7 @@ This page summarises the conventions for `frontend/`, the React app that the dae
 | UI | React 18 and TypeScript 5 (strict, `noUnusedLocals`, `noUnusedParameters`), built with Vite |
 | Routing | React Router v6, with routes in `src/router.tsx` |
 | Server state | TanStack Query v5. There is no Redux, Zustand or other global store |
-| API types | openapi-typescript, generated from each capability's OpenAPI contract |
+| API types | openapi-typescript, generated from each capability's OpenAPI contract, which is generated from the backend's models |
 | Components | shadcn/ui over Radix primitives, styled with Tailwind |
 | Forms | react-hook-form and zod |
 | Copy | i18next, with English and Chinese catalogues |
@@ -52,9 +52,10 @@ The file-size gate applies here too: a page ≤ 200 lines, a component ≤ 250 l
 
 Every request leaves through one of two modules. Both resolve the base URL and token through `src/lib/auth.ts`, and both send `X-Coffer-Token` and `X-Coffer-Actor: ui`. Nothing else in `src` calls `fetch`. The one exception is the chat event stream.
 
-- **Generated types.** `npm run codegen` (or `make frontend-codegen`) runs openapi-typescript over each contract listed in `frontend/scripts/codegen.mjs` and writes `src/lib/api/generated/<capability>.ts`. Never edit `generated/` by hand. `npm run lint` starts with `codegen:check`, so if you change a contract and do not regenerate, CI fails.
-- **The typed client** (`getApiClient()` in `src/lib/api/client.ts`, over openapi-fetch) serves the mcp-gateway paths.
-- **One hand-written helper**, `call<T>(path, { method, body })` in `src/lib/api/call.ts`, serves everything else. It builds the URL and headers, turns `204` into `undefined` and `{ error: { code, message, details } }` into an `ApiError`, and sends `FormData` bodies. Each `src/lib/api/x.ts` is a set of request functions over `call`. Its wire types alias the generated schema, for example `components["schemas"]["ProviderOut"]`. Do not add a second helper.
+- **Generated types.** Every capability's contract is generated from the backend's models, and `npm run codegen` (or `make frontend-codegen`; `make contracts` runs both steps) runs openapi-typescript over every one of them and writes `src/lib/api/generated/<capability>.ts`. Never edit `generated/` by hand. `npm run lint` starts with `codegen:check`, so a contract regenerated without regenerating the types fails CI.
+- **The typed client** (`getApiClient()` in `src/lib/api/client.ts`, over openapi-fetch) knows every capability's paths, so a call through it is checked for its path, parameters, body and response.
+- **One hand-written helper**, `call<T>(path, { method, body })` in `src/lib/api/call.ts`, serves the modules that have not moved to the typed client. It builds the URL and headers, turns `204` into `undefined` and `{ error: { code, message, details } }` into an `ApiError`, and sends `FormData` bodies. Do not add a second helper.
+- **No hand-written wire types.** A wire type in `src/lib/api/x.ts` is an alias of the generated schema, for example `components["schemas"]["ProviderOut"]`. When the contract is not what the backend really sends, fix the backend model and regenerate, never the TypeScript. `codegen:check` refuses an exported interface, or a type spelling an object shape, in those modules. A type that never crosses the wire carries a `@ui-only` tag saying so, and the hand-written wire types that predate the generator are on an allow-list that the rebuild of each page empties; the gate also fails on an allow-list entry that is gone, so the list only shrinks.
 
 Errors converge on `ApiError(code, message)`. Show them with `translateApiError(t, error)`, which looks up `errors.<CODE>` in the catalogue and falls back to the server's message. Never show a raw error string.
 

@@ -4,15 +4,15 @@
  */
 
 export interface paths {
-    "/skills": {
+    "/api/v1/agents/{uid}/unmanaged-skills": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List managed skills */
-        get: operations["listSkills"];
+        /** List Unmanaged Skills */
+        get: operations["list_unmanaged_skills_api_v1_agents__uid__unmanaged_skills_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21,85 +21,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/skills/import": {
+    "/api/v1/agents/{uid}/unmanaged-skills/{skill}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
-        /** Import a skill from a local filesystem path */
-        post: operations["importSkill"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/skills/{uid}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The skill Resource's immutable identity. Not its name: a skill's name is also its master folder under `~/.coffer/skills/` and the name of every delivered link, all of which move when it is renamed. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        get: operations["getSkill"];
+        /**
+         * Get Unmanaged Skill
+         * @description One unmanaged skill's metadata (spec skill-manager "Preview an unmanaged
+         *     skill read-only"). 404 when the scan finds no such entry at ``location``.
+         */
+        get: operations["get_unmanaged_skill_api_v1_agents__uid__unmanaged_skills__skill__get"];
         put?: never;
         post?: never;
-        /** Remove a skill and all its bindings */
-        delete: operations["deleteSkill"];
+        /** Delete Unmanaged Skill */
+        delete: operations["delete_unmanaged_skill_api_v1_agents__uid__unmanaged_skills__skill__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/skills/{uid}/files": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The skill Resource's immutable identity. Not its name: a skill's name is also its master folder under `~/.coffer/skills/` and the name of every delivered link, all of which move when it is renamed. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        /** List a skill's master folder as a read-only file tree */
-        get: operations["listSkillFiles"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/skills/{uid}/files/content": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The skill Resource's immutable identity. Not its name: a skill's name is also its master folder under `~/.coffer/skills/` and the name of every delivered link, all of which move when it is renamed. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        /** Read a single file's contents from a skill's master folder */
-        get: operations["readSkillFile"];
-        /** Overwrite one existing text file in a skill's master folder */
-        put: operations["writeSkillFile"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/skills/verify": {
+    "/api/v1/agents/{uid}/unmanaged-skills/{skill}/adopt": {
         parameters: {
             query?: never;
             header?: never;
@@ -108,15 +52,75 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Report drift between bindings and on-disk symlinks */
-        post: operations["verifySkillDrift"];
+        /** Adopt Unmanaged Skill */
+        post: operations["adopt_unmanaged_skill_api_v1_agents__uid__unmanaged_skills__skill__adopt_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/skills/repair": {
+    "/api/v1/agents/{uid}/unmanaged-skills/{skill}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Unmanaged Skill Files
+         * @description The unmanaged folder as a read-only file tree — the same walk, and the
+         *     same containment, as a managed skill's master folder.
+         */
+        get: operations["list_unmanaged_skill_files_api_v1_agents__uid__unmanaged_skills__skill__files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agents/{uid}/unmanaged-skills/{skill}/files/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Unmanaged Skill File
+         * @description Read one file of an unmanaged folder. A path resolving outside the
+         *     folder (``..``, absolute, escaping symlink) is refused with 400 before
+         *     anything is read; there is no write counterpart.
+         */
+        get: operations["read_unmanaged_skill_file_api_v1_agents__uid__unmanaged_skills__skill__files_content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Skills */
+        get: operations["list_skills_api_v1_skills_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/import": {
         parameters: {
             query?: never;
             header?: never;
@@ -125,165 +129,108 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Opt-in repair that re-delivers repairable drift from the master library
-         * @description Re-delivers repairable drift kinds (missing_link, tampered_link) from
-         *     the master library. Foreign/user content (replaced_with_regular), a
-         *     missing master, and orphan_master entries are left intact and returned
-         *     in `remaining`. Each repair is audited. This endpoint is the HTTP
-         *     surface for `coffer skill verify --fix`; `POST /skills/verify` remains
-         *     report-only ("Report skill drift on request").
-         */
-        post: operations["repairSkillDrift"];
+        /** Import Skill */
+        post: operations["import_skill_api_v1_skills_import_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/agents/{uid}/unmanaged-skills": {
+    "/api/v1/skills/repair": {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                /** @description The agent Resource's immutable uid (kind `agent`, spec agent-registry) whose workspace to scan. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * List skill-shaped folders in the agent's workspace that Coffer doesn't manage
-         * @description Read-only scan of the agent's skill locations — `<config_dir>/skills`
-         *     for both types, plus `~/.agents/skills` for codex — derived at request
-         *     time, never stored ("List unmanaged skills in an agent's skill
-         *     locations"). Coffer-managed links (symlinks resolving inside
-         *     `~/.coffer/skills/`) and dot-entries such as Codex's `.system` are
-         *     excluded. Symlinks pointing outside the master store are listed with
-         *     `foreign_link=true` and are never adoptable.
-         */
-        get: operations["listUnmanagedSkills"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{uid}/unmanaged-skills/{skill}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable uid. Note the asymmetry in this path: the agent is addressed by uid because it IS a resource, while `{skill}` is a bare folder name — an unmanaged folder has no resource and so no uid to be addressed by. That is exactly what adopting one gives it. */
-                uid: string;
-                /** @description Unmanaged skill folder name as reported by the scan. */
-                skill: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * One unmanaged skill's metadata, for its read-only detail page
-         * @description The entry is found by the same scan the list runs, so only a folder
-         *     the list would show can be addressed; anything else is 404 ("Preview
-         *     an unmanaged skill read-only"). `description` is the SKILL.md
-         *     frontmatter's when the folder validates, and null otherwise.
-         */
-        get: operations["getUnmanagedSkill"];
-        put?: never;
-        post?: never;
-        /**
-         * Delete an unmanaged skill folder from the agent's workspace
-         * @description Removes only that entry from disk — never master content or bindings
-         *     ("Delete an unmanaged skill on explicit request"). Audited as
-         *     `skill_unmanaged_deleted`.
-         */
-        delete: operations["deleteUnmanagedSkill"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{uid}/unmanaged-skills/{skill}/files": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable uid. */
-                uid: string;
-                /** @description Unmanaged skill folder name as reported by the scan. */
-                skill: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * List an unmanaged skill folder as a read-only file tree
-         * @description The same tree, walk and containment as `GET /skills/{uid}/files`,
-         *     rooted at the unmanaged folder instead of a master folder ("Preview
-         *     an unmanaged skill read-only").
-         */
-        get: operations["listUnmanagedSkillFiles"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{uid}/unmanaged-skills/{skill}/files/content": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable uid. */
-                uid: string;
-                /** @description Unmanaged skill folder name as reported by the scan. */
-                skill: string;
-            };
-            cookie?: never;
-        };
-        /**
-         * Read a single file of an unmanaged skill folder
-         * @description Read-only: there is no write counterpart. A path resolving outside the
-         *     folder (`..`, an absolute path, an escaping symlink) is rejected with
-         *     400 before anything is read. Size cap and binary detection match
-         *     `GET /skills/{uid}/files/content`.
-         */
-        get: operations["readUnmanagedSkillFile"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agents/{uid}/unmanaged-skills/{skill}/adopt": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable uid. Note the asymmetry in this path: the agent is addressed by uid because it IS a resource, while `{skill}` is a bare folder name — an unmanaged folder has no resource and so no uid to be addressed by. That is exactly what adopting one gives it. */
-                uid: string;
-                skill: string;
-            };
+            path?: never;
             cookie?: never;
         };
         get?: never;
         put?: never;
+        /** Repair Skills */
+        post: operations["repair_skills_api_v1_skills_repair_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify Skills */
+        post: operations["verify_skills_api_v1_skills_verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/{uid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Skill */
+        get: operations["get_skill_api_v1_skills__uid__get"];
+        put?: never;
+        post?: never;
+        /** Delete Skill */
+        delete: operations["delete_skill_api_v1_skills__uid__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/{uid}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
         /**
-         * Adopt an unmanaged skill folder into the Coffer master store
-         * @description Validates the folder, moves it to `~/.coffer/skills/<name>/`, registers
-         *     the `skill` resource, delivers the managed link to
-         *     `<config_dir>/skills/<name>`, and records an enabled binding for the
-         *     agent — in that order ("Adopt an unmanaged skill"). Adopting from
-         *     `~/.agents/skills` consolidates: the original folder there is removed
-         *     and the link lands in `<config_dir>/skills`. Any failure before
-         *     registration leaves the original folder unmoved. Audited as
-         *     `skill_adopted`.
+         * List Skill Files
+         * @description Return the skill's master folder as a read-only file tree.
          */
-        post: operations["adoptUnmanagedSkill"];
+        get: operations["list_skill_files_api_v1_skills__uid__files_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/{uid}/files/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Skill File
+         * @description Read a single file's contents from the skill's master folder.
+         */
+        get: operations["read_skill_file_api_v1_skills__uid__files_content_get"];
+        /**
+         * Write Skill File
+         * @description Overwrite one existing text file in the skill's master folder.
+         *
+         *     A body carrying ``expected_fingerprint`` makes the write conditional:
+         *     ``SkillFileStale`` propagates to the shared error handler as 409
+         *     ``SKILL_FILE_STALE`` with the file left untouched.
+         */
+        put: operations["write_skill_file_api_v1_skills__uid__files_content_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -294,269 +241,321 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /**
-         * @description The app-wide error envelope (`surfaces/http/errors.py`), the same shape
-         *     `ErrorResponse` carries in the mcp-gateway contract. Contract-only
-         *     alias — there is no Pydantic model of this name.
-         */
-        ErrorOut: {
-            error: {
-                /** @example RESOURCE_NOT_FOUND */
-                code: string;
-                /** @example resource not found: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920 */
-                message: string;
-                details?: {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        SkillImportRequest: {
-            /** @description Path to the existing skill folder; supports `~` expansion. */
-            path: string;
+        /** AdoptBody */
+        AdoptBody: {
             /**
-             * @description Replace an existing skill of the same name instead of rejecting.
-             * @default false
-             */
-            overwrite: boolean;
-        };
-        SkillSource: components["schemas"]["LocalImportSource"] | components["schemas"]["BuiltinSource"];
-        LocalImportSource: {
-            /**
-             * @description discriminator enum property added by openapi-typescript
+             * Location
              * @enum {string}
              */
-            type: "local_import";
-            original_path: string;
+            location: "skills" | "agents_dir";
         };
-        /** @description Coffer generated this skill. It carries no provenance fields at all: the master folder is rewritten from the running build at every start, so nothing about where it came from would still be true tomorrow — and a skill's config converges to the user's other machines, where anything machine-specific would never settle. */
-        BuiltinSource: {
+        /**
+         * BuiltinSourceOut
+         * @description Coffer generated this skill. It carries no provenance fields at all:
+         *     the master folder is rewritten from the running build at every start.
+         */
+        BuiltinSourceOut: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
             type: "builtin";
         };
-        SkillOut: {
-            /**
-             * @description The skill Resource's immutable identity, and what every route addressing this skill takes.
-             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
-             */
-            uid: string;
-            /** @description Unique among skills and fixed once registered: it is the skill's master folder name, the name of every link delivered into an agent's workspace and the SKILL.md `name:`, so a changed name on `PATCH /api/v1/resources/{uid}` is refused with 409 `NAME_IMMUTABLE`. */
-            name: string;
-            /** @description Optional display text the Skills page shows in place of the name, set through `PATCH /api/v1/resources/{uid}`; null when none is set. */
-            title?: string | null;
-            description: string;
-            source: components["schemas"]["SkillSource"];
-            /** @description True for a skill Coffer generates and owns: its master folder is rewritten from the running build at every boot, so DELETE is refused with 409 `RESOURCE_PROTECTED`. Enabling, disabling and narrowing its scope stay available — those decide reach, which is the owner's to decide, while existence is not. */
-            builtin: boolean;
-            enabled: boolean;
-            scope: components["schemas"]["ScopeOut"];
-            version_hash: string;
-            master_path: string;
-            /** Format: date-time */
-            last_synced_from_source_at: string | null;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: date-time */
-            updated_at: string;
-            bindings: components["schemas"]["SkillBindingOut"][];
+        /**
+         * DriftEntryOut
+         * @description One disagreement between what Coffer delivered and what is on disk.
+         *
+         *     By NAME, and deliberately so even now that ``DriftEntry`` carries uids:
+         *     an entry is a finding about a PATH in a workspace, and two of the five
+         *     kinds (``missing_master``, ``orphan_master``) are precisely the case where
+         *     no resource stands behind the name — there would be nothing to put in a uid
+         *     field. The report is read and acted on as a whole through
+         *     ``POST /skills/repair``, never used to address one resource, so a uid here
+         *     would be an identity nobody follows. The uids on the domain entry exist for
+         *     the repair pass, which re-delivers against them so a skill renamed between
+         *     verify and repair is still the skill that gets repaired; that is an
+         *     internal guarantee, not a field of this report.
+         */
+        DriftEntryOut: {
+            /** Agent Name */
+            agent_name: string;
+            kind: components["schemas"]["DriftKind"];
+            /** Skill Name */
+            skill_name: string;
+            /** Suggested Remedy */
+            suggested_remedy: string;
+            /** Target Path */
+            target_path: string;
         };
-        /** @description Which agents this skill is delivered to, on THIS machine. `agents: null` means every agent; `[]` matches nothing, i.e. dormant. Shape is shared with every other kind — it is the resource framework's scope, not a skill-specific one — so it MUST stay identical to `ScopeOut` in `openspec/specs/resource-framework/contracts/api.openapi.yaml` and to `ScopeOut` in `backend/coffer/surfaces/http/schemas.py`. It was previously declared here as a bare `string[]`, which is the agent list one level down; the wire has always carried the object. */
+        /**
+         * DriftKind
+         * @description Categorical disagreement between a binding row and its disk target.
+         * @enum {string}
+         */
+        DriftKind: "missing_link" | "tampered_link" | "replaced_with_regular" | "missing_master" | "orphan_master";
+        /** DriftReportOut */
+        DriftReportOut: {
+            /** Entries */
+            entries: components["schemas"]["DriftEntryOut"][];
+        };
+        /** ErrorDetail */
+        ErrorDetail: {
+            /**
+             * Code
+             * @example RESOURCE_NOT_FOUND
+             */
+            code: string;
+            /** Details */
+            details: {
+                [key: string]: unknown;
+            };
+            /**
+             * Message
+             * @example resource not found: mcp_server:filesystem
+             */
+            message: string;
+        };
+        /** ErrorResponse */
+        ErrorResponse: {
+            error: components["schemas"]["ErrorDetail"];
+        };
+        /**
+         * LinkMode
+         * @description How a binding's target was realised on disk.
+         * @enum {string}
+         */
+        LinkMode: "symlink" | "junction" | "copy_fallback";
+        /**
+         * LocalImportSourceOut
+         * @description A skill copied in from a folder on disk; the path is informational.
+         */
+        LocalImportSourceOut: {
+            /** Original Path */
+            original_path: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "local_import";
+        };
+        /** RepairReportOut */
+        RepairReportOut: {
+            remaining: components["schemas"]["DriftReportOut"];
+            /** Remediated */
+            remediated: components["schemas"]["DriftEntryOut"][];
+        };
+        /**
+         * ScopeOut
+         * @description A resource's activation scope as a response carries it. ``agents`` is
+         *     always present: ``null`` means unrestricted, ``[]`` dormant.
+         */
         ScopeOut: {
             /**
-             * @description Agent resource UIDS, not names. A scope is a reference to another resource and a name is a label its owner may change; while this held names, renaming an agent silently emptied every scope naming it — which for a skill means it stops being delivered to the agent the user picked, with nothing said.
+             * Agents
              * @example [
              *       "9f2c1a7b4e8d4c1fa0b3d5e6f7081920"
              *     ]
              */
             agents: string[] | null;
-        } | null;
-        /** @description Internal delivery bookkeeping, not a user-facing toggle: a row means this agent currently holds a delivered copy of the skill. Delivery is decided by the skill's own enabled flag and scope. */
+        };
+        /**
+         * SkillBindingOut
+         * @description One agent currently holding a delivered copy of this skill.
+         *
+         *     Internal delivery bookkeeping surfaced read-only: there is no per-binding
+         *     toggle any more, so a row here simply means "delivered". Which agents get a
+         *     row is decided by ``SkillOut.enabled`` + ``SkillOut.scope``.
+         *
+         *     Both halves of the agent's identity ride along: ``agent_uid`` is what a
+         *     client follows to that agent, ``agent_name`` is what it prints. A delivery
+         *     is a fact about an agent row, so it keeps pointing at the same agent when
+         *     the user renames it (ADR resource-identity-is-an-immutable-uid).
+         */
         SkillBindingOut: {
-            /**
-             * @description Which agent holds the copy. A uid because a binding is a STORED pointer at another resource — the row is a foreign key into `resources` and outlives any number of renames on either side — so the wire form of that pointer has to be the identity, not a label that was merely current when the row was written.
-             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
-             */
+            /** Agent Name */
+            agent_name: string;
+            /** Agent Uid */
             agent_uid: string;
-            /** @description The same agent's label, resolved at read time. Carried beside the uid and not instead of it: the bindings list is rendered as a line of agent names under a skill, and a row of UUIDs tells the reader nothing. Both, because this one object answers a machine's question and a person's at once. */
-            agent_name: string;
-            /** Format: date-time */
-            last_linked_at?: string | null;
-            last_link_path?: string | null;
-            /** @enum {string|null} */
-            link_mode?: "symlink" | "junction" | "copy_fallback" | null;
+            /** Last Link Path */
+            last_link_path: string | null;
+            /** Last Linked At */
+            last_linked_at: string | null;
+            link_mode: components["schemas"]["LinkMode"] | null;
         };
-        /** @description One disagreement between what Coffer believes it delivered and what is on disk. Reported by NAME, not by uid, and deliberately so: an entry is a finding about a path in a workspace, and two of the five kinds (`missing_master`, `orphan_master`) describe precisely the case where no resource stands behind the name — there is no uid to report. The report is read and acted on as a whole through `POST /skills/repair`, never used to address one resource. */
-        DriftEntry: {
-            skill_name: string;
-            agent_name: string;
-            /** @enum {string} */
-            kind: "missing_link" | "tampered_link" | "replaced_with_regular" | "missing_master" | "orphan_master";
-            target_path: string;
-            suggested_remedy: string;
-        };
-        DriftReport: {
-            entries: components["schemas"]["DriftEntry"][];
-        };
-        RepairReport: {
-            /** @description Drift entries that were successfully re-delivered from master during this repair run. */
-            remediated: components["schemas"]["DriftEntry"][];
-            /** @description Drift still present after repair (foreign content, missing master, orphan master — requires manual action). */
-            remaining: components["schemas"]["DriftReport"];
-        };
-        SkillFileNodeOut: {
-            name: string;
-            /** @description POSIX path relative to the master folder root ("" for the root). */
-            path: string;
-            /** @description Resolved absolute path of this entry on disk. The in-app file viewer is read-only; this path backs open-in-external-editor / reveal-in-file-manager. */
+        /** SkillFileContentOut */
+        SkillFileContentOut: {
+            /** Abs Path */
             abs_path: string;
-            /** @description Absolute path of this entry's containing folder (its parent directory). For the root node it equals the master folder's parent. */
+            /** Binary */
+            binary: boolean;
+            /** Content */
+            content: string;
+            /** Fingerprint */
+            fingerprint: string;
+            /** Folder Abs Path */
             folder_abs_path: string;
-            /** @enum {string} */
-            type: "file" | "dir";
-            /** @description Byte size for files; null for directories. */
-            size?: number | null;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** SkillFileNodeOut */
+        SkillFileNodeOut: {
+            /** Abs Path */
+            abs_path: string;
+            /** Children */
+            children: components["schemas"]["SkillFileNodeOut"][];
+            /** Folder Abs Path */
+            folder_abs_path: string;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Size */
+            size: number | null;
             /**
-             * @description True on a directory whose children were clipped at the max tree depth.
+             * Truncated
              * @default false
              */
             truncated: boolean;
-            /** @description Child nodes; empty for files. */
-            children?: components["schemas"]["SkillFileNodeOut"][];
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "file" | "dir";
         };
+        /** SkillFileTreeOut */
         SkillFileTreeOut: {
             root: components["schemas"]["SkillFileNodeOut"];
         };
-        /** @description A skill-shaped entry found in an agent's skill locations that Coffer does not manage — derived at scan time, never stored. */
-        UnmanagedSkillOut: {
-            /** @description Folder name. */
-            name: string;
-            /** @description Absolute path on disk. */
-            path: string;
-            /**
-             * @description Which scan location the entry was found in: `skills` = `<config_dir>/skills`; `agents_dir` = the agent product's secondary standard location (today: Codex's `~/.agents/skills`).
-             * @enum {string}
-             */
-            location: "skills" | "agents_dir";
-            /** @description Whether the folder passes AgentSkills validation ("Validate imported skill folders against AgentSkills"). */
-            valid: boolean;
-            /** @description Validation failure reason when `valid` is false; null otherwise. */
-            reason: string | null;
-            /** @description True for symlinks whose target resolves outside the master store; surfaced to the user but never adoptable (origin is unknown). */
-            foreign_link: boolean;
-        };
-        /** @description One unmanaged skill for its read-only detail page: the list entry plus its SKILL.md description. */
-        UnmanagedSkillDetailOut: {
-            /** @description Folder name. */
-            name: string;
-            /** @description Absolute path on disk. */
-            path: string;
-            /**
-             * @description Which scan location the entry was found in.
-             * @enum {string}
-             */
-            location: "skills" | "agents_dir";
-            /** @description Whether the folder passes AgentSkills validation. */
-            valid: boolean;
-            /** @description Validation failure reason when `valid` is false; null otherwise. */
-            reason: string | null;
-            /** @description True for symlinks whose target resolves outside the master store. */
-            foreign_link: boolean;
-            /** @description The SKILL.md frontmatter description when the folder validates; null when it does not. */
-            description: string | null;
-        };
-        UnmanagedAdoptRequest: {
-            /**
-             * @description Where the folder was discovered, as reported by the scan.
-             * @enum {string}
-             */
-            location: "skills" | "agents_dir";
-        };
-        /** @description The skill resource adoption just created, named both ways: the uid to navigate to it with, the name to say which folder became it. */
-        SkillRefOut: {
-            /**
-             * @description The new skill Resource's immutable identity — what the caller follows to `GET /skills/{uid}`.
-             * @example 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
-             */
-            uid: string;
-            /** @description The adopted skill's label, which is the folder name it was adopted under. */
-            name: string;
-        };
-        SkillFileContentOut: {
-            /** @description POSIX path relative to the master folder root. */
-            path: string;
-            /** @description Resolved absolute path of the file on disk. Backs open-in-external-editor / reveal-in-file-manager alongside the in-app editor. */
-            abs_path: string;
-            /** @description Absolute path of the file's containing folder (its parent directory). */
-            folder_abs_path: string;
-            /** @description File text; empty when `binary` is true. */
-            content: string;
-            /** @description True when the file exceeded the read cap and was truncated. */
-            truncated: boolean;
-            /** @description True for non-UTF-8 / NUL-containing files (content is empty). */
-            binary: boolean;
-            /** @description True byte size of the file on disk. */
-            size: number;
-            /** @description sha256 hex digest of the file's RAW on-disk bytes — not of `content`, which is truncated past the read cap and empty for a binary file. Echo it back as `expected_fingerprint` on a write to make that write conditional. */
-            fingerprint: string;
-        };
+        /** SkillFileWriteRequest */
         SkillFileWriteRequest: {
-            /** @description POSIX path of an EXISTING text file, relative to the master folder root. Must stay inside the folder; new files / directories are not created here. */
-            path: string;
-            /** @description Full new UTF-8 contents. Rejected (400) if it exceeds the file-size cap or the target is an existing binary file. */
+            /** Content */
             content: string;
-            /** @description The `fingerprint` from the read that seeded this edit. When supplied and it no longer matches the bytes on disk, the write is rejected (409, `SKILL_FILE_STALE`) and the file is left byte-identical — the master folder is also edited directly by the user, so a lost-update race is routine. Omit for an unconditional last-writer-wins write. */
+            /** Expected Fingerprint */
             expected_fingerprint?: string | null;
+            /** Path */
+            path: string;
+        };
+        /** SkillImportRequest */
+        SkillImportRequest: {
+            /**
+             * Overwrite
+             * @default false
+             */
+            overwrite?: boolean;
+            /** Path */
+            path: string;
+        };
+        /** SkillListOut */
+        SkillListOut: {
+            /** Items */
+            items: components["schemas"]["SkillOut"][];
+        };
+        /** SkillOut */
+        SkillOut: {
+            /** Bindings */
+            bindings: components["schemas"]["SkillBindingOut"][];
+            /** Builtin */
+            builtin: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Last Synced From Source At */
+            last_synced_from_source_at: string | null;
+            /** Master Path */
+            master_path: string;
+            /** Name */
+            name: string;
+            scope: components["schemas"]["ScopeOut"] | null;
+            /** Source */
+            source: components["schemas"]["LocalImportSourceOut"] | components["schemas"]["BuiltinSourceOut"];
+            /** Title */
+            title: string | null;
+            /** Uid */
+            uid: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Version Hash */
+            version_hash: string;
+        };
+        /**
+         * SkillRefOut
+         * @description The managed skill an adoption just created.
+         *
+         *     The ``uid`` is what a caller needs to go on and address the new skill —
+         *     ``/api/v1/skills/{uid}`` — while the ``name`` is what it tells the user was
+         *     adopted. An unmanaged folder had neither: it has no resource row at all,
+         *     which is why it is named by its directory name in the path above.
+         */
+        SkillRefOut: {
+            /** Name */
+            name: string;
+            /** Uid */
+            uid: string;
+        };
+        /** UnmanagedListOut */
+        UnmanagedListOut: {
+            /** Items */
+            items: components["schemas"]["UnmanagedSkillOut"][];
+        };
+        /**
+         * UnmanagedSkillDetailOut
+         * @description One unmanaged skill for its read-only detail page.
+         *
+         *     ``description`` is the SKILL.md frontmatter's, known only when the folder
+         *     validates; an invalid folder carries ``reason`` instead.
+         */
+        UnmanagedSkillDetailOut: {
+            /** Description */
+            description: string | null;
+            /** Foreign Link */
+            foreign_link: boolean;
+            /**
+             * Location
+             * @enum {string}
+             */
+            location: "skills" | "agents_dir";
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Reason */
+            reason: string | null;
+            /** Valid */
+            valid: boolean;
+        };
+        /** UnmanagedSkillOut */
+        UnmanagedSkillOut: {
+            /** Foreign Link */
+            foreign_link: boolean;
+            /**
+             * Location
+             * @enum {string}
+             */
+            location: "skills" | "agents_dir";
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /** Reason */
+            reason: string | null;
+            /** Valid */
+            valid: boolean;
         };
     };
-    responses: {
-        /** @description Missing or invalid X-Coffer-Token */
-        Unauthorized: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
-        };
-        /** @description Malformed request */
-        BadRequest: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
-        };
-        /** @description Skill or agent not found */
-        NotFound: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
-        };
-        /** @description Duplicate skill name */
-        Conflict: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
-        };
-        /** @description Validation failure (invalid SKILL.md, size limit, path-escape, ...) */
-        UnprocessableEntity: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["ErrorOut"];
-            };
-        };
-    };
+    responses: never;
     parameters: never;
     requestBodies: never;
     headers: never;
@@ -564,33 +563,323 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    listSkills: {
+    list_unmanaged_skills_api_v1_agents__uid__unmanaged_skills_get: {
         parameters: {
             query?: never;
-            header?: never;
-            path?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        items: components["schemas"]["SkillOut"][];
-                    };
+                    "application/json": components["schemas"]["UnmanagedListOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    importSkill: {
+    get_unmanaged_skill_api_v1_agents__uid__unmanaged_skills__skill__get: {
+        parameters: {
+            query: {
+                location: "skills" | "agents_dir";
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+                skill: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnmanagedSkillDetailOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_unmanaged_skill_api_v1_agents__uid__unmanaged_skills__skill__delete: {
+        parameters: {
+            query: {
+                location: "skills" | "agents_dir";
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+                skill: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    adopt_unmanaged_skill_api_v1_agents__uid__unmanaged_skills__skill__adopt_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                uid: string;
+                skill: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdoptBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillRefOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_unmanaged_skill_files_api_v1_agents__uid__unmanaged_skills__skill__files_get: {
+        parameters: {
+            query: {
+                location: "skills" | "agents_dir";
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+                skill: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillFileTreeOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    read_unmanaged_skill_file_api_v1_agents__uid__unmanaged_skills__skill__files_content_get: {
+        parameters: {
+            query: {
+                location: "skills" | "agents_dir";
+                path: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+                skill: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillFileContentOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_skills_api_v1_skills_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    import_skill_api_v1_skills_import_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -600,7 +889,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Imported */
+            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -609,25 +898,121 @@ export interface operations {
                     "application/json": components["schemas"]["SkillOut"];
                 };
             };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            409: components["responses"]["Conflict"];
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    getSkill: {
+    repair_skills_api_v1_skills_repair_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepairReportOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    verify_skills_api_v1_skills_verify_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriftReportOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_skill_api_v1_skills__uid__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description The skill Resource's immutable identity. Not its name: a skill's name is also its master folder under `~/.coffer/skills/` and the name of every delivered link, all of which move when it is renamed. */
                 uid: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -636,55 +1021,81 @@ export interface operations {
                     "application/json": components["schemas"]["SkillOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    deleteSkill: {
+    delete_skill_api_v1_skills__uid__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
-                /** @description The skill Resource's immutable identity. Not its name: a skill's name is also its master folder under `~/.coffer/skills/` and the name of every delivered link, all of which move when it is renamed. */
                 uid: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description No Content */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            /** @description `RESOURCE_PROTECTED` — the skill is Coffer's builtin skill, which is rewritten from the running build at every start; disable it or narrow its scope instead (see "Refuse deleting a builtin skill"). */
-            409: {
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
     };
-    listSkillFiles: {
+    list_skill_files_api_v1_skills__uid__files_get: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description The skill Resource's immutable identity. Not its name: a skill's name is also its master folder under `~/.coffer/skills/` and the name of every delivered link, all of which move when it is renamed. */
                 uid: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -693,27 +1104,42 @@ export interface operations {
                     "application/json": components["schemas"]["SkillFileTreeOut"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    readSkillFile: {
+    read_skill_file_api_v1_skills__uid__files_content_get: {
         parameters: {
             query: {
-                /** @description Path to the file, relative to the skill's master folder. */
                 path: string;
             };
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
             path: {
-                /** @description The skill Resource's immutable identity. Not its name: a skill's name is also its master folder under `~/.coffer/skills/` and the name of every delivered link, all of which move when it is renamed. */
                 uid: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -722,18 +1148,34 @@ export interface operations {
                     "application/json": components["schemas"]["SkillFileContentOut"];
                 };
             };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    writeSkillFile: {
+    write_skill_file_api_v1_skills__uid__files_content_put: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
             path: {
-                /** @description The skill Resource's immutable identity. Not its name: a skill's name is also its master folder under `~/.coffer/skills/` and the name of every delivered link, all of which move when it is renamed. */
                 uid: string;
             };
             cookie?: never;
@@ -744,7 +1186,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -753,242 +1195,22 @@ export interface operations {
                     "application/json": components["schemas"]["SkillFileContentOut"];
                 };
             };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    verifySkillDrift: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DriftReport"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    repairSkillDrift: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RepairReport"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-        };
-    };
-    listUnmanagedSkills: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable uid (kind `agent`, spec agent-registry) whose workspace to scan. */
-                uid: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        items: components["schemas"]["UnmanagedSkillOut"][];
-                    };
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    getUnmanagedSkill: {
-        parameters: {
-            query: {
-                /** @description Where the folder was discovered, as reported by the scan. */
-                location: "skills" | "agents_dir";
-            };
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable uid. Note the asymmetry in this path: the agent is addressed by uid because it IS a resource, while `{skill}` is a bare folder name — an unmanaged folder has no resource and so no uid to be addressed by. That is exactly what adopting one gives it. */
-                uid: string;
-                /** @description Unmanaged skill folder name as reported by the scan. */
-                skill: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UnmanagedSkillDetailOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    deleteUnmanagedSkill: {
-        parameters: {
-            query: {
-                /** @description Where the folder was discovered, as reported by the scan. */
-                location: "skills" | "agents_dir";
-            };
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable uid. Note the asymmetry in this path: the agent is addressed by uid because it IS a resource, while `{skill}` is a bare folder name — an unmanaged folder has no resource and so no uid to be addressed by. That is exactly what adopting one gives it. */
-                uid: string;
-                /** @description Unmanaged skill folder name as reported by the scan. */
-                skill: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-        };
-    };
-    listUnmanagedSkillFiles: {
-        parameters: {
-            query: {
-                /** @description Where the folder was discovered, as reported by the scan. */
-                location: "skills" | "agents_dir";
-            };
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable uid. */
-                uid: string;
-                /** @description Unmanaged skill folder name as reported by the scan. */
-                skill: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SkillFileTreeOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    readUnmanagedSkillFile: {
-        parameters: {
-            query: {
-                /** @description Where the folder was discovered, as reported by the scan. */
-                location: "skills" | "agents_dir";
-                /** @description Path to the file, relative to the unmanaged folder. */
-                path: string;
-            };
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable uid. */
-                uid: string;
-                /** @description Unmanaged skill folder name as reported by the scan. */
-                skill: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SkillFileContentOut"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            422: components["responses"]["UnprocessableEntity"];
-        };
-    };
-    adoptUnmanagedSkill: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description The agent Resource's immutable uid. Note the asymmetry in this path: the agent is addressed by uid because it IS a resource, while `{skill}` is a bare folder name — an unmanaged folder has no resource and so no uid to be addressed by. That is exactly what adopting one gives it. */
-                uid: string;
-                skill: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UnmanagedAdoptRequest"];
-            };
-        };
-        responses: {
-            /** @description Adopted */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SkillRefOut"];
-                };
-            };
-            401: components["responses"]["Unauthorized"];
-            404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
-            /** @description Invalid skill folder (`UNMANAGED_SKILL_INVALID`) or a foreign symlink, which is never adoptable */
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorOut"];
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

@@ -125,9 +125,9 @@ When a change alters behaviour, its spec deltas **and every related doc** change
 in the same PR — before or alongside the code, never as a follow-up:
 
 - the spec deltas in the change folder, archived into `openspec/specs/`;
-- `contracts/api.openapi.yaml` — never designed by hand: change the Pydantic
-  models, bring the contract to match them (regenerate it once the S-4
-  generator lands), then re-run frontend codegen. The behavioural `spec.md` is
+- `contracts/api.openapi.yaml` — never edited by hand: change the Pydantic
+  models and run `make contracts`, which regenerates the contract and then the
+  frontend's types; review the contract diff. The behavioural `spec.md` is
   what is written first; the wire schema follows the models;
 - `data-model.md` when an entity changes;
 - the cross-cutting docs the change touches: the relevant `docs/decisions/`

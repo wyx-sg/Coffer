@@ -6,6 +6,7 @@ import { CapabilityList } from "./CapabilityList";
 import { ApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
 
+type MCPToolView = components["schemas"]["MCPToolView"];
 type MCPResourceView = components["schemas"]["MCPResourceView"];
 type MCPPromptView = components["schemas"]["MCPPromptView"];
 
@@ -34,7 +35,7 @@ function selectStatus(optionName: string) {
   fireEvent.click(option);
 }
 
-const sampleTools = [
+const sampleTools: MCPToolView[] = [
   {
     original_name: "read_file",
     prefixed_name: "fs__read_file",
@@ -48,7 +49,8 @@ const sampleTools = [
     prefixed_name: "fs__write_file",
     description: null,
     enabled: false,
-    input_schema: undefined,
+    // The daemon sends `{}` for a tool that declared no schema.
+    input_schema: {},
     client_name_length: 27,
   },
 ];
@@ -104,7 +106,10 @@ describe("CapabilityList", () => {
 
     // The only tool has no parameters, so the table stays flat — no {} detail.
     expect(document.querySelector(".cm-content")).toBeNull();
-    const withObjectOnly = [sampleTools[0], { ...sampleTools[1], input_schema: { type: "object" } }];
+    const withObjectOnly = [
+      sampleTools[0],
+      { ...sampleTools[1], input_schema: { type: "object" } },
+    ];
     render(wrap(<CapabilityList serverUid="u-filesystem" kind="tool" tools={withObjectOnly} />));
     fireEvent.click(screen.getByText("write_file").closest("tr")!);
     expect(await screen.findByText("This tool declares no parameters.")).toBeInTheDocument();
@@ -154,6 +159,7 @@ describe("CapabilityList", () => {
     const sampleResources: MCPResourceView[] = [
       {
         original_uri: "file:///data",
+        name: null,
         prefixed_uri: "fs__file:///data",
         description: "Data directory",
         enabled: true,
@@ -198,6 +204,7 @@ describe("CapabilityList", () => {
         description: "Summarize a file",
         enabled: false,
         client_name_length: 26,
+        arguments: [],
       },
     ];
 

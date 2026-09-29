@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import pathlib
 from dataclasses import dataclass, field
+from typing import Literal
 
 from coffer.domain.error_base import CofferError
 from coffer.infrastructure.memory.paths import UnsafeMemoryPath
@@ -81,7 +82,7 @@ class FileNode:
 
     name: str
     path: str
-    type: str  # "file" | "dir"
+    type: Literal["file", "dir"]
     size: int | None = None
     children: list[FileNode] = field(default_factory=list)
     #: Set on a directory whose descendants were clipped at ``MAX_TREE_DEPTH``,

@@ -262,7 +262,7 @@ Read Coffer's records: the audit log, MCP calls and the daemon log
 coffer log audit [OPTIONS]
 ```
 
-Read the audit log, newest first.
+Read the audit log, newest first, one page at a time.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -271,6 +271,7 @@ Read the audit log, newest first.
 | `--event-type` | option | text |  | Only this event type |
 | `--since` | option | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
 | `--limit` | option | integer (1-500) | `50` | Most entries to print |
+| `--cursor` | option | text |  | Read the page after this one: the next_cursor a previous read printed |
 | `--json` | option | flag |  | JSON output for scripts |
 
 ### log mcp
@@ -289,6 +290,7 @@ Without --server this is the log the Activity page shows, Coffer's own calls (se
 | `--status` | option | text |  | ok \| error |
 | `--since` | option | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
 | `--limit` | option | integer (1-500) | `20` | Most calls to print |
+| `--cursor` | option | text |  | Read the page after this one: the next_cursor a previous read printed |
 | `--json` | option | flag |  | JSON output for scripts |
 
 ### log daemon
@@ -882,14 +884,15 @@ coffer agent transcript [OPTIONS] NAME [ID]
 
 List this agent's conversations on this machine, or print one of them.
 
-With an ID, what comes back is a window — --limit turns from --offset, each cut at the server's per-turn cap and secret-scrubbed — and the header says how many turns the whole session holds.
+The listing pages by cursor: a page with more after it ends with the --cursor value that reads the next one. With an ID, what comes back is a window — --limit turns from --offset, each cut at the server's per-turn cap and secret-scrubbed — and the header says how many turns the whole session holds.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Agent name |
 | `[ID]` | argument | text |  | A session id from the listing; omit to list sessions |
 | `--limit` | option | integer |  | Sessions to list (default 20) or turns to show (default 200) |
-| `--offset` | option | integer | `0` | Skip this many sessions or turns. |
+| `--offset` | option | integer | `0` | With an ID: skip this many turns. |
+| `--cursor` | option | text |  | Listing: read the page after the one that printed this cursor. |
 | `--query, -q` | option | text |  | Search title or project path. |
 | `--project` | option | text |  | Only this exact project path. |
 | `--sort` | option | text |  | started_at \| last_activity_at (default) \| message_count |

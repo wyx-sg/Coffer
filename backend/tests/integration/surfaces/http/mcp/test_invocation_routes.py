@@ -134,7 +134,7 @@ async def test_empty_invocations_list(inv_client: tuple) -> None:
     client, _engine, _repo, _rsvc, uids = inv_client
     r = await client.get(f"/api/v1/resources/mcp_server/{uids['fs']}/invocations")
     assert r.status_code == 200, r.text
-    assert r.json() == {"invocations": []}
+    assert r.json() == {"invocations": [], "next_cursor": None}
 
 
 @pytest.mark.asyncio

@@ -30,10 +30,10 @@ class ErrorResponse(BaseModel):
 # --- Resources (kind-agnostic) ---
 
 
-class ScopeOut(BaseModel):
-    """A resource's activation scope on the wire: one allow-list of agents
-    (ADR per-agent-resource-scope). ``null`` means unrestricted; ``[]`` matches
-    nothing, i.e. dormant.
+class ScopeIn(BaseModel):
+    """A resource's activation scope as a request writes it: one allow-list of
+    agents (ADR per-agent-resource-scope). ``null`` or absent means
+    unrestricted; ``[]`` matches nothing, i.e. dormant.
 
     Extra keys are REFUSED rather than ignored, which is the unusual choice and
     the deliberate one. This model used to carry a second axis, ``machines``,
@@ -51,13 +51,20 @@ class ScopeOut(BaseModel):
     #: the wrong vocabulary to everyone reading the generated client.
     agents: list[str] | None = Field(default=None, examples=[["9f2c1a7b4e8d4c1fa0b3d5e6f7081920"]])
 
+    def to_domain(self) -> Scope:
+        return Scope(agents=self.agents)
+
+
+class ScopeOut(BaseModel):
+    """A resource's activation scope as a response carries it. ``agents`` is
+    always present: ``null`` means unrestricted, ``[]`` dormant."""
+
+    agents: list[str] | None = Field(examples=[["9f2c1a7b4e8d4c1fa0b3d5e6f7081920"]])
+
     @classmethod
     def of(cls, scope: Scope | None) -> ScopeOut | None:
         """The wire shape of a stored scope; null stays null (unscoped)."""
         return None if scope is None else cls(agents=scope.agents)
-
-    def to_domain(self) -> Scope:
-        return Scope(agents=self.agents)
 
 
 class ResourceOut(BaseModel):
@@ -126,27 +133,7 @@ class ResourceScopeUpdate(BaseModel):
     Scope is set per machine and does not sync: every machine holding this
     vault decides for itself which of its agents a resource activates for."""
 
-    scope: ScopeOut | None = None
-
-
-# --- Audit ---
-
-
-class AuditEntryOut(BaseModel):
-    id: int
-    timestamp: datetime
-    event_type: str
-    resource_kind: str | None = None
-    #: The label the resource carried WHEN THE EVENT HAPPENED, which is the
-    #: point of storing it: a renamed resource's history reads as the history
-    #: of a thing that was called different names at different times.
-    resource_name: str | None = None
-    actor: str
-    details: dict[str, Any] | None = None
-
-
-class AuditListOut(BaseModel):
-    entries: list[AuditEntryOut]
+    scope: ScopeIn | None = None
 
 
 # --- Retention ---
@@ -173,6 +160,13 @@ class RetentionPolicyUpdate(BaseModel):
         le=3650,
         description="Null = keep forever; 1..3650 days otherwise.",
     )
+
+
+class PruneRequestIn(BaseModel):
+    """``POST /retention/prune`` body; the whole body is optional."""
+
+    #: The one table to prune; absent or null prunes every registered table.
+    table_name: str | None = None
 
 
 class PruneResultOut(BaseModel):
@@ -248,36 +242,6 @@ class McpTestResultOut(BaseModel):
     protocol_version: str | None = None
     server_capabilities: dict[str, Any] | None = None
     error_message: str | None = None
-
-
-class InvocationOut(BaseModel):
-    timestamp: datetime
-    #: Which upstream server the call went to — the value actually recorded in
-    #: the log, and what to filter or link by. Required, not optional: the
-    #: cross-server timeline is unreadable without it, and the per-server route
-    #: knows it too. Two of its forms are not resource uids and resolve to
-    #: nothing: ``BUILTIN_SERVER_UID`` ("coffer"), the sentinel Coffer's own
-    #: built-in tools log under, and the ``DELETED_SERVER_UID_PREFIX`` form
-    #: ("deleted:<name>") given to rows whose server was already gone when the
-    #: log was re-keyed from names to uids.
-    resource_uid: str
-    #: The same server's label, resolved at read time by the route, so the
-    #: timeline is readable without a client holding the whole resource list.
-    #: Null when ``resource_uid`` resolves to no resource — a deleted server, or
-    #: the built-in sentinel — which is where a client falls back to showing the
-    #: uid's own text. Nullable but NOT defaulted: a projection that forgot to
-    #: resolve would otherwise silently emit null for every row.
-    resource_name: str | None
-    capability_type: str = Field(pattern="^(tool|resource|prompt)$")
-    capability_key: str
-    duration_ms: int
-    status: str
-    error_message: str | None = None
-    session_id: str | None = None
-
-
-class InvocationListOut(BaseModel):
-    invocations: list[InvocationOut]
 
 
 # --- Credentials ---

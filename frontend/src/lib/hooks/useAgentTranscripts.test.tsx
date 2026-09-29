@@ -49,11 +49,11 @@ describe("agentTranscriptsKey", () => {
   });
 
   test("extends the key with the params so each page caches independently", () => {
-    expect(agentTranscriptsKey("u-claude", { limit: 10, offset: 10 })).toEqual([
+    expect(agentTranscriptsKey("u-claude", { limit: 10, cursor: "c2" })).toEqual([
       "agents",
       "u-claude",
       "conversations",
-      { limit: 10, offset: 10 },
+      { limit: 10, cursor: "c2" },
     ]);
   });
 });
@@ -63,7 +63,7 @@ describe("useAgentTranscripts", () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
-        jsonResponse(200, { sessions: [SAMPLE_SESSION], total: 1, limit: 100, offset: 0 }),
+        jsonResponse(200, { sessions: [SAMPLE_SESSION], total: 1, limit: 100, next_cursor: null }),
       );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -78,21 +78,23 @@ describe("useAgentTranscripts", () => {
     // The base URL already carries the /api/v1 prefix; the path must not repeat
     // it (a doubled /api/v1/api/v1 hits no route → 404 NOT_FOUND).
     expect(url).not.toContain("/api/v1/api/v1");
-    // Listing is paged (most-recent first) — the request carries limit/offset.
-    expect(url).toMatch(/\/api\/v1\/agents\/u-claude\/transcripts\?limit=\d+&offset=\d+$/);
+    // Listing is paged (most-recent first) — the first page carries only a limit.
+    expect(url).toMatch(/\/api\/v1\/agents\/u-claude\/transcripts\?limit=\d+$/);
   });
 
   test("forwards search, sort and order as query params", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValue(jsonResponse(200, { sessions: [], total: 0, limit: 10, offset: 0 }));
+      .mockResolvedValue(
+        jsonResponse(200, { sessions: [], total: 0, limit: 10, next_cursor: null }),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     const { result } = renderHook(
       () =>
         useAgentTranscripts("u-claude", {
           limit: 10,
-          offset: 20,
+          cursor: "c2",
           q: "alpha",
           sort: "started_at",
           order: "asc",
@@ -102,7 +104,7 @@ describe("useAgentTranscripts", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     const url = String(fetchMock.mock.calls[0][0]);
     expect(url).toContain("limit=10");
-    expect(url).toContain("offset=20");
+    expect(url).toContain("cursor=c2");
     expect(url).toContain("q=alpha");
     expect(url).toContain("sort=started_at");
     expect(url).toContain("order=asc");
