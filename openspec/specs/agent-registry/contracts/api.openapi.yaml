@@ -358,6 +358,37 @@ paths:
         required: true
         schema: { type: string }
         description: MCP entry name as it appears in the agent's config file.
+    get:
+      tags: [agents]
+      operationId: getAgentMcpEntry
+      summary: Read one MCP entry from the agent's config file in full
+      description: |
+        Read-only, derived at read time like the listing (see "Show one direct
+        MCP entry's full configuration without its secrets"). Carries every
+        listing field plus the absolute `path` of the config file the entry
+        lives in, its `cwd`, and every other key it holds as `extra`. Env and
+        header VALUES never cross HTTP (key names only), and the value of any
+        other key whose name looks secret-like — or that nests one — is
+        withheld (`masked: true`, `value: null`). Nothing is spawned: this
+        reads the file, it does not start the server. Addressed like the
+        delete: `source` disambiguates a name several files share (422,
+        `MCP_ENTRY_SOURCE_AMBIGUOUS`, when omitted then); the `coffer` entry
+        is not addressable here (422, `MCP_ENTRY_PROTECTED`).
+      parameters:
+        - in: query
+          name: source
+          required: false
+          schema: { type: string }
+          description: Config-file key the entry lives in, when ambiguous.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/McpEntryDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
     delete:
       tags: [agents]
       operationId: deleteAgentMcpEntry
@@ -1175,6 +1206,85 @@ components:
           description: >-
             Name of an equivalent registered mcp_server resource, when one
             exists — the user can remove the duplicate instead of adopting.
+
+    McpEntryField:
+      type: object
+      required: [key, value, masked]
+      description: >-
+        One key of an MCP entry beyond the ones the listing names, rendered as
+        text (strings as themselves, anything else as compact JSON).
+      properties:
+        key: { type: string }
+        value:
+          type: string
+          nullable: true
+          description: "Null when masked — a secret-looking value never crosses HTTP."
+        masked:
+          type: boolean
+          description: >-
+            True when the key's name looks secret-like (same pattern as
+            `secret_keys`, non-empty value) or its value nests such a key.
+
+    McpEntryDetail:
+      type: object
+      required:
+        [
+          name,
+          source,
+          transport,
+          command,
+          args,
+          env_keys,
+          secret_keys,
+          url,
+          header_keys,
+          enabled,
+          is_coffer,
+          matches_resource,
+          path,
+          cwd,
+          extra,
+        ]
+      description: >-
+        One MCP entry in full: every `McpEntry` field plus the config file it
+        came from, its working directory and its other keys. Env/header VALUES
+        never cross HTTP; secret-looking `extra` values are masked.
+      properties:
+        name: { type: string }
+        source:
+          { type: string, description: "Allowlist key of the source file." }
+        transport: { type: string, enum: [stdio, http] }
+        command: { type: string, nullable: true }
+        args:
+          type: array
+          items: { type: string }
+        env_keys:
+          type: array
+          items: { type: string }
+          description: "Env variable KEY NAMES only (sorted); values stay on disk."
+        secret_keys:
+          type: array
+          items: { type: string }
+          description: "Env/header key names that look secret-like (see `McpEntry`)."
+        url: { type: string, nullable: true }
+        header_keys:
+          type: array
+          items: { type: string }
+          description: "HTTP header KEY NAMES only (sorted); values stay on disk."
+        enabled: { type: boolean, nullable: true }
+        is_coffer: { type: boolean }
+        matches_resource: { type: string, nullable: true }
+        path:
+          type: string
+          description: "Resolved absolute path of the config file the entry lives in."
+        cwd:
+          type: string
+          nullable: true
+          description: "Working directory a stdio server is started in, when the entry sets one."
+        extra:
+          type: array
+          items: { $ref: "#/components/schemas/McpEntryField" }
+          description: "Every other key the entry carries, sorted by key."
 
     McpEntriesOut:
       type: object

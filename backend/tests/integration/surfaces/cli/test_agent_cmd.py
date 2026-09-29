@@ -701,6 +701,29 @@ def test_scan_lists_the_agents_mcp_entries_without_secret_values(workspace_cli):
     assert _SECRET_VALUE not in r.output
 
 
+def test_scan_ref_prints_an_mcp_entry_without_secret_values(workspace_cli):
+    """`scan --ref <agent>:<entry>` reads one entry in full: file, command, key names."""
+    tmp_path, _keyring = workspace_cli
+    r = _runner.invoke(cli_app, ["scan", "--ref", "cx:fetcher", "--json"])
+    assert r.exit_code == 0, r.output
+    body = json.loads(_extract_json(r.output))
+    assert body["path"] == str(tmp_path / ".codex" / "config.toml")
+    assert body["command"] == "uvx"
+    assert body["args"] == ["mcp-fetch"]
+    assert body["secret_keys"] == ["API_TOKEN"]
+    assert _SECRET_VALUE not in r.output
+
+    r = _runner.invoke(cli_app, ["scan", "--ref", "cx:fetcher"])
+    assert r.exit_code == 0, r.output
+    assert f"file: {tmp_path / '.codex' / 'config.toml'}" in r.output
+    assert "command: uvx mcp-fetch" in r.output
+    assert "env API_TOKEN: (secret)" in r.output
+    assert _SECRET_VALUE not in r.output
+
+    r = _runner.invoke(cli_app, ["scan", "--ref", "cx:missing"])
+    assert r.exit_code == 4, r.output
+
+
 def test_discard_mcp_entry_asks_first(workspace_cli):
     # Declining the prompt leaves the entry where it is.
     r = _runner.invoke(cli_app, ["discard", "mcp", "cx:fetcher"], input="n\n")

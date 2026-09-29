@@ -13,9 +13,10 @@ discard what Coffer does not manage"):
   entry excepted (``GET /agents/{uid}/mcp-entries``); its ref is
   ``<agent>:<entry>``.
 
-``adopt`` and ``discard`` act on one row by the ref the scan printed, re-scanned
-first so a ref that names nothing now is refused before any change. A detected
-agent cannot be discarded: nothing of Coffer's put it there.
+``scan --ref`` shows one row in full. ``adopt`` and ``discard`` act on one row
+by the ref the scan printed, re-scanned first so a ref that names nothing now
+is refused before any change. A detected agent cannot be discarded: nothing of
+Coffer's put it there.
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
+from coffer.surfaces.cli import _scan_detail
 from coffer.surfaces.cli._options import ExitCode
 from coffer.surfaces.cli._resolve import resolve_uid
 
@@ -142,12 +144,31 @@ def scan_rows(
 def scan(
     ctx: typer.Context,
     agent: str | None = typer.Option(None, "--agent", help="Only what this agent holds"),
+    ref: str | None = typer.Option(
+        None, "--ref", help="Show one row in full: a type, a folder path or <agent>:<entry>"
+    ),
+    source: str | None = typer.Option(
+        None, "--source", help="With --ref on an mcp row: the config-file key"
+    ),
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """List what agents hold that Coffer does not manage: agents, skills, MCP entries."""
+    """List what agents hold that Coffer does not manage: agents, skills, MCP entries.
+
+    With --ref, show that one row in full: an MCP entry's whole configuration
+    (secret values withheld) or an unmanaged skill's metadata.
+    """
+    verbose = _verbose(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        rows = scan_rows(c, agent=agent, verbose=_verbose(ctx))
+        if ref is not None:
+            row = _row(c, _kind_of(ref), ref, verbose=verbose)
+            _scan_detail.echo(
+                row["kind"],
+                _scan_detail.detail(c, row, source=source, verbose=verbose),
+                output_json=output_json,
+            )
+            return
+        rows = scan_rows(c, agent=agent, verbose=verbose)
     if output_json:
         typer.echo(_json.dumps({"rows": rows}, indent=2))
         return
@@ -160,6 +181,13 @@ def scan(
     for row in rows:
         table.add_row(row["kind"], row["agent"], row["ref"], row["detail"])
     _console.print(table)
+
+
+def _kind_of(ref: str) -> str:
+    """Which kind of row a ref names, by the shape the scan gives each kind."""
+    if ref.startswith(("/", "~", ".")):
+        return "skill"
+    return "mcp" if ":" in ref else "agent"
 
 
 # --- one row by its ref ------------------------------------------------------------

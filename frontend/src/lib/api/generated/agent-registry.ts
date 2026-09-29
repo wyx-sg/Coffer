@@ -235,7 +235,21 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Read one MCP entry from the agent's config file in full
+         * @description Read-only, derived at read time like the listing (see "Show one direct
+         *     MCP entry's full configuration without its secrets"). Carries every
+         *     listing field plus the absolute `path` of the config file the entry
+         *     lives in, its `cwd`, and every other key it holds as `extra`. Env and
+         *     header VALUES never cross HTTP (key names only), and the value of any
+         *     other key whose name looks secret-like — or that nests one — is
+         *     withheld (`masked: true`, `value: null`). Nothing is spawned: this
+         *     reads the file, it does not start the server. Addressed like the
+         *     delete: `source` disambiguates a name several files share (422,
+         *     `MCP_ENTRY_SOURCE_AMBIGUOUS`, when omitted then); the `coffer` entry
+         *     is not addressable here (422, `MCP_ENTRY_PROTECTED`).
+         */
+        get: operations["getAgentMcpEntry"];
         put?: never;
         post?: never;
         /**
@@ -756,6 +770,40 @@ export interface components {
             is_coffer: boolean;
             /** @description Name of an equivalent registered mcp_server resource, when one exists — the user can remove the duplicate instead of adopting. */
             matches_resource: string | null;
+        };
+        /** @description One key of an MCP entry beyond the ones the listing names, rendered as text (strings as themselves, anything else as compact JSON). */
+        McpEntryField: {
+            key: string;
+            /** @description Null when masked — a secret-looking value never crosses HTTP. */
+            value: string | null;
+            /** @description True when the key's name looks secret-like (same pattern as `secret_keys`, non-empty value) or its value nests such a key. */
+            masked: boolean;
+        };
+        /** @description One MCP entry in full: every `McpEntry` field plus the config file it came from, its working directory and its other keys. Env/header VALUES never cross HTTP; secret-looking `extra` values are masked. */
+        McpEntryDetail: {
+            name: string;
+            /** @description Allowlist key of the source file. */
+            source: string;
+            /** @enum {string} */
+            transport: "stdio" | "http";
+            command: string | null;
+            args: string[];
+            /** @description Env variable KEY NAMES only (sorted); values stay on disk. */
+            env_keys: string[];
+            /** @description Env/header key names that look secret-like (see `McpEntry`). */
+            secret_keys: string[];
+            url: string | null;
+            /** @description HTTP header KEY NAMES only (sorted); values stay on disk. */
+            header_keys: string[];
+            enabled: boolean | null;
+            is_coffer: boolean;
+            matches_resource: string | null;
+            /** @description Resolved absolute path of the config file the entry lives in. */
+            path: string;
+            /** @description Working directory a stdio server is started in, when the entry sets one. */
+            cwd: string | null;
+            /** @description Every other key the entry carries, sorted by key. */
+            extra: components["schemas"]["McpEntryField"][];
         };
         McpEntriesOut: {
             items: components["schemas"]["McpEntry"][];
@@ -1360,6 +1408,37 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getAgentMcpEntry: {
+        parameters: {
+            query?: {
+                /** @description Config-file key the entry lives in, when ambiguous. */
+                source?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
+                /** @description MCP entry name as it appears in the agent's config file. */
+                entry: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpEntryDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     deleteAgentMcpEntry: {

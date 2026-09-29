@@ -258,6 +258,25 @@ Coffer does not offer toggling an entry's `enabled` flag, nor editing an entry i
 - **THEN** the output carries a row of kind `mcp` with the reference `claude-code:github`
 - **AND** no row names the `coffer` entry
 
+### Requirement: Show one direct MCP entry's full configuration without its secrets
+Users MUST be able to open one direct MCP entry and see everything the agent's own config file holds for it, read-only: its transport, its command and arguments (or its URL), its working directory, its per-entry `enabled` flag where the format has one, the names of its environment variables and HTTP headers, every other key the entry carries, which config file it lives in (the resolved absolute path, with open-in-editor and reveal-in-file-manager beside it), and `matches_resource` when an equivalent `mcp_server` resource is already registered. The read is addressed like removal and adoption — the entry's name, plus the source file where the type's entries may come from more than one — and is derived from the file at read time; Coffer stores nothing and starts nothing, so an unmanaged server is never spawned to be looked at.
+
+No secret value crosses the API. Environment and header values are never returned — only their names, with the secret-like ones flagged by the pattern of "Route secret-like environment values to the credential store on adoption". Any other key whose name matches that pattern with a non-empty value, or whose value nests such a key at any depth, has its value withheld by the daemon and is reported as masked.
+
+The detail is available from the REST API (`GET /agents/{uid}/mcp-entries/{entry}`), from `coffer scan --ref <agent>:<entry> [--source] [--json]`, and in the web UI as the page a direct server's name opens on the agent's MCP servers tab (`/agents/{uid}/mcp-servers/{entry}?source=`). The page labels the entry as a direct server of that agent, returns to the agent's MCP servers tab, and offers the row's two writes: adopting it (then opening the new managed server's page) and deleting it behind the same confirm (then returning to the tab).
+
+#### Scenario: read one direct MCP entry with its secrets withheld
+- **GIVEN** a registered agent whose config file defines a stdio MCP entry with arguments, a working directory, an environment carrying a secret-like and a plain value, a secret-like extra key and a table that nests one
+- **WHEN** the user reads that entry
+- **THEN** Coffer returns its transport, command, arguments, working directory, the environment key names with the secret-like one flagged, every other key sorted by name with plain values shown as text, and the absolute path of the file it came from
+- **AND** the secret-like extra key and the table nesting one are reported masked with no value, and no environment, header or masked value appears anywhere in the response
+
+#### Scenario: open a direct MCP server's detail page from the agent
+- **GIVEN** the agent's MCP servers tab lists a direct server
+- **WHEN** the user clicks the server's name
+- **THEN** its detail page opens showing it as a direct server of that agent, with its command, arguments, working directory, config file and variable names, and marking secret-looking names and masked fields as hidden without showing any value
+- **AND** the back link returns to the agent's MCP servers tab
+
 ### Requirement: Remove a direct MCP entry from its source file
 Users MUST be able to remove a direct MCP entry — from the agent's page, the REST route, or `coffer discard mcp <agent>:<entry>` on the command line. Removal edits only the entry's source file, reuses the atomic-write + `.bak` machinery of "Write config files atomically with a backup and an audit entry", and records an `agent_mcp_entry_removed` audit entry. The `coffer` entry is not removable through this operation — it is managed by "Install Coffer's MCP server into an agent in one action" and "Uninstall Coffer's MCP server from an agent".
 
@@ -504,12 +523,12 @@ The system MUST expose a read-only **native-memory store read** that returns one
 - **THEN** Coffer returns the store directory as a tree (directories before files, paths relative to the store) and the file's contents with the absolute path that backs open / reveal, while a directory that is not one of this agent's stores — its sibling project directory included — and a path escaping the store are both rejected as `not_found` (404); read-only, emitting no audit event and writing nothing
 
 ### Requirement: Expose every agent operation through REST, CLI and the Agents page
-Every management operation — register/list/view/update/remove, config-file write and delete (including directory children), Coffer-MCP install/uninstall/status, MCP entry list/remove/adopt, plugin list/toggle/uninstall, transcript listing and single-session read, and the model catalogue — MUST be available through (a) the REST API and (b) the `coffer` CLI, each command calling the corresponding REST endpoint:
+Every management operation — register/list/view/update/remove, config-file write and delete (including directory children), Coffer-MCP install/uninstall/status, MCP entry list/view/remove/adopt, plugin list/toggle/uninstall, transcript listing and single-session read, and the model catalogue — MUST be available through (a) the REST API and (b) the `coffer` CLI, each command calling the corresponding REST endpoint:
 
 - the lifecycle verbs of "Manage the agent lifecycle" under `coffer agent`;
 - `coffer agent config edit` and `coffer agent config rm` for config-file writes and deletes;
 - `coffer agent connect` and `coffer agent disconnect` for Coffer's MCP entry, with its status on `coffer agent show`;
-- `coffer scan --agent <name>`, `coffer adopt mcp` and `coffer discard mcp` for direct MCP entries;
+- `coffer scan --agent <name>`, `coffer scan --ref <agent>:<entry>`, `coffer adopt mcp` and `coffer discard mcp` for direct MCP entries;
 - `coffer agent plugin list|enable|disable|rm` for plugins, where `rm` is the uninstall of "Uninstall a plugin by the type's own strategy";
 - `coffer agent transcript <name>` to list an agent's sessions, with the listing's search, project, sort and paging options, and `coffer agent transcript <name> <id>` to read one session in the bounded windows of "Read one transcript session in bounded windows";
 - `coffer agent models` for the model catalogue.
@@ -520,6 +539,7 @@ The Agents page in the web UI MUST expose all of these, config-file content writ
 
 - A config file (and a directory-entry child) opens in a viewer that becomes **editable behind an explicit Edit**, saves through the same path as REST and the CLI ("Validate config-file content before saving it", "Write config files atomically with a backup and an audit entry"), and guards an unsaved draft three ways — picking another file asks first, leaving the tab asks first, and leaving the page asks first. Open-in-external-editor / reveal-in-file-manager sit beside the content for the edits that want a real editor.
 - The agent detail page has seven tabs — Overview, Skills, MCP servers, Plugins, Memory, Conversations, and Config files. Plugins acts on the agent (enable / disable / uninstall), and each plugin row expands to its manifest detail and bundled components. Memory carries one write — installing or removing Coffer's memory-delivery hook, which memory specifies (including its audit events and the per-agent delivery status the tab renders) and this page mounts; the rest of Memory, and all of Conversations, are read-only views of the agent's own stores.
+- A direct server's name on the MCP servers tab opens that entry's own read-only detail page ("Show one direct MCP entry's full configuration without its secrets"), whose header carries the same two writes as the row — adopt and delete — and whose way back returns to the MCP servers tab.
 - Neither the Memory nor the Conversations table carries per-row actions: a row OPENS its subject, and the open / reveal affordances live on the page it opens, beside the thing they act on. A Conversations row opens that one session rendered as a readable conversation, beside a contents list of the session's prompts that scrolls the conversation to any one of them; a Memory row opens that store's directory as a file tree with a read-only preview, because a store is a directory and one session is a single file.
 
 #### Scenario: desktop app agents page

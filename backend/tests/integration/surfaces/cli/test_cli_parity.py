@@ -143,7 +143,10 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
 #: set would otherwise assert nothing about them.
 _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
     "open": {"--json", "--no-browser"},
-    "scan": {"--agent", "--json"},
+    # --ref shows one row in full: a direct MCP entry (spec agent-registry "Show
+    # one direct MCP entry's full configuration without its secrets") or an
+    # unmanaged skill (spec skill-manager "Preview an unmanaged skill read-only").
+    "scan": {"--agent", "--ref", "--source", "--json"},
     # A name, a title and a description are edited on every kind (design D1).
     "knowledge edit": {"--name", "--title"},
     # The model an agent answers with is a FIELD of the agent, bound by the

@@ -90,7 +90,7 @@ machine, exactly like a route the build does not have. The tables below mark tho
 
 ## Routes
 
-The daemon mounts 166 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 167 operations in 20 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -103,7 +103,7 @@ The daemon mounts 166 operations in 20 groups. Groups follow the order the daemo
 | [settings](#settings) | 2 |
 | [sync](#sync) | 19 |
 | [internal-engine](#internal-engine) | 6 |
-| [agents](#agents) | 32 |
+| [agents](#agents) | 33 |
 | [fs](#fs) | 5 |
 | [skills](#skills) | 9 |
 | [mcp](#mcp) | 10 |
@@ -239,6 +239,7 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `vault_sy
 | `POST` | `/api/v1/agents/{uid}/mcp-install` | Install Mcp |
 | `DELETE` | `/api/v1/agents/{uid}/mcp-install` | Uninstall Mcp |
 | `GET` | `/api/v1/agents/{uid}/mcp-entries` | List Mcp Entries |
+| `GET` | `/api/v1/agents/{uid}/mcp-entries/{entry}` | Get Mcp Entry |
 | `DELETE` | `/api/v1/agents/{uid}/mcp-entries/{entry}` | Delete Mcp Entry |
 | `POST` | `/api/v1/agents/{uid}/mcp-entries/{entry}/adopt` | Adopt Mcp Entry |
 | `GET` | `/api/v1/agents/{uid}/plugins` | List Plugins |
