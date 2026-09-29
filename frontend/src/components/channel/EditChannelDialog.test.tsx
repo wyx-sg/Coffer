@@ -251,6 +251,62 @@ describe("EditChannelDialog", () => {
     });
   });
 
+  describe("replies", () => {
+    const stepsSwitch = () => screen.getByRole("switch", { name: /show steps while working/i });
+    const notifyField = () => screen.getByLabelText(/ping when a turn takes longer than/i);
+
+    test("absent keys show the backend defaults, and an unchanged save writes neither", async () => {
+      const api = installApi(mockApiClient());
+      renderDialog();
+
+      expect(stepsSwitch()).toBeChecked();
+      expect(notifyField()).toHaveValue(90);
+      save();
+
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      const config = (api.PATCH.mock.calls[0][1] as { body: { config: Record<string, unknown> } })
+        .body.config;
+      expect("show_steps" in config).toBe(false);
+      expect("notify_after_seconds" in config).toBe(false);
+    });
+
+    test("stored values prefill, and changes are written — steps off, ping at 0", async () => {
+      const api = installApi(mockApiClient());
+      renderDialog({
+        ...telegramResource,
+        config: { ...telegramResource.config, notify_after_seconds: 300 },
+      } as unknown as typeof telegramResource);
+
+      expect(notifyField()).toHaveValue(300);
+      fireEvent.click(stepsSwitch());
+      fireEvent.change(notifyField(), { target: { value: "0" } });
+      save();
+
+      await waitFor(() => expect(api.PATCH).toHaveBeenCalledTimes(1));
+      const config = (api.PATCH.mock.calls[0][1] as { body: { config: Record<string, unknown> } })
+        .body.config;
+      expect(config.show_steps).toBe(false);
+      expect(config.notify_after_seconds).toBe(0);
+    });
+
+    test("an out-of-range or blank ping threshold blocks Save with an inline error", () => {
+      const api = installApi(mockApiClient());
+      renderDialog();
+
+      fireEvent.change(notifyField(), { target: { value: "3601" } });
+      expect(screen.getByRole("alert")).toHaveTextContent(/0 to 3600/);
+      expect(screen.getByRole("button", { name: /save changes/i })).toBeDisabled();
+
+      fireEvent.change(notifyField(), { target: { value: "" } });
+      expect(screen.getByRole("button", { name: /save changes/i })).toBeDisabled();
+
+      fireEvent.change(notifyField(), { target: { value: "120" } });
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.getByRole("button", { name: /save changes/i })).toBeEnabled();
+      expect(api.PATCH).not.toHaveBeenCalled();
+    });
+  });
+
   describe("seatalk", () => {
     const seatalkChannel = {
       uid: ST_UID,

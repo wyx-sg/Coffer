@@ -31,6 +31,7 @@ Every path below is resolved against `$HOME`. The storage-location environment v
 │   ├── shim-<pid>-<epoch>.log
 │   └── upstream/<server>.log, <server>.log.1
 ├── knowledge/<collection>/       # knowledge documents (+ README.md, hidden .inbox/)
+├── knowledge/.git/               # knowledge history: every write as one commit
 ├── memory/<partition>/           # derived memory (MEMORY.md, notes/, RETIRED.md, .raw/)
 ├── skills/<name>/                # skill master store (SKILL.md, .coffer.meta.json, …)
 ├── sync/                         # vault sync working tree (a git repository)
@@ -92,7 +93,8 @@ To undo an upgrade by hand, point the symlinks back at the previous version dire
 | Path | Purpose | Owner | Syncs | Safe to delete |
 | --- | --- | --- | --- | --- |
 | `knowledge/<collection>/` | A collection: Markdown documents in any nesting, plus a `README.md` describing the collection. You and Coffer's curation pass both edit these files. | you, daemon | Yes, when [vault sync](/guides/vault-sync) is on | **No.** This is written knowledge. |
-| `knowledge/<collection>/.inbox/` | New material waiting to be merged into the documents: extracted upload text, an agent's `coffer__write`. Each item is removed once curation folds it in. | daemon | Yes | No: unmerged material is lost. |
+| `knowledge/<collection>/.inbox/` | Items waiting to be curated into the documents: extracted upload text, an agent's `coffer__write`, a document added on the Knowledge page. Each item is removed once curation folds it in. | daemon | Yes | No: items not yet curated are lost. |
+| `knowledge/.git/` | The history of every write to the knowledge tree: one git commit per change, naming its writer (you, an agent, curation, sync, or an edit on disk). Created on first use. Read it with `coffer knowledge history` and `coffer knowledge changes`. | daemon | No | Yes, but every earlier version and every undo is lost; a new history starts from the current tree. |
 | `knowledge.pre-<revision>.bak/` | A copy of the knowledge tree taken before a migration that restructured it. | daemon | No | Yes, once you have checked the migrated tree. |
 | `memory/<partition>/` | Derived memory for `global` or one repository: `MEMORY.md` (index), `notes/` (Coffer's notes), `RETIRED.md` (what was retired and why). | daemon (distil pass) | **No** (derived and local) | Yes: aggregation and distil rebuild it. Retirement decisions in `RETIRED.md` are lost. |
 | `memory/<partition>/.raw/` | What aggregation read out of the agents' own memory, verbatim. | daemon (aggregate pass) | No | Yes: the next aggregation rereads the agents. |

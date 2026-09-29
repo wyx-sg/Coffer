@@ -37,7 +37,9 @@ from coffer.application.channel.store_ports import (
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
 )
+from coffer.application.channel.turn_finish import TurnOutcome
 from coffer.application.channel.turn_render import TurnRenderer
+from coffer.domain.channel.envelopes import ChoiceButton
 from coffer.domain.chat.attachment import Attachment
 from coffer.domain.errors import CofferError
 
@@ -70,7 +72,8 @@ class QueuedInbound:
     came from; ``reply_to_message_id`` is the user's inbound platform_message_id the
     receipt/completion reactions target (see "Acknowledge receipt and completion by
     capability"; "" when the transport supplied none); the mention id and address are
-    what a group reply opens by @mentioning (see "Mention the asker in a group answer");
+    what a group reply opens by @mentioning (see "Mention the asker in a group answer"),
+    with the display name a platform that spells mentions by name needs;
     and ``title_hint`` is the human's own words, carried apart from the driving text
     (spec chat "Persist conversations and messages in SQLite"; "" when nothing was
     nameable). ``conversation_thread_id`` is which of the chat's conversations the
@@ -86,6 +89,7 @@ class QueuedInbound:
     reply_to_message_id: str = ""
     mention_user_id: str = ""
     mention_user_email: str = ""
+    mention_user_name: str = ""
     title_hint: str = ""
     conversation_thread_id: str = ""
 
@@ -158,7 +162,7 @@ class TurnDriver:
         adapter = binding.adapter
         with contextlib.suppress(Exception):
             if adapter.capabilities.supports_reactions and item.reply_to_message_id:
-                await adapter.set_reaction(peer.chat_id, item.reply_to_message_id, "👀")
+                await self._react(binding, peer, item, adapter.capabilities.reactions.received)
             elif adapter.capabilities.supports_typing:
                 await adapter.send_typing(
                     peer.chat_id, thread_id=item.thread_id, chat_kind=item.chat_kind
@@ -269,6 +273,8 @@ class TurnDriver:
                 await adapter.send_typing(
                     peer.chat_id, thread_id=item.thread_id, chat_kind=item.chat_kind
                 )
+        # The turn is running now (a queued message kept its receipt mark until here).
+        await self._react(binding, peer, item, adapter.capabilities.reactions.working)
 
         async def _send(message: str) -> None:
             # The turn's own replies point back at the message that
@@ -282,20 +288,38 @@ class TurnDriver:
                 reply_to_message_id=item.reply_to_message_id,
             )
 
+        async def _send_card(
+            text: str, buttons: Sequence[ChoiceButton], *, title: str = ""
+        ) -> None:
+            await self._safe_send(
+                binding,
+                peer.chat_id,
+                text,
+                buttons=buttons,
+                title=title,
+                thread_id=item.thread_id,
+                chat_kind=item.chat_kind,
+                reply_to_message_id=item.reply_to_message_id,
+            )
+
         renderer = TurnRenderer(
             channel=binding.resource.name,
             adapter=adapter,
             chat_id=peer.chat_id,
             conversation_id=conversation_id,
             send=_send,
+            send_card=_send_card,
             thread_id=item.thread_id,
             chat_kind=item.chat_kind,
             mention_user_id=item.mention_user_id,
             mention_user_email=item.mention_user_email,
+            mention_user_name=item.mention_user_name,
+            show_steps=binding.show_steps,
+            notify_after_seconds=binding.notify_after_seconds,
         )
-        clean = False
+        outcome: TurnOutcome = "failed"
         try:
-            clean = await renderer.consume(queue)
+            outcome = await renderer.consume(queue)
         except asyncio.CancelledError:
             raise
         except Exception:
@@ -307,9 +331,21 @@ class TurnDriver:
             if session.render_task is asyncio.current_task():
                 session.render_task = None
                 session.running_conversation_id = None
-        # Mark completion (✅) on the user's message ONLY on a clean finish
-        # (an errored/interrupted turn keeps just the 👀 receipt), where the
-        # transport supports reactions. Best-effort — never fails a delivered reply.
-        if clean and adapter.capabilities.supports_reactions and item.reply_to_message_id:
-            with contextlib.suppress(Exception):
-                await adapter.set_reaction(peer.chat_id, item.reply_to_message_id, "✅")
+        # Mark how it ended on the user's message: done (a question for the
+        # owner counts as done — the turn finished), failed or stopped.
+        marks = adapter.capabilities.reactions
+        mark = {"failed": marks.failed, "stopped": marks.stopped}.get(outcome, marks.done)
+        await self._react(binding, peer, item, mark)
+
+    async def _react(
+        self, binding: ChannelBinding, peer: ChannelPeer, item: QueuedInbound, emoji: str
+    ) -> None:
+        """Set one progress mark on the asker's message, where the transport
+        reacts and names an emoji for this stage. Best-effort — a failed mark
+        never fails a delivered reply (see "Acknowledge receipt and completion
+        by capability")."""
+        adapter = binding.adapter
+        if not (emoji and adapter.capabilities.supports_reactions and item.reply_to_message_id):
+            return
+        with contextlib.suppress(Exception):
+            await adapter.set_reaction(peer.chat_id, item.reply_to_message_id, emoji)

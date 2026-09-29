@@ -1169,6 +1169,8 @@ Its secrets are credential refs: store each secret first with `coffer credential
 | `--ignore-other-mentions / --no-ignore-other-mentions` | option | boolean |  | In groups, drop a message that @mentions anyone else (default: off) |
 | `--wait-after-text` | option | float (0-60) |  | Seconds to wait after a text message for more before answering (default: 1.5; 0 = none) |
 | `--wait-after-forward` | option | float (0-60) |  | Seconds to wait after a forwarded record or files with no text (default: 5; 0 = none) |
+| `--show-steps / --hide-steps` | option | boolean |  | List each step under the live status line while a turn runs (default: on) |
+| `--notify-after` | option | float (0-3600) |  | Ping the chat when a turn runs at least this many seconds (default: 90; 0 = never) |
 | `--dir` | option | text (repeatable) |  | An absolute directory `/dir` may switch into (repeat for several; replaces the list) |
 | `--title` | option | text |  | Display title (≤80 chars) |
 | `--description` | option | text |  |  |
@@ -1180,7 +1182,7 @@ Its secrets are credential refs: store each secret first with `coffer credential
 coffer channel edit [OPTIONS] NAME
 ```
 
-Change a channel's name, title, description, group gating, quiet windows or `/dir` directories.
+Change a channel's name, title, description, group gating, quiet windows, live status, completion ping or `/dir` directories.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1193,6 +1195,8 @@ Change a channel's name, title, description, group gating, quiet windows or `/di
 | `--ignore-other-mentions / --no-ignore-other-mentions` | option | boolean |  | In groups, drop a message that @mentions anyone else (default: off) |
 | `--wait-after-text` | option | float (0-60) |  | Seconds to wait after a text message for more before answering (default: 1.5; 0 = none) |
 | `--wait-after-forward` | option | float (0-60) |  | Seconds to wait after a forwarded record or files with no text (default: 5; 0 = none) |
+| `--show-steps / --hide-steps` | option | boolean |  | List each step under the live status line while a turn runs (default: on) |
+| `--notify-after` | option | float (0-3600) |  | Ping the chat when a turn runs at least this many seconds (default: 90; 0 = never) |
 | `--dir` | option | text (repeatable) |  | An absolute directory `/dir` may switch into (repeat for several; replaces the list) |
 | `--no-dirs` | option | flag |  | Allow no directories for `/dir` (clears the list) |
 
@@ -1410,7 +1414,7 @@ Report drift between bindings and on-disk symlinks.
 coffer knowledge [OPTIONS] COMMAND [ARGS]...
 ```
 
-Manage Coffer's knowledge collections, the Markdown under ~/.coffer/knowledge/&lt;collection&gt;/ (`coffer path knowledge` prints it). Each collection is one tree of documents you and Coffer write together: read, grep and edit them with your own tools, and add new knowledge with `write` or `upload` — Coffer's curation pass merges it into the documents.
+Manage Coffer's knowledge collections, the Markdown under ~/.coffer/knowledge/&lt;collection&gt;/ (`coffer path knowledge` prints it). Each collection is one tree of documents you and Coffer write together: read, grep and edit them with your own tools, and add new knowledge with `write` or `upload`: it waits as an item until Coffer curates it into the documents. `history`, `changes` and `undo` show and reverse what changed.
 
 ### knowledge list
 
@@ -1418,7 +1422,7 @@ Manage Coffer's knowledge collections, the Markdown under ~/.coffer/knowledge/&l
 coffer knowledge list [OPTIONS]
 ```
 
-List every collection, with its documents and unmerged material.
+List every collection, with its documents and the items waiting to be curated.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1485,7 +1489,7 @@ Remove a collection and its directory.
 coffer knowledge write [OPTIONS]
 ```
 
-Add new knowledge. Coffer's curation pass merges it into the documents.
+Add new knowledge as an item. Coffer curates it into the documents.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1502,7 +1506,7 @@ coffer knowledge upload [OPTIONS] FILE
 
 Convert a document to Markdown and add what it says to a collection.
 
-The extracted text is new material: curation merges it into the documents, and neither the original nor the extracted file is kept.
+The extracted text becomes an item that curation folds into the documents; neither the original nor the extracted file is kept.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1515,14 +1519,69 @@ The extracted text is new material: curation merges it into the documents, and n
 coffer knowledge curate [OPTIONS] COLLECTION
 ```
 
-Run a curation pass by hand over one collection.
+Curate a collection now: one pass per pending item until none is left.
 
-A pass is bounded and reports why it stopped, so the status is the answer: ok; truncated when the pass was cut off (its item stays pending); up_to_date; no_model when Coffer's own model is not configured; too_large; or failed. A pass already running over the same collection is refused rather than queued.
+Items waiting in the inbox go first, oldest first, then documents edited since curation last saw them. Each pass is bounded and reports its status — ok, truncated (cut off; its item stays pending), too_large, failed — and the run stops at the first failed pass, leaving the rest pending. With no model configured, the inbox becomes documents as it stands (no_model). A run already curating the same collection is refused rather than queued.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `COLLECTION` | argument | text | required | Collection to curate |
-| `--document` | option | text | `""` | Carry one edited document through rather than the next pending item |
+| `--document` | option | text | `""` | Curate just this document (a path under the collection) |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### knowledge history
+
+```sh
+coffer knowledge history [OPTIONS] PATH
+```
+
+List a document's versions, newest first, with who wrote each.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `PATH` | argument | text | required | A document, e.g. shopee/infra/cache.md |
+| `--version` | option | text | `""` | Print this version's diff |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### knowledge restore
+
+```sh
+coffer knowledge restore [OPTIONS] PATH VERSION
+```
+
+Put one version of a document back, as a new version.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `PATH` | argument | text | required | The document to restore |
+| `VERSION` | argument | text | required | The version to put back (from `history`) |
+
+### knowledge changes
+
+```sh
+coffer knowledge changes [OPTIONS] [VERSION]
+```
+
+Recent changes to knowledge across collections, and the items waiting.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `VERSION` | argument | text | `""` | Show this change in full, with each document's diff |
+| `--in` | option | text | `""` | Only this collection |
+| `--limit` | option | integer | `20` | How many changes |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### knowledge undo
+
+```sh
+coffer knowledge undo [OPTIONS] VERSION
+```
+
+Undo a curation pass as a whole: every document it wrote or retired goes back to how it was. Refused, naming the document, if one has changed since.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `VERSION` | argument | text | required | The curation pass to undo (from `changes`) |
 
 ## coffer memory
 

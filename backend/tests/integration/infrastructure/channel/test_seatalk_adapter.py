@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 from coffer.application.channel.ports import AdapterCallbacks
 from coffer.domain.channel.envelopes import InboundLifecycle
 from coffer.domain.channel.errors import ChannelSendFailed
-from coffer.infrastructure.channel.live_text import SeaTalkLiveText
+from coffer.infrastructure.channel.seatalk_live import SeaTalkLiveText
 from coffer.infrastructure.channel.seatalk_send import (
     SEATALK_MENTION_EMAIL_TEMPLATE,
     SEATALK_MENTION_TEMPLATE,

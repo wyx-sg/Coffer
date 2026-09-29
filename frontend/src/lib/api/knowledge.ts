@@ -29,7 +29,7 @@ import { call, enc } from "@/lib/api/call";
 import type {
   CollectionListOut,
   CollectionOut,
-  CurationOut,
+  CurationRunOut,
   FileOut,
   FileSave,
   IngestedDocumentOut,
@@ -110,23 +110,19 @@ export function deleteFile(path: string): Promise<void> {
 // --- curation ---------------------------------------------------------------
 
 /**
- * Run ONE curation pass over one collection now — the manual trigger for the
- * pass the background sweep otherwise runs on an interval. It takes one
- * pending item and merges it into the collection's documents.
+ * Curate one collection now: the daemon runs one pass per pending item —
+ * inbox items oldest first, then documents edited since curation last saw
+ * them — until none is left, each pass still bounded, stopping at the first
+ * that fails. The answer lists every pass's outcome; progress (n of m) is on
+ * the in-flight list (`/upkeep/runs`) while the request is open.
  *
- * `document` names a particular document to carry through; omitted, the pass
- * takes the oldest pending item — inbox material first, then a document edited
- * since curation last saw it — which is what the page's button wants. A pass
- * with no internal model configured comes back `no_model`, having promoted the
- * inbox to documents as it stood (`promoted`) — a clean 200, not an error — so
- * every status here is something the page reports rather than a failure.
- *
- * A second pass over the same collection is refused with 409
- * `UPKEEP_ALREADY_RUNNING` rather than queued (see "Run one pass per collection
- * at a time").
+ * `document` curates just that document. With no internal model configured
+ * the run comes back `no_model`, having promoted the inbox as it stood — a
+ * clean 200. A second run over the same collection is refused with 409
+ * `UPKEEP_ALREADY_RUNNING` rather than queued.
  */
-export function curateCollection(uid: string, document?: string | null): Promise<CurationOut> {
-  return call<CurationOut>(`${ROOT}/collections/${enc(uid)}/curate`, {
+export function curateCollection(uid: string, document?: string | null): Promise<CurationRunOut> {
+  return call<CurationRunOut>(`${ROOT}/collections/${enc(uid)}/curate`, {
     method: "POST",
     body: { document: document ?? null },
   });

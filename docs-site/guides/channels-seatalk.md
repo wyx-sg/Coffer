@@ -125,9 +125,11 @@ No state is shown before the first attempt. Events that SeaTalk sends while the 
 
 ## How replies look
 
-- **Streaming** — the reply is one message that grows while the agent writes, starting the moment the turn begins. Each update carries the full text so far. Coffer re-sends the latest text every 10 seconds on a long tool call, because SeaTalk ends a stream that goes 30 seconds without an update. SeaTalk clients older than 3.67 show the finished message when the stream closes.
-- **Long replies** — one stream carries at most 4,096 characters. A longer reply finishes the stream at a paragraph boundary and the rest arrives as ordinary messages.
-- **Formatting** — the agent's Markdown is converted to SeaTalk Markdown: bold, italic, inline code, code fences and lists. Headings become bold and links become `label (url)`, since SeaTalk supports neither. Messages are split to stay under SeaTalk's 4,096-byte cap.
+- **Streaming** — the reply is one message that grows while the agent writes, starting the moment the turn begins with the status line (`⏳ Working · 0s`). Each update carries the full text so far, and the status line's clock moves every 10 seconds. Coffer re-sends the latest text every 10 seconds on a long tool call, because SeaTalk ends a stream that goes 30 seconds without an update. SeaTalk clients older than 3.67 show the finished message when the stream closes.
+- **Long replies** — one stream carries at most 4,096 characters. A longer reply finishes the stream at a paragraph boundary and the rest arrives as ordinary messages numbered `(2/3)`, `(3/3)`.
+- **Long turns** — finishing a stream notifies nobody, because the message was created when the turn began. A turn longer than the channel's threshold (90 seconds by default) therefore ends with one new message, `✅ Done · 4m 12s — <first line>`, in the same thread; in a group it @mentions whoever asked.
+- **Formatting** — the agent's Markdown is converted to SeaTalk Markdown: bold, italic, inline code, code fences and lists. Headings become bold and links become `label (url)`, since SeaTalk supports neither. A table becomes one bullet per row (a big one also arrives as a `.csv`), and a code block over 30 lines arrives as a file. Messages are split to stay under SeaTalk's 4,096-byte cap.
+- **Details** — a `## Details` section goes behind a card titled with the answer's first line; **Details** posts it as a reply in the card's thread, **As file** sends it as a `.md`.
 - **Receipt** — SeaTalk has no reactions, so a typing indicator is kept alive every 3 seconds while the turn runs, in direct chats and group threads alike. SeaTalk silently skips group typing in groups of more than 200 members.
 
 The keep-alive gives up after about 10 minutes with no new content, so a turn that stays silent that long lets its stream lapse. If a stream is ended by SeaTalk — an error or a gap past 30 seconds — Coffer does not reuse it. The partial message stays in the chat and the full reply is sent as ordinary messages.
@@ -166,7 +168,7 @@ If the bot is removed from a group or the group is disbanded, that group's sessi
 
 ## Cards
 
-A bare `/model`, `/dir`, `/resume` or `/kb` answers with an interactive card, and `/status` and `/help` carry **Stop**, **New**, **Model**, **Resume** and **Dir** buttons. A tap on one of those does exactly what typing the command does.
+A bare `/model`, `/dir`, `/resume` or `/kb` answers with an interactive card, and `/status` and `/help` carry **Stop**, **New**, **Model**, **Resume** and **Dir** buttons. A tap on one of those does exactly what typing the command does. A question the agent ends on arrives as a card too, with one button per answer; a tap sends that answer as your reply.
 
 - Buttons are laid out in up to three rows. Short labels share a row; a long one such as "Claude Code" gets its own.
 - A card has at most six buttons; longer lists page with **← Prev** and **Next →**.

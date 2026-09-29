@@ -283,6 +283,9 @@ def build_inbound_message(
         platform_message_id=str(message.get("message_id", "")),
         timestamp=datetime.fromtimestamp(int(message.get("date", 0)), tz=UTC),
         sender_id=str(sender.get("id") or ""),
+        # The id a mention links to — the same ``from.id`` (Telegram addresses a
+        # member by one id for both).
+        sender_mention_id=str(sender.get("id") or ""),
         chat_kind="group" if group else "direct",
         # Telegram hands the group's name over for free on every update ("Open every turn with its
         # message origin"); a DM's chat has no title.

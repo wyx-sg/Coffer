@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from coffer.infrastructure.chat.adapter_support import (
-    ChannelNameResolver,
+    ChannelNoteResolver,
     HomeEnvResolver,
     MemoryContextComposer,
     ModelLister,
@@ -40,7 +40,7 @@ class DriverDeps:
     list_models: ModelLister | None
     transcriber_factory: TranscriberFactory | None
     compose_memory_context: MemoryContextComposer | None
-    resolve_channel_name: ChannelNameResolver | None
+    resolve_channel: ChannelNoteResolver | None
     resolve_home_env: Callable[[str], HomeEnvResolver]
     resolve_key: Callable[[str], Callable[[], Awaitable[str | None]]]
 
@@ -59,7 +59,7 @@ class ClaudeSdkDriver:
             list_models=deps.list_models,
             transcriber_factory=deps.transcriber_factory,
             compose_memory_context=deps.compose_memory_context,
-            resolve_channel_name=deps.resolve_channel_name,
+            resolve_channel=deps.resolve_channel,
             resolve_home_env=deps.resolve_home_env(self.agent_key),
         )
 
@@ -79,7 +79,7 @@ class CodexAppServerDriver:
             transcriber_factory=deps.transcriber_factory,
             list_models=deps.list_models,
             compose_memory_context=deps.compose_memory_context,
-            resolve_channel_name=deps.resolve_channel_name,
+            resolve_channel=deps.resolve_channel,
             resolve_home_env=deps.resolve_home_env(self.agent_key),
         )
 

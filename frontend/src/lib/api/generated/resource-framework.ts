@@ -810,6 +810,11 @@ export interface components {
          */
         UpkeepRunOut: {
             /**
+             * Done
+             * @description For a run that works through several items one pass at a time (knowledge's Curate now): the passes finished so far. Null for a single pass.
+             */
+            done: number | null;
+            /**
              * Kind
              * @description The kind whose pass this is: `memory` or `knowledge`.
              */
@@ -825,6 +830,11 @@ export interface components {
              * @description When this daemon started the pass.
              */
             started_at: string;
+            /**
+             * Total
+             * @description For such a run: how many items were pending when it started.
+             */
+            total: number | null;
         };
     };
     responses: never;

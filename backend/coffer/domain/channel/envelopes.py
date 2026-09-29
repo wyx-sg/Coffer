@@ -42,9 +42,9 @@ class InboundMessage:
     # ``employee_code`` while a mention
     # must carry ``seatalk_id``, and the docs warn that ``employee_code`` and
     # ``email`` arrive EMPTY for a sender outside the bot's organisation while
-    # ``seatalk_id`` is always present. "" when the transport has no such id, or
-    # spells mentions in a way that needs more than one (Telegram needs a
-    # display name too) — the reply then simply carries no mention.
+    # ``seatalk_id`` is always present. "" when the transport has no such id —
+    # the reply then simply carries no mention. (Telegram's is ``from.id``; its
+    # mention also carries ``sender_display`` as the link text.)
     sender_mention_id: str = ""
     # The same thing by ADDRESS, for a platform that documents a second mention
     # form (SeaTalk: ``?email=``). Only a fallback: it is precisely the field the
@@ -82,6 +82,24 @@ class InboundMessage:
     # defaults instead of a thread nobody will continue (spec channels "Set a
     # group's defaults from its main chat"). False everywhere else.
     group_main: bool = False
+
+
+@dataclass(frozen=True)
+class ReactionSet:
+    """The emoji a transport marks a turn's progress with on the asker's message
+    (see "Acknowledge receipt and completion by capability").
+
+    A transport fact, not a core one: a platform may accept only a fixed list
+    (Telegram's ``setMessageReaction`` does), so the adapter names emoji it knows
+    will land. ``""`` skips that stage. One reaction replaces the last, so the
+    message shows the turn's current state.
+    """
+
+    received: str = ""  # on receipt, before the turn starts (queued messages keep it)
+    working: str = ""  # when the turn starts running
+    done: str = ""  # a clean finish (a turn ending on a question for the owner too)
+    failed: str = ""  # an error, or the tool-iteration limit
+    stopped: str = ""  # interrupted
 
 
 @dataclass(frozen=True)
@@ -131,15 +149,17 @@ class ChannelCapabilities:
     supports_groups: bool = False  # group-chat send path exists
     supports_history_fetch: bool = False  # can fetch recent/thread messages for context
     supports_reactions: bool = False  # emoji reaction on a message (set_reaction),
-    # used for the receipt (👀) + completion (✅) ack of "Acknowledge receipt
-    # and completion by capability"; transports without
-    # it fall back to the typing/working signal for the same receipt cue
+    # used for the progress marks of "Acknowledge receipt and completion by
+    # capability"; transports without it fall back to the typing/working signal
+    # for the same receipt cue
+    reactions: ReactionSet = ReactionSet()  # which emoji, per stage
     # "Mention the asker in a group answer": how this transport spells an
     # @mention, with ``{user_id}`` standing
     # in for the id being addressed — e.g. ``"<x target=\"y?id={user_id}\"/>"``.
-    # The core substitutes and prefixes; it never learns the shape. A transport
-    # that cannot mention, or whose mention needs more than an id (Telegram's
-    # carries a display name), declares none and its replies carry none. The
+    # The core substitutes and prefixes; it never learns the shape. A mention
+    # that also needs a display name (Telegram's inline mention is a link with
+    # text) puts ``{name}`` where the name goes. A transport that cannot mention
+    # declares none and its replies carry none. The
     # markup is the platform's RICH text, so every snapshot that may carry it is
     # sent as such — see ``turn_text.with_mention``.
     mention_template: str = ""
@@ -154,6 +174,17 @@ class ChannelCapabilities:
     # where a direct-chat thread only exists because someone created it
     # (Telegram's private-chat topics), so every one is its own conversation.
     direct_threads_are_replies: bool = False
+    # One or two sentences telling the agent what Markdown renders on this
+    # transport (see "Tell a channel-driven agent it is on a chat channel").
+    render_notes: str = ""
+    # "Shape a reply for what the chat can show": whether a markdown table
+    # renders (False → bullet rows + a CSV), how many lines a code block may
+    # keep inline (0 = any; more → attached as a file), and whether the
+    # transport collapses a ``## Details`` section itself (Telegram) — one that
+    # does not may move it behind a card's button instead.
+    renders_tables: bool = True
+    max_inline_code_lines: int = 0
+    collapses_details: bool = False
 
 
 @dataclass(frozen=True)

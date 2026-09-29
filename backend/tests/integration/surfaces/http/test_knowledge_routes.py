@@ -456,7 +456,10 @@ def test_curating_with_no_model_promotes_what_the_inbox_holds(  # type: ignore[n
     assert resp.status_code == 200, resp.text
     out = resp.json()
     assert out["status"] == "no_model"
-    assert out["promoted"] == ["shopee/gateway.md"]
+    # Curate now answers every pass it ran; with no model the one pass promoted
+    # the whole inbox, and the run ends there.
+    assert [p["status"] for p in out["passes"]] == ["no_model"]
+    assert out["passes"][0]["promoted"] == ["shopee/gateway.md"]
     assert list((tmp_path / "knowledge" / "shopee" / ".inbox").iterdir()) == []
     promoted = client.get("/api/v1/knowledge/file", params={"path": "shopee/gateway.md"})
     assert promoted.status_code == 200, promoted.text

@@ -66,6 +66,7 @@ from coffer.domain.sync.models import ExportSummary
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.daemon.config import write_machine_name
+from coffer.infrastructure.knowledge.history import KNOWLEDGE_HISTORY
 from coffer.infrastructure.llm.llm_completion import LangchainLlmCompletion
 from coffer.infrastructure.memory.paths import memory_root
 from coffer.infrastructure.persistence.convergence_state_repo import SqlAlchemyConvergenceStateRepo
@@ -99,6 +100,24 @@ class SyncWiring(NamedTuple):
     service: ConvergeService
     registry: MachineRegistry
     state: SqlAlchemyConvergenceStateRepo
+
+
+class _KnowledgeApplier(TreeApplier):
+    """The knowledge tree's applier, which marks every path it applies so the
+    knowledge history names sync as its writer rather than reading it as an
+    edit on disk (spec knowledge "Keep every document's history and undo a
+    pass as a whole")."""
+
+    def __init__(self, *, worktree: pathlib.Path, live_root: pathlib.Path) -> None:
+        super().__init__("knowledge/", worktree=worktree, live_root=live_root)
+
+    async def upsert(self, path: str) -> None:
+        await super().upsert(path)
+        KNOWLEDGE_HISTORY.mark_sync(self._relative(path))
+
+    async def remove(self, path: str) -> None:
+        await super().remove(path)
+        KNOWLEDGE_HISTORY.mark_sync(self._relative(path))
 
 
 def _key_fingerprint(master_key: ResolvedMasterKey) -> str | None:
@@ -190,7 +209,7 @@ def wire_sync(
             mirror=mirror,
             state=state,
             appliers=[
-                TreeApplier("knowledge/", worktree=worktree, live_root=knowledge_root()),
+                _KnowledgeApplier(worktree=worktree, live_root=knowledge_root()),
                 # The skills tree carries one folder this machine generates for
                 # itself and therefore never receives from another (spec
                 # vault-sync "Withhold derived output in both halves"). ``Bundle``

@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 
+from coffer.domain.chat.channel_note import ChannelNote
 from coffer.domain.chat.conversation import Conversation
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.domain.chat.message import Message, Role, TextBlock
@@ -56,9 +57,9 @@ async def _repo(tmp_path: Any) -> tuple[ConversationRepo, Any]:
 _SEATALK_UID = "3c8a17d5e2f04b9188ac6d0f5e2b7a91"
 
 
-async def _seatalk_name(uid: str) -> str | None:
+async def _seatalk_name(uid: str, conversation_id: str) -> ChannelNote | None:
     assert uid == _SEATALK_UID
-    return "SeaTalk"
+    return ChannelNote(name="st-ops", platform="SeaTalk", chat_kind="group", in_thread=True)
 
 
 def _conv(agent_key: str = "codex", channel_uid: str | None = None) -> Conversation:
@@ -417,7 +418,7 @@ async def test_channel_turn_carries_the_notes_codex_used_to_miss(tmp_path: Any) 
         session_factory=factory,
         list_models=_models,
         compose_memory_context=_memory,
-        resolve_channel_name=_seatalk_name,
+        resolve_channel=_seatalk_name,
     )
     await provider.init_conversation(conv.id, {"cwd": str(tmp_path), "model": "gpt-5.4"})
     adapter = await provider.build_adapter(conv.id)

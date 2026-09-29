@@ -4,7 +4,7 @@ knowledge "Cover knowledge management on REST and the CLI").
 ``show``, ``edit`` and ``rm`` are the lifecycle verbs every kind shares
 (``_kind_verbs``). ``list`` and ``add`` are the kind's own: ``list`` reads
 ``/knowledge/collections``, which counts each collection's documents and its
-unmerged material and reads its description off its ``README.md``; ``add``
+items waiting to be curated and reads its description off its ``README.md``; ``add``
 creates the directory and the README, which the generic create route does not
 (the kind is not generic-creatable). ``write``, ``upload`` and ``curate`` feed
 and run curation. There is no ``scope``, ``enable`` or ``disable``: every collection is
@@ -22,9 +22,15 @@ through ``_resolve`` (ADR resource-identity-is-an-immutable-uid).
 
 from __future__ import annotations
 
+import contextlib
 import json as _json
 import pathlib
+import sys
+import threading
+from collections.abc import Iterator
+from typing import Any
 
+import httpx
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -32,6 +38,7 @@ from rich.table import Table
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._kind_verbs import KindVerbs, check_title_arg, label, register_kind_verbs
 from coffer.surfaces.cli._resolve import resolve_uid
+from coffer.surfaces.cli.knowledge_history_cmd import register_history_commands
 
 #: The registry kind. Spelled here rather than imported from the application
 #: layer, so a CLI module depends on the daemon's HTTP surface and nothing deeper.
@@ -43,7 +50,8 @@ app = typer.Typer(
         "~/.coffer/knowledge/<collection>/ (`coffer path knowledge` prints it). "
         "Each collection is one tree of documents you and Coffer write together: "
         "read, grep and edit them with your own tools, and add new knowledge with "
-        "`write` or `upload` — Coffer's curation pass merges it into the documents."
+        "`write` or `upload`: it waits as an item until Coffer curates it into the "
+        "documents. `history`, `changes` and `undo` show and reverse what changed."
     )
 )
 _console = Console()
@@ -58,7 +66,7 @@ def list_collections(
     ctx: typer.Context,
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """List every collection, with its documents and unmerged material."""
+    """List every collection, with its documents and the items waiting to be curated."""
     c, _info = _cli_client.client_or_exit()
     with c:
         r = c.get("/knowledge/collections")
@@ -69,10 +77,10 @@ def list_collections(
         return
     table = Table(title="Knowledge collections")
     table.add_column("name")
-    # Pending is material still waiting to be merged — what an agent cannot
+    # Waiting is items still to be curated — what an agent cannot
     # read yet (spec knowledge "Hide dot-prefixed entries except the inbox").
     table.add_column("documents", justify="right")
-    table.add_column("pending", justify="right")
+    table.add_column("waiting", justify="right")
     table.add_column("description")
     for entry in data["collections"]:
         table.add_row(
@@ -136,7 +144,7 @@ def submit_material(
     body: str = typer.Option("", "--body", "-b"),
     collection: str = typer.Option(..., "--in", help="Collection to add it to"),
 ) -> None:
-    """Add new knowledge. Coffer's curation pass merges it into the documents."""
+    """Add new knowledge as an item. Coffer curates it into the documents."""
     payload = {
         "title": title,
         "description": description,
@@ -151,10 +159,10 @@ def submit_material(
 
 
 def _submission(data: dict[str, object]) -> str:
-    """One line saying what became of the material."""
+    """One line saying what became of the item."""
     if data.get("path"):
         return str(data["path"])
-    return f"queued in {data['collection']} — curation merges it into the documents"
+    return f"queued in {data['collection']} — waiting to be curated into the documents"
 
 
 @app.command("upload")
@@ -167,8 +175,8 @@ def upload(
 ) -> None:
     """Convert a document to Markdown and add what it says to a collection.
 
-    The extracted text is new material: curation merges it into the documents,
-    and neither the original nor the extracted file is kept.
+    The extracted text becomes an item that curation folds into the documents;
+    neither the original nor the extracted file is kept.
 
     \f
     Requirement "Convert uploads into material without keeping them".
@@ -192,20 +200,21 @@ def curate(
     ctx: typer.Context,
     collection: str = typer.Argument(..., help="Collection to curate"),
     document: str = typer.Option(
-        "", "--document", help="Carry one edited document through rather than the next pending item"
+        "", "--document", help="Curate just this document (a path under the collection)"
     ),
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """Run a curation pass by hand over one collection.
+    """Curate a collection now: one pass per pending item until none is left.
 
-    A pass is bounded and reports why it stopped, so the status is the answer:
-    ok; truncated when the pass was cut off (its item stays pending);
-    up_to_date; no_model when Coffer's own model is not configured; too_large;
-    or failed. A pass already running over the same collection is refused
-    rather than queued.
+    Items waiting in the inbox go first, oldest first, then documents edited
+    since curation last saw them. Each pass is bounded and reports its status —
+    ok, truncated (cut off; its item stays pending), too_large, failed — and the
+    run stops at the first failed pass, leaving the rest pending. With no
+    model configured, the inbox becomes documents as it stands (no_model).
+    A run already curating the same collection is refused rather than queued.
 
     \f
-    Requirements "Promote material directly when no model is configured" and
-    "Run one pass per collection at a time".
+    Requirement "Run curation on a sweep and on demand".
     """
     # The route takes the document in the body, not the query string: a path
     # is content, and a silently-ignored query param would look like a pass
@@ -213,11 +222,74 @@ def curate(
     body = {"document": document} if document else {}
     c, _info = _cli_client.client_or_exit()
     with c:
-        # The one command in this group addressed by identity rather than by a
-        # path: a pass runs for minutes over a whole corpus, so it is aimed at
-        # the collection's uid. The lookup happens here, once, so the person
-        # still types the name they gave the collection.
+        # Addressed by identity: a run takes minutes over a whole corpus, so it
+        # is aimed at the collection's uid, looked up here once from the name.
         uid = resolve_uid(c, KIND, collection, verbose=_verbose(ctx))
-        r = c.post(f"/knowledge/collections/{uid}/curate", json=body)
+        with _live_progress(c, uid, enabled=not output_json and sys.stderr.isatty()):
+            r = c.post(f"/knowledge/collections/{uid}/curate", json=body, timeout=None)
         _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(_json.dumps(r.json(), indent=2))
+    data = r.json()
+    if output_json:
+        typer.echo(_json.dumps(data, indent=2))
+        return
+    total = data["total"]
+    for n, outcome in enumerate(data["passes"], start=1):
+        typer.echo(f"{n} of {max(total, len(data['passes']))}: {_pass_line(outcome)}")
+    typer.echo(_run_line(data))
+
+
+def _pass_line(outcome: dict[str, Any]) -> str:
+    status = str(outcome["status"])
+    item = str(outcome.get("item") or "")
+    if status in {"ok", "truncated"}:
+        detail = f"{outcome.get('written', 0)} written, {outcome.get('retired', 0)} retired"
+        return f"{status} {item} ({detail})".replace("  ", " ")
+    promoted = outcome.get("promoted") or []
+    if promoted:
+        return f"{status} {item} — became {', '.join(map(str, promoted))}".replace("  ", " ")
+    return f"{status} {item}".strip()
+
+
+def _run_line(data: dict[str, Any]) -> str:
+    status = data["status"]
+    if status == "up_to_date":
+        return f"{data['collection']}: nothing to curate"
+    if status == "no_model":
+        return f"{data['collection']}: Coffer's model is not set; items became documents as is"
+    if status == "failed":
+        return f"{data['collection']}: stopped at a failed pass — the rest is still pending"
+    return f"{data['collection']}: curated {len(data['passes'])} of {data['total']}"
+
+
+@contextlib.contextmanager
+def _live_progress(c: httpx.Client, uid: str, *, enabled: bool) -> Iterator[None]:
+    """Print ``curating n of m`` to stderr while the run's request is open,
+    read off the in-flight list (``GET /upkeep/runs``) the run updates."""
+    if not enabled:
+        yield
+        return
+    stop = threading.Event()
+
+    def poll() -> None:
+        seen: tuple[object, object] | None = None
+        with httpx.Client(base_url=c.base_url, headers=c.headers, timeout=5) as poller:
+            while not stop.wait(1.0):
+                with contextlib.suppress(Exception):
+                    runs = poller.get("/upkeep/runs").json()["runs"]
+                    mine = next((x for x in runs if x["kind"] == KIND and x["name"] == uid), None)
+                    if mine and mine.get("total") and (mine["done"], mine["total"]) != seen:
+                        seen = (mine["done"], mine["total"])
+                        typer.echo(f"curating… {mine['done']} of {mine['total']} done", err=True)
+
+    worker = threading.Thread(target=poll, daemon=True)
+    worker.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        worker.join(timeout=2)
+
+
+# The history commands (``history``, ``restore``, ``changes``, ``undo``) live
+# beside this module for the file-size ceiling and join this group here.
+register_history_commands(app, console=_console, verbose=_verbose)

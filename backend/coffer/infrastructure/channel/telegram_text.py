@@ -30,3 +30,10 @@ def clip_tail_utf16(text: str, limit: int) -> str:
 
 
 __all__ = ["clip_tail_utf16", "utf16_len"]
+
+
+#: "Mention the asker in a group answer": Telegram's inline mention is a link to
+#: ``tg://user?id=<id>`` whose TEXT is shown — rich markdown and the HTML subset
+#: both render it as a mention that notifies, and it works for a member with no
+#: username. So it needs the display name as well as the id.
+TELEGRAM_MENTION_TEMPLATE = "[{name}](tg://user?id={user_id})"

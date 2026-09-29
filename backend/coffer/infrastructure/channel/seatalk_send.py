@@ -15,7 +15,13 @@ from coffer.domain.channel.envelopes import ChoiceButton, SentMessage
 from coffer.infrastructure.channel.render import chunk_text, markdown_to_seatalk
 from coffer.infrastructure.channel.seatalk_parse import interactive_card, split_to_byte_limit
 
-__all__ = ["SEATALK_MENTION_EMAIL_TEMPLATE", "SEATALK_MENTION_TEMPLATE", "send_text_pieces"]
+__all__ = [
+    "SEATALK_MENTION_EMAIL_TEMPLATE",
+    "SEATALK_MENTION_TEMPLATE",
+    "numbered",
+    "rendered_pieces",
+    "send_text_pieces",
+]
 
 #: "Mention the asker in a group answer": how SeaTalk spells an @mention inside message content,
 #: read from the "Send Message to Group Chat" formatted-text sample: ``"Kindly note there's **no
@@ -61,6 +67,23 @@ SEATALK_MENTION_EMAIL_TEMPLATE = '<mention-tag target="seatalk://user?email={use
 Send = Callable[[str, dict[str, Any], str, str], Awaitable[Any]]
 
 
+def rendered_pieces(markdown: str, char_limit: int, byte_limit: int) -> list[str]:
+    """``markdown`` as the SeaTalk messages it will take: chunked on paragraph
+    (never inside a fence), rendered, then byte-split — render before the byte
+    split so escaping cannot push a piece past the platform's byte cap."""
+    return [
+        piece
+        for chunk in chunk_text(markdown, char_limit)
+        for piece in split_to_byte_limit(markdown_to_seatalk(chunk), byte_limit)
+    ]
+
+
+def numbered(piece: str, index: int, total: int) -> str:
+    """Head every piece after the first of a reply cut into several with
+    ``(2/3)`` (spec channels "Shape a reply for what the chat can show")."""
+    return f"({index + 1}/{total})\n{piece}" if index > 0 and total > 1 else piece
+
+
 async def send_text_pieces(
     send: Send,
     chat_id: str,
@@ -86,15 +109,13 @@ async def send_text_pieces(
         )
         return SentMessage(message_id=str(result.get("message_id", "")))
     last = ""
-    for chunk in chunk_text(markdown, char_limit):
-        # Render before the byte split so escaping cannot push a piece past the
-        # platform's byte cap.
-        for piece in split_to_byte_limit(markdown_to_seatalk(chunk), byte_limit):
-            result = await send(
-                chat_id,
-                {"tag": "text", "text": {"format": 1, "content": piece}},
-                thread_id,
-                chat_kind,
-            )
-            last = str(result.get("message_id", ""))
+    pieces = rendered_pieces(markdown, char_limit, byte_limit)
+    for i, piece in enumerate(pieces):
+        result = await send(
+            chat_id,
+            {"tag": "text", "text": {"format": 1, "content": numbered(piece, i, len(pieces))}},
+            thread_id,
+            chat_kind,
+        )
+        last = str(result.get("message_id", ""))
     return SentMessage(message_id=last)

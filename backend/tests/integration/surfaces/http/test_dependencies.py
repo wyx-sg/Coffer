@@ -85,7 +85,7 @@ _PROVIDERS: list[_Provider] = [
     *_pairs(skill_deps, "_skill_service"),
     # knowledge kind — two services, not three: there is no search service to
     # provide any more (spec knowledge "Expose exactly one knowledge tool").
-    *_pairs(knowledge_deps, "_knowledge_service", "_ingest_service"),
+    *_pairs(knowledge_deps, "_knowledge_service", "_ingest_service", "_history_service"),
     # memory kind
     *_pairs(memory_deps, "_memory_service", "_memory_delivery_service"),
     # turn platform (chat)
@@ -106,8 +106,12 @@ _PROVIDERS: list[_Provider] = [
 # Providers a surface works without: the getter answers ``None`` while unset
 # instead of raising. The chat routes mirror a web reply into its channel only
 # when the channel kind has published its mirror (spec chat "Mirror a web reply
-# into the channel it came from").
-_OPTIONAL_PROVIDERS: list[_Provider] = [*_pairs(chat_deps, "_channel_mirror")]
+# into the channel it came from"), and a channel turn's note says more than the
+# channel's name only once it has published its note reader (spec channels "Tell
+# a channel-driven agent it is on a chat channel").
+_OPTIONAL_PROVIDERS: list[_Provider] = [
+    *_pairs(chat_deps, "_channel_mirror", "_channel_note_reader")
+]
 
 _MODULES: list[ModuleType] = sorted(
     {mod for mod, _a, _g, _s in _PROVIDERS}, key=lambda m: m.__name__

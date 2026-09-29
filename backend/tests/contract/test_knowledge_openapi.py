@@ -43,6 +43,16 @@ _EXPECTED_ROUTES = {
     # name-addressed on purpose: their arguments are filesystem paths.
     ("POST", "/api/v1/knowledge/collections/{uid}/curate"),
     ("POST", "/api/v1/knowledge/upload"),
+    # History (see "Keep every document's history and undo a pass as a whole",
+    # "Follow knowledge changes across collections"): a document's versions and
+    # one version's diff, restoring one, the recent changes and one change in
+    # full, and undoing a curation pass. None creates a document at a path.
+    ("GET", "/api/v1/knowledge/history"),
+    ("GET", "/api/v1/knowledge/history/diff"),
+    ("POST", "/api/v1/knowledge/history/restore"),
+    ("GET", "/api/v1/knowledge/changes"),
+    ("GET", "/api/v1/knowledge/changes/{version}"),
+    ("POST", "/api/v1/knowledge/changes/{version}/undo"),
 }
 
 #: Exactly one (see "Expose exactly one knowledge tool"). Upload is

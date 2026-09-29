@@ -22,7 +22,7 @@ from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.domain.connection import CODEX_ENV_KEY
 from coffer.infrastructure.chat.adapter_support import (
-    ChannelNameResolver,
+    ChannelNoteResolver,
     HomeEnvResolver,
     MemoryContextComposer,
     ModelLister,
@@ -69,7 +69,7 @@ class CodexAppServerProvider:
         transcriber_factory: TranscriberFactory | None = None,
         list_models: ModelLister | None = None,
         compose_memory_context: MemoryContextComposer | None = None,
-        resolve_channel_name: ChannelNameResolver | None = None,
+        resolve_channel: ChannelNoteResolver | None = None,
         resolve_home_env: HomeEnvResolver | None = None,
     ) -> None:
         self._conversations = conversations
@@ -94,7 +94,7 @@ class CodexAppServerProvider:
         # prompt reads. ``None`` ⇒ a channel turn still gets its channel append,
         # just without naming the channel — the uid is what decides that it IS a
         # channel turn, and the label was only ever colour.
-        self._resolve_channel_name = resolve_channel_name
+        self._resolve_channel = resolve_channel
         # Points the spawned app-server at the agent's own config dir
         # (CODEX_HOME) when it is not ~/.codex. ``None`` ⇒ the default dir.
         self._resolve_home_env = resolve_home_env
@@ -162,7 +162,8 @@ class CodexAppServerProvider:
             model=config.model,
             list_models=self._list_models,
             compose_memory=self._compose_memory_context,
-            resolve_channel_name=self._resolve_channel_name,
+            resolve_channel=self._resolve_channel,
+            conversation_id=conversation_id,
         )
 
         return CodexAppServerAdapter(

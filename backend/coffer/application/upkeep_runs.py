@@ -28,6 +28,7 @@ on the way out.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import threading
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
@@ -49,6 +50,11 @@ class UpkeepRun:
     kind: str
     name: str
     started_at: datetime
+    #: For a run that works through several items one pass at a time (a
+    #: collection's Curate now): how many it has done of how many. ``None``
+    #: for a pass that is one unit of work.
+    done: int | None = None
+    total: int | None = None
 
 
 class UpkeepRunRegistry:
@@ -82,6 +88,14 @@ class UpkeepRunRegistry:
         """Give the key back. Releasing a key nobody holds is a no-op."""
         with self._lock:
             self._running.pop((kind, name), None)
+
+    def progress(self, kind: str, name: str, *, done: int, total: int) -> None:
+        """Record how far a multi-item run has got. A key nobody holds is left
+        alone: the run has ended, and progress must not resurrect it."""
+        with self._lock:
+            key = (kind, name)
+            if key in self._running:
+                self._running[key] = dataclasses.replace(self._running[key], done=done, total=total)
 
     # --- reading it ---------------------------------------------------------
 

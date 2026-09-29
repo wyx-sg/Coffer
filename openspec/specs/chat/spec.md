@@ -881,7 +881,10 @@ being handed over as a file attachment.
 ### Requirement: Compose the agent's prompt appends in one place
 The appends an agent receives on top of its own prompt MUST be composed in
 **one** place, shared by every provider, in a fixed order: the note telling a
-channel-driven agent it is on a chat channel; then, for a channel-driven turn
+channel-driven agent it is on a chat channel — written from facts only the
+channel kind holds (the platform, the chat kind, what renders there;
+[channels](../channels/spec.md) "Tell a channel-driven agent it is on a chat
+channel"), which it hands over as a value chat reads without importing it; then, for a channel-driven turn
 only, the memory digest, whose content is memory's own ([memory](../memory/spec.md) "Deliver to channel turns through the system prompt") and
 whose injection point is this one; then the model note of "Tell the agent which
 model it is on", on every turn. Composing it here is what lets memory reach an

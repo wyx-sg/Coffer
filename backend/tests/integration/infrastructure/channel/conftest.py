@@ -85,6 +85,10 @@ class FakeTelegram:
         #: Canned ``result`` per method for the ones with no bespoke branch
         #: below (getMe, getMyDescription, …) — consulted before the {} default.
         self.results: dict[str, Any] = {}
+        #: Whether this server knows Bot API 10.1's sendRichMessageDraft. NO by
+        #: default, like the other 10.x surfaces: the plain draft is what most
+        #: draft tests exercise, and the rich one latches off on its refusal.
+        self.supports_rich_drafts = False
         #: Method → the description a 400 refusal of it carries, for the
         #: methods a test scripts the platform to refuse outright.
         self.refusals: dict[str, str] = {}
@@ -129,6 +133,10 @@ class FakeTelegram:
             except TimeoutError:
                 batch = []
             return JSONResponse(content={"ok": True, "result": batch})
+        if method == "sendRichMessageDraft" and not self.supports_rich_drafts:
+            return JSONResponse(
+                status_code=404, content={"ok": False, "description": "Not Found: method not found"}
+            )
         if method == "sendMessageDraft" and not self.supports_drafts:
             return JSONResponse(
                 status_code=404, content={"ok": False, "description": "Not Found: method not found"}

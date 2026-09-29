@@ -184,6 +184,13 @@ _STATUS: dict[str, int] = {
     # knowledge "Save a document edited in the web UI"): the file moved on
     # disk since the editor read it, and is left as it is.
     "KNOWLEDGE_FILE_CONFLICT": 409,
+    # History (spec knowledge "Keep every document's history and undo a pass as
+    # a whole"): no git on this machine is a state of the machine, an unknown
+    # version a missing thing, an undo over a later change a conflict.
+    "KNOWLEDGE_HISTORY_UNAVAILABLE": 503,
+    "KNOWLEDGE_VERSION_NOT_FOUND": 404,
+    "KNOWLEDGE_NOT_A_PASS": 400,
+    "KNOWLEDGE_UNDO_CONFLICT": 409,
     # Also the answer for a path that cannot name a document — the
     # collection itself, its README, or anything hidden (spec knowledge "Guard
     # every path through one module").
@@ -271,6 +278,11 @@ def _details_for(exc: errors.CofferError) -> dict[str, Any]:
     approval_ids = getattr(exc, "approval_ids", None)
     if approval_ids:
         out["approval_ids"] = list(approval_ids)
+    # An error that carries its own machine-readable context (a stale save's
+    # disk version, the document an undo would overwrite) hands it over whole.
+    extra = getattr(exc, "error_details", None)
+    if isinstance(extra, dict):
+        out.update(extra)
     return out
 
 

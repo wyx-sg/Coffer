@@ -13,9 +13,11 @@ import contextlib
 import os
 import pathlib
 import re
+import tempfile
 from collections.abc import Sequence
 
 from coffer.application.channel.ports import ChannelAdapter
+from coffer.application.channel.reply_shape import ReplyFile
 from coffer.domain.chat.attachment import Attachment
 
 #: A line-anchored ``MEDIA:/abs/path`` sentinel, with an optional ``| caption``
@@ -123,3 +125,33 @@ async def deliver_media(
         sent += 1
         out = out.replace(match.group(0), "", 1).strip()
     return out, sent
+
+
+async def send_reply_files(
+    adapter: ChannelAdapter,
+    chat_id: str,
+    files: Sequence[ReplyFile],
+    *,
+    thread_id: str = "",
+    chat_kind: str = "direct",
+) -> int:
+    """Upload the files a shaped reply carries beside its text (a table's CSV,
+    a long log — see "Shape a reply for what the chat can show"), after the
+    text that points at them. Each is written to a fresh temporary directory
+    under its own name, so the chat shows ``table-1.csv`` rather than a random
+    one. Best-effort: a file that fails is skipped, the reply already landed."""
+    if not files or not adapter.capabilities.supports_media:
+        return 0
+    staged = pathlib.Path(tempfile.mkdtemp(prefix="coffer-reply-"))
+    sent = 0
+    for file in files:
+        path = staged / file.filename
+        try:
+            path.write_text(file.content, encoding="utf-8")
+            await adapter.send_media(
+                chat_id, str(path), as_photo=False, thread_id=thread_id, chat_kind=chat_kind
+            )
+        except Exception:
+            continue
+        sent += 1
+    return sent

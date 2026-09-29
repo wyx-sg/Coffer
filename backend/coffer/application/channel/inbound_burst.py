@@ -96,6 +96,7 @@ def merge_parts(parts: list[BurstPart]) -> QueuedInbound:
         reply_to_message_id=last.item.reply_to_message_id,
         mention_user_id=last.item.mention_user_id,
         mention_user_email=last.item.mention_user_email,
+        mention_user_name=last.item.mention_user_name,
         title_hint=title_hint,
     )
 

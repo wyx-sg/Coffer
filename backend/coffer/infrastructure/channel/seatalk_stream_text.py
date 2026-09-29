@@ -7,6 +7,7 @@ and a finished one is cut at a paragraph the rest can follow from.
 
 from __future__ import annotations
 
+from coffer.application.channel.turn_status import LIVE_SEPARATOR, split_snapshot
 from coffer.infrastructure.channel.render import (
     chunk_text,
     escape_seatalk_literal,
@@ -46,6 +47,14 @@ def interim_snapshot(text: str) -> str:
     """
     prefix, body = split_leading_mention(text)
     budget = _STREAM_BYTE_BUDGET - len(prefix.encode("utf-8"))
+    block, answer = split_snapshot(body)
+    if answer:
+        # The status block stays whole at the head; only the answer under it
+        # gives up its oldest words.
+        head = f"{block}\n{LIVE_SEPARATOR}\n"
+        room = budget - len(head.encode("utf-8"))
+        if room > 0:
+            return prefix + escape_seatalk_literal(head + _clip_tail_bytes(answer, room))
     return prefix + escape_seatalk_literal(_clip_tail_bytes(body, budget))
 
 

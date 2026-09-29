@@ -338,7 +338,7 @@ def test_a_note_alone_still_gives_the_turn_text() -> None:
 @pytest.mark.acceptance(
     spec="channels/telegram", scenario="a telegram group message carries from.id and the chat title"
 )
-def test_a_group_message_carries_from_id_and_title_and_no_mention_id():
+def test_a_group_message_carries_from_id_as_both_gate_and_mention_id():
     built = build_inbound_message(
         _message(
             chat={"id": -100123, "type": "supergroup", "title": "Ops room"},
@@ -353,8 +353,8 @@ def test_a_group_message_carries_from_id_and_title_and_no_mention_id():
     )
     assert built.sender_id == "4242"
     assert built.chat_title == "Ops room"
-    # Telegram spells a mention with a display name too, so the reply carries none.
-    assert built.sender_mention_id == ""
+    # Telegram addresses a member by one id for both; the mention adds the name.
+    assert built.sender_mention_id == "4242"
 
 
 # -- /cmd@botname (spec channels/telegram "Treat a command addressed to this bot

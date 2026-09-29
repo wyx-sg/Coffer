@@ -19,7 +19,7 @@ from coffer.application.chat.service import ConversationRepo
 from coffer.domain.chat.agent_config import AgentConfig
 from coffer.domain.chat.errors import AgentConfigRejected, ConversationNotFound
 from coffer.infrastructure.chat.adapter_support import (
-    ChannelNameResolver,
+    ChannelNoteResolver,
     HomeEnvResolver,
     MemoryContextComposer,
     ModelLister,
@@ -71,7 +71,7 @@ class ClaudeSdkProvider:
         list_models: ModelLister | None = None,
         transcriber_factory: TranscriberFactory | None = None,
         compose_memory_context: MemoryContextComposer | None = None,
-        resolve_channel_name: ChannelNameResolver | None = None,
+        resolve_channel: ChannelNoteResolver | None = None,
         resolve_home_env: HomeEnvResolver | None = None,
     ) -> None:
         self._conversations = conversations
@@ -91,7 +91,7 @@ class ClaudeSdkProvider:
         # prompt reads. ``None`` ⇒ a channel turn still gets its channel append,
         # just without naming the channel — the uid is what decides that it IS a
         # channel turn, and the label was only ever colour.
-        self._resolve_channel_name = resolve_channel_name
+        self._resolve_channel = resolve_channel
         # Points the spawned Claude Code at the agent's own config dir
         # (CLAUDE_CONFIG_DIR) when it is not ~/.claude, so a turn reads the
         # skills, MCP entry and settings Coffer put there. ``None`` ⇒ the
@@ -149,7 +149,8 @@ class ClaudeSdkProvider:
             model=config.model,
             list_models=self._list_models,
             compose_memory=self._compose_memory_context,
-            resolve_channel_name=self._resolve_channel_name,
+            resolve_channel=self._resolve_channel,
+            conversation_id=conversation_id,
         )
 
         # Overrides only: the SDK merges ``options.env`` over the daemon's own

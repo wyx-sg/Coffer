@@ -42,12 +42,13 @@ export type CollectionListOut = Schemas["CollectionListOut"];
 export type TreeOut = Schemas["TreeOut"];
 
 /**
- * What one curation pass did. `status` is what the page reports: every one of
- * them is a 200, because a vault with no internal model configured, or with
- * nothing pending, is an ordinary state rather than a failed request (see
- * "Promote material directly when no model is configured").
+ * What Curate now did: every pass it ran, in order — one per pending item
+ * until none was left, stopping at the first failed pass (see "Run curation on
+ * a sweep and on demand"). `total` is how many items were pending when it
+ * started. Every status is a 200: no model, or nothing pending, is an ordinary
+ * state rather than a failed request.
  */
-export type CurationOut = Schemas["CurationOut"];
+export type CurationRunOut = Schemas["CurationRunOut"];
 
 /**
  * What one successful `POST /knowledge/upload` produced: either a document

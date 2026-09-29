@@ -74,6 +74,14 @@ class _CommonChannelFields(BaseModel):
     # no text, before the held burst runs. 0 runs every message as its own turn.
     wait_after_text_seconds: float = Field(default=1.5, ge=0, le=60)
     wait_after_forward_seconds: float = Field(default=5.0, ge=0, le=60)
+    # "Show a turn's working state as one status line": whether the live status
+    # lists the turn's step lines under its header. Off keeps the header (time,
+    # step count) and the narration line and hides the steps — e.g. in a group.
+    show_steps: bool = True
+    # "Ping the asker when a long turn ends": a turn that ran at least this many
+    # seconds ends with one short completion line where its answer would not
+    # notify on its own. 0 turns the ping off.
+    notify_after_seconds: float = Field(default=90.0, ge=0, le=3600)
     # The working directories `/dir` may switch a conversation into (spec
     # channels "Choose the working directory from chat"): absolute paths, each
     # also admitting the directories beneath it. Empty means the channel's
