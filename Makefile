@@ -136,6 +136,7 @@ lint:
 	$(PY) scripts/check_removed_commands.py
 	$(PY) scripts/check_platform_calls.py
 	$(PY) scripts/check_agent_type_branches.py
+	$(PY) scripts/check_frontend_colors.py
 # Both trees are checked under the project's rules. `backend/**` gets them
 # from backend/pyproject.toml; `evals/**` used to get ruff's built-in defaults
 # (line-length 88, the starter rule set) because nothing above it carried a

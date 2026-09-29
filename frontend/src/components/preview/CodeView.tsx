@@ -43,11 +43,11 @@ interface CodeViewProps {
 const baseTheme = EditorView.theme({
   "&": { backgroundColor: "transparent", color: "inherit", fontSize: "0.75rem" },
   "&.cm-focused": { outline: "none" },
-  ".cm-content": { fontFamily: "var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace)" },
+  ".cm-content": { fontFamily: '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace' },
   ".cm-scroller": { lineHeight: "1.5" },
   ".cm-gutters": {
     backgroundColor: "transparent",
-    color: "hsl(var(--muted-foreground))",
+    color: "rgb(var(--text-subtle))",
     border: "none",
   },
   ".cm-cursor": { borderLeftColor: "transparent" },

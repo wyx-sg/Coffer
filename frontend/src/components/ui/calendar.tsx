@@ -12,19 +12,19 @@ import { cn } from "@/lib/utils";
  * no fragile per-element classNames mapping to drift across versions.
  */
 const THEME_VARS = {
-  "--rdp-accent-color": "hsl(var(--primary))",
-  "--rdp-accent-background-color": "hsl(var(--accent))",
+  "--rdp-accent-color": "rgb(var(--accent))",
+  "--rdp-accent-background-color": "rgb(var(--surface-selected))",
   "--rdp-day-width": "2.25rem",
   "--rdp-day-height": "2.25rem",
   "--rdp-day_button-width": "2.25rem",
   "--rdp-day_button-height": "2.25rem",
-  "--rdp-day_button-border-radius": "var(--radius)",
-  "--rdp-selected-border": "2px solid hsl(var(--primary))",
-  "--rdp-today-color": "hsl(var(--primary))",
-  "--rdp-range_start-color": "hsl(var(--primary-foreground))",
-  "--rdp-range_end-color": "hsl(var(--primary-foreground))",
-  "--rdp-range_middle-background-color": "hsl(var(--accent))",
-  "--rdp-range_middle-color": "hsl(var(--accent-foreground))",
+  "--rdp-day_button-border-radius": "7px",
+  "--rdp-selected-border": "2px solid rgb(var(--accent))",
+  "--rdp-today-color": "rgb(var(--accent))",
+  "--rdp-range_start-color": "rgb(var(--on-accent))",
+  "--rdp-range_end-color": "rgb(var(--on-accent))",
+  "--rdp-range_middle-background-color": "rgb(var(--surface-selected))",
+  "--rdp-range_middle-color": "rgb(var(--text))",
 } as React.CSSProperties;
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>;
