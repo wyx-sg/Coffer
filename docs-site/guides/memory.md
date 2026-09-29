@@ -145,11 +145,15 @@ What gets installed:
 | Agent | Settings file | Event |
 | --- | --- | --- |
 | Claude Code | `~/.claude/settings.json` | `SessionStart` (on startup, resume, clear and compact), with a 10-second timeout |
-| Codex | `~/.codex/hooks.json` | `UserPromptSubmit`, guarded to fire once per session, because Codex has no session-start event |
+| Codex | `~/.codex/hooks.json` | `SessionStart` (on startup, resume, clear and compact), with a 10-second timeout; it prints the JSON Codex reads a session-start hook's context from |
 
-The entry runs `coffer memory context --agent-uid <uid> --cwd "$PWD"` and is marked with `coffer-memory`, so Coffer can find and remove exactly its own entry. Installing twice leaves one entry; removing takes out only Coffer's entry and leaves every other hook and setting untouched. The hook lives in the agent's settings, not in its memory files.
+The entry runs `coffer memory context --agent-uid <uid> --cwd "$PWD"`, calling `coffer` by its full path (usually `~/.coffer/bin/coffer`), because the shell an agent runs hooks in may not have `~/.coffer/bin` on its `PATH`. It is marked with `coffer-memory`, so Coffer can find and remove exactly its own entry. Installing twice leaves one entry, and removing takes out only Coffer's entry and leaves every other hook and setting untouched. The hook lives in the agent's settings, not in its memory files.
 
-At every start the daemon checks installed hooks and rewrites any whose command is out of date for the running build. It never adds a hook to an agent that does not have one.
+::: warning Codex needs you to approve the hook
+Codex runs a hook only after you have approved it, and it skips an unapproved one without saying so. After connecting a Codex agent, and again after any Coffer update that changes the hook's command, open Codex, run `/hooks` and trust Coffer's hook. Coffer does not approve its own hook. The agent's **Hooks** tab, `coffer agent hooks <name>` and the attention list all show when the approval is missing.
+:::
+
+The daemon keeps installed hooks current. On every reconcile pass it rewrites any hook whose command or event is out of date for the running build; an older build's Codex hook on `UserPromptSubmit` is moved to `SessionStart` this way. It never adds a hook to an agent that does not have one.
 
 ### What the agent receives
 
@@ -168,7 +172,7 @@ coffer memory context --agent-uid <uid> --cwd ~/src/payments-api
 
 `coffer agent show <name>` prints an agent's uid. The payload is the same for every agent; the uid only records which agent's hook fired.
 
-The payload is capped at 12,000 tokens by default (`--ceiling-tokens` overrides it). When the index does not fit, the oldest lines are dropped first, the current repository's lines are kept in preference to `global`'s, and the text says how many lines were dropped and which folder still holds them — every note stays readable as a file.
+What a hook prints is capped at 9,500 bytes, which is under both agents' limits for a hook's output: Claude Code shows the model only a short preview of anything past about 10,000 characters, and Codex cuts the middle out of anything past about 2,500 tokens. A large vault's index is bigger than that. When the index does not fit, the oldest lines are dropped first, the current repository's lines are kept in preference to `global`'s, and the text says how many lines were dropped and which folder still holds them — every note stays readable as a file.
 
 Every time a hook fires, Coffer records an audit event. The agent's **Memory** tab shows only whether the hook is installed; to see whether it is firing, look on the [Activity](/guides/activity) page or run:
 

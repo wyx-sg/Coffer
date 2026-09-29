@@ -290,7 +290,7 @@ a leading no-op shell command, so detection never depends on `argv[0]`:
 | Agent type | File | Event | Guard |
 |---|---|---|---|
 | Claude Code | `settings.json` | `SessionStart`, matcher `startup\|resume\|clear\|compact` — Claude Code's own matcher vocabulary for that event | none needed |
-| Codex | `hooks.json` | `UserPromptSubmit` | once-per-session, keyed on the agent process, since Codex publishes no session id |
+| Codex | `hooks.json` | `SessionStart`, the same matcher; the command asks for the event's JSON `additionalContext` | none needed; Codex runs it only once the user has approved it in `/hooks`, and Coffer reads that approval from `config.toml`'s `[hooks.state]` without writing it |
 
 The hook is one part — `memory_hook` — of the agent's Coffer connection
 (spec agent-registry "Connect an agent to Coffer in one action"), and its state

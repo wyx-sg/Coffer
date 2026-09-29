@@ -18,6 +18,11 @@ partition is served to every agent, so ``POST
 /context`` composes the same payload whoever fired it. The agent uid identifies
 the caller for the audit log and decides nothing about the content.
 
+**The payload is bounded for a hook.** This is the route an installed hook
+reaches, and both agents cut a hook's output past about 10,000 characters
+(Claude Code) or 10,000 UTF-8 bytes (Codex); so the text is composed under
+``DELIVERY_CEILING_BYTES`` whoever asks, and a preview shows what a hook gets.
+
 **The route records no audit event of its own** beyond the fire
 ``DeliveryService.record_fired`` writes.
 """
@@ -29,6 +34,7 @@ from fastapi import APIRouter, Depends
 from coffer.application.memory.context import DEFAULT_CEILING_TOKENS, compose_context
 from coffer.application.memory.delivery import DeliveryService
 from coffer.application.memory.service import MemoryService
+from coffer.domain.memory.delivery import DELIVERY_CEILING_BYTES
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.memory.dependencies import (
     get_memory_delivery_service,
@@ -66,6 +72,7 @@ async def context(
         svc,
         cwd=body.cwd,
         ceiling_tokens=body.ceiling_tokens or DEFAULT_CEILING_TOKENS,
+        ceiling_bytes=DELIVERY_CEILING_BYTES,
     )
     if body.record_fired and body.agent_uid:
         await delivery.record_fired(body.agent_uid)

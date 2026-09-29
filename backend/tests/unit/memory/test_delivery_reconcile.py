@@ -19,10 +19,12 @@ from coffer.application.audit_service import AuditService
 from coffer.application.memory.delivery import DeliveryService
 from coffer.application.memory.delivery_reconcile import TARGET, DeliveryHookTarget
 from coffer.application.reconcile.reconciler import Reconciler
+from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.memory.delivery import MARKER
 from coffer.domain.reconcile import Disposition, Op, Outcome, PassReport, Trigger
-from tests.support.facets import agent_catalog
+from coffer.infrastructure.memory.delivery.codex import current_hash, trust_key
+from tests.support.facets import TEST_COFFER_CLI, agent_catalog
 from tests.unit.memory.test_delivery_service import (
     _CC_SETTINGS_PATH,
     _CC_UID,
@@ -124,7 +126,7 @@ async def test_a_stale_command_is_rewritten_at_boot() -> None:
     assert result.change.decision.reason_code == "stale_command"
     assert result.outcome is Outcome.APPLIED
     assert await rig.command(_CC_UID) == (
-        f': {MARKER}; coffer memory context --agent-uid {_CC_UID} --cwd "$PWD"'
+        f': {MARKER}; {TEST_COFFER_CLI} memory context --agent-uid {_CC_UID} --cwd "$PWD"'
     )
     repairs = rig.events(AuditEventType.MEMORY_DELIVERY_INSTALLED)
     assert [e.actor for e in repairs] == ["ui", "system"]
@@ -281,3 +283,78 @@ async def test_a_failed_audit_removes_a_file_the_install_created() -> None:
     assert result.outcome is Outcome.FAILED
     assert _CC_SETTINGS_PATH not in rig.store._files
     assert rig.store.deletes == [_CC_SETTINGS_PATH]
+
+
+# ---------------------------------------------------------------------------
+# Codex: the older build's hook, and trust
+# ---------------------------------------------------------------------------
+
+#: What a build before SessionStart support installed for Codex.
+_LEGACY_CODEX = (
+    f': {MARKER}; f="${{TMPDIR:-/tmp}}/.coffer-memory-fired-$PPID"; '
+    f'[ -e "$f" ] || {{ : > "$f"; coffer memory context --agent-uid {_CODEX_UID} '
+    '--cwd "$PWD"; }'
+)
+_CODEX_CONFIG_PATH = _CODEX_HOOKS_PATH.with_name("config.toml")
+
+
+def _approve_codex(rig: _Rig) -> None:
+    """What the user's approval in Codex's /hooks records."""
+    text = rig.store._files[_CODEX_HOOKS_PATH]
+    adapter = agent_catalog().delivery_hook(AgentType.CODEX)
+    assert adapter is not None
+    hook = adapter.find(text)
+    assert hook is not None
+    key = trust_key(str(_CODEX_HOOKS_PATH), hook)
+    rig.store._files[_CODEX_CONFIG_PATH] = (
+        f'[hooks.state."{key}"]\ntrusted_hash = "{current_hash(hook)}"\n'
+    )
+
+
+@pytest.mark.acceptance(
+    spec="memory", scenario="an older build's Codex hook is moved to SessionStart"
+)
+async def test_an_older_builds_codex_hook_is_moved_to_session_start_on_a_period() -> None:
+    """The migration needs no person: the entry an older build left on
+    UserPromptSubmit differs in event and command, so a period pass rewrites
+    it — the foreign hook beside it stays."""
+    rig = _Rig(connected=[_CODEX_UID])
+    foreign = {"hooks": [{"type": "command", "command": "/skynet/beforeSubmitPrompt.sh"}]}
+    legacy = {"hooks": [{"type": "command", "command": _LEGACY_CODEX, "timeout": 10}]}
+    rig.store._files[_CODEX_HOOKS_PATH] = json.dumps(
+        {"hooks": {"UserPromptSubmit": [foreign, legacy]}}
+    )
+
+    result = _only(await rig.run(Trigger.PERIOD))
+
+    assert result.change.difference.op is Op.MODIFY
+    assert result.change.difference.changed_params == ("command", "event", "trust")
+    assert result.change.decision.reason_code == "stale_command"
+    assert result.outcome is Outcome.APPLIED
+    data = json.loads(rig.store._files[_CODEX_HOOKS_PATH])
+    assert data["hooks"]["UserPromptSubmit"] == [foreign]
+    (entry,) = data["hooks"]["SessionStart"]
+    assert entry["hooks"][0]["command"] == await rig.command(_CODEX_UID)
+    assert entry["hooks"][0]["command"].startswith(f": {MARKER}; {TEST_COFFER_CLI} ")
+
+
+@pytest.mark.acceptance(
+    spec="memory", scenario="a current Codex hook Codex has not approved is reported, not written"
+)
+async def test_an_untrusted_codex_hook_is_reported_and_never_approved_by_coffer() -> None:
+    rig = _Rig(connected=[_CODEX_UID])
+    await rig.delivery.install(_CODEX_UID, actor="ui")
+    writes = len(rig.store.writes)
+
+    for trigger in (Trigger.PERIOD, Trigger.MANUAL):
+        result = _only(await rig.run(trigger))
+        assert result.change.difference.changed_params == ("trust",)
+        assert result.change.decision.disposition is Disposition.REPORT
+        assert result.change.decision.reason_code == "hook_untrusted"
+        assert "/hooks" in result.change.decision.reason
+        assert result.outcome is Outcome.PLANNED
+    assert len(rig.store.writes) == writes
+    assert _CODEX_CONFIG_PATH not in rig.store._files
+
+    _approve_codex(rig)
+    assert (await rig.run(Trigger.PERIOD)).results == ()

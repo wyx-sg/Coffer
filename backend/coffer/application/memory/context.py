@@ -216,20 +216,32 @@ def _repository_of(partitions: Sequence[PartitionView], name: str) -> str:
     return ""
 
 
-class _Ceiling:
-    """Tracks the tokens left, with each section's trim notice reserved up
-    front so a trim can never crowd out the line that announces it."""
+def _line_bytes(line: str) -> int:
+    """What one line costs against a byte ceiling: its UTF-8 bytes and the
+    newline that joins it to the next."""
+    return len(line.encode("utf-8")) + 1
 
-    def __init__(self, total_tokens: int) -> None:
+
+class _Ceiling:
+    """Tracks the tokens — and, when a byte ceiling is set, the UTF-8 bytes —
+    left, with each section's trim notice reserved up front so a trim can
+    never crowd out the line that announces it."""
+
+    def __init__(self, total_tokens: int, total_bytes: int | None = None) -> None:
         self._remaining = total_tokens
+        self._bytes = total_bytes
 
     def reserve(self, text: str) -> None:
-        self._remaining -= estimate_tokens(text)
+        self.spend(text)
 
     def spend(self, text: str) -> None:
         self._remaining -= estimate_tokens(text)
+        if self._bytes is not None:
+            self._bytes -= _line_bytes(text)
 
     def fits(self, text: str) -> bool:
+        if self._bytes is not None and _line_bytes(text) > self._bytes:
+            return False
         return estimate_tokens(text) <= self._remaining
 
 
@@ -254,6 +266,7 @@ async def compose_context(
     *,
     cwd: str,
     ceiling_tokens: int = DEFAULT_CEILING_TOKENS,
+    ceiling_bytes: int | None = None,
 ) -> ComposedContext:
     """Build the session-start payload (see "Deliver the index and the notes path at
     session start"): what is known about the
@@ -269,6 +282,11 @@ async def compose_context(
     delivered, on a live vault of 189 entries, 8 lines of which **none** were
     about the project the session was open in. The partition a session is
     open in is the one it is about.
+
+    ``ceiling_bytes`` bounds the whole text in UTF-8 bytes as well. A hook
+    delivery sets it (``domain.memory.delivery.DELIVERY_CEILING_BYTES``),
+    because an agent cuts a hook's output that is longer, and the cut loses
+    exactly the repository lines this order puts first.
 
     With nothing to deliver, the text is empty rather than a bare header:
     A channel turn appends this only when it is non-empty, and an
@@ -319,7 +337,7 @@ async def compose_context(
     )
     root_line = _root_line()
 
-    ceiling = _Ceiling(ceiling_tokens)
+    ceiling = _Ceiling(ceiling_tokens, ceiling_bytes)
     for scaffolding in (header, global_heading, project_heading, closing, root_line):
         ceiling.reserve(scaffolding)
     if project_visible:

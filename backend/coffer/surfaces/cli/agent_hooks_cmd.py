@@ -2,8 +2,8 @@
 
 CLI parity for ``GET /agents/{uid}/hooks`` (spec agent-registry "List every
 hook in the agent's native config"): one line per hook with its event,
-matcher, source and command, Coffer's own marked, then Coffer's hook health
-and when it last fired. Read only.
+matcher, source and command, Coffer's own marked, then Coffer's hook health,
+whether the agent will run it (its trust), and when it last fired. Read only.
 
 Its own module so ``agent_cmd`` stays under the backend file-size cap;
 ``agent_cmd`` calls :func:`attach`.
@@ -18,6 +18,15 @@ import typer
 
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._resolve import resolve_uid
+
+#: What to tell the user when the agent will not run Coffer's hook. Coffer
+#: never approves its own hook: that is the user's act in the agent.
+_NEEDS_APPROVAL = {
+    "untrusted": "Coffer's hook needs approval in Codex: run /hooks there and trust it.",
+    "modified": "Coffer's hook changed since you approved it: run /hooks in Codex and trust it.",
+    "disabled": "Coffer's hook is switched off in Codex: turn it back on with /hooks.",
+    "unknown": "Could not read Codex's hook trust record (config.toml).",
+}
 
 
 def _line(hook: dict[str, Any]) -> str:
@@ -49,7 +58,11 @@ def hooks(
     own = data.get("coffer_hook")
     if own is not None:
         fired = own.get("last_fired_at") or "never"
-        typer.echo(f"coffer hook: {own['health']} on {own['event']}, last fired {fired}")
+        trust = own.get("trust") or "not_required"
+        trusted = "" if trust == "not_required" else f", trust {trust}"
+        typer.echo(f"coffer hook: {own['health']} on {own['event']}{trusted}, last fired {fired}")
+        if own["health"] != "missing" and trust in _NEEDS_APPROVAL:
+            typer.echo(_NEEDS_APPROVAL[trust])
     for err in data.get("parse_errors") or []:
         typer.echo(f"could not parse {err['path']}: {err['error']}", err=True)
 

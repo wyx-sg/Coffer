@@ -246,18 +246,17 @@ async def test_install_records_an_audit_event_with_the_actor(
 
 
 @pytest.mark.acceptance(spec="memory", scenario="hook installation is marker-scoped and removable")
-async def test_install_for_codex_writes_a_guarded_entry_into_hooks_json(
+async def test_install_for_codex_writes_a_session_start_entry_into_hooks_json(
     svc: DeliveryService, store: FakeStore
 ) -> None:
-    """Codex is delivered into its own file, on its own event, with a guard.
+    """Codex is delivered into its own file, on SessionStart, as JSON.
 
-    Three things are per-agent-type, and all three have to hold at once or the
-    hook is installed somewhere Codex never reads: the file is
+    Three things are per-agent-type, and all three have to hold at once or
+    Codex never runs the hook or never shows its output: the file is
     ``<config_dir>/hooks.json`` (not Claude Code's ``settings.json``), the
-    event is ``UserPromptSubmit`` (Codex has no session-start event at all),
-    and because that event fires on EVERY prompt the installed command carries
-    a once-per-session lock-file guard keyed on the invoking process. Without
-    the guard, Coffer's context would be prepended to every single prompt.
+    event is ``SessionStart`` (once per session, so no guard — the old
+    ``$PPID`` guard let only the first session of a shared app-server fire),
+    and the CLI is asked for the event's JSON ``additionalContext``.
     """
     status = await svc.install(_CODEX_UID, actor="tester")
 
@@ -265,16 +264,14 @@ async def test_install_for_codex_writes_a_guarded_entry_into_hooks_json(
     assert _CC_SETTINGS_PATH not in store._files
 
     written = json.loads(store._files[_CODEX_HOOKS_PATH])
-    assert set(written["hooks"]) == {"UserPromptSubmit"}
-    entries = written["hooks"]["UserPromptSubmit"]
+    assert set(written["hooks"]) == {"SessionStart"}
+    entries = written["hooks"]["SessionStart"]
     assert len(entries) == 1
     command = entries[0]["hooks"][0]["command"]
     assert command == status.command
     assert MARKER in command
-    # The once-per-session guard: a $PPID-keyed lock file, tested before the
-    # invocation runs and created on the first fire.
-    assert "$PPID" in command
-    assert "[ -e " in command
+    assert command.endswith("--hook-event SessionStart")
+    assert "$PPID" not in command
 
 
 async def test_status_never_writes(svc: DeliveryService, store: FakeStore) -> None:
@@ -346,7 +343,7 @@ async def test_status_reports_installed_after_install(svc: DeliveryService) -> N
     await svc.install(_CODEX_UID, actor="tester")
     status = await svc.status(_CODEX_UID)
     assert status.installed is True
-    assert status.event == "UserPromptSubmit"
+    assert status.event == "SessionStart"
 
 
 async def test_supports_exactly_the_types_with_a_hook_adapter(svc: DeliveryService) -> None:

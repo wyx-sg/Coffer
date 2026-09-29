@@ -48,3 +48,37 @@ def test_the_cli_lists_hooks_and_coffers_health(daemon: TestClient) -> None:
 
     missing = _runner.invoke(cli_app, ["agent", "hooks", "nobody"])
     assert missing.exit_code != 0
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry/codex", scenario="report whether Codex trusts Coffer's hook"
+)
+def test_the_cli_says_when_codex_has_not_approved_coffers_hook(
+    daemon: TestClient, tmp_path: pathlib.Path
+) -> None:
+    """An installed, current Codex hook that Codex will skip reads as such, with
+    what the user does about it — Coffer never approves its own hook."""
+    codex = tmp_path / ".codex"
+    codex.mkdir()
+    created = daemon.post("/agents", json={"type": "codex", "name": "cx"})
+    assert created.status_code == 201, created.text
+    uid = created.json()["uid"]
+    expected = daemon.get(f"/agents/{uid}/hooks").json()["coffer_hook"]["expected_command"]
+    assert expected.endswith("--hook-event SessionStart")
+    assert expected.split()[2].startswith("/"), "the CLI is called by absolute path"
+    entry = {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [{"type": "command", "command": expected, "timeout": 10}],
+    }
+    (codex / "hooks.json").write_text(json.dumps({"hooks": {"SessionStart": [entry]}}))
+
+    plain = _runner.invoke(cli_app, ["agent", "hooks", "cx"], env={"COLUMNS": "250"})
+    assert plain.exit_code == 0, plain.output
+    assert "coffer hook: current on SessionStart, trust untrusted, last fired never" in (
+        plain.output
+    )
+    assert "run /hooks there and trust it" in plain.output
+
+    body = extract_json(_runner.invoke(cli_app, ["agent", "hooks", "cx", "--json"]).output)
+    assert body["coffer_hook"]["trust"] == "untrusted"
+    assert not (codex / "config.toml").exists()

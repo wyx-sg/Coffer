@@ -8,7 +8,11 @@ marks the one that is Coffer's own and reports that hook's health by asking
 the agent's delivery hook — the delivery-hook entry of its projection facet —
 the same marker-and-command comparison the boot repair uses: ``current`` when
 the installed command is exactly the one Coffer would write now, ``stale`` when
-Coffer's marker carries another command, ``missing`` when there is none. The
+Coffer's marker carries another command, ``missing`` when there is none. Its
+**trust** says whether the agent will run it at all: Codex skips, silently, a
+hook the user has not approved in ``/hooks``, so an installed, current hook can
+still deliver nothing. The adapter reads the agent's own trust record
+(``config.toml``'s ``[hooks.state]`` for Codex); nothing here writes it. The
 last time it fired is read from the audit log, where every real fire is
 recorded.
 
@@ -32,6 +36,7 @@ from coffer.domain.agent.config_files import spec_for
 from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.agent.hooks import HookHealth, HookRow, HookSource, MalformedHooks, parse_hooks
 from coffer.domain.audit import AuditEventType
+from coffer.domain.hook_trust import HookTrust
 from coffer.domain.resource import Resource
 
 if TYPE_CHECKING:
@@ -73,6 +78,10 @@ class CofferHook:
     event: str
     path: str
     health: HookHealth
+    #: Whether the agent will run it: ``trusted``, ``untrusted``,
+    #: ``modified`` (approved for an earlier command), ``disabled``,
+    #: ``unknown``, or ``not_required`` for an agent with no review step.
+    trust: HookTrust
     #: What is installed, when something carrying Coffer's marker is.
     installed_command: str | None
     #: What Coffer would write now.
@@ -177,15 +186,21 @@ class AgentHooksService:
         self, agent: Resource, cfg: AgentConfig, hook: DeliveryAdapter
     ) -> CofferHook:
         """``hook`` is the delivery-hook entry of the agent's projection facet."""
-        path = spec_for(cfg.type, hook.config_key, cfg.resolved_config_dir()).path
+        config_dir = cfg.resolved_config_dir()
+        path = spec_for(cfg.type, hook.config_key, config_dir).path
         text = self._store.read_text(path) or ""
         expected = hook.command_for(agent.uid)
-        installed: str | None
         try:
-            installed = hook.find_command(text)
+            found = hook.find(text)
         except Exception:
             # An unparseable file is already a parse error in the listing.
-            installed = None
+            found = None
+        installed = found.command if found is not None else None
+        trust_text: str | None = None
+        if hook.trust_config_key is not None:
+            trust_path = spec_for(cfg.type, hook.trust_config_key, config_dir).path
+            trust_text = self._store.read_text(trust_path)
+        trust = hook.trust(text, trust_text, str(path))
         if installed is None:
             health = HookHealth.MISSING
         elif installed == expected:
@@ -196,9 +211,12 @@ class AgentHooksService:
             resource=agent, event_type=AuditEventType.MEMORY_DELIVERY_FIRED.value, limit=1
         )
         return CofferHook(
-            event=hook.event,
+            # Where it sits when installed (an older build's may sit on another
+            # event), where it would go otherwise.
+            event=found.event if found is not None else hook.event,
             path=str(path),
             health=health,
+            trust=trust,
             installed_command=installed,
             expected_command=expected,
             last_fired_at=fired[0].timestamp if fired else None,

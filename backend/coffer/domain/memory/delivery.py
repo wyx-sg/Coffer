@@ -1,5 +1,7 @@
-"""Coffer's own session-start-like hook: the marker, the installed command,
-the JSON text transform, and the shape of an install/status view.
+"""Coffer's own session-start hook: the installed command, the ceiling on
+what it prints, the adapter Protocol, and the shape of an install/status view.
+The marker and the JSON text transform live in `domain.memory.hook_entries`
+and are re-exported here.
 
 Pure — no filesystem access; the application layer reads an agent's own
 settings file through the same allowlisted machinery every other config-file
@@ -32,35 +34,24 @@ belongs — this status for the first, the audit log for the second.
 
 from __future__ import annotations
 
-import json
 import shlex
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Protocol
 
 from coffer.domain.error_base import CofferError
-
-#: Marks every hook entry Coffer installs. Embedded as the argument to a
-#: leading no-op `:` shell command so it survives verbatim at the very start
-#: of the installed command string regardless of what an adapter wraps around
-#: it (Codex's once-per-session guard) or what CLI binary name a future
-#: packaging change picks — detection never depends on `argv[0]`.
-MARKER = "coffer-memory"
-
-#: The one top-level key both supported formats keep their hook entries
-#: under (Claude Code's `settings.json`, Codex's `hooks.json`): an object
-#: keyed by event name, each value a list of matcher groups.
-HOOKS_KEY = "hooks"
-
-
-class MalformedDeliveryConfig(CofferError):  # noqa: N818
-    """The agent's settings/hooks file is not a JSON object Coffer can edit.
-
-    Raised instead of silently clobbering content Coffer cannot parse — the
-    caller (`application.memory.delivery`) re-raises this with the file's
-    path attached, since a domain function never sees a path, only text.
-    """
-
-    code = "MEMORY_DELIVERY_CONFIG_INVALID"
+from coffer.domain.hook_trust import HookTrust
+from coffer.domain.memory.hook_entries import (
+    HOOKS_KEY,
+    MARKER,
+    InstalledHook,
+    MalformedDeliveryConfig,
+    find_command,
+    find_installed,
+    install_entry,
+    is_installed,
+    is_marked,
+    remove_entry,
+)
 
 
 class DeliveryUnsupported(CofferError):  # noqa: N818
@@ -80,8 +71,39 @@ class DeliveryUnsupported(CofferError):  # noqa: N818
         self.agent_type = agent_type
 
 
-def context_invocation(agent_uid: str) -> str:
+#: The ceiling on one delivered payload, in UTF-8 bytes of text. Both agents
+#: that run Coffer's hook cut an injection that is larger than this, and both
+#: cuts lose the lines that matter:
+#:
+#: * **Claude Code** keeps a hook's output inline up to about 10,000
+#:   characters. Past that it saves the output to a file and shows the model a
+#:   ~2 KB preview, which is the newest few `global` lines and nothing about
+#:   the repository.
+#: * **Codex** keeps `additionalContext` up to 2,500 tokens, which it counts as
+#:   UTF-8 bytes / 4, so 10,000 bytes. Past that it keeps the head and the tail
+#:   and cuts the middle.
+#:
+#: A byte count satisfies both: a text of N UTF-8 bytes is never more than N
+#: characters. 9,500 leaves room for the line an agent adds around the output.
+#: See spec memory "Bound delivery and prefer the current repository".
+DELIVERY_CEILING_BYTES = 9500
+
+
+def context_invocation(
+    agent_uid: str, *, cli: str = "coffer", hook_event: str | None = None
+) -> str:
     """The bare CLI call Coffer wants running at session start.
+
+    ``cli`` is the **absolute path** of the ``coffer`` binary whenever the
+    composition root can find one. A hook runs under whatever shell the agent
+    starts, and that shell need not read the user's rc files: Codex runs its
+    hooks under ``/bin/zsh`` with a ``PATH`` that does not include
+    ``~/.coffer/bin``, so a bare ``coffer`` there is "command not found" and the
+    hook delivers nothing. The bare name is only the fallback for a build that
+    cannot locate its own CLI.
+
+    ``hook_event``, when given, asks the CLI to wrap the text as that event's
+    JSON ``hookSpecificOutput.additionalContext`` rather than print it plain.
 
     The agent is named by its **uid**, not by its registry name (ADR
     resource-identity-is-an-immutable-uid). An installed hook is a string
@@ -91,25 +113,27 @@ def context_invocation(agent_uid: str) -> str:
     either — one spelling, and it is the one that cannot change.
 
     `--cwd` reads the shell's own `$PWD` at fire time, not a value baked in
-    at install time: the session's working directory is only known when the
-    hook actually runs (as the *hook's own* process — a child of the
-    session), never when it is installed.
+    at install time: both agents run the hook with the session's working
+    directory as its own, and that directory is only known when the hook
+    actually runs.
     """
-    return f'coffer memory context --agent-uid {shlex.quote(agent_uid)} --cwd "$PWD"'
+    call = f'{shlex.quote(cli)} memory context --agent-uid {shlex.quote(agent_uid)} --cwd "$PWD"'
+    if hook_event is not None:
+        call += f" --hook-event {shlex.quote(hook_event)}"
+    return call
 
 
-def hook_command(agent_uid: str) -> str:
+def hook_command(agent_uid: str, *, cli: str = "coffer", hook_event: str | None = None) -> str:
     """The exact command string Coffer installs for `agent_uid`.
 
-    Marker-scoped: an adapter that wraps this further (Codex's once-per-
-    session guard) keeps the same `": {MARKER};"` prefix, so every adapter's
-    installed command is recognised identically regardless of what follows.
-    That is also what makes the switch to `--agent-uid` costless for an
+    Marker-scoped: every adapter's installed command starts with the same
+    `": {MARKER};"` prefix, so it is recognised identically regardless of what
+    follows. That is also what makes a changed command costless for an
     already-installed hook: detection never reads the arguments, so a
     reinstall replaces the entry in place and an old one is found and removed
     exactly as before.
     """
-    return f": {MARKER}; {context_invocation(agent_uid)}"
+    return f": {MARKER}; {context_invocation(agent_uid, cli=cli, hook_event=hook_event)}"
 
 
 @dataclass(frozen=True)
@@ -188,126 +212,45 @@ class DeliveryAdapter(Protocol):
         """The installed command, or `None` if Coffer has no entry."""
         ...
 
+    def find(self, text: str) -> InstalledHook | None:
+        """Coffer's entry on whichever event it sits — an older build's may sit
+        on an event this build no longer installs on — or `None`."""
+        ...
+
     def is_coffer_command(self, command: str) -> bool:
         """Whether a hook command found in the agent's config is Coffer's own
         (by the marker, never by the arguments)."""
         ...
 
+    @property
+    def trust_config_key(self) -> str | None:
+        """The `ConfigFileSpec` key of the file where the agent records which
+        hooks the user has trusted, or `None` when it runs every hook it finds."""
+        ...
 
-def _parse(text: str) -> dict[str, Any]:
-    if not text.strip():
-        return {}
-    try:
-        data = json.loads(text)
-    except ValueError as e:
-        raise MalformedDeliveryConfig(f"invalid JSON: {e}") from e
-    if not isinstance(data, dict):
-        raise MalformedDeliveryConfig("top-level value must be a JSON object")
-    return data
-
-
-def _dump(data: dict[str, Any]) -> str:
-    # ensure_ascii=False: a settings file may hold non-ASCII content
-    # (project paths, plugin names) elsewhere; escaping it on every install
-    # would needlessly rewrite unrelated bytes. Mirrors mcp_install.py.
-    return json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+    def trust(self, hooks_text: str, trust_text: str | None, hooks_path: str) -> HookTrust:
+        """Whether the agent will run Coffer's entry in `hooks_text` (the file
+        at `hooks_path`), judged from its trust record `trust_text`. Reads;
+        never writes. `NOT_REQUIRED` for an agent with no review step."""
+        ...
 
 
-def _is_coffer_leaf(leaf: Any) -> bool:
-    if not isinstance(leaf, dict):
-        return False
-    cmd = leaf.get("command")
-    return isinstance(cmd, str) and is_marked(cmd)
-
-
-def _is_coffer_entry(entry: Any) -> bool:
-    if not isinstance(entry, dict):
-        return False
-    leaves = entry.get("hooks")
-    if not isinstance(leaves, list):
-        return False
-    return any(_is_coffer_leaf(leaf) for leaf in leaves)
-
-
-def install_entry(
-    text: str,
-    *,
-    event: str,
-    command: str,
-    matcher: str | None,
-    timeout: int | None = None,
-) -> str:
-    """Return `text` with Coffer's hook entry for `event` inserted/replaced.
-
-    Idempotent: a prior Coffer entry for `event` is dropped and replaced with
-    a fresh one carrying `command`; every other entry — another event
-    entirely, or a foreign hook on this SAME event — is left untouched.
-    """
-    data = _parse(text)
-    hooks = data.get(HOOKS_KEY)
-    if not isinstance(hooks, dict):
-        hooks = {}
-        data[HOOKS_KEY] = hooks
-    entries = hooks.get(event)
-    kept = [e for e in entries if not _is_coffer_entry(e)] if isinstance(entries, list) else []
-    leaf: dict[str, Any] = {"type": "command", "command": command}
-    if timeout is not None:
-        leaf["timeout"] = timeout
-    new_entry: dict[str, Any] = {"hooks": [leaf]}
-    if matcher is not None:
-        new_entry = {"matcher": matcher, "hooks": [leaf]}
-    kept.append(new_entry)
-    hooks[event] = kept
-    return _dump(data)
-
-
-def remove_entry(text: str, *, event: str) -> str:
-    """Return `text` with ONLY Coffer's entry for `event` removed.
-
-    A foreign hook on the same event, every other event, and every unrelated
-    top-level key are left intact. A now-empty event array is dropped
-    cleanly, and so is an empty top-level `hooks` object — mirrors the
-    removed injection layer's own cleanup behaviour.
-    """
-    data = _parse(text)
-    hooks = data.get(HOOKS_KEY)
-    if not isinstance(hooks, dict):
-        return _dump(data)
-    entries = hooks.get(event)
-    if isinstance(entries, list):
-        kept = [e for e in entries if not _is_coffer_entry(e)]
-        if kept:
-            hooks[event] = kept
-        else:
-            del hooks[event]
-    if not hooks:
-        del data[HOOKS_KEY]
-    return _dump(data)
-
-
-def find_command(text: str, *, event: str) -> str | None:
-    """The command of Coffer's entry for `event`, or `None` if absent."""
-    data = _parse(text)
-    hooks = data.get(HOOKS_KEY)
-    if not isinstance(hooks, dict):
-        return None
-    entries = hooks.get(event)
-    if not isinstance(entries, list):
-        return None
-    for entry in entries:
-        if not _is_coffer_entry(entry):
-            continue
-        for leaf in entry.get("hooks", []):
-            if _is_coffer_leaf(leaf):
-                return str(leaf.get("command"))
-    return None
-
-
-def is_marked(command: str) -> bool:
-    """Whether a hook command carries Coffer's marker."""
-    return command.startswith(f": {MARKER}")
-
-
-def is_installed(text: str, *, event: str) -> bool:
-    """Whether Coffer's entry for `event` is present in `text`."""
-    return find_command(text, event=event) is not None
+__all__ = [
+    "DELIVERY_CEILING_BYTES",
+    "HOOKS_KEY",
+    "MARKER",
+    "DeliveryAdapter",
+    "DeliveryStatus",
+    "DeliveryUnsupported",
+    "HookTrust",
+    "InstalledHook",
+    "MalformedDeliveryConfig",
+    "context_invocation",
+    "find_command",
+    "find_installed",
+    "hook_command",
+    "install_entry",
+    "is_installed",
+    "is_marked",
+    "remove_entry",
+]

@@ -46,9 +46,9 @@ Other platform assumptions carry no check at all:
   no `SIGTERM` delivery between processes.
 - **Symlinks in `application/`.** `application/binary_deploy.py` creates and
   reads symlinks directly with `os.symlink` / `os.readlink`.
-- **Shell syntax in a written hook.** `infrastructure/memory/delivery/codex.py`
-  installs a guard that uses `${TMPDIR:-/tmp}`, `$PPID` and `[ -e … ]` — a
-  POSIX shell command written into another program's config.
+- **Shell syntax in a written hook.** `domain/memory/delivery.py` writes a
+  command that begins with the POSIX no-op `: coffer-memory;` and reads
+  `"$PWD"` — a POSIX shell command written into another program's config.
 
 Two costs follow. The Windows branches in `application/` have never executed
 in CI, so they are unverified code that reads as supported. And every one of
