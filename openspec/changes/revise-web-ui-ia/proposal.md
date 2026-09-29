@@ -119,6 +119,15 @@ unarchived until that implementation lands.
 - Every **split view** (list/detail, file tree/file, conversation list/thread, the sidebar) resizes
   by dragging its divider, within minimum widths, with double-click to reset and ←/→ from the
   keyboard; the width is remembered per page in the browser, safe to lose.
+- The agent **Model tab** carries Provider · Model · Effort, and for Claude Code off its built-in
+  login a **Model per tier** section (Opus / Sonnet / Haiku, Fable when listed) that Coffer prefills
+  and the user can edit or reset; no other model setting is shown. Claude Code gets the top-level
+  `model` and `effortLevel`, the `ANTHROPIC_DEFAULT_<TIER>_MODEL` pins and a `modelPicker`; the
+  deprecated `ANTHROPIC_SMALL_FAST_MODEL` and `env.ANTHROPIC_MODEL` are deleted on every write.
+  Codex's catalogue carries each model's context window, a 90% auto-compact limit and its effort
+  levels. A local model connection reads its window from the runtime (a required field when it
+  cannot, a warning below 64k) and sets Claude Code's compatibility key. Switching back to the
+  built-in login removes every key Coffer wrote.
 - A **command palette** (⌘K / Ctrl+K) jumps to any page or object. It carries no action that
   changes state.
 - A sidebar entry carries an **attention dot** while its kind's attention signal is raised; Sync's
@@ -156,14 +165,17 @@ unarchived until that implementation lands.
 - `internal-engine`: the engine's settings are shown in the Coffer's model section of Settings ›
   General, with a provider-then-model picker and a Test action for the engine and for speech to
   text.
-- `agent-registry`: the Agents entry heads the Agents group; the agent detail page's nine tabs,
+- `agent-registry`: the model binding carries `effort` and `tier_models` in place of `fast_model`;
+  the Agents entry heads the Agents group; the agent detail page's nine tabs,
   the owner filter and per-kind actions, instructions files under Config files; the Agents list's
   two fixed rows with automatic detection, previewed Add / Connect / Repair, Add both and the
   row menu's config directory.
 - `skill-manager`: unmanaged skills are reached and adopted only from the agent's Skills tab, and
   the Skills page lists managed skills only; a skill's detail page has Files (opening on a
   rendered `SKILL.md` with Preview / Source and Edit), Delivery, Requires and History tabs.
-- `provider-switching`: Model providers sits in the Agents group as one table with no tabs,
+- `provider-switching`: the Claude Code and Codex projections write the model keys above and
+  revert every key Coffer wrote; the Model tab's fields, tier suggestions, per-model context window
+  and effort levels, and local model connections; Model providers sits in the Agents group as one table with no tabs,
   per-agent connection and model selection moves to the agent's Model tab, and a provider's
   detail page lists what uses it read-only.
 

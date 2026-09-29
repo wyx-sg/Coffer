@@ -419,3 +419,32 @@ by command — and the `uid` where a name can be renamed (model providers, chann
 collections, memory partitions), because an address must survive a rename. Old `?tab=` and old
 uid addresses of fixed-name kinds redirect. The MCP servers route stays `/mcp-servers`, the
 sidebar's route, rather than a shorter `/mcp`.
+
+### 15. The agent Model tab
+
+Two research notes (`claude-code-model-settings-research.md`, `codex-model-settings-research.md`,
+kept with the rearchitecture plan) read Claude Code 2.1.281 and Codex 0.155.1 and the switchers
+that configure them. The decisions:
+
+- **Provider · Model · Effort, nothing else visible.** Everything else a model needs — tier pins,
+  picker entries, context window, compaction, compatibility flags — Coffer derives from the
+  connection and writes itself. *Rejected:* an Advanced section of context, output, subagent and
+  fallback fields; each is a way to break an agent that Coffer can fill correctly.
+- **Claude Code writes `model`, not `env.ANTHROPIC_MODEL`.** The env var outranks the settings key,
+  so it silently undoes the user's `/model` at every launch. **Tiers, not a fast model:** Claude
+  Code resolves `opus` / `sonnet` / `haiku` / `fable` through `ANTHROPIC_DEFAULT_<TIER>_MODEL`, and
+  Haiku also runs background tasks; on a non-Claude endpoint an unpinned tier sends a Claude id and
+  fails. So Coffer prefills every tier (all = Model on non-Claude and local endpoints, by name on a
+  Claude-id gateway) and lets the user edit or reset them. `ANTHROPIC_SMALL_FAST_MODEL` is
+  deprecated and still read ahead of the Haiku pin, so every write deletes it. `modelPicker` fills
+  `/model` with the connection's models, replacing the built-in rows only where they would fail.
+- **Codex needs the catalogue to carry metadata.** Without `supported_reasoning_levels` Codex sends
+  no effort, and without a context window it never compacts; so each curated model records its
+  window and levels, and the catalogue carries them with compaction at 90%.
+- **Local models:** the window is the one the runtime serves, never the model card's; a required
+  field when it cannot be read, a warning under 64k; Claude Code gets
+  `CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS=1` and `CLAUDE_CODE_MAX_CONTEXT_TOKENS` automatically.
+  A local model connection here is one speaking the agent's own protocol; the `ollama` protocol
+  stays internal-only ("Keep ollama connections internal-only").
+- **Back to built-in removes every key Coffer wrote**, so stale pins never redirect tiers on the
+  subscription; a value the user has since changed through `/model` or `/effort` is theirs.
