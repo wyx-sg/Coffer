@@ -21,6 +21,7 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useAgentPlugins: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
   useTogglePlugin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useUninstallPlugin: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useAgentHooks: vi.fn(() => ({ data: undefined, isPending: true, error: null })),
   useAgentConnection: vi.fn(() => ({
     data: { state: "disconnected", parts: [] },
     isPending: false,
@@ -127,23 +128,47 @@ describe("AgentDetailPage header and tab routing", () => {
 });
 
 describe("AgentDetailPage", () => {
-  test("renders the header, all seven workspace tabs, and the overview by default", () => {
+  test("the header shows the version, and Not installed when the program is gone", () => {
+    useAgentMock.mockReturnValue({
+      data: { ...AGENT, state: "config_only", version: "codex-cli 0.40.0" },
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof hooks.useAgent>);
+    renderAt();
+    expect(screen.getByText("codex-cli 0.40.0")).toBeInTheDocument();
+    expect(screen.getByText("Not installed")).toBeInTheDocument();
+  });
+
+  test("an installed agent carries no Not installed badge", () => {
+    useAgentMock.mockReturnValue({
+      data: { ...AGENT, state: "installed_active", version: null },
+      isPending: false,
+      error: null,
+      refetch: vi.fn(),
+    } as unknown as ReturnType<typeof hooks.useAgent>);
+    renderAt();
+    expect(screen.queryByText("Not installed")).not.toBeInTheDocument();
+  });
+
+  test("renders the header, all eight workspace tabs, and the overview by default", () => {
     mockAgentLoaded();
 
     renderAt();
 
     expect(screen.getByRole("heading", { name: "cur" })).toBeInTheDocument();
 
-    // The seven workspace tabs. Plugins is the only one that acts on the agent;
-    // Memory and Conversations are read-only views of what it keeps on disk.
+    // The eight workspace tabs. Plugins is the only one that acts on the agent;
+    // Hooks, Memory and Conversations are read-only views of what it keeps on disk.
     expect(screen.getByRole("tab", { name: /overview/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /^skills$/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /mcp servers/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /^plugins$/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /^hooks$/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /^memory$/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /conversations/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /config files/i })).toBeInTheDocument();
-    expect(screen.getAllByRole("tab")).toHaveLength(7);
+    expect(screen.getAllByRole("tab")).toHaveLength(8);
 
     // Categories that were never built keep their absence pinned.
     expect(screen.queryByRole("tab", { name: /subagents & commands/i })).not.toBeInTheDocument();

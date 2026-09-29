@@ -118,8 +118,8 @@ describe("DraftThread", () => {
     // A Coffer LLM connection is an OPTIONAL override: with none configured the
     // agent runs on its own built-in login (chat shells out to its SDK/CLI), so
     // the draft must NOT block — the composer is available and there is no
-    // "no connection" empty state (spec provider-switching "Revert an agent to
-    // its built-in login").
+    // "no connection" empty state (spec provider-switching "Revert an agent type
+    // to its built-in login").
     useProvidersMock.mockReturnValue({ data: [] });
     renderDraft();
     expect(screen.getByText(/start a new conversation/i)).toBeInTheDocument();

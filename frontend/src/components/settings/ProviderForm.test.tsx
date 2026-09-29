@@ -123,7 +123,7 @@ describe("ProviderForm edits the wire, and only when it moved", () => {
   // Whether `protocol` travels in the PATCH is now load-bearing rather than a
   // nicety: the daemon refuses a wire CHANGE on a connection that is switched
   // on (409 PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE), because the wire decides
-  // which agents a connection covers and which `use-builtin` reverts. Sending
+  // whether a connection can cover any agent at all (ollama reaches none). Sending
   // the unchanged wire back would turn every "save the endpoint" on a live
   // connection into that refusal.
   test("a changed wire travels in the patch", async () => {

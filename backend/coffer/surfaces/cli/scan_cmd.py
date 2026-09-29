@@ -4,9 +4,10 @@ that Coffer does not manage yet.
 One table with a ``kind`` column (spec resource-framework "Scan, adopt and
 discard what Coffer does not manage"):
 
-- ``agent`` — an installed agent that is not registered (``GET
-  /agents/candidates``); its ref is the agent type, and its detail names
-  ``coffer agent add <type>``, the command that registers it;
+- ``agent`` — an agent seen on this machine that is not registered (``GET
+  /agents/candidates``); its ref is the agent type, and its detail carries the
+  detection state and version, and — for an installed agent that has been run
+  — names ``coffer agent add <type>``, the command that registers it;
 - ``skill`` — a skill-shaped folder in a registered agent's skill locations that
   is not a Coffer-managed link (``GET /agents/{uid}/unmanaged-skills``); its ref
   is the folder's path;
@@ -60,6 +61,26 @@ def _agents(c: httpx.Client, only: str | None, *, verbose: bool) -> list[dict[st
     return [a for a in agents if a["uid"] == uid]
 
 
+#: What a candidate that cannot be added yet is told instead of the add command.
+_NOT_ADDABLE = {
+    "installed_never_run": "installed but never run — start it once to create {dir}",
+    "config_only": "not installed — {dir} is left from an earlier install",
+}
+
+
+def _agent_detail(cand: dict[str, Any]) -> str:
+    version = f" {cand['version']}" if cand.get("version") else ""
+    head = f"{cand['display_name']}{version} at {cand['config_dir']}"
+    hint = _NOT_ADDABLE.get(cand["state"])
+    if hint is not None:
+        return f"{head} — {hint.format(dir=cand['config_dir'])}"
+    add = f"coffer agent add {cand['type']}"
+    if cand["suggested_name"] != cand["type"].replace("_", "-"):
+        # A directory named by CLAUDE_CONFIG_DIR / CODEX_HOME, not the standard one.
+        add += f" --name {cand['suggested_name']} --config-dir {cand['config_dir']}"
+    return f"{head} — register: {add}"
+
+
 def _agent_rows(c: httpx.Client, *, verbose: bool) -> list[dict[str, Any]]:
     r = c.get("/agents/candidates")
     _cli_client.check(r, verbose=verbose)
@@ -68,12 +89,11 @@ def _agent_rows(c: httpx.Client, *, verbose: bool) -> list[dict[str, Any]]:
             "kind": "agent",
             "agent": cand["suggested_name"],
             "ref": cand["type"],
-            "detail": (
-                f"{cand['display_name']} at {cand['config_dir']}"
-                f" — register: coffer agent add {cand['type']}"
-            ),
+            "detail": _agent_detail(cand),
             "config_dir": cand["config_dir"],
             "suggested_name": cand["suggested_name"],
+            "state": cand["state"],
+            "version": cand.get("version"),
         }
         for cand in r.json()["candidates"]
     ]

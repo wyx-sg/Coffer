@@ -26,6 +26,7 @@ from coffer.application.provider.projector import ProviderProjector
 from coffer.application.provider.service import ProviderService
 from coffer.application.provider.sync_reconcile import ProviderProjectionReconcile
 from coffer.application.resource_service import ResourceService
+from coffer.domain.agent.facets import AgentCatalog
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentialStore
 from coffer.surfaces.http.engine_config_composition import (
@@ -64,6 +65,7 @@ def wire_provider_kind(
     credential_store: EncryptedCredentialStore,
     agent_service: AgentService,
     sync: SyncContributions,
+    agent_catalog: AgentCatalog,
 ) -> ProviderWiring:
     """Wire the ``provider`` kind (spec provider-switching) into the app."""
     # Handed the resource table so a direct write cannot flag a second
@@ -76,6 +78,8 @@ def wire_provider_kind(
         config_store=ConfigFileStore(),
         agents=agent_service,
         audit=audit,
+        # The agents' provider projection facets.
+        agent_catalog=agent_catalog,
         # Coffer's own engine, told when the connection it runs on moves. The
         # engine decides the fate of its model; this kind only reports the move
         # and the new connection's catalogue (spec internal-engine "Drop the
@@ -92,7 +96,7 @@ def wire_provider_kind(
         ProviderProjectionReconcile(
             providers=provider_svc,
             agents=agent_service,
-            projector=ProviderProjector(ConfigFileStore()),
+            projector=ProviderProjector(ConfigFileStore(), agents=agent_catalog),
         )
     )
     # A synced document flagging a second internal default is applied with the
@@ -106,6 +110,7 @@ def wire_provider_kind(
         agents=agent_service,
         config_store=ConfigFileStore(),
         deactivate=provider_svc.deactivate,
+        catalog=agent_catalog,
     )
     return ProviderWiring(
         service=provider_svc,

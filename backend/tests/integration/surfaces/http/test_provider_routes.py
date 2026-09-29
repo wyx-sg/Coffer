@@ -204,8 +204,7 @@ def test_patch_can_correct_the_wire(tmp_path, monkeypatch):
 
     This connection was never switched on, which is the only state the edit is
     free in — a live one is refused (``test_protocol_edit_guard``), because the
-    wire decides which agents a connection can cover and which ``use-builtin``
-    reverts.
+    wire decides whether a connection can cover any agent at all.
     """
     app = _app(tmp_path, monkeypatch, 59755)
     with _client(app) as c:
@@ -338,7 +337,7 @@ def test_activate_writes_codex_config(tmp_path, monkeypatch):
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="switch a wire back to the agent built-in login",
+    scenario="switch an agent back to its built-in login",
 )
 def test_use_builtin_removes_projection_and_clears_active(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59785)
@@ -350,11 +349,13 @@ def test_use_builtin_removes_projection_and_clears_active(tmp_path, monkeypatch)
         # sanity — the connection is projected into the agent config first
         assert json.loads((cfg / "settings.json").read_text())["env"]["ANTHROPIC_BASE_URL"]
 
-        # ``use-builtin`` is addressed by WIRE, not by a connection: it is the
-        # agent that is being put back on its own login, and which connection
-        # was covering it is what the route answers rather than what it takes.
-        r = c.post("/api/v1/providers/use-builtin/anthropic")
+        # ``use-builtin`` is addressed by AGENT type, not by a connection or a
+        # wire: it is the agent that is being put back on its own login, and
+        # which connection was covering it is what the route answers rather
+        # than what it takes.
+        r = c.post("/api/v1/providers/use-builtin/claude_code")
         assert r.status_code == 200, r.text
+        assert r.json()["agent_type"] == "claude_code"
         assert r.json()["deprojected"] == ["cc"]
         # ``previous`` is a LABEL — it is there for a human reading the result,
         # not for addressing anything.
@@ -372,11 +373,22 @@ def test_use_builtin_removes_projection_and_clears_active(tmp_path, monkeypatch)
 def test_use_builtin_is_idempotent_noop(tmp_path, monkeypatch):
     app = _app(tmp_path, monkeypatch, 59786)
     with _client(app) as c:
-        # Nothing active for the wire → use-builtin is a clean no-op.
-        r = c.post("/api/v1/providers/use-builtin/openai")
+        # Nothing active for the agent type → use-builtin is a clean no-op.
+        r = c.post("/api/v1/providers/use-builtin/codex")
         assert r.status_code == 200, r.text
         assert r.json()["deprojected"] == []
         assert r.json()["previous"] is None
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a wire no longer names an agent to revert",
+)
+def test_use_builtin_takes_an_agent_type_not_a_wire(tmp_path, monkeypatch):
+    app = _app(tmp_path, monkeypatch, 59787)
+    with _client(app) as c:
+        assert c.post("/api/v1/providers/use-builtin/anthropic").status_code == 422
+        assert c.post("/api/v1/providers/use-builtin/gemini_cli").status_code == 422
 
 
 @pytest.mark.acceptance(

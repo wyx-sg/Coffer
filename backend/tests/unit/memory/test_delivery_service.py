@@ -24,6 +24,7 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceNotFound
 from coffer.domain.memory.delivery import MARKER, MalformedDeliveryConfig
 from coffer.domain.resource import Resource
+from tests.support.facets import agent_catalog
 
 pytestmark = pytest.mark.asyncio
 
@@ -138,7 +139,7 @@ async def audit() -> AuditService:
 @pytest_asyncio.fixture
 async def svc(store: FakeStore, audit: AuditService) -> DeliveryService:
     agents = FakeAgentLookup([_CLAUDE_RESOURCE, _CODEX_RESOURCE])
-    return DeliveryService(agent_service=agents, audit=audit, store=store)
+    return DeliveryService(agent_service=agents, audit=audit, store=store, catalog=agent_catalog())
 
 
 _CC_SETTINGS_PATH = _CLAUDE_CONFIG_DIR / "settings.json"
@@ -346,9 +347,38 @@ async def test_status_reports_installed_after_install(svc: DeliveryService) -> N
     assert status.event == "UserPromptSubmit"
 
 
-async def test_supports_exactly_the_types_with_a_hook_adapter() -> None:
-    assert DeliveryService.supports(AgentType.CLAUDE_CODE) is True
-    assert DeliveryService.supports(AgentType.CODEX) is True
+async def test_supports_exactly_the_types_with_a_hook_adapter(svc: DeliveryService) -> None:
+    assert svc.supports(AgentType.CLAUDE_CODE) is True
+    assert svc.supports(AgentType.CODEX) is True
+
+
+async def test_an_agent_without_a_delivery_hook_is_unsupported() -> None:
+    """The adapter is the projection facet's; an agent whose projection has no
+    delivery hook is refused rather than guessed at."""
+    import dataclasses
+
+    from coffer.domain.agent.facets import AgentCatalog
+    from coffer.domain.memory.delivery import DeliveryUnsupported
+
+    bound = agent_catalog()
+    bare = AgentCatalog(
+        {
+            d.type: dataclasses.replace(
+                d, projection=dataclasses.replace(d.projection, delivery_hook=None)
+            )
+            for d in bound
+            if d.projection is not None
+        }
+    )
+    svc = DeliveryService(
+        agent_service=FakeAgentLookup([_CLAUDE_RESOURCE]),
+        audit=AuditService(FakeAuditRepo()),
+        store=FakeStore(),
+        catalog=bare,
+    )
+    assert svc.supports(AgentType.CLAUDE_CODE) is False
+    with pytest.raises(DeliveryUnsupported):
+        await svc.status(_CC_UID)
 
 
 async def test_remove_everywhere_takes_the_hook_out_of_every_agent_carrying_one(

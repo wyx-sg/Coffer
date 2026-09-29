@@ -8,8 +8,10 @@ import stat
 
 import pytest
 
+from coffer.application.agent.auto_detect import AutoDetectService
 from coffer.application.agent.service import assert_skill_dir_usable
 from coffer.application.platform_port import PrivilegedPaths
+from coffer.domain.agent.detection import DetectionState
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import (
@@ -19,6 +21,7 @@ from coffer.domain.errors import (
     SkillDirNotWritable,
 )
 from coffer.infrastructure.platform import HostPlatform
+from tests.support.facets import agent_catalog, installed
 
 
 def _rules() -> PrivilegedPaths:
@@ -199,50 +202,134 @@ async def test_remove_deletes_agent(agent_bundle, tmp_path):
 # ---------------------------------------------------------------------------
 
 
+def _detect(bundle, programs=None, environ=None):
+    """The bundle's registry with probes answering from ``programs``."""
+    return AutoDetectService(
+        agent_service=bundle.svc,
+        catalog=agent_catalog(programs),
+        environ=lambda: dict(environ or {}),
+    )
+
+
 @pytest.mark.acceptance(
     spec="agent-registry",
     scenario="discover installed agents as candidates",
 )
 async def test_discover_returns_installed_candidate(agent_bundle, tmp_path, monkeypatch):
-    """An installed agent (marker dir present) is reported as a candidate, and
-    discovery is read-only — nothing is registered."""
+    """An installed agent (program on PATH, config dir present) is reported as
+    a candidate with its state and version, and discovery is read-only."""
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
 
-    candidates = await agent_bundle.detect.discover()
-    types = [c.type.value for c in candidates]
-    assert "codex" in types
+    candidates = await _detect(agent_bundle, {AgentType.CODEX: installed("0.155.1")}).discover()
+    codex = next(c for c in candidates if c.type is AgentType.CODEX)
+    assert codex.state is DetectionState.INSTALLED_ACTIVE
+    assert codex.version == "0.155.1"
+    assert codex.addable
     # Read-only: discovery must not register anything.
     assert (await agent_bundle.svc.list()) == []
 
 
-async def test_discover_skips_types_without_marker(agent_bundle, tmp_path, monkeypatch):
-    """No marker dir on disk → the type is not offered as a candidate."""
+async def test_discover_skips_types_with_neither_signal(agent_bundle, tmp_path, monkeypatch):
+    """No program and no config dir → the type is not offered."""
     monkeypatch.setenv("HOME", str(tmp_path))
-    # Neither ~/.codex nor ~/.claude exists.
-    candidates = await agent_bundle.detect.discover()
-    assert candidates == []
+    assert await _detect(agent_bundle).discover() == []
 
 
 @pytest.mark.acceptance(
     spec="agent-registry",
-    scenario="skip already-registered types on subsequent scan",
+    scenario="offer an installed agent that has never run",
+)
+async def test_an_installed_agent_without_a_config_dir_is_never_run(
+    agent_bundle, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    candidates = await _detect(
+        agent_bundle, {AgentType.CLAUDE_CODE: installed("2.1.281")}
+    ).discover()
+    assert [(c.type, c.state) for c in candidates] == [
+        (AgentType.CLAUDE_CODE, DetectionState.INSTALLED_NEVER_RUN)
+    ]
+    assert not candidates[0].addable
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="show a leftover config directory as not installed",
+)
+async def test_a_config_dir_without_its_program_is_config_only(agent_bundle, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".claude").mkdir()
+    candidates = await _detect(agent_bundle).discover()
+    assert [(c.type, c.state, c.version) for c in candidates] == [
+        (AgentType.CLAUDE_CODE, DetectionState.CONFIG_ONLY, None)
+    ]
+    assert not candidates[0].addable
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="offer the directory named by the agent's environment variable",
+)
+async def test_the_env_named_dir_is_a_candidate_beside_the_default(
+    agent_bundle, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".claude").mkdir()
+    work = tmp_path / ".claude-work"
+    work.mkdir()
+    found = {AgentType.CLAUDE_CODE: installed("2.1.281")}
+
+    candidates = await _detect(agent_bundle, found, {"CLAUDE_CONFIG_DIR": str(work)}).discover()
+
+    assert [(c.config_dir, c.suggested_name) for c in candidates] == [
+        (str(tmp_path / ".claude"), "claude-code"),
+        (str(work), "claude-code-claude-work"),
+    ]
+    assert all(c.state is DetectionState.INSTALLED_ACTIVE for c in candidates)
+    # The variable naming the standard directory adds nothing.
+    same = await _detect(
+        agent_bundle, found, {"CLAUDE_CONFIG_DIR": str(tmp_path / ".claude")}
+    ).discover()
+    assert len(same) == 1
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="skip already-registered config directories on subsequent scan",
 )
 async def test_discover_skips_already_registered(agent_bundle, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".codex").mkdir()
     custom = tmp_path / "cfg"
     custom.mkdir()
     await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX,
-        name="manual-codex",
-        config_dir=str(custom),
-        actor="cli",
+        agent_type=AgentType.CODEX, name="codex", config_dir=None, actor="cli"
+    )
+    await agent_bundle.svc.register(
+        agent_type=AgentType.CODEX, name="manual-codex", config_dir=str(custom), actor="cli"
     )
 
+    candidates = await _detect(
+        agent_bundle, {AgentType.CODEX: installed()}, {"CODEX_HOME": str(custom)}
+    ).discover()
+    assert "codex" not in [c.type.value for c in candidates]
+
+
+async def test_a_custom_registration_leaves_the_standard_dir_offered(
+    agent_bundle, tmp_path, monkeypatch
+):
+    """Registrations are per config directory: registering a custom Codex home
+    does not hide the standard one, which is a config set of its own."""
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
-
-    candidates = await agent_bundle.detect.discover()
-    assert "codex" not in [c.type.value for c in candidates]
+    custom = tmp_path / "cfg"
+    custom.mkdir()
+    await agent_bundle.svc.register(
+        agent_type=AgentType.CODEX, name="manual-codex", config_dir=str(custom), actor="cli"
+    )
+    candidates = await _detect(agent_bundle, {AgentType.CODEX: installed()}).discover()
+    assert [c.config_dir for c in candidates] == [str(tmp_path / ".codex")]
 
 
 @pytest.mark.acceptance(
@@ -254,18 +341,29 @@ async def test_discover_re_surfaces_removed_agent(agent_bundle, tmp_path, monkey
     again as a candidate (the removal might have been accidental)."""
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".codex").mkdir()
-    custom = tmp_path / "cfg"
-    custom.mkdir()
     agent = await agent_bundle.svc.register(
-        agent_type=AgentType.CODEX,
-        name="x",
-        config_dir=str(custom),
-        actor="system",
+        agent_type=AgentType.CODEX, name="x", config_dir=None, actor="system"
     )
+    detect = _detect(agent_bundle, {AgentType.CODEX: installed()})
+    assert await detect.discover() == []
     await agent_bundle.svc.remove(uid=agent.uid, actor="cli")
 
-    candidates = await agent_bundle.detect.discover()
+    candidates = await detect.discover()
     assert "codex" in [c.type.value for c in candidates]
+
+
+@pytest.mark.acceptance(
+    spec="agent-registry",
+    scenario="report a registered agent's detection state",
+)
+async def test_detect_reports_a_registered_agents_state(agent_bundle, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".codex").mkdir()
+    detect = _detect(agent_bundle, {AgentType.CODEX: installed("0.155.1")})
+    got = await detect.detect(AgentType.CODEX, tmp_path / ".codex")
+    assert (got.state, got.version) == (DetectionState.INSTALLED_ACTIVE, "0.155.1")
+    gone = await _detect(agent_bundle).detect(AgentType.CODEX, tmp_path / "nowhere")
+    assert gone.state is DetectionState.MISSING
 
 
 # ---------------------------------------------------------------------------

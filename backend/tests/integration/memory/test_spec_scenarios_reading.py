@@ -15,7 +15,7 @@ from datetime import datetime
 import pytest
 
 from coffer.application.memory.context import compose_context
-from coffer.application.memory.service import DEFAULT_READERS, KIND_MEMORY, MemoryService
+from coffer.application.memory.service import KIND_MEMORY, MemoryService
 from coffer.infrastructure.memory import paths, store
 from coffer.infrastructure.memory.raw_store import list_raw_entries, read_raw_entry
 from coffer.infrastructure.memory.readers import ClaudeCodeMemoryReader, CodexMemoryReader
@@ -27,6 +27,7 @@ from tests.integration.memory.conftest import (
     codex_config,
     init_repository,
 )
+from tests.support.facets import agent_catalog
 
 
 def _cc_file(name: str, description: str, type_: str, body: str) -> str:
@@ -254,9 +255,12 @@ async def test_reading_from_inside_a_repository_brings_no_partition_into_existen
 async def test_the_registry_holds_two_readers_and_a_full_run_writes_only_the_four_parts(
     tmp_path: pathlib.Path,
 ) -> None:
-    assert set(DEFAULT_READERS) == {"claude_code", "codex"}
-    assert isinstance(DEFAULT_READERS["claude_code"], ClaudeCodeMemoryReader)
-    assert isinstance(DEFAULT_READERS["codex"], CodexMemoryReader)
+    # The readers are the agents' memory-reader facets, as the composition
+    # root binds them.
+    readers = agent_catalog().memory_readers()
+    assert set(readers) == {"claude_code", "codex"}
+    assert isinstance(readers["claude_code"], ClaudeCodeMemoryReader)
+    assert isinstance(readers["codex"], CodexMemoryReader)
 
     repository = init_repository(tmp_path / "home" / "dev" / "coffer")
     claude_dir = claude_code_config(
@@ -280,7 +284,8 @@ async def test_the_registry_holds_two_readers_and_a_full_run_writes_only_the_fou
         resources=resources,  # type: ignore[arg-type]
         audit=FakeAudit(),  # type: ignore[arg-type]
         agent_source_resolver=agent_source_resolver,
-    )  # the default registry, not a substitute
+        readers=readers,
+    )  # the bound facets, not a substitute
 
     result = await service.aggregate()
     assert result.failures == ()

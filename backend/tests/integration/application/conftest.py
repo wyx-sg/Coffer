@@ -30,6 +30,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyResourceRepo,
 )
 from coffer.infrastructure.platform import HostPlatform
+from tests.support.facets import agent_catalog
 
 
 @dataclass
@@ -64,7 +65,7 @@ async def agent_bundle(tmp_path: pathlib.Path):
     svc = AgentService(
         platform=HostPlatform(), resource_service=rs, audit=audit, config_file_store=store
     )
-    detect = AutoDetectService(agent_service=svc)
+    detect = AutoDetectService(agent_service=svc, catalog=agent_catalog())
     config_files = AgentConfigFileService(agent_service=svc, audit=audit, store=store)
     mcp = AgentMcpService(
         agent_service=svc,

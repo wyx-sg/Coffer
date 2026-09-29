@@ -325,7 +325,7 @@ describe("AgentOverviewTab", () => {
     // Built-in needs no endpoint test — confirm is enabled straight away.
     expect(confirmBtn()).toBeEnabled();
     fireEvent.click(confirmBtn());
-    expect(useBuiltinMutate).toHaveBeenCalledWith("anthropic");
+    expect(useBuiltinMutate).toHaveBeenCalledWith("claude_code");
     expect(activateMutate).not.toHaveBeenCalled();
     expect(patchAgentMutate).not.toHaveBeenCalled();
   });

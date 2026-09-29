@@ -52,7 +52,7 @@ from pathlib import Path
 
 from coffer.infrastructure.daemon.spawn import daemon_spawn_command
 from coffer.infrastructure.logging.files import log_dir
-from coffer.infrastructure.platform.process import has_launchd
+from coffer.infrastructure.platform.process import has_launchd, login_shell_path
 
 _logger = logging.getLogger(__name__)
 
@@ -98,44 +98,6 @@ def build_plist(*, program: list[str], path_env: str, log_file: Path) -> dict[st
         "StandardOutPath": str(log_file),
         "StandardErrorPath": str(log_file),
     }
-
-
-#: How long the login-shell probe is allowed to take. A shell profile that
-#: hangs must not hang an install; the inherited PATH is a worse answer, not
-#: no answer.
-_SHELL_PROBE_TIMEOUT = 3.0
-
-
-def login_shell_path() -> str:
-    """The user's real `PATH`, as their login shell reports it.
-
-    Not `os.environ["PATH"]`, and the difference is the whole point of the
-    key. This code usually runs *inside the daemon* — reached from the
-    Settings page — and that daemon was commonly auto-spawned by an MCP shim
-    belonging to a GUI-launched editor, whose `PATH` is the truncated one
-    macOS hands a Dock launch. Baking that into the agent would install
-    exactly the minimal `PATH` this key exists to avoid, and the `npx`/`uvx`
-    upstreams would resolve to nothing at the next login.
-
-    The shell is asked the same way `desktop/src/env_path.rs` asks it, and
-    falls back to the inherited value on any failure: a probe that cannot
-    answer must not stop an install.
-    """
-    shell = os.environ.get("SHELL", "/bin/zsh")
-    inherited = os.environ.get("PATH", "")
-    try:
-        result = subprocess.run(
-            [shell, "-l", "-c", 'printf %s "$PATH"'],
-            capture_output=True,
-            text=True,
-            timeout=_SHELL_PROBE_TIMEOUT,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        _logger.warning("login shell PATH probe failed (%r); using the inherited PATH", exc)
-        return inherited
-    probed = result.stdout.strip()
-    return probed or inherited
 
 
 def agent_program() -> list[str]:

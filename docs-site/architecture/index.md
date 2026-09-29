@@ -177,6 +177,7 @@ The rest of the section is organised from the foundations outward.
 - [Resource framework](/architecture/resource-framework) — the one abstraction every managed thing shares: identity, lifecycle, audit and reach.
 - [Layering and code layout](/architecture/layering) — the four layers, the import contracts that enforce them, and where code goes.
 - [Platform port](/architecture/platform) — why one place knows the host OS and everything else asks it, and the gate that keeps it that way.
+- [Agent facets](/architecture/agent-facets) — one record per agent names every difference; mechanisms are optional facets bound at startup, projection is one registry, and detection has two signals.
 
 **Runtime** covers the processes and how requests move through them.
 

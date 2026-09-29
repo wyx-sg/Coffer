@@ -206,6 +206,7 @@ No test may touch the real user's home. `backend/tests/conftest.py` installs `te
   - `two_homes` / `two_machine_homes(base)` — machines `a`, `b` + one bare remote (`bare_remote()`, shared with `integration/sync/harness.py`).
   - `claude_code_dir`, `codex_dir` / `fake_agent_dir(home, AgentType.X, config_dir=None, files=None)` — agent config tree laid out from the descriptor; `.write(key, text)`, `.add_skill(name)`, `.home_env()`.
   - `fake_channel_adapter` / `tests.support.channel.FakeChannelAdapter` — recording IM transport (re-exported by `integration/channel/conftest.py`).
+  - `tests.support.facets.agent_catalog(programs=None)` — the composition root's bound agent catalogue with every dependency probe answering "not installed" unless `programs` says otherwise (`installed(version)`); `put_programs_on_path(monkeypatch, bin_dir, {"codex": "codex-cli 1.0"})` for tests that go through the real probe (assert the state, not the version — the login shell's `PATH` may find the real program first). The shared facet contract, `integration/agent/test_facet_contract.py`, runs against `fake_agent_dir` for every shipped agent.
 
 ## Make Targets
 
@@ -229,7 +230,8 @@ make format              # ruff format + ruff --fix + prettier (frontend)
 `scripts/check_doc_numbering.py`, `scripts/check_spec_citations.py`,
 `scripts/check_architecture_doc.py`,
 `scripts/check_pyinstaller_specs.py`, `scripts/check_cli_reference.py`,
-`scripts/check_removed_commands.py`, `ruff check`, `ruff format --check`,
+`scripts/check_removed_commands.py`, `scripts/check_platform_calls.py`,
+`scripts/check_agent_type_branches.py`, `ruff check`, `ruff format --check`,
 `mypy --strict`, `lint-imports` (the layering + cross-kind fence), and — when
 `frontend/node_modules` is present — `scripts/dump_i18n_backend_keys.py --check`
 plus `npm run lint`, `npm run typecheck` and `npm run knip` in `frontend/`.

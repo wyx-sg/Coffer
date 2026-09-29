@@ -6,22 +6,17 @@ an endpoint that turns out to speak a different wire than the probe guessed is
 corrected in place rather than deleted and re-entered, key and all.
 
 But the wire is not inert, and saying "nothing keys off it" (as this module and
-``ProviderPatch`` both used to) was wrong in two places that matter:
-
-- ``targets.scoped_targets`` answers ``[]`` for ``Protocol.OLLAMA`` BEFORE the
-  resource's scope is consulted, so the wire decides whether a connection can
-  cover any agent at all; and
-- ``service._AGENT_FOR_WIRE`` is how ``use-builtin <wire>`` finds the agent to
-  put back on its own login, so the wire decides which revert reaches it.
+``ProviderPatch`` both used to) was wrong: ``targets.scoped_targets`` answers
+``[]`` for ``Protocol.OLLAMA`` BEFORE the resource's scope is consulted, so the
+wire decides whether a connection can cover any agent at all.
 
 Which is why a wire change is REFUSED while the connection is ``is_active``.
 Allowing it would strand the projection: a live anthropic connection moved to
 ``ollama`` loses every target while the ``~/.claude/settings.json`` it already
-wrote stays behind, and one moved to ``openai`` stops answering to
-``use-builtin anthropic`` while ``use-builtin openai`` goes to Codex instead —
-either way nothing left would ever de-project it. De-projecting silently would
-be worse than refusing: the user asked to edit a field, not to take their
-agents off a gateway. An inactive connection is unaffected — no projection
+wrote stays behind, and nothing left would ever de-project it (a revert to the
+built-in login is keyed by agent and reaches only the connection's targets).
+De-projecting silently would be worse than refusing: the user asked to edit a
+field, not to take their agents off a gateway. An inactive connection is unaffected — no projection
 exists to strand. The re-validate below still enforces the other rule the wire
 carries: an ollama connection holds no key.
 
@@ -76,7 +71,10 @@ async def update(
             # The connection's NAME in the error, because the message is read
             # by a person looking at a form they just submitted; the uid it was
             # addressed by would tell them nothing.
-            raise ProviderProtocolLockedWhileActive(current.name, str(config.get("protocol")))
+            reached = service._compat(current, await service._agents.list())
+            raise ProviderProtocolLockedWhileActive(
+                current.name, str(config.get("protocol")), [t.value for t in reached]
+            )
         config["protocol"] = protocol.value
     if base_url is not None:
         config["base_url"] = base_url

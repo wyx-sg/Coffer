@@ -1,18 +1,9 @@
 // frontend/src/pages/AgentDetailPage.tsx — spec agent-registry.
-// Per-agent detail page: the shared PageHeader (back link, type chip, and the
-// [Connect to / Disconnect from Coffer][Edit][Delete] actions) over seven tabs —
-// Overview, Skills, MCP servers, Plugins, Memory, Conversations and Config
-// files. The active tab lives in the URL (?tab=) so a refresh or a shared link
-// reopens the same one — and so that coming back from a Memory or Conversations
-// detail page returns to the tab the row was on, rather than landing on
-// Overview and losing the reader's place. Leaving the Config files tab with an
-// unsaved draft asks first: switching tabs unmounts the editor and would drop
-// the edits.
-//
-// Of the seven, only Plugins acts on the agent (enable / disable / uninstall);
-// Memory and Conversations are read-only views of what the agent keeps on disk,
-// and a row in either opens its own page — the store's files, or that one
-// conversation — where the open / reveal actions live.
+// Per-agent detail page: the shared PageHeader (back link, type chip, the Coffer
+// connection / Edit / Delete actions) over eight tabs. The active tab lives in the
+// URL (?tab=), so a refresh, a shared link or coming back from a detail page lands
+// where the reader was. Leaving Config files with an unsaved draft asks first.
+// Only Plugins acts on the agent; Hooks, Memory and Conversations are read-only.
 import { useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -27,20 +18,29 @@ import { AgentMcpServersTab } from "@/components/agents/AgentMcpServersTab";
 import { AgentMemoryTab } from "@/components/agents/AgentMemoryTab";
 import { AgentOverviewTab } from "@/components/agents/AgentOverviewTab";
 import { AgentPluginsTab } from "@/components/agents/AgentPluginsTab";
+import { AgentHooksTab } from "@/components/agents/AgentHooksTab";
+import { AgentHeaderBadges } from "@/components/agents/AgentStateBadges";
 import { AgentSkillsTab } from "@/components/agents/AgentSkillsTab";
 import { PageHeader } from "@/components/PageHeader";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { translateApiError } from "@/lib/api/errors";
-import { agentTypeLabel } from "@/lib/agents/display";
 import { useAgent } from "@/lib/hooks/useAgents";
 import { displayName } from "@/lib/resourceTitle";
 import { ResourceLabel } from "@/components/resource/ResourceLabel";
 
-const TABS = ["overview", "skills", "mcpServers", "plugins", "memory", "conversations", "config"];
+const TABS = [
+  "overview",
+  "skills",
+  "mcpServers",
+  "plugins",
+  "hooks",
+  "memory",
+  "conversations",
+  "config",
+];
 const DEFAULT_TAB = "overview";
 
 export function AgentDetailPage() {
@@ -106,7 +106,7 @@ export function AgentDetailPage() {
       <PageHeader
         back={{ to: "/agents", label: t("agents.detail.back") }}
         title={<ResourceLabel resource={agent} heading />}
-        badges={<Badge variant="secondary">{agentTypeLabel(agent.type)}</Badge>}
+        badges={<AgentHeaderBadges agent={agent} />}
         subtitle={agent.description ?? undefined}
         actions={
           <div className="flex items-center gap-2">
@@ -143,6 +143,7 @@ export function AgentDetailPage() {
           <TabsTrigger value="skills">{t("agents.workspace.skills")}</TabsTrigger>
           <TabsTrigger value="mcpServers">{t("agents.workspace.mcpServers")}</TabsTrigger>
           <TabsTrigger value="plugins">{t("agents.workspace.plugins")}</TabsTrigger>
+          <TabsTrigger value="hooks">{t("agents.workspace.hooks")}</TabsTrigger>
           <TabsTrigger value="memory">{t("agents.workspace.memory")}</TabsTrigger>
           <TabsTrigger value="conversations">{t("agents.workspace.conversations")}</TabsTrigger>
           <TabsTrigger value="config">{t("agents.workspace.config")}</TabsTrigger>
@@ -158,6 +159,9 @@ export function AgentDetailPage() {
         </TabsContent>
         <TabsContent value="plugins" className="pt-6">
           <AgentPluginsTab agent={agent} />
+        </TabsContent>
+        <TabsContent value="hooks" className="pt-6">
+          <AgentHooksTab agent={agent} />
         </TabsContent>
         <TabsContent value="memory" className="pt-6">
           <AgentMemoryTab agent={agent} />

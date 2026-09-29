@@ -54,6 +54,7 @@ from coffer.surfaces.http.chat.agent_provider_routes import router as agent_prov
 from coffer.surfaces.http.chat.dependencies import get_agent_registry, get_model_catalog
 from coffer.surfaces.http.chat_wiring import _ActiveProviderModels
 from coffer.surfaces.http.provider_dependencies import set_provider_service
+from tests.support.facets import agent_catalog
 from tests.unit.chat.conftest import FakeAgentProvider
 
 _NOW = dt.datetime(2026, 9, 11, tzinfo=dt.UTC)
@@ -169,6 +170,7 @@ async def env(tmp_path: pathlib.Path) -> AsyncIterator[_Env]:
         )
         agent_uids[agent_type] = registered.uid
     providers = ProviderService(
+        agent_catalog=agent_catalog(),
         resources=resources,
         credentials=store,
         config_store=ConfigFileStore(),

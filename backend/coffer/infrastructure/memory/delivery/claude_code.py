@@ -32,6 +32,9 @@ TIMEOUT_SECONDS = 10
 class ClaudeCodeDelivery:
     """`domain.memory.delivery.DeliveryAdapter` for Claude Code."""
 
+    #: The agent this adapter serves, by its type value (the memory kind
+    #: declares it as a value; it may not import the agent kind's modules).
+    agent_type: str = "claude_code"
     config_key: str = CONFIG_KEY
     event: str = EVENT
 
@@ -52,6 +55,9 @@ class ClaudeCodeDelivery:
 
     def find_command(self, text: str) -> str | None:
         return delivery.find_command(text, event=self.event)
+
+    def is_coffer_command(self, command: str) -> bool:
+        return delivery.is_marked(command)
 
 
 ADAPTER = ClaudeCodeDelivery()

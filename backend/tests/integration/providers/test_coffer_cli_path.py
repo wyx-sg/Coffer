@@ -21,6 +21,7 @@ from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.resource import Resource
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
+from tests.support.facets import agent_catalog
 
 _NOW = datetime(2026, 9, 24, tzinfo=UTC)
 
@@ -118,7 +119,7 @@ def test_the_projector_writes_the_resolved_cli_into_settings(tmp_path: pathlib.P
         updated_at=_NOW,
     )
     projector = ProviderProjector(
-        ConfigFileStore(), cli_resolver=lambda: "/Users/me/My Apps/coffer"
+        ConfigFileStore(), agents=agent_catalog(), cli_resolver=lambda: "/Users/me/My Apps/coffer"
     )
 
     projector.project_type(

@@ -25,6 +25,7 @@ from coffer.application.chat.turn_runner import DEFAULT_TURN_IDLE_TIMEOUT_SECOND
 from coffer.application.provider.introspection import ModelIntrospectionService
 from coffer.application.provider.targets import projection_targets
 from coffer.application.resource_service import ResourceService
+from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.errors import CredentialMissing, ResourceNotFound
 from coffer.domain.provider.config import ProviderConfig
 from coffer.domain.provider.modality import Modality
@@ -160,6 +161,7 @@ def wire_chat(
     credential_store: EncryptedCredentialStore,
     agent_service: AgentService,
     resource_service: ResourceService,
+    agent_catalog: AgentCatalog,
     compose_memory_context: MemoryContextComposer | None = None,
 ) -> ChatWiring:
     """Wire the agent-chat feature (spec chat) into the running app.
@@ -204,6 +206,7 @@ def wire_chat(
 
     registry = build_agent_provider_registry(
         conv_repo,
+        agent_catalog,
         _credential_resolver,
         compose_memory_context=compose_memory_context,
         resolve_channel_name=_channel_name,

@@ -1,4 +1,10 @@
-"""Boot migration: move a custom-dir Claude Code agent's MCP entry home → own file.
+"""Boot migration: move a custom-dir agent's MCP entry home → its own file.
+
+Applies to every agent type whose MCP file for the standard config directory
+sits OUTSIDE that directory — Claude Code's ``$HOME/.claude.json`` beside
+``~/.claude`` — because only such a file can be mistaken for a custom-dir
+agent's own. Codex keeps ``config.toml`` inside its directory, so it has
+nothing to move. The rule is read from the descriptor, never from the type.
 
 Until Coffer honoured a custom config directory for ``.claude.json``, it
 installed EVERY Claude Code agent's ``coffer`` entry into ``$HOME/.claude.json``
@@ -27,10 +33,9 @@ from typing import Protocol
 
 from coffer.application.agent.config_file_service import ConfigFileStorePort
 from coffer.application.audit_service import AuditService
-from coffer.domain.agent.allowlists import claude_global_config
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import ConfigFileFormat, spec_for
-from coffer.domain.agent.descriptor import descriptor_for
+from coffer.domain.agent.descriptor import AGENT_DESCRIPTORS, AgentDescriptor
 from coffer.domain.agent.mcp_install import (
     apply_install,
     apply_uninstall,
@@ -38,7 +43,6 @@ from coffer.domain.agent.mcp_install import (
     installed_command,
     is_installed,
 )
-from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ConfigFileFormatInvalid
 from coffer.domain.resource import Resource
@@ -65,12 +69,20 @@ class ClaudeHomeMcpEntryMigration:
 
     async def heal(self) -> list[str]:
         """Move what belongs elsewhere; one note per moved entry."""
-        descriptor = descriptor_for(AgentType.CLAUDE_CODE)
+        notes: list[str] = []
+        for descriptor in AGENT_DESCRIPTORS.values():
+            notes.extend(await self._heal_type(descriptor))
+        return notes
+
+    async def _heal_type(self, descriptor: AgentDescriptor) -> list[str]:
         injection = descriptor.mcp
-        if injection is None:  # pragma: no cover - Claude Code always has one
+        if injection is None:
             return []
         fmt, ck = injection.format, injection.container_key
-        home_path = claude_global_config(descriptor.default_config_dir())
+        default_dir = descriptor.default_config_dir()
+        home_path = spec_for(descriptor.type, injection.config_key, default_dir).path
+        if default_dir in home_path.parents:
+            return []  # the standard dir's file is inside it: nothing to confuse
         home_text = self._read(home_path, fmt, ck)
         if not home_text:
             return []  # absent, empty or unparseable (logged): nothing to move
@@ -82,7 +94,7 @@ class ClaudeHomeMcpEntryMigration:
             if agent.uid != home_uid:
                 continue
             cfg = AgentConfig.model_validate(agent.config)
-            if cfg.type is not AgentType.CLAUDE_CODE:
+            if cfg.type != descriptor.type:
                 continue
             target = spec_for(cfg.type, injection.config_key, cfg.resolved_config_dir()).path
             if target == home_path:
@@ -90,7 +102,7 @@ class ClaudeHomeMcpEntryMigration:
             target_text = self._read(target, fmt, ck)
             if target_text is None:
                 logger.warning(
-                    "claude_mcp_home_migration: %s holds agent %s's entry; not moved "
+                    "mcp_home_migration: %s holds agent %s's entry; not moved "
                     "because %s does not parse",
                     home_path,
                     agent.uid,

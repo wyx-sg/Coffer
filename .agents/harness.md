@@ -46,6 +46,14 @@ A hook or gate must stay fast: a slow one trains people to bypass it.
   `sys.platform` / `platform.system()` / `os.name` check anywhere in
   `backend/coffer/` outside `infrastructure/platform/` — ask the platform port
   instead ([Platform port](../docs-site/architecture/platform.md)).
+- `scripts/check_agent_type_branches.py` (also `make lint`) fails on code in
+  `backend/coffer/` that names an `AgentType` member (`AgentType.CODEX`, under
+  any alias) or compares a value with an agent type's literal (`== "codex"`, a
+  `match` case) outside `domain/agent/`, `infrastructure/agent/`, the
+  migrations and the facet implementations the script lists by name — put the
+  value on the descriptor or the mechanism in a facet instead
+  ([Agent facets](../docs-site/architecture/agent-facets.md)). Its own tests
+  are `backend/tests/integration/harness/test_agent_type_gate.py`.
 
 ## How it is tested
 

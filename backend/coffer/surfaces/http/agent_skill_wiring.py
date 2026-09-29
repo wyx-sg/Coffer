@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from coffer.application.agent.auto_detect import AutoDetectService
 from coffer.application.agent.config_file_service import AgentConfigFileService
+from coffer.application.agent.hooks_service import AgentHooksService
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.agent.mcp_entry_service import AgentMcpEntryService
 from coffer.application.agent.mcp_home_migration import ClaudeHomeMcpEntryMigration
@@ -34,6 +35,7 @@ from coffer.application.skill.builtin_seed import BuiltinSkillSeed
 from coffer.application.skill.kind import make_skill_kind
 from coffer.application.skill.service import SkillService
 from coffer.domain.agent.config import AgentConfig
+from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.agent.scan import scan_locations
 from coffer.domain.resource import Resource
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
@@ -54,6 +56,7 @@ from coffer.surfaces.http.agent_dependencies import (
 from coffer.surfaces.http.skill_dependencies import set_skill_service
 from coffer.surfaces.http.sync_contributions import SyncContributions
 from coffer.surfaces.http.workspace_dependencies import (
+    set_agent_hooks_service,
     set_agent_mcp_entry_service,
     set_agent_native_memory_service,
     set_agent_plugin_service,
@@ -111,6 +114,7 @@ def wire_agent_and_skill_kinds(
     credential_store: EncryptedCredentialStore,
     sync: SyncContributions,
     platform: PlatformPort,
+    agent_catalog: AgentCatalog,
 ) -> AgentSkillWiring:
     """Wire the agent + skill kinds (specs agent-registry and skill-manager) into a running app.
 
@@ -190,7 +194,8 @@ def wire_agent_and_skill_kinds(
         reconcile_skill_delivery=_agent_reconcile_skill_delivery,
         config_file_store=config_file_store,
     )
-    auto_detect_svc = AutoDetectService(agent_service=agent_svc)
+    # Two-signal detection: the agents' dependency probe facets + the dirs.
+    auto_detect_svc = AutoDetectService(agent_service=agent_svc, catalog=agent_catalog)
     agent_config_file_svc = AgentConfigFileService(
         agent_service=agent_svc, audit=audit, store=config_file_store
     )
@@ -213,6 +218,16 @@ def wire_agent_and_skill_kinds(
         store=config_file_store,
         detail_reader=FsPluginDetailReader(),
         cli_runner=ClaudePluginCli(),
+    )
+
+    # Read-only listing of every hook in the agent's native config, Coffer's
+    # own marked with its health (the delivery hook of the projection facet).
+    agent_hooks_svc = AgentHooksService(
+        agent_service=agent_svc,
+        store=config_file_store,
+        plugins=agent_plugin_svc,
+        audit=audit,
+        catalog=agent_catalog,
     )
 
     # Read-only listing of the agent's OWN native per-project memory stores
@@ -284,6 +299,7 @@ def wire_agent_and_skill_kinds(
     set_agent_mcp_entry_service(agent_mcp_entry_svc)
     set_agent_native_memory_service(agent_native_memory_svc)
     set_agent_plugin_service(agent_plugin_svc)
+    set_agent_hooks_service(agent_hooks_svc)
     set_agent_transcript_service(agent_transcript_svc)
     set_skill_service(skill_svc)
 

@@ -54,18 +54,8 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.memory.note import Note
 from coffer.domain.memory.reader import MemoryReader
 from coffer.infrastructure.memory import store
-from coffer.infrastructure.memory.readers import ClaudeCodeMemoryReader, CodexMemoryReader
 
 KIND_MEMORY = "memory"
-
-
-#: The two readers this layer supports (spec memory "Reintroduce no retired mechanism" — a third
-#: agent earns an abstraction, not before). Built once; a caller that wants a
-#: fake substitutes the whole mapping rather than reaching inside it.
-DEFAULT_READERS: Mapping[str, MemoryReader] = {
-    "claude_code": ClaudeCodeMemoryReader(),
-    "codex": CodexMemoryReader(),
-}
 
 
 class MemoryService:
@@ -87,7 +77,7 @@ class MemoryService:
         resources: ResourceService,
         audit: AuditService,
         agent_source_resolver: AgentSourceResolver,
-        readers: Mapping[str, MemoryReader] | None = None,
+        readers: Mapping[str, MemoryReader],
         completion: LlmCompletionPort | None = None,
         model_selector: ModelSelectorPort | None = None,
         credential_resolver: Callable[[str], str] | None = None,
@@ -97,9 +87,10 @@ class MemoryService:
         self._resources = resources
         self._audit = audit
         self._resolve_agent_source = agent_source_resolver
-        self._readers: Mapping[str, MemoryReader] = (
-            dict(readers) if readers is not None else DEFAULT_READERS
-        )
+        # One reader per agent type value: the memory-reader facets of the
+        # agents (ADR agent-mechanisms-are-optional-facets-on-the-descriptor),
+        # handed in by the composition root. An agent without one is skipped.
+        self._readers: Mapping[str, MemoryReader] = dict(readers)
         self._completion = completion
         self._models = model_selector
         self._credential_resolver = credential_resolver
@@ -293,7 +284,6 @@ class MemoryService:
 
 
 __all__ = [
-    "DEFAULT_READERS",
     "KIND_MEMORY",
     "MemoryPartitionConfig",
     "MemoryService",

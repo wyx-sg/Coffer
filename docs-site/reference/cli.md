@@ -895,6 +895,19 @@ List the models a picker offers for this agent, with their effort levels.
 | `AGENT_KEY` | argument | text | required | Agent type, e.g. claude_code or codex |
 | `--json` | option | flag |  | JSON output |
 
+### agent hooks
+
+```sh
+coffer agent hooks [OPTIONS] NAME
+```
+
+List every hook the agent will run; Coffer's own is marked with \*.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Agent name |
+| `--json` | option | flag |  | JSON output |
+
 ### agent config
 
 ```sh
@@ -1588,7 +1601,7 @@ Rename a connection, or change its title, description, endpoint, wire or key.
 
 A rename changes the label and nothing else: the uid, the stored key and any projection into an agent stay where they are.
 
-A wire change is refused while the connection is switched on, because the wire decides which agents a connection can cover and which `coffer provider builtin <wire>` reverts. Run `builtin` first, edit, then `coffer provider switch <name>` again.
+A wire change is refused while the connection is switched on, because the wire decides whether a connection can cover any agent at all. Run `coffer provider builtin <agent_type>` first, edit, then `coffer provider switch <name>` again.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1668,16 +1681,16 @@ Switch the agents this connection reaches onto it and write their native config.
 ### provider builtin
 
 ```sh
-coffer provider builtin [OPTIONS] WIRE
+coffer provider builtin [OPTIONS] AGENT_TYPE
 ```
 
-Switch's other half: put this wire's agent(s) back on their OWN login.
+Switch's other half: put every agent of this type back on its OWN login.
 
-Removes Coffer's projection from the native config and clears the active connection. Idempotent — a no-op when the agent already runs built-in.
+Removes Coffer's projection from the native config and clears the active connection covering it. Idempotent — a no-op when the agent already runs built-in.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `WIRE` | argument | text | required | Wire format: anthropic \| openai |
+| `AGENT_TYPE` | argument | text | required | Agent type: claude_code \| codex |
 
 ### provider key
 

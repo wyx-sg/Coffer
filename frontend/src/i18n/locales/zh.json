@@ -871,6 +871,7 @@
       "skills": "技能",
       "mcpServers": "MCP 服务器",
       "plugins": "插件",
+      "hooks": "钩子",
       "memory": "记忆",
       "conversations": "对话记录",
       "mcp": {
@@ -1050,6 +1051,35 @@
     "health": {
       "available": "可用",
       "missing": "未检测到"
+    },
+    "detection": {
+      "notInstalled": "未安装",
+      "neverRunHint": "已安装但从未运行——运行一次即可创建它的配置目录。"
+    },
+    "hooksTab": {
+      "allMatcher": "全部",
+      "cofferBadge": "Coffer",
+      "sourceUser": "用户",
+      "sourcePlugin": "插件 {{id}}",
+      "parseError": "部分钩子文件无法读取：",
+      "emptyTitle": "没有钩子",
+      "emptyBody": "该 Agent 的配置及其已启用的插件都没有声明钩子。",
+      "cofferHook": {
+        "title": "Coffer 的钩子",
+        "health": {
+          "current": "最新",
+          "stale": "已过期",
+          "missing": "缺失"
+        },
+        "lastFired": "上次触发于 {{time}}",
+        "neverFired": "从未触发",
+        "repair": "修复",
+        "repaired": "已重新安装 Coffer 的钩子",
+        "helpLabel": "关于 Coffer 的钩子",
+        "help": "Coffer 通过 {{event}} 钩子向该 Agent 投递记忆，位于：",
+        "expected": "Coffer 安装的命令：",
+        "installed": "当前安装的命令："
+      }
     },
     "noneDetected": "本机没有检测到 Agent，可在下方手动添加。",
     "removeConfirmTitle": "移除 {{name}}？",

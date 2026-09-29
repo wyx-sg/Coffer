@@ -118,9 +118,12 @@ paths:
       operationId: listAgentCandidates
       summary: Discover installed-but-unregistered agents
       description: |
-        Read-only discovery: scans known install markers for each supported
-        agent type and returns the ones that are installed but not yet
-        registered, as candidates. Registers nothing — the user reviews the
+        Read-only discovery with two signals: for each supported type, the
+        program on the agent's real PATH (and its version) and the config
+        directory — the standard one, plus the one `CLAUDE_CONFIG_DIR` /
+        `CODEX_HOME` names in the daemon's environment. Every directory with
+        either signal that no registered agent holds is a candidate carrying
+        its detection state. Registers nothing — the user reviews the
         candidates and chooses which to add (discovery + confirm). A removed
         agent re-appears here on the next scan; there is no suppression list.
       responses:
@@ -463,6 +466,36 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ErrorOut" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
+
+  /agents/{uid}/hooks:
+    parameters:
+      - in: path
+        name: uid
+        required: true
+        description: The agent Resource's immutable identity.
+        schema: { type: string }
+    get:
+      tags: [agents]
+      operationId: listAgentHooks
+      summary: List every hook in the agent's native config
+      description: |
+        Read only (spec agent-registry "List every hook in the agent's native
+        config"): every command hook the agent's own hook-carrying files and
+        its enabled plugins' hook files declare, each with its event, matcher,
+        command and source file. Coffer's own delivery hook is marked, and
+        `coffer_hook` reports its health — `current` when the installed
+        command is exactly the one Coffer would write now, `stale` when
+        Coffer's marker carries another command, `missing` when it is not
+        there — and the last recorded fire. Writes nothing, records no audit
+        event; an unparseable file is a `parse_errors` entry.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentHooksOut" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   /agents/{uid}/plugins:
     parameters:
@@ -971,6 +1004,8 @@ components:
           model,
           fast_model,
           wire_api,
+          state,
+          version,
           created_at,
           updated_at,
         ]
@@ -1014,23 +1049,51 @@ components:
         model: { type: string, nullable: true, description: "The agent's model binding; null = unbound, so the agent runs on its own default." }
         fast_model: { type: string, nullable: true }
         wire_api: { type: string, nullable: true }
+        state:
+          $ref: "#/components/schemas/DetectionState"
+        version:
+          type: string
+          nullable: true
+          description: >-
+            The version the agent's program reports (`claude --version`,
+            `codex --version`); null when the program is not found or did not
+            answer in time.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    DetectionState:
+      type: string
+      enum: [installed_active, installed_never_run, config_only, missing]
+      description: >-
+        Two-signal detection: the agent's program on its real PATH, and its
+        config directory. `installed_active` — both; `installed_never_run` —
+        the program without its directory yet; `config_only` — the directory
+        without the program (shown as not installed); `missing` — neither,
+        only ever reported for a registered agent.
 
     AgentCandidate:
       type: object
       required:
-        [type, display_name, config_dir, default_skill_dir, suggested_name]
+        [
+          type,
+          display_name,
+          config_dir,
+          default_skill_dir,
+          suggested_name,
+          state,
+          version,
+        ]
       description: >-
-        An installed-but-unregistered agent surfaced by discovery. Derived at
-        scan time, never stored; the user confirms it to register.
+        An agent seen on this machine that is not registered, surfaced by
+        discovery. Derived at scan time, never stored; the user confirms an
+        `installed_active` one to register it.
       properties:
         type: { $ref: "#/components/schemas/AgentType" }
         display_name: { type: string }
         config_dir:
           {
             type: string,
-            description: "The type's standard config directory on disk (~/.claude, ~/.codex).",
+            description: "The config directory looked at: the type's standard one (~/.claude, ~/.codex), or the one CLAUDE_CONFIG_DIR / CODEX_HOME names in the daemon's environment.",
           }
         default_skill_dir:
           {
@@ -1040,8 +1103,14 @@ components:
         suggested_name:
           {
             type: string,
-            description: "Default resource name (e.g. claude-code).",
+            description: "Default resource name (e.g. claude-code; claude-code-<dir> for an environment-named directory).",
           }
+        state:
+          $ref: "#/components/schemas/DetectionState"
+        version:
+          type: string
+          nullable: true
+          description: The version the agent's program reports, when found.
 
     AgentCandidatesOut:
       type: object
@@ -1183,6 +1252,58 @@ components:
         source: { type: string, description: "Allowlist key of the file." }
         path: { type: string, description: "Resolved absolute path." }
         error: { type: string, description: "Parser error message." }
+
+    HookSource:
+      type: string
+      enum: [user, plugin]
+      description: >-
+        Where a hook is declared: a file in the agent's config directory, or
+        an enabled plugin's hook file.
+
+    HookHealth:
+      type: string
+      enum: [current, stale, missing]
+
+    NativeHook:
+      type: object
+      required: [event, matcher, command, type, timeout, source, path, plugin, coffer]
+      properties:
+        event: { type: string }
+        matcher: { type: string, nullable: true }
+        command: { type: string }
+        type: { type: string }
+        timeout: { type: integer, nullable: true }
+        source: { $ref: "#/components/schemas/HookSource" }
+        path: { type: string, description: "The file that declares the hook." }
+        plugin: { type: string, nullable: true, description: "The contributing plugin's id." }
+        coffer: { type: boolean, description: "Whether this is Coffer's own delivery hook." }
+
+    CofferHook:
+      type: object
+      required: [event, path, health, installed_command, expected_command, last_fired_at]
+      properties:
+        event: { type: string }
+        path: { type: string }
+        health: { $ref: "#/components/schemas/HookHealth" }
+        installed_command: { type: string, nullable: true }
+        expected_command: { type: string }
+        last_fired_at: { type: string, format: date-time, nullable: true }
+
+    AgentHooksOut:
+      type: object
+      required: [items, coffer_hook, parse_errors]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/NativeHook" }
+        coffer_hook:
+          anyOf:
+            - $ref: "#/components/schemas/CofferHook"
+            - type: "null"
+          description: Coffer's own delivery hook; null when the agent type has none.
+        parse_errors:
+          type: array
+          items: { $ref: "#/components/schemas/ParseError" }
 
     McpEntry:
       type: object

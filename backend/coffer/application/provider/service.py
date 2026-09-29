@@ -28,7 +28,6 @@ from coffer.application.provider.internal_default_ops import (
 from coffer.application.provider.ports import EngineNotifyPort
 from coffer.application.provider.projector import ProjectionConfigStore, ProviderProjector
 from coffer.application.provider.results import ActivateResult, DeactivateResult
-from coffer.application.provider.switch_ops import AGENT_FOR_WIRE
 from coffer.application.provider.switch_ops import activate as _activate_op
 from coffer.application.provider.switch_ops import deactivate as _deactivate_op
 from coffer.application.provider.targets import projection_targets
@@ -40,6 +39,7 @@ from coffer.application.provider.transcribe_default_ops import (
 )
 from coffer.application.provider.update_ops import update as _update_op
 from coffer.application.resource_service import ResourceService
+from coffer.domain.agent.facets import AgentCatalog
 from coffer.domain.agent.types import AgentType
 from coffer.domain.credential_errors import CredentialMissing
 from coffer.domain.errors import ResourceNotFound
@@ -76,13 +76,17 @@ class ProviderService:
         config_store: ProjectionConfigStore,
         agents: _AgentLister,
         audit: AuditService,
+        agent_catalog: AgentCatalog,
         engine: EngineNotifyPort | None = None,
     ) -> None:
         self._resources = resources
         self._credentials = credentials
         self._agents = agents
         self._audit = audit
-        self._projector = ProviderProjector(config_store)
+        # The agents' provider projection facets: what each agent's native
+        # config speaks and how a connection is written into it.
+        self._catalog = agent_catalog
+        self._projector = ProviderProjector(config_store, agents=agent_catalog)
         # Coffer's internal engine, told when the connection it runs on moves (spec
         # internal-engine "Drop the engine model when its connection moves"). The
         # engine's model is not this kind's to reason about, so what happens to it
@@ -260,13 +264,13 @@ class ProviderService:
         """
         return await _activate_op(self, uid, actor=actor)
 
-    async def deactivate(self, wire: Protocol, *, actor: str = "api") -> DeactivateResult:
-        """Switch the agent behind ``wire`` (anthropic→Claude Code, openai→Codex)
-        back to its built-in login: de-project Coffer's keys and clear the active
-        connection's ``is_active``. A connection reaching multiple agents
-        is reverted as a unit (the single ``is_active`` flag is all-or-nothing).
-        Idempotent; de-projects before the flip, mirroring :meth:`activate`."""
-        return await _deactivate_op(self, wire, actor=actor)
+    async def deactivate(self, agent_type: AgentType, *, actor: str = "api") -> DeactivateResult:
+        """Switch every agent of ``agent_type`` back to its built-in login:
+        de-project Coffer's keys and clear the active connection's
+        ``is_active``. A connection reaching multiple agents is reverted as a
+        unit (the single ``is_active`` flag is all-or-nothing). Idempotent;
+        de-projects before the flip, mirroring :meth:`activate`."""
+        return await _deactivate_op(self, agent_type, actor=actor)
 
     async def resolve_connection_key(self, uid: str) -> str:
         """The decrypted key of ONE specific connection — what Claude Code's
@@ -304,13 +308,16 @@ class ProviderService:
         raise NoActiveProvider(agent_type.value)
 
     async def resolve_active_key(self, wire: Protocol) -> str:
-        """Back-compat: the active key for a wire's agent (legacy ``--wire`` key
-        helper / ``/active-key/{wire}``). Resolves by the connection active for
-        the agent the wire stands for."""
-        agent_type = AGENT_FOR_WIRE.get(wire)
-        if agent_type is None:
-            raise NoActiveProvider(wire.value)
-        return await self.resolve_active_key_for_agent(agent_type)
+        """Back-compat: the active key for the legacy ``--wire`` key helper
+        (``/active-key/{wire}``). Resolves through the agents whose provider
+        projection declares that wire, in agent-type order: the first one with
+        an active connection answers."""
+        for agent_type in self._catalog.agents_speaking(wire.value):
+            try:
+                return await self.resolve_active_key_for_agent(agent_type)
+            except NoActiveProvider:
+                continue
+        raise NoActiveProvider(wire.value)
 
     async def _key_of(self, cfg: ProviderConfig, *, label: str) -> str:
         ref = cfg.credential_ref

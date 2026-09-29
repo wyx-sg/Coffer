@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Response, status
 from coffer.application.provider.service import ProviderService
 from coffer.application.provider.targets import scoped_targets
 from coffer.application.resource_service import ResourceService
+from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import CuratedModel, Protocol, ProviderConfig
 from coffer.domain.resource import Resource
 from coffer.surfaces.http.auth import require_token
@@ -205,18 +206,18 @@ async def activate_provider(
     )
 
 
-@router.post("/use-builtin/{wire}", response_model=DeactivateOut)
+@router.post("/use-builtin/{agent_type}", response_model=DeactivateOut)
 async def use_builtin_provider(
-    wire: Protocol,
+    agent_type: AgentType,
     svc: ProviderService = Depends(get_provider_service),  # noqa: B008
     actor: str = Depends(get_actor),
 ) -> DeactivateOut:
-    """Switch this wire's agent(s) back to their OWN built-in login: remove
-    Coffer's projection from the native config and clear the active connection.
-    Idempotent — a no-op when the agent already runs built-in."""
-    result = await svc.deactivate(wire, actor=actor)
+    """Switch every agent of this type back to its OWN built-in login: remove
+    Coffer's projection from the native config and clear the active connection
+    covering it. Idempotent — a no-op when the agent already runs built-in."""
+    result = await svc.deactivate(agent_type, actor=actor)
     return DeactivateOut(
-        protocol=result.protocol,  # type: ignore[arg-type]
+        agent_type=AgentType(result.agent_type),
         deprojected=result.deprojected,
         previous=result.previous,
     )

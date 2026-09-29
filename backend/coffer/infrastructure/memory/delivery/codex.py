@@ -51,6 +51,9 @@ _GUARD_PREFIX = 'f="${TMPDIR:-/tmp}/.coffer-memory-fired-$PPID"; [ -e "$f" ] || 
 class CodexDelivery:
     """`domain.memory.delivery.DeliveryAdapter` for Codex."""
 
+    #: The agent this adapter serves, by its type value (the memory kind
+    #: declares it as a value; it may not import the agent kind's modules).
+    agent_type: str = "codex"
     config_key: str = CONFIG_KEY
     event: str = EVENT
 
@@ -72,6 +75,9 @@ class CodexDelivery:
 
     def find_command(self, text: str) -> str | None:
         return delivery.find_command(text, event=self.event)
+
+    def is_coffer_command(self, command: str) -> bool:
+        return delivery.is_marked(command)
 
 
 ADAPTER = CodexDelivery()

@@ -64,9 +64,10 @@ binding.
 `protocol` says what the endpoint speaks: `anthropic`, `openai`, `ollama` or `unknown`, where
 `unknown` means a probe was inconclusive. It drives model introspection and whether a key is
 required; it does not choose the agent a connection is written into, but a keyless (`ollama`)
-connection reaches no agent whatever its scope says, and `use-builtin <wire>` finds the agent to
-revert through the wire — which is why the wire cannot move under a live connection (see "Refuse to
-move the wire of a live connection").
+connection reaches no agent whatever its scope says — which is why the wire cannot move under a live
+connection (see "Refuse to move the wire of a live connection"). No wire names an agent: each agent
+declares the wire protocols its native config speaks, possibly none (see "Keep projection transforms
+pure").
 
 #### Scenario: reject a profile with an unknown wire format
 - **GIVEN** the daemon is running,
@@ -226,10 +227,15 @@ the agent's; this requirement is about what the projection reads.
 - **THEN** the projected `env.ANTHROPIC_MODEL` / `env.ANTHROPIC_SMALL_FAST_MODEL` come from the AGENT's binding — the model lives at the point of use, not on the connection. An unbound agent gets no model env written, so it runs on its OWN default model.
 
 ### Requirement: Keep projection transforms pure
-Domain projection logic MUST be pure (no I/O): the `apply_*` / `remove_*` functions in
-`domain/provider/projection.py` (`apply_anthropic_settings`, `apply_codex_provider` and their
-inverses) take the existing text and return the new native-config TEXT; `ProviderProjector` performs
-the file read and write, refuses a stale write, and owns the Codex catalogue file's lifecycle.
+Domain projection logic MUST be pure (no I/O). Each agent that can be put on a connection has a
+provider entry in its projection facet ([Agent Mechanisms Are Optional Facets on the Descriptor](../../../docs/decisions/agent-mechanisms-are-optional-facets-on-the-descriptor.md)):
+it names the allowlisted file it lands in and the wire protocols the agent's native config speaks
+(possibly none), and composes the pure `apply_*` / `remove_*` transforms (`apply_anthropic_settings`,
+`apply_codex_provider` and their inverses) into a plan — the main file's new TEXT, the files written
+before it and the files removed after it — plus the check whether Coffer's keys are present.
+`ProviderProjector` performs the plan: it reads and writes the files, refuses a stale write, and
+writes a side file (the Codex model catalogue) before the pointer to it and removes it after the
+pointer is gone. The writer is the agent's facet, never chosen by a protocol.
 
 #### Scenario: projection transforms touch no file
 - **GIVEN** existing native-config text for Claude Code and for Codex, and file access that fails if attempted
@@ -291,24 +297,14 @@ routed to Claude Code. Coffer translates nothing between protocols.
 - **THEN** it projects into Claude Code's `settings.json` (the anthropic shape) with `apiKeyHelper = "<absolute path to the coffer CLI> provider key --connection-uid <uid>"`, `GET /providers/{uid}/key` returns exactly that connection's key, and the reported agent set follows the scope.
 
 ### Requirement: Audit every provider switch
-The system MUST emit an audit event with value `"provider_switched"` and details
-`{from, to, protocol, agents}` for every switch.
+The system MUST emit an audit event with value `"provider_switched"` for every switch, with details
+`{from, to, protocol, agents}` for an activation and `{from, to: null, agent_type, agents}` for a
+revert to the built-in login.
 
 #### Scenario: a provider switch is recorded in the audit log
 - **GIVEN** a connection is activated,
 - **WHEN** the user queries the audit log,
 - **THEN** a `provider_switched` entry appears with details `{from, to, protocol, agents}`, a timestamp, and an actor.
-
-### Requirement: Revert an agent to its built-in login
-`POST /api/v1/providers/use-builtin/{wire}` (and `coffer provider builtin <wire>`) MUST remove
-Coffer's managed keys from the agent behind that wire and clear the active connection's flag,
-idempotently — succeeding when nothing was active — and MUST revert a connection that reaches
-several agents as a unit, because the single `is_active` flag is all-or-nothing.
-
-#### Scenario: switch a wire back to the agent built-in login
-- **GIVEN** a connection is active and projected into Claude Code,
-- **WHEN** the user switches that wire back to built-in (`POST /providers/use-builtin/{wire}`, or `coffer provider builtin <wire>`),
-- **THEN** Coffer's managed keys are removed from the agent's native config so it falls back to its own login, and the connection is no longer active; the operation is idempotent (a no-op when nothing is active). A connection is an optional override.
 
 ### Requirement: Clear an active flag the agent's config contradicts at boot
 At boot, for each agent type with an active connection reaching it, the system MUST check that the
@@ -346,7 +342,8 @@ non-zero exit with a message on `stderr` from the CLI; the secret appears in nei
 name: its caller is the `apiKeyHelper` line Coffer writes into another tool's config file, so it MUST
 keep resolving to the same connection after a rename. The wire-keyed form (`--wire <wire>` /
 `GET /api/v1/providers/active-key/{wire}`) MUST remain for back-compat with `settings.json` files
-written before, resolving through the connection active for that wire's agent.
+written before, resolving through the agents whose native config declares that wire: the first such
+agent type, in agent-type order, with an active connection answers.
 
 #### Scenario: resolve the active provider key for the apiKeyHelper
 - **GIVEN** a connection is active with a known secret stored in the vault,
@@ -407,10 +404,9 @@ because its config holds no secret.
 A connection's `protocol` MUST be correctable — the probe that guessed the wire can be wrong, and
 re-entering the key to fix it is a worse answer than editing it. But the wire is not inert, so
 changing it MUST be refused with 409 `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE` while the connection is
-active, with a message that names the way out (`coffer provider builtin <wire>`). Two things key
-off it: a keyless (`ollama`) connection covers no agent whatever its scope says (see "Keep ollama
-connections internal-only"), and reverting to the built-in login finds the agent to revert through
-the wire.
+active, with a message that names the way out (`coffer provider builtin <agent_type>` for each
+agent type the connection reaches). A keyless (`ollama`) connection covers no agent whatever its
+scope says (see "Keep ollama connections internal-only").
 Moving the wire of a connection that is currently projected would leave the native config Coffer
 already wrote standing, with nothing left that would ever take it off. Silently de-projecting instead
 MUST NOT be the answer: the developer asked to change a field, not to take their agents off a
@@ -421,7 +417,7 @@ surface that offers the edit — REST, `coffer provider edit`, and the connectio
 #### Scenario: correcting a mis-probed wire is refused while the connection is live
 - **GIVEN** a connection that is switched on and projected into an agent,
 - **WHEN** the user patches its `protocol` to a different wire,
-- **THEN** the request is refused `409` `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`, the stored wire is unchanged, and the message names `coffer provider builtin <wire>` as the way out
+- **THEN** the request is refused `409` `PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE`, the stored wire is unchanged, and the message names `coffer provider builtin <agent_type>` for the agent types it reaches as the way out
 - **AND** re-sending the wire the connection already has is not a change and succeeds, so a client that submits a whole form is never told its unchanged dropdown is a conflict; once the agents are back on their own login, the same patch succeeds (see "Refuse to move the wire of a live connection")
 
 ### Requirement: Offer every connection operation on REST, CLI and web
@@ -436,7 +432,7 @@ available over REST (`PATCH /api/v1/providers/{uid}`: `base_url`, `protocol`, `m
 (`coffer provider edit <name> [--name <new>] [--title <text>] [--description <text>] [--protocol <wire>] [--base-url <url>] [--secret <value>]`)
 and from its detail page, including correcting the wire. `coffer provider add <name> --protocol <p>
 --base-url <url> [--secret <value> | --credential-ref <ref>]` takes no model. Reverting is
-`coffer provider builtin <wire>`: a surface that can put an agent onto a Coffer connection and
+`coffer provider builtin <agent_type>`: a surface that can put an agent onto a Coffer connection and
 not take it off again is half an operation. Which connection the internal engine and speech-to-text
 run on is set through `coffer config` (see "Set the internal-engine default" and "Keep an
 independent speech-to-text default"), not through a `provider` subcommand.
@@ -481,9 +477,9 @@ The web surfaces:
 - **THEN** only that field is updated, `credential_ref` is unchanged, and `resource_updated` is audited.
 #### Scenario: the command line covers create, list, switch and revert
 - **GIVEN** the daemon is running,
-- **WHEN** the user runs `coffer provider add`, `coffer provider list --json`, `coffer provider switch` and `coffer provider builtin <wire>` from the CLI,
+- **WHEN** the user runs `coffer provider add`, `coffer provider list --json`, `coffer provider switch` and `coffer provider builtin <agent_type>` from the CLI,
 - **THEN** each operation succeeds with the same effect as the HTTP API and `list --json` returns machine-readable output,
-- **AND** after the revert the connection is no longer active for its wire, so a terminal-only user can undo the switch they made.
+- **AND** after the revert the connection is no longer active for that agent type, so a terminal-only user can undo the switch they made.
 #### Scenario: the connections page lists profiles and their compatible agents
 - **GIVEN** the connections page is rendered with two mock connections whose reach differs,
 - **WHEN** the page renders,
@@ -854,3 +850,21 @@ index.
 - **WHEN** the user runs `coffer config set transcribe.provider B`, then `coffer config get transcribe.provider`,
 - **THEN** B carries `transcribe_default`, `get` prints B, and a `provider_transcribe_default_set` entry names B,
 - **AND** A is still the internal-engine default.
+
+### Requirement: Revert an agent type to its built-in login
+`POST /api/v1/providers/use-builtin/{agent_type}` (and `coffer provider builtin <agent_type>`) MUST
+remove Coffer's managed keys from every enabled agent of that type and clear the flag of the
+connection active for it, idempotently — succeeding when nothing was active — and MUST revert a
+connection that reaches several agent types as a unit, because the single `is_active` flag is
+all-or-nothing. The route and the command take an agent type; a wire is not accepted, because a
+connection reaches agents through its scope and no protocol names an agent.
+
+#### Scenario: switch an agent back to its built-in login
+- **GIVEN** a connection is active and projected into Claude Code,
+- **WHEN** the user switches Claude Code back to built-in (`POST /providers/use-builtin/claude_code`, or `coffer provider builtin claude_code`),
+- **THEN** Coffer's managed keys are removed from the agent's native config so it falls back to its own login, and the connection is no longer active; the operation is idempotent (a no-op when nothing is active). A connection is an optional override.
+
+#### Scenario: a wire no longer names an agent to revert
+- **GIVEN** the daemon is running
+- **WHEN** the user asks to revert `anthropic`, or a type that is not an agent type
+- **THEN** the request is refused as `unprocessable_entity` (422) and nothing is written

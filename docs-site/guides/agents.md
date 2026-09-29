@@ -1,6 +1,6 @@
 ---
 title: Agents
-description: Register Claude Code and Codex with Coffer, connect them to Coffer, and manage their config files, MCP entries, plugins, models, memory and transcripts.
+description: Register Claude Code and Codex with Coffer, connect them to Coffer, and manage their config files, MCP entries, plugins, hooks, models, memory and transcripts.
 ---
 
 # Agents
@@ -18,10 +18,10 @@ Everything Coffer shares — MCP servers, skills, knowledge, memory, model provi
 
 Coffer supports two agent types:
 
-| Type | Product | Default config directory | Discovered by |
+| Type | Product | Default config directory | Program Coffer looks for |
 | --- | --- | --- | --- |
-| `claude_code` | Claude Code (CLI and IDE/desktop forms) | `~/.claude` | the directory existing |
-| `codex` | OpenAI Codex (CLI and IDE forms) | `~/.codex` | the directory existing |
+| `claude_code` | Claude Code (CLI and IDE/desktop forms) | `~/.claude` | `claude` |
+| `codex` | OpenAI Codex (CLI and IDE forms) | `~/.codex` | `codex` |
 
 The CLI and IDE forms of each product read the same config directory, so one registered agent covers both. The Claude Desktop chat app has its own configuration and is not a supported agent.
 
@@ -33,16 +33,26 @@ Coffer never copies an agent's configuration into its database. Config files, MC
 
 ### From detected agents
 
-Coffer scans for each supported type's config directory and offers what it finds. It never registers anything on its own, and the daemon does not auto-register agents at startup.
+Coffer detects an agent from two signals: its program on your `PATH` — the `PATH` your login shell gives you, so an agent installed with Homebrew or a Node version manager is found even when the daemon was started from the Dock — and its config directory. It reads the program's version (`claude --version`, `codex --version`) along the way. It never registers anything on its own, and the daemon does not auto-register agents at startup.
 
-**Web UI:** open **Agents** and click **Add agent**. The dialog lists **Detected agents**; tick the ones you want and click **Add selected**.
+Each detected agent is in one of these states:
+
+| State | Program | Config directory | What you can do |
+| --- | --- | --- | --- |
+| **Installed** | found | present | Add it. |
+| **Installed, never run** | found | not yet created | Run the agent once so it creates its directory, then add it. |
+| **Not installed** | missing | present | Nothing to add: the directory is left from an earlier install. Reinstall the agent, or ignore it. |
+
+Coffer looks at each type's default directory and, when the daemon's environment sets `CLAUDE_CONFIG_DIR` or `CODEX_HOME`, at the directory it names — shown as a separate agent with a name of its own, such as `claude-code-claude-work`. It does not search the rest of your disk; register any other directory [manually](#manually-with-a-custom-config-directory). A directory that is already registered is not offered again.
+
+**Web UI:** open **Agents** and click **Add agent**. The dialog lists **Detected agents** with their version; tick the installed ones you want and click **Add selected**. An agent that is installed but never run, or not installed, is listed with that state and cannot be ticked.
 
 **CLI:**
 
 ```sh
 coffer scan
-# lists detected agents that are not registered (kind "agent"), with their type as the ref
-# and the command that registers each one
+# lists detected agents that are not registered (kind "agent"), with their type as the ref,
+# their state and version, and — for an installed one — the command that registers it
 
 coffer agent add codex            # register a detected agent under its suggested name
 # registered: agent codex
@@ -83,7 +93,7 @@ In the web UI, the agent's detail page has **Edit** (config directory and descri
 - **Title** is an optional display name (up to 80 characters) that Coffer's pages and the CLI show in place of the name; an empty `--title` clears it.
 - **Rename** changes only the label. Everything that refers to an agent — reach lists, a channel's default agent, the installed MCP entry — holds the agent's immutable `uid`, so a rename breaks nothing.
 - **Disable** makes Coffer stop writing into and reading from the agent: its delivered skills are removed, its native memory is not aggregated, and its config no longer feeds the model catalogue. Enabling it again restores what the skills grant. This switch is on the CLI and REST API only.
-- **Remove** deletes the registration and removes the skills Coffer delivered. The agent stays installed, and `coffer scan` offers it again for as long as its config directory exists.
+- **Remove** deletes the registration and removes the skills Coffer delivered. The agent stays installed, and `coffer scan` offers it again for as long as its program or its config directory is there.
 
 ::: warning Removing an agent leaves Coffer's entries in place
 Removing an agent does not disconnect it. The `coffer` MCP entry keeps reporting a `uid` no registered agent has, so its sessions see only servers that reach every agent. Run `coffer agent disconnect <name>` before removing, or connect again after registering the agent again.
@@ -291,6 +301,36 @@ coffer agent plugin rm codex formatter@acme
 
 Claude Code's own inventory files are never written by Coffer. When the `claude` CLI is not on `PATH`, uninstall is unavailable (`PLUGIN_UNINSTALL_UNSUPPORTED`) and the web UI hides the action. Installing plugins and managing marketplaces stay with the agent's own tooling.
 
+## Hooks
+
+The **Hooks** tab shows every hook the agent will run, grouped by event, read straight from the agent's files: each hook's matcher, its command and where it comes from — one of the agent's own settings files, or a plugin (by name). Only plugins that are switched on are included, since a disabled plugin's hooks do not run. Hooks set in a project's own settings are not shown, because Coffer does not know which repositories you use the agent in.
+
+| | Claude Code | Codex |
+| --- | --- | --- |
+| Agent's own files | `settings.json`, `settings.local.json` | `hooks.json` |
+| Plugins | each enabled plugin's `hooks/hooks.json` | each enabled plugin's `hooks/hooks.json`, where it has one |
+| Coffer's own hook | `SessionStart` in `settings.json` | `UserPromptSubmit` in `hooks.json` |
+
+Coffer's own hook — the [memory delivery hook](/guides/memory#at-session-start-through-a-hook) — is marked, and a line above the table says how it is doing:
+
+- **Current** — installed with exactly the command this version of Coffer writes.
+- **Out of date** — Coffer's hook is there but carries a command an older version wrote. The daemon rewrites it at start-up; **Repair** does it now.
+- **Missing** — no Coffer hook. **Repair** connects the agent to Coffer again, which installs it (while the `memory` feature is on).
+
+It also shows when the hook last fired, from the [audit log](/guides/activity). "Never fired" on an agent you use every day is the sign that the agent is not running the hook.
+
+Everything else on the tab is read only: Coffer never edits another tool's hooks. To change one, open the file it comes from.
+
+```sh
+coffer agent hooks claude-code
+# * SessionStart [startup|resume|clear|compact]  (user)  : coffer-memory; coffer memory context …
+#   PreToolUse [Bash]  (user)  ./lint.sh
+#   SessionStart  (plugin formatter@acme)  ./plug.sh
+# coffer hook: current on SessionStart, last fired 2026-09-29T08:12:03Z
+
+coffer agent hooks claude-code --json   # the full answer, with each hook's file
+```
+
 ## Models
 
 The model catalogue answers "which models can this agent be put on". Coffer reads it back from the installed agent every time, so a newly released model appears without a Coffer release:
@@ -351,6 +391,8 @@ The **Skills** tab shows the skills Coffer delivers to the agent (**Managed by C
 | **Connect to Coffer** fails naming `coffer-mcp-shim` | The daemon cannot find the shim | Set `COFFER_MCP_SHIM_PATH` in the daemon's environment, or reinstall Coffer so `~/.coffer/bin/coffer-mcp-shim` exists. |
 | Status says **Connected** but the agent has no Coffer tools | The agent was not restarted, or reads a different config directory | Restart the agent. For a custom directory, start the agent with `CLAUDE_CONFIG_DIR` / `CODEX_HOME` pointing at it. |
 | **Availability** shows **Not found** | The agent's CLI (`claude` or `codex`) is not on the daemon's `PATH` | Install the CLI, or make it visible to the daemon. |
+| The agent reads **Not installed** | Its program is not on your login shell's `PATH`; only its config directory is left | Reinstall the agent, or put its program on your `PATH`. |
+| Detected as **Installed, never run** | The program is installed but has never created its config directory | Start the agent once, then add it. |
 | A save fails with `CONFIG_FILE_STALE` | The file changed after you opened it | Re-open the file and save again. |
 | Plugin uninstall is missing | `claude` is not on `PATH` | Run `claude plugin uninstall <id>` yourself. |
 
@@ -359,5 +401,6 @@ The **Skills** tab shows the skills Coffer delivers to the agent (**Managed by C
 - [Connect a client](/guides/connect-a-client) — the shim, the HTTP endpoint and agent identity
 - [MCP servers](/guides/mcp-servers) — what the gateway serves to agents
 - [Model providers](/guides/providers) — projecting an endpoint into an agent
+- [Agent facets](/architecture/agent-facets) — how Coffer keeps what differs between agents in one place
 - [Resource framework](/architecture/resource-framework) — reach and immutable uids
 - Spec: [agent-registry](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/agent-registry/spec.md), [claude-code](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/agent-registry/claude-code/spec.md), [codex](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/agent-registry/codex/spec.md)

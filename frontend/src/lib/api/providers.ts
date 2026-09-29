@@ -184,10 +184,10 @@ export const providersApi = {
   activate: (uid: string) =>
     call<ActivateOut>(`/providers/${enc(uid)}/activate`, { method: "POST" }),
 
-  /** Switch a wire's agent(s) back to their own built-in login: remove Coffer's
-   * projection and clear the active connection. Idempotent. */
-  useBuiltin: (wire: Protocol) =>
-    call<DeactivateOut>(`/providers/use-builtin/${enc(wire)}`, { method: "POST" }),
+  /** Switch an agent type back to its own built-in login: remove Coffer's
+   * projection and clear the connection active for it. Idempotent. */
+  useBuiltin: (agentType: AgentType) =>
+    call<DeactivateOut>(`/providers/use-builtin/${enc(agentType)}`, { method: "POST" }),
 
   /** Make this connection Coffer's internal-engine default (clears the flag on
    * all others). Returns the updated connection. */

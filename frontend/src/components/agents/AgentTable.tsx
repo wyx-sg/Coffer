@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 
 import { AgentBulkActions } from "@/components/agents/AgentBulkActions";
 import { AgentConnectionBadge } from "@/components/agents/AgentConnectionControls";
+import { AgentNotInstalledBadge } from "@/components/agents/AgentStateBadges";
 import { DataTable, type Column } from "@/components/DataTable";
 import { RowDeleteButton } from "@/components/table/RowDeleteButton";
 import { Badge } from "@/components/ui/badge";
@@ -76,7 +77,12 @@ export function AgentTable({
       key: "name",
       header: t("agents.name"),
       className: "whitespace-nowrap",
-      cell: (a) => <ResourceLabel resource={a} />,
+      cell: (a) => (
+        <span className="inline-flex items-center gap-2">
+          <ResourceLabel resource={a} />
+          <AgentNotInstalledBadge state={a.state} />
+        </span>
+      ),
     },
     {
       key: "type",

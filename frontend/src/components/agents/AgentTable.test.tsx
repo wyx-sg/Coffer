@@ -114,6 +114,16 @@ describe("AgentTable", () => {
     expect(screen.queryByText("/home/u/.codex")).not.toBeInTheDocument();
   });
 
+  test("marks a row Not installed when its program is gone", () => {
+    stubRemove();
+    const agents: AgentOut[] = [
+      { ...SAMPLE[0], state: "config_only" },
+      { ...SAMPLE[1], state: "installed_active" },
+    ];
+    render(<AgentTable agents={agents} />, { wrapper: wrap(null) });
+    expect(screen.getAllByText("Not installed")).toHaveLength(1);
+  });
+
   test("shows the product name for the type, never the registry key", () => {
     stubRemove();
     render(<AgentTable agents={SAMPLE} />, { wrapper: wrap(null) });

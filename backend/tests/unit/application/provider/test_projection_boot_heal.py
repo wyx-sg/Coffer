@@ -17,12 +17,9 @@ from typing import Any
 
 import pytest
 
-from coffer.application.provider.boot_reconcile import (
-    ProviderProjectionBootHeal,
-    _projection_present,
-)
+from coffer.application.provider.boot_reconcile import ProviderProjectionBootHeal
 from coffer.domain.agent.types import AgentType
-from coffer.domain.provider.config import Protocol
+from coffer.domain.provider.agent_projection import CodexProviderProjection
 from coffer.domain.provider.projection import (
     anthropic_api_key_helper,
     apply_anthropic_settings,
@@ -30,6 +27,7 @@ from coffer.domain.provider.projection import (
 )
 from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope
+from tests.support.facets import agent_catalog
 
 _NOW = datetime(2026, 9, 10, tzinfo=UTC)
 _BASE_URL = "https://gateway.example/v1"
@@ -127,10 +125,10 @@ def _projected_settings() -> str:
 
 
 def _heal(store: Any, agents: list[Resource], providers: list[Resource]):
-    calls: list[Protocol] = []
+    calls: list[AgentType] = []
 
-    async def deactivate(wire: Protocol) -> object:
-        calls.append(wire)
+    async def deactivate(agent_type: AgentType) -> object:
+        calls.append(agent_type)
         return None
 
     heal = ProviderProjectionBootHeal(
@@ -138,6 +136,7 @@ def _heal(store: Any, agents: list[Resource], providers: list[Resource]):
         agents=_Lister(agents),
         config_store=store,
         deactivate=deactivate,
+        catalog=agent_catalog(),
     )
     return heal, calls
 
@@ -150,7 +149,7 @@ async def test_a_flag_the_agent_config_denies_is_cleared(tmp_path: pathlib.Path)
 
     notes = await heal.heal()
 
-    assert calls == [Protocol.ANTHROPIC], "the agent type must be put back on its built-in login"
+    assert calls == [AgentType.CLAUDE_CODE], "the agent type must be put back on its built-in login"
     assert any("agnes" in n and "built-in login" in n for n in notes)
 
 
@@ -214,7 +213,7 @@ async def test_an_unreadable_config_is_assumed_projected(tmp_path: pathlib.Path)
 async def test_a_failing_deactivate_is_reported_not_raised(tmp_path: pathlib.Path) -> None:
     store = _Store({_settings_path(tmp_path): "{}"})
 
-    async def deactivate(wire: Protocol) -> object:
+    async def deactivate(agent_type: AgentType) -> object:
         raise RuntimeError("registry is busy")
 
     heal = ProviderProjectionBootHeal(
@@ -222,6 +221,7 @@ async def test_a_failing_deactivate_is_reported_not_raised(tmp_path: pathlib.Pat
         agents=_Lister([_agent(tmp_path)]),
         config_store=store,
         deactivate=deactivate,
+        catalog=agent_catalog(),
     )
 
     notes = await heal.heal()
@@ -238,6 +238,7 @@ def test_a_leftover_codex_shell_exclude_is_not_a_projection() -> None:
     projected = apply_codex_provider(
         "", base_url=_BASE_URL, model="m", wire_api="responses", display_name="x"
     )
-    assert _projection_present(projected, AgentType.CODEX)
+    facet = CodexProviderProjection()
+    assert facet.is_present(projected)
     leftover = '[shell_environment_policy]\nexclude = ["COFFER_PROVIDER_KEY"]\n'
-    assert not _projection_present(leftover, AgentType.CODEX)
+    assert not facet.is_present(leftover)

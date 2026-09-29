@@ -25,6 +25,7 @@ from coffer.domain.resource import Resource
 from coffer.domain.workspace_errors import ConfigFileStale
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.surfaces.http.errors import _STATUS
+from tests.support.facets import agent_catalog
 
 _NOW = datetime(2026, 9, 14, tzinfo=UTC)
 
@@ -96,7 +97,7 @@ def test_projection_refuses_to_overwrite_a_concurrent_edit(tmp_path: pathlib.Pat
     store = _EditedUnderneath('{"theme": "dark"}')
 
     with pytest.raises(ConfigFileStale) as exc:
-        ProviderProjector(store).project_type(
+        ProviderProjector(store, agents=agent_catalog()).project_type(
             _connection(), _config(), [_agent(tmp_path)], AgentType.CLAUDE_CODE
         )
 
@@ -107,14 +108,16 @@ def test_projection_refuses_to_overwrite_a_concurrent_edit(tmp_path: pathlib.Pat
 
 def test_deprojection_refuses_to_overwrite_a_concurrent_edit(tmp_path: pathlib.Path) -> None:
     settings = tmp_path / "settings.json"
-    ProviderProjector(ConfigFileStore()).project_type(
+    ProviderProjector(ConfigFileStore(), agents=agent_catalog()).project_type(
         _connection(), _config(), [_agent(tmp_path)], AgentType.CLAUDE_CODE
     )
     projected = settings.read_text(encoding="utf-8")
     store = _EditedUnderneath(projected.replace("}", ', "theme": "dark"}', 1))
 
     with pytest.raises(ConfigFileStale):
-        ProviderProjector(store).deproject_type([_agent(tmp_path)], AgentType.CLAUDE_CODE)
+        ProviderProjector(store, agents=agent_catalog()).deproject_type(
+            [_agent(tmp_path)], AgentType.CLAUDE_CODE
+        )
 
     assert '"theme": "dark"' in settings.read_text(encoding="utf-8")
 
@@ -125,7 +128,7 @@ def test_unchanged_file_projects_normally_with_the_fingerprint_check(
     """The check is invisible when nobody edited the file: the projection lands."""
     settings = tmp_path / "settings.json"
     settings.write_text('{"theme": "light"}', encoding="utf-8")
-    projected = ProviderProjector(ConfigFileStore()).project_type(
+    projected = ProviderProjector(ConfigFileStore(), agents=agent_catalog()).project_type(
         _connection(), _config(), [_agent(tmp_path)], AgentType.CLAUDE_CODE
     )
     assert projected == ["cc"]
@@ -150,7 +153,7 @@ class _FakeService:
     """
 
     def __init__(self, store: ConfigFileStore) -> None:
-        self._projector = ProviderProjector(store)
+        self._projector = ProviderProjector(store, agents=agent_catalog())
         self._audit = _FakeAudit()
 
 
@@ -184,7 +187,7 @@ async def test_service_audits_a_refused_projection_then_reraises(tmp_path: pathl
 @pytest.mark.asyncio
 async def test_service_audits_a_refused_deprojection(tmp_path: pathlib.Path) -> None:
     settings = tmp_path / "settings.json"
-    ProviderProjector(ConfigFileStore()).project_type(
+    ProviderProjector(ConfigFileStore(), agents=agent_catalog()).project_type(
         _connection(), _config(), [_agent(tmp_path)], AgentType.CLAUDE_CODE
     )
     edited = settings.read_text(encoding="utf-8").replace("}", ', "theme": "dark"}', 1)
