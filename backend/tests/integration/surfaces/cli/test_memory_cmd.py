@@ -341,37 +341,6 @@ def test_distil_without_an_internal_connection_reports_the_mechanical_pass(memor
     }
 
 
-# ----- delivery -------------------------------------------------------------
-
-
-def test_delivery_install_status_and_remove_round_trip(memory_cli_daemon):
-    _register_cc_via_http()
-
-    installed = _runner.invoke(cli_app, ["memory", "delivery-install", "cc"])
-    assert installed.exit_code == 0, installed.output
-    assert json.loads(_extract_json(installed.output))["installed"] is True
-
-    status = _runner.invoke(cli_app, ["memory", "delivery", "--json"])
-    data = json.loads(_extract_json(status.output))["delivery"]
-    # The row carries both: the label a person reads, and the identity a script
-    # would act on.
-    row = next(d for d in data if d["agent_name"] == "cc")
-    assert row["installed"] is True
-    assert row["agent_uid"]
-
-    narrowed = _runner.invoke(cli_app, ["memory", "delivery", "--agent", "cc", "--json"])
-    assert narrowed.exit_code == 0, narrowed.output
-    assert len(json.loads(_extract_json(narrowed.output))["delivery"]) == 1
-
-    removed = _runner.invoke(cli_app, ["memory", "delivery-remove", "cc"])
-    assert removed.exit_code == 0, removed.output
-    assert json.loads(_extract_json(removed.output))["installed"] is False
-
-    table = _runner.invoke(cli_app, ["memory", "delivery"])
-    assert table.exit_code == 0, table.output
-    assert "cc" in table.output
-
-
 # ----- `context`: the hook-invoked command, tested without client_or_exit --
 
 

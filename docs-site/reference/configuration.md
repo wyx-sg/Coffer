@@ -117,8 +117,7 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
   "port": 8123,
   "machine_name": "studio",
   "machine_id": "3f0c9a…",
-  "features": { "vault_sync": true, "memory": false },
-  "memory_delivery_withdrawn": ["01J9ZX…"]
+  "features": { "vault_sync": true, "memory": false }
 }
 ```
 
@@ -128,7 +127,6 @@ The desktop app reads `HOME` (or `USERPROFILE`), `SHELL` and `PATH` to locate `~
 | `machine_name` | string | host name without `.local` | This machine's display label in vault sync. Free to change; nothing references it. | **Sync** page, `coffer sync machine rename` |
 | `machine_id` | string | derived from the host | Cache of the host-derived machine id that names this machine in a synced vault. Deleting it recomputes the same value. | written by the daemon |
 | `features` | object of booleans | `{}` | This machine's experimental-feature switches. Takes effect at once. | **Settings → General → Experimental features**, `coffer daemon features enable/disable` |
-| `memory_delivery_withdrawn` | array of agent uids | absent | The agents whose memory delivery hook Coffer removed when `memory` was switched off, so switching it back on restores exactly those. | written by the daemon |
 
 The daemon's runtime state — its pid, port and API token — lives in a different file, `~/.coffer/daemon.json`, which is created on start and removed on exit. See [Files and directories](/reference/filesystem#daemon-files).
 

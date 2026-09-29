@@ -2,41 +2,36 @@
 
 Spec experimental-features "Withdraw what a switched-off feature put in front of
 agents": switching ``memory`` off removes the delivery hook from every agent it
-was installed in, and switching it on installs it again.
+was installed in, and switching it on installs it into every agent connected to
+Coffer.
 
 Installing is explicit (spec memory "Install delivery hooks explicitly and
-removably"): nothing puts the hook into an agent the person never chose. So
-"install it again" means into exactly the agents it was taken out of, and that
-list has to outlive the daemon — a switch turned off, a restart, then on again
-must still find its way back. The list is kept through
-:class:`WithdrawnDeliveryPort`, on this machine only, like the switch itself.
+removably"): nothing puts the hook into an agent the person never chose. The
+choice is connecting the agent (spec agent-registry "Connect an agent to Coffer
+in one action"), which installs the hook while ``memory`` is on; so switching
+``memory`` on puts the hook into exactly the agents that are connected — which
+agents those are is the agent kind's answer, handed in as a callable by the
+composition root, because this kind may not import that one.
 
-The reconcile is the boot heal too: at boot a ``memory`` that is off makes sure
-no hook is left in any agent, and one that is on puts back whatever an earlier
-switch withdrew and then rewrites stale commands, as the heal always did.
+At boot a ``memory`` that is off makes sure no hook is left in any agent, and
+one that is on rewrites stale commands, as the heal always did. Boot does not
+install into connected agents that lack the hook: a hook missing from a
+connected agent is a connection the agent's page reports as needing repair, and
+repairing it is the user's act, not a side effect of a restart.
 """
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Awaitable, Callable
 from typing import Protocol
 
 from coffer.application.memory.delivery import DeliveryService
-from coffer.domain.errors import ResourceNotFound
-
-logger = logging.getLogger(__name__)
 
 #: The actor on the install/remove audit events a switch causes.
 FEATURE_ACTOR = "system:features"
 
-
-class WithdrawnDeliveryPort(Protocol):
-    """The agents a switched-off ``memory`` took the hook out of, by uid."""
-
-    def read(self) -> list[str]: ...
-
-    def write(self, uids: list[str]) -> None: ...
+#: The uids of the agents connected to Coffer.
+ConnectedAgents = Callable[[], Awaitable[list[str]]]
 
 
 class FeatureStatePort(Protocol):
@@ -66,57 +61,50 @@ def memory_switch_subscriber(
     return _on_switch
 
 
-async def reconcile_delivery(
-    delivery: DeliveryService,
-    withdrawn: WithdrawnDeliveryPort,
-    *,
-    enabled: bool,
-) -> tuple[str, ...]:
-    """Bring every agent's hook in line with the switch. Returns notes to log.
+async def reconcile_at_boot(delivery: DeliveryService, *, enabled: bool) -> tuple[str, ...]:
+    """Boot: withdraw everywhere when ``memory`` is off, heal stale commands
+    when it is on. Returns notes to log."""
+    if not enabled:
+        return await delivery.remove_everywhere(actor=FEATURE_ACTOR)
+    return await delivery.heal_drift()
 
-    Best-effort per agent, like the heal it replaces: one unreadable settings
-    file must not keep the others from being put right.
+
+async def reconcile_on_switch(
+    delivery: DeliveryService, connected: ConnectedAgents, *, enabled: bool
+) -> tuple[str, ...]:
+    """A switch: off withdraws everywhere; on installs into every connected
+    agent that lacks the hook, then heals. Returns notes to log.
+
+    Best-effort per agent: one unreadable settings file must not keep the
+    others from being put right.
     """
     if not enabled:
-        return await _withdraw(delivery, withdrawn)
-    notes = list(await _restore(delivery, withdrawn))
+        return await delivery.remove_everywhere(actor=FEATURE_ACTOR)
+    notes = list(await _install_into(delivery, await connected()))
     notes += await delivery.heal_drift()
     return tuple(notes)
 
 
-async def _withdraw(delivery: DeliveryService, withdrawn: WithdrawnDeliveryPort) -> tuple[str, ...]:
-    removed, notes = await delivery.remove_everywhere(actor=FEATURE_ACTOR)
-    # Only the agents it actually left: one whose removal failed still has it,
-    # and is not one to put back.
-    withdrawn.write(sorted(set(withdrawn.read()) | set(removed)))
-    return tuple(notes)
-
-
-async def _restore(delivery: DeliveryService, withdrawn: WithdrawnDeliveryPort) -> tuple[str, ...]:
-    pending = withdrawn.read()
-    if not pending:
-        return ()
+async def _install_into(delivery: DeliveryService, uids: list[str]) -> tuple[str, ...]:
     notes: list[str] = []
-    left: list[str] = []
-    for uid in pending:
+    for uid in uids:
         try:
-            status = await delivery.install(uid, actor=FEATURE_ACTOR)
-        except ResourceNotFound:
-            # The agent was deleted while memory was off: nothing to put back.
-            continue
+            status = await delivery.status(uid)
+            if status.installed:
+                continue
+            await delivery.install(uid, actor=FEATURE_ACTOR)
         except Exception as exc:
-            left.append(uid)
-            notes.append(f"{uid}: could not reinstall the delivery hook ({exc!r})")
+            notes.append(f"{uid}: could not install the delivery hook ({exc!r})")
             continue
-        notes.append(f"{status.agent_name}: delivery hook reinstalled, memory is switched on")
-    withdrawn.write(left)
+        notes.append(f"{status.agent_name}: delivery hook installed, memory is switched on")
     return tuple(notes)
 
 
 __all__ = [
     "FEATURE_ACTOR",
+    "ConnectedAgents",
     "FeatureStatePort",
-    "WithdrawnDeliveryPort",
     "memory_switch_subscriber",
-    "reconcile_delivery",
+    "reconcile_at_boot",
+    "reconcile_on_switch",
 ]

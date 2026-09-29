@@ -260,7 +260,7 @@ export interface paths {
          *     the `source` query parameter disambiguates; omitting it then is
          *     rejected with 422 (`MCP_ENTRY_SOURCE_AMBIGUOUS`). The `coffer` entry
          *     is not removable here (422, `MCP_ENTRY_PROTECTED`) — it is managed by
-         *     the `/mcp-install` operations.
+         *     the `/coffer-connection` operations.
          */
         delete: operations["deleteAgentMcpEntry"];
         options?: never;
@@ -395,7 +395,7 @@ export interface paths {
         patch: operations["setAgentPluginEnabled"];
         trace?: never;
     };
-    "/agents/{uid}/mcp-install": {
+    "/agents/{uid}/coffer-connection": {
         parameters: {
             query?: never;
             header?: never;
@@ -405,33 +405,48 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Whether Coffer's MCP is installed in this agent */
-        get: operations["getAgentMcpInstallStatus"];
+        /**
+         * Whether this agent is connected to Coffer, part by part
+         * @description Reads the agent's own config files; writes nothing and records no
+         *     audit event ("Report an agent's Coffer connection part by part").
+         *     `parts` lists what applies to this agent now — the gateway MCP entry
+         *     (`mcp`) always, the memory delivery hook (`memory_hook`) while the
+         *     `memory` feature is on — and `state` is `connected` when every one
+         *     is installed, `disconnected` when none is, `partial` otherwise.
+         */
+        get: operations["getAgentCofferConnection"];
         put?: never;
         /**
-         * Install Coffer's MCP server into this agent
-         * @description Writes a `coffer` stdio MCP-server entry (command = absolute path to
-         *     coffer-mcp-shim, argument `--agent-uid <uid>`) into the agent's MCP
-         *     config file (claude_code: its global config file — `~/.claude.json`
-         *     for the default config directory, `<config_dir>/.claude.json` for a
-         *     custom one; codex: `<config_dir>/config.toml`), atomically and with a
-         *     `.bak` backup. The shim reports
-         *     that uid on every call and the gateway matches it against each
-         *     resource's `scope.agents`, which is why the argument is the uid and
-         *     not the agent's name: this line is written once into a file Coffer
-         *     does not own and then read on every turn, so a label in it would stop
-         *     matching any scope the first time the user renamed the agent — and a
-         *     reference that resolves to nothing in an allow-list is the silent
-         *     widening this change exists to remove. Idempotent — re-installing
-         *     updates the entry in place. Returns 422 if the coffer-mcp-shim binary
-         *     cannot be resolved.
+         * Connect this agent to Coffer
+         * @description Installs every part that applies to the agent now, the gateway MCP
+         *     entry first ("Connect an agent to Coffer in one action"). The MCP
+         *     entry is a `coffer` stdio MCP-server entry (command = absolute path
+         *     to coffer-mcp-shim, argument `--agent-uid <uid>`) written into the
+         *     agent's MCP config file (claude_code: its global config file —
+         *     `~/.claude.json` for the default config directory,
+         *     `<config_dir>/.claude.json` for a custom one; codex:
+         *     `<config_dir>/config.toml`). The shim reports that uid on every call
+         *     and the gateway matches it against each resource's `scope.agents`,
+         *     which is why the argument is the uid and not the agent's name: this
+         *     line is written once into a file Coffer does not own and then read
+         *     on every turn, so a label in it would stop matching any scope the
+         *     first time the user renamed the agent. The memory delivery hook
+         *     (while `memory` is on) is a marker-scoped entry in the agent's
+         *     settings/hooks file. Every write is atomic with a `.bak` backup and
+         *     is audited by the part that made it. Idempotent — connecting again
+         *     rewrites each entry in place. Returns 422 if the coffer-mcp-shim
+         *     binary cannot be resolved (nothing is written) or a file to edit is
+         *     not valid JSON.
          */
-        post: operations["installAgentMcp"];
+        post: operations["connectAgentToCoffer"];
         /**
-         * Remove Coffer's MCP server entry from this agent
-         * @description Removes the `coffer` entry. No-op success when not installed.
+         * Disconnect this agent from Coffer
+         * @description Removes every part Coffer wrote into the agent — only Coffer's own
+         *     marked entries, never other configuration ("Disconnect an agent from
+         *     Coffer"). A part that is absent is a no-op that writes and audits
+         *     nothing.
          */
-        delete: operations["uninstallAgentMcp"];
+        delete: operations["disconnectAgentFromCoffer"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1010,11 +1025,21 @@ export interface components {
             limit: number;
             offset: number;
         };
-        McpInstallStatus: {
-            /** @description Whether a `coffer` MCP-server entry is present in the agent's MCP config. */
+        CofferConnection: {
+            /**
+             * @description `connected` when every part in `parts` is installed, `disconnected` when none is, `partial` otherwise.
+             * @enum {string}
+             */
+            state: "connected" | "partial" | "disconnected";
+            /** @description The parts that apply to this agent now, in install order. */
+            parts: components["schemas"]["CofferConnectionPart"][];
+        };
+        CofferConnectionPart: {
+            /** @description `mcp` (the gateway MCP entry) or `memory_hook` (the memory delivery hook). */
+            key: string;
             installed: boolean;
-            /** @description The resolved coffer-mcp-shim command written/found, when installed. */
-            command: string | null;
+            /** @description What is installed, when it is — the shim command or the hook command. */
+            detail: string | null;
         };
         AgentModelOut: {
             /** @description The id passed verbatim to the agent's CLI — whatever that agent calls the choice, which for Claude Code is a tier alias and for Codex a versioned model name. */
@@ -1657,7 +1682,7 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
         };
     };
-    getAgentMcpInstallStatus: {
+    getAgentCofferConnection: {
         parameters: {
             query?: never;
             header?: never;
@@ -1675,14 +1700,14 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["McpInstallStatus"];
+                    "application/json": components["schemas"]["CofferConnection"];
                 };
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };
     };
-    installAgentMcp: {
+    connectAgentToCoffer: {
         parameters: {
             query?: never;
             header?: never;
@@ -1694,13 +1719,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Installed (or already installed) */
+            /** @description Connected */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["McpInstallStatus"];
+                    "application/json": components["schemas"]["CofferConnection"];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -1708,7 +1733,7 @@ export interface operations {
             422: components["responses"]["UnprocessableEntity"];
         };
     };
-    uninstallAgentMcp: {
+    disconnectAgentFromCoffer: {
         parameters: {
             query?: never;
             header?: never;
@@ -1720,17 +1745,18 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Uninstalled (or was not installed) */
+            /** @description Disconnected (or was not connected) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["McpInstallStatus"];
+                    "application/json": components["schemas"]["CofferConnection"];
                 };
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
         };
     };
     listAgentNativeMemory: {

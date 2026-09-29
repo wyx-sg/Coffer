@@ -34,7 +34,7 @@ Coffer reads native memory and never creates, modifies, moves, deletes or reform
 - **No agent's own loop is disturbed.** Each agent keeps managing its memory exactly as its vendor designed. Coffer never holds a second copy that could drift from the first, so nothing has to be reconciled.
 - **The whole store becomes disposable.** Everything under `~/.coffer/memory/` is derived. You can delete it, and the next aggregation and distil passes rebuild an *equivalent* set of notes: the same subjects from the same sources, possibly in different words. That is what makes it safe for the distil pass to rewrite notes aggressively.
 
-The one file Coffer does write into an agent's configuration is a hook entry in the agent's *settings*. That file is not memory, and Coffer writes the entry only when you install delivery (see [Delivery](#delivery)).
+The one file Coffer does write into an agent's configuration is a hook entry in the agent's *settings*. That file is not memory, and Coffer writes the entry only when you connect the agent to Coffer (see [Delivery](#delivery)).
 
 ### Four directories with one writer each
 
@@ -250,7 +250,7 @@ Delivery reaches an agent through the agent's own hook mechanism, calling Coffer
 | Claude Code | `settings.json` (`settings` key) | `SessionStart`, matcher `startup\|resume\|clear\|compact` | 10 s timeout |
 | Codex | `hooks.json` (`hooks` key) | `UserPromptSubmit` | Codex has no session-start event, so the command carries a once-per-session guard: a flag file under `$TMPDIR` keyed by `$PPID` |
 
-The leading `: coffer-memory;` is a shell no-op that carries the marker. Coffer finds, replaces and removes its own entry by that marker, and never touches another tool's hooks on the same event. Installing is always an explicit act (`coffer memory delivery-install`, or the agent's detail page). It is idempotent, and removing the entry deletes empty event arrays and an empty `hooks` key after itself. The agent is named by its immutable uid, because a hook string may sit in a settings file for months while you rename the agent.
+The leading `: coffer-memory;` is a shell no-op that carries the marker. Coffer finds, replaces and removes its own entry by that marker, and never touches another tool's hooks on the same event. Installing is always an explicit act: the hook is one part of the agent's Coffer connection (`coffer agent connect`, or **Connect to Coffer** on the agent's page; see [Agents](/guides/agents#connect-an-agent-to-coffer)). It is idempotent, and removing the entry deletes empty event arrays and an empty `hooks` key after itself. The agent is named by its immutable uid, because a hook string may sit in a settings file for months while you rename the agent.
 
 ```mermaid
 sequenceDiagram
@@ -265,13 +265,13 @@ sequenceDiagram
   C-->>A: print text to stdout (becomes session context)
 ```
 
-The CLI command is silent on every failure. If no daemon is running, or the daemon answers with an error, the command prints nothing, so a hook never breaks a session. Each real fire records a `memory_delivery_fired` audit event. A management preview leaves `record_fired` false. The per-agent delivery status reports only whether the hook is installed. Whether it *fires* is a stream of events, which you read on the [Activity](/guides/activity) page.
+The CLI command is silent on every failure. If no daemon is running, or the daemon answers with an error, the command prints nothing, so a hook never breaks a session. Each real fire records a `memory_delivery_fired` audit event. A management preview leaves `record_fired` false. The connection status reports only whether the hook is installed. Whether it *fires* is a stream of events, which you read on the [Activity](/guides/activity) page.
 
 ### Keeping hooks current
 
 Detection matches the marker and never reads the arguments. A hook whose command went stale, for example because a CLI flag changed, therefore still reads as installed, while failing at every session start. At boot the daemon compares each installed command with the command the running build would install, and rewrites the ones that differ (`DeliveryService.heal_drift`). The repair runs best-effort per agent and never installs a hook for an agent that has none.
 
-The same reconcile follows the `memory` feature switch (`application/memory/delivery_switch.py`). Switching memory off removes the hook from every agent and records their uids in `daemon-config.json`. Switching it back on reinstalls the hook into exactly those agents, then heals stale commands.
+The same reconcile follows the `memory` feature switch (`application/memory/delivery_switch.py`). Switching memory off removes the hook from every agent. Switching it back on installs the hook into every agent connected to Coffer — every agent carrying the gateway MCP entry, a list the composition root hands in from the agent kind — then heals stale commands. Boot with memory on only heals; a connected agent missing the hook reads as needing repair until it is connected again.
 
 ### Channel turns
 

@@ -352,7 +352,7 @@ The files are the only copy. Coffer keeps no history of deleted or rewritten doc
 
 **An agent does not use the knowledge.** Check that the `knowledge` feature is on, that the `coffer-guide` skill is enabled and reaches that agent (`coffer scope show skill coffer-guide`), and that the collection's `README.md` opens with a sentence naming its subjects.
 
-**`coffer__write` is missing from the agent's tools.** The `knowledge` feature is switched off on this machine, or Coffer's MCP server is not installed for that agent (`coffer agent mcp install <agent>`).
+**`coffer__write` is missing from the agent's tools.** The `knowledge` feature is switched off on this machine, or the agent is not connected to Coffer (`coffer agent connect <agent>`).
 
 ## Related
 

@@ -26,7 +26,7 @@ Coffer is a **daemon plus a vault**:
 - **The vault** is the directory `~/.coffer`. It contains a SQLite database for configuration, plain-file trees for skills, knowledge and memory, and an encrypted credential store.
 - **`coffer-mcp-shim`** is a small stdio program that each agent starts as an ordinary MCP server. It finds the running daemon, starting one if none is running, and forwards the session to it.
 
-When you run `coffer agent mcp install claude-code`, Coffer writes one `coffer` entry into Claude Code's MCP config. From then on, Claude Code reaches every MCP server you register in Coffer through that one entry.
+When you run `coffer agent connect claude-code`, Coffer writes one `coffer` entry into Claude Code's MCP config. From then on, Claude Code reaches every MCP server you register in Coffer through that one entry.
 
 ## What it manages
 

@@ -176,8 +176,8 @@ transforms (no filesystem):
   shim path (the latter handles both command-map and command-array shapes).
 
 The MCP config file for each type is itself an allowlisted config file
-(`global` for Claude Code, `config` for Codex). The Coffer-MCP
-install/uninstall operations write to it via the atomic-write/backup path
+(`global` for Claude Code, `config` for Codex). The Coffer
+connection's `mcp` part writes to it via the atomic-write/backup path
 described under `AgentMcpService`; it can also be edited like any other
 allowlisted config file through `AgentConfigFileService.write_file`. Both paths
 share the same atomic-write + `.bak` machinery.
@@ -196,9 +196,9 @@ strips config keys this spec removed, `0058` strips the skill-follow policy,
 `0060` backfills the curated-`models` key, `0061` flips `wire_api` from `chat`
 to `responses`, and `0063` strips the curated-`models` key again.
 
-**Config files and Coffer-MCP install state are NOT persisted in SQLite** — the
-agent's on-disk config files are the source of truth. Install status is derived
-by reading the relevant config file on demand.
+**Config files and Coffer connection state are NOT persisted in SQLite** — the
+agent's on-disk config files are the source of truth. Connection status is
+derived by reading the relevant config files on demand.
 
 ### Reuse of existing tables
 
@@ -299,9 +299,36 @@ through the same store. Reuses `domain/agent/mcp_install.py`.
 | `install(uid, *, actor) -> McpInstallStatus`   | Resolve the shim path (`COFFER_MCP_SHIM_PATH` → `shutil.which("coffer-mcp-shim")` → interpreter scripts dir → bundled fallback; raise `ShimNotFound` if none). `apply_install` with the agent's uid; atomic write + `.bak`; audit `agent_mcp_installed`. Idempotent. |
 | `uninstall(uid, *, actor) -> McpInstallStatus` | `apply_uninstall`; atomic write + `.bak`; audit `agent_mcp_uninstalled`. No-op when absent (no write, no audit).                                                                                                                    |
 
-`McpInstallStatus` is `(installed: bool, command: str | None)` — the HTTP
-`McpInstallStatusOut` carries the same two fields. A type whose descriptor
-declares no `McpInjectionSpec` raises `McpInstallUnsupported` (→ 422).
+`McpInstallStatus` is `(installed: bool, command: str | None)`. A type whose
+descriptor declares no `McpInjectionSpec` raises `McpInstallUnsupported`
+(→ 422). The service is not exposed on its own route: it is the `mcp` part of
+the agent's Coffer connection, below.
+
+### `AgentConnectionService` (`application/agent/connection_service.py`)
+
+Connects an agent to Coffer, or disconnects it, by installing or removing each
+**part** Coffer writes into the agent's own configuration ("Connect an agent to
+Coffer in one action", "Report an agent's Coffer connection part by part",
+"Disconnect an agent from Coffer"). A part is a `ConnectionPart` — a key,
+`supports(agent_type)`, `enabled()`, and `status` / `install` / `remove` by
+agent uid — and owns its own atomic write, `.bak` and audit event; the service
+writes nothing itself and records no audit event of its own.
+
+| Part          | Owner                                         | Applies when                          | Audit events                                            |
+| ------------- | --------------------------------------------- | ------------------------------------- | ------------------------------------------------------- |
+| `mcp`         | `AgentMcpService` (via `McpConnectionPart`)   | always (every type declares one)      | `agent_mcp_installed` / `agent_mcp_uninstalled`         |
+| `memory_hook` | memory's `DeliveryService`, adapted in `surfaces/http/agent_connection_wiring.py` | the `memory` feature is on | `memory_delivery_installed` / `memory_delivery_removed` |
+
+| Method                                   | Purpose |
+| ---------------------------------------- | ------- |
+| `status(uid) -> ConnectionStatus`        | Each applicable part's `PartStatus(key, installed, detail)`, and a `state`: `connected` (all installed), `partial`, or `disconnected` (none). Read on demand, never stored. |
+| `connect(uid, *, actor)`                 | (Re)install every applicable part, the `mcp` part first so a missing shim refuses before anything is written. |
+| `disconnect(uid, *, actor)`              | Remove every part the type supports, applicable now or not. |
+| `connected_agents() -> list[str]`        | The uids of agents carrying the `mcp` entry — where switching `memory` on installs the hook. |
+
+The memory kind's part is adapted at the composition root because the agent
+kind may not import the memory kind; the HTTP shape is `CofferConnectionOut`
+(`state`, `parts[]` of `CofferConnectionPartOut(key, installed, detail)`).
 
 ## Workspace amendment — derived entities (never stored)
 
@@ -498,7 +525,9 @@ the routers are mounted in `surfaces/http/routing.py`. Together they:
    `on_enabled_changed` hooks.
 4. Register it in the per-kind registry the kind-agnostic resource routes read.
 5. Mount `agent_routes` (registry + candidates), `agent_config_routes` (config
-   files + MCP install), `agent_workspace_routes` (MCP entries + plugins),
+   files), `agent_connection_routes` (the Coffer connection, whose service
+   `agent_connection_wiring` builds once the memory kind is wired too),
+   `agent_workspace_routes` (MCP entries + plugins),
    `agent_native_memory_routes`, `agent_transcript_routes`,
    and `agent_unmanaged_skill_routes`. The `/fs/*` routes the picker and the
    open/reveal affordances call are mounted by spec daemon, not here.
@@ -517,7 +546,7 @@ The `on_delete` hook is bound to a callable supplied by the skill module (spec s
   from its allowlist (see agent-registry/codex "Never expose Codex's credential file").
 - Config files are editable through Coffer. All writes to an agent's own config
   files — whichever files the type's child spec allowlists — whether a user
-  save or a Coffer-MCP install/uninstall — are addressable **only** by
+  save or a Coffer connect/disconnect — are addressable **only** by
   allowlisted `key`, never by a caller-supplied path, and each is protected by an
   atomic write and a `.bak` backup. User saves additionally validate content
   against the file's format before touching disk. No path outside the resolved

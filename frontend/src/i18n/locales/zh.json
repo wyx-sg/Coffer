@@ -910,7 +910,7 @@
     "agentOwn": "Agent 自有（不经 Coffer）",
     "memoryTab": {
       "accessViaGateway": "该 Agent 通过 MCP 网关访问 Coffer 的记忆；请在记忆页面管理分区。",
-      "notInstalled": "该 Agent 尚未安装 Coffer MCP——安装后才能通过网关访问 Coffer 的记忆。",
+      "notInstalled": "该 Agent 尚未接入 Coffer——接入后才能通过网关访问 Coffer 的记忆。",
       "openMemoryPage": "打开记忆页面",
       "nativeHint": "该 Agent 自己的原生记忆库（不经 Coffer 管理），只读。",
       "nativeEmpty": "该 Agent 没有原生记忆库。",
@@ -957,18 +957,28 @@
         "hooks": "围绕 Codex 事件运行命令的生命周期钩子。"
       }
     },
-    "mcp": {
-      "title": "Coffer MCP",
-      "installed": "已安装",
-      "notInstalled": "未安装",
-      "install": "安装 Coffer MCP",
-      "uninstall": "卸载 Coffer MCP",
+    "cofferConnection": {
+      "title": "Coffer",
+      "connected": "已接入",
+      "notConnected": "未接入",
+      "needsRepair": "需要修复",
       "checking": "检查中…",
-      "installedToast": "已安装 Coffer MCP",
-      "uninstalledToast": "已卸载 Coffer MCP",
-      "uninstallConfirm": {
-        "title": "卸载 Coffer MCP？",
-        "body": "该 Agent 将无法再通过网关访问 Coffer 的知识、技能和 MCP 服务器。随时可以重新安装。"
+      "connect": "接入 Coffer",
+      "disconnect": "断开 Coffer",
+      "connectedToast": "已接入 Coffer",
+      "disconnectedToast": "已断开 Coffer",
+      "helpLabel": "接入会安装什么",
+      "helpIntro": "接入会写入该 Agent 自己的配置：",
+      "parts": {
+        "mcp": "网关 MCP 条目——通过 Coffer 访问 MCP 服务器和工具",
+        "memory_hook": "记忆投递钩子——会话开始时交付记忆索引"
+      },
+      "memoryOff": "记忆功能开启时才会添加记忆钩子。",
+      "repairHint": "部分内容缺失——再次接入即可补齐。",
+      "disconnectNote": "断开只移除 Coffer 自己写入的条目。",
+      "disconnectConfirm": {
+        "title": "断开 Coffer？",
+        "body": "Coffer 会从该 Agent 的配置中移除自己写入的条目，之后该 Agent 无法再访问 Coffer 的 MCP 服务器、工具和记忆。配置中的其他内容不受影响。随时可以重新接入。"
       }
     },
     "welcome": {
@@ -988,7 +998,6 @@
       }
     },
     "cofferSkills": "Coffer 技能",
-    "bulkInstallMcp": "安装 Coffer MCP",
     "cofferManaged": "由 Coffer 管理",
     "skillsTab": {
       "managedHint": "这些技能由 Coffer 投递。哪些技能能到达该 Agent，由技能页面上每个技能的启用状态及其生效范围决定。",
@@ -1016,7 +1025,7 @@
       "unmanagedNoMatch": "没有匹配的非托管技能。"
     },
     "mcpTab": {
-      "notInstalled": "尚未在该 Agent 上安装 Coffer MCP——安装后可在此暴露 Coffer 的 MCP 服务器。"
+      "notInstalled": "该 Agent 尚未接入 Coffer——接入后可在此使用 Coffer 的 MCP 服务器。"
     },
     "cols": {
       "health": "可用性"
@@ -1215,21 +1224,6 @@
       "notes": "笔记数",
       "unresolvable": "仓库已不在",
       "unresolvableHint": "该分区对应的仓库已不在磁盘上，因此它不会投递给任何 Agent。之所以仍然列出，是因为要不要删掉由你决定。"
-    },
-    "delivery": {
-      "title": "投递",
-      "subtitle": "写在该 Agent 自己设置里的 Coffer 会话开始钩子。",
-      "installed": "已安装",
-      "notInstalled": "未安装",
-      "installedHint": "Coffer 的 {{event}} 钩子已写入该 Agent 的设置。每一次触发都会记在活动页面。",
-      "notInstalledHint": "安装 Coffer 的钩子，在会话开始时把记忆索引交给该 Agent。",
-      "install": "安装",
-      "remove": "移除",
-      "removeConfirmTitle": "移除 {{agent}} 的投递？",
-      "removeConfirmDescription": "只会移除 Coffer 自己标记的那一条——不会影响 {{agent}} 配置的其他任何内容。",
-      "installDone": "投递已安装。",
-      "removeDone": "投递已移除。",
-      "unsupported": "该 Agent 没有可供投递挂载的钩子事件。"
     },
     "files": {
       "tree": "文件",

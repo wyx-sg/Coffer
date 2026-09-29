@@ -21,8 +21,11 @@ vi.mock("@/lib/hooks/useAgents", () => ({
   useRegisterAgent: vi.fn(),
   useRemoveAgent: vi.fn(),
   // The agents table's "Coffer MCP" column renders a per-row status badge.
-  useAgentMcpStatus: vi.fn(() => ({ data: { installed: false }, isPending: false })),
-  useAgentMcpInstall: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useAgentConnection: vi.fn(() => ({
+    data: { state: "disconnected", parts: [] },
+    isPending: false,
+  })),
+  useAgentConnect: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }));
 // The table's availability column reads the provider registry.
 vi.mock("@/lib/hooks/useAgentProviders", () => ({

@@ -910,7 +910,7 @@
     "agentOwn": "Agent's own (not via Coffer)",
     "memoryTab": {
       "accessViaGateway": "This agent reaches Coffer's memory through the MCP gateway; manage partitions on the Memory page.",
-      "notInstalled": "Coffer MCP isn't installed on this agent yet — install it to give the agent access to Coffer's memory.",
+      "notInstalled": "This agent isn't connected to Coffer yet — connect it to give the agent access to Coffer's memory.",
       "openMemoryPage": "Open the Memory page",
       "nativeHint": "The agent's own native memory stores (not managed by Coffer), read-only.",
       "nativeEmpty": "This agent has no native memory stores.",
@@ -957,18 +957,28 @@
         "hooks": "Lifecycle hooks that run commands around Codex events."
       }
     },
-    "mcp": {
-      "title": "Coffer MCP",
-      "installed": "Installed",
-      "notInstalled": "Not installed",
-      "install": "Install Coffer MCP",
-      "uninstall": "Uninstall Coffer MCP",
+    "cofferConnection": {
+      "title": "Coffer",
+      "connected": "Connected",
+      "notConnected": "Not connected",
+      "needsRepair": "Needs repair",
       "checking": "Checking…",
-      "installedToast": "Coffer MCP installed",
-      "uninstalledToast": "Coffer MCP uninstalled",
-      "uninstallConfirm": {
-        "title": "Uninstall Coffer MCP?",
-        "body": "The agent will no longer reach Coffer's knowledge, skills and MCP servers through the gateway. You can reinstall it anytime."
+      "connect": "Connect to Coffer",
+      "disconnect": "Disconnect from Coffer",
+      "connectedToast": "Connected to Coffer",
+      "disconnectedToast": "Disconnected from Coffer",
+      "helpLabel": "What connecting installs",
+      "helpIntro": "Connecting writes into this agent's own config:",
+      "parts": {
+        "mcp": "Gateway MCP entry — Coffer's MCP servers and tools",
+        "memory_hook": "Memory delivery hook — the memory index at session start"
+      },
+      "memoryOff": "The memory hook is added while Memory is switched on.",
+      "repairHint": "Some parts are missing — connect again to put them back.",
+      "disconnectNote": "Disconnecting removes only Coffer's own entries.",
+      "disconnectConfirm": {
+        "title": "Disconnect from Coffer?",
+        "body": "Coffer removes its own entries from this agent's config, and the agent no longer reaches Coffer's MCP servers, tools and memory. Nothing else in its config is touched. You can connect it again anytime."
       }
     },
     "welcome": {
@@ -988,7 +998,6 @@
       }
     },
     "cofferSkills": "Coffer skills",
-    "bulkInstallMcp": "Install Coffer MCP",
     "cofferManaged": "Managed by Coffer",
     "skillsTab": {
       "managedHint": "Coffer delivers these skills. Which ones reach this agent is decided on the Skills page, by each skill's enable state and its reach.",
@@ -1016,7 +1025,7 @@
       "unmanagedNoMatch": "No unmanaged skills match your search."
     },
     "mcpTab": {
-      "notInstalled": "Coffer MCP isn't installed on this agent yet — install it to expose Coffer's MCP servers here."
+      "notInstalled": "This agent isn't connected to Coffer yet — connect it to expose Coffer's MCP servers here."
     },
     "cols": {
       "health": "Availability"
@@ -1215,21 +1224,6 @@
       "notes": "Notes",
       "unresolvable": "Repository missing",
       "unresolvableHint": "This partition's repository is no longer on disk, so nothing is delivered from it. It stays listed because deleting it is yours to decide."
-    },
-    "delivery": {
-      "title": "Delivery",
-      "subtitle": "Coffer's session-start hook in this agent's own settings.",
-      "installed": "Installed",
-      "notInstalled": "Not installed",
-      "installedHint": "Coffer's {{event}} hook is written into this agent's settings. Every time it fires is recorded on the Activity page.",
-      "notInstalledHint": "Install Coffer's hook to hand this agent the memory index at session start.",
-      "install": "Install",
-      "remove": "Remove",
-      "removeConfirmTitle": "Remove delivery for {{agent}}?",
-      "removeConfirmDescription": "This only takes out Coffer's own marker-scoped entry — nothing else {{agent}} has configured is touched.",
-      "installDone": "Delivery installed.",
-      "removeDone": "Delivery removed.",
-      "unsupported": "This agent has no hook event delivery can attach to."
     },
     "files": {
       "tree": "Files",

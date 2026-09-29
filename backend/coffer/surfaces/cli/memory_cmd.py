@@ -37,7 +37,6 @@ from rich.table import Table
 
 from coffer.infrastructure.daemon.bootstrap import live_daemon
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli import memory_delivery_cmd as _delivery
 from coffer.surfaces.cli._resolve import resolve_uid
 
 #: The registry kind the partition-addressing commands resolve a name against.
@@ -370,14 +369,3 @@ def context(
             typer.echo(text)
     except Exception:
         return
-
-
-# --- delivery commands (memory_delivery_cmd.py, to respect the size cap) ---
-#
-# Split along the seam that was already there: every command above reads or
-# rewrites Coffer's own memory tree, while those three write into an AGENT's
-# settings file. The commands themselves are unmoved — ``coffer memory
-# delivery``, ``delivery-install``, ``delivery-remove`` — because they are
-# registered on this same typer.
-
-_delivery.attach(app)

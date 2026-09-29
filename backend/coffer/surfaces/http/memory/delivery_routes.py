@@ -1,10 +1,11 @@
-"""``/api/v1/memory/context`` and ``/api/v1/memory/delivery`` — the push half.
+"""``/api/v1/memory/context`` — the push half.
 
-One route composes the session-start payload, three manage whether an agent's
-own settings file carries the hook that asks for it. They live together because
-they share a subject that the rest of the family does not have: an **agent**.
+The route composes the session-start payload the installed hook asks for.
+Whether an agent's own settings file carries that hook is not managed here: the
+hook is one part of connecting the agent to Coffer (spec agent-registry
+"Connect an agent to Coffer in one action"), on the agent's own routes.
 
-**The agent is named by uid, everywhere on this module.** The installed hook is
+**The agent is named by uid.** The installed hook is
 a string Coffer writes into somebody else's settings file once and never
 revisits, so a label baked into it would start naming an agent nothing answers
 to the first time the user edited it — and every session's fire would go
@@ -17,21 +18,18 @@ partition is served to every agent, so ``POST
 /context`` composes the same payload whoever fired it. The agent uid identifies
 the caller for the audit log and decides nothing about the content.
 
-**No route here records an audit event of its own.** Install and remove record
-theirs inside ``DeliveryService``, with the actor that asked; a second record
-written at this boundary would put two rows in the log for one act.
+**The route records no audit event of its own** beyond the fire
+``DeliveryService.record_fired`` writes.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 
 from coffer.application.memory.context import DEFAULT_CEILING_TOKENS, compose_context
 from coffer.application.memory.delivery import DeliveryService
 from coffer.application.memory.service import MemoryService
-from coffer.domain.memory.delivery import DeliveryStatus
 from coffer.surfaces.http.auth import require_token
-from coffer.surfaces.http.dependencies import get_actor
 from coffer.surfaces.http.memory.dependencies import (
     get_memory_delivery_service,
     get_memory_service,
@@ -39,8 +37,6 @@ from coffer.surfaces.http.memory.dependencies import (
 from coffer.surfaces.http.memory.schemas import (
     ComposedContextOut,
     ContextQuery,
-    DeliveryStatusListOut,
-    DeliveryStatusOut,
 )
 
 router = APIRouter(
@@ -48,21 +44,6 @@ router = APIRouter(
     tags=["memory"],
     dependencies=[Depends(require_token)],
 )
-
-
-def _delivery_out(status: DeliveryStatus) -> DeliveryStatusOut:
-    return DeliveryStatusOut(
-        # Both halves travel, as the domain value carries them: the uid is what
-        # the install and remove routes take, and the name is what the row is
-        # headed with. A surface holding one would have to fetch the agent list
-        # to get the other, which is the second lookup this shape removes (the
-        # same reason an audit row carries ``resource_name`` beside its id).
-        agent_uid=status.agent_uid,
-        agent_name=status.agent_name,
-        installed=status.installed,
-        command=status.command,
-        event=status.event,
-    )
 
 
 @router.post("/context", response_model=ComposedContextOut)
@@ -94,41 +75,3 @@ async def context(
         notes_included=composed.notes_included,
         notes_omitted=composed.notes_omitted,
     )
-
-
-@router.get("/delivery", response_model=DeliveryStatusListOut)
-async def delivery_status(
-    agent_uid: str | None = Query(default=None),
-    svc: DeliveryService = Depends(get_memory_delivery_service),  # noqa: B008
-) -> DeliveryStatusListOut:
-    """Delivery state for one agent, or for every agent with an adapter.
-
-    Each row carries both the agent's uid and its name, so the surface that
-    renders the list can act on a row without a second request.
-    """
-    statuses = await svc.status(agent_uid)
-    return DeliveryStatusListOut(delivery=[_delivery_out(s) for s in statuses])
-
-
-@router.post("/delivery/{agent_uid}/install", response_model=DeliveryStatusOut)
-async def install_delivery(
-    agent_uid: str,
-    svc: DeliveryService = Depends(get_memory_delivery_service),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> DeliveryStatusOut:
-    """Write Coffer's hook into one agent's own settings file.
-
-    The uid is not only how this route is addressed — it is what goes INTO the
-    installed command, so the entry keeps naming this agent however the user
-    relabels it afterwards, and a rename costs no reinstall.
-    """
-    return _delivery_out(await svc.install(agent_uid, actor=actor))
-
-
-@router.delete("/delivery/{agent_uid}", response_model=DeliveryStatusOut)
-async def remove_delivery(
-    agent_uid: str,
-    svc: DeliveryService = Depends(get_memory_delivery_service),  # noqa: B008
-    actor: str = Depends(get_actor),
-) -> DeliveryStatusOut:
-    return _delivery_out(await svc.remove(agent_uid, actor=actor))

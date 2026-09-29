@@ -883,6 +883,43 @@ Detection never adds anything on its own — it lists candidates and shows the `
 | --- | --- | --- | --- | --- |
 | `--json` | option | flag |  | JSON output |
 
+### agent connection
+
+```sh
+coffer agent connection [OPTIONS] NAME
+```
+
+Report whether this agent is connected to Coffer, part by part.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Agent name |
+| `--json` | option | flag |  | JSON output |
+
+### agent connect
+
+```sh
+coffer agent connect [OPTIONS] NAME
+```
+
+Connect this agent to Coffer: install every part that applies to it.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Agent name |
+
+### agent disconnect
+
+```sh
+coffer agent disconnect [OPTIONS] NAME
+```
+
+Disconnect this agent from Coffer: remove every part Coffer wrote into it.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Agent name |
+
 ### agent native-memory
 
 ```sh
@@ -1063,46 +1100,9 @@ Delete a child file of a directory-type config entry.
 coffer agent mcp [OPTIONS] COMMAND [ARGS]...
 ```
 
-Install/uninstall Coffer's MCP server into an agent
+List, remove and adopt the MCP entries in an agent's own config
 
-Subcommands: `status`, `install`, `uninstall`, `entries`, `show-entry`, `remove-entry`, `adopt`.
-
-### agent mcp status
-
-```sh
-coffer agent mcp status [OPTIONS] NAME
-```
-
-Report whether Coffer's MCP is installed in this agent.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `--json` | option | flag |  |  |
-
-### agent mcp install
-
-```sh
-coffer agent mcp install [OPTIONS] NAME
-```
-
-Install Coffer's MCP server entry into this agent.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-
-### agent mcp uninstall
-
-```sh
-coffer agent mcp uninstall [OPTIONS] NAME
-```
-
-Remove Coffer's MCP server entry from this agent.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
+Subcommands: `entries`, `show-entry`, `remove-entry`, `adopt`.
 
 ### agent mcp entries
 
@@ -1799,47 +1799,6 @@ The installed session-start hook runs this; you rarely need to. It prints nothin
 | `--agent-uid` | option | text | required | The uid of the agent whose hook is firing |
 | `--cwd` | option | text | required | The session's working directory |
 | `--ceiling-tokens` | option | integer | `0` | 0 = the server's default |
-
-### memory delivery
-
-```sh
-coffer memory delivery [OPTIONS]
-```
-
-Show per-agent delivery installation state.
-
-Installed or not, and nothing else. Whether the hook has ever \*fired\* is an event, not a property of an agent, so it is read on the audit surface: ``coffer audit list --event-type memory_delivery_fired``.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `--agent` | option | text | `""` | Restrict to one agent, by name |
-| `--json` | option | flag |  |  |
-
-### memory delivery-install
-
-```sh
-coffer memory delivery-install [OPTIONS] AGENT
-```
-
-Install Coffer's session-start hook for an agent.
-
-Renaming the agent later does not need a reinstall.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `AGENT` | argument | text | required | Agent name |
-
-### memory delivery-remove
-
-```sh
-coffer memory delivery-remove [OPTIONS] AGENT
-```
-
-Remove Coffer's session-start hook for an agent.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `AGENT` | argument | text | required | Agent name |
 
 ## coffer provider
 

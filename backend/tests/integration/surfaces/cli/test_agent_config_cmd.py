@@ -1,4 +1,4 @@
-"""Integration tests for `coffer agent config ...` and `coffer agent mcp ...`.
+"""Integration tests for `coffer agent config ...`.
 
 Covers the spec scenario "config-file and MCP operations mirror across
 surfaces": each CLI subcommand calls the corresponding REST endpoint.
@@ -35,7 +35,6 @@ from typer.testing import CliRunner
 import coffer.surfaces.cli._client as _cli_client
 from coffer.application.agent.config_file_service import AgentConfigFileService
 from coffer.application.agent.kind import make_agent_kind
-from coffer.application.agent.mcp_service import AgentMcpService
 from coffer.application.agent.service import AgentService
 from coffer.application.audit_service import AuditService
 from coffer.application.resource_service import ResourceService
@@ -54,10 +53,7 @@ from coffer.infrastructure.persistence.repos import (
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_config_routes import router as agent_config_router
-from coffer.surfaces.http.agent_dependencies import (
-    get_agent_config_file_service,
-    get_agent_mcp_service,
-)
+from coffer.surfaces.http.agent_dependencies import get_agent_config_file_service
 from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.resource_routes import router as resource_router
@@ -85,9 +81,6 @@ def agent_config_cli(tmp_path, monkeypatch):
     shim = tmp_path / "coffer-mcp-shim"
     shim.write_text("#!/bin/sh\n", encoding="utf-8")
     config_files = AgentConfigFileService(agent_service=agent_svc, audit=audit, store=store)
-    mcp = AgentMcpService(
-        agent_service=agent_svc, audit=audit, store=store, shim_resolver=lambda: str(shim)
-    )
 
     # Register a claude_code agent up front.
     (tmp_path / ".claude" / "skills").mkdir(parents=True)
@@ -108,7 +101,6 @@ def agent_config_cli(tmp_path, monkeypatch):
     # would search a registry ``cc`` was never registered into.
     app.include_router(resource_router)
     app.dependency_overrides[get_agent_config_file_service] = lambda: config_files
-    app.dependency_overrides[get_agent_mcp_service] = lambda: mcp
     app.dependency_overrides[get_resource_service] = lambda: resource_svc
 
     set_active_token(_TOKEN)
@@ -347,30 +339,6 @@ def test_config_rm_without_force_aborts(agent_config_cli):
     )
     assert r.exit_code == 1
     assert child.exists()
-
-
-def test_mcp_install_status_uninstall(agent_config_cli):
-    _tmp, shim = agent_config_cli
-    r = _runner.invoke(cli_app, ["agent", "mcp", "status", "cc", "--json"])
-    assert r.exit_code == 0
-    assert json.loads(r.output)["installed"] is False
-
-    r = _runner.invoke(cli_app, ["agent", "mcp", "install", "cc"])
-    assert r.exit_code == 0, r.output
-    # The echo reports the agent by the label that was typed — the uid it
-    # resolved to is an address, and a person reading this line is checking
-    # which agent they just changed.
-    assert "installed Coffer MCP into agent cc (" in r.output
-    assert shim in r.output
-
-    r = _runner.invoke(cli_app, ["agent", "mcp", "status", "cc", "--json"])
-    assert json.loads(r.output)["installed"] is True
-
-    r = _runner.invoke(cli_app, ["agent", "mcp", "uninstall", "cc"])
-    assert r.exit_code == 0
-    assert "removed Coffer MCP from agent cc" in r.output
-    r = _runner.invoke(cli_app, ["agent", "mcp", "status", "cc", "--json"])
-    assert json.loads(r.output)["installed"] is False
 
 
 def test_config_cat_json_prints_the_full_response(agent_config_cli):

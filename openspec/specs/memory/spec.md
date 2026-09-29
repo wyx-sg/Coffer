@@ -323,7 +323,7 @@ A **channel-driven turn** MUST receive the same payload through the system-promp
 - **AND** when there is nothing to deliver the turn carries no memory header at all, rather than an empty one (see "Deliver to channel turns through the system prompt")
 
 ### Requirement: Install delivery hooks explicitly and removably
-For an agent the developer drives themselves, delivery MUST go through that agent's own hook mechanism, invoking Coffer's existing CLI. Where the agent has a session-start event, delivery MUST use it; where it has none, delivery MUST use its earliest per-session event with a **once-per-session guard**. Installation MUST be an **explicit act** on Coffer's surface, marker-scoped, removable without disturbing entries Coffer did not write, and idempotent. Coffer MUST NOT install it silently, and MUST NOT write into any file that is an agent's *memory* — a hook lives in the agent's settings, which is a different thing.
+For an agent the developer drives themselves, delivery MUST go through that agent's own hook mechanism, invoking Coffer's existing CLI. Where the agent has a session-start event, delivery MUST use it; where it has none, delivery MUST use its earliest per-session event with a **once-per-session guard**. Installation MUST be an **explicit act** on Coffer's surface — connecting the agent to Coffer, of which the hook is one part (spec agent-registry "Connect an agent to Coffer in one action"), or switching `memory` on while the agent is connected — marker-scoped, removable without disturbing entries Coffer did not write, and idempotent. Coffer MUST NOT install it silently, and MUST NOT write into any file that is an agent's *memory* — a hook lives in the agent's settings, which is a different thing.
 
 #### Scenario: hook installation is marker-scoped and removable
 - **GIVEN** an agent whose settings file already carries a foreign hook on the same lifecycle event, other events' hooks, and unrelated top-level keys
@@ -341,13 +341,13 @@ An installed hook MUST be repaired when the command Coffer would write is no lon
 - **AND** an agent whose hook is already current is left untouched, and an agent with no hook is not given one.
 
 ### Requirement: Audit every delivery fire
-Coffer MUST record **an audit event for every delivery fire**, so that whether delivery is actually happening is answerable after the fact. A fire is an event, not a property of the agent: the per-agent delivery status MUST report installation only, and MUST NOT carry a last-fired timestamp.
+Coffer MUST record **an audit event for every delivery fire**, so that whether delivery is actually happening is answerable after the fact. A fire is an event, not a property of the agent: the hook's per-agent status MUST report installation only, and MUST NOT carry a last-fired timestamp.
 
 #### Scenario: every hook fire is recorded in the audit log
 - **GIVEN** an agent for which delivery has been installed
 - **WHEN** the installed hook fires and the served context is recorded as a delivery
 - **THEN** exactly one audit event is written naming that agent as both the resource and the actor
-- **AND** the per-agent installed state is unchanged by a fire, and neither installing nor reading status records a fire of its own (see "Audit every delivery fire", "Show delivery state on the agent's own page")
+- **AND** the per-agent installed state is unchanged by a fire, and neither installing nor reading status records a fire of its own (see "Audit every delivery fire")
 
 ### Requirement: Expose only coffer__recall
 The MCP gateway MUST expose exactly one built-in tool for this layer, `coffer__recall`, and its description MUST state that it **locates** notes rather than returning them: matching is literal, and the answer is where to read. There MUST be no `remember` tool: an agent records something by recording it the way it already does, and Coffer reads it on the next pass.
@@ -368,7 +368,7 @@ The MCP gateway MUST expose exactly one built-in tool for this layer, `coffer__r
 - **AND** the answer spans every partition, whichever agent is asking, and carries no score, no mode and no ranking (see "Serve every partition to every agent", "Recall locations by literal match")
 
 ### Requirement: Cover memory management on REST and the CLI
-A REST family under `/api/v1/memory` and a `coffer memory` CLI group MUST cover: list partitions and notes, show one note with its provenance, browse a partition's own directory and read one file from it, update memory (see "Update memory in one action"), run a distil pass over one partition, compose the session context, read what has been retired, and install/inspect/remove delivery for an agent.
+A REST family under `/api/v1/memory` and a `coffer memory` CLI group MUST cover: list partitions and notes, show one note with its provenance, browse a partition's own directory and read one file from it, update memory (see "Update memory in one action"), run a distil pass over one partition, compose the session context, and read what has been retired. Installing, inspecting and removing an agent's delivery hook are part of that agent's Coffer connection (spec agent-registry "Connect an agent to Coffer in one action") and are not in this family.
 
 #### Scenario: a partition's own directory is browsable as a file tree
 - **GIVEN** a distilled partition
@@ -392,15 +392,6 @@ Every lifecycle act — aggregation, distil, retirement, delivery installed, rem
 - **GIVEN** a registered agent with native memory and a partition to distil
 - **WHEN** a user requests an aggregation and then a distil pass
 - **THEN** exactly one aggregation audit event and one distil audit event name that user as their actor, beside any the daemon's own worker recorded under its own actor
-
-### Requirement: Show delivery state on the agent's own page
-Per-agent delivery state MUST be presented on **that agent's own detail page**, not on the partitions surface. That surface answers one question — installed or not; firing is read as events on the audit surface.
-
-#### Scenario: show installed or not on the agent page
-- **GIVEN** an agent's detail page, for an agent with delivery installed and one without
-- **WHEN** its memory delivery section renders
-- **THEN** it states whether delivery is installed and offers the matching install or remove action
-- **AND** it shows no last-fired time
 
 ### Requirement: Show memory events on the vault-wide audit surface
 This layer MUST NOT carry an audit surface of its own. Its events are read on the vault-wide audit surface, and every event type this layer records MUST be legible there rather than shown as a raw event code.

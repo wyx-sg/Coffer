@@ -135,7 +135,10 @@ from that state.
 
 ### Requirement: Withdraw what a switched-off feature put in front of agents
 Switching `memory` off MUST remove the memory delivery hook from every agent it
-was installed in, and switching it on MUST install it again. Switching
+was installed in, and switching it on MUST install it into every agent connected
+to Coffer — every agent carrying Coffer's gateway MCP entry (spec agent-registry
+"Connect an agent to Coffer in one action") — and into no other. A daemon that
+boots with `memory` off MUST likewise leave no hook in any agent. Switching
 `knowledge` off MUST rewrite the `coffer-guide` skill without its knowledge
 catalogue, and a channel `/save` MUST answer that knowledge is switched off
 without saving; switching it on MUST restore the catalogue. Switching
@@ -146,10 +149,10 @@ list carries: while `knowledge` is off neither names `coffer__write` nor the
 knowledge root, and while `memory` is off neither names `coffer__recall`.
 
 #### Scenario: switching memory off removes the delivery hook
-- **GIVEN** an agent with the memory delivery hook installed
+- **GIVEN** an agent connected to Coffer with the memory delivery hook installed, and a second agent that is not connected
 - **WHEN** `memory` is switched off
-- **THEN** the hook is no longer in the agent's configuration
-- **AND** switching `memory` on installs it again
+- **THEN** the hook is no longer in the connected agent's configuration
+- **AND** switching `memory` on installs it again in the connected agent and puts none in the agent that is not connected
 
 #### Scenario: switching knowledge off drops the catalogue from the guide
 - **GIVEN** an enabled collection catalogued in `coffer-guide`

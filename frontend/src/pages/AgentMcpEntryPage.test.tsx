@@ -22,7 +22,7 @@ import { acceptance } from "@/test/acceptance";
 vi.mock("@/lib/api/agents", () => ({
   agentsApi: {
     get: vi.fn(),
-    mcpStatus: vi.fn(),
+    connection: vi.fn(),
     mcpEntries: vi.fn(),
     mcpEntry: vi.fn(),
     removeMcpEntry: vi.fn(),
@@ -111,7 +111,10 @@ describe("AgentMcpEntryPage", () => {
     async () => {
       // Start on the agent's MCP servers tab and click the server's name.
       stub();
-      api.mcpStatus.mockResolvedValue({ installed: true, command: "/opt/coffer-mcp-shim" });
+      api.connection.mockResolvedValue({
+        state: "connected",
+        parts: [{ key: "mcp", installed: true, detail: "/opt/coffer-mcp-shim" }],
+      });
       api.mcpEntries.mockResolvedValue({ items: [ENTRY], parse_errors: [] });
       const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
       render(

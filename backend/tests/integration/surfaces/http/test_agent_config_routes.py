@@ -1,6 +1,6 @@
-"""HTTP coverage for /api/v1/agents/{uid}/config-files and /mcp-install.
+"""HTTP coverage for /api/v1/agents/{uid}/config-files.
 
-Both route families hang off the agent's immutable ``uid``, never its name
+The route family hangs off the agent's immutable ``uid``, never its name
 (ADR resource-identity-is-an-immutable-uid). ``_register_claude`` therefore
 hands back the uid its own ``POST /api/v1/agents`` response carried, and every
 test addresses the agent by that — no second request, and no place where a
@@ -10,7 +10,6 @@ label could be mistaken for an identity.
 from __future__ import annotations
 
 import hashlib
-import json
 import pathlib
 import uuid
 
@@ -28,7 +27,7 @@ def _app(tmp_path: pathlib.Path, monkeypatch, port_start: int):
     monkeypatch.setenv("COFFER_DB_URL", f"sqlite+aiosqlite:///{tmp_path / 'c.db'}")
     monkeypatch.setenv("COFFER_PORT_RANGE_START", str(port_start))
     monkeypatch.setenv("COFFER_PORT_RANGE_END", str(port_start + 9))
-    # Deterministic shim resolution for the MCP-install endpoint.
+    # Deterministic shim resolution, as every app built here resolves one.
     shim = tmp_path / "coffer-mcp-shim"
     shim.write_text("#!/bin/sh\n", encoding="utf-8")
     monkeypatch.setenv("COFFER_MCP_SHIM_PATH", str(shim))
@@ -304,38 +303,3 @@ def test_config_routes_unknown_agent_404(tmp_path, monkeypatch):
         for absent in (uuid.uuid4().hex, "ghost"):
             r = c.get(f"/api/v1/agents/{absent}/config-files")
             assert r.status_code == 404, f"{absent}: {r.text}"
-
-
-def test_mcp_install_lifecycle(tmp_path, monkeypatch):
-    app, shim = _app(tmp_path, monkeypatch, 59740)
-    with _client(app) as c:
-        uid = _register_claude(c, tmp_path)
-
-        r = c.get(f"/api/v1/agents/{uid}/mcp-install")
-        assert r.status_code == 200
-        assert r.json()["installed"] is False
-
-        r = c.post(f"/api/v1/agents/{uid}/mcp-install")
-        assert r.status_code == 200, r.text
-        assert r.json()["installed"] is True
-        assert r.json()["command"] == str(shim)
-        data = json.loads((tmp_path / ".claude.json").read_text())
-        # "Install Coffer's MCP server into an agent in one action": install writes
-        # `--agent-uid <uid>` so the shim self-reports its identity at the MCP
-        # handshake. It is the uid and not the label because this string is written
-        # once into a file Coffer does not otherwise touch, and then outlives every
-        # rename — a name here would go stale on the first one and quietly stop
-        # matching any resource scope (ADR resource-identity-is-an-immutable-uid).
-        assert data["mcpServers"]["coffer"] == {
-            "command": str(shim),
-            "args": ["--agent-uid", uid],
-        }
-
-        r = c.get(f"/api/v1/agents/{uid}/mcp-install")
-        assert r.json()["installed"] is True
-
-        r = c.request("DELETE", f"/api/v1/agents/{uid}/mcp-install")
-        assert r.status_code == 200
-        assert r.json()["installed"] is False
-        data = json.loads((tmp_path / ".claude.json").read_text())
-        assert "coffer" not in data.get("mcpServers", {})

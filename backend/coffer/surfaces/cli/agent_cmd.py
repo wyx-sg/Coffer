@@ -17,6 +17,7 @@ from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli import agent_config_cmd as _config
+from coffer.surfaces.cli import agent_connection_cmd as _connection
 from coffer.surfaces.cli import agent_models_cmd as _models
 from coffer.surfaces.cli import agent_native_memory_cmd as _native_memory
 from coffer.surfaces.cli import agent_transcript_cmd as _transcripts
@@ -25,7 +26,7 @@ from coffer.surfaces.cli._resolve import resolve_uid
 
 app = typer.Typer(help="Manage registered AI agents")
 config_app = typer.Typer(help="View and edit an agent's config files")
-mcp_app = typer.Typer(help="Install/uninstall Coffer's MCP server into an agent")
+mcp_app = typer.Typer(help="List, remove and adopt the MCP entries in an agent's own config")
 _console = Console()
 
 
@@ -239,63 +240,15 @@ app.add_typer(config_app, name="config")
 app.add_typer(mcp_app, name="mcp")
 
 
-@mcp_app.command("status")
-def mcp_status(
-    ctx: typer.Context,
-    name: str = typer.Argument(...),
-    output_json: bool = typer.Option(False, "--json"),
-) -> None:
-    """Report whether Coffer's MCP is installed in this agent."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, "agent", name, verbose=verbose)
-        r = c.get(f"/agents/{uid}/mcp-install")
-        _cli_client.check(r, verbose=verbose)
-    data = r.json()
-    if output_json:
-        typer.echo(_json.dumps(data, indent=2))
-        return
-    typer.echo(f"installed: {data['installed']}")
-    if data.get("command"):
-        typer.echo(f"command: {data['command']}")
-
-
-@mcp_app.command("install")
-def mcp_install(
-    ctx: typer.Context,
-    name: str = typer.Argument(...),
-) -> None:
-    """Install Coffer's MCP server entry into this agent."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, "agent", name, verbose=verbose)
-        r = c.post(f"/agents/{uid}/mcp-install")
-        _cli_client.check(r, verbose=verbose)
-    typer.echo(f"installed Coffer MCP into agent {name} ({r.json().get('command')})")
-
-
-@mcp_app.command("uninstall")
-def mcp_uninstall(
-    ctx: typer.Context,
-    name: str = typer.Argument(...),
-) -> None:
-    """Remove Coffer's MCP server entry from this agent."""
-    verbose = (ctx.obj or {}).get("verbose", False)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, "agent", name, verbose=verbose)
-        r = c.delete(f"/agents/{uid}/mcp-install")
-        _cli_client.check(r, verbose=verbose)
-    typer.echo(f"removed Coffer MCP from agent {name}")
-
-
 # --- workspace subcommands (mcp entries/plugins/dir configs) -----------------
 # Implemented in agent_workspace_cmd.py to keep this file under the size cap.
 
 _config.attach(config_app)
 _workspace.attach(app, config_app=config_app, mcp_app=mcp_app)
+
+# --- connect / disconnect / connection (agent_connection_cmd.py, same reason) ---
+
+_connection.attach(app)
 
 # --- native-memory read command (agent_native_memory_cmd.py, same reason) ---
 

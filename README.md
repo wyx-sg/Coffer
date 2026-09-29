@@ -153,14 +153,15 @@ An **agent** is a registered local AI coding agent (supported types: `claude_cod
 Coffer can auto-detect installed agents (it lists candidates and asks you to confirm — nothing is
 registered automatically), edit each agent's curated config files in-app (format-validated,
 atomic write with a `.bak` backup, plus an in-editor find/replace that scrolls to the match), and
-one-click install or uninstall Coffer's own MCP server into an agent. The web UI has an
-**Agents** page (list + detail), a detect dialog, the config-file editor, and an MCP-install toggle.
+connect an agent to Coffer (or disconnect it) in one click — its gateway MCP entry plus, while
+memory is on, the memory delivery hook. The web UI has an **Agents** page (list + detail), a detect
+dialog, the config-file editor, and a Connect to Coffer control.
 
 ```bash
 coffer agent detect               # discover installed agents (confirm before registering)
 coffer agent add claude_code      # register one (--name optional; defaults to claude-code)
 coffer agent config edit <name> <key>  # edit a curated config file in your $EDITOR
-coffer agent mcp install <name>   # install Coffer's MCP server into the agent
+coffer agent connect <name>       # connect the agent to Coffer (MCP entry + memory hook)
 ```
 
 ---
@@ -173,7 +174,7 @@ Use `coffer-mcp-shim` as the stdio MCP server command. The shim auto-discovers (
 
 ```bash
 coffer agent add claude_code
-coffer agent mcp install claude-code
+coffer agent connect claude-code
 ```
 
 This writes the shim entry into Claude Code's own config, with the agent's identity on it.
@@ -182,7 +183,7 @@ This writes the shim entry into Claude Code's own config, with the agent's ident
 
 ```bash
 coffer agent add codex
-coffer agent mcp install codex
+coffer agent connect codex
 ```
 
 ### Any other MCP client

@@ -1,11 +1,11 @@
-"""/api/v1/agents/{uid}/config-files and /mcp-install routes (spec agent-registry).
+"""/api/v1/agents/{uid}/config-files routes (spec agent-registry).
 
-Config-file view + edit (list + read + write), directory-entry child files
-(read + write + delete under `/files/{relpath}`), and one-click Coffer-MCP
-install. Writes carry an optional `expected_fingerprint` for optimistic
-concurrency ("Reject stale config-file writes by fingerprint"). Domain errors
+Config-file view + edit (list + read + write) and directory-entry child files
+(read + write + delete under `/files/{relpath}`). Writes carry an optional
+`expected_fingerprint` for optimistic concurrency ("Reject stale config-file
+writes by fingerprint"). Domain errors
 (ConfigFileNotAllowed → 404, ConfigFileFormatInvalid → 422, ConfigFileStale → 409,
-ShimNotFound → 422, ResourceNotFound → 404) are mapped centrally by surfaces/http/errors.py.
+ResourceNotFound → 404) are mapped centrally by surfaces/http/errors.py.
 """
 
 from __future__ import annotations
@@ -20,12 +20,8 @@ from coffer.application.agent.config_file_service import (
     ConfigFileContent,
     ConfigFileInfo,
 )
-from coffer.application.agent.mcp_service import AgentMcpService, McpInstallStatus
 from coffer.domain.agent.config_files import ConfigFileFormat
-from coffer.surfaces.http.agent_dependencies import (
-    get_agent_config_file_service,
-    get_agent_mcp_service,
-)
+from coffer.surfaces.http.agent_dependencies import get_agent_config_file_service
 from coffer.surfaces.http.auth import require_token
 from coffer.surfaces.http.dependencies import get_actor as _actor
 
@@ -74,11 +70,6 @@ class ConfigFileWrite(BaseModel):
     expected_fingerprint: str | None = None
 
 
-class McpInstallStatusOut(BaseModel):
-    installed: bool
-    command: str | None
-
-
 def _info_out(i: ConfigFileInfo) -> ConfigFileInfoOut:
     return ConfigFileInfoOut(
         key=i.key,
@@ -111,10 +102,6 @@ def _content_out(c: ConfigFileContent) -> ConfigFileContentOut:
         content=c.content,
         fingerprint=c.fingerprint,
     )
-
-
-def _status_out(s: McpInstallStatus) -> McpInstallStatusOut:
-    return McpInstallStatusOut(installed=s.installed, command=s.command)
 
 
 @router.get("/{uid}/config-files", response_model=ConfigFileListOut)
@@ -196,29 +183,3 @@ async def write_config_file(
             uid, key, body.content, expected_fingerprint=body.expected_fingerprint, actor=actor
         )
     )
-
-
-@router.get("/{uid}/mcp-install", response_model=McpInstallStatusOut)
-async def mcp_install_status(
-    uid: str,
-    svc: AgentMcpService = Depends(get_agent_mcp_service),  # noqa: B008
-) -> McpInstallStatusOut:
-    return _status_out(await svc.status(uid))
-
-
-@router.post("/{uid}/mcp-install", response_model=McpInstallStatusOut)
-async def install_mcp(
-    uid: str,
-    svc: AgentMcpService = Depends(get_agent_mcp_service),  # noqa: B008
-    actor: str = Depends(_actor),
-) -> McpInstallStatusOut:
-    return _status_out(await svc.install(uid, actor=actor))
-
-
-@router.delete("/{uid}/mcp-install", response_model=McpInstallStatusOut)
-async def uninstall_mcp(
-    uid: str,
-    svc: AgentMcpService = Depends(get_agent_mcp_service),  # noqa: B008
-    actor: str = Depends(_actor),
-) -> McpInstallStatusOut:
-    return _status_out(await svc.uninstall(uid, actor=actor))

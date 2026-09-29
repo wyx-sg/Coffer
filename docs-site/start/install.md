@@ -41,7 +41,7 @@ Open a new shell, or `source` the profile the script names, so that `coffer` is 
 
 ```sh
 coffer agent add claude_code
-coffer agent mcp install claude-code
+coffer agent connect claude-code
 ```
 
 See the [Quickstart](/start/quickstart) for what they do.
@@ -205,11 +205,10 @@ Restarting matters because a daemon that is already running keeps running the ol
 
 ## Uninstall
 
-1. Remove Coffer's entry from each agent, and remove the agent from Coffer. Removing the agent also removes the skill links Coffer delivered into it:
+1. Disconnect each agent from Coffer, which removes Coffer's entries from its config, and remove the agent from Coffer. Removing the agent also removes the skill links Coffer delivered into it:
 
    ```sh
-   coffer agent mcp uninstall claude-code
-   coffer memory delivery-remove claude-code   # only if you installed memory delivery
+   coffer agent disconnect claude-code
    coffer agent rm claude-code
    ```
 
