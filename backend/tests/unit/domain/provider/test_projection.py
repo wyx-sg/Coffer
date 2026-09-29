@@ -181,6 +181,51 @@ def test_remove_codex_empty_and_idempotent() -> None:
     assert tomllib.loads(once) == tomllib.loads(twice)
 
 
+# --- the key never reaches the agent's shell commands --------------------------
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="the projected key is hidden from the agent's shell commands",
+)
+def test_codex_excludes_the_key_from_shell_commands() -> None:
+    doc = tomllib.loads(
+        apply_codex_provider("", base_url="u", model="m", wire_api="responses", display_name="x")
+    )
+    assert doc["shell_environment_policy"] == {"exclude": [CODEX_ENV_KEY]}
+
+
+def test_codex_exclude_keeps_the_users_policy_and_adds_the_key_once() -> None:
+    text = '[shell_environment_policy]\ninherit = "core"\nexclude = ["AWS_*"]\n'
+    once = apply_codex_provider(
+        text, base_url="u", model="m", wire_api="responses", display_name="x"
+    )
+    twice = apply_codex_provider(
+        once, base_url="u", model="m", wire_api="responses", display_name="x"
+    )
+    policy = tomllib.loads(twice)["shell_environment_policy"]
+    assert policy == {"inherit": "core", "exclude": ["AWS_*", CODEX_ENV_KEY]}
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="the projected key is hidden from the agent's shell commands",
+)
+def test_remove_codex_drops_only_its_own_exclude_entry() -> None:
+    projected = apply_codex_provider(
+        '[shell_environment_policy]\nexclude = ["AWS_*"]\n',
+        base_url="u",
+        model="m",
+        wire_api="responses",
+        display_name="x",
+    )
+    doc = tomllib.loads(remove_codex_provider(projected))
+    assert doc["shell_environment_policy"] == {"exclude": ["AWS_*"]}
+
+    bare = apply_codex_provider("", base_url="u", model="m", wire_api="responses", display_name="x")
+    assert "shell_environment_policy" not in tomllib.loads(remove_codex_provider(bare))
+
+
 def test_target_for_agent_maps_agent_to_config() -> None:
     # The projection writer is now chosen by AGENT type, not protocol — so an
     # openai-wire connection routed to Claude Code writes settings.json.

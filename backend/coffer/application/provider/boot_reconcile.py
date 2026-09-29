@@ -39,6 +39,7 @@ from coffer.application.provider.targets import projection_targets
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.config_files import spec_for
 from coffer.domain.agent.types import AgentType
+from coffer.domain.provider.codex_shell_env import CODEX_SHELL_ENV_POLICY_KEY
 from coffer.domain.provider.config import Protocol, ProviderConfig
 from coffer.domain.provider.projection import (
     remove_anthropic_settings,
@@ -74,12 +75,21 @@ def _projection_present(text: str, agent_type: AgentType) -> bool:
 
     A document neither Coffer nor the remover can parse is not evidence of
     anything; the caller treats that (via the raised error) as "assume present".
+
+    Codex's ``shell_environment_policy`` is left out of the comparison: its
+    ``exclude`` entry only hides the key from shell commands and selects no
+    provider, so one left behind by a hand-removed provider block is not a
+    projection (the heal's ``deproject`` removes it).
     """
     if not text.strip():
         return False
     if agent_type is AgentType.CLAUDE_CODE:
         return bool(json.loads(remove_anthropic_settings(text)) != json.loads(text))
-    return bool(tomllib.loads(remove_codex_provider(text)) != tomllib.loads(text))
+    before = tomllib.loads(text)
+    after = tomllib.loads(remove_codex_provider(text))
+    before.pop(CODEX_SHELL_ENV_POLICY_KEY, None)
+    after.pop(CODEX_SHELL_ENV_POLICY_KEY, None)
+    return before != after
 
 
 class ProviderProjectionBootHeal:

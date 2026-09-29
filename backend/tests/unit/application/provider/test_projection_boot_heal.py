@@ -17,9 +17,17 @@ from typing import Any
 
 import pytest
 
-from coffer.application.provider.boot_reconcile import ProviderProjectionBootHeal
+from coffer.application.provider.boot_reconcile import (
+    ProviderProjectionBootHeal,
+    _projection_present,
+)
+from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import Protocol
-from coffer.domain.provider.projection import anthropic_api_key_helper, apply_anthropic_settings
+from coffer.domain.provider.projection import (
+    anthropic_api_key_helper,
+    apply_anthropic_settings,
+    apply_codex_provider,
+)
 from coffer.domain.resource import Resource
 from coffer.domain.scope import Scope
 
@@ -219,3 +227,17 @@ async def test_a_failing_deactivate_is_reported_not_raised(tmp_path: pathlib.Pat
     notes = await heal.heal()
 
     assert any("could not clear stale 'agnes'" in n for n in notes)
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching", scenario="a leftover shell exclude entry is not a Codex projection"
+)
+def test_a_leftover_codex_shell_exclude_is_not_a_projection() -> None:
+    """The ``shell_environment_policy.exclude`` entry only hides the key; with the
+    provider block removed by hand it selects nothing, so the flag is stale."""
+    projected = apply_codex_provider(
+        "", base_url=_BASE_URL, model="m", wire_api="responses", display_name="x"
+    )
+    assert _projection_present(projected, AgentType.CODEX)
+    leftover = '[shell_environment_policy]\nexclude = ["COFFER_PROVIDER_KEY"]\n'
+    assert not _projection_present(leftover, AgentType.CODEX)
