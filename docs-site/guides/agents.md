@@ -40,14 +40,15 @@ Coffer scans for each supported type's config directory and offers what it finds
 **CLI:**
 
 ```sh
-coffer agent detect
-# detected: codex -> add with `coffer agent add codex --name codex`
+coffer scan
+# lists detected agents that are not registered (kind "agent"), with their type as the ref
 
-coffer agent add codex
+coffer adopt agent codex          # register a detected agent under its suggested name
+coffer agent add codex            # or register by type yourself
 # registered: agent codex
 ```
 
-`--name` is optional. Without it, the name defaults to the type with underscores turned into hyphens: `claude-code`, `codex`.
+`--name` is optional on both. Without it, the name defaults to the type with underscores turned into hyphens: `claude-code`, `codex`.
 
 ### Manually, with a custom config directory
 
@@ -71,16 +72,18 @@ When Coffer itself starts an agent for such a registration — a [chat](/guides/
 
 ```sh
 coffer agent edit claude-work --config-dir ~/work2/.claude --description "Work account"
-coffer resource rename agent claude-work claude-office
-coffer resource disable agent claude-office
+coffer agent edit claude-work --title "Claude (work account)"
+coffer agent edit claude-work --name claude-office
+coffer agent disable claude-office
 coffer agent rm claude-office
 ```
 
 In the web UI, the agent's detail page has **Edit** (config directory and description) and **Delete** in its header.
 
+- **Title** is an optional display name (up to 80 characters) that Coffer's pages and the CLI show in place of the name; an empty `--title` clears it.
 - **Rename** changes only the label. Everything that refers to an agent — reach lists, a channel's default agent, the installed MCP entry — holds the agent's immutable `uid`, so a rename breaks nothing.
 - **Disable** makes Coffer stop writing into and reading from the agent: its delivered skills are removed, its native memory is not aggregated, and its config no longer feeds the model catalogue. Enabling it again restores what the skills grant. This switch is on the CLI and REST API only.
-- **Remove** deletes the registration and removes the skills Coffer delivered. The agent stays installed, and `coffer agent detect` offers it again for as long as its config directory exists.
+- **Remove** deletes the registration and removes the skills Coffer delivered. The agent stays installed, and `coffer scan` offers it again for as long as its config directory exists.
 
 ::: warning Removing an agent leaves Coffer's entries in place
 Removing an agent does not disconnect it. The `coffer` MCP entry keeps reporting a `uid` no registered agent has, so its sessions see only servers that reach every agent. Run `coffer agent disconnect <name>` before removing, or connect again after registering the agent again.
@@ -109,6 +112,11 @@ coffer agent connect claude-code
 
 coffer agent connection claude-code          # add --json for the raw answer
 # claude-code: connected
+
+coffer agent show claude-code                # the same report, beside the agent's record
+# ...
+# coffer_connection: connected
+#   gateway MCP entry: installed (/Users/you/.coffer/bin/coffer-mcp-shim)
 
 coffer agent disconnect claude-code
 ```
@@ -212,18 +220,16 @@ Each type has a fixed allowlist:
 **CLI:**
 
 ```sh
-coffer agent config ls claude-code
-coffer agent config cat claude-code settings
+coffer path agent claude-code config                        # where each allowlisted file is
 coffer agent config edit claude-code instructions          # opens $EDITOR
 coffer agent config edit codex config --from-file ./config.toml
 
 # Directory entries (Claude Code subagents)
-coffer agent config files claude-code subagents
-coffer agent config write claude-code subagents reviewer.md --from-file ./reviewer.md
-coffer agent config rm claude-code subagents reviewer.md
+coffer agent config edit claude-code subagents/reviewer.md --from-file ./reviewer.md
+coffer agent config rm claude-code subagents/reviewer.md
 ```
 
-Reading a file that does not exist returns empty content and does not create it. Files inside a directory entry must stay inside it and end in `.md`.
+To read a file, open the path `coffer path agent <name> config` prints with your own tools. Reading a file that does not exist returns empty content and does not create it. Files inside a directory entry must stay inside it and end in `.md`.
 
 ::: tip Concurrent edits are refused, not overwritten
 Every read returns a fingerprint of the content. The editor and `coffer agent config edit` send it back with the save, and if the file changed on disk in the meantime — the agent itself rewrote it, or you saved it elsewhere — the write is refused with `CONFIG_FILE_STALE` (exit code 5 on the CLI) and the file is left as it is. Re-open and save again.
@@ -246,11 +252,13 @@ You can do two things with a direct entry:
 - **Adopt into Coffer**: Coffer registers the entry as an `mcp_server` resource, checks that it reads back, and only then removes the direct entry. Any failure rolls the new resource back and leaves the agent's file byte-identical. The server is then served to every agent through the gateway. Adopting from the detail page opens the new managed server's page.
 
 ```sh
-coffer agent mcp entries claude-code
-coffer agent mcp show-entry claude-code github --source global
-coffer agent mcp remove-entry claude-code old-server --source settings
-coffer agent mcp adopt claude-code github --secret GITHUB_TOKEN=github/token
+coffer scan --agent claude-code                       # direct MCP entries have kind "mcp"
+coffer scan --ref claude-code:github --source global  # one entry in full, secrets withheld
+coffer discard mcp claude-code:old-server --source settings
+coffer adopt mcp claude-code:github --secret GITHUB_TOKEN=github/token
 ```
+
+The ref is `<agent>:<entry>`, as the scan prints it.
 
 When the entry's environment or headers carry a non-empty value under a secret-looking key (containing `TOKEN`, `SECRET`, `PASSWORD`, `PASSWD`, `API_KEY`, `APIKEY`, `CREDENTIAL` or `AUTHORIZATION`), adoption requires a `--secret KEY=REF` mapping for each one. Coffer stores the current value in its [encrypted credential store](/guides/credentials) under the ref you name, and the new resource config carries only the ref. A name collision is refused with a suggested alternative (`--name` to pick one). For a Claude Code name that appears in both files, pass `--source` with the file's key (`global` or `settings`). The `coffer` entry itself is never removable or adoptable this way.
 
@@ -275,7 +283,7 @@ coffer agent plugin list claude-code
 coffer agent plugin show claude-code formatter@acme
 coffer agent plugin disable claude-code formatter@acme
 coffer agent plugin enable claude-code formatter@acme
-coffer agent plugin uninstall codex formatter@acme
+coffer agent plugin rm codex formatter@acme
 ```
 
 | | Claude Code | Codex |
@@ -325,11 +333,13 @@ Opening a row shows the store's files with a read-only preview. The memory deliv
 The **Conversations** tab lists the agent's local transcripts (`<config_dir>/projects/**/*.jsonl` for Claude Code, `<config_dir>/sessions/**/*.jsonl` for Codex) with title, project, message count and activity times, searchable and sortable. Opening one renders the session as a conversation with a **Contents** list of your prompts; the harness's own injected blocks are folded under **Harness context**.
 
 ```sh
-coffer agent native-memory claude-code
-coffer agent native-memory-files claude-code --dir <memory_dir>
-coffer agent transcripts claude-code -q "release" --sort message_count
-coffer agent transcript claude-code --path <source_path> --limit 50
+coffer path agent claude-code memory                   # the native memory stores
+coffer path agent claude-code transcripts              # the transcript folders
+coffer agent transcript claude-code -q "release" --sort message_count
+coffer agent transcript claude-code <session_id> --limit 50
 ```
+
+Native memory stores are plain files; read them with your own tools at the paths `coffer path` prints.
 
 Transcript text is secret-scrubbed before it is shown, long turns are cut and flagged, and a session is read in windows of turns. Coffer never writes, stores or sends transcripts or native memory anywhere.
 

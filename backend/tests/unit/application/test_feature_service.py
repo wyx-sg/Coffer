@@ -28,6 +28,11 @@ class _FakeSettings:
         self.writes.append((key, enabled))
         self.stored[key] = enabled
 
+    def clear(self, key: str) -> None:
+        if self.fail:
+            raise OSError("disk full")
+        self.stored.pop(key, None)
+
 
 @pytest.mark.acceptance(
     spec="experimental-features",
@@ -111,6 +116,41 @@ async def test_set_refuses_an_unknown_key() -> None:
     with pytest.raises(FeatureUnknown):
         await svc.set("workflow", True)
     assert settings.writes == []
+
+
+async def test_unset_removes_the_setting_and_follows_the_channel_again() -> None:
+    settings = _FakeSettings({"memory": False})
+    svc = FeatureService(channel="dev", settings=settings)
+    heard: list[tuple[str, bool]] = []
+    svc.subscribe(lambda k, e: heard.append((k, e)))
+
+    after = await svc.unset("memory")
+
+    assert after == FeatureState("memory", True, "channel")
+    assert "memory" not in settings.stored
+    assert heard == [("memory", True)]
+    # Unsetting again changes nothing and is not an error.
+    assert await svc.unset("memory") == FeatureState("memory", True, "channel")
+    assert heard == [("memory", True)]
+
+
+async def test_unset_refuses_a_pinned_or_unknown_feature_and_writes_nothing() -> None:
+    settings = _FakeSettings({"knowledge": True})
+    svc = FeatureService(channel="stable", settings=settings, pins={"knowledge": True})
+    with pytest.raises(FeaturePinned):
+        await svc.unset("knowledge")
+    with pytest.raises(FeatureUnknown):
+        await svc.unset("workflow")
+    assert settings.stored == {"knowledge": True}
+
+
+async def test_a_failed_unset_leaves_the_state_as_it_was() -> None:
+    settings = _FakeSettings({"memory": True})
+    settings.fail = True
+    svc = FeatureService(channel="stable", settings=settings)
+    with pytest.raises(OSError):
+        await svc.unset("memory")
+    assert svc.state("memory") == FeatureState("memory", True, "setting")
 
 
 async def test_subscribers_hear_a_change_sync_and_async() -> None:

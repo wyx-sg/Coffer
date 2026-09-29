@@ -197,24 +197,37 @@ def test_get_json_show(daemon):
 
 
 # ---------------------------------------------------------------------------
-# delete — via the daemon
+# rm — via the daemon
 # ---------------------------------------------------------------------------
 
 
-def test_delete_force_removes_through_daemon(daemon):
+def test_rm_force_removes_through_daemon(daemon):
     daemon.store["to_del"] = "x"
-    result = runner.invoke(app, ["credentials", "delete", "to_del", "--force"])
+    result = runner.invoke(app, ["credentials", "rm", "to_del", "--force"])
     assert result.exit_code == 0
     assert "deleted: to_del" in result.output
     assert "to_del" not in daemon.store
 
 
-def test_delete_prompts_for_confirmation(daemon):
+def test_rm_prompts_for_confirmation(daemon):
     daemon.store["protected"] = "val"
-    result = runner.invoke(app, ["credentials", "delete", "protected"], input="n\n")
+    result = runner.invoke(app, ["credentials", "rm", "protected"], input="n\n")
     assert result.exit_code != 0
     # Declined → still stored.
     assert daemon.store["protected"] == "val"
+
+    accepted = runner.invoke(app, ["credentials", "rm", "protected"], input="y\n")
+    assert accepted.exit_code == 0, accepted.output
+    assert "protected" not in daemon.store
+
+
+def test_removed_credentials_commands_are_gone(daemon):
+    """`delete` is `rm`; the master key's location is `coffer config`'s
+    `credentials.storage` key."""
+    for gone in ("delete", "storage"):
+        r = runner.invoke(app, ["credentials", gone, "--help"])
+        assert r.exit_code != 0, gone
+        assert "No such command" in r.output
 
 
 # ---------------------------------------------------------------------------
@@ -315,58 +328,3 @@ def test_credentials_list_5xx_renders_message_exits_nonzero(monkeypatch):
     result = runner.invoke(app, ["credentials", "list"])
     assert result.exit_code != 0
     assert "Traceback" not in (result.output or "")
-
-
-# ---------------------------------------------------------------------------
-# storage subcommand
-# ---------------------------------------------------------------------------
-
-
-def test_storage_shows_current_location(monkeypatch):
-    """GET /settings/credentials → master_key_storage shown in stdout."""
-    d = _FakeDaemon(master_key_storage="file")
-    _use_daemon(monkeypatch, d)
-
-    result = runner.invoke(app, ["credentials", "storage"])
-    assert result.exit_code == 0, result.output
-    assert "file" in result.output
-
-
-def test_storage_set_keychain_calls_put(monkeypatch):
-    """--set keychain issues PUT /settings/credentials and echoes 'keychain'."""
-    d = _FakeDaemon(master_key_storage="file")
-    _use_daemon(monkeypatch, d)
-
-    result = runner.invoke(app, ["credentials", "storage", "--set", "keychain"])
-    assert result.exit_code == 0, result.output
-    assert "keychain" in result.output
-    assert d.master_key_storage == "keychain"
-
-
-def test_storage_rejects_invalid_value(monkeypatch):
-    """--set vault exits with INVALID_INPUT (6) without any HTTP call."""
-    http_called = []
-
-    class _NoCallDaemon:
-        def get(self, *_a: Any, **_k: Any) -> _Resp:
-            http_called.append("get")
-            return _Resp(200, {"master_key_storage": "file"})
-
-        def put(self, *_a: Any, **_k: Any) -> _Resp:
-            http_called.append("put")
-            return _Resp(200, {"master_key_storage": "file"})
-
-        def __enter__(self) -> _NoCallDaemon:
-            return self
-
-        def __exit__(self, *_: object) -> None:
-            pass
-
-    info = DaemonInfo(
-        version=1, pid=1, port=9999, token="t", started_at=dt.now(tz=UTC), binary_path="/fake"
-    )
-    monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (_NoCallDaemon(), info))
-
-    result = runner.invoke(app, ["credentials", "storage", "--set", "vault"])
-    assert result.exit_code == 6
-    assert not http_called, "HTTP should not be called for invalid input"

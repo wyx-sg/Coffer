@@ -430,6 +430,8 @@ export interface components {
             uid: string;
             /** @description A mutable label, unique within kind `provider`, editable through the kind-agnostic `PATCH /api/v1/resources/{uid}`. Display only: nothing Coffer writes into another tool's config spells it any more, which is what let the provider-specific rename route go. */
             name: string;
+            /** @description Optional display text a person chose, shown in place of the name wherever this resource is listed or shown; null when none is set. Edited through `PATCH /api/v1/resources/{uid}` (resource-framework "Carry an optional editable title on every resource"). */
+            title?: string | null;
             protocol: components["schemas"]["Protocol"];
             /** @description The upstream LLM endpoint URL. */
             base_url: string;

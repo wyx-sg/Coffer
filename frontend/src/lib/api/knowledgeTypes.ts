@@ -48,6 +48,9 @@ export interface CollectionOut {
    *  root. Display it, and build the `path` / `collection` arguments of the
    *  FILE routes from it: those address a place on disk. */
   name: string;
+  /** The display title a person chose, shown in place of the name; null when
+   *  none is set. Edited through `PATCH /resources/{uid}`. */
+  title?: string | null;
   description: string | null;
   /** Documents an agent can read today, counted recursively. */
   document_count: number;

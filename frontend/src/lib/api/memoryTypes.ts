@@ -32,6 +32,9 @@ export interface PartitionOut {
   /** A mutable label, and the partition's directory name under the memory
    *  root. For display. */
   name: string;
+  /** The display title a person chose, shown in place of the name; null when
+   *  none is set. Edited through `PATCH /resources/{uid}`. */
+  title?: string | null;
   /** Absolute path of the repository's main working tree; empty for `global`. */
   repository_path: string;
   /** What the repository was resolved to: `remote:<host>/<path>` when it has an

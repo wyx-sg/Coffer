@@ -186,7 +186,7 @@ The raw identifier never leaves the machine. What travels is `sha256("coffer-mac
 
 Each machine writes exactly one file, `machines/<machine_id>.yaml`, and never another machine's, so descriptors cannot conflict and git merges them trivially. The registry is whatever `machines/*.yaml` holds. A descriptor carries `name`, `os`, `hostname`, `coffer_version`, `last_converged_on`, `last_converged_commit`, `key_fingerprint` (a 12-character SHA-256 prefix of the master key, so another machine can say its credentials will not decrypt here) and the registered `agents`.
 
-`last_converged_on` is a day, restamped at most once per calendar day, so an idle machine does not commit a heartbeat every interval. The one exception: a descriptor that has no commit yet is filled in as soon as there is one, so a machine reinstalled on the day it first converged can still be recognised as returning. Retiring a gone machine's descriptor (`coffer sync machine remove`) is the one deliberate write to another machine's path.
+`last_converged_on` is a day, restamped at most once per calendar day, so an idle machine does not commit a heartbeat every interval. The one exception: a descriptor that has no commit yet is filled in as soon as there is one, so a machine reinstalled on the day it first converged can still be recognised as returning. Retiring a gone machine's descriptor (`coffer sync machine rm`) is the one deliberate write to another machine's path.
 
 ## Applying a diff
 
@@ -207,7 +207,7 @@ flowchart LR
 ```
 
 - **Knowledge and skill files** (`TreeApplier`) are copied in or unlinked; an emptied collection directory is removed too. Symlinks in the working tree are refused. There is no index to rebuild, because [knowledge is plain files](/architecture/knowledge).
-- **Resource documents** (`ResourceApplier`) go through the resource service, keyed by uid. A new uid is registered at that same uid, so both machines hold the same resource. An existing uid with a different name is applied as a rename through `ResourceService.rename`, which runs the kind's `on_rename` hook. Config and description are updated; the local `enabled` and `scope` are never touched, and a newly arrived resource takes this machine's default reach. Before any write the kind's `ImportGate` validates the config, and a kind may register an `ImportNormaliser` (the provider kind uses one to keep a single internal-engine default). A removal runs the real `ResourceService.delete`, whose cascade releases credentials no remaining resource cites. A document whose uid disagrees with its path is refused rather than guessed at.
+- **Resource documents** (`ResourceApplier`) go through the resource service, keyed by uid. A new uid is registered at that same uid, so both machines hold the same resource. An existing uid with a different name is applied as a rename through `ResourceService.rename`, which runs the kind's `on_rename` hook (a kind whose name is fixed refuses it, and the path is held). Config and description are updated, and the title is set from the document's `title` key, or cleared when the document carries none; the local `enabled` and `scope` are never touched, and a newly arrived resource takes this machine's default reach. Before any write the kind's `ImportGate` validates the config, and a kind may register an `ImportNormaliser` (the provider kind uses one to keep a single internal-engine default). A removal runs the real `ResourceService.delete`, whose cascade releases credentials no remaining resource cites. A document whose uid disagrees with its path is refused rather than guessed at.
 - **State documents** (`StateApplier`) are handed to the `SyncedStatePort` that claims the area, with `${HOME}` expanded. Each area defines what deleting its document means: an un-pairing, capabilities re-enabled, engine settings back to defaults, or nothing at all for the plugin inventory. An area this build does not know is skipped rather than failed.
 - **Credential blobs** (`CredentialApplier`) are written as ciphertext only, and only if the incoming blob was encrypted later than the one already held. A stale blob pushed cleanly by another machine is ignored rather than allowed to orphan a working secret.
 
@@ -280,7 +280,7 @@ The history on the remote is the backup, and recovery reuses the round's own mac
 
 | Command | What it does | Pointer |
 | --- | --- | --- |
-| `coffer sync rollback` | Applies the diff from the current state back to the newest `coffer/pre-apply/*` snapshot. | Unchanged, so the next round publishes the undo as a local change. |
+| `coffer sync restore` (no `--at`) | Applies the diff from the current state back to the newest `coffer/pre-apply/*` snapshot. | Unchanged, so the next round publishes the undo as a local change. |
 | `coffer sync restore --at <sha, ref or YYYY-MM-DD>` | Brings back documents from an earlier revision, dropping that diff's deletions so later work survives. | Unchanged, so the recovered documents publish as additions. |
 | `coffer sync rebuild` | Makes this vault the remote's tip, discarding what only this machine holds. Offered where the publish guard holds a wiped vault. | Set to the tip. |
 

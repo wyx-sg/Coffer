@@ -40,6 +40,7 @@ def _to_domain(row: ResourceModel) -> Resource:
         created_at=row.created_at,
         updated_at=row.updated_at,
         scope=Scope.from_json(json.loads(row.scope_json)) if row.scope_json else None,
+        title=row.title,
     )
 
 
@@ -112,6 +113,7 @@ class SqlAlchemyResourceRepo:
                 created_at=resource.created_at,
                 updated_at=resource.updated_at,
                 scope_json=_scope_json(resource.scope),
+                title=resource.title,
             )
             session.add(row)
             try:
@@ -184,6 +186,18 @@ class SqlAlchemyResourceRepo:
                 await session.commit()
             except sqlalchemy.exc.IntegrityError as e:
                 raise ResourceAlreadyExists(kind, new_name) from e
+            await session.refresh(row)
+            return _to_domain(row)
+
+    async def set_title(self, uid: str, title: str | None) -> Resource:
+        """Write the display title; ``None`` clears it."""
+        async with self._sm() as session:
+            row = await self._row(session, uid)
+            if row is None:
+                raise ResourceNotFound(uid)
+            row.title = title
+            row.updated_at = datetime.now(tz=UTC)
+            await session.commit()
             await session.refresh(row)
             return _to_domain(row)
 

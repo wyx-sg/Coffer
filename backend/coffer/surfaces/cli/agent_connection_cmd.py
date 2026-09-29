@@ -14,7 +14,8 @@ from typing import Any
 import typer
 
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli._resolve import resolve_uid
+from coffer.surfaces.cli._kind_verbs import verbose_of
+from coffer.surfaces.cli._resolve import resolve_ref
 
 #: How each part reads in a person's terminal.
 _PART_LABELS = {
@@ -30,17 +31,23 @@ _STATE_LABELS = {
 
 
 def _call(ctx: typer.Context, name: str, method: str) -> dict[str, Any]:
-    verbose = (ctx.obj or {}).get("verbose", False)
+    verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        uid = resolve_uid(c, "agent", name, verbose=verbose)
+        uid = resolve_ref(c, "agent", name, verbose=verbose)["uid"]
         r = c.request(method, f"/agents/{uid}/coffer-connection")
         _cli_client.check(r, verbose=verbose)
     data: dict[str, Any] = r.json()
     return data
 
 
-def _echo_parts(data: dict[str, Any]) -> None:
+def state_label(state: str) -> str:
+    """How a connection state reads in a person's terminal."""
+    return _STATE_LABELS.get(state, state)
+
+
+def echo_parts(data: dict[str, Any]) -> None:
+    """One indented line per part — shared with ``coffer agent show``."""
     for part in data["parts"]:
         label = _PART_LABELS.get(part["key"], part["key"])
         mark = "installed" if part["installed"] else "missing"
@@ -50,7 +57,7 @@ def _echo_parts(data: dict[str, Any]) -> None:
 
 def connection(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
+    name: str = typer.Argument(..., metavar="NAME", help="Agent name or uid"),
     output_json: bool = typer.Option(False, "--json", help="JSON output"),
 ) -> None:
     """Report whether this agent is connected to Coffer, part by part."""
@@ -58,23 +65,23 @@ def connection(
     if output_json:
         typer.echo(_json.dumps(data, indent=2))
         return
-    typer.echo(f"{name}: {_STATE_LABELS.get(data['state'], data['state'])}")
-    _echo_parts(data)
+    typer.echo(f"{name}: {state_label(data['state'])}")
+    echo_parts(data)
 
 
 def connect(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
+    name: str = typer.Argument(..., metavar="NAME", help="Agent name or uid"),
 ) -> None:
     """Connect this agent to Coffer: install every part that applies to it."""
     data = _call(ctx, name, "POST")
     typer.echo(f"connected agent {name} to Coffer")
-    _echo_parts(data)
+    echo_parts(data)
 
 
 def disconnect(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
+    name: str = typer.Argument(..., metavar="NAME", help="Agent name or uid"),
 ) -> None:
     """Disconnect this agent from Coffer: remove every part Coffer wrote into it."""
     _call(ctx, name, "DELETE")

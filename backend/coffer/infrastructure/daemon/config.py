@@ -75,7 +75,7 @@ def _read_raw() -> dict[str, Any] | None:
     except (OSError, json.JSONDecodeError) as exc:
         # A hand-mangled config must not stop the daemon from starting — that
         # would be unrecoverable from the UI, which needs a running daemon. Warn
-        # loudly and fall back to the default port; `coffer daemon port show`
+        # loudly and fall back to the default port; `coffer config get daemon.port`
         # reports the same problem where the user can act on it.
         _logger.warning("daemon config at %s is unreadable (%r); ignoring it", path, exc)
         return None
@@ -280,6 +280,16 @@ def write_feature_setting(key: str, enabled: bool) -> None:
     current = payload.get("features")
     features = dict(current) if isinstance(current, dict) else {}
     features[key] = enabled
+    _merge(features=features)
+
+
+def clear_feature_setting(key: str) -> None:
+    """Remove one feature from the ``features`` object, keeping every other key
+    in it, so the feature falls back to the channel default."""
+    payload = _read_raw() or {}
+    current = payload.get("features")
+    features = dict(current) if isinstance(current, dict) else {}
+    features.pop(key, None)
     _merge(features=features)
 
 

@@ -45,8 +45,12 @@ interface SkillBindingOut {
 export interface SkillOut {
   /** The skill Resource's immutable identity — what every route below takes. */
   uid: string;
-  /** A mutable label, and also the master folder's name on disk. For display. */
+  /** The master folder's name on disk and the name agents load the skill by —
+   *  fixed after registration (a rename answers 409 `NAME_IMMUTABLE`). */
   name: string;
+  /** The display title a person chose, shown in place of the name; null when
+   *  none is set. Edited through `PATCH /resources/{uid}`. */
+  title?: string | null;
   description: string;
   source: SkillSource;
   /** True for a skill Coffer generates and owns. Its master folder is rewritten

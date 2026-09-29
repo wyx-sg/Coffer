@@ -19,6 +19,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { skillsApi, type SkillOut } from "@/lib/api/skills";
 import { skillsKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
+import { displayName } from "@/lib/resourceTitle";
 
 /** Per-row reach control for the skill itself: enable/disable is only one of
  *  its three states, so the list shows the same control the detail page does
@@ -59,7 +60,7 @@ export function SkillRowActions({
   const { t } = useTranslation();
   const button = (
     <RowDeleteButton
-      ariaLabel={t("skills.deleteAria", { name: skill.name })}
+      ariaLabel={t("skills.deleteAria", { name: displayName(skill) })}
       disabled={deleteDisabled || skill.builtin}
       onDelete={onDelete}
     />
@@ -101,7 +102,7 @@ export function SkillsBulkActions({ skills, onDone }: { skills: SkillOut[]; onDo
         onDone={onDone}
       />
       <BulkDeleteButton
-        title={t("skills.removeConfirmTitle", { name: skills.map((s) => s.name).join(", ") })}
+        title={t("skills.removeConfirmTitle", { name: skills.map(displayName).join(", ") })}
         description={t("skills.removeConfirmBody")}
         pending={bulk.isPending}
         onConfirm={async () => {

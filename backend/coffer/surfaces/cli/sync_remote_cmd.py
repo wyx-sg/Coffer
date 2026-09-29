@@ -51,14 +51,15 @@ def remote_body(current: dict[str, Any] | None, url: str, **given: Any) -> dict[
 
 
 def print_remote(remote: dict[str, Any]) -> None:
+    """Every setting of the stored remote — what ``coffer sync status`` and
+    ``remote set|pause|resume`` print."""
     _console.print(f"remote: {remote['url']}  branch {remote['branch']}")
     _console.print(
         f"  every {remote['interval_seconds']}s · "
         f"credentials {'included' if remote['include_credentials'] else 'excluded'} · "
         f"{'enabled' if remote['enabled'] else 'disabled'}"
     )
-    if remote.get("credential_ref"):
-        _console.print(f"  push credential: {remote['credential_ref']}")
+    _console.print(f"  push credential: {remote.get('credential_ref') or '(none)'}")
     _console.print(f"  working tree: {remote['worktree_path']}")
 
 
@@ -114,21 +115,6 @@ def remote_set(
         r = c.put("/sync/remote", json=body)
         _cli_client.check(r, verbose=verbose)
         print_remote(r.json())
-
-
-@remote_app.command("show")
-def remote_show(ctx: typer.Context) -> None:
-    """Show the configured remote and its settings."""
-    verbose = _verbose(ctx)
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        r = c.get("/sync/remote")
-        _cli_client.check(r, verbose=verbose)
-        payload = r.json()
-    if not payload.get("configured"):
-        _console.print("no sync remote configured")
-        return
-    print_remote(payload["remote"])
 
 
 @remote_app.command("clear")

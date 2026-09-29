@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2026-09-18
 **Deciders**: Yuxing Wu
-**Related**: [The Resource Framework Is Core Domain](resource-framework-upfront.md), [Kind Plug-in Contract](kind-plugin-contract.md), [Vault Sync](vault-sync.md), [Sync Deletion Breaker](sync-deletion-breaker.md), [Credential References](credential-references.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), spec resource-framework "Address every resource by an immutable uid through one kind-agnostic surface", spec resource-framework "Treat a resource's name as a mutable label", spec vault-sync "Key resource documents by uid", PR #406
+**Related**: [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md), [The Resource Framework Is Core Domain](resource-framework-upfront.md), [Kind Plug-in Contract](kind-plugin-contract.md), [Vault Sync](vault-sync.md), [Sync Deletion Breaker](sync-deletion-breaker.md), [Credential References](credential-references.md), [Per-Agent Resource Scope](per-agent-resource-scope.md), spec resource-framework "Address every resource by an immutable uid through one kind-agnostic surface", spec resource-framework "Treat a resource's name as a mutable label", spec vault-sync "Key resource documents by uid", PR #406
 
 ## Context
 
@@ -65,7 +65,9 @@ it: `/api/v1/resources/{uid}`, per-kind route prefixes
 (`/api/v1/resources/mcp_server/{uid}/…`), cross-resource references, the sync
 path `resources/<kind>/<uid>.yaml` with `uid` inside the document, web UI
 detail routes. `name` stays unique within a kind but is a label, renamed
-through the ordinary `PATCH`. The integer `id` stays exactly what it was: the
+through the ordinary `PATCH` — except on the kinds whose name is quoted outside
+Coffer, which [Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md)
+exempts. The integer `id` stays exactly what it was: the
 internal, per-machine surrogate key and foreign-key target.
 
 Existing rows needed uids that every machine in a fleet would compute
@@ -76,7 +78,8 @@ upgrades. After that revision the derivation is never used again; every new
 resource gets a random `uuid4`.
 
 - **Pros.** A rename is a modification of one file and one column; nothing
-  else holds the name. Every kind gets rename at once. Two machines hold one
+  else inside Coffer holds the name. Every kind whose name is Coffer's alone
+  gets rename at once. Two machines hold one
   identity per resource. The spelling (`uuid4().hex`) is the one already used
   for provider credential refs, the fallback machine id and the frontend's
   minted credential refs (`lib/credentialRef.ts`).
@@ -184,7 +187,11 @@ minting one is the sync applier, creating a resource another machine already
 identified.
 
 `name` is a mutable label: unique within its kind, renamed by a field on
-`PATCH /api/v1/resources/{uid}` for every kind, audited as `from`/`to`. The
+`PATCH /api/v1/resources/{uid}`, audited as `from`/`to`. A kind whose name is
+visible outside Coffer declares it fixed (`Kind.name_fixed`: today `mcp_server`
+and `skill`) and refuses a changed name with `409 NAME_IMMUTABLE`; every
+resource also carries an editable display `title`
+([Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md)). The
 `<kind>:<name>` string and the `ResourceRef` type are gone; responses carry
 `uid`, `kind` and `name` as three plain fields. Cross-resource references hold
 uids. The sync document for a resource is `resources/<kind>/<uid>.yaml`.
@@ -200,11 +207,10 @@ frontmatter name rule).
 
 - A rename is a column write plus, for the kinds that key something else by
   name, their `on_rename` hook ([Kind Plug-in Contract](kind-plugin-contract.md)).
-  Four kinds supply one: `skill`, `knowledge` and `memory` move their directory,
-  and `mcp_server` evicts every session supervisor's live connection under the
-  old name so a renamed server does not leave an unreachable subprocess behind.
-  A hook failure aborts the rename with nothing changed. `agent`, `provider` and
-  `channel` rename by writing one column.
+  Two kinds supply one: `knowledge` and `memory` move their directory. A hook
+  failure aborts the rename with nothing changed. `agent`, `provider` and
+  `channel` rename by writing one column. `skill` and `mcp_server` are not
+  renamed at all ([Names Visible to Agents Are Fixed](names-visible-to-agents-are-fixed.md)).
 - The CLI keeps taking names and resolves them to uids itself; nobody types a
   uid. The web UI addresses detail pages by uid, and the old name-based routes
   were deleted with no redirect, so a bookmarked name URL breaks once.

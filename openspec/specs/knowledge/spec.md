@@ -84,8 +84,8 @@ A **collection** is a top-level subdirectory of the knowledge root and is one `k
 
 #### Scenario: an unknown collection is an error, never auto-created
 - **GIVEN** a knowledge root with no `typo` collection in it
-- **WHEN** `coffer knowledge ls typo --json` runs
-- **THEN** the command exits non-zero and no `typo` directory exists afterwards: a read never provisions a collection
+- **WHEN** `coffer knowledge show typo --json` runs, and then `coffer path knowledge typo`
+- **THEN** both commands exit non-zero and no `typo` directory exists afterwards: a read never provisions a collection
 
 ### Requirement: Derive no boundary from the working directory
 The system MUST NOT derive any boundary from the agent's cwd. There MUST be no `global` scope, no `project-<ULID>` naming, no git-root resolution, no scope-to-project-root mapping table, no auto-provisioning and no scope display labels.
@@ -101,7 +101,7 @@ A collection's one-line description MUST be the first paragraph of its `README.m
 
 #### Scenario: the catalogue lists collections with their README description
 - **GIVEN** a collection created with the description "First description", whose `README.md` is then edited by hand to open with "Edited by hand."
-- **WHEN** `coffer knowledge collections --json` runs
+- **WHEN** `coffer knowledge list --json` runs
 - **THEN** the collection's `description` is the README's first paragraph as edited, not the string the creation call supplied — the description is read off disk on every listing, never out of a row
 
 ### Requirement: Present knowledge as files on disk
@@ -126,7 +126,7 @@ Every entrance Coffer serves — `coffer__write`, the CLI's `write` and its rout
 `coffer__write` MUST submit material to a named collection from `title`, `description` and body text. It MUST take no path, no folder and no lane, and MUST NOT replace anything: two submissions of the same title are two pieces of material. A submission MUST be a plain file write — no LLM, no conversion, no indexing step — and MUST record one `mcp_invocations` row and one audit event naming the calling agent, taken from the session's handshake identity ([mcp-gateway](../mcp-gateway/spec.md) "Take the agent identity from the handshake") written in as an `agent` argument no tool advertises and no caller can set. Its answer MUST say what became of the material: `pending`, with no path — an inbox address vanishes once the material is merged, so reporting one would be reporting an address that is about to stop existing — or `written`, with the document's path, when it was promoted (see "Promote material directly when no model is configured"). A submission naming a collection that does not exist or is disabled MUST be refused with the collections that **are** available: that names exactly what this agent's own delivered skill already lists, and it turns a dead end into a correction for a model that reached for the tool without opening the skill.
 
 #### Scenario: written material waits in the inbox, or becomes a document with no model
-- **GIVEN** a `shopee` collection created through `coffer knowledge create`, and an internal model connection configured
+- **GIVEN** a `shopee` collection created through `coffer knowledge add`, and an internal model connection configured
 - **WHEN** `coffer__write` is called against the daemon with the title `Session ownership`, a description and a body
 - **THEN** the answer's `status` is `pending` and it carries no path, the material waits in `shopee/.inbox/session-ownership.md` — named by the title's own slug, with no id in it anywhere — and one `knowledge_written` audit event is recorded
 - **AND** with no internal model configured, the same call answers `written` with the path `shopee/session-ownership.md`: the material became a document of its own on the spot, and the inbox is empty
@@ -179,12 +179,13 @@ Upload MUST be bounded: one file per call, a size ceiling, and a refusal that na
 - **THEN** the upload is refused with the reason naming the document type, and nothing is written — no inbox item, no document, no original
 
 ### Requirement: Let only a person delete a document
-Deleting a document MUST be a person's action, offered on the REST, CLI and web surfaces, and it MUST be allowed for **any** document, whoever wrote it: the tree is the person's as much as curation's. No agent-facing tool may delete anything. Inside a pass, `retire_document` is curation's own way to remove a document whose content it has written elsewhere (see "Preserve every fact a pass is shown"), and it is bounded like a write (see "Bound a pass to eight writes").
+Deleting a document MUST be a person's action, and it MUST be allowed for **any** document, whoever wrote it: the tree is the person's as much as curation's. The REST route and the web UI MUST offer it, and each deletion through them MUST record a `knowledge_deleted` audit event. On the command line a person deletes the file itself, in the collection directory that `coffer path knowledge <collection>` names, and the deletion is live on the next read and the next catalogue (see "Keep direct file edits a complete way to change knowledge"). No agent-facing tool may delete anything. Inside a pass, `retire_document` is curation's own way to remove a document whose content it has written elsewhere (see "Preserve every fact a pass is shown"), and it is bounded like a write (see "Bound a pass to eight writes").
 
 #### Scenario: delete a document an agent wrote
-- **GIVEN** a document in `shopee/` whose frontmatter `actor` is `agent`
-- **WHEN** a person deletes it through `DELETE` on the knowledge route and another through `coffer knowledge delete`
-- **THEN** both files are gone from the tree and a `knowledge_deleted` audit event is recorded for each
+- **GIVEN** two documents in `shopee/` whose frontmatter `actor` is `agent`
+- **WHEN** a person deletes one through `DELETE` on the knowledge route, and removes the other's file from the directory `coffer path knowledge shopee` prints
+- **THEN** both files are gone from the tree, and neither is listed or catalogued afterwards
+- **AND** a `knowledge_deleted` audit event is recorded for the one deleted through the route
 
 ### Requirement: Curate through a fenced four-tool pass
 Curation is how material becomes knowledge and how an edit to one document reaches the rest. It is a bounded agentic pass driven by the internal model connection, whose tool surface MUST be exactly `list_documents`, `read_document`, `write_document` and `retire_document`, fenced to **one collection's documents**: no tool may reach the inbox, the collection's `README.md`, or another collection. A pass takes **one item** — one piece of material, or one edited document — and the context and writes of "Assemble a pass from a bounded context" and "Bound a pass to eight writes".
@@ -339,10 +340,10 @@ The skill's **frontmatter description** MUST describe Coffer itself — naming i
 - **GIVEN** a rendered `coffer-guide` `SKILL.md`
 - **WHEN** its frontmatter and its body are read
 - **THEN** the description names Coffer and its built-in tools as well as the enabled collections' subjects, and is within 1024 characters — a catalogue too large to fit drops whole collection subjects from the tail rather than ending mid-sentence
-- **AND** the body carries the manual first — the four built-in tools, the tiering contract, that Coffer never writes an agent's memory, and that no Coffer tool waits on an approval — and the catalogue after it, in one file
+- **AND** the body carries the manual first — the two built-in tools, the tiering contract, that Coffer never writes an agent's memory, and that no Coffer tool waits on an approval — and the catalogue after it, in one file
 
 ### Requirement: Merge the manual and the catalogue in the skill body
-The skill's **body** MUST be one merged manual: Coffer's own — its four built-in tools and when to reach for each, the tiering contract that makes an unlisted upstream tool still callable, the fact that Coffer reads an agent's memory and never writes it, that no Coffer tool waits on a human approval, and what does not belong in knowledge — **followed by** the catalogue: the path of the knowledge root, and, for each enabled collection, every document's collection-relative path, title and description. It MUST instruct the agent to read those files with its own tools, to reach for `coffer__write` when it learns something durable, and that it may also correct or extend a document it has read by editing the file itself, which the next sweep carries into the rest of the collection (see "Keep direct file edits a complete way to change knowledge"). One skill, not a set: a frontmatter description is resident in every session whether the skill is opened or not, while a body is paid for only when a model reaches for it, so a second skill would spend the resident budget again to describe something most sessions never open.
+The skill's **body** MUST be one merged manual: Coffer's own — its two built-in tools, `coffer__search_tools` and `coffer__write`, and when to reach for each; the tiering contract that makes an unlisted upstream tool still callable; the memory root, and that Coffer's distilled memory notes are Markdown under it which the agent finds by searching that directory with its own tools; that Coffer's own logs are read with `coffer log` and located with `coffer path logs`; the fact that Coffer reads an agent's memory and never writes it; that no Coffer tool waits on a human approval; and what does not belong in knowledge — **followed by** the catalogue: the path of the knowledge root, and, for each enabled collection, every document's collection-relative path, title and description. It MUST instruct the agent to read those files with its own tools, to reach for `coffer__write` when it learns something durable, and that it may also correct or extend a document it has read by editing the file itself, which the next sweep carries into the rest of the collection (see "Keep direct file edits a complete way to change knowledge"). One skill, not a set: a frontmatter description is resident in every session whether the skill is opened or not, while a body is paid for only when a model reaches for it, so a second skill would spend the resident budget again to describe something most sessions never open.
 
 #### Scenario: the skill body carries the catalogue and the absolute root
 - **GIVEN** a collection holding three documents
@@ -350,13 +351,19 @@ The skill's **body** MUST be one merged manual: Coffer's own — its four built-
 - **THEN** its body carries each document's collection-relative path, title and description, and the path of the knowledge root, and it instructs the agent to read those files with its own tools
 - **AND** the frontmatter `description` names the collection's subject, taken from the collection's own `README.md`, so a model matching on it has something to match
 
+#### Scenario: the manual names two tools, the memory root and the log reader
+- **GIVEN** the `knowledge` and `memory` features switched on
+- **WHEN** the skill is rendered
+- **THEN** its manual names exactly two built-in tools, `coffer__search_tools` and `coffer__write`, and names neither `coffer__recall` nor `coffer__diagnose`
+- **AND** it names the memory root with the instruction to search it with the agent's own tools, and names `coffer log` and `coffer path logs` as the way to read Coffer's own logs
+
 ### Requirement: Keep the handshake instructions to what a skill cannot carry
-The MCP gateway's own `initialize` instructions MUST stay within their character cap and MUST carry only what a skill cannot: what Coffer is, the names of its four built-in tools (`coffer__write`, `coffer__recall`, `coffer__diagnose`, `coffer__search_tools`) so they are recognisable in a tool list, the tiering sentence when tools are actually hidden this session, and a pointer to the `coffer-guide` skill for everything else. It MUST NOT restate the manual, MUST NOT name a retrieval tool, and MUST NOT carry the catalogue — the catalogue is in the skill body, which costs a session nothing until a model opens it. A built-in tool whose experimental feature is switched off is not in the tool list, and the instructions MUST NOT name it either ([experimental-features](../experimental-features/spec.md) "Withdraw what a switched-off feature put in front of agents").
+The MCP gateway's own `initialize` instructions MUST stay within their character cap and MUST carry only what a skill cannot: what Coffer is, the names of its two built-in tools (`coffer__write`, `coffer__search_tools`) so they are recognisable in a tool list, one line saying that Coffer's memory notes are files under the memory root read with the agent's own tools and that Coffer's own logs are read with `coffer log`, the tiering sentence when tools are actually hidden this session, and a pointer to the `coffer-guide` skill for everything else. It MUST NOT restate the manual, MUST NOT name a retrieval tool, and MUST NOT carry the catalogue — the catalogue is in the skill body, which costs a session nothing until a model opens it. A built-in tool whose experimental feature is switched off is not in the tool list, and the instructions MUST NOT name it either, nor the memory root while the memory feature is off ([experimental-features](../experimental-features/spec.md) "Withdraw what a switched-off feature put in front of agents").
 
 #### Scenario: the handshake names Coffer's tools and points at the skill
 - **GIVEN** a real daemon driven over its `/mcp` endpoint by the MCP SDK
 - **WHEN** the client initializes, both with upstream tools hidden and with none hidden
-- **THEN** the `instructions` text is within its character cap, names `coffer__write`, `coffer__recall`, `coffer__diagnose` and `coffer__search_tools`, and points at the `coffer-guide` skill for the rest
+- **THEN** the `instructions` text is within its character cap, names `coffer__write` and `coffer__search_tools`, names neither `coffer__recall` nor `coffer__diagnose`, and points at the `coffer-guide` skill for the rest
 - **AND** it names no retrieval tool and carries no collection catalogue
 
 ### Requirement: Render the guide skill deterministically
@@ -478,10 +485,16 @@ Every collection MUST be named, catalogued and served to **every** agent, and a 
 - **AND** the second is refused with 409 `KNOWLEDGE_FILE_CONFLICT` and the file still holds the first save's body
 
 ### Requirement: Cover knowledge management on REST and the CLI
-The REST API under `/api/v1/knowledge` and the `coffer knowledge` CLI group MUST cover: create a collection, list one level of a collection at a path, read a document, save an edited document's body (`PUT /file`; `coffer knowledge save`, see "Save a document edited in the web UI"), submit material (`POST /material`; `coffer knowledge write`), upload a document, delete a document, and trigger curation. A person may equally edit a document in their own editor, reached from the page's open-in-editor action, and that edit is live on the next read (see "Keep direct file edits a complete way to change knowledge"). Collection deletion goes through the Resource framework (`DELETE /api/v1/resources/{uid}`). There MUST be no index, reindex, check-sources, update-source or embedding-configuration endpoint, no settings endpoint for the cwd-derived scope axis "Derive no boundary from the working directory" forbids, no per-agent reach endpoint for this kind and no enabled switch (see "Serve every collection to every agent"). These surfaces serve the human and the UI; they are not an agent's retrieval path.
+The REST API under `/api/v1/knowledge` MUST cover: create a collection, list one level of a collection at a path, read a document, save an edited document's body (`PUT /file`, see "Save a document edited in the web UI"), submit material (`POST /material`), upload a document, delete a document, and trigger curation. The `coffer knowledge` CLI group MUST offer `list`, `show`, `add`, `edit`, `rm`, `save` (replace a document's body with the fingerprint guard of "Save a document edited in the web UI"), `write` (submit material), `upload` and `curate`. A collection's documents are plain files, so on the command line `coffer path knowledge [<collection>]` prints the absolute path of the knowledge root or of one collection, and the documents are listed, read and deleted on disk; the `coffer knowledge` group carries no command that lists, prints or deletes a document. A person may equally edit a document in their own editor, reached from the page's open-in-editor action or from that path, and that edit is live on the next read (see "Keep direct file edits a complete way to change knowledge"). Collection deletion goes through the Resource framework (`DELETE /api/v1/resources/{uid}`; `coffer knowledge rm`). There MUST be no index, reindex, check-sources, update-source or embedding-configuration endpoint, no settings endpoint for the cwd-derived scope axis "Derive no boundary from the working directory" forbids, and no per-agent reach endpoint, `scope` command, enabled switch or `enable`/`disable` command for this kind (see "Serve every collection to every agent"). These surfaces serve the human and the UI; they are not an agent's retrieval path.
 
 #### Scenario: expose every knowledge operation on both surfaces
 - **GIVEN** the daemon's route table and the `coffer knowledge` command group
 - **WHEN** both are enumerated
-- **THEN** each offers create, list a level, read, save an edited body, submit material, upload, delete a document and trigger curation
-- **AND** none is an index, reindex, source, embedding, scope or reach endpoint
+- **THEN** the routes offer create, list a level, read, save an edited body, submit material, upload, delete a document and trigger curation, and the command group offers exactly `list`, `show`, `add`, `edit`, `rm`, `save`, `write`, `upload` and `curate`
+- **AND** none is an index, reindex, source, embedding, scope or reach endpoint, and the group has no `enable`, `disable` or `scope` command
+
+#### Scenario: locate a collection's documents from the command line
+- **GIVEN** a `shopee` collection holding a document at `shopee/infra/cache.md`
+- **WHEN** `coffer path knowledge shopee` runs, and then `coffer path knowledge` with no collection
+- **THEN** the first prints the absolute path of the `shopee` directory, under which the document is read at `infra/cache.md`, and the second prints the absolute knowledge root
+- **AND** `coffer knowledge` offers no `collections`, `create`, `ls`, `read` or `delete` command

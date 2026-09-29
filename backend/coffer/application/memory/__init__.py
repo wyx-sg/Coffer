@@ -6,11 +6,11 @@ finished native-memory readers and writes what they said, verbatim, under each
 partition's hidden ``.raw/``; the distil pass turns those entries into Coffer's
 own notes and writes the index. :class:`MemoryService` drives both, registers
 the partitions a pass files into, and is the one read path — ``notes/``, at
-call time — that delivery and recall compose against.
+call time — that delivery composes against.
 :func:`make_memory_kind` wires the ``memory`` Resource kind's lifecycle.
 
-Delivery and recall are separate concerns with their
-own modules, and are not re-exported here.
+Delivery is a separate concern with its own modules, and is not re-exported
+here.
 """
 
 from coffer.application.memory.aggregate import (

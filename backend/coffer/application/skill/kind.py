@@ -15,11 +15,12 @@ parallel — by the time the background coroutine looked the resource up again
 the row was gone and the cleanup raised ResourceNotFound (silently
 suppressed), orphaning every symlink and the master folder.
 
-The `on_rename` hook is what a rename costs this kind. A skill's name is also
-a directory — ``~/.coffer/skills/<name>`` — and the copies delivered into each
-agent's skills dir are named after it too, so the label cannot move on its own.
-It is PRE-write: raising aborts the rename with nothing moved, which is the
-only ordering under which a failure leaves the row and the disk agreeing.
+A skill's name is fixed (``name_fixed``). It is the directory an agent loads
+the skill from and the ``name:`` its SKILL.md declares, so agents, other skills
+and the user's own notes quote it; a rename would break every one of them
+(ADR names-visible-to-agents-are-fixed). The framework refuses a changed name
+before anything moves, so this kind supplies no rename hook. Its title — what
+the Skills page shows in place of the name — stays editable.
 """
 
 from __future__ import annotations
@@ -36,9 +37,6 @@ AsyncOnDelete = Callable[[Resource], Awaitable[None]]
 # Sync or async — ResourceService awaits the result if it's an Awaitable.
 OnScopeChangedHook = Callable[[Resource], Awaitable[None] | None]
 OnEnabledChangedHook = Callable[[Resource], Awaitable[None] | None]
-#: ``(skill_as_it_stands, new_name)``. Awaited by ResourceService.rename
-#: BEFORE the row moves.
-AsyncOnRename = Callable[[Resource, str], Awaitable[None]]
 
 
 def _refuse_builtin_delete(skill: Resource) -> None:
@@ -88,7 +86,6 @@ def _row_converges(config: dict[str, object]) -> bool:
 
 def make_skill_kind(
     cleanup_bindings_for_skill: AsyncOnDelete,
-    move_master_folder: AsyncOnRename,
     on_scope_changed: OnScopeChangedHook | None = None,
     on_enabled_changed: OnEnabledChangedHook | None = None,
 ) -> Kind:
@@ -99,13 +96,6 @@ def make_skill_kind(
         # symlink + the master folder first.
         await cleanup_bindings_for_skill(skill)
 
-    async def _on_rename(skill: Resource, new_name: str) -> None:
-        # Awaited by ResourceService.rename BEFORE the row's name column
-        # changes. ``move_master_folder`` raises if the master folder cannot
-        # move, and the rename is abandoned with the row and the disk both
-        # still on the old name.
-        await move_master_folder(skill, new_name)
-
     return Kind(
         name="skill",
         display_name="Skill",
@@ -113,15 +103,16 @@ def make_skill_kind(
         # The framework's name rule is a superset of the frontmatter's, and a
         # skill's name is not only a directory: it is written into the
         # SKILL.md that the agent product reads. Declaring the kind's own,
-        # narrower rule is what stops a rename producing a file Coffer's own
-        # importer would then reject. The framework runs this on register AND
-        # rename, so the two cannot drift.
+        # narrower rule is what stops registration accepting a name Coffer's
+        # own importer would then reject.
         validate_name=validate_frontmatter_name,
         on_delete=_on_delete,
-        # A skill's name is a directory under ~/.coffer/skills/ and the name of
-        # every copy delivered into an agent's skills dir, so renaming the row
-        # alone would leave the label pointing at nothing.
-        on_rename=_on_rename,
+        # A skill's name is its master folder under ~/.coffer/skills/, the name
+        # of every copy delivered into an agent's skills dir and the SKILL.md
+        # ``name:`` — all quoted by agents — so it never changes. A new name
+        # means removing the skill and importing it again.
+        name_fixed=True,
+        name_fixed_resets="its enabled flag, its scope and its deliveries to agents",
         # A builtin skill's row is Coffer's, not the user's: deleting it is a
         # no-op the next boot undoes, so the framework refuses it up front
         # for every surface at once.

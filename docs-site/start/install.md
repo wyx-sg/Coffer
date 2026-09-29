@@ -179,7 +179,7 @@ Once started, the daemon keeps running until you stop it or another daemon repla
 coffer daemon service install    # coffer daemon service status | uninstall
 ```
 
-The daemon binds `127.0.0.1:8000`. If another program already holds that port, the daemon refuses to start and names the program holding it. You can move it with `coffer daemon port set <port>` and go back with `coffer daemon port clear`. See [Running the daemon](/guides/daemon).
+The daemon binds `127.0.0.1:8000`. If another program already holds that port, the daemon refuses to start and names the program holding it. You can move it with `coffer config set daemon.port <port>` and go back with `coffer config unset daemon.port`. See [Running the daemon](/guides/daemon).
 
 ## Upgrade
 
@@ -228,7 +228,7 @@ Restarting matters because a daemon that is already running keeps running the ol
 
 ## Release channel
 
-Every build has a **channel**. A tagged release is stamped `stable`. Source runs, `make desktop` and `make bundle-binaries` are `dev`. The channel sets only the default for the experimental features (Sync, Knowledge and Memory): off on `stable`, on on `dev`. You can switch any of them on each machine under **Settings → General** or with `coffer daemon features enable <key>`. See [Experimental features](/guides/experimental-features).
+Every build has a **channel**. A tagged release is stamped `stable`. Source runs, `make desktop` and `make bundle-binaries` are `dev`. The channel sets only the default for the experimental features (Sync, Knowledge and Memory): off on `stable`, on on `dev`. You can switch any of them on each machine under **Settings → General** or with `coffer config set feature.<key> on`. See [Experimental features](/guides/experimental-features).
 
 ## Next steps
 

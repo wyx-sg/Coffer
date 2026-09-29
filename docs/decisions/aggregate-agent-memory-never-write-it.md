@@ -130,8 +130,9 @@ Multi-term, fuzzy or embedding search behind `coffer__recall`.
 - **Cons.** The tool was called five times in its life: the problem was never
   that queries missed, it was that no query was made.
 - **Why it lost.** Both agents reached the same conclusion independently and
-  ship no search tool over their own memory. `coffer__recall` survives only as
-  a locator for partitions the session was not opened in, answering with paths.
+  ship no search tool over their own memory. Coffer ships none either: every
+  partition's notes sit under one memory root, so an agent greps that one
+  directory with its own file tools.
 
 ### Option G — Write the distilled notes back into each agent's native memory
 
@@ -182,9 +183,9 @@ path to read the bodies as files.**
    receives the same payload through the system-prompt append the turn platform
    already composes, with no hook.
 7. **Behind the `memory` experimental feature.** Off by default on the stable
-   channel. While it is off, aggregation and distil skip their rounds,
-   `coffer__recall` is absent, the `coffer-guide` skill does not document it,
-   and every delivery hook is withdrawn.
+   channel. While it is off, aggregation and distil skip their rounds, the
+   `coffer-guide` skill does not document the memory layer, and every delivery
+   hook is withdrawn.
 
 ## Consequences
 

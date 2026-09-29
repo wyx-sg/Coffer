@@ -219,7 +219,7 @@ def render_http_error(
             # "Close every surface of a switched-off feature").
             key = ((envelope or {}).get("details") or {}).get("feature", "?")
             typer.echo(
-                f"{key} is switched off on this machine — run: coffer daemon features enable {key}",
+                f"{key} is switched off on this machine — run: coffer config set feature.{key} on",
                 err=True,
             )
             return ExitCode.GENERIC

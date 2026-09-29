@@ -21,6 +21,8 @@ import { useAgentProviders } from "@/lib/hooks/useAgentProviders";
 import { useRemoveAgent } from "@/lib/hooks/useAgents";
 import { useSkills } from "@/lib/hooks/useSkills";
 import { cn } from "@/lib/utils";
+import { displayName, searchableName } from "@/lib/resourceTitle";
+import { ResourceLabel } from "@/components/resource/ResourceLabel";
 
 // Managed coding agents only (Claude Code / Codex), keeping this table's
 // columns uniform.
@@ -74,7 +76,7 @@ export function AgentTable({
       key: "name",
       header: t("agents.name"),
       className: "whitespace-nowrap",
-      cell: (a) => <span className="font-medium">{a.name}</span>,
+      cell: (a) => <ResourceLabel resource={a} />,
     },
     {
       key: "type",
@@ -147,7 +149,7 @@ export function AgentTable({
       className: "text-right",
       cell: (a) => (
         <RowDeleteButton
-          ariaLabel={t("agents.deleteAria", { name: a.name })}
+          ariaLabel={t("agents.deleteAria", { name: displayName(a) })}
           disabled={remove.isPending}
           onDelete={() => setDeleting(a)}
         />
@@ -163,13 +165,13 @@ export function AgentTable({
         columns={columns}
         rowKey={(a) => a.uid}
         search={{
-          accessor: (a) => `${a.name} ${agentTypeLabel(a.type)} ${a.config_dir}`,
+          accessor: (a) => `${searchableName(a)} ${agentTypeLabel(a.type)} ${a.config_dir}`,
           placeholder: t("agents.searchPlaceholder"),
         }}
         onRowClick={(a) => navigate(`/agents/${encodeURIComponent(a.uid)}`)}
         selection={{
           ariaSelectAll: t("common.bulk.selectAll"),
-          ariaSelectRow: (a) => `${t("common.bulk.selectRow")}: ${a.name}`,
+          ariaSelectRow: (a) => `${t("common.bulk.selectRow")}: ${displayName(a)}`,
           bulkLabel: (count) => t("common.bulk.selected", { count }),
           clearLabel: t("common.clear"),
           renderBulkActions: ({ selectedRows, clear }) => (
@@ -182,7 +184,7 @@ export function AgentTable({
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(o) => !o && setDeleting(null)}
-        title={t("agents.removeConfirm", { name: deleting?.name ?? "" })}
+        title={t("agents.removeConfirm", { name: deleting ? displayName(deleting) : "" })}
         description={t("agents.removeConfirmBody")}
         confirmLabel={remove.isPending ? t("common.deleting") : t("common.delete")}
         pending={remove.isPending}

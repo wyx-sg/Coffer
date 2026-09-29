@@ -17,7 +17,12 @@ from coffer.application.mcp.discovery import (
     DiscoveredResource,
     DiscoveredTool,
 )
-from coffer.domain.mcp.namespace import prefix_prompt, prefix_resource_uri, prefix_tool
+from coffer.domain.mcp.namespace import (
+    client_name_length,
+    prefix_prompt,
+    prefix_resource_uri,
+    prefix_tool,
+)
 from coffer.domain.resource import Resource
 from coffer.infrastructure.mcp.persistence import MCPCapabilityPreferenceRepo
 from coffer.surfaces.http.schemas import (
@@ -45,6 +50,7 @@ def live_capability_list(
                 description=t.description,
                 input_schema=t.input_schema,
                 enabled=t.enabled,
+                client_name_length=client_name_length(t.prefixed_name),
             )
             for t in tools
         ],
@@ -73,6 +79,7 @@ def live_capability_list(
                     for a in p.arguments
                 ],
                 enabled=p.enabled,
+                client_name_length=client_name_length(p.prefixed_name),
             )
             for p in prompts
         ],
@@ -115,6 +122,7 @@ async def cached_capability_list(
                 description=None,
                 input_schema={},
                 enabled=row.enabled,
+                client_name_length=client_name_length(prefix_tool(name, row.capability_key)),
             )
             for row in rows
             if row.capability_type == "tool"
@@ -138,6 +146,7 @@ async def cached_capability_list(
                 description=None,
                 arguments=[],
                 enabled=row.enabled,
+                client_name_length=client_name_length(prefix_prompt(name, row.capability_key)),
             )
             for row in rows
             if row.capability_type == "prompt"

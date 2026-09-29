@@ -32,23 +32,18 @@ import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { translateApiError } from "@/lib/api/errors";
+import { titlePatchValue } from "@/lib/resourceTitle";
+import { ResourceTitleField } from "@/components/resource/ResourceTitleField";
 import {
   wireNeedsCredential,
-  type Protocol,
   type Provider,
   type ProviderCreate,
   type ProviderPatch,
 } from "@/lib/api/providers";
-import { PRESETS, PROTOCOL_LABEL_KEY, SELECTABLE_PROTOCOLS } from "./connectionPresets";
+import { PRESETS } from "./connectionPresets";
 import { providerFormSchema, type ProviderFormValues } from "./providerFormSchema";
+import { PresetPicker, ProtocolPicker } from "./ProviderWireFields";
 
 interface Props {
   /** Present → edit an existing connection (the wire IS editable — see the
@@ -59,8 +54,13 @@ interface Props {
   onSubmit: (values: ProviderCreate) => Promise<void> | void;
   /** Required when `initial` is set. Receives the PATCH body plus, when the user
    *  changed it, the new NAME — which is a separate rename call, not a patch
-   *  field. `null` means the name is unchanged. */
-  onUpdate?: (patch: ProviderPatch, newName: string | null) => Promise<void> | void;
+   *  field. `null` means the name is unchanged. `newTitle` is the title to set
+   *  (`null` clears it), or `undefined` when the title is unchanged. */
+  onUpdate?: (
+    patch: ProviderPatch,
+    newName: string | null,
+    newTitle?: string | null,
+  ) => Promise<void> | void;
   onCancel: () => void;
 }
 
@@ -87,6 +87,7 @@ export function ProviderForm({
     resolver: zodResolver(providerFormSchema(t, { isEdit })),
     defaultValues: {
       name: initial?.name ?? "",
+      title: initial?.title ?? "",
       presetId: "openai",
       protocol: initial?.protocol ?? "openai",
       baseUrl: initial?.base_url ?? "https://api.openai.com/v1",
@@ -117,7 +118,12 @@ export function ProviderForm({
       if (values.protocol !== initial.protocol) patch.protocol = values.protocol;
       if (needsCredential && values.secret) patch.secret_value = values.secret;
       const renamed = values.name.trim();
-      await onUpdate?.(patch, renamed && renamed !== initial.name ? renamed : null);
+      const nextTitle = titlePatchValue(values.title);
+      await onUpdate?.(
+        patch,
+        renamed && renamed !== initial.name ? renamed : null,
+        nextTitle !== (initial.title ?? null) ? nextTitle : undefined,
+      );
       return;
     }
     const body: ProviderCreate = {
@@ -128,32 +134,6 @@ export function ProviderForm({
     if (needsCredential && values.secret) body.secret_value = values.secret;
     await onSubmit(body);
   });
-
-  const protocolPicker = (id: string) => (
-    <div className="space-y-1.5">
-      <Label htmlFor={id} required>
-        {t("settings.connections.wireFormat")}
-      </Label>
-      <Controller
-        control={control}
-        name="protocol"
-        render={({ field }) => (
-          <Select value={field.value} onValueChange={(v) => field.onChange(v as Protocol)}>
-            <SelectTrigger id={id}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SELECTABLE_PROTOCOLS.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {t(PROTOCOL_LABEL_KEY[p])}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      />
-    </div>
-  );
 
   return (
     <form className="space-y-3" onSubmit={submit} noValidate>
@@ -168,34 +148,35 @@ export function ProviderForm({
         ) : null}
       </div>
 
+      {isEdit ? (
+        <Controller
+          control={control}
+          name="title"
+          render={({ field }) => (
+            <ResourceTitleField
+              id="p-title"
+              value={field.value}
+              onChange={field.onChange}
+              name={initial.name}
+            />
+          )}
+        />
+      ) : null}
+
       {/* Provider preset (create only). In edit mode the wire itself is
           editable instead: a wrong guess is corrected here rather than
           re-entered, key and all. The daemon refuses that CHANGE while the
           connection is switched on (409 PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE)
-          — the wire decides which agents it covers and which `use-builtin`
+          — the wire decides which agents it covers and which `builtin`
           reverts — so `submit` sends `protocol` only when it actually moved. */}
       {isEdit ? (
-        protocolPicker("p-wire-edit")
+        <ProtocolPicker id="p-wire-edit" control={control} />
       ) : (
-        <div className="space-y-1.5">
-          <Label htmlFor="p-preset">{t("settings.connections.provider")}</Label>
-          <Select value={presetId} onValueChange={pickPreset}>
-            <SelectTrigger id="p-preset">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PRESETS.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.id === "custom" ? t("settings.connections.customProvider") : p.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <PresetPicker value={presetId} onChange={pickPreset} />
       )}
 
       {/* Custom connections pick the protocol by hand. */}
-      {!isEdit && isCustom ? protocolPicker("p-wire") : null}
+      {!isEdit && isCustom ? <ProtocolPicker id="p-wire" control={control} /> : null}
 
       <div className="space-y-1.5">
         <Label htmlFor="p-base" required>

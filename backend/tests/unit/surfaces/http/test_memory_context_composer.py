@@ -51,6 +51,9 @@ class _Settings:
     def write(self, key: str, enabled: bool) -> None:
         return None
 
+    def clear(self, key: str) -> None:
+        return None
+
 
 def _features(*, memory: bool) -> FeatureService:
     return FeatureService(channel="stable", settings=_Settings(), pins={"memory": memory})

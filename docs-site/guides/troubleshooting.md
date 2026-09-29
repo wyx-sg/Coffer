@@ -8,7 +8,7 @@ description: Symptoms, causes and fixes for common Coffer problems — the daemo
 This page lists problems you can meet running Coffer, organised by area, each as symptom, cause and fix. Every message quoted here is one Coffer actually prints. If your problem is not listed, start with [Collect information for a bug report](#collect-information-for-a-bug-report).
 
 ::: tip Ask your agent first
-An agent connected to Coffer can call `coffer__diagnose`, which returns Coffer's recent audit log and daemon log on one timeline. Asking "check Coffer's logs for what just failed" is often the fastest first step. See [Activity and audit](/guides/activity#let-an-agent-diagnose-coffer-coffer-diagnose).
+An agent with a shell can read Coffer's own records: `coffer log daemon --errors --since 1h` for the daemon log, `coffer log audit --since 1h` for the audit log, and `coffer path logs` for where `daemon.log` is, so it can grep the file directly. Asking "check Coffer's logs for what just failed" is often the fastest first step. See [Activity and audit](/guides/activity).
 :::
 
 ## The daemon
@@ -27,7 +27,7 @@ port 8000 is the port Coffer's daemon binds, but something else is already using
 **Fix.** Stop the process named, or move Coffer to another port and restart:
 
 ```sh
-coffer daemon port set 8765
+coffer config set daemon.port 8765
 coffer daemon restart
 ```
 
@@ -100,12 +100,12 @@ Work through these causes in order:
 | Cause | How to tell | Fix |
 | --- | --- | --- |
 | The tool is not advertised, because the catalogue exceeds the listing budget (50 upstream tools by default). | The server is healthy and the tool is enabled. | The tool still works. Ask the agent to find it with `coffer__search_tools`, or set `COFFER_TOOL_TIERING=off` in the daemon's environment to list everything. |
-| The server is disabled on this machine, or its reach does not include this agent. | The server's reach control, or `coffer scope show mcp_server <name>`. | Enable it, or add the agent: `coffer resource enable mcp_server <name>`, `coffer scope set mcp_server <name> --agents <agent>`. |
+| The server is disabled on this machine, or its reach does not include this agent. | The server's reach control, or `coffer mcp scope <name>`. | Enable it, or add the agent: `coffer mcp enable <name>`, `coffer mcp scope <name> --agents <agent>`. |
 | The agent's session reports no identity, so it sees only unscoped servers. | The agent's MCP entry runs `coffer-mcp-shim` without `--agent-uid`. | Connect the agent again: `coffer agent connect <agent>`. |
-| The individual tool is switched off. | The server's **Tools** tab, or `coffer mcp tool list <name>`. | Switch it on there, or with `coffer mcp tool enable`. |
+| The individual tool is switched off. | The server's **Tools** tab, or `coffer mcp cap list <name>`. | Switch it on there, or with `coffer mcp cap enable <name> tool:<tool>`. |
 | The server cannot start: its launcher is missing. | The server shows `npx is not installed on this machine` (or `uvx`, …). | Install that runtime, then **Refresh capabilities**. Coffer does not install runtimes. |
 | The server is failing or slow to answer. | `coffer mcp test <name>`; the server's stderr in `~/.coffer/logs/upstream/<name>.log`. | Fix the server's configuration or credentials. A server that misses discovery is retried in the background and its tools reappear when it answers. |
-| A Coffer tool belongs to a switched-off feature (`coffer__write` for `knowledge`, `coffer__recall` for `memory`). | `coffer daemon features list` | `coffer daemon features enable <key>` |
+| A Coffer tool belongs to a switched-off feature (`coffer__write` for `knowledge`). | `coffer config list feature.` | `coffer config set feature.<key> on` |
 
 See [MCP servers](/guides/mcp-servers) and [Connect a client](/guides/connect-a-client).
 
@@ -127,13 +127,13 @@ See [MCP servers](/guides/mcp-servers) and [Connect a client](/guides/connect-a-
 
 **Cause.** The browser keeps those preferences per origin, and the origin includes the port. The daemon is now on a different port than before, so the browser treats it as a different site.
 
-**Fix.** Keep one port: `coffer daemon port show` tells you the configured port; `coffer daemon port clear` returns to 8000.
+**Fix.** Keep one port: `coffer config get daemon.port` tells you the configured port; `coffer config unset daemon.port` returns to 8000.
 
 ### A page says a feature "is switched off"
 
 **Cause.** Sync, Knowledge and Memory are [experimental features](/guides/experimental-features), off by default in release builds.
 
-**Fix.** **Settings → General → Experimental features**, or `coffer daemon features enable <key>`. If the switch is disabled, the feature is pinned by `COFFER_FEATURES` in the daemon's environment.
+**Fix.** **Settings → General → Experimental features**, or `coffer config set feature.<key> on`. If the switch is disabled, the feature is pinned by `COFFER_FEATURES` in the daemon's environment.
 
 ## Credentials and macOS keychain prompts
 
@@ -148,7 +148,7 @@ See [MCP servers](/guides/mcp-servers) and [Connect a client](/guides/connect-a-
 
 - Move the master key back to a file beside the database:
   ```sh
-  coffer credentials storage --set file
+  coffer config set credentials.storage file
   ```
   or switch off **Store master key in OS keychain** in **Settings → Security**.
 - Find credentials that are cited but missing with `coffer credentials list`, then store each one with `coffer credentials set <ref>`.
@@ -174,10 +174,10 @@ The full list is in [Vault sync troubleshooting](/guides/vault-sync#troubleshoot
 Check the channel's runtime state first:
 
 ```sh
-coffer channel status <name>
+coffer channel show <name>
 ```
 
-| What `status` shows | Cause | Fix |
+| What `show` prints | Cause | Fix |
 | --- | --- | --- |
 | No answer, or a daemon error | The daemon is not running. Channels run inside the daemon. | `coffer daemon start`. On macOS, `coffer daemon service install` keeps it running without a Coffer window. |
 | `runs on: <id> (another machine)` | The channel is bound to another machine sharing this vault, which answers instead. | Nothing, or move it here: `coffer channel bind <name>` |

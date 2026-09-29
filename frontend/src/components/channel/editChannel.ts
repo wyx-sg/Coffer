@@ -2,7 +2,7 @@
 // Apply plumbing for EditChannelDialog: rotated secrets are written to their
 // existing credential refs FIRST (so the channel keeps working off the same
 // refs), then the resource config is PATCHed (bound agent / SeaTalk app id /
-// group gating / message batching).
+// group gating / message batching), with the title when it changed.
 // Unlike registration there is nothing to roll back — overwriting a ref's
 // value and PATCHing a live resource are both in-place updates.
 import { getApiClient } from "@/lib/api/client";
@@ -15,10 +15,15 @@ async function writeSecret(ref: string, value: string): Promise<void> {
   if (error) throwApiError(error, "INTERNAL_ERROR", "credential write failed");
 }
 
-async function patchConfig(uid: string, config: Record<string, unknown>): Promise<void> {
+async function patchConfig(
+  uid: string,
+  config: Record<string, unknown>,
+  title: string | null | undefined,
+): Promise<void> {
   const { error } = await getApiClient().PATCH("/resources/{uid}", {
     params: { path: { uid } },
-    body: { config },
+    // The title rides the same PATCH only when it moved.
+    body: title === undefined ? { config } : { config, title },
   });
   if (error) throwApiError(error, "INTERNAL_ERROR", "update failed");
 }
@@ -35,7 +40,7 @@ export async function applyChannelEdit(
   for (const s of plan.secrets) {
     await writeSecret(s.ref, s.value);
   }
-  await patchConfig(plan.uid, plan.config);
+  await patchConfig(plan.uid, plan.config, plan.title);
   return { uid: plan.uid, name: plan.name };
 }
 
@@ -116,6 +121,8 @@ export interface ChannelEditInput {
   /** Its label. Used only to name the channel in the toast — never to address
    *  it, and (since refs became opaque) never to mint one either. */
   name: string;
+  /** The title to set (`null` clears it), or undefined to leave it alone. */
+  title?: string | null;
   /** The channel's current resource config (the source of truth for refs). */
   config: Record<string, unknown>;
   values: ChannelEditValues;
@@ -173,5 +180,7 @@ export function planChannelEdit(input: ChannelEditInput): ChannelEditPlan {
     }
   }
 
-  return { uid: input.uid, name: input.name, config: nextConfig, secrets };
+  const plan: ChannelEditPlan = { uid: input.uid, name: input.name, config: nextConfig, secrets };
+  if (input.title !== undefined) plan.title = input.title;
+  return plan;
 }

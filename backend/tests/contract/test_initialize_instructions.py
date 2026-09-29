@@ -8,8 +8,6 @@ the tools tiering leaves unlisted — the contract exists but never arrives.
 
 from __future__ import annotations
 
-import pathlib
-
 import pytest
 
 from coffer.application.mcp.gateway_instructions import (
@@ -20,12 +18,18 @@ from coffer.application.mcp.gateway_instructions import (
     build_instructions,
 )
 
+#: A realistic absolute memory root, longer than most.
+_ROOT = "/Users/someone.with.a.long.name/.coffer/memory"
+
 
 def test_instructions_fit_the_system_prompt_budget():
     # It lands in every session's system prompt; tool tiering caps it so the context
     # it spends stays far below what tiering saves.
     assert len(build_instructions(hidden_count=0)) <= MAX_INSTRUCTIONS_CHARS
     assert len(build_instructions(hidden_count=999_999)) <= MAX_INSTRUCTIONS_CHARS
+    assert (
+        len(build_instructions(hidden_count=999_999, memory_root=_ROOT)) <= MAX_INSTRUCTIONS_CHARS
+    )
 
 
 def test_instructions_are_never_truncated_to_fit():
@@ -37,15 +41,31 @@ def test_instructions_are_never_truncated_to_fit():
     untruncated text fits — at ``hidden_count=0`` and at a count with more
     digits than any real catalogue will ever produce.
     """
-    from coffer.application.mcp.gateway_instructions import _BASE, _TIERED
+    from coffer.application.mcp.gateway_instructions import _TIERED
 
-    assert len(_BASE) <= MAX_INSTRUCTIONS_CHARS
-    longest = _BASE + _TIERED.format(n=999_999)
+    base = build_instructions(hidden_count=0, memory_root=_ROOT)
+    assert len(base) <= MAX_INSTRUCTIONS_CHARS
+    longest = build_instructions(hidden_count=999_999, memory_root=_ROOT)
+    assert longest == base + _TIERED.format(n=999_999), (
+        "the tiered text is not the base text plus the tiering sentence: the "
+        "builder cut something to fit"
+    )
     assert len(longest) <= MAX_INSTRUCTIONS_CHARS, (
         f"instructions are {len(longest)} chars, over the {MAX_INSTRUCTIONS_CHARS} "
         "cap: the builder would silently cut the tail off"
     )
-    assert build_instructions(hidden_count=999_999) == longest
+    assert longest.endswith("callable.")
+
+
+def test_a_memory_root_too_long_to_fit_is_named_by_its_command() -> None:
+    """A moved memory root can be any length; the cap is met by naming the
+    command that prints it rather than by cutting the tail off."""
+    root = "/" + "very-long-directory/" * 30 + "memory"
+    text = build_instructions(hidden_count=999_999, memory_root=root)
+    assert len(text) <= MAX_INSTRUCTIONS_CHARS
+    assert root not in text
+    assert "coffer path memory" in text
+    assert text.endswith("callable.")
 
 
 def test_instructions_name_the_escape_hatch():
@@ -53,7 +73,7 @@ def test_instructions_name_the_escape_hatch():
 
 
 def test_instructions_name_every_builtin_tool_even_with_nothing_hidden():
-    """All four names, in every session (spec knowledge "Keep the handshake
+    """Both names, in every session (spec knowledge "Keep the handshake
     instructions to what a skill cannot carry").
 
     The names are what make the tools recognisable in a tool list, and that is
@@ -83,8 +103,8 @@ def test_no_hidden_tools_means_no_misleading_claim():
     """
     from coffer.application.mcp.gateway_instructions import _TIERED
 
-    text = build_instructions(hidden_count=0)
-    assert "not listed" not in text
+    text = build_instructions(hidden_count=0, memory_root=_ROOT)
+    assert "unlisted" not in text
     assert "budgeted slice" not in text
     # Nothing of the tiering paragraph survives, however it is later worded.
     assert not any(
@@ -111,70 +131,69 @@ def test_instructions_only_name_tools_that_exist() -> None:
     prompt and never called against, so a tool that is renamed or retired
     leaves the instructions telling every agent to call a name the gateway no
     longer answers. That is exactly what happened when the knowledge layer
-    replaced ``recall`` / ``remember`` / ``search_knowledge`` / ``ask``.
+    replaced ``recall`` / ``remember`` / ``search_knowledge`` / ``ask``, and
+    again when ``recall`` and ``diagnose`` were removed.
     """
     from coffer.application.builtin_tools import BuiltinToolRegistry
-    from coffer.application.diagnostics import register_diagnostics_builtin_tools
     from coffer.application.knowledge.builtin_tools import register_knowledge_builtin_tools
     from coffer.application.mcp.gateway_instructions import NAMED_TOOLS
-    from coffer.application.memory.builtin_recall_tool import register_recall_tool
 
     registry = BuiltinToolRegistry()
     register_knowledge_builtin_tools(
         registry,
         knowledge_service=None,  # type: ignore[arg-type]
     )
-    register_diagnostics_builtin_tools(
-        registry,
-        audit_repo=None,  # type: ignore[arg-type]
-        log_path=lambda: pathlib.Path("daemon.log"),
-    )
-    # The defect this line fixes: memory's registrar was never called here, so
-    # ``coffer__recall`` was absent from ``available`` and the equality below
-    # held only because the instructions did not name it either. A gate that
-    # assembles an incomplete registry cannot tell "not advertised" from "does
-    # not exist" — it passed for as long as the omission was symmetrical, and
-    # recall went unmentioned in the handshake the whole time.
-    register_recall_tool(
-        registry,
-        recall_service=None,  # type: ignore[arg-type]
-    )
     # ``search_tools`` is answered by the gateway itself rather than the
     # registry, so it is the one name that is legitimately not in there.
     available = {tool.name for tool in registry.list()} | {"search_tools"}
 
-    assert available == NAMED_TOOLS, (
+    assert available == NAMED_TOOLS == {"write", "search_tools"}, (
         f"instructions name unregistered tools: {sorted(NAMED_TOOLS - available)}; "
         f"registered tools the instructions never name: {sorted(available - NAMED_TOOLS)}"
     )
 
-    text = build_instructions(hidden_count=70)
-    named_in_text = {name for name in NAMED_TOOLS if name in text}
-    assert named_in_text == NAMED_TOOLS, (
-        f"NAMED_TOOLS lists tools the text does not name: {NAMED_TOOLS - named_in_text}"
-    )
+    for hidden in (0, 70):
+        text = build_instructions(hidden_count=hidden, memory_root=_ROOT)
+        assert len(text) <= MAX_INSTRUCTIONS_CHARS
+        assert "coffer__write" in text
+        assert "coffer__search_tools" in text
+        assert "coffer__recall" not in text
+        assert "coffer__diagnose" not in text
+        assert "coffer-guide" in text
+        # No catalogue: no collection heading, no document list.
+        assert "What is in this developer's knowledge" not in text
+        # One line each for the memory root and Coffer's own logs.
+        assert f"{_ROOT}/*/notes/" in text
+        assert "coffer log" in text
+        assert "coffer path logs" in text
 
 
 def test_instructions_name_only_the_tools_the_list_carries() -> None:
-    """A tool a switched-off feature took out of the list is not advertised
-    (spec experimental-features "Withdraw what a switched-off feature put in
-    front of agents"), and neither is the knowledge layer without its tool."""
-    without_memory = build_instructions(hidden_count=0, tools=["write", "diagnose"])
-    assert "coffer__recall" not in without_memory
+    """A tool a switched-off feature took out of the list is not advertised,
+    nor the memory root while memory is off (spec experimental-features
+    "Withdraw what a switched-off feature put in front of agents"), and neither
+    is the knowledge layer without its tool."""
+    without_memory = build_instructions(hidden_count=0, tools=["write"])
     assert "coffer__write" in without_memory
     assert "coffer__search_tools" in without_memory
+    assert "memory" not in without_memory
 
-    neither = build_instructions(hidden_count=0, tools=["diagnose"])
+    neither = build_instructions(hidden_count=0, tools=[])
     assert "coffer__write" not in neither
-    assert "coffer__recall" not in neither
     assert "knowledge" not in neither
-    assert "coffer__diagnose" in neither
+    assert "memory" not in neither
     assert "coffer__search_tools" in neither
+    assert "coffer log" in neither
+
+    memory_only = build_instructions(hidden_count=0, tools=[], memory_root=_ROOT)
+    assert _ROOT in memory_only
+    assert "coffer__write" not in memory_only
     assert len(build_instructions(hidden_count=999_999, tools=[])) <= MAX_INSTRUCTIONS_CHARS
 
 
 def test_every_tool_listed_reads_as_the_full_text() -> None:
-    from coffer.application.mcp.gateway_instructions import _BASE, NAMED_TOOLS
+    from coffer.application.mcp.gateway_instructions import NAMED_TOOLS
 
-    assert build_instructions(hidden_count=0, tools=NAMED_TOOLS) == _BASE
-    assert build_instructions(hidden_count=0) == _BASE
+    assert build_instructions(hidden_count=0, tools=NAMED_TOOLS) == build_instructions(
+        hidden_count=0
+    )

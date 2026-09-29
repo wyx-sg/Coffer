@@ -107,12 +107,13 @@ agent's own tooling.
 
 ### Option E — No hooks; delivery is pull-only
 
-Install nothing; the agent reaches memory only through `coffer__recall` or the
-files.
+Install nothing; the agent reaches memory only by reading the files under the
+memory root itself.
 
 - **Pros.** Coffer never edits an agent's settings.
-- **Cons.** Measured on the live vault: `coffer__recall` was called 5 times in
-  its lifetime and 0 times in the three weeks before the redesign. An agent
+- **Cons.** Measured on the live vault: a pull tool over memory
+  (`coffer__recall`) was called 5 times in its lifetime and 0 times in the
+  three weeks before the redesign. An agent
   that must reach for memory does not.
 - **Why it lost.** Session-start delivery is the whole point of memory. It stays
   consent-based — nothing is installed unless a person asks.

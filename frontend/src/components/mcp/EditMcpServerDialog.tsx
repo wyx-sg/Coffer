@@ -13,6 +13,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { FixedNameField } from "@/components/resource/FixedName";
+import { ResourceTitleField } from "@/components/resource/ResourceTitleField";
 import { translateApiError } from "@/lib/api/errors";
 import type { components } from "@/lib/api/types";
 import { useSaveMcpServerEdit } from "@/lib/hooks/useMcpServerMutations";
@@ -28,7 +30,9 @@ interface Props {
 }
 
 /**
- * Edit an MCP server: description, the config as JSON, and credentials.
+ * Edit an MCP server: title, description, the config as JSON, and credentials.
+ * The name is shown read-only — it is the prefix of every tool name agents see,
+ * so the daemon refuses to change it (409 NAME_IMMUTABLE).
  * Credentials live in their own section because the encrypted credential
  * store holds the values — the config JSON only ever carries references.
  * On save, new / rotated secrets are written to the credential store and
@@ -38,12 +42,14 @@ interface Props {
 export function EditMcpServerDialog({ resource }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [configText, setConfigText] = useState("");
   const [creds, setCreds] = useState<CredRow[]>([]);
   const [timeouts, setTimeouts] = useState<Timeouts>(() => timeoutsOf(resource.config));
 
   function reset() {
+    setTitle(resource.title ?? "");
     setDescription(resource.description ?? "");
     setConfigText(configWithoutOwnControls(resource.config));
     setTimeouts(timeoutsOf(resource.config));
@@ -61,7 +67,7 @@ export function EditMcpServerDialog({ resource }: Props) {
   const save = useSaveMcpServerEdit();
   const onSave = () =>
     save.mutate(
-      { resource, description, configText, creds, timeouts },
+      { resource, title, description, configText, creds, timeouts },
       { onSuccess: () => setOpen(false) },
     );
 
@@ -92,6 +98,14 @@ export function EditMcpServerDialog({ resource }: Props) {
           </div>
         ) : null}
         <div className="space-y-4">
+          <FixedNameField id="edit-name" name={resource.name} hint={t("mcp.edit.fixedNameHint")} />
+          <ResourceTitleField
+            id="edit-title"
+            value={title}
+            onChange={setTitle}
+            name={resource.name}
+          />
+
           <div className="space-y-1.5">
             <Label htmlFor="edit-desc">{t("mcp.edit.description")}</Label>
             <Input

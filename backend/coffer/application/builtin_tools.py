@@ -1,9 +1,19 @@
-"""Kind-agnostic registry of Coffer's own MCP tools.
+"""Kind-agnostic registry of Coffer's own MCP tools, and of the directories
+Coffer tells an agent to read itself.
 
 These tools are exposed through Coffer's MCP gateway under the reserved
 prefix `coffer__`, alongside upstream-MCP-server tools. Each kind contributes
 its own tools at composition-root time; the gateway only sees the kind-agnostic
 `BuiltinTool` interface.
+
+A kind whose content an agent reads as files rather than through a tool
+registers the directory instead (:class:`AgentDirectory`) — memory's notes are
+Markdown under the memory root, found with the agent's own search (spec memory
+"Expose no memory tool and name the memory root at session start"). The
+handshake names that directory the way it names a tool, and under the same
+rule: only while the feature that owns it is switched on (spec
+experimental-features "Withdraw what a switched-off feature put in front of
+agents"). It lives here so the gateway can name it without importing the kind.
 
 Contract 6 is honoured: this module imports no kind-specific code. Per-kind
 modules live under `application/<kind>/builtin_tools.py` and are wired into
@@ -39,6 +49,19 @@ class BuiltinTool:
     feature: str | None = None
 
 
+@dataclass(frozen=True)
+class AgentDirectory:
+    """A directory Coffer points an agent at, to be read with its own tools.
+
+    ``path`` is asked on every read, so an environment override set after
+    wiring is still honoured. ``feature`` gates it exactly as it gates a tool.
+    """
+
+    name: str
+    path: Callable[[], str]
+    feature: str | None = None
+
+
 # Reserved prefix used to namespace Coffer's own tools so they cannot
 # collide with upstream-server tools (which follow `<server>__<tool>`).
 COFFER_TOOL_PREFIX = "coffer__"
@@ -56,12 +79,28 @@ class BuiltinToolRegistry:
 
     def __init__(self, *, feature_enabled: Callable[[str], bool] | None = None) -> None:
         self._tools: dict[str, BuiltinTool] = {}
+        self._directories: dict[str, AgentDirectory] = {}
         self._feature_enabled = feature_enabled
 
-    def _present(self, tool: BuiltinTool) -> bool:
-        if tool.feature is None or self._feature_enabled is None:
+    def _present(self, item: BuiltinTool | AgentDirectory) -> bool:
+        if item.feature is None or self._feature_enabled is None:
             return True
-        return self._feature_enabled(tool.feature)
+        return self._feature_enabled(item.feature)
+
+    def register_directory(self, directory: AgentDirectory) -> None:
+        if directory.feature is not None:
+            get_feature(directory.feature)
+        if directory.name in self._directories:
+            raise ValueError(f"duplicate agent directory: {directory.name!r}")
+        self._directories[directory.name] = directory
+
+    def directory(self, name: str) -> str | None:
+        """The directory registered as ``name``, or ``None`` when nothing is
+        registered under it or its feature is switched off."""
+        directory = self._directories.get(name)
+        if directory is None or not self._present(directory):
+            return None
+        return directory.path()
 
     def register(self, tool: BuiltinTool) -> None:
         if tool.feature is not None:

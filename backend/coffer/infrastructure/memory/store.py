@@ -283,7 +283,7 @@ def read_index(partition: str) -> str:
 def list_partitions() -> tuple[str, ...]:
     """Every partition directory present on disk, ``global`` included.
 
-    This module creates none of them — "Create partitions only by aggregation"
+    This module creates none of them — "Provision partitions only from aggregation"
     gives that to aggregation, so an agent's working directory cannot bring a
     partition into existence merely by being read. Dot-prefixed directories are
     the layer's own state.

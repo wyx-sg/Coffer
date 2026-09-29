@@ -203,6 +203,7 @@ Deterministic projection of a `Resource`:
 uid: 9f2c1a7b4e8d4c1fa0b3d5e6f7081920
 kind: mcp_server
 name: confluence
+title: Team wiki         # only when the resource has a title
 description: "..."
 config: { ... }          # the validated, json-mode config; keys sorted
 ```
@@ -212,6 +213,12 @@ The `uid` is the document's identity and its filename. The `name` travels
 modification of one file instead of a deletion beside an addition
 ([Resource Identity Is an Immutable `uid`](../../../docs/decisions/resource-identity-is-an-immutable-uid.md)).
 
+- `title` is written **only when the resource has one**, unlike
+  `description`, which is always written. Leaving the key out keeps every
+  document written before titles existed byte-identical, so no round rewrites
+  the registry to add `title: null`. An applier reads a missing key as "no
+  title": the row is registered or updated with an empty title, and a title
+  cleared on one machine is cleared on the other when the documents converge.
 - `created_at` / `updated_at` / the local integer `id` are **excluded** —
   machine-local, and they would make every round produce a commit. The `uid` is
   the opposite of machine-local and is the one identifier that DOES travel.

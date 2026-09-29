@@ -146,7 +146,7 @@ async def test_the_payload_names_the_absolute_notes_path_and_no_tool() -> None:
     assert notes_dir.startswith("/")
     assert "read one as a file" in composed.text
     # Every consumer reads files already, so no tool is named for it.
-    for tool in ("coffer__recall", "coffer__read", "coffer__search", "MCP", "tool"):
+    for tool in ("coffer__", "MCP"):
         assert tool not in composed.text
 
 

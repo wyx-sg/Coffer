@@ -69,6 +69,9 @@ export interface AgentOut {
    *  agent list, a channel's `default_agent`, a skill binding). */
   uid: string;
   name: string;
+  /** The display title a person chose, shown in place of the name; null when
+   *  none is set. Edited through `PATCH /resources/{uid}`. */
+  title?: string | null;
   type: AgentType;
   config_dir: string;
   description: string | null;

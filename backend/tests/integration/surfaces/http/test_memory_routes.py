@@ -867,3 +867,18 @@ def test_files_of_an_unknown_partition_are_not_found(client) -> None:
     r = client.get("/api/v1/memory/partitions/no-such-uid/files")
     assert r.status_code == 404
     assert r.json()["error"]["code"] == "RESOURCE_NOT_FOUND"
+
+
+def test_partition_list_carries_the_resource_title(client, tmp_path) -> None:
+    """spec resource-framework "Carry an optional editable title on every resource":
+    the partition list carries the title set through the kind-agnostic update,
+    and ``name`` stays the directory label."""
+    _register_agent(client, "cc")
+    _seed(tmp_path, _repository(tmp_path), _default_files())
+    _sync(client)
+    uid = _partition_uid(client, "global")
+    assert _partitions(client)["global"]["title"] is None
+
+    r = client.patch(f"/api/v1/resources/{uid}", json={"title": "Personal"})
+    assert r.status_code == 200, r.text
+    assert _partitions(client)["global"]["title"] == "Personal"

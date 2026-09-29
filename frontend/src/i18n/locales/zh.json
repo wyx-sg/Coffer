@@ -143,6 +143,17 @@
       "description": "描述",
       "status": "状态",
       "reach": "生效范围"
+    },
+    "titleField": {
+      "label": "标题",
+      "hint": "在列出它的地方代替名称显示。留空则显示名称。",
+      "dialogTitle": "编辑标题",
+      "dialogSubtitle": "标题只用于显示，agent 看到的仍是名称。"
+    },
+    "fixedName": {
+      "badge": "名称固定",
+      "label": "名称",
+      "cannotChange": "注册后不能修改。"
     }
   },
   "mcp": {
@@ -197,7 +208,8 @@
       "header": {
         "name": "名称",
         "enabled": "已启用"
-      }
+      },
+      "nameTooLong": "客户端看到的名称有 {{length}} 个字符，超过模型 API 对工具名的 {{limit}} 字符上限；有些客户端会丢弃超过 60 个字符的名称。"
     },
     "invocations": {
       "empty": "暂无调用记录。",
@@ -246,11 +258,14 @@
       "errEnvNotObject": "服务器「{{name}}」的 env 必须是字符串值的对象。",
       "noHeaders": "无请求头",
       "errBadHeaderValue": "服务器「{{name}}」的请求头「{{key}}」必须为字符串。",
-      "errHeadersNotObject": "服务器「{{name}}」的 headers 必须是字符串值的对象。"
+      "errHeadersNotObject": "服务器「{{name}}」的 headers 必须是字符串值的对象。",
+      "fixedName": "服务器将沿用这个名称，注册后不能修改。",
+      "nameTooLong": "「{{name}}」有 {{length}} 个字符，MCP 服务器名称最多 {{max}} 个字符。请在粘贴的 JSON 里缩短它的键名。",
+      "blockedByName": "导入前请返回，把超过 {{max}} 个字符的名称缩短。"
     },
     "edit": {
       "title": "编辑 MCP 服务器",
-      "subtitle": "修改该服务器的描述、配置和凭据。",
+      "subtitle": "修改该服务器的标题、描述、配置和凭据。",
       "description": "描述",
       "descriptionPlaceholder": "这个服务器是做什么的",
       "config": "配置（JSON）",
@@ -261,7 +276,8 @@
       "removeCredential": "删除凭据",
       "credentialNew": "密钥值",
       "credentialHint": "凭据值会加密存入 Coffer 本地数据库；移除凭据会删除对应的存储条目。",
-      "errRenameNeedsValue": "重命名「{{name}}」需要重新输入密钥值。"
+      "errRenameNeedsValue": "重命名「{{name}}」需要重新输入密钥值。",
+      "fixedNameHint": "agent 看到的该服务器每个工具名都以它为前缀（mcp__coffer__<name>__…）。"
     },
     "timeouts": {
       "legend": "超时（秒）",
@@ -753,6 +769,7 @@
     "MEMORY_FILE_NOT_FOUND": "该分区里没有这个文件",
     "MEMORY_UNREADABLE": "该记忆文件无法读取",
     "MEMORY_UNSAFE_PATH": "该路径在记忆库中不被允许",
+    "NAME_IMMUTABLE": "注册后名称不能再改，因为 Agent 会引用它。要换名称请删除后以新名称重新注册，或改为设置标题",
     "NOT_FOUND": "未找到。",
     "NO_ACTIVE_PROVIDER": "当前没有启用的模型提供商——请在「模型提供商」页面添加一个",
     "PLUGIN_NOT_FOUND": "未找到该插件",
@@ -1106,7 +1123,8 @@
         "overview": "概览",
         "files": "文件"
       },
-      "sourceBuiltin": "由 Coffer 生成"
+      "sourceBuiltin": "由 Coffer 生成",
+      "fixedNameHint": "agent 从这个名称的文件夹加载该技能。"
     },
     "files": {
       "tree": "文件",

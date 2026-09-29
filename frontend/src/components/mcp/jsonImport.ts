@@ -15,6 +15,20 @@ const SECRET_NAME_RE = /token|secret|pass|pwd|key|cred|auth/i;
  */
 const SECRET_VALUE_RE = /^(?:Bearer\s+|ghp_|gho_|github_pat_|sk-|xox[abp]-|eyJ[A-Za-z0-9_-]{20,})/;
 
+/**
+ * The longest name the daemon registers a new MCP server under (spec
+ * mcp-gateway "Manage MCP servers as resources"). The name is fixed after
+ * registration and prefixes every tool name a client sees
+ * (`mcp__coffer__<server>__<tool>`), so the review flags a longer one before
+ * submit rather than letting the registration be refused.
+ */
+export const MCP_SERVER_NAME_MAX = 24;
+
+/** Whether `name` is over the registration cap. */
+export function serverNameTooLong(name: string): boolean {
+  return name.length > MCP_SERVER_NAME_MAX;
+}
+
 interface ParsedEnvVar {
   key: string;
   value: string;

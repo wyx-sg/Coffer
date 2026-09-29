@@ -8,7 +8,7 @@ description: Let Coffer read what each of your agents has learned, distil it int
 Coffer reads the memory your agents already keep — Claude Code's per-project notes, Codex's task groups and profile — distils it into one set of notes per repository plus one global set, and makes those notes available to every agent. It never writes back into an agent's own memory. This page covers what Coffer reads, where the notes live, how agents receive them, and how to browse, switch off and rebuild them.
 
 ::: warning Experimental feature
-Memory is an [experimental feature](/guides/experimental-features) with the key `memory`. It is on by default in `dev` builds and off by default in `stable` builds. Switch it on under **Settings → General → Experimental features**, or run `coffer daemon features enable memory`. While it is off, the Memory page, the `/api/v1/memory` routes and the `coffer__recall` tool are unavailable, and Coffer removes its session-start hook from every agent that had one; switching memory back on reinstalls the hook in those same agents. Nothing already distilled is deleted.
+Memory is an [experimental feature](/guides/experimental-features) with the key `memory`. It is on by default in `dev` builds and off by default in `stable` builds. Switch it on under **Settings → General → Experimental features**, or run `coffer config set feature.memory on`. While it is off, the Memory page and the `/api/v1/memory` routes are unavailable, and Coffer removes its session-start hook from every agent that had one; switching memory back on reinstalls the hook in those same agents. Nothing already distilled is deleted.
 :::
 
 ## What memory aggregation is for
@@ -69,7 +69,7 @@ Partitions are created by aggregation only; you do not create them.
 | `MEMORY.md` | The index. Each line gives a note's title, its file, a one-line description written to stand on its own, and the search terms the source supplied, newest first. This is what a session receives. |
 | `notes/<slug>.md` | One note. Frontmatter carries `title`, `description`, `type` (`user`, `feedback` or `project`), `origins` (every agent file the note was built from), `created_at` and `updated_at`, and sometimes `search_terms`. The body is Coffer's own wording. |
 | `RETIRED.md` | Each retired note's title, the reason, and the note that replaced it. The next pass reads this file so a retired subject is not brought back from the same unchanged source. A note is also retired here, with the reason "its sources are gone", when every raw entry it was built from has left `.raw/` — the agent deleted the fact, or it is now filed into another partition — and that kind of record does not stop the subject coming back. |
-| `.raw/` | Every entry exactly as it was read, with the agent, source path and read time. It is the distil pass's input and lets you check a note against the words it came from. It is not shown in the web UI and not readable through the partition's file routes; open it on disk, or use `coffer memory note` to see the entries behind a note. |
+| `.raw/` | Every entry exactly as it was read, with the agent, source path and read time. It is the distil pass's input and lets you check a note against the words it came from. It is not shown in the web UI and not readable through the partition's file routes; open it on disk under `coffer path memory <partition>`. |
 
 Everything under `~/.coffer/memory/` is derived. It can be deleted and rebuilt at any time, and it is not carried by [vault sync](/guides/vault-sync): each machine builds its own from the agents installed on it. To move the memory root, set `COFFER_MEMORY_ROOT` in the daemon's environment.
 
@@ -87,7 +87,7 @@ The two passes run on separate timers: distil does not wait for an aggregation (
 **Without an internal model.** If Coffer's model is not configured (see [Model providers](/guides/providers)), distil still runs, mechanically: each entry becomes a note of its own and `MEMORY.md` is written from their frontmatter. You get a thinner index, not an empty one, and no model is called.
 
 ::: info What leaves your machine
-Only the distil pass sends memory content anywhere, and only to the model endpoint you configured. Aggregation, delivery and recall send nothing.
+Only the distil pass sends memory content anywhere, and only to the model endpoint you configured. Aggregation and delivery send nothing.
 :::
 
 ### Change the schedule
@@ -95,10 +95,10 @@ Only the distil pass sends memory content anywhere, and only to the model endpoi
 Under **Settings → Coffer's model → Automatic upkeep**, each pass has a switch and an interval. On the CLI:
 
 ```sh
-coffer engine upkeep list
-coffer engine upkeep set aggregate --interval 1800
-coffer engine upkeep set distil --off
-coffer engine upkeep set distil --default-interval
+coffer config list engine.upkeep.
+coffer config set engine.upkeep.aggregate.interval 1800
+coffer config set engine.upkeep.distil.enabled off
+coffer config unset engine.upkeep.distil.interval     # back to the default interval
 ```
 
 A change applies without a restart. The shortest interval is 60 seconds.
@@ -119,7 +119,7 @@ Memory → choose the partition → Update memory
 
 :::
 
-**Update memory** (`coffer memory sync`, `POST /api/v1/memory/sync`) runs both passes in one action: it reads every registered agent's latest memory, then distils every partition that gained new entries. It reports how many entries it read across how many partitions, any sources that failed to parse, and which partitions it distilled. A partition whose distil pass is already running is reported as skipped rather than failing the update. The button is the same on the partitions page and on a partition's page. Only one distil pass runs per partition at a time; a request while one is running is refused with `UPKEEP_ALREADY_RUNNING`. `coffer engine upkeep runs` shows what is running now.
+**Update memory** (`coffer memory sync`, `POST /api/v1/memory/sync`) runs both passes in one action: it reads every registered agent's latest memory, then distils every partition that gained new entries. It reports how many entries it read across how many partitions, any sources that failed to parse, and which partitions it distilled. A partition whose distil pass is already running is reported as skipped rather than failing the update. The button is the same on the partitions page and on a partition's page. Only one distil pass runs per partition at a time; a request while one is running is refused with `UPKEEP_ALREADY_RUNNING`. `coffer daemon status` shows what is running now.
 
 ## How agents receive memory
 
@@ -158,7 +158,8 @@ The composed context contains, in order:
 
 1. the `global` partition's index — what is known about you,
 2. the whole index of the partition for the repository the session is in, and
-3. the absolute path of that partition's `notes/` folder, with the instruction that a note's body is read as a file.
+3. the absolute path of that partition's `notes/` folder, with the instruction that a note's body is read as a file, and
+4. the memory root (`~/.coffer/memory/`), which spans every partition, so a note from another repository is one search away with the agent's own tools.
 
 To see exactly what an agent gets, run the same command the hook runs:
 
@@ -166,14 +167,14 @@ To see exactly what an agent gets, run the same command the hook runs:
 coffer memory context --agent-uid <uid> --cwd ~/src/payments-api
 ```
 
-`coffer resource show agent <name>` prints an agent's uid. The payload is the same for every agent; the uid only records which agent's hook fired.
+`coffer agent show <name>` prints an agent's uid. The payload is the same for every agent; the uid only records which agent's hook fired.
 
 The payload is capped at 12,000 tokens by default (`--ceiling-tokens` overrides it). When the index does not fit, the oldest lines are dropped first, the current repository's lines are kept in preference to `global`'s, and the text says how many lines were dropped and which folder still holds them — every note stays readable as a file.
 
 Every time a hook fires, Coffer records an audit event. The agent's **Memory** tab shows only whether the hook is installed; to see whether it is firing, look on the [Activity](/guides/activity) page or run:
 
 ```sh
-coffer audit list --event-type memory_delivery_fired
+coffer log audit --event-type memory_delivery_fired
 ```
 
 ### In channel turns
@@ -182,9 +183,9 @@ A turn that comes from a [channel](/guides/channels) runs no session-start hook,
 
 A turn you send from the [Chat](/guides/chat) page does not get this append: it gets memory the way a terminal session does, through the agent's own session-start hook when the agent is connected to Coffer. No turn gets memory both ways.
 
-### On demand: `coffer__recall`
+### On demand: search the memory root
 
-For a note from a different repository than the one the session is in, an agent calls `coffer__recall` with a word or phrase. It searches every partition with a literal, case-insensitive match and returns each matching note's absolute path, title and one-line description — never the body, which the agent then reads as a file. Retired notes and `.raw/` are never returned. Recall calls no model.
+For a note from a different repository than the one the session is in, an agent searches the memory root with its own file tools — `grep` over `~/.coffer/memory/` covers every partition at once, and the session-start payload names that root. Every note is a Markdown file with its title and one-line description in its frontmatter. `coffer path memory` prints the root, and `coffer path memory <partition>` one partition's folder. There is no memory tool: Coffer exposes nothing for an agent to call.
 
 There is no tool for an agent to write memory through Coffer. An agent records something the way it always does, in its own memory, and Coffer reads it on the next pass. The `coffer-guide` skill tells agents this.
 
@@ -195,12 +196,11 @@ There is no tool for an agent to write memory through Coffer. An agent records s
 ::: code-group
 
 ```sh [CLI]
-coffer memory partitions
-coffer memory notes payments-api
-coffer memory note payments-api retry-budget-for-ledger-writes
-coffer memory retired payments-api
-coffer memory ls payments-api
-coffer memory read payments-api MEMORY.md
+coffer memory list                             # partitions, note counts, repositories
+coffer memory show payments-api
+coffer path memory payments-api                 # MEMORY.md, notes/, RETIRED.md
+cat "$(coffer path memory payments-api)"/MEMORY.md
+cat "$(coffer path memory payments-api)"/notes/retry-budget-for-ledger-writes.md
 ```
 
 ```text [Web UI]
@@ -213,7 +213,7 @@ The **Memory** page lists partitions with their repository and number of notes. 
 
 A partition's page shows its folder as a file tree — `MEMORY.md`, `notes/` and `RETIRED.md` — beside a read-only preview with **Open in editor** and **Reveal in Finder**; both fill the window. `.raw/` is not shown. A note's frontmatter is shown as metadata above its body. There are no per-note edit or delete actions: the notes are derived, and the next distil pass would rewrite an edit.
 
-`coffer memory note` prints a note together with the entries behind it and the absolute path of each native file they were read from, so you can trace a note that reads wrong back to what the agent actually recorded.
+A note's `origins` frontmatter names every agent file it was built from, and `.raw/` holds each entry exactly as it was read, so you can trace a note that reads wrong back to what the agent actually recorded.
 
 ### An agent's own memory
 
@@ -221,7 +221,7 @@ To see the memory an agent keeps for itself, open **Agents → choose the agent 
 
 ## Every partition reaches every agent
 
-A partition has no on/off switch and no per-agent reach. Every partition is served to every agent — including agents that contributed nothing to it, which is the point of aggregating — through session-start delivery and `coffer__recall`. `coffer resource enable` and `disable` refuse a partition with `RESOURCE_NOT_TOGGLEABLE`.
+A partition has no on/off switch and no per-agent reach. Every partition is served to every agent — including agents that contributed nothing to it, which is the point of aggregating — through session-start delivery. `coffer memory` has no `enable` or `disable`, and the generic enable and disable routes refuse a partition with `RESOURCE_NOT_TOGGLEABLE`.
 
 This controls what Coffer hands to agents, not what they can open: the notes are ordinary files under `~/.coffer/memory/`.
 
@@ -238,21 +238,19 @@ coffer memory sync
 
 The rebuilt partition covers the same subjects from the same sources. Its wording will differ, because notes are a distillation, not a copy. Retirements recorded in the deleted `RETIRED.md` are lost with it, so a subject that was retired may come back.
 
-To remove a partition from Coffer entirely — for example one marked **Repository missing** — delete its resource:
+To remove a partition from Coffer entirely — for example one marked **Repository missing** — remove it:
 
 ```sh
-coffer resource delete memory payments-api
+coffer memory rm payments-api
 ```
 
 ## Troubleshooting
 
 **A partition is empty or missing.** Check that the agent is registered and enabled, then run `coffer memory sync` and read its report. Entries learned outside a git repository do not get a partition of their own.
 
-**An agent is not given its memory at session start.** Run `coffer agent connection <agent>` to confirm the memory delivery hook is installed for that agent (connect it again if it reads **needs repair**), then `coffer audit list --event-type memory_delivery_fired` to see whether it fires. Run `coffer memory context --agent-uid <uid> --cwd <repo>` to see what would be delivered.
+**An agent is not given its memory at session start.** Run `coffer agent connection <agent>` to confirm the memory delivery hook is installed for that agent (connect it again if it reads **needs repair**), then `coffer log audit --event-type memory_delivery_fired` to see whether it fires. Run `coffer memory context --agent-uid <uid> --cwd <repo>` to see what would be delivered.
 
 **Notes read like copies of the source, one per entry.** Coffer's model is not configured, so distil is running mechanically. Configure it under **Settings → Coffer's model**, then run `coffer memory distil <partition>`.
-
-**`coffer__recall` is missing from the agent's tools.** The `memory` feature is switched off on this machine, or the agent is not connected to Coffer (`coffer agent connect <agent>`).
 
 ## Related
 

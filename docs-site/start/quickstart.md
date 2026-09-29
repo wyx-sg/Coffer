@@ -34,11 +34,16 @@ opened http://127.0.0.1:8000/ in your browser
 Coffer never registers an agent on its own. Ask it what it can find, then confirm.
 
 ```sh
-coffer agent detect
+coffer scan
 ```
 
 ```text
-detected: claude_code -> add with `coffer agent add claude_code --name claude-code`
+                          Not managed by Coffer
+┏━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Kind  ┃ Agent       ┃ Ref         ┃ Detail                            ┃
+┡━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ agent │ claude-code │ claude_code │ Claude Code at /Users/you/.claude │
+└───────┴─────────────┴─────────────┴───────────────────────────────────┘
 ```
 
 ```sh
@@ -49,7 +54,7 @@ coffer agent add claude_code
 registered: agent claude-code
 ```
 
-If you leave out `--name`, Coffer uses a default based on the type: `claude_code` becomes `claude-code`. If your Claude Code config is somewhere other than `~/.claude`, pass `--config-dir <path>`.
+(`coffer adopt agent claude_code` does the same from the scan row.) If you leave out `--name`, Coffer uses a default based on the type: `claude_code` becomes `claude-code`. If your Claude Code config is somewhere other than `~/.claude`, pass `--config-dir <path>`.
 
 **In the web UI:** open **Agents**, click **Add agent**, tick Claude Code under **Detected agents**, and click **Add selected (1)**.
 
@@ -106,24 +111,24 @@ Check that Coffer can start the server and see its tools:
 
 ```sh
 coffer mcp test filesystem
-coffer mcp tool list filesystem
+coffer mcp cap list filesystem --type tool
 ```
 
 ```text
-OK  (2907 ms)
-
-                                filesystem tools
-┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
-┃ Key                  ┃ Prefixed                     ┃ Enabled ┃ Description     ┃
-┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
-│ read_text_file       │ filesystem__read_text_file   │ True    │ Read the …      │
-│ write_file           │ filesystem__write_file       │ True    │ Create a new …  │
-│ list_directory       │ filesystem__list_directory   │ True    │ Get a detailed… │
-│ …                    │ …                            │ …       │ …               │
-└──────────────────────┴──────────────────────────────┴─────────┴─────────────────┘
+capabilities: 14 tools, 0 prompts, 0 resources (re-queried)
+OK  (993 ms)
+                          filesystem capabilities
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Ref                 ┃ Enabled ┃ Name length ┃ Description                ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ tool:read_file      │ yes     │ 34          │ Read the complete contents │
+│ tool:read_text_file │ yes     │ 39          │ Read the complete contents │
+│ tool:write_file     │ yes     │ 35          │ Create a new file or …     │
+│ …                   │ …       │ …           │ …                          │
+└─────────────────────┴─────────┴─────────────┴────────────────────────────┘
 ```
 
-The first test can take a few seconds while `npx` downloads the package. The **Prefixed** column shows the name an agent sees.
+The first test can take a few seconds while `npx` downloads the package. An agent sees each tool as `filesystem__<tool>`. **Name length** counts the full name a client such as Claude Code sees, `mcp__coffer__filesystem__<tool>`; a name over 64 characters is flagged with `!`, because model provider APIs refuse it.
 
 **In the web UI:** open **MCP servers**, click **Add MCP server**, and paste the server's JSON in the standard `mcpServers` format. The path must be absolute:
 
@@ -145,7 +150,7 @@ Click **Continue**, review what will be imported, and click **Import 1**. On the
 Start a **new** Claude Code session. A session that was already open loaded its MCP servers when it started. Run `/mcp`, and `coffer` appears as a connected server. Its tools include:
 
 - the filesystem server's tools: `filesystem__read_text_file`, `filesystem__list_directory`, `filesystem__write_file` and the rest;
-- Coffer's own built-in tools: `coffer__search_tools` and `coffer__diagnose`, plus `coffer__write` and `coffer__recall` when the Knowledge and Memory features are on.
+- Coffer's own built-in tools: `coffer__search_tools`, plus `coffer__write` when the Knowledge feature is on.
 
 Claude Code adds its own prefix to every MCP tool, so in its tool list the names appear as `mcp__coffer__filesystem__list_directory`. Ask it to use one:
 
@@ -156,7 +161,7 @@ Claude Code adds its own prefix to every MCP tool, so in its tool list the names
 Claude Code calls `filesystem__list_directory`. Coffer routes the call to the filesystem server under its original name, `list_directory`, and records the call. You can see the record with:
 
 ```sh
-coffer mcp invocations filesystem
+coffer log mcp --server filesystem
 ```
 
 or on the server's **Invocations** tab. The record holds the tool, the time, the duration and the outcome. It never holds the arguments or the result.
@@ -186,12 +191,12 @@ EOF
 Import it:
 
 ```sh
-coffer skill import ~/skills-src/commit-message
+coffer skill add ~/skills-src/commit-message
 coffer skill list
 ```
 
 ```text
-imported: skill commit-message
+added: skill commit-message
 
 ┏━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┓
 ┃ Name           ┃ Source       ┃ Scope      ┃ Delivered to ┃ Hash         ┃
@@ -214,7 +219,7 @@ commit-message -> /Users/you/.coffer/skills/commit-message
 
 Some things to know:
 
-- **Scope `everywhere`** means every registered agent receives the skill, including agents you register later. To limit the skill to certain agents, run `coffer scope set skill commit-message --agents claude-code`. Scope applies to this machine only.
+- **Scope `everywhere`** means every registered agent receives the skill, including agents you register later. To limit the skill to certain agents, run `coffer skill scope commit-message --agents claude-code`. Scope applies to this machine only.
 - **`coffer-guide`** is Coffer's own skill, delivered automatically. It explains Coffer's tools to the agent and lists your knowledge collections.
 - **Editing.** The delivered copy is a link to the library copy, so an edit through either path changes the same file. `coffer skill verify` reports any link that has gone missing or been changed, and `--fix` repairs it.
 
@@ -238,6 +243,6 @@ flowchart LR
 - **Add Codex.** Run `coffer agent add codex` and `coffer agent connect codex`. Codex gets the same servers and skills with no further setup. See [Agents](/guides/agents).
 - **Curate tools.** Switch off tools you do not want agents to see, or restrict a server to particular agents. See [MCP servers](/guides/mcp-servers).
 - **Store a key.** Register a server that needs an API key, using a credential ref. See [Credentials](/guides/credentials).
-- **Share knowledge.** Create a collection with `coffer knowledge create handbook` and drop Markdown files into it. See [Knowledge](/guides/knowledge).
+- **Share knowledge.** Create a collection with `coffer knowledge add handbook` and drop Markdown files into it. See [Knowledge](/guides/knowledge).
 - **Switch providers.** Point both agents at the same model gateway in one step. See [Model providers](/guides/providers).
 - **Learn the model.** [Core concepts](/start/concepts) explains the terms used throughout these docs.

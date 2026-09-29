@@ -60,14 +60,14 @@ runs). The channel decides the default state of every
 ### Built-in login
 
 An agent's own authentication, as it was before Coffer [projected](#projection) a
-[connection](#connection) into it. `coffer provider use-builtin <wire>` returns an agent to
+[connection](#connection) into it. `coffer provider builtin <wire>` returns an agent to
 it. See [Model providers](/guides/providers).
 
 ### Built-in tool
 
 An MCP tool Coffer itself provides, listed with the reserved `coffer__` prefix alongside
-upstream tools: `coffer__write`, `coffer__recall`, `coffer__diagnose` and
-`coffer__search_tools`. See [MCP tools](/reference/mcp-tools).
+upstream tools: `coffer__search_tools`, and `coffer__write` while the knowledge
+[experimental feature](#experimental-feature) is on. See [MCP tools](/reference/mcp-tools).
 
 ## C
 
@@ -108,7 +108,7 @@ advances the [pointer](#pointer). See [Vault sync](/architecture/vault-sync#the-
 
 The one machine allowed to run the [curation pass](#curation-pass) automatically, so two
 synced machines never rewrite the same collection at once. Set with
-`coffer engine curate-owner`. See [Knowledge](/architecture/knowledge#the-owner-machine).
+`coffer config set engine.curate_owner`. See [Knowledge](/architecture/knowledge#the-owner-machine).
 
 ### Curation pass
 
@@ -249,7 +249,8 @@ on the agent's page. See [Memory](/guides/memory).
 ### Note
 
 One topic in Coffer's memory, written by the [distil pass](#distil-pass) as a Markdown file
-in a [partition's](#partition) `notes/` directory. `coffer__recall` returns notes' paths. See
+in a [partition's](#partition) `notes/` directory. An agent finds notes by searching the
+memory root, which `coffer path memory` names, with its own file tools. See
 [Memory](/guides/memory).
 
 ## O
@@ -279,7 +280,7 @@ is joining. See [Vault sync](/architecture/vault-sync#the-pointer-the-retry-set-
 ### Pre-apply snapshot
 
 A git tag Coffer places before applying a [converge round](#converge-round), so the round
-can be rolled back with `coffer sync rollback`. See [Vault sync](/architecture/vault-sync#recovery).
+can be rolled back with `coffer sync restore`. See [Vault sync](/architecture/vault-sync#recovery).
 
 ### Projection
 
@@ -314,7 +315,7 @@ memory partition or provider connection. Every resource has a [kind](#kind), an 
 
 Per-table limits on how long Coffer keeps log-like rows, such as the audit log and the
 [invocation log](#invocation-log), enforced by a background pruner. Manage it with
-`coffer retention`. See [Observability](/architecture/observability#retention).
+`coffer config set retention.<table>`. See [Observability](/architecture/observability#retention).
 
 ### Retry set
 
@@ -335,7 +336,7 @@ messaging platform. Set with `coffer channel bind`. See [Channels](/guides/chann
 A resource's optional list of the agents it applies to; no list means every agent. Together
 with `enabled` it forms the resource's [reach](#reach). For a [channel](#channel) the scope is
 read the other way round: it names the agents the channel may drive. Set with
-`coffer scope set`. See [Resource framework](/architecture/resource-framework#reach).
+the kind's `scope` command, such as `coffer skill scope <name> --agents a,b`. See [Resource framework](/architecture/resource-framework#reach).
 
 ### Session
 
@@ -364,6 +365,13 @@ The gateway's listing budget: when upstream tools outnumber it, `tools/list` car
 most-used tools (at least one per server) and every other tool stays callable by name and
 findable with `coffer__search_tools`. See [MCP tools](/reference/mcp-tools#tiering).
 
+### Title
+
+A resource's optional display label, at most 80 characters, shown in place of its name by the
+web UI and the CLI and changed with `edit --title`. An MCP server's and a skill's name is
+fixed once registered, because agents quote it, so the title is how you relabel one. See
+[Resource framework](/architecture/resource-framework#identity).
+
 ### Trace id
 
 A per-request identifier the daemon returns in the `X-Coffer-Trace` header and stamps on
@@ -381,18 +389,18 @@ its tool calls. A conversation runs one turn at a time and queues further messag
 ### uid
 
 A resource's permanent identifier: a random 32-character hex string minted once, never
-reused, and the same on every synced machine. Names can change; the uid cannot. See
+reused, and the same on every synced machine. Most names can change; the uid cannot. See
 [Resource framework](/architecture/resource-framework#identity).
 
 ### Unmanaged skill
 
 A skill folder an agent has in its own skills directory that Coffer did not put there. The
-agent's page lists them so you can [adopt](#adopt) or remove them. See [Skills](/guides/skills).
+agent's page and `coffer scan` list them so you can [adopt](#adopt) or discard them. See [Skills](/guides/skills).
 
 ### Upkeep pass
 
 Work Coffer does on a timer, without being asked: `aggregate` and `distil` for memory,
-`curate` for knowledge. Each can be switched off or retimed with `coffer engine upkeep set`.
+`curate` for knowledge. Each can be switched off or retimed with `coffer config set engine.upkeep.<pass>.enabled` or `.interval`.
 See [Memory](/architecture/memory#workers-and-scheduling) and [Knowledge](/architecture/knowledge#the-sweep).
 
 ## V

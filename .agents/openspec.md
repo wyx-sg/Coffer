@@ -94,8 +94,8 @@ The system SHALL <behaviour>.
 - A requirement is identified by its **title** — there are no requirement
   numbers. Renaming one is a `RENAMED` delta, so the rename is reviewed like
   any other change. Cite one from outside its spec as a link plus its title:
-  ``[skill-manager](../openspec/specs/skill-manager/spec.md) "Keep one master folder per skill and carry it through a rename"``,
-  or in a code comment as ``spec skill-manager "Keep one master folder per skill and carry it through a rename"``.
+  ``[skill-manager](../openspec/specs/skill-manager/spec.md) "Keep one master folder per skill"``,
+  or in a code comment as ``spec skill-manager "Keep one master folder per skill"``.
   `scripts/check_spec_citations.py` (run by `make lint`) resolves every such
   citation against the `### Requirement:` headings under `openspec/specs/`, so
   a rename fails the gate until its citations follow. A title an in-flight
@@ -172,9 +172,9 @@ the draft was withdrawn.
 restructure moved the audit log and per-table retention into it, and
 `audit_log` and `retention_policies` are durable state this spec seeds, reads,
 configures and prunes rather than another spec's state it displays. With them it
-is also independently operable — `coffer resource`, `coffer scope`,
-`coffer audit` and `coffer retention` against a running daemon, with acceptance
-scenarios that exercise each. The move was forced rather than convenient: the
+is also independently operable — each kind's lifecycle verbs, `coffer log audit`,
+`coffer log prune` and the `retention.*` keys of `coffer config` against a
+running daemon, with acceptance scenarios that exercise each. The move was forced rather than convenient: the
 three framework obligations the first audit would have parked in the
 principles could not live there, because the principles hold rules and not
 routes, tables, entities or scenarios, so parking them would have deleted them
@@ -276,10 +276,20 @@ Every feature, on completion, must deliver a usable end-to-end product: backend 
 
 A capability is "shipped" only when the end-to-end deliverable works AND every requirement's scenarios have at least one covering test.
 
-**Every management operation is reachable from both REST and the CLI.** Whatever
-a user can do to a spec's state through the management API they can also do
-through `coffer`, sharing the same daemon and the same error model — and the
-reverse. This is policy over every spec rather than a promise of any one of
+**Every mutation, and every read of state that is not a plain file, is reachable
+from both REST and the CLI.** Whatever a user can change in a spec's state through
+the management API they can also change through `coffer`, sharing the same daemon
+and the same error model — and the reverse — and the same holds for reading state
+that lives in the database or the daemon's memory. Plain files are the one
+narrowing: where the owning spec declares a file directly readable or editable
+(knowledge documents, memory notes, skill master folders, agents' own config and
+native-memory files, the daemon log), the CLI satisfies parity by naming the file
+with `coffer path`, and the agent or person reads and edits it with their own
+tools. The REST route that serves such a file to the web UI stays, because a
+browser page cannot read the disk, and the parity test lists every such route by
+name so that a REST read with no CLI command is a reviewed decision rather than a
+gap. A setting changed with `coffer config` counts as the CLI counterpart of the
+route that stores it. This is policy over every spec rather than a promise of any one of
 them, which is why the rule is stated here: written into a single spec's prose
 it would read as that spec's private promise, and the next spec would quietly
 ship a REST-only half. A spec that cannot honour it records the gap in its
@@ -287,8 +297,9 @@ ship a REST-only half. A spec that cannot honour it records the gap in its
 
 The **test** for it lives in
 [`resource-framework`](../openspec/specs/resource-framework/spec.md) as the
-REST/CLI parity requirement, with the two acceptance scenarios "command line
-covers every visual operation" and "command line surfaces same errors". That is
+REST/CLI parity requirement, with the acceptance scenarios "command line
+covers every visual operation", "file-backed reads are answered by coffer path"
+and "command line surfaces same errors". That is
 not a second statement of the rule — the assertion runs over the whole command
 tree across every spec, so it has no narrower home, and `resource-framework` is
 the only spec whose scope is already cross-kind. Stated once here, tested once

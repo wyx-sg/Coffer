@@ -35,22 +35,40 @@ coffer [OPTIONS] COMMAND [ARGS]...
 
 | Group | Description |
 | --- | --- |
+| [`coffer scan`](#coffer-scan) | List what agents hold that Coffer does not manage: agents, skills, MCP entries. |
 | [`coffer daemon`](#coffer-daemon) | Daemon lifecycle |
 | [`coffer open`](#coffer-open) | Open Coffer's web UI in your browser. |
-| [`coffer resource`](#coffer-resource) | Manage resources (kind-agnostic) |
-| [`coffer scope`](#coffer-scope) | Activation scope for a resource |
-| [`coffer audit`](#coffer-audit) | Query the audit log |
-| [`coffer retention`](#coffer-retention) | Manage data retention policies |
+| [`coffer config`](#coffer-config) | Read and change Coffer's settings (coffer config list shows every key) |
+| [`coffer log`](#coffer-log) | Read Coffer's records: the audit log, MCP calls and the daemon log |
+| [`coffer path`](#coffer-path) | Print where Coffer's files live (knowledge, memory, skills, agents, logs, vault) |
+| [`coffer adopt`](#coffer-adopt) | Bring one scanned item under Coffer's management |
+| [`coffer discard`](#coffer-discard) | Remove one scanned item from the agent that holds it |
 | [`coffer mcp`](#coffer-mcp) | Manage MCP servers and their capabilities |
 | [`coffer credentials`](#coffer-credentials) | Manage encrypted credentials. |
 | [`coffer agent`](#coffer-agent) | Manage registered AI agents |
 | [`coffer channel`](#coffer-channel) | Manage messaging channels (Telegram, SeaTalk) |
 | [`coffer skill`](#coffer-skill) | Manage skills (AgentSkills standard) |
-| [`coffer knowledge`](#coffer-knowledge) | Browse and edit Coffer's knowledge, the Markdown under ~/.coffer/knowledge/&lt;collection&gt;/. |
+| [`coffer knowledge`](#coffer-knowledge) | Manage Coffer's knowledge collections, the Markdown under ~/.coffer/knowledge/&lt;collection&gt;/ (`coffer path knowledge` prints it). |
 | [`coffer memory`](#coffer-memory) | Browse and manage Coffer's memory layer |
-| [`coffer provider`](#coffer-provider) | Manage provider profiles and switch the active provider |
-| [`coffer engine`](#coffer-engine) | Coffer's own engine: the model it thinks with, and its unattended work |
+| [`coffer provider`](#coffer-provider) | Manage LLM connections and switch agents onto them |
 | [`coffer sync`](#coffer-sync) | Keep this vault converged with a git remote you own |
+
+## coffer scan
+
+```sh
+coffer scan [OPTIONS]
+```
+
+List what agents hold that Coffer does not manage: agents, skills, MCP entries.
+
+With --ref, show that one row in full: an MCP entry's whole configuration (secret values withheld) or an unmanaged skill's metadata.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--agent` | option | text |  | Only what this agent holds |
+| `--ref` | option | text |  | Show one row in full: a type, a folder path or &lt;agent&gt;:&lt;entry&gt; |
+| `--source` | option | text |  | With --ref on an mcp row: the config-file key |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ## coffer daemon
 
@@ -92,7 +110,9 @@ The way a changed setting — a fixed port above all — actually takes effect, 
 coffer daemon status [OPTIONS]
 ```
 
-Show whether the daemon is running, and its version, channel, port and pid.
+Show whether the daemon is running, and the passes it is running right now.
+
+Reports its version, channel, port and pid, and the long passes in flight (kind, target, start time), oldest first.
 
 Read-only: when no daemon is running it says so and exits 3 instead of starting one.
 
@@ -107,48 +127,6 @@ coffer daemon rotate-token [OPTIONS]
 ```
 
 Rotate the daemon API token and update daemon.json.
-
-### daemon port
-
-```sh
-coffer daemon port [OPTIONS] COMMAND [ARGS]...
-```
-
-The port the daemon listens on
-
-Subcommands: `show`, `set`, `clear`.
-
-### daemon port show
-
-```sh
-coffer daemon port show [OPTIONS]
-```
-
-Show the port the daemon will bind, and the port it is actually on.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `--json` | option | flag |  | JSON output for scripts |
-
-### daemon port set
-
-```sh
-coffer daemon port set [OPTIONS] PORT
-```
-
-Change the port the daemon binds, away from the default.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `PORT` | argument | integer | required | Port the daemon should always listen on |
-
-### daemon port clear
-
-```sh
-coffer daemon port clear [OPTIONS]
-```
-
-Go back to the default port.
 
 ### daemon service
 
@@ -184,52 +162,6 @@ coffer daemon service status [OPTIONS]
 
 Whether the login service is installed, and where.
 
-### daemon features
-
-```sh
-coffer daemon features [OPTIONS] COMMAND [ARGS]...
-```
-
-Experimental features on this machine
-
-Subcommands: `list`, `enable`, `disable`.
-
-### daemon features list
-
-```sh
-coffer daemon features list [OPTIONS]
-```
-
-Every experimental feature, its state, and what decided it.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `--json` | option | flag |  | JSON output for scripts |
-
-### daemon features enable
-
-```sh
-coffer daemon features enable [OPTIONS] KEY
-```
-
-Switch KEY on, at once.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `KEY` | argument | text | required | Feature key |
-
-### daemon features disable
-
-```sh
-coffer daemon features disable [OPTIONS] KEY
-```
-
-Switch KEY off, at once. Nothing it holds is deleted.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `KEY` | argument | text | required | Feature key |
-
 ## coffer open
 
 ```sh
@@ -243,216 +175,318 @@ Open Coffer's web UI in your browser.
 | `--json` | option | flag |  |  |
 | `--no-browser` | option | flag |  | Print the URL instead of launching a browser. |
 
-## coffer resource
+## coffer config
 
 ```sh
-coffer resource [OPTIONS] COMMAND [ARGS]...
+coffer config [OPTIONS] COMMAND [ARGS]...
 ```
 
-Manage resources (kind-agnostic)
+Read and change Coffer's settings (coffer config list shows every key)
 
-### resource list
+### config list
 
 ```sh
-coffer resource list [OPTIONS]
+coffer config list [OPTIONS] [PREFIX]
 ```
 
-List all registered resources.
+List every key with its value, its default, its type and its help.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `--kind` | option | text |  | Filter by kind |
+| `PREFIX` | argument | text | `""` | Only keys starting with this, e.g. engine. |
 | `--json` | option | flag |  | JSON output for scripts |
 
-### resource show
+### config get
 
 ```sh
-coffer resource show [OPTIONS] KIND NAME
+coffer config get [OPTIONS] KEY
 ```
 
-Show details of a single resource.
+Print a setting's current value.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `KIND` | argument | text | required | Resource kind, e.g. mcp_server |
-| `NAME` | argument | text | required | Resource name |
-| `--json` | option | flag |  |  |
-
-### resource rename
-
-```sh
-coffer resource rename [OPTIONS] KIND NAME NEW_NAME
-```
-
-Rename a resource.
-
-A label change and nothing else: the resource keeps its identity, so its reach, its credentials, its bindings and its history all follow it without being rewritten. Works for every kind.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `KIND` | argument | text | required | Resource kind, e.g. mcp_server |
-| `NAME` | argument | text | required | Resource name |
-| `NEW_NAME` | argument | text | required | The new name |
-
-### resource enable
-
-```sh
-coffer resource enable [OPTIONS] KIND NAME
-```
-
-Enable a resource.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `KIND` | argument | text | required | Resource kind, e.g. mcp_server |
-| `NAME` | argument | text | required | Resource name |
-
-### resource disable
-
-```sh
-coffer resource disable [OPTIONS] KIND NAME
-```
-
-Disable a resource.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `KIND` | argument | text | required | Resource kind, e.g. mcp_server |
-| `NAME` | argument | text | required | Resource name |
-
-### resource delete
-
-```sh
-coffer resource delete [OPTIONS] KIND NAME
-```
-
-Delete a resource.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `KIND` | argument | text | required | Resource kind, e.g. mcp_server |
-| `NAME` | argument | text | required | Resource name |
-| `--force, -f` | option | flag |  |  |
-
-## coffer scope
-
-```sh
-coffer scope [OPTIONS] COMMAND [ARGS]...
-```
-
-Activation scope for a resource
-
-### scope show
-
-```sh
-coffer scope show [OPTIONS] KIND NAME
-```
-
-Show a resource's current scope and whether its kind supports scope.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `KIND` | argument | text | required | Resource kind, e.g. mcp_server |
-| `NAME` | argument | text | required | Resource name |
-
-### scope set
-
-```sh
-coffer scope set [OPTIONS] KIND NAME
-```
-
-Replace a resource's scope with an explicit allow-list of agents.
-
-Whole-value write (no read-modify-write): ``--agents`` restricts to exactly those names. ``--no-agents`` writes the empty list, which is DORMANT — use ``scope clear`` to go back to every agent.
-
-The scope written here applies to THIS machine only and is not synced.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `KIND` | argument | text | required | Resource kind, e.g. mcp_server |
-| `NAME` | argument | text | required | Resource name |
-| `--agents` | option | text |  | Comma-separated agent names this resource is active for |
-| `--no-agents` | option | flag |  | Make the resource dormant (active for no agent) |
-
-### scope clear
-
-```sh
-coffer scope clear [OPTIONS] KIND NAME
-```
-
-Clear the scope back to unscoped — active for every agent on this machine.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `KIND` | argument | text | required | Resource kind, e.g. mcp_server |
-| `NAME` | argument | text | required | Resource name |
-
-## coffer audit
-
-```sh
-coffer audit [OPTIONS] COMMAND [ARGS]...
-```
-
-Query the audit log
-
-### audit list
-
-```sh
-coffer audit list [OPTIONS]
-```
-
-List audit log entries.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `--kind` | option | text |  | Filter by resource kind |
-| `--name` | option | text |  | Filter by resource name |
-| `--event-type` | option | text |  | Filter by event type |
-| `--since` | option | text |  | ISO 8601 datetime lower bound |
-| `--limit` | option | integer | `50` | Maximum entries to return (1-500) |
+| `KEY` | argument | text | required | Setting key |
 | `--json` | option | flag |  | JSON output for scripts |
 
-## coffer retention
+### config set
 
 ```sh
-coffer retention [OPTIONS] COMMAND [ARGS]...
+coffer config set [OPTIONS] KEY VALUE
 ```
 
-Manage data retention policies
-
-### retention list
-
-```sh
-coffer retention list [OPTIONS]
-```
-
-List all retention policies.
-
-### retention set
-
-```sh
-coffer retention set [OPTIONS] TABLE
-```
-
-Set retention policy for a table.
+Change a setting; the value is checked against the key's type first.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `TABLE` | argument | text | required | Table name to configure |
-| `--days` | option | integer |  | Retention in days (&gt;=1) |
-| `--forever` | option | flag |  | Keep rows forever (no pruning) |
+| `KEY` | argument | text | required | Setting key |
+| `VALUE` | argument | text | required | New value (see the key's type in config list) |
 
-### retention prune-now
+### config unset
 
 ```sh
-coffer retention prune-now [OPTIONS]
+coffer config unset [OPTIONS] KEY
 ```
 
-Trigger an immediate prune run.
+Return a setting to its default.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `--table` | option | text |  | Prune a specific table only |
+| `KEY` | argument | text | required | Setting key |
+
+## coffer log
+
+```sh
+coffer log [OPTIONS] COMMAND [ARGS]...
+```
+
+Read Coffer's records: the audit log, MCP calls and the daemon log
+
+### log audit
+
+```sh
+coffer log audit [OPTIONS]
+```
+
+Read the audit log, newest first.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--kind` | option | text |  | Only this resource kind |
+| `--name` | option | text |  | Only this resource (needs --kind) |
+| `--event-type` | option | text |  | Only this event type |
+| `--since` | option | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
+| `--limit` | option | integer (1-500) | `50` | Most entries to print |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### log mcp
+
+```sh
+coffer log mcp [OPTIONS]
+```
+
+Read the MCP invocation log, newest first.
+
+Without --server this is the log the Activity page shows, Coffer's own calls (server ``coffer``) and deleted servers' rows (``deleted:<name>``) included.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--server` | option | text |  | One server; omit for every server |
+| `--status` | option | text |  | ok \| error |
+| `--since` | option | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
+| `--limit` | option | integer (1-500) | `20` | Most calls to print |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### log daemon
+
+```sh
+coffer log daemon [OPTIONS]
+```
+
+Read the tail of the daemon log, newest first, normalised as the Activity page shows it.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--since` | option | text |  | ISO 8601 instant, or an age such as 30m, 1h, 2d |
+| `--errors` | option | flag |  | Only errors |
+| `--limit` | option | integer (1-500) | `100` | Most records to print |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### log prune
+
+```sh
+coffer log prune [OPTIONS]
+```
+
+Prune every registered log table now (or only --table), by its retention period.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--table` | option | text |  | Prune only this table |
+
+## coffer path
+
+```sh
+coffer path [OPTIONS] COMMAND [ARGS]...
+```
+
+Print where Coffer's files live (knowledge, memory, skills, agents, logs, vault)
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--json` | option | flag |  | JSON object keyed by what each path is |
+
+### path knowledge
+
+```sh
+coffer path knowledge [OPTIONS] [COLLECTION]
+```
+
+The knowledge root, or one collection's directory of Markdown documents.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `COLLECTION` | argument | text |  | A collection; omit for the knowledge root |
+| `--json` | option | flag |  | JSON object keyed by what each path is |
+
+### path memory
+
+```sh
+coffer path memory [OPTIONS] [PARTITION]
+```
+
+The memory root, or one partition's directory (MEMORY.md, notes/, RETIRED.md).
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `PARTITION` | argument | text |  | A partition; omit for the memory root |
+| `--json` | option | flag |  | JSON object keyed by what each path is |
+
+### path skill
+
+```sh
+coffer path skill [OPTIONS] NAME
+```
+
+A skill's master folder, which a person edits in place.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Skill name |
+| `--json` | option | flag |  | JSON object keyed by what each path is |
+
+### path agent
+
+```sh
+coffer path agent [OPTIONS] NAME config|memory|transcripts
+```
+
+An agent's own files: its config files, native memory stores, or transcript folders.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Agent name |
+| `CONFIG|MEMORY|TRANSCRIPTS` | argument | text | required |  |
+| `--json` | option | flag |  | JSON object keyed by what each path is |
+
+### path logs
+
+```sh
+coffer path logs [OPTIONS]
+```
+
+The log directory and the daemon.log in it (COFFER_LOG_DIR moves both).
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--json` | option | flag |  | JSON object keyed by what each path is |
+
+### path vault
+
+```sh
+coffer path vault [OPTIONS]
+```
+
+The directory that holds this machine's vault.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--json` | option | flag |  | JSON object keyed by what each path is |
+
+## coffer adopt
+
+```sh
+coffer adopt [OPTIONS] COMMAND [ARGS]...
+```
+
+Bring one scanned item under Coffer's management
+
+### adopt agent
+
+```sh
+coffer adopt agent [OPTIONS] TYPE
+```
+
+Register a detected agent under its suggested name and config directory.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `TYPE` | argument | text | required | The agent type the scan printed |
+| `--name` | option | text |  | Register under this name instead |
+
+### adopt skill
+
+```sh
+coffer adopt skill [OPTIONS] PATH
+```
+
+Move an unmanaged skill folder into Coffer's master store and link it back.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `PATH` | argument | text | required | The folder path the scan printed |
+
+### adopt mcp
+
+```sh
+coffer adopt mcp [OPTIONS] AGENT:ENTRY
+```
+
+Register an agent's direct MCP entry as a Coffer MCP server and remove it from the agent.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `AGENT:ENTRY` | argument | text | required | The ref the scan printed |
+| `--name` | option | text |  | Register the server under this name |
+| `--source` | option | text |  | Config-file key when the entry is in several files |
+| `--secret` | option | text (repeatable) |  | KEY=CREDENTIAL_REF for a secret-like env/header key (repeatable) |
+
+## coffer discard
+
+```sh
+coffer discard [OPTIONS] COMMAND [ARGS]...
+```
+
+Remove one scanned item from the agent that holds it
+
+### discard agent
+
+```sh
+coffer discard agent [OPTIONS] TYPE
+```
+
+Refused: a detected agent was not put there by Coffer, so Coffer does not remove it.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `TYPE` | argument | text | required |  |
+
+### discard skill
+
+```sh
+coffer discard skill [OPTIONS] PATH
+```
+
+Delete an unmanaged skill folder from the agent's skill location (from disk).
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `PATH` | argument | text | required | The folder path the scan printed |
+| `--force, --yes, -f, -y` | option | flag |  | Do not ask |
+
+### discard mcp
+
+```sh
+coffer discard mcp [OPTIONS] AGENT:ENTRY
+```
+
+Remove an MCP entry from the agent's own config file (a .bak is kept).
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `AGENT:ENTRY` | argument | text | required | The ref the scan printed |
+| `--source` | option | text |  | Config-file key when the entry is in several files |
+| `--force, --yes, -f, -y` | option | flag |  | Do not ask |
 
 ## coffer mcp
 
@@ -472,24 +506,12 @@ Register a new MCP server (stdio OR http; pick one).
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Server name (kind-internally unique) |
+| `NAME` | argument | text | required | Server name (fixed once registered, ≤24 chars) |
 | `--stdio` | option | text |  | Command line to launch, quoted as one string, e.g. 'npx -y my-server --flag' |
 | `--http` | option | text |  | HTTP MCP server URL |
 | `--credential` | option | text (repeatable) |  | ENV_OR_HEADER=CREDENTIAL_REF (repeatable) |
+| `--title` | option | text |  | Display title (≤80 chars) |
 | `--description` | option | text |  |  |
-
-### mcp remove
-
-```sh
-coffer mcp remove [OPTIONS] NAME
-```
-
-Delete an MCP server registration.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `--force, -f` | option | flag |  |  |
 
 ### mcp list
 
@@ -497,11 +519,11 @@ Delete an MCP server registration.
 coffer mcp list [OPTIONS]
 ```
 
-List all registered MCP servers.
+List every registered MCP server.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `--json` | option | flag |  |  |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ### mcp show
 
@@ -509,24 +531,91 @@ List all registered MCP servers.
 coffer mcp show [OPTIONS] NAME
 ```
 
-Show details of a single MCP server.
+Show one MCP server, by name or uid.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `--json` | option | flag |  |  |
+| `NAME` | argument | text | required | Name or uid |
+| `--json` | option | flag |  | JSON output for scripts |
 
-### mcp refresh
+### mcp edit
 
 ```sh
-coffer mcp refresh [OPTIONS] NAME
+coffer mcp edit [OPTIONS] NAME
 ```
 
-Invalidate + re-query capabilities for an MCP server.
+Change an MCP server's title, description, transport, env, headers, credential refs or timeouts (its name is fixed). Only the options given change.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
+| `NAME` | argument | text | required | Name or uid |
+| `--name` | option | text |  | Refused: this kind's name is fixed once registered (use --title) |
+| `--title` | option | text |  | Display title (≤80 chars); empty clears it |
+| `--description` | option | text |  |  |
+| `--stdio` | option | text |  | New command line, quoted as one string (stdio transport) |
+| `--http` | option | text |  | New URL (http transport) |
+| `--env` | option | text (repeatable) |  | Plain env var KEY=VALUE for a stdio server (repeatable) |
+| `--clear-env` | option | flag |  | Drop every plain env var first |
+| `--header` | option | text (repeatable) |  | Plain header KEY=VALUE for an http server (repeatable) |
+| `--clear-headers` | option | flag |  | Drop every plain header first |
+| `--cwd` | option | text |  | Working directory (stdio); empty clears it |
+| `--credential` | option | text (repeatable) |  | ENV_OR_HEADER=CREDENTIAL_REF (repeatable) |
+| `--clear-credentials` | option | flag |  | Drop every credential ref first |
+| `--spawn-timeout-seconds` | option | integer |  | Start-up timeout (5-120) |
+| `--request-timeout-seconds` | option | integer |  | Per-request timeout (5-1800) |
+
+### mcp rm
+
+```sh
+coffer mcp rm [OPTIONS] NAME
+```
+
+Remove an MCP server registration.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+| `--force, --yes, -f, -y` | option | flag |  | Do not ask |
+
+### mcp enable
+
+```sh
+coffer mcp enable [OPTIONS] NAME
+```
+
+Enable a MCP server.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+
+### mcp disable
+
+```sh
+coffer mcp disable [OPTIONS] NAME
+```
+
+Disable a MCP server.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+
+### mcp scope
+
+```sh
+coffer mcp scope [OPTIONS] NAME
+```
+
+Show or set which agents a MCP server reaches (this machine only).
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+| `--agents` | option | text |  | Only these agents (a,b) |
+| `--all` | option | flag |  | Every agent |
+| `--none` | option | flag |  | No agent (dormant) |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ### mcp test
 
@@ -534,176 +623,65 @@ Invalidate + re-query capabilities for an MCP server.
 coffer mcp test [OPTIONS] NAME
 ```
 
-Health-test the upstream MCP server.
+Re-query a server's capabilities, then report whether it answers.
+
+Exits 7 when the server does not answer.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
+| `NAME` | argument | text | required | Server name |
 
-### mcp invocations
-
-```sh
-coffer mcp invocations [OPTIONS] [NAME]
-```
-
-Query the invocation log — one server's calls, or every server's.
-
-Without a server this reads the same log the Activity page shows, including Coffer's own built-in calls (server `coffer`) and the rows of deleted servers (`deleted:<name>`).
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text |  | One server; omit for every server |
-| `--limit` | option | integer (1-500) | `20` |  |
-| `--status` | option | text |  |  |
-| `--since` | option | text |  | ISO 8601 timestamp |
-| `--json` | option | flag |  |  |
-
-### mcp tool
+### mcp cap
 
 ```sh
-coffer mcp tool [OPTIONS] COMMAND [ARGS]...
+coffer mcp cap [OPTIONS] COMMAND [ARGS]...
 ```
 
-Manage tool preferences
+List and toggle a server's tools, prompts and resources
 
 Subcommands: `list`, `enable`, `disable`.
 
-### mcp tool list
+### mcp cap list
 
 ```sh
-coffer mcp tool list [OPTIONS] NAME
+coffer mcp cap list [OPTIONS] SERVER
 ```
 
-List tools for an MCP server.
+List a server's capabilities, each with the ref that toggles it.
+
+A tool whose client-visible name (mcp__coffer__&lt;server&gt;__&lt;tool&gt;) is over 64 characters is flagged; it stays enabled and listed.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `--json` | option | flag |  |  |
+| `SERVER` | argument | text | required | Server name |
+| `--type` | option | text |  | tool \| prompt \| resource |
+| `--json` | option | flag |  | JSON output for scripts |
 
-### mcp tool enable
+### mcp cap enable
 
 ```sh
-coffer mcp tool enable [OPTIONS] NAME TOOL_KEY
+coffer mcp cap enable [OPTIONS] SERVER REF...
 ```
 
-Enable a tool capability.
+Enable capabilities, each named by a typed ref.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `TOOL_KEY` | argument | text | required |  |
+| `SERVER` | argument | text | required | Server name |
+| `REF...` | argument | text (variadic) | required | tool:&lt;name&gt; \| prompt:&lt;name&gt; \| resource:&lt;uri&gt; |
 
-### mcp tool disable
+### mcp cap disable
 
 ```sh
-coffer mcp tool disable [OPTIONS] NAME TOOL_KEY
+coffer mcp cap disable [OPTIONS] SERVER REF...
 ```
 
-Disable a tool capability.
+Disable capabilities, each named by a typed ref.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `TOOL_KEY` | argument | text | required |  |
-
-### mcp resource
-
-```sh
-coffer mcp resource [OPTIONS] COMMAND [ARGS]...
-```
-
-Manage resource preferences
-
-Subcommands: `list`, `enable`, `disable`.
-
-### mcp resource list
-
-```sh
-coffer mcp resource list [OPTIONS] NAME
-```
-
-List resources for an MCP server.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `--json` | option | flag |  |  |
-
-### mcp resource enable
-
-```sh
-coffer mcp resource enable [OPTIONS] NAME URI
-```
-
-Enable a resource capability.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `URI` | argument | text | required |  |
-
-### mcp resource disable
-
-```sh
-coffer mcp resource disable [OPTIONS] NAME URI
-```
-
-Disable a resource capability.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `URI` | argument | text | required |  |
-
-### mcp prompt
-
-```sh
-coffer mcp prompt [OPTIONS] COMMAND [ARGS]...
-```
-
-Manage prompt preferences
-
-Subcommands: `list`, `enable`, `disable`.
-
-### mcp prompt list
-
-```sh
-coffer mcp prompt list [OPTIONS] NAME
-```
-
-List prompts for an MCP server.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `--json` | option | flag |  |  |
-
-### mcp prompt enable
-
-```sh
-coffer mcp prompt enable [OPTIONS] NAME KEY
-```
-
-Enable a prompt capability.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `KEY` | argument | text | required |  |
-
-### mcp prompt disable
-
-```sh
-coffer mcp prompt disable [OPTIONS] NAME KEY
-```
-
-Disable a prompt capability.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `KEY` | argument | text | required |  |
+| `SERVER` | argument | text | required | Server name |
+| `REF...` | argument | text (variadic) | required | tool:&lt;name&gt; \| prompt:&lt;name&gt; \| resource:&lt;uri&gt; |
 
 ## coffer credentials
 
@@ -758,31 +736,20 @@ The daemon enumerates refs from every kind (MCP servers, channels, model provide
 | --- | --- | --- | --- | --- |
 | `--json` | option | flag |  | JSON output for scripts |
 
-### credentials delete
+### credentials rm
 
 ```sh
-coffer credentials delete [OPTIONS] REF
+coffer credentials rm [OPTIONS] REF
 ```
 
 Delete a secret from the encrypted credential store (via the daemon).
+
+Asks first unless --force is given.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `REF` | argument | text | required | Credential reference key |
 | `--force, -f` | option | flag |  | Skip confirmation prompt |
-
-### credentials storage
-
-```sh
-coffer credentials storage [OPTIONS]
-```
-
-Show or change where the credential master key is stored.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `--set` | option | text |  | Move the master key: 'file' (default location) or 'keychain'. |
-| `--json` | option | flag |  | JSON output for scripts |
 
 ## coffer agent
 
@@ -802,7 +769,7 @@ List registered agents.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `--json` | option | flag |  | JSON output |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ### agent add
 
@@ -819,6 +786,7 @@ Register an agent.
 | `AGENT_TYPE` | argument | text | required | claude_code \| codex |
 | `--name, -n` | option | text |  | Resource name (defaults to a per-type name, e.g. claude-code). |
 | `--config-dir` | option | text |  | Override config directory (default: ~/.claude etc.). |
+| `--title` | option | text |  | Display title (≤80 chars) |
 | `--description` | option | text |  |  |
 
 ### agent show
@@ -827,12 +795,12 @@ Register an agent.
 coffer agent show [OPTIONS] NAME
 ```
 
-Show one agent.
+Show one agent, with its Coffer connection part by part.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `--json` | option | flag |  |  |
+| `NAME` | argument | text | required | Agent name or uid |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ### agent edit
 
@@ -840,17 +808,17 @@ Show one agent.
 coffer agent edit [OPTIONS] NAME
 ```
 
-Update an agent's fields, including the model it answers with.
+Change an agent's name, title, description, config dir or model binding.
 
 The model binding lives on the agent, not on the connection: an unbound agent projects no model and runs on its own default. A change here takes effect on disk the next time that agent's connection is activated (`coffer provider switch <name>`), which is what re-projects the config.
 
---clear-fast-model unbinds the fast slot.
-
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `--config-dir` | option | text |  |  |
+| `NAME` | argument | text | required | Agent name or uid |
+| `--name` | option | text |  | New name |
+| `--title` | option | text |  | Display title (≤80 chars); empty clears it |
 | `--description` | option | text |  |  |
+| `--config-dir` | option | text |  |  |
 | `--model` | option | text |  | Model this agent answers with |
 | `--fast-model` | option | text |  | Small/fast model slot (anthropic wire only) |
 | `--clear-fast-model` | option | flag |  | Unbind the fast slot |
@@ -862,26 +830,36 @@ The model binding lives on the agent, not on the connection: an unbound agent pr
 coffer agent rm [OPTIONS] NAME
 ```
 
-Remove an agent (re-discoverable on the next scan — removal isn't permanent).
+Remove an agent (re-discoverable by `coffer scan` — removal isn't permanent).
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `--force, -f` | option | flag |  |  |
+| `NAME` | argument | text | required | Name or uid |
+| `--force, --yes, -f, -y` | option | flag |  | Do not ask |
 
-### agent detect
+### agent enable
 
 ```sh
-coffer agent detect [OPTIONS]
+coffer agent enable [OPTIONS] NAME
 ```
 
-Discover installed agents that aren't registered yet (read-only).
-
-Detection never adds anything on its own — it lists candidates and shows the `coffer agent add` command to register each (discovery + confirm).
+Switch an agent back on: Coffer writes into and reads from it again.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `--json` | option | flag |  | JSON output |
+| `NAME` | argument | text | required | Name or uid |
+
+### agent disable
+
+```sh
+coffer agent disable [OPTIONS] NAME
+```
+
+Switch an agent off: its delivered skills are reclaimed.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
 
 ### agent connection
 
@@ -893,7 +871,7 @@ Report whether this agent is connected to Coffer, part by part.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
+| `NAME` | argument | text | required | Agent name or uid |
 | `--json` | option | flag |  | JSON output |
 
 ### agent connect
@@ -906,7 +884,7 @@ Connect this agent to Coffer: install every part that applies to it.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
+| `NAME` | argument | text | required | Agent name or uid |
 
 ### agent disconnect
 
@@ -918,71 +896,29 @@ Disconnect this agent from Coffer: remove every part Coffer wrote into it.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
-
-### agent native-memory
-
-```sh
-coffer agent native-memory [OPTIONS] NAME
-```
-
-List the agent's OWN native per-project memory stores (read-only).
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
-| `--json` | option | flag |  | JSON output |
-
-### agent native-memory-files
-
-```sh
-coffer agent native-memory-files [OPTIONS] NAME
-```
-
-Show one native-memory store: its files, or one file's contents.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
-| `--dir` | option | text | required | A memory_dir from `native-memory`. |
-| `--path` | option | text |  | Print this file's contents instead of the tree. |
-| `--json` | option | flag |  | JSON output |
-
-### agent transcripts
-
-```sh
-coffer agent transcripts [OPTIONS] NAME
-```
-
-List the conversations this agent has recorded on this machine.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
-| `--limit` | option | integer | `20` | Max sessions to show (1-500). |
-| `--offset` | option | integer | `0` | Skip this many sessions. |
-| `--query, -q` | option | text |  | Search title or project path. |
-| `--sort` | option | text | `last_activity_at` | started_at \| last_activity_at \| message_count |
-| `--order` | option | text | `desc` | asc \| desc |
-| `--json` | option | flag |  | JSON output |
+| `NAME` | argument | text | required | Agent name or uid |
 
 ### agent transcript
 
 ```sh
-coffer agent transcript [OPTIONS] NAME
+coffer agent transcript [OPTIONS] NAME [ID]
 ```
 
-Print one conversation: its turns, secret-scrubbed and bounded.
+List this agent's conversations on this machine, or print one of them.
 
-A transcript can be tens of megabytes, so what comes back is a window — ``limit`` turns from ``offset``, each cut at the server's per-turn cap. The header says how many turns the file holds in total, so a short output is never mistaken for a short conversation.
+With an ID, what comes back is a window — --limit turns from --offset, each cut at the server's per-turn cap and secret-scrubbed — and the header says how many turns the whole session holds.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Agent name |
-| `--path` | option | text | required | Absolute source_path from `transcripts`. |
-| `--limit` | option | integer | `200` | Max turns to show (1-500). |
-| `--offset` | option | integer | `0` | Skip this many turns. |
-| `--json` | option | flag |  | JSON output |
+| `[ID]` | argument | text |  | A session id from the listing; omit to list sessions |
+| `--limit` | option | integer |  | Sessions to list (default 20) or turns to show (default 200) |
+| `--offset` | option | integer | `0` | Skip this many sessions or turns. |
+| `--query, -q` | option | text |  | Search title or project path. |
+| `--project` | option | text |  | Only this exact project path. |
+| `--sort` | option | text |  | started_at \| last_activity_at (default) \| message_count |
+| `--order` | option | text |  | asc \| desc (default) |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ### agent models
 
@@ -1003,165 +939,39 @@ List the models a picker offers for this agent, with their effort levels.
 coffer agent config [OPTIONS] COMMAND [ARGS]...
 ```
 
-View and edit an agent's config files
+Write and delete an agent's config files (read them via `coffer path`)
 
-Subcommands: `ls`, `cat`, `edit`, `files`, `write`, `rm`.
-
-### agent config ls
-
-```sh
-coffer agent config ls [OPTIONS] NAME
-```
-
-List an agent's curated config files.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
-| `--json` | option | flag |  | JSON output |
-
-### agent config cat
-
-```sh
-coffer agent config cat [OPTIONS] NAME KEY
-```
-
-Print one config file's content (--json: the whole read, fingerprint included).
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `KEY` | argument | text | required | Config-file key (e.g. settings, config, instructions) |
-| `--json` | option | flag |  | JSON output |
+Subcommands: `edit`, `rm`.
 
 ### agent config edit
 
 ```sh
-coffer agent config edit [OPTIONS] NAME KEY
+coffer agent config edit [OPTIONS] NAME KEY[/CHILD]
 ```
 
-Edit one config file. Opens $EDITOR on its current content, or use --from-file.
+Edit one config file, or one file inside a directory entry.
 
-On save, Coffer validates the content against the file's format (malformed JSON/TOML is rejected and the on-disk file is left unchanged), writes it atomically, and keeps a `<path>.bak` of the prior version. The write carries the fingerprint of the content it started from, so a change made on disk in the meantime is refused (exit 5) instead of overwritten.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `KEY` | argument | text | required | Config-file key (e.g. settings, config, instructions) |
-| `--from-file` | option | text |  | Read the new content from PATH instead of opening $EDITOR (non-interactive). |
-
-### agent config files
-
-```sh
-coffer agent config files [OPTIONS] NAME KEY
-```
-
-List the child files of a directory-type config entry.
+Opens $EDITOR on the current content, or takes it from --from-file. Coffer validates the content against the file's format (malformed JSON/TOML is rejected, exit 2, and the file is left unchanged), writes it atomically and keeps a `<path>.bak` of the prior version. A change made on disk since the read is refused (exit 5) instead of overwritten.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Agent name |
-| `KEY` | argument | text | required | Directory-type config key (e.g. subagents) |
-| `--json` | option | flag |  | JSON output |
-
-### agent config write
-
-```sh
-coffer agent config write [OPTIONS] NAME KEY RELPATH
-```
-
-Write a child file of a directory-type config entry (content from --from-file or stdin).
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
-| `KEY` | argument | text | required | Directory-type config key (e.g. subagents) |
-| `RELPATH` | argument | text | required | Child file path (e.g. reviewer.md) |
-| `--from-file` | option | text |  | Read the content from PATH instead of stdin. |
+| `KEY[/CHILD]` | argument | text | required | Config-file key (e.g. settings, config, instructions), or KEY/CHILD for one file inside a directory entry (e.g. subagents/reviewer.md) |
+| `--from-file` | option | text |  | Take the new content from PATH ('-' for stdin) instead of opening $EDITOR. |
 
 ### agent config rm
 
 ```sh
-coffer agent config rm [OPTIONS] NAME KEY RELPATH
+coffer agent config rm [OPTIONS] NAME KEY/CHILD
 ```
 
-Delete a child file of a directory-type config entry.
+Delete one file inside a directory entry (its content is kept as .bak).
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Agent name |
-| `KEY` | argument | text | required | Directory-type config key (e.g. subagents) |
-| `RELPATH` | argument | text | required | Child file path (e.g. reviewer.md) |
-| `--force, -f` | option | flag |  |  |
-
-### agent mcp
-
-```sh
-coffer agent mcp [OPTIONS] COMMAND [ARGS]...
-```
-
-List, remove and adopt the MCP entries in an agent's own config
-
-Subcommands: `entries`, `show-entry`, `remove-entry`, `adopt`.
-
-### agent mcp entries
-
-```sh
-coffer agent mcp entries [OPTIONS] NAME
-```
-
-List the MCP server entries in the agent's own config files.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
-| `--json` | option | flag |  | JSON output |
-
-### agent mcp show-entry
-
-```sh
-coffer agent mcp show-entry [OPTIONS] NAME ENTRY
-```
-
-Show one MCP entry in full — secret values are never printed.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
-| `ENTRY` | argument | text | required | MCP entry name |
-| `--source` | option | text |  | Config-file key when the entry exists in several files. |
-| `--json` | option | flag |  | JSON output |
-
-### agent mcp remove-entry
-
-```sh
-coffer agent mcp remove-entry [OPTIONS] NAME ENTRY
-```
-
-Remove one MCP entry from the agent's config file (a .bak is kept).
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
-| `ENTRY` | argument | text | required | MCP entry name |
-| `--source` | option | text |  | Config-file key when the entry exists in several files. |
-| `--force, -f` | option | flag |  |  |
-
-### agent mcp adopt
-
-```sh
-coffer agent mcp adopt [OPTIONS] NAME ENTRY
-```
-
-Adopt an MCP entry into Coffer as a managed mcp_server resource.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Agent name |
-| `ENTRY` | argument | text | required | MCP entry name |
-| `--source` | option | text |  | Config-file key when the entry exists in several files. |
-| `--name` | option | text |  | Register the resource under this name instead. |
-| `--secret` | option | text (repeatable) |  | KEY=CREDENTIAL_REF mapping for a secret-like env/header key (repeatable). |
+| `KEY/CHILD` | argument | text | required | One file inside a directory entry (e.g. subagents/x.md) |
+| `--force, --yes, -f, -y` | option | flag |  | Do not ask |
 
 ### agent plugin
 
@@ -1171,7 +981,7 @@ coffer agent plugin [OPTIONS] COMMAND [ARGS]...
 
 View and manage an agent's installed plugins
 
-Subcommands: `list`, `show`, `enable`, `disable`, `uninstall`.
+Subcommands: `list`, `show`, `enable`, `disable`, `rm`.
 
 ### agent plugin list
 
@@ -1184,7 +994,7 @@ List the agent's installed plugins and known marketplaces.
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Agent name |
-| `--json` | option | flag |  | JSON output |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ### agent plugin show
 
@@ -1226,10 +1036,10 @@ Disable a plugin in the agent's config.
 | `NAME` | argument | text | required | Agent name |
 | `PLUGIN_ID` | argument | text | required | Plugin id (name@marketplace) |
 
-### agent plugin uninstall
+### agent plugin rm
 
 ```sh
-coffer agent plugin uninstall [OPTIONS] NAME PLUGIN_ID
+coffer agent plugin rm [OPTIONS] NAME PLUGIN_ID
 ```
 
 Uninstall a plugin (Codex edits its config; Claude Code shells out to its own CLI).
@@ -1238,7 +1048,7 @@ Uninstall a plugin (Codex edits its config; Claude Code shells out to its own CL
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Agent name |
 | `PLUGIN_ID` | argument | text | required | Plugin id (name@marketplace) |
-| `--force, -f` | option | flag |  |  |
+| `--force, --yes, -f, -y` | option | flag |  | Do not ask |
 
 ## coffer channel
 
@@ -1258,12 +1068,25 @@ List registered channels.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `--json` | option | flag |  | JSON output |
+| `--json` | option | flag |  | JSON output for scripts |
 
-### channel register
+### channel show
 
 ```sh
-coffer channel register [OPTIONS] NAME
+coffer channel show [OPTIONS] NAME
+```
+
+Show a channel's configuration and status (runtime, binding, pairing, inbound).
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+| `--json` | option | flag |  | JSON output |
+
+### channel add
+
+```sh
+coffer channel add [OPTIONS] NAME
 ```
 
 Register a channel.
@@ -1284,6 +1107,80 @@ Its secrets are credential refs: store each secret first with `coffer credential
 | `--ignore-other-mentions / --no-ignore-other-mentions` | option | boolean |  | In groups, drop a message that @mentions anyone else (default: off) |
 | `--wait-after-text` | option | float (0-60) |  | Seconds to wait after a text message for more before answering (default: 1.5; 0 = none) |
 | `--wait-after-forward` | option | float (0-60) |  | Seconds to wait after a forwarded record or files with no text (default: 5; 0 = none) |
+| `--title` | option | text |  | Display title (≤80 chars) |
+| `--description` | option | text |  |  |
+
+### channel edit
+
+```sh
+coffer channel edit [OPTIONS] NAME
+```
+
+Change a channel's name, title, description, group gating or quiet windows.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+| `--name` | option | text |  | New name |
+| `--title` | option | text |  | Display title (≤80 chars); empty clears it |
+| `--description` | option | text |  |  |
+| `--require-mention / --no-require-mention` | option | boolean |  | In groups, answer only when @mentioned or replied to (default: on) |
+| `--ignore-other-mentions / --no-ignore-other-mentions` | option | boolean |  | In groups, drop a message that @mentions anyone else (default: off) |
+| `--wait-after-text` | option | float (0-60) |  | Seconds to wait after a text message for more before answering (default: 1.5; 0 = none) |
+| `--wait-after-forward` | option | float (0-60) |  | Seconds to wait after a forwarded record or files with no text (default: 5; 0 = none) |
+
+### channel rm
+
+```sh
+coffer channel rm [OPTIONS] NAME
+```
+
+Remove a channel and its pairings.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+| `--force, --yes, -f, -y` | option | flag |  | Do not ask |
+
+### channel enable
+
+```sh
+coffer channel enable [OPTIONS] NAME
+```
+
+Enable a channel (its adapter starts on the machine it is bound to).
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+
+### channel disable
+
+```sh
+coffer channel disable [OPTIONS] NAME
+```
+
+Disable a channel (its adapter stops).
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+
+### channel scope
+
+```sh
+coffer channel scope [OPTIONS] NAME
+```
+
+Show or set which agents a channel may drive (this machine only).
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+| `--agents` | option | text |  | Only these agents (a,b) |
+| `--all` | option | flag |  | Every agent |
+| `--none` | option | flag |  | No agent (dormant) |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ### channel pair
 
@@ -1296,19 +1193,6 @@ Issue a pairing code; send it to the bot from your own account.
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Channel name |
-
-### channel status
-
-```sh
-coffer channel status [OPTIONS] NAME
-```
-
-Show runtime, pairing, and inbound status.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Channel name |
-| `--json` | option | flag |  | JSON output |
 
 ### channel bind
 
@@ -1324,24 +1208,6 @@ Takes effect without a restart: the binding is config, and both daemons reconcil
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Channel name |
 | `MACHINE_ID` | argument | text |  | machine_id to bind to (default: this machine) |
-
-### channel set
-
-```sh
-coffer channel set [OPTIONS] NAME
-```
-
-Change when the bot answers in a group, and how long it waits for more.
-
-Options left out keep their current value.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Channel name |
-| `--require-mention / --no-require-mention` | option | boolean |  | In groups, answer only when @mentioned or replied to (default: on) |
-| `--ignore-other-mentions / --no-ignore-other-mentions` | option | boolean |  | In groups, drop a message that @mentions anyone else (default: off) |
-| `--wait-after-text` | option | float (0-60) |  | Seconds to wait after a text message for more before answering (default: 1.5; 0 = none) |
-| `--wait-after-forward` | option | float (0-60) |  | Seconds to wait after a forwarded record or files with no text (default: 5; 0 = none) |
 
 ### channel notify
 
@@ -1367,59 +1233,6 @@ coffer skill [OPTIONS] COMMAND [ARGS]...
 
 Manage skills (AgentSkills standard)
 
-### skill files
-
-```sh
-coffer skill files [OPTIONS] NAME
-```
-
-List a skill's master folder (or, with --agent, an unmanaged folder) as a file tree.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Skill name |
-| `--json` | option | flag |  | JSON output |
-| `--agent` | option | text |  | Read the agent's UNMANAGED skill folder of this name instead of a managed skill. |
-| `--location` | option | text | `skills` | With --agent: where the folder was discovered, skills \| agents_dir. |
-
-### skill cat
-
-```sh
-coffer skill cat [OPTIONS] NAME PATH
-```
-
-Print one file of a skill's master folder (or, with --agent, an unmanaged folder).
-
-A file past the read cap prints its first part and exits 1 with a note on stderr, so a script never mistakes the part for the file; --json exits 0 and carries `truncated` for the caller to judge.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Skill name |
-| `PATH` | argument | text | required | Path inside the skill folder, e.g. SKILL.md |
-| `--json` | option | flag |  | The whole read: content, fingerprint, size, binary, truncated |
-| `--agent` | option | text |  | Read the agent's UNMANAGED skill folder of this name instead of a managed skill. |
-| `--location` | option | text | `skills` | With --agent: where the folder was discovered, skills \| agents_dir. |
-
-### skill write
-
-```sh
-coffer skill write [OPTIONS] NAME PATH
-```
-
-Overwrite an existing text file in a skill's master folder.
-
-The write is conditional: it carries a fingerprint, and a file changed on disk since then is refused (exit 5) and left as it is. Coffer's own builtin skill is refused (exit 5) because it is rewritten from the build.
-
-Content comes from ``--from-file`` or piped stdin. With stdin a terminal and no ``--from-file`` the command refuses up front (exit 2) rather than wait silently for EOF; empty content — stdin already at EOF, as under cron, CI or an agent's shell — is refused (exit 2) unless ``--allow-empty`` says emptying the file is meant.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Skill name |
-| `PATH` | argument | text | required | Existing text file inside the skill folder |
-| `--from-file` | option | text |  | Read the new content from PATH instead of stdin |
-| `--fingerprint` | option | text |  | The fingerprint of the read your edit started from (`skill cat --json`); default: a fresh read taken just before the write |
-| `--allow-empty` | option | flag |  | Accept empty content and empty the file |
-
 ### skill list
 
 ```sh
@@ -1430,20 +1243,7 @@ List managed skills.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `--json` | option | flag |  |  |
-
-### skill import
-
-```sh
-coffer skill import [OPTIONS] PATH
-```
-
-Import a skill from a local folder.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `PATH` | argument | text | required | Local path to an existing skill folder. |
-| `--force, -f` | option | flag |  | Replace an existing skill of the same name |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ### skill show
 
@@ -1451,12 +1251,41 @@ Import a skill from a local folder.
 coffer skill show [OPTIONS] NAME
 ```
 
-Show one skill.
+Show one skill, by name or uid.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `--json` | option | flag |  |  |
+| `NAME` | argument | text | required | Name or uid |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### skill add
+
+```sh
+coffer skill add [OPTIONS] FOLDER
+```
+
+Import a skill from a local folder; its name comes from SKILL.md.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `FOLDER` | argument | text | required | Local path to an existing skill folder |
+| `--force, -f` | option | flag |  | Replace an existing skill of the same name |
+| `--title` | option | text |  | Display title (≤80 chars) |
+
+### skill edit
+
+```sh
+coffer skill edit [OPTIONS] NAME
+```
+
+Change a skill's title, description or settings.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+| `--name` | option | text |  | Refused: this kind's name is fixed once registered (use --title) |
+| `--title` | option | text |  | Display title (≤80 chars); empty clears it |
+| `--description` | option | text |  |  |
 
 ### skill rm
 
@@ -1464,56 +1293,52 @@ Show one skill.
 coffer skill rm [OPTIONS] NAME
 ```
 
-Remove a skill and tear down all its agent bindings.
-
-A skill Coffer generates itself is refused (exit 5).
+Remove a skill and tear down all its agent deliveries. A skill Coffer generates itself is refused (exit 5).
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required |  |
-| `--force, -f` | option | flag |  |  |
+| `NAME` | argument | text | required | Name or uid |
+| `--force, --yes, -f, -y` | option | flag |  | Do not ask |
 
-### skill unmanaged
+### skill enable
 
 ```sh
-coffer skill unmanaged [OPTIONS] AGENT
+coffer skill enable [OPTIONS] NAME
 ```
 
-List skill-shaped folders in the agent's workspace that Coffer doesn't manage.
+Enable a skill: it is delivered to every agent in its scope.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `AGENT` | argument | text | required | Agent name. |
-| `--json` | option | flag |  |  |
+| `NAME` | argument | text | required | Name or uid |
 
-### skill adopt
+### skill disable
 
 ```sh
-coffer skill adopt [OPTIONS] AGENT SKILL
+coffer skill disable [OPTIONS] NAME
 ```
 
-Adopt an unmanaged skill folder into the Coffer master store.
+Disable a skill: its delivered links are withdrawn.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `AGENT` | argument | text | required | Agent name. |
-| `SKILL` | argument | text | required | Unmanaged skill folder name. |
-| `--location` | option | text | `skills` | Where the folder was discovered: skills \| agents_dir. |
+| `NAME` | argument | text | required | Name or uid |
 
-### skill rm-unmanaged
+### skill scope
 
 ```sh
-coffer skill rm-unmanaged [OPTIONS] AGENT SKILL
+coffer skill scope [OPTIONS] NAME
 ```
 
-Delete an unmanaged skill folder from the agent's workspace (from disk).
+Show or set which agents a skill reaches (this machine only).
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `AGENT` | argument | text | required | Agent name. |
-| `SKILL` | argument | text | required | Unmanaged skill folder name. |
-| `--location` | option | text | `skills` | Where the folder was discovered: skills \| agents_dir. |
-| `--force, -f` | option | flag |  |  |
+| `NAME` | argument | text | required | Name or uid |
+| `--agents` | option | text |  | Only these agents (a,b) |
+| `--all` | option | flag |  | Every agent |
+| `--none` | option | flag |  | No agent (dormant) |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ### skill verify
 
@@ -1525,7 +1350,7 @@ Report drift between bindings and on-disk symlinks.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `--json` | option | flag |  |  |
+| `--json` | option | flag |  | JSON output for scripts |
 | `--fix` | option | flag |  | Re-deliver repairable drift (missing/tampered links) from master; leaves foreign content untouched. |
 
 ## coffer knowledge
@@ -1534,24 +1359,37 @@ Report drift between bindings and on-disk symlinks.
 coffer knowledge [OPTIONS] COMMAND [ARGS]...
 ```
 
-Browse and edit Coffer's knowledge, the Markdown under ~/.coffer/knowledge/&lt;collection&gt;/. Each collection is one tree of documents you and Coffer write together: edit them in your own editor, and add new knowledge with `write` or `upload` — Coffer's curation pass merges it into the documents. Grep the directory with your own tools; there is no search command.
+Manage Coffer's knowledge collections, the Markdown under ~/.coffer/knowledge/&lt;collection&gt;/ (`coffer path knowledge` prints it). Each collection is one tree of documents you and Coffer write together: read, grep and edit them with your own tools, and add new knowledge with `write` or `upload` — Coffer's curation pass merges it into the documents.
 
-### knowledge collections
+### knowledge list
 
 ```sh
-coffer knowledge collections [OPTIONS]
+coffer knowledge list [OPTIONS]
 ```
 
 List every collection, with its documents and unmerged material.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `--json` | option | flag |  |  |
+| `--json` | option | flag |  | JSON output for scripts |
 
-### knowledge create
+### knowledge show
 
 ```sh
-coffer knowledge create [OPTIONS] NAME
+coffer knowledge show [OPTIONS] NAME
+```
+
+Show one collection, by name or uid.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### knowledge add
+
+```sh
+coffer knowledge add [OPTIONS] NAME
 ```
 
 Create a collection. Nothing else creates one.
@@ -1559,33 +1397,35 @@ Create a collection. Nothing else creates one.
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Collection name (one path segment) |
-| `--description, -d` | option | text | `""` |  |
+| `--description, -d` | option | text | `""` | Written as the opening paragraph of its README.md |
+| `--title` | option | text |  | Display title (≤80 chars) |
 
-### knowledge ls
+### knowledge edit
 
 ```sh
-coffer knowledge ls [OPTIONS] PATH
+coffer knowledge edit [OPTIONS] NAME
 ```
 
-List one level of a collection — folders and files, not the whole tree.
+Rename a collection (its directory moves with it) or set its title.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `PATH` | argument | text | required | A collection or a folder inside one, e.g. payments or payments/apis |
-| `--json` | option | flag |  |  |
+| `NAME` | argument | text | required | Name or uid |
+| `--name` | option | text |  | New name |
+| `--title` | option | text |  | Display title (≤80 chars); empty clears it |
 
-### knowledge read
+### knowledge rm
 
 ```sh
-coffer knowledge read [OPTIONS] PATH
+coffer knowledge rm [OPTIONS] NAME
 ```
 
-Print a document.
+Remove a collection and its directory.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `PATH` | argument | text | required | File path under the knowledge root |
-| `--json` | option | flag |  |  |
+| `NAME` | argument | text | required | Name or uid |
+| `--force, --yes, -f, -y` | option | flag |  | Do not ask |
 
 ### knowledge save
 
@@ -1616,18 +1456,6 @@ Add new knowledge. Coffer's curation pass merges it into the documents.
 | `--description, -d` | option | text | required | What it is about |
 | `--body, -b` | option | text | `""` |  |
 | `--in` | option | text | required | Collection to add it to |
-
-### knowledge delete
-
-```sh
-coffer knowledge delete [OPTIONS] PATH
-```
-
-Delete a document.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `PATH` | argument | text | required | Document path, e.g. payments/gateway.md |
 
 ### knowledge upload
 
@@ -1667,94 +1495,58 @@ coffer memory [OPTIONS] COMMAND [ARGS]...
 
 Browse and manage Coffer's memory layer
 
-### memory partitions
+### memory list
 
 ```sh
-coffer memory partitions [OPTIONS]
+coffer memory list [OPTIONS]
 ```
 
-List every partition.
+List every partition, with its note count and repository.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `--json` | option | flag |  |  |
+| `--json` | option | flag |  | JSON output for scripts |
 
-### memory notes
+### memory show
 
 ```sh
-coffer memory notes [OPTIONS] PARTITION
+coffer memory show [OPTIONS] NAME
 ```
 
-List every note in one partition.
-
-A retired note is not in this list and is not marked in it either — it has left notes/ and is in RETIRED.md, which `coffer memory retired` prints.
+Show one partition, by name or uid.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `PARTITION` | argument | text | required | Partition name (or 'global') |
-| `--json` | option | flag |  |  |
+| `NAME` | argument | text | required | Name or uid |
+| `--json` | option | flag |  | JSON output for scripts |
 
-### memory note
+### memory edit
 
 ```sh
-coffer memory note [OPTIONS] PARTITION SLUG
+coffer memory edit [OPTIONS] NAME
 ```
 
-Show one note — Coffer's own text, and the entries behind it.
-
-The origins are printed with the absolute path of the native file each one was read out of, because the body is a paraphrase: a note that reads wrong has to be traceable back to the thing that actually said it.
+Change a partition's title, description or settings.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `PARTITION` | argument | text | required |  |
-| `SLUG` | argument | text | required |  |
-| `--json` | option | flag |  |  |
+| `NAME` | argument | text | required | Name or uid |
+| `--name` | option | text |  | New name |
+| `--title` | option | text |  | Display title (≤80 chars); empty clears it |
+| `--description` | option | text |  |  |
 
-### memory retired
+### memory rm
 
 ```sh
-coffer memory retired [OPTIONS] PARTITION
+coffer memory rm [OPTIONS] NAME
 ```
 
-Show what this partition retired, and why.
-
-Newest first. ``RETIRED.md`` is not a bin: the material a retired note was built from still lives in the agent's own memory, so without the record the next distil pass would re-open the note the last one removed. A row with no slug is one where a pass kept nothing from an entry at all.
+Remove a partition.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `PARTITION` | argument | text | required | Partition name (or 'global') |
-| `--json` | option | flag |  |  |
-
-### memory ls
-
-```sh
-coffer memory ls [OPTIONS] PARTITION
-```
-
-List a partition's own directory as a tree.
-
-The whole tree rather than one level, unlike `coffer knowledge ls`: a partition is two levels deep by construction (`MEMORY.md`, `RETIRED.md` and a `notes/` folder), so stopping at the root would never show a note. The hidden `.raw/` of verbatim agent input is not listed.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `PARTITION` | argument | text | required | Partition name (or 'global') |
-| `--json` | option | flag |  |  |
-
-### memory read
-
-```sh
-coffer memory read [OPTIONS] PARTITION PATH
-```
-
-Print one file out of a partition's directory.
-
-Read-only: everything under ~/.coffer/memory/ is derived, so there is no matching write for an edit to survive. --json carries the absolute paths an editor or a file manager needs.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `PARTITION` | argument | text | required | Partition name (or 'global') |
-| `PATH` | argument | text | required | File path inside the partition, e.g. notes/foo.md |
-| `--json` | option | flag |  |  |
+| `NAME` | argument | text | required | Name or uid |
+| `--force, --yes, -f, -y` | option | flag |  | Do not ask |
 
 ### memory sync
 
@@ -1806,23 +1598,7 @@ The installed session-start hook runs this; you rarely need to. It prints nothin
 coffer provider [OPTIONS] COMMAND [ARGS]...
 ```
 
-Manage provider profiles and switch the active provider
-
-### provider add
-
-```sh
-coffer provider add [OPTIONS] NAME
-```
-
-Create an LLM connection. For anthropic/openai/unknown supply exactly one of --secret / --credential-ref; an ollama connection needs neither. The new connection starts on the wire's own default scope; route it to specific agents (e.g. an openai gateway to claude_code) with `coffer scope set provider <name> --agents claude-code`. The model is chosen at the point of use (`coffer agent edit --model`), not on the connection.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Profile name |
-| `--protocol` | option | text | required | Protocol: anthropic \| openai \| ollama \| unknown |
-| `--base-url` | option | text | required | Upstream endpoint base URL |
-| `--secret` | option | text |  | API key (stored encrypted) |
-| `--credential-ref` | option | text |  | Reuse an existing credential ref instead of --secret |
+Manage LLM connections and switch agents onto them
 
 ### provider list
 
@@ -1830,11 +1606,11 @@ Create an LLM connection. For anthropic/openai/unknown supply exactly one of --s
 coffer provider list [OPTIONS]
 ```
 
-List all provider profiles.
+List every LLM connection.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `--json` | option | flag |  |  |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ### provider show
 
@@ -1842,11 +1618,32 @@ List all provider profiles.
 coffer provider show [OPTIONS] NAME
 ```
 
-Show one provider profile.
+Show one connection, by name or uid.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Profile name |
+| `NAME` | argument | text | required | Name or uid |
+| `--json` | option | flag |  | JSON output for scripts |
+
+### provider add
+
+```sh
+coffer provider add [OPTIONS] NAME
+```
+
+Create an LLM connection.
+
+For anthropic/openai/unknown supply exactly one of --secret / --credential-ref; an ollama connection needs neither. The new connection starts on the wire's own default reach; route it to specific agents (e.g. an openai gateway to Claude Code) with `coffer provider scope <name> --agents claude-code`. The model is chosen at the point of use, not on the connection.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Connection name |
+| `--protocol` | option | text | required | Protocol: anthropic \| openai \| ollama \| unknown |
+| `--base-url` | option | text | required | Upstream endpoint base URL |
+| `--secret` | option | text |  | API key (stored encrypted) |
+| `--credential-ref` | option | text |  | Reuse an existing credential ref instead of --secret |
+| `--title` | option | text |  | Display title (≤80 chars) |
+| `--description` | option | text |  |  |
 
 ### provider edit
 
@@ -1854,15 +1651,18 @@ Show one provider profile.
 coffer provider edit [OPTIONS] NAME
 ```
 
-Edit a connection's endpoint, wire format or key.
+Rename a connection, or change its title, description, endpoint, wire or key.
 
-`credential_ref` is the immutable one: it is the vault address the connection owns. The WIRE is not — the probe that guessed it can be wrong, and correcting it in place is what saves re-entering the key.
+A rename changes the label and nothing else: the uid, the stored key and any projection into an agent stay where they are.
 
-A wire change is refused while the connection is switched on, because the wire decides which agents a connection can cover and which `coffer provider use-builtin <wire>` reverts. Run `use-builtin` first, edit, then `coffer provider switch <name>` again.
+A wire change is refused while the connection is switched on, because the wire decides which agents a connection can cover and which `coffer provider builtin <wire>` reverts. Run `builtin` first, edit, then `coffer provider switch <name>` again.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Profile name |
+| `NAME` | argument | text | required | Name or uid |
+| `--name` | option | text |  | New name |
+| `--title` | option | text |  | Display title (≤80 chars); empty clears it |
+| `--description` | option | text |  |  |
 | `--protocol` | option | text |  | Correct the wire format: anthropic \| openai \| ollama \| unknown |
 | `--base-url` | option | text |  |  |
 | `--secret` | option | text |  | Rotate the stored API key |
@@ -1873,11 +1673,52 @@ A wire change is refused while the connection is switched on, because the wire d
 coffer provider rm [OPTIONS] NAME
 ```
 
-Remove a provider profile.
+Remove a connection (its stored key goes with it when nothing else cites it).
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Profile name |
+| `NAME` | argument | text | required | Name or uid |
+| `--force, --yes, -f, -y` | option | flag |  | Do not ask |
+
+### provider enable
+
+```sh
+coffer provider enable [OPTIONS] NAME
+```
+
+Enable a connection.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+
+### provider disable
+
+```sh
+coffer provider disable [OPTIONS] NAME
+```
+
+Disable a connection.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+
+### provider scope
+
+```sh
+coffer provider scope [OPTIONS] NAME
+```
+
+Show or set which agents a connection reaches (this machine only).
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+| `--agents` | option | text |  | Only these agents (a,b) |
+| `--all` | option | flag |  | Every agent |
+| `--none` | option | flag |  | No agent (dormant) |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ### provider switch
 
@@ -1885,16 +1726,16 @@ Remove a provider profile.
 coffer provider switch [OPTIONS] NAME
 ```
 
-Switch: make this profile active for its wire and write native config.
+Switch the agents this connection reaches onto it and write their native config.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Profile to activate |
+| `NAME` | argument | text | required | Connection to activate |
 
-### provider use-builtin
+### provider builtin
 
 ```sh
-coffer provider use-builtin [OPTIONS] WIRE
+coffer provider builtin [OPTIONS] WIRE
 ```
 
 Switch's other half: put this wire's agent(s) back on their OWN login.
@@ -1905,39 +1746,13 @@ Removes Coffer's projection from the native config and clears the active connect
 | --- | --- | --- | --- | --- |
 | `WIRE` | argument | text | required | Wire format: anthropic \| openai |
 
-### provider internal-default
-
-```sh
-coffer provider internal-default [OPTIONS] NAME
-```
-
-Make this connection the one Coffer's own model runs on (at most one).
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Connection to use internally |
-
-### provider transcribe-default
-
-```sh
-coffer provider transcribe-default [OPTIONS] NAME
-```
-
-Make this connection the one Coffer transcribes speech on (≤1 globally).
-
-A separate flag from internal-default, not a fallback to it: a gateway that serves chat completions commonly serves no transcription endpoint at all. Pair it with `coffer engine transcribe-model set <model>` — with either half missing, Coffer transcribes nothing and the agent gets the audio file.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `NAME` | argument | text | required | Connection Coffer transcribes speech on |
-
 ### provider key
 
 ```sh
 coffer provider key [OPTIONS]
 ```
 
-Print a provider's API key for Claude Code's apiKeyHelper.
+Print a connection's API key for Claude Code's apiKeyHelper.
 
 Coffer writes this call into the agent's own config file when it switches the agent onto a connection; you rarely run it yourself. It takes the connection's uid, not its name, so renaming the connection keeps it working.
 
@@ -1949,252 +1764,6 @@ Exits 4 with nothing on stdout when the daemon resolves no key — for --connect
 | --- | --- | --- | --- | --- |
 | `--connection-uid` | option | text |  | Print this specific connection's key (the projected helper) |
 | `--wire` | option | text |  | Back-compat: print the key active for a wire (anthropic \| openai) |
-
-## coffer engine
-
-```sh
-coffer engine [OPTIONS] COMMAND [ARGS]...
-```
-
-Coffer's own engine: the model it thinks with, and its unattended work
-
-### engine model
-
-```sh
-coffer engine model [OPTIONS] COMMAND [ARGS]...
-```
-
-The model Coffer's own passes run on
-
-Subcommands: `show`, `set`, `clear`.
-
-### engine model show
-
-```sh
-coffer engine model show [OPTIONS]
-```
-
-Print the model Coffer's own passes run on.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `--json` | option | flag |  |  |
-
-### engine model set
-
-```sh
-coffer engine model set [OPTIONS] MODEL
-```
-
-Choose the model Coffer's own passes run on.
-
-The ENDPOINT and key come from the connection flagged internal-default (``coffer provider internal-default``); only the model is written here.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `MODEL` | argument | text | required | Model id Coffer's own passes should run on |
-
-### engine model clear
-
-```sh
-coffer engine model clear [OPTIONS]
-```
-
-Forget the engine model, making every internal pass a clean no-op.
-
-### engine upkeep
-
-```sh
-coffer engine upkeep [OPTIONS] COMMAND [ARGS]...
-```
-
-The passes Coffer runs when nobody asked
-
-Subcommands: `list`, `set`, `runs`.
-
-### engine upkeep list
-
-```sh
-coffer engine upkeep list [OPTIONS]
-```
-
-Show each unattended pass's switch, its interval and the default.
-
-The interval column is the one the operator CHOSE; while they have chosen none it reads "default", and the last column says what that default actually is — so the terminal shows what the settings page shows.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `--json` | option | flag |  |  |
-
-### engine upkeep set
-
-```sh
-coffer engine upkeep set [OPTIONS] PASS
-```
-
-Change ONE pass's switch or interval, leaving every other pass alone.
-
-Each half is sent only when named, so a switch can be flipped without restating an interval. An interval below the floor, or a pass Coffer does not run, is refused, as it is on the settings page.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `PASS` | argument | text | required | aggregate \| distil \| curate |
-| `--on` | option | flag |  | Let this pass run |
-| `--off` | option | flag |  | Stop this pass running |
-| `--interval` | option | integer |  | Seconds between passes |
-| `--default-interval` | option | flag |  | Return this pass to its own default interval |
-
-### engine upkeep runs
-
-```sh
-coffer engine upkeep runs [OPTIONS]
-```
-
-Show which passes are running right now, per collection or partition.
-
-Oldest first. A target not listed has no pass running.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `--json` | option | flag |  |  |
-
-### engine curate-owner
-
-```sh
-coffer engine curate-owner [OPTIONS] COMMAND [ARGS]...
-```
-
-The one machine allowed to run the curation pass
-
-Subcommands: `show`, `set`, `clear`.
-
-### engine curate-owner show
-
-```sh
-coffer engine curate-owner show [OPTIONS]
-```
-
-Print which machine may run the curation pass, and what that means here.
-
-The state, not just the id: an owner naming a machine that has since been retired stops curation on EVERY machine, and printing its id the way an ordinary remote owner is printed would hide exactly that.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `--json` | option | flag |  |  |
-
-### engine curate-owner set
-
-```sh
-coffer engine curate-owner set [OPTIONS] [MACHINE_ID]
-```
-
-Name the one machine allowed to run the curation pass.
-
-With no machine named, this machine. An id no machine claims is still written, and reported as the fault it is.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `MACHINE_ID` | argument | text |  | machine_id that should own curation (default: this machine) |
-
-### engine curate-owner clear
-
-```sh
-coffer engine curate-owner clear [OPTIONS]
-```
-
-Stop naming an owner, so curation runs wherever this setting is read.
-
-Right for a vault down to one machine, wrong for one that still spans several — which is why it is something the operator asks for and never a repair anything performs on its own.
-
-### engine timeout
-
-```sh
-coffer engine timeout [OPTIONS] COMMAND [ARGS]...
-```
-
-How long one call to Coffer's own model may take
-
-Subcommands: `show`, `set`, `default`.
-
-### engine timeout show
-
-```sh
-coffer engine timeout show [OPTIONS]
-```
-
-Print how long one call to Coffer's own model may take.
-
-Names the built-in default alongside the chosen bound, the way ``upkeep list`` names a pass's default interval: an unchosen bound is reported as unchosen, never as a blank the reader has to interpret.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `--json` | option | flag |  |  |
-
-### engine timeout set
-
-```sh
-coffer engine timeout set [OPTIONS] SECONDS
-```
-
-Bound every call Coffer's own model makes.
-
-Raise it for a slow endpoint: a pass whose calls time out defers its work while still reporting success. A number outside the allowed range is refused (exit 6), not quietly rounded.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `SECONDS` | argument | integer | required | Seconds one model call may take |
-
-### engine timeout default
-
-```sh
-coffer engine timeout default [OPTIONS]
-```
-
-Return to the built-in bound, which a chosen number cannot express.
-
-### engine transcribe-model
-
-```sh
-coffer engine transcribe-model [OPTIONS] COMMAND [ARGS]...
-```
-
-The model Coffer transcribes speech with
-
-Subcommands: `show`, `set`, `clear`.
-
-### engine transcribe-model show
-
-```sh
-coffer engine transcribe-model show [OPTIONS]
-```
-
-Print the model Coffer transcribes speech with.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `--json` | option | flag |  |  |
-
-### engine transcribe-model set
-
-```sh
-coffer engine transcribe-model set [OPTIONS] MODEL
-```
-
-Choose the model Coffer transcribes speech with.
-
-The ENDPOINT and key come from the connection flagged transcribe-default (``coffer provider transcribe-default``) — not from the one Coffer's own model runs on, because a chat gateway commonly serves no transcription endpoint at all. Both halves are needed: with either missing, Coffer transcribes nothing.
-
-| Name | Kind | Type | Default | Description |
-| --- | --- | --- | --- | --- |
-| `MODEL` | argument | text | required | Model id that turns speech into text |
-
-### engine transcribe-model clear
-
-```sh
-coffer engine transcribe-model clear [OPTIONS]
-```
-
-Stop transcribing: voice reaches the agent as a file and the recording never leaves this machine.
 
 ## coffer sync
 
@@ -2258,21 +1827,15 @@ For a machine whose vault is gone: confirming a held round would publish the los
 | --- | --- | --- | --- | --- |
 | `--yes` | option | flag |  | Skip the confirmation prompt |
 
-### sync rollback
-
-```sh
-coffer sync rollback [OPTIONS]
-```
-
-Undo the last applied round from its pre-apply snapshot.
-
 ### sync restore
 
 ```sh
 coffer sync restore [OPTIONS]
 ```
 
-Bring the vault to an earlier point in the remote's history.
+Undo the last applied round, or with --at go back to an earlier revision.
+
+Without --at this returns the vault to the last round's pre-apply snapshot; when that round applied nothing it changes nothing and says so. With --at, documents deleted since come back and nothing gained since is discarded.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -2284,9 +1847,13 @@ Bring the vault to an earlier point in the remote's history.
 coffer sync status [OPTIONS]
 ```
 
-What the remote is, and how the last round went.
+The remote and every one of its settings, and how the last round went.
 
 Exits non-zero when the last round needs a human — held for confirmation, conflicted, or failed to push or run at all — so that a prompt, a cron line or a monitor can notice without reading the text. A paused remote exits zero.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ### sync history
 
@@ -2310,7 +1877,7 @@ coffer sync remote [OPTIONS] COMMAND [ARGS]...
 
 The one git remote this vault converges with
 
-Subcommands: `set`, `show`, `clear`, `pause`, `resume`.
+Subcommands: `set`, `clear`, `pause`, `resume`.
 
 ### sync remote set
 
@@ -2330,14 +1897,6 @@ On a configured remote an option not given keeps its stored value, and a paused 
 | `--with-credentials / --without-credentials` | option | boolean |  | Carry credential ciphertext (never the master key); default off |
 | `--credential-ref` | option | text |  | Name of the push credential in the credential store ('' removes it) |
 | `--worktree` | option | text |  | Absolute path of the git working tree, outside the vault (default ~/.coffer/sync) |
-
-### sync remote show
-
-```sh
-coffer sync remote show [OPTIONS]
-```
-
-Show the configured remote and its settings.
 
 ### sync remote clear
 
@@ -2371,7 +1930,7 @@ coffer sync machine [OPTIONS] COMMAND [ARGS]...
 
 The machines sharing this vault
 
-Subcommands: `list`, `rename`, `remove`.
+Subcommands: `list`, `rename`, `rm`.
 
 ### sync machine list
 
@@ -2380,6 +1939,10 @@ coffer sync machine list [OPTIONS]
 ```
 
 Every machine sharing this vault.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ### sync machine rename
 
@@ -2393,10 +1956,10 @@ Rename this machine. Costs nothing: scope references the id, not the name.
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required |  |
 
-### sync machine remove
+### sync machine rm
 
 ```sh
-coffer sync machine remove [OPTIONS] MACHINE_ID
+coffer sync machine rm [OPTIONS] MACHINE_ID
 ```
 
 Remove a retired machine's descriptor from the registry.

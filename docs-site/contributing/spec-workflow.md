@@ -201,7 +201,7 @@ The pytest marker is registered with `--strict-markers`, so a typo in the marker
 
 A capability ships only when a user can really operate it. That means backend persistence plus every surface that exposes it (CLI, MCP through `coffer-mcp-shim`, REST and, where it has one, the web UI), all wired together, with every scenario covered by a passing test. A backend with no surface, or a page with no backend, is not done.
 
-One rule applies across every spec: **every management operation is reachable from both REST and the `coffer` CLI**, with the same daemon and the same error model. The [`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) spec tests it across the whole command tree. A spec that cannot honour the rule records the gap in its `## Purpose`.
+One rule applies across every spec: **every mutation, and every read of state that is not a plain file, is reachable from both REST and the `coffer` CLI**, with the same daemon and the same error model. For a plain file the owning spec declares directly readable or editable — a knowledge document, a memory note, a skill's folder, an agent's own config file, the daemon log — the CLI satisfies the rule by naming the file with `coffer path`; the REST routes that serve such files stay for the web UI, which cannot read the disk. The [`resource-framework`](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/resource-framework/spec.md) spec tests it across the whole command tree. A spec that cannot honour the rule records the gap in its `## Purpose`.
 
 ## Docs change with the code
 

@@ -50,6 +50,10 @@ vi.mock("@/lib/hooks/useMemory", () => ({
   })),
   usePartitionFileContent: vi.fn(() => ({ data: undefined, isPending: false, error: null })),
 }));
+// The header's Edit dialog sets the partition's title.
+vi.mock("@/lib/hooks/useResourceMutations", () => ({
+  useSetResourceTitle: vi.fn(() => ({ mutate: vi.fn(), isPending: false, reset: vi.fn(), error: null })),
+}));
 
 function renderPage() {
   // The Update memory button's Tooltip needs the provider the app shell

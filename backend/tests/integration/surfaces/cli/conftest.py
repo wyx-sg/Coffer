@@ -59,7 +59,7 @@ class _FakeConfig(BaseModel):
 
 
 class _FakeScopedConfig(BaseModel):
-    """Lenient config for the scope-capable test kinds (test_scope_cmd.py) —
+    """Lenient config for the scope-capable test kinds (test_kind_verbs.py) —
     no required fields, so tests can register with ``config={}``."""
 
     model_config = ConfigDict(extra="allow")
@@ -80,9 +80,9 @@ def _build_app(tmp_path) -> tuple[FastAPI, object]:  # type: ignore[type-ignore]
     sm = session_maker(engine)
     kinds = {
         "fake_kind": Kind(name="fake_kind", display_name="Fake", config_schema=_FakeConfig),
-        # Scope-capable test double for test_scope_cmd.py (ADR per-agent-resource-scope): mirrors
+        # Scope-capable test double (ADR per-agent-resource-scope): mirrors
         # mcp_server/skill. Declared here (rather than a one-off fixture) so
-        # `coffer scope ...` tests reuse the same in_proc_daemon wiring as
+        # `coffer <kind> scope ...` tests reuse the same in_proc_daemon wiring as
         # every other CLI test module. ``fake_kind`` above is the no-scope
         # counterpart (mirrors agent/channel/knowledge_base/memory).
         "fake_scoped": Kind(

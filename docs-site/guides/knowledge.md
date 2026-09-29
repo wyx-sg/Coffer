@@ -8,7 +8,7 @@ description: Keep what you and your agents know about your working environment a
 Knowledge is a directory of Markdown documents about your working environment — services, repositories, conventions, decisions, traps — that every agent on your machine reads. This page covers creating collections, adding and editing documents, how Coffer's curation pass merges new material, and how agents find what is there.
 
 ::: warning Experimental feature
-Knowledge is an [experimental feature](/guides/experimental-features) with the key `knowledge`. It is on by default in `dev` builds and off by default in `stable` builds. Switch it on under **Settings → General → Experimental features**, or run `coffer daemon features enable knowledge`. While it is off, the Knowledge page, the `/api/v1/knowledge` routes and the `coffer__write` tool are unavailable, and nothing you stored is deleted.
+Knowledge is an [experimental feature](/guides/experimental-features) with the key `knowledge`. It is on by default in `dev` builds and off by default in `stable` builds. Switch it on under **Settings → General → Experimental features**, or run `coffer config set feature.knowledge on`. While it is off, the Knowledge page, the `/api/v1/knowledge` routes and the `coffer__write` tool are unavailable, and nothing you stored is deleted.
 :::
 
 ## What knowledge is for
@@ -80,7 +80,7 @@ Collections are created only on purpose. Reading, writing or an agent's working 
 ::: code-group
 
 ```sh [CLI]
-coffer knowledge create payments --description "Payments platform: ownership, APIs, data flows."
+coffer knowledge add payments --description "Payments platform: ownership, APIs, data flows."
 ```
 
 ```text [Web UI]
@@ -89,12 +89,12 @@ Knowledge → New collection → Name, Description → Create
 
 :::
 
-This creates `~/.coffer/knowledge/payments/` and, when you give a description, a `README.md` holding it. From then on the README is the description; edit the file to change it.
+This creates `~/.coffer/knowledge/payments/` and, when you give a description, a `README.md` holding it. From then on the README is the description; edit the file to change it. `coffer knowledge edit payments --name <new>` renames the collection and moves its directory with it; `--title` sets the title Coffer's pages show in place of the name.
 
 List what you have:
 
 ```sh
-coffer knowledge collections
+coffer knowledge list
 ```
 
 The **Knowledge** page shows the same list with each collection's description, its number of documents, and how much material is **Pending**.
@@ -204,9 +204,9 @@ Curation runs on a background sweep, every 60 seconds by default, starting about
 Change the switch or the interval under **Settings → Coffer's model → Automatic upkeep → Merge new knowledge into documents**, or on the CLI:
 
 ```sh
-coffer engine upkeep list
-coffer engine upkeep set curate --interval 300
-coffer engine upkeep set curate --off
+coffer config list engine.upkeep.
+coffer config set engine.upkeep.curate.interval 300
+coffer config set engine.upkeep.curate.enabled off
 ```
 
 The shortest interval is 60 seconds. A changed interval applies without a restart. With the sweep off, new material waits in the inbox until you run a pass by hand, and edits are not carried through.
@@ -240,7 +240,7 @@ Every pass reports a status:
 | `truncated` | The pass hit its step limit. What it wrote is kept and the item is tried again later. |
 | `failed` | The pass did not finish. Nothing was lost; the item is tried again. |
 
-A request while a pass is already running over the same collection is refused with `UPKEEP_ALREADY_RUNNING` rather than queued. `coffer engine upkeep runs` shows which passes are running now.
+A request while a pass is already running over the same collection is refused with `UPKEEP_ALREADY_RUNNING` rather than queued. `coffer daemon status` shows which passes are running now.
 
 ### Without an internal model
 
@@ -251,8 +251,8 @@ If Coffer's model is not configured, nothing waits: each submission becomes a do
 A pass rewrites documents that [vault sync](/guides/vault-sync) carries between machines. If two machines both curated, the same material would be merged into two different documents. So curation runs on one **owner machine** only.
 
 - With no owner named, curation runs wherever the vault is open — correct for a single machine.
-- To name this machine: **Settings → Coffer's model → Automatic upkeep → Run curation on this machine**, or `coffer engine curate-owner set`.
-- `coffer engine curate-owner show` reports the current owner, and flags an owner that no known machine claims (in that state curation runs nowhere); `coffer engine curate-owner clear` removes it.
+- To name this machine: **Settings → Coffer's model → Automatic upkeep → Run curation on this machine**, or `coffer config set engine.curate_owner this`.
+- `coffer config get engine.curate_owner` reports the current owner, and flags an owner that no known machine claims (in that state curation runs nowhere); `coffer config unset engine.curate_owner` removes it.
 
 Curation and a sync round never run at the same time, and curation is skipped while a sync conflict or confirmation is outstanding.
 
@@ -282,9 +282,9 @@ Write a good `README.md` for each collection: its first paragraph is what a mode
 ::: code-group
 
 ```sh [CLI]
-coffer knowledge ls payments            # one level: folders and files
-coffer knowledge ls payments/gateway
-coffer knowledge read payments/session-ownership.md
+coffer path knowledge payments          # the collection's directory
+ls "$(coffer path knowledge payments)"/gateway
+cat "$(coffer path knowledge payments)"/session-ownership.md
 ```
 
 ```text [Web UI]
@@ -295,11 +295,11 @@ Knowledge → choose the collection
 
 The collection page shows one tree of documents beside a preview, both filling the window. The preview shows when each document was last curated, and offers **Edit** (see [Edit a file yourself](#edit-a-file-yourself)). The tree also shows the collection's **Inbox** folder: material waiting to be merged. An inbox item opens read-only — it cannot be edited or deleted — and it leaves the folder once curation has merged it.
 
-`coffer knowledge read --json` includes the absolute path of the file and of its folder.
+The documents are plain files: `coffer path knowledge` prints the knowledge root, and `coffer path knowledge <collection>` one collection's directory, so you read and grep them with your own tools.
 
 ## Every collection reaches every agent
 
-A collection has no on/off switch and no per-agent reach: every collection is available to every agent, and a collection leaves agents' `coffer-guide` skill only by being deleted. `coffer resource enable` and `disable` refuse a collection with `RESOURCE_NOT_TOGGLEABLE`. To switch the whole knowledge layer off, use the `knowledge` [experimental feature](/guides/experimental-features).
+A collection has no on/off switch and no per-agent reach: every collection is available to every agent, and a collection leaves agents' `coffer-guide` skill only by being deleted. `coffer knowledge` has no `enable` or `disable`, and the generic enable and disable routes refuse a collection with `RESOURCE_NOT_TOGGLEABLE`. To switch the whole knowledge layer off, use the `knowledge` [experimental feature](/guides/experimental-features).
 
 ::: warning Not access control
 The skill hands agents the knowledge root, and an agent can read anything under it with its own tools. Keep nothing in a collection that an agent on this machine should not read.
@@ -312,7 +312,7 @@ Only a person deletes. No agent-facing tool can delete knowledge, and you can de
 ::: code-group
 
 ```sh [CLI]
-coffer knowledge delete payments/gateway/rate-limits.md
+rm "$(coffer path knowledge payments)"/gateway/rate-limits.md
 ```
 
 ```text [Web UI]
@@ -326,7 +326,7 @@ To delete a whole collection, and every file in it:
 ::: code-group
 
 ```sh [CLI]
-coffer resource delete knowledge payments
+coffer knowledge rm payments
 ```
 
 ```text [Web UI]
@@ -348,9 +348,9 @@ The files are the only copy. Coffer keeps no history of deleted or rewritten doc
 
 ## Troubleshooting
 
-**Pending material never gets merged.** Check that curation is switched on (`coffer engine upkeep list`), that this machine is the owner or no owner is set (`coffer engine curate-owner show`), and that Coffer's model is configured. Run `coffer knowledge curate <collection>` to see the status of one pass.
+**Pending material never gets merged.** Check that curation is switched on (`coffer config get engine.upkeep.curate.enabled`), that this machine is the owner or no owner is set (`coffer config get engine.curate_owner`), and that Coffer's model is configured. Run `coffer knowledge curate <collection>` to see the status of one pass.
 
-**An agent does not use the knowledge.** Check that the `knowledge` feature is on, that the `coffer-guide` skill is enabled and reaches that agent (`coffer scope show skill coffer-guide`), and that the collection's `README.md` opens with a sentence naming its subjects.
+**An agent does not use the knowledge.** Check that the `knowledge` feature is on, that the `coffer-guide` skill is enabled and reaches that agent (`coffer skill scope coffer-guide`), and that the collection's `README.md` opens with a sentence naming its subjects.
 
 **`coffer__write` is missing from the agent's tools.** The `knowledge` feature is switched off on this machine, or the agent is not connected to Coffer (`coffer agent connect <agent>`).
 

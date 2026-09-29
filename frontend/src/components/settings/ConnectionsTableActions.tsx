@@ -18,6 +18,7 @@ import { providersApi, type Provider } from "@/lib/api/providers";
 import { providersKey } from "@/lib/api/queryKeys";
 import { useBulkMutate } from "@/lib/hooks/useBulkMutate";
 import type { ResourceReach } from "@/lib/hooks/useResources";
+import { displayName } from "@/lib/resourceTitle";
 
 export const PROVIDER_KIND = "provider";
 
@@ -63,7 +64,7 @@ export function ConnectionRowActions({
   return (
     <div className="flex items-center justify-end gap-2">
       <RowDeleteButton
-        ariaLabel={`${t("common.delete")}: ${provider.name}`}
+        ariaLabel={`${t("common.delete")}: ${displayName(provider)}`}
         disabled={deleteDisabled}
         onDelete={onDelete}
       />

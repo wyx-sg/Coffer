@@ -321,8 +321,8 @@ async def list_daemon_logs(
     level: str = Query(default=""),
     limit: int = Query(default=100, ge=1, le=500),
 ) -> DaemonLogListOut:
-    """The tail of ``daemon.log``, newest-first — the same record ``coffer__diagnose``
-    reads, for the human looking at the Activity page instead of an agent.
+    """The tail of ``daemon.log``, newest-first — the same record ``coffer log daemon``
+    reads, for the human looking at the Activity page.
 
     The file interleaves several writers' formats (see ``log_reader``); they
     are normalised there onto the same fields, so every row here carries the

@@ -119,6 +119,7 @@ lint:
 	$(PY) scripts/check_architecture_doc.py
 	$(PY) scripts/check_pyinstaller_specs.py
 	$(PY) scripts/check_cli_reference.py
+	$(PY) scripts/check_removed_commands.py
 # Both trees are checked under the project's rules. `backend/**` gets them
 # from backend/pyproject.toml; `evals/**` used to get ruff's built-in defaults
 # (line-length 88, the starter rule set) because nothing above it carried a

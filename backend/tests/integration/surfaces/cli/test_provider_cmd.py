@@ -98,8 +98,8 @@ def provider_daemon(tmp_path, monkeypatch):
         credentials=store,
     )
     # One agent of each type, registered through the service because the agent
-    # kind refuses the generic create path. They exist so `coffer scope set
-    # provider <name> --agents <agent-name>` has a name to resolve to a uid.
+    # kind refuses the generic create path. They exist so `coffer provider
+    # scope <name> --agents <agent-name>` has a name to resolve to a uid.
     loop = asyncio.new_event_loop()
     for agent_name, agent_type in (("claude-code", "claude_code"), ("codex", "codex")):
         loop.run_until_complete(
@@ -141,8 +141,33 @@ def provider_daemon(tmp_path, monkeypatch):
         raise_server_exceptions=False,
     )
     monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (fake_client, object()))
-    yield
+    yield audit
     set_active_token(None)
+
+
+def _add(name: str = "acme", *extra: str, protocol: str = "anthropic") -> None:
+    r = _runner.invoke(
+        cli_app,
+        [
+            "provider",
+            "add",
+            name,
+            "--protocol",
+            protocol,
+            "--base-url",
+            f"https://gw/{protocol}",
+            "--secret",
+            "sk-x",
+            *extra,
+        ],
+    )
+    assert r.exit_code == 0, r.output
+
+
+def _show(name: str) -> dict:
+    r = _runner.invoke(cli_app, ["provider", "show", name, "--json"])
+    assert r.exit_code == 0, r.output
+    return json.loads(r.output)
 
 
 @pytest.mark.acceptance(
@@ -169,57 +194,51 @@ def test_cli_create_list_switch(provider_daemon):
 
     r = _runner.invoke(cli_app, ["provider", "list", "--json"])
     assert r.exit_code == 0, r.output
-    assert [p["name"] for p in json.loads(r.output)["providers"]] == ["acme"]
+    [row] = json.loads(r.output)["resources"]
+    assert row["name"] == "acme" and row["config"]["protocol"] == "anthropic"
+
+    table = _runner.invoke(cli_app, ["provider", "list"], env={"COLUMNS": "200"})
+    assert table.exit_code == 0, table.output
+    assert "acme" in table.output and "https://gw/anthropic" in table.output
 
     r = _runner.invoke(cli_app, ["provider", "switch", "acme"])
     assert r.exit_code == 0, r.output
     assert "switched to acme" in r.output
+    assert _show("acme")["config"]["is_active"] is True
+
+
+def test_cli_add_takes_a_title_and_description(provider_daemon):
+    _add("acme", "--title", "Acme gateway", "--description", "the EU one")
+    shown = _show("acme")
+    assert shown["title"] == "Acme gateway"
+    assert shown["description"] == "the EU one"
 
 
 def test_cli_key_by_connection_and_scope(provider_daemon):
-    # An openai gateway re-targeted at Claude Code. `--compatible` is gone:
-    # which agents a connection reaches is the framework's per-agent scope
-    # (ADR per-agent-resource-scope), set through the shared `coffer scope` surface.
-    r = _runner.invoke(
-        cli_app,
-        [
-            "provider",
-            "add",
-            "agnes",
-            "--protocol",
-            "openai",
-            "--base-url",
-            "https://agnes/v1",
-            "--secret",
-            "sk-agnes",
-        ],
-    )
-    assert r.exit_code == 0, r.output
+    # An openai gateway re-targeted at Claude Code: which agents a connection
+    # reaches is the framework's per-agent scope (ADR per-agent-resource-scope),
+    # set with the group's own `scope` verb.
+    _add("agnes", protocol="openai")
 
-    # The wire's own default is what a new connection starts on.
-    show = _runner.invoke(cli_app, ["provider", "show", "agnes"])
-    assert json.loads(show.output)["compatible_agents"] == ["claude_code", "codex"]
+    # The wire's own default is what a new connection starts on: unscoped.
+    reach = _runner.invoke(cli_app, ["provider", "scope", "agnes", "--json"])
+    assert reach.exit_code == 0, reach.output
+    assert json.loads(reach.output)["scope"] is None
 
-    # `--agents` takes agent NAMES; `coffer scope` resolves each to the uid the
-    # stored scope holds. `claude-code` is the agent's name, `claude_code` is
-    # its TYPE — and the type is what `compatible_agents` reports back, because
-    # a projection writes the agent PRODUCT's file.
-    narrowed = _runner.invoke(
-        cli_app, ["scope", "set", "provider", "agnes", "--agents", "claude-code"]
-    )
+    # `--agents` takes agent NAMES, resolved to the uids the stored scope holds.
+    narrowed = _runner.invoke(cli_app, ["provider", "scope", "agnes", "--agents", "claude-code"])
     assert narrowed.exit_code == 0, narrowed.output
-    show = _runner.invoke(cli_app, ["provider", "show", "agnes"])
-    assert json.loads(show.output)["compatible_agents"] == ["claude_code"]
+    assert "claude-code" in narrowed.output
+    reach = _runner.invoke(cli_app, ["provider", "scope", "agnes", "--json"])
+    assert json.loads(reach.output)["scope"] == {"agents": ["claude-code"]}
 
     # --connection-uid prints exactly that connection's key. It takes the UID,
     # not a name, because its caller is the `apiKeyHelper` line Coffer wrote
-    # into the agent's own config file: that line has to keep resolving to this
-    # connection after the user relabels it
-    # (ADR resource-identity-is-an-immutable-uid).
-    uid = json.loads(_runner.invoke(cli_app, ["provider", "show", "agnes"]).output)["uid"]
+    # into the agent's own config file (ADR resource-identity-is-an-immutable-uid).
+    uid = _show("agnes")["uid"]
     key = _runner.invoke(cli_app, ["provider", "key", "--connection-uid", uid])
     assert key.exit_code == 0, key.output
-    assert key.output.strip() == "sk-agnes"
+    assert key.output.strip() == "sk-x"
 
     # No selector → usage error.
     assert _runner.invoke(cli_app, ["provider", "key"]).exit_code == 6
@@ -234,254 +253,186 @@ def test_cli_key_by_connection_uid_refuses_a_disabled_connection(provider_daemon
     disables the connection; it must then fail loudly rather than hand the
     agent the key (spec provider-switching "Resolve a key for exactly one
     connection")."""
-    added = _runner.invoke(
-        cli_app,
-        [
-            "provider",
-            "add",
-            "acme",
-            "--protocol",
-            "anthropic",
-            "--base-url",
-            "https://gw/anthropic",
-            "--secret",
-            "sk-acme",
-        ],
-    )
-    assert added.exit_code == 0, added.output
-    uid = json.loads(_runner.invoke(cli_app, ["provider", "show", "acme"]).output)["uid"]
+    _add("acme")
+    uid = _show("acme")["uid"]
     live = _runner.invoke(cli_app, ["provider", "key", "--connection-uid", uid])
     assert live.exit_code == 0, live.output
-    assert live.output.strip() == "sk-acme"
+    assert live.output.strip() == "sk-x"
 
-    off = _runner.invoke(cli_app, ["resource", "disable", "provider", "acme"])
+    off = _runner.invoke(cli_app, ["provider", "disable", "acme"])
     assert off.exit_code == 0, off.output
 
     key = _runner.invoke(cli_app, ["provider", "key", "--connection-uid", uid])
     assert key.exit_code == 4, key.output
-    assert "sk-acme" not in key.output
+    assert "sk-x" not in key.output
     assert f"no key for connection {uid!r}" in key.output
     assert "disabled" in key.output
+
+    on = _runner.invoke(cli_app, ["provider", "enable", "acme"])
+    assert on.exit_code == 0, on.output
+    assert _runner.invoke(cli_app, ["provider", "key", "--connection-uid", uid]).exit_code == 0
 
 
 @pytest.mark.acceptance(
     spec="provider-switching",
     scenario="the command line covers create, list, switch and revert",
 )
-def test_cli_use_builtin_reverts_a_wire_to_the_agents_own_login(provider_daemon):
-    """`switch`'s other half. POST /providers/use-builtin/{wire} has backed the
-    Model providers page since the deactivate path landed; the CLI had
-    activate's half and not this one, so a terminal-only user could put an
-    agent onto a Coffer connection and never take it off again."""
-    added = _runner.invoke(
-        cli_app,
-        [
-            "provider",
-            "add",
-            "acme",
-            "--protocol",
-            "anthropic",
-            "--base-url",
-            "https://gw/anthropic",
-            "--secret",
-            "sk-x",
-        ],
-    )
-    assert added.exit_code == 0, added.output
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="switch a wire back to the agent built-in login",
+)
+def test_cli_builtin_reverts_a_wire_to_the_agents_own_login(provider_daemon):
+    """`switch`'s other half: a terminal-only user can take an agent off a
+    Coffer connection again."""
+    _add("acme")
     assert _runner.invoke(cli_app, ["provider", "switch", "acme"]).exit_code == 0
 
-    reverted = _runner.invoke(cli_app, ["provider", "use-builtin", "anthropic"])
+    reverted = _runner.invoke(cli_app, ["provider", "builtin", "anthropic"])
     assert reverted.exit_code == 0, reverted.output
     assert "acme" in reverted.output
 
     # The connection is no longer active for its wire.
-    shown = _runner.invoke(cli_app, ["provider", "show", "acme"])
-    assert json.loads(shown.output)["is_active"] is False
+    assert _show("acme")["config"]["is_active"] is False
+
+    # Idempotent: nothing is active now, and a second revert still succeeds.
+    again = _runner.invoke(cli_app, ["provider", "builtin", "anthropic"])
+    assert again.exit_code == 0, again.output
+    assert "nothing was active" in again.output
 
 
-def test_cli_use_builtin_is_idempotent_when_nothing_is_active(provider_daemon):
-    """The route is a no-op when the agent already runs built-in, and the CLI
-    must report that rather than fail."""
-    reverted = _runner.invoke(cli_app, ["provider", "use-builtin", "anthropic"])
-    assert reverted.exit_code == 0, reverted.output
-
-
-def test_cli_use_builtin_rejects_a_wire_that_is_not_one(provider_daemon):
+def test_cli_builtin_rejects_a_wire_that_is_not_one(provider_daemon):
     """An unknown wire is a usage error the user can read, not a traceback."""
-    bad = _runner.invoke(cli_app, ["provider", "use-builtin", "smoke-signals"])
+    bad = _runner.invoke(cli_app, ["provider", "builtin", "smoke-signals"])
     combined = bad.output + (bad.stderr or "")
     assert bad.exit_code == 6, combined
     assert "Traceback" not in combined, combined
 
 
+def test_cli_removed_provider_commands_are_gone(provider_daemon):
+    """The defaults are `coffer config` keys and the revert is `builtin` now."""
+    for gone in ("use-builtin", "internal-default", "transcribe-default", "rename"):
+        r = _runner.invoke(cli_app, ["provider", gone, "--help"])
+        assert r.exit_code != 0, gone
+        assert "No such command" in r.output
+
+
 def test_cli_edit_corrects_a_mis_probed_wire(provider_daemon):
-    """`PATCH /providers/{uid}` has accepted `protocol` since the probe could
-    be wrong; the CLI could not send it, and its help said the field was
-    immutable — so a terminal-only user had no way to correct a wrong wire at
-    all, and was told the correction did not exist."""
-    added = _runner.invoke(
-        cli_app,
-        [
-            "provider",
-            "add",
-            "agnes",
-            "--protocol",
-            "anthropic",
-            "--base-url",
-            "https://agnes/v1",
-            "--secret",
-            "sk-agnes",
-        ],
-    )
-    assert added.exit_code == 0, added.output
-    ref = json.loads(_runner.invoke(cli_app, ["provider", "show", "agnes"]).output)[
-        "credential_ref"
-    ]
+    """The probe that guessed the wire can be wrong, so `edit --protocol`
+    corrects it in place — the key does not have to be re-entered."""
+    _add("agnes")
+    ref = _show("agnes")["config"]["credential_ref"]
 
     edited = _runner.invoke(cli_app, ["provider", "edit", "agnes", "--protocol", "openai"])
     assert edited.exit_code == 0, edited.output
 
-    shown = json.loads(_runner.invoke(cli_app, ["provider", "show", "agnes"]).output)
-    assert shown["protocol"] == "openai"
-    # Corrected in place: the key did not have to be re-entered, which is the
-    # whole reason the field is mutable.
-    assert shown["credential_ref"] == ref
+    shown = _show("agnes")
+    assert shown["config"]["protocol"] == "openai"
+    assert shown["config"]["credential_ref"] == ref
 
 
+def test_cli_edit_rotates_the_key_in_place(provider_daemon):
+    _add("acme")
+    before = _show("acme")
+    rotated = _runner.invoke(cli_app, ["provider", "edit", "acme", "--secret", "sk-new"])
+    assert rotated.exit_code == 0, rotated.output
+    after = _show("acme")
+    assert after["config"]["credential_ref"] == before["config"]["credential_ref"]
+    key = _runner.invoke(cli_app, ["provider", "key", "--connection-uid", after["uid"]])
+    assert key.output.strip() == "sk-new"
+
+
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="correcting a mis-probed wire is refused while the connection is live",
+)
 def test_cli_edit_refuses_to_move_the_wire_while_the_connection_is_live(provider_daemon):
-    """The wire is not inert: it decides whether a connection can cover any
-    agent at all (an ollama one covers none) and which wire `use-builtin`
-    reverts. Moving it under a live projection would strand the native config
-    already written, so the daemon refuses and the CLI reports the conflict
-    with an exit code of its own, not a traceback."""
-    _runner.invoke(
-        cli_app,
-        [
-            "provider",
-            "add",
-            "acme",
-            "--protocol",
-            "anthropic",
-            "--base-url",
-            "https://gw/anthropic",
-            "--secret",
-            "sk-x",
-        ],
-    )
+    """The daemon refuses; the CLI reports the conflict with an exit code of its
+    own and the message naming `coffer provider builtin <wire>` as the way out."""
+    _add("acme")
     assert _runner.invoke(cli_app, ["provider", "switch", "acme"]).exit_code == 0
 
-    refused = _runner.invoke(cli_app, ["provider", "edit", "acme", "--protocol", "openai"])
+    refused = _runner.invoke(
+        cli_app, ["provider", "edit", "acme", "--protocol", "openai", "--name", "acme-eu"]
+    )
     combined = refused.output + (refused.stderr or "")
     assert refused.exit_code == 5, combined
     assert "Traceback" not in combined, combined
-    # The message has to name the way out, or the user is simply stuck.
-    assert "use-builtin" in combined, combined
-    assert (
-        json.loads(_runner.invoke(cli_app, ["provider", "show", "acme"]).output)["protocol"]
-        == "anthropic"
-    )
+    assert "coffer provider builtin anthropic" in combined, combined
+    shown = _show("acme")
+    # A refused wire change renames nothing either.
+    assert shown["name"] == "acme"
+    assert shown["config"]["protocol"] == "anthropic"
 
     # The way out works: revert, edit, and the wire moves.
-    assert _runner.invoke(cli_app, ["provider", "use-builtin", "anthropic"]).exit_code == 0
+    assert _runner.invoke(cli_app, ["provider", "builtin", "anthropic"]).exit_code == 0
     ok = _runner.invoke(cli_app, ["provider", "edit", "acme", "--protocol", "openai"])
     assert ok.exit_code == 0, ok.output
-    assert (
-        json.loads(_runner.invoke(cli_app, ["provider", "show", "acme"]).output)["protocol"]
-        == "openai"
-    )
+    assert _show("acme")["config"]["protocol"] == "openai"
 
 
 def test_cli_edit_with_no_options_is_a_usage_error(provider_daemon):
-    """`edit` with nothing to change must say so rather than send an empty
-    patch — the guard added `--protocol` to that list, so it is re-pinned."""
+    """`edit` with nothing to change says so rather than sending an empty patch."""
     empty = _runner.invoke(cli_app, ["provider", "edit", "acme"])
     assert empty.exit_code == 6, empty.output + (empty.stderr or "")
 
 
-def test_cli_rename_is_the_kind_agnostic_verb_now(provider_daemon):
-    """`coffer provider rename` is GONE, and nothing was lost with it.
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="rename a connection from the command line",
+)
+def test_cli_edit_name_renames_the_same_connection(provider_daemon):
+    """`coffer provider edit acme --name acme-eu` is a label change: same uid,
+    same stored key, a `resource_renamed` entry naming both names; a name
+    another connection holds is refused with the route's error."""
+    audit = provider_daemon
+    _add("acme")
+    _add("taken")
+    before = _show("acme")
 
-    It existed because the connection's NAME was written out into another
-    tool's config file, so moving the name had to move that projection too.
-    The projected `apiKeyHelper` cites the uid now
-    (ADR resource-identity-is-an-immutable-uid), which leaves a rename as what
-    it always was for the other kinds: a label change. So it is served by the
-    kind-agnostic verb, and this test asserts the thing that actually matters —
-    that the connection is the SAME connection afterwards.
-    """
-    added = _runner.invoke(
-        cli_app,
-        [
-            "provider",
-            "add",
-            "acme",
-            "--protocol",
-            "anthropic",
-            "--base-url",
-            "https://gw/anthropic",
-            "--secret",
-            "sk-x",
-        ],
-    )
-    assert added.exit_code == 0, added.output
-    before = json.loads(_runner.invoke(cli_app, ["provider", "show", "acme"]).output)
-
-    renamed = _runner.invoke(cli_app, ["resource", "rename", "provider", "acme", "acme-eu"])
+    renamed = _runner.invoke(cli_app, ["provider", "edit", "acme", "--name", "acme-eu"])
     assert renamed.exit_code == 0, renamed.output
     assert "acme-eu" in renamed.output
 
-    assert [
-        p["name"]
-        for p in json.loads(_runner.invoke(cli_app, ["provider", "list", "--json"]).output)[
-            "providers"
-        ]
-    ] == ["acme-eu"]
-
-    after = json.loads(_runner.invoke(cli_app, ["provider", "show", "acme-eu"]).output)
-    # The identity did not move, so neither did anything hung off it: the key
-    # stayed at the address the connection owns, and the helper Coffer already
-    # projected still names a connection that exists.
+    after = _show("acme-eu")
     assert after["uid"] == before["uid"]
-    assert after["credential_ref"] == before["credential_ref"]
+    assert after["config"]["credential_ref"] == before["config"]["credential_ref"]
     key = _runner.invoke(cli_app, ["provider", "key", "--connection-uid", after["uid"]])
-    assert key.exit_code == 0, key.output
     assert key.output.strip() == "sk-x"
 
+    entries = asyncio.run(audit.query(event_type="resource_renamed"))
+    assert [(e.details["from"], e.details["to"]) for e in entries] == [("acme", "acme-eu")]
 
-def test_cli_rename_reports_a_name_already_taken(provider_daemon):
-    """A name is still unique within its kind — a user should not end up with
-    two connections called the same thing — so a collision is a 409, which the
-    CLI must surface as a readable message and the conflict exit code rather
-    than a traceback."""
-    for name in ("acme", "beta"):
-        _runner.invoke(
-            cli_app,
-            [
-                "provider",
-                "add",
-                name,
-                "--protocol",
-                "anthropic",
-                "--base-url",
-                "https://gw/anthropic",
-                "--secret",
-                "sk-x",
-            ],
-        )
-
-    clash = _runner.invoke(cli_app, ["resource", "rename", "provider", "acme", "beta"])
+    clash = _runner.invoke(cli_app, ["provider", "edit", "acme-eu", "--name", "taken"])
     combined = clash.output + (clash.stderr or "")
     assert clash.exit_code == 5, combined
+    assert "RESOURCE_ALREADY_EXISTS" in combined or "already" in combined, combined
     assert "Traceback" not in combined, combined
+    assert _show("acme-eu")["uid"] == before["uid"]
 
 
-def test_cli_rename_of_a_missing_connection_is_not_found(provider_daemon):
+def test_cli_edit_title_leaves_the_name_alone(provider_daemon):
+    _add("acme")
+    r = _runner.invoke(cli_app, ["provider", "edit", "acme", "--title", "Acme EU"])
+    assert r.exit_code == 0, r.output
+    shown = _show("acme")
+    assert shown["name"] == "acme" and shown["title"] == "Acme EU"
+
+
+def test_cli_edit_of_a_missing_connection_is_not_found(provider_daemon):
     """The name is resolved to a uid before anything is sent, so a name nobody
     holds is reported here rather than as a 404 on a uid the user never saw."""
-    missing = _runner.invoke(cli_app, ["resource", "rename", "provider", "ghost", "spectre"])
+    missing = _runner.invoke(cli_app, ["provider", "edit", "ghost", "--name", "spectre"])
     combined = missing.output + (missing.stderr or "")
     assert missing.exit_code == 4, combined
     assert "ghost" in combined, combined
+
+
+def test_cli_rm_removes_the_connection(provider_daemon):
+    _add("acme")
+    r = _runner.invoke(cli_app, ["provider", "rm", "acme", "--yes"])
+    assert r.exit_code == 0, r.output
+    listed = _runner.invoke(cli_app, ["provider", "list", "--json"])
+    assert json.loads(listed.output)["resources"] == []
 
 
 @pytest.mark.acceptance(

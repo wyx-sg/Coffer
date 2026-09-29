@@ -2,7 +2,8 @@
 
 A *resource document* is the plain-dict form written to
 ``resources/<kind>/<uid>.yaml`` in the tree the vault converges through, and
-it is identity plus description plus config — nothing else. The path is keyed
+it is identity plus title (when there is one), description and config —
+nothing else. The path is keyed
 on the **uid** and the name lives inside the document, which is what makes a
 rename a modification of one file rather than a deletion beside an addition
 (ADR resource-identity-is-an-immutable-uid). Determinism is
@@ -43,7 +44,7 @@ from coffer.domain.sync.errors import SyncSerializationError
 #: Fields that are part of the document, in canonical order. ``uid`` leads
 #: because it is the identity — everything after it is something the identity
 #: has, including the name.
-_DOC_FIELDS = ("uid", "kind", "name", "description", "config")
+_DOC_FIELDS = ("uid", "kind", "name", "title", "description", "config")
 
 # NOTE — there is no ignored-field list here any more, and the layout version
 # is why. It used to name ``enabled`` and ``scope``, the reach fields older
@@ -71,6 +72,7 @@ class ResourceDoc:
     name: str
     description: str | None
     config: dict[str, Any] = field(default_factory=dict)
+    title: str | None = None
 
 
 def resource_to_doc(
@@ -80,6 +82,7 @@ def resource_to_doc(
     name: str,
     description: str | None,
     config: Mapping[str, Any],
+    title: str | None = None,
 ) -> dict[str, Any]:
     """Project a resource into its canonical bundle-document dict.
 
@@ -104,14 +107,24 @@ def resource_to_doc(
 
     ``description`` is always emitted, even as ``None``, so files stay
     byte-identical across exports rather than gaining and losing a key.
+
+    ``title`` is the opposite, and deliberately: it is emitted only when the
+    resource has one (spec vault-sync "Converge resource definitions as
+    serialized documents"). Every resource written before titles existed has
+    none, so leaving the key out keeps each of those documents byte-identical
+    to what is already in the tree — no round rewrites the whole registry to
+    add ``title: null`` — and an applier reads a missing key as "no title".
     """
-    return {
+    doc: dict[str, Any] = {
         "uid": uid,
         "kind": kind,
         "name": name,
         "description": description,
         "config": dict(config),
     }
+    if title is not None:
+        doc["title"] = title
+    return doc
 
 
 def parse_resource_doc(data: Mapping[str, Any]) -> ResourceDoc:
@@ -123,6 +136,7 @@ def parse_resource_doc(data: Mapping[str, Any]) -> ResourceDoc:
     kind = data["kind"]
     name = data["name"]
     description = data.get("description")
+    title = data.get("title")
     config = data["config"]
     if not isinstance(uid, str) or not uid:
         raise SyncSerializationError("'uid' must be a non-empty string")
@@ -132,6 +146,8 @@ def parse_resource_doc(data: Mapping[str, Any]) -> ResourceDoc:
         raise SyncSerializationError("'name' must be a non-empty string")
     if description is not None and not isinstance(description, str):
         raise SyncSerializationError("'description' must be a string or null")
+    if title is not None and not isinstance(title, str):
+        raise SyncSerializationError("'title' must be a string or null")
     if not isinstance(config, Mapping):
         raise SyncSerializationError("'config' must be a mapping")
     # Strict about every field nobody has ever written: a typo'd key is a
@@ -145,4 +161,5 @@ def parse_resource_doc(data: Mapping[str, Any]) -> ResourceDoc:
         name=name,
         description=description,
         config=dict(config),
+        title=title,
     )

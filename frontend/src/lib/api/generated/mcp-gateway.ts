@@ -241,6 +241,8 @@ export interface components {
                 [key: string]: unknown;
             };
             enabled: boolean;
+            /** @description Length of the name a client shows for this tool, `mcp__coffer__<prefixed_name>`. Above 64 is past the limit model provider APIs place on a tool name; some clients drop names above 60. */
+            client_name_length: number;
         };
         MCPResourceView: {
             prefixed_uri: string;
@@ -260,6 +262,8 @@ export interface components {
                 required?: boolean;
             }[];
             enabled: boolean;
+            /** @description Length of `mcp__coffer__<prefixed_name>`, as on a tool. */
+            client_name_length: number;
         };
         CapabilityListOut: {
             /** @description The server's label, for the page heading. It is resolved from the uid in the path, not the path segment echoed back — a capabilities page headed by a UUID would be unreadable. */

@@ -1,6 +1,9 @@
-"""`coffer daemon` subcommand group: start / stop / restart / status, the
-two settings that decide where it listens and whether the system starts it at
-all, and the experimental features it serves."""
+"""`coffer daemon` subcommand group: start / stop / restart / status /
+rotate-token, and the login service that decides whether the system starts it
+at all.
+
+The port it listens on and the experimental features it serves are settings,
+read and changed with `coffer config` (`daemon.port`, `feature.<key>`)."""
 
 from __future__ import annotations
 
@@ -9,6 +12,7 @@ import os
 import signal
 import time
 from pathlib import Path
+from typing import Any
 
 import typer
 
@@ -16,13 +20,11 @@ from coffer.infrastructure.daemon import bootstrap, port_alloc
 from coffer.infrastructure.daemon.pid_lock import pid_is_coffer_daemon
 from coffer.infrastructure.daemon.spawn import spawn_detached_daemon
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli import daemon_features_cmd, daemon_port_cmd, daemon_service_cmd
+from coffer.surfaces.cli import daemon_service_cmd
 from coffer.surfaces.cli._options import ExitCode
 
 app = typer.Typer(help="Daemon lifecycle")
-app.add_typer(daemon_port_cmd.app, name="port")
 app.add_typer(daemon_service_cmd.app, name="service")
-app.add_typer(daemon_features_cmd.app, name="features")
 
 
 def _wait_for_daemon_json(path: Path, timeout: float = 10.0) -> bool:
@@ -183,14 +185,19 @@ def status(
     ctx: typer.Context,
     output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """Show whether the daemon is running, and its version, channel, port and pid.
+    """Show whether the daemon is running, and the passes it is running right now.
+
+    Reports its version, channel, port and pid, and the long passes in flight
+    (kind, target, start time), oldest first.
 
     Read-only: when no daemon is running it says so and exits 3 instead of
     starting one.
 
     \f
     3 is both this CLI's "daemon unreachable" code and the LSB ``status`` code
-    for "not running".
+    for "not running". The passes in flight are ``GET /upkeep/runs`` (spec
+    resource-framework "Report the passes in flight in one cross-kind read"),
+    oldest first, carried under ``passes_in_flight`` in ``--json``.
     """
     verbose = (ctx.obj or {}).get("verbose", False)
     # Probe first: client_or_exit() alone would spawn a daemon, and a status
@@ -206,8 +213,13 @@ def status(
         r = c.get("/daemon/status")
         _cli_client.check(r, verbose=verbose)
         data = r.json()
+        r = c.get("/upkeep/runs")
+        _cli_client.check(r, verbose=verbose)
+        runs: list[dict[str, Any]] = r.json()["runs"]
     if output_json:
-        typer.echo(_json.dumps({**data, "port": info.port, "pid": info.pid}))
+        typer.echo(
+            _json.dumps({**data, "port": info.port, "pid": info.pid, "passes_in_flight": runs})
+        )
         return
     typer.echo(f"status:  {data['status']}")
     typer.echo(f"version: {data['version']}")
@@ -216,6 +228,12 @@ def status(
     typer.echo(f"channel: {channel}")
     typer.echo(f"port:    {info.port}")
     typer.echo(f"pid:     {info.pid}")
+    typer.echo("")
+    typer.echo("passes in flight:")
+    if not runs:
+        typer.echo("  no pass is running")
+    for run in runs:
+        typer.echo(f"  {run['kind']:<10} {run['name']}  (started {run['started_at']})")
 
 
 @app.command("rotate-token")

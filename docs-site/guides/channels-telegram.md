@@ -34,7 +34,7 @@ You do not need to set a description or a command list: Coffer registers the bot
 # Paste the token at the prompt; it is read from stdin, not your shell history
 coffer credentials set channel/tg/bot-token
 
-coffer channel register my-telegram --type telegram \
+coffer channel add my-telegram --type telegram \
   --bot-token-ref channel/tg/bot-token \
   --agent claude-code
 ```
@@ -55,11 +55,15 @@ Channels → Add channel
 Check that it is running:
 
 ```sh
-coffer channel status my-telegram
+coffer channel show my-telegram
 ```
 
 ```text
 channel:  my-telegram (telegram)
+uid:      9b2e…
+agent:    claude-code
+gating:   require_mention=on  ignore_other_mentions=off
+secret:   bot_token_ref = channel/tg/bot-token
 enabled:  True    running: True
 runs on:  3f9c… (this machine)
 pairing:  no pending code
@@ -145,19 +149,19 @@ The Bot API only reports mentions in the text of a plain message, so an @mention
 
 Telegram bots start with **privacy mode on**, which means the bot only sees messages that mention it, reply to it, or are commands. That is what the default `require_mention: true` expects, so nothing needs changing.
 
-If you turn `require_mention` off so the bot acts on every owner message in a group — **Edit** → **In group chats** → **Answer only when @mentioned**, or `coffer channel set <name> --no-require-mention` — the bot also needs to see them:
+If you turn `require_mention` off so the bot acts on every owner message in a group — **Edit** → **In group chats** → **Answer only when @mentioned**, or `coffer channel edit <name> --no-require-mention` — the bot also needs to see them:
 
 1. In BotFather, send `/setprivacy`, choose the bot and select **Disable**.
 2. Remove the bot from the group and add it again. The change applies only to groups the bot joins afterwards.
 
-Until you do, `coffer channel status` prints a `warning:` line naming this fix.
+Until you do, `coffer channel show` prints a `warning:` line naming this fix.
 
 ## Rotate the token
 
 On the channel's page, choose **Edit**, enter the new token in **New bot token** and **Save changes**. The token is written under the reference the channel already uses, so pairing and machine binding are untouched. From the CLI:
 
 ```sh
-coffer resource show channel my-telegram      # find the bot_token_ref
+coffer channel show my-telegram               # find the bot_token_ref
 coffer credentials set channel/tg/bot-token   # paste the new token
 ```
 
@@ -175,7 +179,7 @@ coffer credentials set channel/tg/bot-token   # paste the new token
 ## Troubleshooting
 
 **The bot does not answer at all.**
-Run `coffer channel status my-telegram`.
+Run `coffer channel show my-telegram`.
 
 - `running: False` — the channel is disabled, dormant (its scope names no agent), has no usable default agent, or is bound to another machine. The status and the channel's page say which.
 - `peer: not paired` — pair first. An unpaired bot answers nobody.

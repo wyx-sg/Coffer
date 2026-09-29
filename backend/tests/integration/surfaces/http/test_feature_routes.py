@@ -133,6 +133,23 @@ async def test_put_switches_a_feature_writes_the_config_and_status_follows(
     assert status["features"]["knowledge"] is False
 
 
+async def test_delete_clears_the_setting_and_the_feature_follows_the_channel(
+    client: AsyncClient, home: Path
+) -> None:
+    assert (
+        await client.put("/api/v1/daemon/features/knowledge", json={"enabled": False})
+    ).status_code == 200
+    r = await client.delete("/api/v1/daemon/features/knowledge")
+    assert r.status_code == 200
+    assert r.json() == {"key": "knowledge", "enabled": True, "source": "channel"}
+    assert _config(home) == {"features": {}}
+    status = (await client.get("/api/v1/daemon/status")).json()
+    assert status["features"]["knowledge"] is True
+    unknown = await client.delete("/api/v1/daemon/features/workflow")
+    assert unknown.status_code == 404
+    assert unknown.json()["error"]["code"] == "FEATURE_UNKNOWN"
+
+
 async def test_put_an_unknown_key_answers_feature_unknown(client: AsyncClient, home: Path) -> None:
     r = await client.put("/api/v1/daemon/features/workflow", json={"enabled": True})
     assert r.status_code == 404
@@ -160,6 +177,9 @@ async def test_a_pinned_feature_answers_409_and_stays_off(
         assert r.status_code == 409
         assert r.json()["error"]["code"] == "FEATURE_PINNED"
         assert r.json()["error"]["details"] == {"feature": "knowledge"}
+        unset = await c.delete("/api/v1/daemon/features/knowledge")
+        assert unset.status_code == 409
+        assert unset.json()["error"]["code"] == "FEATURE_PINNED"
         listed = (await c.get("/api/v1/daemon/features")).json()["features"]
         assert {"key": "knowledge", "enabled": False, "source": "pin"} in listed
     assert not (home / ".coffer" / "daemon-config.json").exists()

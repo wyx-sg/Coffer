@@ -127,9 +127,9 @@ async def list_skill_files(
     skill = await svc.get_skill(uid)
 
     # ``master_path`` takes the NAME, not the uid: the master store's folder on
-    # disk is ``~/.coffer/skills/<name>/``, and a rename moves it there through
-    # the kind's ``on_rename`` hook. So the uid finds the row and the row's
-    # current name says where its bytes are.
+    # disk is ``~/.coffer/skills/<name>/``, and a skill's name is fixed once
+    # registered. So the uid finds the row and the row's name says where its
+    # bytes are.
     master = pathlib.Path(svc.master_path(skill.name)).resolve()
     root = file_ops.build_file_tree(master)
     return SkillFileTreeOut(root=_node_to_out(root, master))

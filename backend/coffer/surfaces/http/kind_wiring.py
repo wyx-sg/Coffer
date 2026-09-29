@@ -3,8 +3,8 @@
 Gathered out of ``app.py``'s lifespan because the order is the only thing here
 worth reading, and it was buried between the things that surround it: provider
 after agent, because it projects into each agent's native config; memory before
-MCP, so the gateway advertises ``coffer__recall``; MCP last of the kinds, so it
-picks up every built-in tool the others registered. Each step returns what it
+MCP, so the gateway's handshake can name the memory root; MCP last of the kinds,
+so it picks up every built-in tool the others registered. Each step returns what it
 built and the next step takes it as a parameter, so the dependency is the
 argument list, not a getter that happens to be populated by then.
 """
@@ -91,7 +91,7 @@ async def wire_resource_kinds(
         _catalogue_changed,
     )
 
-    # Before wire_mcp_kind below, so the gateway advertises `coffer__recall`.
+    # Before wire_mcp_kind below, so the gateway's handshake names the memory root.
     memory = wire_memory_kind(
         app,
         resource_svc,

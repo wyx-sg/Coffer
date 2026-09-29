@@ -51,7 +51,7 @@ keychain (service `coffer`, opt-in) (spec credentials "Keep the master key in ex
   (spec credentials "Verify the destination before relocating the master key").
   The ciphertext column is untouched. Exposed as
   `GET`/`PUT /api/v1/settings/credentials`,
-  `coffer credentials storage [--set file|keychain]` and the Settings →
+  `coffer config get|set credentials.storage` and the Settings →
   Security card, audited as `master_key_relocated`.
 - **One owner of key material.** `MasterKeyManager`
   (`infrastructure/credentials/master_key.py`) is the only code that reads or

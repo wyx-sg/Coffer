@@ -1,13 +1,13 @@
-"""coffer agent plugin subcommands.
+"""``coffer agent plugin list|show|enable|disable|rm`` — an agent's installed plugins.
 
 Part of spec agent-registry "Expose every agent operation through REST, CLI and
-the Agents page": list, show, enable, disable and uninstall an agent's installed
-plugins. Split from ``agent_workspace_cmd`` for the 400-line backend file cap;
-that module's ``attach`` mounts :data:`plugin_app` as ``coffer agent plugin``.
+the Agents page"; ``rm`` is the uninstall of "Uninstall a plugin by the type's
+own strategy". Kept out of ``agent_cmd.py`` for the 400-line backend file cap;
+``agent_cmd`` calls :func:`attach`.
 
-The agent is named and resolved to a uid like everywhere else; ``plugin_id``
-(``name@marketplace``) names something inside the agent's own config, which
-Coffer did not mint, so it stays as it is.
+The agent is taken by NAME and resolved to a uid through ``_resolve`` (ADR
+resource-identity-is-an-immutable-uid). The ``plugin_id`` beside it stays as it
+is: it names something inside the agent's own config, which Coffer did not mint.
 """
 
 from __future__ import annotations
@@ -20,14 +20,14 @@ from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli._resolve import resolve_uid
+from coffer.surfaces.cli._kind_verbs import verbose_of
+from coffer.surfaces.cli._resolve import resolve_ref
 
 plugin_app = typer.Typer(help="View and manage an agent's installed plugins")
 _console = Console()
 
-
-def _verbose(ctx: typer.Context) -> bool:
-    return bool((ctx.obj or {}).get("verbose", False))
+_AGENT = typer.Argument(..., help="Agent name")
+_PLUGIN = typer.Argument(..., help="Plugin id (name@marketplace)")
 
 
 def _not_found_exit(r: Any) -> None:
@@ -36,32 +36,26 @@ def _not_found_exit(r: Any) -> None:
         raise typer.Exit(4)
 
 
-def _warn_parse_errors(parse_errors: list[dict[str, Any]]) -> None:
-    for p in parse_errors:
-        typer.echo(f"warning: cannot parse {p['source']} ({p['path']}): {p['error']}", err=True)
-
-
-# --- coffer agent plugin ... --------------------------------------------------
-
-
 @plugin_app.command("list")
 def plugin_list(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    output_json: bool = typer.Option(False, "--json", help="JSON output"),
+    name: str = _AGENT,
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
     """List the agent's installed plugins and known marketplaces."""
+    verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        uid = resolve_ref(c, "agent", name, verbose=verbose)["uid"]
         r = c.get(f"/agents/{uid}/plugins")
         _not_found_exit(r)
-        _cli_client.check(r, verbose=_verbose(ctx))
+        _cli_client.check(r, verbose=verbose)
     data = r.json()
     if output_json:
         typer.echo(_json.dumps(data, indent=2))
         return
-    _warn_parse_errors(data["parse_errors"])
+    for p in data["parse_errors"]:
+        typer.echo(f"warning: cannot parse {p['source']} ({p['path']}): {p['error']}", err=True)
     table = Table(title=f"Plugins — {name}")
     for col in ("ID", "Name", "Marketplace", "Enabled", "Cache"):
         table.add_column(col)
@@ -82,17 +76,18 @@ def plugin_list(
 @plugin_app.command("show")
 def plugin_show(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    plugin_id: str = typer.Argument(..., help="Plugin id (name@marketplace)"),
+    name: str = _AGENT,
+    plugin_id: str = _PLUGIN,
     output_json: bool = typer.Option(False, "--json", help="JSON output"),
 ) -> None:
     """Show one plugin: its metadata, install dir and everything it contributes."""
+    verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        uid = resolve_ref(c, "agent", name, verbose=verbose)["uid"]
         r = c.get(f"/agents/{uid}/plugins/{plugin_id}")
         _not_found_exit(r)
-        _cli_client.check(r, verbose=_verbose(ctx))
+        _cli_client.check(r, verbose=verbose)
     data = r.json()
     if output_json:
         typer.echo(_json.dumps(data, indent=2))
@@ -121,49 +116,48 @@ def plugin_show(
 
 
 def _plugin_set_enabled(ctx: typer.Context, name: str, plugin_id: str, enabled: bool) -> None:
+    verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        uid = resolve_ref(c, "agent", name, verbose=verbose)["uid"]
         r = c.patch(f"/agents/{uid}/plugins/{plugin_id}", json={"enabled": enabled})
         _not_found_exit(r)
-        _cli_client.check(r, verbose=_verbose(ctx))
+        _cli_client.check(r, verbose=verbose)
     typer.echo(f"{'enabled' if enabled else 'disabled'}: plugin {plugin_id} (agent {name})")
 
 
 @plugin_app.command("enable")
-def plugin_enable(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    plugin_id: str = typer.Argument(..., help="Plugin id (name@marketplace)"),
-) -> None:
+def plugin_enable(ctx: typer.Context, name: str = _AGENT, plugin_id: str = _PLUGIN) -> None:
     """Enable a plugin in the agent's config."""
     _plugin_set_enabled(ctx, name, plugin_id, True)
 
 
 @plugin_app.command("disable")
-def plugin_disable(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    plugin_id: str = typer.Argument(..., help="Plugin id (name@marketplace)"),
-) -> None:
+def plugin_disable(ctx: typer.Context, name: str = _AGENT, plugin_id: str = _PLUGIN) -> None:
     """Disable a plugin in the agent's config."""
     _plugin_set_enabled(ctx, name, plugin_id, False)
 
 
-@plugin_app.command("uninstall")
-def plugin_uninstall(
+@plugin_app.command("rm")
+def plugin_rm(
     ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    plugin_id: str = typer.Argument(..., help="Plugin id (name@marketplace)"),
-    force: bool = typer.Option(False, "--force", "-f"),
+    name: str = _AGENT,
+    plugin_id: str = _PLUGIN,
+    yes: bool = typer.Option(False, "--yes", "-y", "--force", "-f", help="Do not ask"),
 ) -> None:
     """Uninstall a plugin (Codex edits its config; Claude Code shells out to its own CLI)."""
-    if not force and not typer.confirm(f"Really uninstall plugin {plugin_id!r} from agent {name}?"):
+    if not yes and not typer.confirm(f"Really uninstall plugin {plugin_id!r} from agent {name}?"):
         raise typer.Exit(1)
+    verbose = verbose_of(ctx)
     c, _info = _cli_client.client_or_exit()
     with c:
-        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
+        uid = resolve_ref(c, "agent", name, verbose=verbose)["uid"]
         r = c.delete(f"/agents/{uid}/plugins/{plugin_id}")
         _not_found_exit(r)
-        _cli_client.check(r, verbose=_verbose(ctx))
-    typer.echo(f"uninstalled: plugin {plugin_id} from agent {name}")
+        _cli_client.check(r, verbose=verbose)
+    typer.echo(f"removed: plugin {plugin_id} from agent {name}")
+
+
+def attach(agent_app: typer.Typer) -> None:
+    """Register ``coffer agent plugin`` on agent_cmd's typer."""
+    agent_app.add_typer(plugin_app, name="plugin")

@@ -1,13 +1,18 @@
-"""``coffer agent transcripts`` / ``transcript`` — an agent's local conversations.
+"""``coffer agent transcript <name> [<id>]`` — an agent's local conversations.
 
 CLI parity for the web Conversations tab, which has two surfaces and so does
-this: ``transcripts`` lists the sessions (``GET /agents/{uid}/transcripts``) and
-``transcript`` renders one of them (``.../transcripts/session``), taking the
-absolute ``source_path`` the listing printed. Read-only, both of them.
+this one command: without an id it lists the sessions
+(``GET /agents/{uid}/transcripts``), with one it renders that session
+(``.../transcripts/session``) in a bounded window of turns. Read-only.
+
+The id is the ``session_id`` the listing printed; the session route is keyed by
+the file's ``source_path``, so the command finds the session in the listing
+first. An id the listing does not know is handed to the route as it is (an
+absolute ``source_path`` works that way too), and the route's own not-found
+answer is what the user sees.
 
 Its own module (rather than more lines in ``agent_cmd.py``) so both stay under
-the backend file-size cap; ``agent_cmd`` calls :func:`attach` so the user-facing
-tree stays ``coffer agent transcripts`` / ``coffer agent transcript``.
+the backend file-size cap; ``agent_cmd`` calls :func:`attach`.
 """
 
 from __future__ import annotations
@@ -15,18 +20,18 @@ from __future__ import annotations
 import json as _json
 from typing import Any
 
+import httpx
 import typer
 from rich.console import Console
 from rich.table import Table
 
 from coffer.surfaces.cli import _client as _cli_client
-from coffer.surfaces.cli._resolve import resolve_uid
+from coffer.surfaces.cli._kind_verbs import verbose_of
+from coffer.surfaces.cli._resolve import resolve_ref
 
 _console = Console()
-
-
-def _verbose(ctx: typer.Context) -> bool:
-    return bool((ctx.obj or {}).get("verbose", False))
+#: The listing route's page ceiling, used when looking an id up.
+_PAGE = 500
 
 
 def _short_time(value: str | None) -> str:
@@ -36,91 +41,117 @@ def _short_time(value: str | None) -> str:
     return value.replace("T", " ")[:16]
 
 
-def transcripts(
+def transcript(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Agent name"),
-    limit: int = typer.Option(20, "--limit", help="Max sessions to show (1-500)."),
-    offset: int = typer.Option(0, "--offset", help="Skip this many sessions."),
-    query: str | None = typer.Option(None, "--query", "-q", help="Search title or project path."),
-    sort: str = typer.Option(
-        "last_activity_at", "--sort", help="started_at | last_activity_at | message_count"
+    session_id: str | None = typer.Argument(
+        None, metavar="[ID]", help="A session id from the listing; omit to list sessions"
     ),
-    order: str = typer.Option("desc", "--order", help="asc | desc"),
-    output_json: bool = typer.Option(False, "--json", help="JSON output"),
+    limit: int | None = typer.Option(
+        None, "--limit", help="Sessions to list (default 20) or turns to show (default 200)"
+    ),
+    offset: int = typer.Option(0, "--offset", help="Skip this many sessions or turns."),
+    query: str | None = typer.Option(None, "--query", "-q", help="Search title or project path."),
+    project: str | None = typer.Option(None, "--project", help="Only this exact project path."),
+    sort: str | None = typer.Option(
+        None, "--sort", help="started_at | last_activity_at (default) | message_count"
+    ),
+    order: str | None = typer.Option(None, "--order", help="asc | desc (default)"),
+    output_json: bool = typer.Option(False, "--json", help="JSON output for scripts"),
 ) -> None:
-    """List the conversations this agent has recorded on this machine."""
-    params: dict[str, Any] = {
-        "limit": limit,
-        "offset": offset,
-        "sort": sort,
-        "order": order,
-    }
-    if query:
-        params["q"] = query
+    """List this agent's conversations on this machine, or print one of them.
+
+    With an ID, what comes back is a window — --limit turns from --offset, each
+    cut at the server's per-turn cap and secret-scrubbed — and the header says
+    how many turns the whole session holds.
+    """
+    verbose = verbose_of(ctx)
+    listing_only = {"--query": query, "--project": project, "--sort": sort, "--order": order}
+    if session_id is not None and any(v is not None for v in listing_only.values()):
+        used = ", ".join(k for k, v in listing_only.items() if v is not None)
+        typer.echo(f"{used} only apply to the listing (no ID)", err=True)
+        raise typer.Exit(2)
     c, _info = _cli_client.client_or_exit()
     with c:
-        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
-        r = c.get(f"/agents/{uid}/transcripts", params=params)
-        _cli_client.check(r, verbose=_verbose(ctx))
-    data = r.json()
+        uid = resolve_ref(c, "agent", name, verbose=verbose)["uid"]
+        if session_id is None:
+            params: dict[str, Any] = {
+                "limit": limit or 20,
+                "offset": offset,
+                "sort": sort or "last_activity_at",
+                "order": order or "desc",
+            }
+            if query:
+                params["q"] = query
+            if project:
+                params["project"] = project
+            r = c.get(f"/agents/{uid}/transcripts", params=params)
+            _cli_client.check(r, verbose=verbose)
+            _print_listing(name, r.json(), output_json)
+            return
+        path = _source_path(c, uid, session_id, verbose=verbose)
+        r = c.get(
+            f"/agents/{uid}/transcripts/session",
+            params={"path": path, "limit": limit or 200, "offset": offset},
+        )
+        _cli_client.check(r, verbose=verbose)
+    _print_session(r.json(), output_json)
+
+
+def _source_path(c: httpx.Client, uid: str, session_id: str, *, verbose: bool) -> str:
+    """The ``source_path`` of the listed session called ``session_id``, or the id
+    itself when no listed session carries it (the route then answers)."""
+    offset = 0
+    while True:
+        r = c.get(f"/agents/{uid}/transcripts", params={"limit": _PAGE, "offset": offset})
+        _cli_client.check(r, verbose=verbose)
+        page = r.json()
+        for s in page["sessions"]:
+            if s["session_id"] == session_id:
+                return str(s["source_path"])
+        offset += len(page["sessions"])
+        if not page["sessions"] or offset >= page["total"]:
+            return session_id
+
+
+def _print_listing(name: str, data: dict[str, Any], output_json: bool) -> None:
     if output_json:
         typer.echo(_json.dumps(data, indent=2))
         return
     sessions = data["sessions"]
     table = Table(title=f"Conversations — {name} ({len(sessions)} of {data['total']})")
-    for col in ("Title", "Project", "Messages", "Started", "Last activity"):
+    for col in ("ID", "Title", "Project", "Messages", "Last activity"):
         table.add_column(col)
     for s in sessions:
         table.add_row(
-            s.get("title") or s["session_id"],
+            s["session_id"],
+            s.get("title") or "",
             s.get("project_path") or "",
             str(s["message_count"]),
-            _short_time(s.get("started_at")),
             _short_time(s.get("last_activity_at")),
         )
     _console.print(table)
 
 
-def transcript(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Agent name"),
-    path: str = typer.Option(..., "--path", help="Absolute source_path from `transcripts`."),
-    limit: int = typer.Option(200, "--limit", help="Max turns to show (1-500)."),
-    offset: int = typer.Option(0, "--offset", help="Skip this many turns."),
-    output_json: bool = typer.Option(False, "--json", help="JSON output"),
-) -> None:
-    """Print one conversation: its turns, secret-scrubbed and bounded.
-
-    A transcript can be tens of megabytes, so what comes back is a window —
-    ``limit`` turns from ``offset``, each cut at the server's per-turn cap. The
-    header says how many turns the file holds in total, so a short output is
-    never mistaken for a short conversation.
-    """
-    params: dict[str, Any] = {"path": path, "limit": limit, "offset": offset}
-    c, _info = _cli_client.client_or_exit()
-    with c:
-        uid = resolve_uid(c, "agent", name, verbose=_verbose(ctx))
-        r = c.get(f"/agents/{uid}/transcripts/session", params=params)
-        _cli_client.check(r, verbose=_verbose(ctx))
-    data = r.json()
+def _print_session(data: dict[str, Any], output_json: bool) -> None:
     if output_json:
         typer.echo(_json.dumps(data, indent=2))
         return
     shown = len(data["messages"])
     header = data.get("title") or data["session_id"]
-    _console.print(f"[bold]{header}[/bold]")
+    _console.print(f"[bold]{header}[/bold]", markup=True)
     _console.print(
         f"{data['project_path'] or ''}  —  turns {data['offset'] + 1}"
-        f"-{data['offset'] + shown} of {data['message_count']}"
+        f"-{data['offset'] + shown} of {data['message_count']}",
+        markup=False,
     )
     for message in data["messages"]:
         _console.print(f"\n[bold]{message['role']}[/bold] {_short_time(message.get('timestamp'))}")
-        _console.print(message["text"])
+        _console.print(message["text"], markup=False)
         if message.get("truncated"):
             _console.print("[dim](turn truncated)[/dim]")
 
 
 def attach(agent_app: typer.Typer) -> None:
-    """Register the transcript commands on agent_cmd's existing typer."""
-    agent_app.command("transcripts")(transcripts)
+    """Register the transcript command on agent_cmd's existing typer."""
     agent_app.command("transcript")(transcript)

@@ -18,7 +18,6 @@ from coffer.application.memory import distil_routing, distil_write
 from coffer.application.memory.context import compose_context
 from coffer.application.memory.distil import distil_partition
 from coffer.application.memory.index import index_line
-from coffer.application.memory.recall import RecallService
 from coffer.application.memory.service import KIND_MEMORY
 from coffer.domain.memory.note import NOTE_TYPES, TYPE_PROJECT, TYPE_USER, Note, Origin
 from coffer.domain.memory.reader import RawEntry
@@ -408,14 +407,14 @@ async def test_the_search_terms_appear_in_memory_md_and_the_context_in_one_order
     assert context_lines == [index_line(newer), index_line(older)]
 
 
-# --- Send content out only for distil -----------------------------------------
+# --- Send file content out only for distil -----------------------------------------
 
 
 @pytest.mark.asyncio
-@pytest.mark.acceptance(
-    spec="memory", scenario="compose context and recall without calling any model"
-)
-async def test_context_and_recall_answer_while_the_internal_connection_would_fail() -> None:
+@pytest.mark.acceptance(spec="memory", scenario="compose context without calling any model")
+async def test_context_answers_while_the_internal_connection_would_fail() -> None:
+    """A distilled partition, an internal connection rigged to fail the test if
+    called: composing the session context answers, and never calls it."""
     _raw("Lockfile", "dependencies are locked with uv", partition="global", type=TYPE_USER)
     await distil_partition("global", completion=None, model_selector=NoModelSelector())
     resources = FakeResources()
@@ -423,17 +422,15 @@ async def test_context_and_recall_answer_while_the_internal_connection_would_fai
 
     class _SelectorThatFails:
         async def get_default(self) -> Any:
-            raise AssertionError("delivery and recall must not reach the internal connection")
+            raise AssertionError("delivery must not reach the internal connection")
 
     service = memory_service(
         resources, {}, completion=ExplodingCompletion(), model_selector=_SelectorThatFails()
     )
 
     composed = await compose_context(service, cwd="")
-    recalled = await RecallService(memory=service).recall("locked with uv")
 
     assert "Lockfile" in composed.text
-    assert [n.title for n in recalled.notes] == ["Lockfile"]
 
 
 # --- Confine reads to registered agents' memory paths -------------------------

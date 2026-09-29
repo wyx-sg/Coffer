@@ -266,7 +266,7 @@ issue pairing codes, edit the channel, send a test notification to its paired
 owner (see "Notify the paired owner on demand"), and delete it.
 
 Editing changes the channel's default agent, its type's plain settings (a
-SeaTalk app id) and its two group-gating switches, `require_mention` and
+SeaTalk app id), its title and its two group-gating switches, `require_mention` and
 `ignore_other_mentions` (see "Configure when the bot answers in a group"). Rotating an existing
 secret happens **in place**: the new value MUST be written to the credential
 store under the ref the channel already cites before the configuration is
@@ -274,26 +274,35 @@ saved, and that ref MUST stay in the saved configuration, so a rotation moves
 no secret and leaves the channel's machine binding and pairing untouched. A
 secret field left blank rotates nothing.
 
-The CLI MUST offer these operations across three command groups:
-`coffer channel list / register / bind / pair / status / notify / set` for the
-channel-specific ones — `register` and `set` take the group-gating switches as
-`--require-mention/--no-require-mention` and
-`--ignore-other-mentions/--no-ignore-other-mentions`, and `set` changes only
-the switches it is given; the kind-agnostic `coffer resource show / enable /
-disable / rename / delete channel <name>` and `coffer scope show / set channel
-<name>` for its lifecycle and reach; and `coffer credentials set <ref>` for
-rotating a secret under a ref that `coffer resource show` reports. Editing a
-channel's default agent or type settings is served by the detail page and
-`PATCH /api/v1/resources/{uid}`.
+The CLI MUST offer these operations in the `coffer channel` group. Its uniform
+lifecycle verbs are `list`, `show`, `add`, `edit`, `rm`, `enable`, `disable` and
+`scope <name> [--agents a,b | --all | --none]` (see
+[resource-framework](../resource-framework/spec.md), the requirement that
+generates each kind's lifecycle verbs), and its channel-specific commands are
+`pair`, `bind` and `notify`:
+
+- `coffer channel show <name>` MUST report the channel's configuration together
+  with its status — adapter run state, paired peer, machine binding and the
+  inbound state its type reports — in plain and `--json` output.
+- `coffer channel add` and `coffer channel edit` MUST take the group-gating
+  switches as `--require-mention/--no-require-mention` and
+  `--ignore-other-mentions/--no-ignore-other-mentions`. `edit` also takes
+  `--name`, `--title` and `--description`, and it changes only what it is
+  given: every switch, setting and ref it is not given keeps its stored value.
+- `coffer credentials set <ref>` rotates a secret under a ref that
+  `coffer channel show` reports.
+
+Editing a channel's default agent or type settings is served by the detail page
+and `PATCH /api/v1/resources/{uid}`.
 
 #### Scenario: register and list channels from the command line
 - **GIVEN** a running daemon and a stored credential
-- **WHEN** the user runs `coffer channel register` and `coffer channel list`
+- **WHEN** the user runs `coffer channel add` and `coffer channel list`
 - **THEN** the channel is created and appears in the listing
 
 #### Scenario: channel status reports runtime, pairing, and callback details
 - **GIVEN** channels in various states
-- **WHEN** the user queries status via REST and CLI
+- **WHEN** the user queries status via REST and with `coffer channel show`
 - **THEN** adapter run state, paired peer, and the channel type's own inbound
   state are reported accurately
 
@@ -308,8 +317,14 @@ channel's default agent or type settings is served by the detail page and
 
 #### Scenario: the group-gating switches are edited from the command line
 - **GIVEN** a registered channel with `require_mention` on and `ignore_other_mentions` off (the defaults)
-- **WHEN** the owner switches `require_mention` off and `ignore_other_mentions` on through `coffer channel set`
+- **WHEN** the owner switches `require_mention` off and `ignore_other_mentions` on through `coffer channel edit`
 - **THEN** the saved configuration carries both changes and every other setting and ref as it was
+
+#### Scenario: a channel's lifecycle and reach run from its own command group
+- **GIVEN** a registered, enabled channel named `tg`
+- **WHEN** the user runs `coffer channel edit tg --title "Phone bot"`, `coffer channel scope tg --agents codex`, `coffer channel disable tg` and then `coffer channel rm tg`
+- **THEN** the title is saved with every ref unchanged, the channel's scope names only `codex`, and the adapter stops when it is disabled
+- **AND** the removal deletes the channel and its peer binding, and each step is audited
 
 ### Requirement: Audit the events that grant the right to drive turns
 Channel events MUST be audited where an event grants or moves the right to
@@ -1658,7 +1673,7 @@ inside the window restarts it. The window is 1.5 seconds after a text message.
 It is 5 seconds after a message that is rarely the whole ask: a forwarded chat
 record, or files with no text. Both windows are the channel's own settings,
 `wait_after_text_seconds` and `wait_after_forward_seconds`, each from 0 to 60
-seconds and edited on the Channels page or with `coffer channel set
+seconds and edited on the Channels page or with `coffer channel edit
 --wait-after-text/--wait-after-forward`; 0 runs every such message as its own
 turn.
 
@@ -1701,7 +1716,7 @@ it drops the held messages instead, since they had not started.
 
 #### Scenario: the quiet windows are edited from the command line
 - **GIVEN** a registered channel
-- **WHEN** the owner runs `coffer channel set <name> --wait-after-text 0 --wait-after-forward 8`
+- **WHEN** the owner runs `coffer channel edit <name> --wait-after-text 0 --wait-after-forward 8`
 - **THEN** the channel's config holds those two windows and every other setting is unchanged
 
 #### Scenario: the quiet windows are edited on the Channels page

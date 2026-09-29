@@ -171,7 +171,7 @@ def test_read_and_change_the_master_key_location(cli: _Daemon) -> None:
 
     r = daemon.client.get("/api/v1/settings/credentials")
     assert r.status_code == 200 and r.json()["master_key_storage"] == "file"
-    shown = _runner.invoke(cli_app, ["credentials", "storage"])
+    shown = _runner.invoke(cli_app, ["config", "get", "credentials.storage"])
     assert shown.exit_code == 0, shown.output
     assert "file" in shown.output
 
@@ -183,7 +183,7 @@ def test_read_and_change_the_master_key_location(cli: _Daemon) -> None:
     assert daemon.client.get("/api/v1/settings/credentials").json()["master_key_storage"] == (
         "keychain"
     )
-    shown = _runner.invoke(cli_app, ["credentials", "storage"])
+    shown = _runner.invoke(cli_app, ["config", "get", "credentials.storage"])
     assert shown.exit_code == 0, shown.output
     assert "keychain" in shown.output
     # The key really moved: out of the file, into the (in-memory) keychain.
@@ -200,11 +200,11 @@ def test_the_command_line_confirms_a_delete_unless_forced(cli: _Daemon) -> None:
     daemon = cli
     daemon.client.post("/api/v1/credentials", json={"ref": "to/delete", "value": "v"})
 
-    declined = _runner.invoke(cli_app, ["credentials", "delete", "to/delete"], input="n\n")
+    declined = _runner.invoke(cli_app, ["credentials", "rm", "to/delete"], input="n\n")
     assert declined.exit_code != 0
     assert daemon.client.get("/api/v1/credentials/to/delete/exists").json()["present"] is True
 
-    forced = _runner.invoke(cli_app, ["credentials", "delete", "to/delete", "--force"])
+    forced = _runner.invoke(cli_app, ["credentials", "rm", "to/delete", "--force"])
     assert forced.exit_code == 0, forced.output
     assert "Delete credential" not in forced.output
     assert daemon.client.get("/api/v1/credentials/to/delete/exists").json()["present"] is False

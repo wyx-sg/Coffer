@@ -374,7 +374,7 @@ components:
 
     MCPToolView:
       type: object
-      required: [prefixed_name, original_name, enabled]
+      required: [prefixed_name, original_name, enabled, client_name_length]
       properties:
         prefixed_name: { type: string, example: filesystem__read_file }
         original_name: { type: string, example: read_file }
@@ -385,6 +385,12 @@ components:
           type: object
           additionalProperties: true
         enabled: { type: boolean }
+        client_name_length:
+          type: integer
+          description: >-
+            Length of the name a client shows for this tool,
+            `mcp__coffer__<prefixed_name>`. Above 64 is past the limit model
+            provider APIs place on a tool name; some clients drop names above 60.
 
     MCPResourceView:
       type: object
@@ -405,7 +411,7 @@ components:
 
     MCPPromptView:
       type: object
-      required: [prefixed_name, original_name, enabled]
+      required: [prefixed_name, original_name, enabled, client_name_length]
       properties:
         prefixed_name: { type: string }
         original_name: { type: string }
@@ -422,6 +428,9 @@ components:
               description: { type: string, nullable: true }
               required: { type: boolean }
         enabled: { type: boolean }
+        client_name_length:
+          type: integer
+          description: Length of `mcp__coffer__<prefixed_name>`, as on a tool.
 
     CapabilityListOut:
       type: object

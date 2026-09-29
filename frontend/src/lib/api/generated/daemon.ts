@@ -65,7 +65,18 @@ export interface paths {
          */
         put: operations["setDaemonFeature"];
         post?: never;
-        delete?: never;
+        /**
+         * Remove this machine's setting so the feature follows the channel default
+         * @description Removes the key from the `features` object of
+         *     `~/.coffer/daemon-config.json` before the response, and the feature
+         *     takes the build channel's default at once, with no restart (spec
+         *     experimental-features "Switch a feature from the settings page or the
+         *     command line"). Answers with the state after the removal; a feature
+         *     with no setting is answered unchanged. A key the registry does not
+         *     declare answers 404 `FEATURE_UNKNOWN`; a feature pinned by
+         *     `COFFER_FEATURES` answers 409 `FEATURE_PINNED`.
+         */
+        delete: operations["unsetDaemonFeature"];
         options?: never;
         head?: never;
         patch?: never;
@@ -546,6 +557,31 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["ValidationError"];
+        };
+    };
+    unsetDaemonFeature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The feature after its setting was removed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     getDaemonResidency: {

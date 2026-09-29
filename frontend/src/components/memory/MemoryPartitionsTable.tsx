@@ -27,6 +27,8 @@ import { useTranslation } from "react-i18next";
 import { DataTable, type Column } from "@/components/DataTable";
 import { UnresolvableBadge } from "@/components/memory/UnresolvableBadge";
 import type { PartitionOut } from "@/lib/api/memoryTypes";
+import { searchableName } from "@/lib/resourceTitle";
+import { ResourceLabel } from "@/components/resource/ResourceLabel";
 
 export function MemoryPartitionsTable({
   rows,
@@ -43,7 +45,7 @@ export function MemoryPartitionsTable({
     {
       key: "name",
       header: t("memory.cols.name"),
-      cell: (r) => <span className="font-medium">{r.name}</span>,
+      cell: (r) => <ResourceLabel resource={r} />,
     },
     {
       key: "repository",
@@ -77,7 +79,7 @@ export function MemoryPartitionsTable({
       rowKey={(r) => r.uid}
       onRowClick={(r) => navigate(`/memory/${encodeURIComponent(r.uid)}`)}
       search={{
-        accessor: (r) => `${r.name} ${r.repository_path}`,
+        accessor: (r) => `${searchableName(r)} ${r.repository_path}`,
         placeholder: t("memory.searchPlaceholder"),
       }}
       emptyMessage={t("memory.empty")}

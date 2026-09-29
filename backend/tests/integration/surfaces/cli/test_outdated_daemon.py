@@ -68,7 +68,7 @@ def _serve(monkeypatch: pytest.MonkeyPatch, answers: dict[str, Any]) -> None:
 def test_daemon_status_names_an_outdated_daemon_instead_of_failing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _serve(monkeypatch, {"/daemon/status": _OLD_STATUS})
+    _serve(monkeypatch, {"/daemon/status": _OLD_STATUS, "/upkeep/runs": {"runs": []}})
     res = runner.invoke(app, ["daemon", "status"])
     assert res.exit_code == 0, res.output
     [line] = [line for line in res.output.splitlines() if line.startswith("channel:")]
@@ -110,6 +110,6 @@ def test_curate_owner_names_an_outdated_daemon(monkeypatch: pytest.MonkeyPatch) 
             "/daemon/status": _OLD_STATUS,
         },
     )
-    res = runner.invoke(app, ["engine", "curate-owner", "show"])
+    res = runner.invoke(app, ["config", "get", "engine.curate_owner"])
     assert res.exit_code == 1, res.output
     assert _RESTART in res.output

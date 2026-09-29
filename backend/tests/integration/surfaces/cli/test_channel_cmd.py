@@ -240,6 +240,7 @@ def channel_daemon(tmp_path, monkeypatch):
         peers=peers,
         pairing=pairing,
         runtime=runtime,
+        audit=audit,
         agent_uid=agent.uid,
     )
 
@@ -256,7 +257,7 @@ def _register_tg(name: str = "tg") -> Any:
         app,
         [
             "channel",
-            "register",
+            "add",
             name,
             "--type",
             "telegram",
@@ -271,7 +272,7 @@ def _register_tg(name: str = "tg") -> Any:
 def _register_st(name: str = "st") -> Any:
     argv = [
         "channel",
-        "register",
+        "add",
         name,
         "--type",
         "seatalk",
@@ -288,7 +289,7 @@ def _register_st(name: str = "st") -> Any:
 def _listed_names(daemon: _Daemon) -> list[str]:
     result = runner.invoke(app, ["channel", "list", "--json"])
     assert result.exit_code == 0, result.output
-    return [item["name"] for item in json.loads(result.output)]
+    return [item["name"] for item in json.loads(result.output)["resources"]]
 
 
 @pytest.mark.acceptance(
@@ -297,13 +298,13 @@ def _listed_names(daemon: _Daemon) -> list[str]:
 def test_register_and_list_channels(channel_daemon: _Daemon) -> None:
     r = _register_tg()
     assert r.exit_code == 0, r.output
-    assert "registered: channel tg" in r.output
+    assert "added: channel tg" in r.output
     r2 = _register_st()
     assert r2.exit_code == 0, r2.output
 
     listed = runner.invoke(app, ["channel", "list", "--json"])
     assert listed.exit_code == 0, listed.output
-    by_name = {item["name"]: item for item in json.loads(listed.output)}
+    by_name = {item["name"]: item for item in json.loads(listed.output)["resources"]}
     assert by_name["tg"]["config"]["channel_type"] == "telegram"
     assert by_name["tg"]["config"]["bot_token_ref"] == _TG_REF
     # The agent NAME the user typed was resolved to the agent's uid before it
@@ -367,7 +368,7 @@ def test_register_writes_the_group_gating_flags(channel_daemon: _Daemon) -> None
         app,
         [
             "channel",
-            "register",
+            "add",
             "tg",
             "--type",
             "telegram",
@@ -393,61 +394,108 @@ def test_register_writes_the_group_gating_flags(channel_daemon: _Daemon) -> None
 @pytest.mark.acceptance(
     spec="channels", scenario="the group-gating switches are edited from the command line"
 )
-def test_set_changes_only_the_gating_flags_it_is_given(channel_daemon: _Daemon) -> None:
+def test_edit_changes_only_the_gating_flags_it_is_given(channel_daemon: _Daemon) -> None:
     assert _register_tg().exit_code == 0
 
-    r = runner.invoke(app, ["channel", "set", "tg", "--no-require-mention"])
+    r = runner.invoke(
+        app, ["channel", "edit", "tg", "--no-require-mention", "--ignore-other-mentions"]
+    )
     assert r.exit_code == 0, r.output
-    assert r.stdout.splitlines() == ["require_mention: off"]
+    assert "updated: channel tg" in r.output
     config = channel_daemon.channel("tg").config
     assert config["require_mention"] is False
-    assert config["ignore_other_mentions"] is False
-    # An ordinary config patch: the stored refs and the bound agent survive.
+    assert config["ignore_other_mentions"] is True
+    # An ordinary config patch: the stored refs, binding and bound agent survive.
     assert config["bot_token_ref"] == _TG_REF
     assert config["default_agent"] == channel_daemon.agent_uid
+    assert config["runs_on"] == _MACHINE_ID
 
-    r = runner.invoke(app, ["channel", "set", "tg", "--ignore-other-mentions", "--require-mention"])
-    assert r.exit_code == 0, r.output
+    # A flag left out keeps what is stored, not the default.
+    assert runner.invoke(app, ["channel", "edit", "tg", "--require-mention"]).exit_code == 0
     config = channel_daemon.channel("tg").config
     assert config["require_mention"] is True
     assert config["ignore_other_mentions"] is True
-
-    # A flag left out keeps what is stored, not the default.
-    assert runner.invoke(app, ["channel", "set", "tg", "--no-require-mention"]).exit_code == 0
-    assert channel_daemon.channel("tg").config["ignore_other_mentions"] is True
 
 
 @pytest.mark.acceptance(
     spec="channels", scenario="the quiet windows are edited from the command line"
 )
-def test_set_changes_the_quiet_windows(channel_daemon: _Daemon) -> None:
+def test_edit_changes_the_quiet_windows(channel_daemon: _Daemon) -> None:
     assert _register_tg().exit_code == 0
     r = runner.invoke(
-        app, ["channel", "set", "tg", "--wait-after-text", "0", "--wait-after-forward", "8"]
+        app, ["channel", "edit", "tg", "--wait-after-text", "0", "--wait-after-forward", "8"]
     )
     assert r.exit_code == 0, r.output
-    assert r.stdout.splitlines() == [
-        "wait_after_text_seconds: 0s",
-        "wait_after_forward_seconds: 8s",
-    ]
     config = channel_daemon.channel("tg").config
     assert config["wait_after_text_seconds"] == 0
     assert config["wait_after_forward_seconds"] == 8
     assert config["require_mention"] is True  # untouched
-    r = runner.invoke(app, ["channel", "set", "tg", "--wait-after-text", "61"])
+    r = runner.invoke(app, ["channel", "edit", "tg", "--wait-after-text", "61"])
     assert r.exit_code == 2
 
 
-def test_set_with_no_option_exits_2(channel_daemon: _Daemon) -> None:
+def test_edit_with_no_option_exits_2(channel_daemon: _Daemon) -> None:
     assert _register_tg().exit_code == 0
-    r = runner.invoke(app, ["channel", "set", "tg"])
+    r = runner.invoke(app, ["channel", "edit", "tg"])
     assert r.exit_code == 2
     assert "nothing to change" in r.stderr
 
 
-def test_set_unknown_channel_exits_4(channel_daemon: _Daemon) -> None:
-    r = runner.invoke(app, ["channel", "set", "nope", "--require-mention"])
+def test_edit_unknown_channel_exits_4(channel_daemon: _Daemon) -> None:
+    r = runner.invoke(app, ["channel", "edit", "nope", "--require-mention"])
     assert r.exit_code == 4
+
+
+def test_removed_channel_commands_are_gone(channel_daemon: _Daemon) -> None:
+    for gone in ("register", "status", "set"):
+        r = runner.invoke(app, ["channel", gone, "--help"])
+        assert r.exit_code != 0, gone
+        assert "No such command" in r.output
+
+
+@pytest.mark.acceptance(
+    spec="channels", scenario="a channel's lifecycle and reach run from its own command group"
+)
+def test_a_channels_lifecycle_and_reach_run_from_its_own_group(channel_daemon: _Daemon) -> None:
+    assert _register_tg().exit_code == 0
+    assert channel_daemon.channel("tg").enabled is True
+    channel_daemon.pair("tg", chat_id="555")
+    before = channel_daemon.channel("tg")
+
+    titled = runner.invoke(app, ["channel", "edit", "tg", "--title", "Phone bot"])
+    assert titled.exit_code == 0, titled.output
+    after = channel_daemon.channel("tg")
+    assert after.title == "Phone bot"
+    assert after.config == before.config
+
+    scoped = runner.invoke(app, ["channel", "scope", "tg", "--agents", _AGENT_NAME])
+    assert scoped.exit_code == 0, scoped.output
+    assert channel_daemon.channel("tg").scope == Scope(agents=[channel_daemon.agent_uid])
+
+    off = runner.invoke(app, ["channel", "disable", "tg"])
+    assert off.exit_code == 0, off.output
+    assert channel_daemon.channel("tg").enabled is False
+    shown = json.loads(runner.invoke(app, ["channel", "show", "tg", "--json"]).output)
+    assert shown["status"]["enabled"] is False
+    assert shown["title"] == "Phone bot"
+
+    removed = runner.invoke(app, ["channel", "rm", "tg", "--yes"])
+    assert removed.exit_code == 0, removed.output
+    assert _listed_names(channel_daemon) == []
+    assert channel_daemon.run(channel_daemon.peers.list_by_resource(before.id)) == []
+
+    events = [
+        e.event_type
+        for e in channel_daemon.run(channel_daemon.audit.query(kind="channel", limit=50))
+    ]
+    for expected in (
+        "resource_created",
+        "resource_updated",
+        "resource_scope_updated",
+        "resource_disabled",
+        "resource_deleted",
+    ):
+        assert expected in events, (expected, events)
 
 
 @pytest.mark.acceptance(
@@ -457,7 +505,7 @@ def test_set_unknown_channel_exits_4(channel_daemon: _Daemon) -> None:
 def test_scope_set_on_a_channel_narrows_the_agents_it_may_drive(
     channel_daemon: _Daemon,
 ) -> None:
-    """`coffer scope set channel <name>` names the agents this channel may
+    """`coffer channel scope <name>` names the agents this channel may
     route to (ADR per-agent-resource-scope). It is the same framework surface every scoped
     kind shares — the channel kind no longer refuses it.
 
@@ -467,7 +515,7 @@ def test_scope_set_on_a_channel_narrows_the_agents_it_may_drive(
     comparing them directly."""
     assert _register_tg().exit_code == 0
 
-    result = runner.invoke(app, ["scope", "set", "channel", "tg", "--agents", _AGENT_NAME])
+    result = runner.invoke(app, ["channel", "scope", "tg", "--agents", _AGENT_NAME])
 
     assert result.exit_code == 0, result.output
     resource = channel_daemon.channel("tg")
@@ -475,9 +523,7 @@ def test_scope_set_on_a_channel_narrows_the_agents_it_may_drive(
 
 
 def test_register_telegram_without_token_ref_exits_6(channel_daemon: _Daemon) -> None:
-    r = runner.invoke(
-        app, ["channel", "register", "tg", "--type", "telegram", "--agent", _AGENT_NAME]
-    )
+    r = runner.invoke(app, ["channel", "add", "tg", "--type", "telegram", "--agent", _AGENT_NAME])
     assert r.exit_code == 6
     assert _listed_names(channel_daemon) == []  # nothing persisted
 
@@ -487,7 +533,7 @@ def test_register_seatalk_with_missing_flags_exits_6(channel_daemon: _Daemon) ->
         app,
         [
             "channel",
-            "register",
+            "add",
             "st",
             "--type",
             "seatalk",
@@ -502,9 +548,7 @@ def test_register_seatalk_with_missing_flags_exits_6(channel_daemon: _Daemon) ->
 
 
 def test_register_unknown_type_exits_6(channel_daemon: _Daemon) -> None:
-    r = runner.invoke(
-        app, ["channel", "register", "x", "--type", "discord", "--agent", _AGENT_NAME]
-    )
+    r = runner.invoke(app, ["channel", "add", "x", "--type", "discord", "--agent", _AGENT_NAME])
     assert r.exit_code == 6
 
 
@@ -516,7 +560,7 @@ def test_register_without_an_agent_is_refused(channel_daemon: _Daemon) -> None:
     the command never runs, which is the point — the refusal happens before
     anything reaches the daemon."""
     r = runner.invoke(
-        app, ["channel", "register", "tg", "--type", "telegram", "--bot-token-ref", _TG_REF]
+        app, ["channel", "add", "tg", "--type", "telegram", "--bot-token-ref", _TG_REF]
     )
     assert r.exit_code == 2
     assert _listed_names(channel_daemon) == []
@@ -530,7 +574,7 @@ def test_register_with_an_unknown_agent_exits_4(channel_daemon: _Daemon) -> None
         app,
         [
             "channel",
-            "register",
+            "add",
             "tg",
             "--type",
             "telegram",
@@ -549,7 +593,7 @@ def test_register_invalid_agent_config_json_exits_6(channel_daemon: _Daemon) -> 
         app,
         [
             "channel",
-            "register",
+            "add",
             "tg",
             "--type",
             "telegram",
@@ -570,7 +614,7 @@ def test_register_with_missing_credential_exits_8(channel_daemon: _Daemon) -> No
         app,
         [
             "channel",
-            "register",
+            "add",
             "tg",
             "--type",
             "telegram",
@@ -600,12 +644,15 @@ def test_pair_unknown_channel_exits_4(channel_daemon: _Daemon) -> None:
     assert r.exit_code == 4
 
 
-def test_status_renders_runtime_pairing_and_inbound(channel_daemon: _Daemon) -> None:
+@pytest.mark.acceptance(
+    spec="channels", scenario="channel status reports runtime, pairing, and callback details"
+)
+def test_show_renders_runtime_pairing_and_inbound(channel_daemon: _Daemon) -> None:
     assert _register_st().exit_code == 0
     channel_daemon.runtime.adapters["st"] = _StubAdapter()
     channel_daemon.pair("st")
 
-    r = runner.invoke(app, ["channel", "status", "st"])
+    r = runner.invoke(app, ["channel", "show", "st"])
     assert r.exit_code == 0, r.output
     assert "channel:  st (seatalk)" in r.output
     assert "running: True" in r.output
@@ -614,11 +661,15 @@ def test_status_renders_runtime_pairing_and_inbound(channel_daemon: _Daemon) -> 
     # No connection attempt yet: said as such, not as a fault.
     assert "inbound:  websocket (not connected yet)" in r.output
 
-    as_json = runner.invoke(app, ["channel", "status", "st", "--json"])
+    as_json = runner.invoke(app, ["channel", "show", "st", "--json"])
     assert as_json.exit_code == 0, as_json.output
     body = json.loads(as_json.output)
-    assert body["inbound"] == {"websocket_state": None, "websocket_error": None}
-    assert "callback" not in body
+    # The configuration and the status in one document.
+    assert body["name"] == "st" and body["config"]["channel_type"] == "seatalk"
+    assert body["status"]["running"] is True
+    assert body["status"]["peer"]["chat_id"] == "emp-1"
+    assert body["status"]["inbound"] == {"websocket_state": None, "websocket_error": None}
+    assert "callback" not in body["status"]
 
 
 def test_register_seatalk_takes_no_inbound_transport_option(channel_daemon: _Daemon) -> None:
@@ -632,7 +683,7 @@ def test_register_seatalk_takes_no_inbound_transport_option(channel_daemon: _Dae
             app,
             [
                 "channel",
-                "register",
+                "add",
                 "st",
                 "--type",
                 "seatalk",
@@ -658,10 +709,10 @@ def test_register_seatalk_takes_no_inbound_transport_option(channel_daemon: _Dae
     spec="channels/seatalk",
     scenario="status names the websocket connection state",
 )
-def test_status_names_the_websocket_connection_state(channel_daemon: _Daemon) -> None:
+def test_show_names_the_websocket_connection_state(channel_daemon: _Daemon) -> None:
     """Spec channels/seatalk "Report the websocket connection as the channel's
     inbound state": one channel connected, one whose last attempt failed, read
-    through the REST body (``--json`` is the route's own answer) and the CLI's
+    through the REST body (``--json`` carries the route's answer under ``status``) and the CLI's
     rendering of it. Neither surface names a listener, port, path, URL or tunnel.
     """
     assert _register_st("up").exit_code == 0
@@ -673,18 +724,18 @@ def test_status_names_the_websocket_connection_state(channel_daemon: _Daemon) ->
     channel_daemon.runtime.websocket_states[down] = "error"
     channel_daemon.runtime.websocket_errors[down] = "register handshake refused: bad app secret"
 
-    up_text = runner.invoke(app, ["channel", "status", "up"])
-    down_text = runner.invoke(app, ["channel", "status", "down"])
+    up_text = runner.invoke(app, ["channel", "show", "up"])
+    down_text = runner.invoke(app, ["channel", "show", "down"])
     assert up_text.exit_code == 0 and down_text.exit_code == 0
     assert "inbound:  websocket (connected)" in up_text.output
     assert "ws error" not in up_text.output
     assert "inbound:  websocket (error)" in down_text.output
     assert "ws error: register handshake refused: bad app secret" in down_text.output
 
-    up_json = json.loads(runner.invoke(app, ["channel", "status", "up", "--json"]).output)
-    down_json = json.loads(runner.invoke(app, ["channel", "status", "down", "--json"]).output)
-    assert up_json["inbound"] == {"websocket_state": "connected", "websocket_error": None}
-    assert down_json["inbound"] == {
+    up_json = json.loads(runner.invoke(app, ["channel", "show", "up", "--json"]).output)
+    down_json = json.loads(runner.invoke(app, ["channel", "show", "down", "--json"]).output)
+    assert up_json["status"]["inbound"] == {"websocket_state": "connected", "websocket_error": None}
+    assert down_json["status"]["inbound"] == {
         "websocket_state": "error",
         "websocket_error": "register handshake refused: bad app secret",
     }
@@ -693,11 +744,11 @@ def test_status_names_the_websocket_connection_state(channel_daemon: _Daemon) ->
         for word in ("listener", "127.0.0.1", "/seatalk/", "tunnel", "https://"):
             assert word not in rendered
     for body in (up_json, down_json):
-        assert set(body["inbound"]) == {"websocket_state", "websocket_error"}
-        assert "callback" not in body
+        assert set(body["status"]["inbound"]) == {"websocket_state", "websocket_error"}
+        assert "callback" not in body["status"]
 
 
-def test_status_of_a_websocket_channel_prints_its_error_verbatim(
+def test_show_of_a_websocket_channel_prints_its_error_verbatim(
     channel_daemon: _Daemon,
 ) -> None:
     """The two websocket failures that matter — no SDK installed, another
@@ -709,13 +760,13 @@ def test_status_of_a_websocket_channel_prints_its_error_verbatim(
     channel_daemon.runtime.websocket_states[st_uid] = "kicked"
     channel_daemon.runtime.websocket_errors[st_uid] = "another connection took over"
 
-    r = runner.invoke(app, ["channel", "status", "st"])
+    r = runner.invoke(app, ["channel", "show", "st"])
     assert r.exit_code == 0, r.output
     assert "inbound:  websocket (kicked)" in r.output
     assert "ws error: another connection took over" in r.output
 
 
-def test_status_says_an_unbound_channel_runs_nowhere(channel_daemon: _Daemon) -> None:
+def test_show_says_an_unbound_channel_runs_nowhere(channel_daemon: _Daemon) -> None:
     """Spec channels "Bind each channel to the one machine that runs it": unbound
     must be reported as itself, never looking like the normal state of a channel
     that another machine runs."""
@@ -724,29 +775,29 @@ def test_status_says_an_unbound_channel_runs_nowhere(channel_daemon: _Daemon) ->
     config = {k: v for k, v in resource.config.items() if k != "runs_on"}
     channel_daemon.run(channel_daemon.resources.update_config(resource.uid, config, "test"))
 
-    r = runner.invoke(app, ["channel", "status", "tg"])
+    r = runner.invoke(app, ["channel", "show", "tg"])
     assert r.exit_code == 0, r.output
     assert "runs on:  unbound (runs nowhere)" in r.output
     assert "another machine" not in r.output
 
 
-def test_status_names_the_foreign_machine_a_bound_channel_runs_on(
+def test_show_names_the_foreign_machine_a_bound_channel_runs_on(
     channel_daemon: _Daemon,
 ) -> None:
     assert _register_tg().exit_code == 0
     assert runner.invoke(app, ["channel", "bind", "tg", "ffffffffffffffff"]).exit_code == 0
 
-    r = runner.invoke(app, ["channel", "status", "tg"])
+    r = runner.invoke(app, ["channel", "show", "tg"])
     assert r.exit_code == 0, r.output
     assert "runs on:  ffffffffffffffff (another machine)" in r.output
 
     assert runner.invoke(app, ["channel", "bind", "tg"]).exit_code == 0
-    r = runner.invoke(app, ["channel", "status", "tg"])
+    r = runner.invoke(app, ["channel", "show", "tg"])
     assert f"runs on:  {_MACHINE_ID} (this machine)" in r.output
 
 
-def test_status_unknown_channel_exits_4(channel_daemon: _Daemon) -> None:
-    r = runner.invoke(app, ["channel", "status", "ghost"])
+def test_show_unknown_channel_exits_4(channel_daemon: _Daemon) -> None:
+    r = runner.invoke(app, ["channel", "show", "ghost"])
     assert r.exit_code == 4
 
 

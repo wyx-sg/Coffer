@@ -681,6 +681,8 @@ export interface components {
             uid: string;
             /** @description A mutable label, unique among agents, editable through the kind-agnostic `PATCH /api/v1/resources/{uid}`. For display. Note it is NOT `type`: `type` (`claude_code`, `codex`) is the product this agent is, fixed at registration, and the two were compared against each other for long enough to need a translation table — which the uid retires, because references now hold neither. */
             name: string;
+            /** @description Optional display text a person chose, shown in place of the name wherever this resource is listed or shown; null when none is set. Edited through `PATCH /api/v1/resources/{uid}` (resource-framework "Carry an optional editable title on every resource"). */
+            title?: string | null;
             type: components["schemas"]["AgentType"];
             /** @description Resolved config directory (the type's standard location unless overridden) — where the agent's config files live and skills are delivered under <config_dir>/skills. */
             config_dir: string;

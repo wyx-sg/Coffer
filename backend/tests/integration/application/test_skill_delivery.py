@@ -120,7 +120,6 @@ async def _setup(tmp_path: pathlib.Path, *, reconcile_hooks: bool = True):
     )
     placeholder_kinds["skill"] = make_skill_kind(
         skill_svc.cleanup_bindings_for_skill,
-        skill_svc.move_master_folder,
         on_scope_changed=_skill_delivery_changed if reconcile_hooks else None,
         on_enabled_changed=_skill_delivery_changed if reconcile_hooks else None,
     )

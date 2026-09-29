@@ -65,6 +65,10 @@ class AgentOut(BaseModel):
     # store the uid, and a client that prints one must print the name.
     uid: str
     name: str
+    #: The display title a person chose (spec resource-framework "Carry an optional
+    #: editable title on every resource"); ``None`` when unset, and a surface shows
+    #: the name in its place.
+    title: str | None = None
     type: AgentType
     # The agent's config directory — where its config files live and, under
     # <config_dir>/skills, where Coffer delivers skills. Either the user's
@@ -105,6 +109,7 @@ def _to_out(r: Resource) -> AgentOut:
     return AgentOut(
         uid=r.uid,
         name=r.name,
+        title=r.title,
         type=cfg.type,
         config_dir=str(cfg.resolved_config_dir()),
         description=r.description,

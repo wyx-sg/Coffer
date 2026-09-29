@@ -12,10 +12,12 @@ import pathlib
 import tempfile
 
 import pytest
+import yaml
 
 from coffer.application.knowledge.guide_render import (
     GUIDE_SKILL_NAME,
     MAX_DESCRIPTION_CHARS,
+    display_memory_root,
     display_root,
     render,
     render_description,
@@ -49,6 +51,12 @@ def test_the_default_root_is_rendered_home_relative() -> None:
     machines whose home directories differ."""
     home = pathlib.Path("/Users/someone")
     assert display_root(home / ".coffer" / "knowledge", home=home) == "~/.coffer/knowledge"
+
+
+def test_the_memory_root_follows_the_same_rule() -> None:
+    home = pathlib.Path("/Users/someone")
+    assert display_memory_root(home / ".coffer" / "memory", home=home) == "~/.coffer/memory"
+    assert display_memory_root(pathlib.Path("/mnt/memory"), home=home) == "/mnt/memory"
 
 
 def test_a_moved_root_is_rendered_absolute() -> None:
@@ -110,15 +118,58 @@ def test_an_empty_corpus_still_renders_a_usable_manual() -> None:
     assert "No collections have been created yet" in text
 
 
+_MEMORY = "~/.coffer/memory"
+
+
 @pytest.mark.acceptance(
     spec="knowledge", scenario="one skill carries both Coffer's manual and the catalogue"
 )
 def test_the_body_carries_both_halves() -> None:
-    """One skill, two jobs: how Coffer works, and what it currently holds."""
-    text = render("~/.coffer/knowledge", [_collection("shopee", "Shopee's account system.")])
-    assert "never writes it" in text  # the manual half
-    assert "`doc0.md` — **Doc 0**" in text  # the catalogue half
-    assert "~/.coffer/knowledge/shopee/" in text
+    """One skill, two jobs: how Coffer works, and what it currently holds —
+    the manual first, the catalogue after it, in one file."""
+    text = render(
+        "~/.coffer/knowledge",
+        [_collection("shopee", "Shopee's account system.")],
+        memory_root=_MEMORY,
+    )
+    _, frontmatter, body = text.split("---", 2)
+    description = yaml.safe_load(frontmatter)["description"]
+    assert len(description) <= MAX_DESCRIPTION_CHARS
+    assert "Coffer" in description
+    assert "coffer__search_tools" in description
+    assert "coffer__write" in description
+    assert "shopee (Shopee's account system)" in description
+
+    manual_end = body.index("## What is in this developer's knowledge")
+    manual, catalogue = body[:manual_end], body[manual_end:]
+    assert "`coffer__search_tools`" in manual
+    assert "`coffer__write`" in manual
+    assert "Everything left out is\nstill callable" in manual  # the tiering contract
+    assert "never writes it" in manual
+    assert "Nothing here waits on a human" in manual
+    assert "`doc0.md` — **Doc 0**" in catalogue
+    assert "~/.coffer/knowledge/shopee/" in catalogue
+
+
+@pytest.mark.acceptance(
+    spec="knowledge", scenario="the manual names two tools, the memory root and the log reader"
+)
+def test_the_manual_names_two_tools_the_memory_root_and_the_log_reader() -> None:
+    import re
+
+    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY)
+    named = set(re.findall(r"coffer__[a-z_]+", text))
+    assert named == {"coffer__search_tools", "coffer__write"}
+    assert "coffer__recall" not in text
+    assert "coffer__diagnose" not in text
+    assert "adds two tools of its own" in text
+    # The memory root, with the instruction to search it with the agent's own tools.
+    assert f"`{_MEMORY}/<partition>/notes/`" in text
+    assert f"search `{_MEMORY}` with your own tools" in text
+    # Coffer's own logs are read with ``coffer log`` and located with ``coffer path logs``.
+    assert "`coffer log audit`" in text
+    assert "`coffer log daemon`" in text
+    assert "`coffer path logs`" in text
 
 
 # --- the frontmatter is not ours to interpolate ------------------------------
@@ -196,33 +247,37 @@ def test_with_knowledge_switched_off_the_guide_carries_no_catalogue() -> None:
 def test_with_knowledge_switched_off_the_manual_documents_no_knowledge_tool_or_root() -> None:
     """The whole guide, not only its description: ``coffer__write`` and the
     knowledge root leave with the feature, and the tool count follows."""
-    text = render("~/.coffer/knowledge", None)
+    text = render("~/.coffer/knowledge", None, memory_root=_MEMORY)
     assert "coffer__write" not in text
     assert "~/.coffer/knowledge" not in text
-    assert "coffer__recall" in text
-    assert "Three, all prefixed" in text
+    assert _MEMORY in text
+    assert "adds one tool of its own" in text
     assert "<!--" not in text
 
 
-def test_with_memory_switched_off_the_guide_documents_no_recall() -> None:
+def test_with_memory_switched_off_the_guide_names_no_memory_root() -> None:
     catalogue = [_collection("ops", "Runbooks.")]
-    text = render("~/.coffer/knowledge", catalogue, memory=False)
-    assert "coffer__recall" not in text
+    text = render("~/.coffer/knowledge", catalogue)
+    assert "<MEMORY_ROOT>" not in text
+    assert "~/.coffer/memory" not in text
     assert "## Coffer reads your memory" not in text
     assert "coffer__write" in text
     assert "### ops" in text
-    assert "Three, all prefixed" in text
+    assert "adds two tools of its own" in text
+    assert "memory notes" not in text.split("---")[1]
 
-    both_off = render("~/.coffer/knowledge", None, memory=False)
-    assert "coffer__recall" not in both_off
+    both_off = render("~/.coffer/knowledge", None)
+    assert "~/.coffer/memory" not in both_off
     assert "coffer__write" not in both_off
-    assert "Two, all prefixed" in both_off
+    assert "adds one tool of its own" in both_off
+    assert "`coffer path logs`" in both_off  # the log readers are always there
     assert "<!--" not in both_off
 
 
 def test_with_every_feature_on_no_span_marker_reaches_an_agent() -> None:
-    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")])
+    text = render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory_root=_MEMORY)
     assert "<!--" not in text
     assert "<TOOL_COUNT>" not in text
-    assert "Four, all prefixed" in text
-    assert render("~/.coffer/knowledge", [_collection("ops", "Runbooks.")], memory=True) == text
+    assert "<MEMORY_ROOT>" not in text
+    assert "adds two tools of its own" in text
+    assert "memory notes" in text.split("---")[1]

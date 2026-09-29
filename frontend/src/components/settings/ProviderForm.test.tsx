@@ -179,4 +179,21 @@ describe("ProviderForm validation", () => {
       "Leave blank to keep the current value",
     );
   });
+
+  test("edit carries the title: unchanged is undefined, a new one is sent, blank clears", async () => {
+    const onUpdate = renderEdit();
+    save();
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1));
+    expect(onUpdate.mock.calls[0][2]).toBeUndefined();
+
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "  Team gateway " } });
+    save();
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(2));
+    expect(onUpdate.mock.calls[1][2]).toBe("Team gateway");
+  });
+
+  test("a create form has no title field", () => {
+    renderCreate();
+    expect(screen.queryByLabelText("Title")).not.toBeInTheDocument();
+  });
 });

@@ -31,6 +31,9 @@ class _Settings:
     def write(self, key: str, enabled: bool) -> None:
         self.stored[key] = enabled
 
+    def clear(self, key: str) -> None:
+        self.stored.pop(key, None)
+
 
 def _features(**off: bool) -> FeatureService:
     return FeatureService(channel="dev", settings=_Settings(off))

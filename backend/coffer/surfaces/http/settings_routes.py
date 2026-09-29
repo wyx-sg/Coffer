@@ -10,7 +10,7 @@ The daemon's port is deliberately NOT here. It is read before the database
 exists and before this app is mounted, so the surface that changes it has to
 keep working when the daemon cannot start at all — which a route served by that
 daemon cannot. It lives in ~/.coffer/daemon-config.json, reachable through
-`coffer daemon port show/set/clear` alone.
+`coffer config get/set/unset daemon.port` alone.
 """
 
 from __future__ import annotations

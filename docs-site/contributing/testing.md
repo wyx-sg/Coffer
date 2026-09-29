@@ -162,6 +162,7 @@ Use **Node 20**, the version CI uses, when you run the frontend suite locally.
 | `scripts/check_architecture_doc.py` | The code-layout tree in `docs-site/architecture/layering.md` names every package, names nothing that is gone, and the architecture pages name every built-in `coffer__*` tool |
 | `scripts/check_pyinstaller_specs.py` | The three PyInstaller specs point at files that exist and keep the `-X utf8` runtime option. No pull request job runs PyInstaller, so this is the only early warning |
 | `scripts/check_cli_reference.py` | This site's generated CLI and REST API reference pages match the code. Fix drift with `make docs-reference` |
+| `scripts/check_removed_commands.py` | No page under `docs-site/`, shipped skill body or e2e spec quotes a `coffer` command or `coffer__` tool that the CLI and MCP reshape removed. Each hit names the command to use instead |
 | `ruff check`, `ruff format --check` | Lint and formatting over `backend/` and `evals/`, under the rules in `backend/pyproject.toml` |
 | `mypy --strict` | Type-checks the whole `coffer` package |
 | `lint-imports` | Import-linter contracts: the layer direction (`surfaces` → `application` → `domain`), a pure `domain`, `keyring` confined to the credentials code, no cross-kind imports between kinds, and specific libraries confined to their adapters |

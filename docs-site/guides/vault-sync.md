@@ -8,7 +8,7 @@ description: Keep one Coffer vault across several of your machines by converging
 Vault sync keeps the Coffer vaults on your machines converged through a git repository you own, so a laptop and a desktop hold the same knowledge, skills, MCP servers, agents and providers. This page is for anyone who runs Coffer on more than one machine and wants to set it up, understand what it does to their files, and recover when a round needs them.
 
 ::: tip Experimental feature
-Vault sync is an [experimental feature](/guides/experimental-features) with the key `vault_sync`. It is off by default in a release build and on in a build from source. Switch it on under **Settings → General → Experimental features**, or run `coffer daemon features enable vault_sync`.
+Vault sync is an [experimental feature](/guides/experimental-features) with the key `vault_sync`. It is off by default in a release build and on in a build from source. Switch it on under **Settings → General → Experimental features**, or run `coffer config set feature.vault_sync on`.
 :::
 
 ## What it is for
@@ -122,9 +122,9 @@ Without the key, sync still works, but credentials that arrived are reported as 
 
 Some consequences to know:
 
-- **Reach is set per machine.** A server that should run only on the desktop is registered everywhere but disabled on the laptop. A resource arriving on a machine for the first time starts at that machine's default reach. The reach control in the UI says it applies to this machine only; so does `coffer scope set`.
+- **Reach is set per machine.** A server that should run only on the desktop is registered everywhere but disabled on the laptop. A resource arriving on a machine for the first time starts at that machine's default reach. The reach control in the UI says it applies to this machine only; so does `coffer <kind> scope`.
 - **A channel travels, but its adapter runs on one machine.** A chat bot can have only one consumer, so each channel names the machine that runs it. Other machines hold its configuration and pairings without starting it. To move a bot, run `coffer channel bind <name> [<machine_id>]` from the machine that currently runs it. See [Channels](/guides/channels).
-- **Curation runs on one machine.** The pass that merges new knowledge into documents runs on one owner machine, so two machines do not rewrite the same documents differently. Set it under **Settings → Coffer's model → Automatic upkeep** or with `coffer engine curate-owner`. See [Knowledge](/guides/knowledge).
+- **Curation runs on one machine.** The pass that merges new knowledge into documents runs on one owner machine, so two machines do not rewrite the same documents differently. Set it under **Settings → Coffer's model → Automatic upkeep** or with `coffer config set engine.curate_owner`. See [Knowledge](/guides/knowledge).
 - **The plugin inventory records, it does not install.** It lists which plugins each agent has on each machine and writes nothing into any agent's configuration.
 - Paths under your home directory are stored against a `${HOME}` placeholder and expanded with each machine's own home.
 
@@ -217,20 +217,20 @@ While a hold is outstanding the vault converges no further, but each round re-de
 Every round snapshots the vault before it applies anything, and the ten most recent snapshots are kept:
 
 ```sh
-coffer sync rollback                        # undo the most recent round's apply
+coffer sync restore                         # undo the most recent round's apply
 coffer sync restore --at 2026-09-05         # or a sha, or a ref
 ```
 
-`rollback` returns the vault to the snapshot taken before the most recent round applied anything. The undo is an ordinary local change that the next round publishes, so the other machines follow. Run it before another round applies something else: every round that reaches the apply step takes a new snapshot, even one that applies nothing. On the web, **Undo this round** appears on the newest round only when that round applied something here.
+`restore` without `--at` returns the vault to the snapshot taken before the most recent round applied anything. The undo is an ordinary local change that the next round publishes, so the other machines follow. Run it before another round applies something else: every round that reaches the apply step takes a new snapshot, even one that applies nothing. On the web, **Undo this round** appears on the newest round only when that round applied something here.
 
-`restore` moves to the last commit at or before `--at` and applies the difference from where the vault is now, so a document deleted last week returns without discarding anything added since. It is command-line only, and a round never reaches back into history on its own.
+With `--at`, `restore` moves to the last commit at or before that point and applies the difference from where the vault is now, so a document deleted last week returns without discarding anything added since. It is command-line only, and a round never reaches back into history on its own.
 
 ## Manage the machines
 
 ```sh
 coffer sync machine list
 coffer sync machine rename "Work desktop"
-coffer sync machine remove <machine_id>     # retire a machine you no longer use
+coffer sync machine rm <machine_id>         # retire a machine you no longer use
 ```
 
 A machine's id is derived from the host (`IOPlatformUUID` on macOS, `/etc/machine-id` on Linux), hashed before it is published, and survives reinstalling Coffer. Where no host identifier is readable, Coffer stores a generated id in `~/.coffer/machine-id`; that one does not survive deleting `~/.coffer`, and both `coffer sync status` and the machine table (the **Machines** tab on the **Sync** page) say so. Renaming changes only a label. Retiring removes the machine's descriptor and rewrites nothing else; a channel still bound to it runs nowhere until you bind it elsewhere.
@@ -239,20 +239,20 @@ A machine's id is derived from the host (`IOPlatformUUID` on macOS, `/etc/machin
 
 - **Pause:** switch off **Converge automatically** on **Setup**, or run `coffer sync remote pause`. Every round then reports `disabled`, records nothing, pushes nothing and raises no notice. The remote, its settings, the pointer and the history are kept, and switching it back on (or `coffer sync remote resume`) resumes where the vault left off. `coffer sync remote set` never unpauses a paused remote.
 - **Forget the remote:** `coffer sync remote clear`. The vault is left exactly as it is.
-- **Switch the feature off:** `coffer daemon features disable vault_sync` closes every sync surface on this machine and keeps everything it holds.
+- **Switch the feature off:** `coffer config set feature.vault_sync off` closes every sync surface on this machine and keeps everything it holds.
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `vault_sync is switched off on this machine` | The feature is off. | `coffer daemon features enable vault_sync` |
+| `vault_sync is switched off on this machine` | The feature is off. | `coffer config set feature.vault_sync on` |
 | Status `awaiting_join`, nothing applied | This machine has not joined the remote. | `coffer sync adopt` |
 | Push fails with an authentication error | No usable credential: your git config and keychain helper are not consulted. | Store a token and set `--credential-ref`, or use an SSH key that needs no prompt. |
 | `remote set` refused for the working tree | The path is relative, or at, inside or above the vault or `~/.coffer`. | Use the default or an absolute path outside `~/.coffer`. |
 | `credential locked: <ref>` on every round | This machine lacks the master key those credentials were encrypted with. | `coffer sync key import <file>` with the key from a machine that has it. |
 | A held round after reinstalling Coffer | The empty vault would publish its loss. | Do not confirm. `coffer sync rebuild` takes the remote's state; `coffer sync reject` discards just this round. |
 | Status `push_failed` | The round applied here but could not reach the remote. | Check the network and the token; the next round retries. |
-| A machine appears twice in the table | Its id was stored locally and `~/.coffer` was deleted. | `coffer sync machine remove <old id>` |
+| A machine appears twice in the table | Its id was stored locally and `~/.coffer` was deleted. | `coffer sync machine rm <old id>` |
 
 For failures that do not fit here, the round's error is in `coffer sync status`, and the daemon log (**Activity → Daemon**) has the detail.
 

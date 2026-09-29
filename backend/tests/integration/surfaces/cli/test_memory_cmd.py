@@ -1,6 +1,9 @@
 """Integration tests for ``coffer memory ...``.
 
-See spec memory "Cover memory management on REST and the CLI".
+See spec memory "Cover memory management on REST and the CLI": the lifecycle
+verbs (no ``add``), ``sync``, ``distil``, ``context`` and ``delivery on|off``.
+Notes, the index and the retirement record are plain files that ``coffer path
+memory`` names (test_path_cmd.py), so no command here reads one.
 
 Most commands are thin HTTP shells, tested the same way
 ``test_knowledge_cmd.py`` tests its own: boot the real app, route
@@ -35,9 +38,7 @@ from typer.testing import CliRunner
 
 import coffer.surfaces.cli._client as _cli_client
 import coffer.surfaces.cli.memory_cmd as memory_cmd
-from coffer.domain.memory.retired import RetiredNote
 from coffer.infrastructure.daemon.pid_lock import DaemonInfo
-from coffer.infrastructure.memory import store as memory_store
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
@@ -170,7 +171,7 @@ def _distilled_partition(tmp_path: pathlib.Path) -> str:
     _seed_repository(tmp_path)
     synced = _runner.invoke(cli_app, ["memory", "sync", "--json"])
     assert synced.exit_code == 0, synced.output
-    listed = _runner.invoke(cli_app, ["memory", "partitions", "--json"])
+    listed = _runner.invoke(cli_app, ["memory", "list", "--json"])
     partitions = json.loads(_extract_json(listed.output))["partitions"]
     name = next(p["name"] for p in partitions if p["name"] != "global")
     for partition in (name, "global"):
@@ -179,10 +180,16 @@ def _distilled_partition(tmp_path: pathlib.Path) -> str:
     return name
 
 
-# ----- partitions, notes, one note ------------------------------------------
+# ----- list, and the notes on disk ----------------------------------------
 
 
-def test_sync_then_partitions_notes_and_one_note(memory_cli_daemon):
+def _partition_dir(name: str) -> pathlib.Path:
+    located = _runner.invoke(cli_app, ["path", "memory", name])
+    assert located.exit_code == 0, located.output
+    return pathlib.Path(located.output.strip().splitlines()[-1])
+
+
+def test_sync_list_distil_and_the_note_on_disk(memory_cli_daemon):
     tmp_path = memory_cli_daemon
     _register_cc_via_http()
     repository = _seed_repository(tmp_path)
@@ -196,7 +203,7 @@ def test_sync_then_partitions_notes_and_one_note(memory_cli_daemon):
     assert sorted(result["distilled"]) == ["coffer", "global"]
     assert result["skipped"] == []
 
-    listed = _runner.invoke(cli_app, ["memory", "partitions", "--json"])
+    listed = _runner.invoke(cli_app, ["memory", "list", "--json"])
     assert listed.exit_code == 0, listed.output
     partitions = json.loads(_extract_json(listed.output))["partitions"]
     project = next(p for p in partitions if p["name"] != "global")
@@ -210,27 +217,16 @@ def test_sync_then_partitions_notes_and_one_note(memory_cli_daemon):
     assert distilled.exit_code == 0, distilled.output
     assert json.loads(_extract_json(distilled.output))["opened"] == 0
 
-    notes = _runner.invoke(cli_app, ["memory", "notes", project["name"], "--json"])
-    assert notes.exit_code == 0, notes.output
-    note = json.loads(_extract_json(notes.output))["notes"][0]
-    assert note["title"] == "python-lockfile"
-    assert note["slug"] == "python-lockfile"
-    assert note["type"] == "project"
+    # The note is a file: read where `coffer path memory` points.
+    note = _partition_dir(project["name"]) / "notes" / "python-lockfile.md"
+    assert "uv sync --frozen" in note.read_text(encoding="utf-8")
 
-    table = _runner.invoke(cli_app, ["memory", "notes", project["name"]])
+    table = _runner.invoke(cli_app, ["memory", "list"])
     assert table.exit_code == 0, table.output
-    assert "python-lockfile" in table.output.replace("\n", "")
-
-    shown = _runner.invoke(cli_app, ["memory", "note", project["name"], note["slug"]])
-    assert shown.exit_code == 0, shown.output
-    assert "uv sync --frozen" in shown.output
-    # The origin is printed because a note's body is Coffer's paraphrase
-    # ("Write notes in Coffer's own words"): a note that reads wrong has to be
-    # traceable to what said it.
-    assert "origin: cc <-" in shown.output
+    assert "coffer" in table.output
 
 
-def test_partitions_table_calls_out_a_repository_that_is_gone(memory_cli_daemon):
+def test_list_table_calls_out_a_repository_that_is_gone(memory_cli_daemon):
     """Per "Report unresolvable partitions", an orphan is named as one rather
     than sitting there, listed and undeliverable, looking exactly like a live
     partition."""
@@ -238,67 +234,43 @@ def test_partitions_table_calls_out_a_repository_that_is_gone(memory_cli_daemon)
     partition = _distilled_partition(tmp_path)
     shutil.rmtree(tmp_path / "coffer")
 
-    listed = _runner.invoke(cli_app, ["memory", "partitions"])
+    listed = _runner.invoke(cli_app, ["memory", "list"])
 
     assert listed.exit_code == 0, listed.output
     assert "unresolvable" in listed.output.replace("\n", "")
     assert partition in listed.output
 
 
-def test_notes_of_an_unknown_partition_exits_not_found(memory_cli_daemon):
-    notes = _runner.invoke(cli_app, ["memory", "notes", "does-not-exist"])
-    combined = notes.output + (notes.stderr or "")
-    assert notes.exit_code == 4, combined
-    assert "Traceback" not in combined, combined
-
-
-def test_note_that_is_not_there_exits_not_found(memory_cli_daemon):
-    partition = _distilled_partition(memory_cli_daemon)
-
-    shown = _runner.invoke(cli_app, ["memory", "note", partition, "no-such-note"])
-
+def test_show_of_an_unknown_partition_exits_not_found(memory_cli_daemon):
+    shown = _runner.invoke(cli_app, ["memory", "show", "does-not-exist"])
     combined = shown.output + (shown.stderr or "")
     assert shown.exit_code == 4, combined
     assert "Traceback" not in combined, combined
 
 
-# ----- retired --------------------------------------------------------------
+def test_show_edit_and_rm_a_partition(memory_cli_daemon):
+    """The verbs every kind shares, on a partition; there is no `add`, and no
+    switch (spec memory "Serve every partition to every agent")."""
+    import typer.main
 
-
-def test_retired_prints_what_was_retired_and_why(memory_cli_daemon):
-    """``RETIRED.md`` is the only thing that makes a deletion stick in a store
-    whose sources live outside it ("Record retirements so they stick"), so it has
-    a verb of its own."""
     partition = _distilled_partition(memory_cli_daemon)
-    empty = _runner.invoke(cli_app, ["memory", "retired", partition, "--json"])
-    assert json.loads(_extract_json(empty.output))["retired"] == []
+    group = typer.main.get_command(cli_app).commands["memory"]  # type: ignore[attr-defined]
+    assert not {"add", "enable", "disable"} & set(group.commands)
 
-    memory_store.write_retired(
-        partition,
-        [
-            RetiredNote(
-                slug="hook-injection",
-                title="Context injection ships",
-                reason="The mechanism was removed.",
-                replaced_by="pull-only-delivery",
-                retired_at="2026-09-10T00:00:00+00:00",
-                entry_ids=("cc:one",),
-            )
-        ],
-    )
+    shown = _runner.invoke(cli_app, ["memory", "show", partition, "--json"])
+    assert shown.exit_code == 0, shown.output
+    uid = json.loads(_extract_json(shown.output))["uid"]
 
-    listed = _runner.invoke(cli_app, ["memory", "retired", partition])
-    assert listed.exit_code == 0, listed.output
-    # Rich wraps long cells, so the table is asserted on values short enough to
-    # survive a column rather than on the prose it wraps.
-    flat = listed.output.replace("\n", "")
-    assert "hook-injection" in flat
-    assert "removed" in flat
+    titled = _runner.invoke(cli_app, ["memory", "edit", partition, "--title", "Coffer repo"])
+    assert titled.exit_code == 0, titled.output
+    c, _info = _cli_client.client_or_exit()
+    assert c.get(f"/resources/{uid}").json()["title"] == "Coffer repo"
 
-    as_json = _runner.invoke(cli_app, ["memory", "retired", partition, "--json"])
-    record = json.loads(_extract_json(as_json.output))["retired"][0]
-    assert record["slug"] == "hook-injection"
-    assert record["reason"] == "The mechanism was removed."
+    assert c.get(f"/resources/{uid}").json()["enabled"] is True
+
+    removed = _runner.invoke(cli_app, ["memory", "rm", partition, "--yes"])
+    assert removed.exit_code == 0, removed.output
+    assert c.get(f"/resources/{uid}").status_code == 404
 
 
 # ----- distil ---------------------------------------------------------------
@@ -324,8 +296,7 @@ def test_distil_without_an_internal_connection_reports_the_mechanical_pass(memor
     _seed_repository(tmp_path)
     synced = _runner.invoke(cli_app, ["memory", "sync", "--json"])
     assert "global" in json.loads(_extract_json(synced.output))["distilled"]
-    notes = _runner.invoke(cli_app, ["memory", "notes", "global", "--json"])
-    assert len(json.loads(_extract_json(notes.output))["notes"]) == 1
+    assert len(list((_partition_dir("global") / "notes").glob("*.md"))) == 1
 
     distilled = _runner.invoke(cli_app, ["memory", "distil", "global"])
 
@@ -405,6 +376,13 @@ def _route_context_at_the_test_app(monkeypatch) -> None:
     monkeypatch.setattr(memory_cmd.httpx, "post", _fake_post)
 
 
+def _fires() -> int:
+    c, _info = _cli_client.client_or_exit()
+    r = c.get("/audit", params={"event_type": "memory_delivery_fired"})
+    assert r.status_code == 200, r.text
+    return len(r.json()["entries"])
+
+
 def test_context_prints_the_whole_index_and_records_a_fire(memory_cli_daemon, monkeypatch):
     """What an installed session-start hook actually puts in front of an agent:
     a line per note and the absolute directory their bodies are in ("Deliver the
@@ -414,8 +392,7 @@ def test_context_prints_the_whole_index_and_records_a_fire(memory_cli_daemon, mo
     _route_context_at_the_test_app(monkeypatch)
     cc_uid = _agent_uid("cc")
 
-    before = _runner.invoke(cli_app, ["audit", "list", "--json"])
-    assert "memory_delivery_fired" not in before.output
+    assert _fires() == 0
 
     result = _runner.invoke(
         cli_app,
@@ -428,8 +405,7 @@ def test_context_prints_the_whole_index_and_records_a_fire(memory_cli_daemon, mo
     assert str(tmp_path / "memory" / partition / "notes") in result.output
     assert "coffer__recall" not in result.output
 
-    after = _runner.invoke(cli_app, ["audit", "list", "--json"])
-    assert "memory_delivery_fired" in after.output
+    assert _fires() == 1
 
 
 def test_context_of_a_partition_with_nothing_in_it_prints_nothing(memory_cli_daemon, monkeypatch):
@@ -442,94 +418,3 @@ def test_context_of_a_partition_with_nothing_in_it_prints_nothing(memory_cli_dae
 
     assert result.exit_code == 0, result.output
     assert result.output == ""
-
-
-# ----- `ls` / `read`: the partition's own directory from the terminal -------
-#
-# The REST half has existed since "Present partitions as a table and a file
-# tree" (GET /memory/partitions/{uid}/files and .../files/content) but `coffer
-# memory` could reach notes and partitions and not the files they are stored in,
-# which is the one thing "Cover memory management on REST and the CLI" names
-# that the group did not do. The verbs are `ls` and `read` so that browsing
-# memory and browsing knowledge are the same two words.
-
-
-def test_ls_walks_a_partitions_own_directory(memory_cli_daemon):
-    partition = _distilled_partition(memory_cli_daemon)
-
-    listed = _runner.invoke(cli_app, ["memory", "ls", partition, "--json"])
-    assert listed.exit_code == 0, listed.output
-    root = json.loads(_extract_json(listed.output))["root"]
-    assert root["path"] == ""
-    children = {child["name"]: child for child in root["children"]}
-    # `.raw/` is not listed ("Cover memory management on REST and the CLI").
-    assert set(children) == {"MEMORY.md", "notes"}
-    assert children["notes"]["type"] == "dir"
-    assert "notes/python-lockfile.md" in {c["path"] for c in children["notes"]["children"]}
-
-
-def test_ls_renders_the_whole_tree_as_a_table_by_default(memory_cli_daemon):
-    """The default rendering is the tree, not just its top level: a partition
-    is two levels deep by construction (``notes/<slug>.md``), so a listing that
-    stopped at the root would never show a note."""
-    partition = _distilled_partition(memory_cli_daemon)
-
-    listed = _runner.invoke(cli_app, ["memory", "ls", partition])
-
-    assert listed.exit_code == 0, listed.output
-    flat = listed.output.replace("\n", "")
-    assert "notes/python-lockfile.md" in flat
-    assert ".raw" not in flat
-
-
-def test_read_prints_one_file_from_a_partition(memory_cli_daemon):
-    partition = _distilled_partition(memory_cli_daemon)
-
-    read = _runner.invoke(cli_app, ["memory", "read", partition, "notes/python-lockfile.md"])
-
-    assert read.exit_code == 0, read.output
-    assert "uv sync --frozen" in read.output
-
-
-def test_read_prints_the_index_a_session_is_given(memory_cli_daemon):
-    partition = _distilled_partition(memory_cli_daemon)
-
-    read = _runner.invoke(cli_app, ["memory", "read", partition, "MEMORY.md"])
-
-    assert read.exit_code == 0, read.output
-    assert "python-lockfile" in read.output
-
-
-def test_read_json_carries_the_paths_the_viewer_needs(memory_cli_daemon):
-    partition = _distilled_partition(memory_cli_daemon)
-
-    read = _runner.invoke(
-        cli_app, ["memory", "read", partition, "notes/python-lockfile.md", "--json"]
-    )
-
-    assert read.exit_code == 0, read.output
-    data = json.loads(_extract_json(read.output))
-    assert data["path"] == "notes/python-lockfile.md"
-    assert data["abs_path"].endswith("/notes/python-lockfile.md")
-    assert data["folder_abs_path"].endswith(f"/{partition}/notes")
-    assert data["binary"] is False
-
-
-def test_read_of_a_missing_file_exits_not_found_without_a_traceback(memory_cli_daemon):
-    partition = _distilled_partition(memory_cli_daemon)
-
-    read = _runner.invoke(cli_app, ["memory", "read", partition, "notes/no-such-note.md"])
-
-    combined = read.output + (read.stderr or "")
-    assert read.exit_code == 4, combined
-    assert "Traceback" not in combined, combined
-
-
-def test_read_of_a_path_escaping_the_partition_is_refused(memory_cli_daemon):
-    partition = _distilled_partition(memory_cli_daemon)
-
-    read = _runner.invoke(cli_app, ["memory", "read", partition, "../../../../etc/passwd"])
-
-    combined = read.output + (read.stderr or "")
-    assert read.exit_code == 6, combined
-    assert "Traceback" not in combined, combined

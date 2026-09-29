@@ -43,9 +43,9 @@ async def enable_skill_for_agent(
     if not is_active(skill.scope, agent.uid):
         raise SkillOutOfScope(skill.name, agent.name)
     target_dir = service._resolve_agent_skill_dir(agent)
-    # The delivered copy is named after the skill's LABEL, not its uid: the
+    # The delivered copy is named after the skill's NAME, not its uid: the
     # agent product discovers a skill by its directory name. That is why the
-    # skill kind has an ``on_rename`` hook at all (see ``rename_ops``).
+    # skill kind declares its name fixed (``Kind.name_fixed``).
     link_path = target_dir / skill.name
     master = service._store.paths_for(skill.name).folder
 
