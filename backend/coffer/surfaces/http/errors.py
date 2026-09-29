@@ -95,6 +95,15 @@ _STATUS: dict[str, int] = {
     "UNMANAGED_SKILL_NOT_FOUND": 404,
     "CONFIG_FILE_STALE": 409,
     "SKILL_FILE_STALE": 409,
+    # skill sources (spec skill-manager "Add skills from an archive", "Add
+    # skills from a Git repository", "Update a Git-imported skill from its
+    # source"): an expired stage is a missing thing; git failing to fetch is
+    # the upstream refusing us (502, like the vault remote); an update over a
+    # local edit is a state conflict; updating a folder-added skill is too.
+    "SKILL_STAGING_NOT_FOUND": 404,
+    "SKILL_SOURCE_UNREACHABLE": 502,
+    "SKILL_UPDATE_CONFLICT": 409,
+    "SKILL_NOT_FROM_GIT": 409,
     "MCP_ENTRY_PROTECTED": 422,
     "MCP_ENTRY_SOURCE_AMBIGUOUS": 422,
     "ADOPT_SECRET_UNRESOLVED": 422,

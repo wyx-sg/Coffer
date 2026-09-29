@@ -593,7 +593,7 @@ def test_scope_disable_and_enable_a_skill_from_the_skill_group(skill_cli_daemon)
 @pytest.mark.acceptance(spec="skill-manager", scenario="desktop and CLI cover every operation")
 @pytest.mark.acceptance(spec="resource-framework", scenario="a kind without a title refuses one")
 def test_the_skill_group_is_the_lifecycle_verbs_and_the_folder_is_a_path(skill_cli_daemon):
-    """The group offers the shared verbs plus `add` and `verify` — no `edit`,
+    """The group offers the shared verbs plus `add`, `update` and `verify` — no `edit`,
     since a skill has nothing on its record to edit — every read
     takes `--json`, and the master folder is named by `coffer path skill`
     rather than listed, printed or written through the group."""
@@ -607,6 +607,7 @@ def test_the_skill_group_is_the_lifecycle_verbs_and_the_folder_is_a_path(skill_c
         "list",
         "show",
         "add",
+        "update",
         "rm",
         "enable",
         "disable",

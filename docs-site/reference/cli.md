@@ -1336,15 +1336,39 @@ Show one skill, by name or uid.
 ### skill add
 
 ```sh
-coffer skill add [OPTIONS] FOLDER
+coffer skill add [OPTIONS] SOURCE
 ```
 
-Import a skill from a local folder; its name comes from SKILL.md.
+Add a skill from a folder, an archive or a Git repository; its name comes from SKILL.md.
+
+A folder is imported at once. An archive or a repository is staged first: the command prints what it found and asks before adding anything.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `FOLDER` | argument | text | required | Local path to an existing skill folder |
+| `SOURCE` | argument | text | required | A skill folder, a .zip / .skill archive, or a Git URL |
 | `--force, -f` | option | flag |  | Replace an existing skill of the same name |
+| `--ref` | option | text |  | Git: branch, tag or commit |
+| `--path` | option | text |  | Git: folder inside the repository |
+| `--skill` | option | text (repeatable) |  | Which skill to add when there are several (repeatable) |
+| `--all` | option | flag |  | Add every valid skill found |
+| `--yes, -y` | option | flag |  | Add without asking |
+
+### skill update
+
+```sh
+coffer skill update [OPTIONS] NAME
+```
+
+Check a Git-imported skill for updates, preview one and apply it.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Name or uid |
+| `--check` | option | flag |  | Only check the source for newer commits |
+| `--yes, -y` | option | flag |  | Apply without asking |
+| `--take-theirs` | option | flag |  | Apply over local edits, discarding them |
+| `--keep-mine` | option | flag |  | Keep local edits and stop offering this update |
+| `--json` | option | flag |  | JSON output for scripts |
 
 ### skill rm
 

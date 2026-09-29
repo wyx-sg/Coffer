@@ -7,6 +7,7 @@ typed concretely.
 from __future__ import annotations
 
 from coffer.application.skill.service import SkillService
+from coffer.application.skill.source_service import SkillSourceService
 
 _skill_service: SkillService | None = None
 
@@ -22,3 +23,24 @@ def get_skill_service() -> SkillService:
     if _skill_service is None:
         raise RuntimeError("skill service not initialised")
     return _skill_service
+
+
+_skill_source_service: SkillSourceService | None = None
+
+
+def set_skill_source_service(svc: SkillSourceService | None) -> None:
+    """Called by the composition root once on startup (``skill_source_wiring``)."""
+    global _skill_source_service
+    _skill_source_service = svc
+
+
+def get_skill_source_service() -> SkillSourceService:
+    """FastAPI Depends() target for the skill-source routes."""
+    if _skill_source_service is None:
+        raise RuntimeError("skill source service not initialised")
+    return _skill_source_service
+
+
+def get_optional_skill_source_service() -> SkillSourceService | None:
+    """For the read model: a graph built without sources still lists skills."""
+    return _skill_source_service
