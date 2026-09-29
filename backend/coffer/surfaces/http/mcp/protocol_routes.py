@@ -262,11 +262,19 @@ async def handle_get(
                 # instead of leaving it blocked on a queue nobody will fill.
                 getter = asyncio.ensure_future(queue.get())
                 stopper = asyncio.ensure_future(stop_event.wait())
-                done, pending = await asyncio.wait(
-                    {getter, stopper}, return_when=asyncio.FIRST_COMPLETED
-                )
-                for task in pending:
-                    task.cancel()
+                try:
+                    done, _ = await asyncio.wait(
+                        {getter, stopper}, return_when=asyncio.FIRST_COMPLETED
+                    )
+                finally:
+                    # asyncio.wait never cancels what it waits on — not even
+                    # when this generator is cancelled by a client disconnect.
+                    # A leftover getter would stay parked on the session queue
+                    # until the reaper drops it, then be garbage-collected as
+                    # "Task was destroyed but it is pending!".
+                    for task in (getter, stopper):
+                        if not task.done():
+                            task.cancel()
                 if getter in done:
                     payload = getter.result()
                     _touch(mcp_session_id)
