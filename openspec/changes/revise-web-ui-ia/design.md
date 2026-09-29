@@ -468,3 +468,25 @@ is Sources, a later entry. *Rejected:* a
 "create a new skill" form, which was drawn but never built — a skill is authored in the user's
 editor, and a form would be a worse editor. The dialog is specified in skill-manager because that
 spec owns the Skills page.
+
+### 17. Knowledge curation, history and memory delivery
+
+- **Curate now drains.** The manual trigger runs passes until nothing is pending, one at a time and
+  each bounded to eight writes as the sweep's are, showing *n of m* and stopping at the first
+  failure so one broken item does not hide behind a success count. The sweep keeps its global
+  interval (60 s by default, Settings › General), so the trigger is for "now", not for "at all".
+- **One word: Curate (整理).** "Merge" named the same act on some boards; one name per act, as for
+  surfaces. Inbox entries are items in the UI; the spec keeps *material* as its internal term.
+- **Only one quiet trigger**, in the Inbox view and in Recent changes, where waiting items are
+  visible; the header carries a status line instead of a button. Without Coffer's model material
+  is promoted on arrival, so there is nothing to curate and no control is shown.
+- **Add a note is an item.** Writing something down goes through the inbox like every other
+  entrance, so no route creates a document at a path.
+- **History is the vault's git.** The vault is always a git repository in 1.0, each pass one commit
+  naming its writer, so the History tab and whole-pass undo read and revert commits; the old
+  "nothing is kept of what a pass replaced" and "where vault sync is configured" wording goes. The
+  agent named on a curated version comes from the submission's `knowledge_written` audit event.
+- **Memory delivery counts** come from the delivery-fire audit events and from the note paths
+  transcripts record reading, never their text.
+- **No disabled collection.** Every collection is served to every agent; the remaining "enabled" /
+  "disabled" wording in knowledge is removed.

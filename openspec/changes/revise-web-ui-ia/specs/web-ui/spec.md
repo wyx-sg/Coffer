@@ -1094,3 +1094,60 @@ and a remembered width that no longer fits the window is clamped to the bounds.
 - **GIVEN** browser storage that is blocked for the page
 - **WHEN** a split view opens and the user drags its divider
 - **THEN** the split opens at its default width, the drag still resizes it, and no error is shown
+
+### Requirement: Show a knowledge document's history on its History tab
+A knowledge document's pane MUST carry two tabs, **Document** (the default) and **History**. History
+lists the document's versions newest first — who wrote each (the user, Coffer's curation naming the
+agent whose item it curated, or sync) and when — and choosing a version shows its diff against the
+one before, with **Restore this version**, which writes a new version rather than rewriting the
+past (spec [knowledge](../knowledge/spec.md) "Keep every document's history and undo a pass as a
+whole"). A history that cannot be read MUST say so in the tab with a retry, leaving the Document tab
+working.
+
+#### Scenario: the history tab lists versions with their writers
+- **GIVEN** a document the user created, that curation then changed from a Claude Code item
+- **WHEN** the user opens its History tab and chooses the older version
+- **THEN** the tab lists both versions with their writers and times, shows the diff, and offers Restore this version
+
+#### Scenario: a history that fails to load leaves the document readable
+- **GIVEN** the history read failing
+- **WHEN** the user opens the History tab
+- **THEN** the tab says it could not load the history and offers a retry, and the Document tab still renders
+
+### Requirement: Follow knowledge changes in Recent changes
+The Knowledge page MUST carry a **Recent changes** view: one timeline across every collection, newest
+first, of curation passes and of documents people and agents wrote or deleted, filterable to one
+collection, with the items still waiting and a quiet **Curate now** beside them (spec
+[knowledge](../knowledge/spec.md) "Run curation on a sweep and on demand"). Choosing a pass MUST show
+what it changed — each document it wrote or retired, with a diff — and offer **Undo this pass**, which
+asks first and undoes the whole pass, reporting a refusal that names the document changed since. The
+wording is Curate / Curation (整理) throughout.
+
+#### Scenario: recent changes shows a cross-collection timeline with waiting items
+- **GIVEN** a pass in one collection, a person's edit in another, and two items waiting
+- **WHEN** the user opens Recent changes
+- **THEN** both changes are listed newest first with their collections, the two waiting items are shown with Curate now, and filtering to one collection leaves only its entries
+
+#### Scenario: a pass is inspected and undone as a whole
+- **GIVEN** a pass that changed two documents
+- **WHEN** the user opens it in Recent changes, reviews the diffs and confirms Undo this pass
+- **THEN** both documents are back as they were before it, and the timeline shows the undo as a new entry
+
+### Requirement: Show how often memory is delivered
+The Memory page MUST show, for each agent with delivery installed, how many times memory was
+delivered to it in the last seven days — counted from the delivery-fire audit events (spec
+[memory](../memory/spec.md) "Audit every delivery fire") — and how many distinct notes its sessions
+read in that time, counted from the file paths its transcripts record reading, never from their
+content. An agent with delivery not installed MUST read as not installed with a link to its agent
+page, and a count that cannot be computed MUST read as unavailable rather than zero.
+
+#### Scenario: the memory page shows deliveries and notes read per agent
+- **GIVEN** Claude Code with delivery installed, 12 delivery fires in the last seven days, and transcripts recording reads of 5 distinct notes
+- **WHEN** the user opens the Memory page
+- **THEN** Claude Code's row reads 12 deliveries and 5 notes read in the last 7 days
+
+#### Scenario: an agent without delivery reads as not installed
+- **GIVEN** Codex with no delivery hook installed
+- **WHEN** the Memory page renders
+- **THEN** Codex reads as not installed with a link to its agent page, and no count is shown
+
