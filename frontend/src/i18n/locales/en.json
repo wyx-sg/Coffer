@@ -950,7 +950,11 @@
     "APPROVAL_NOT_PENDING": "That approval has already been answered.",
     "SECRET_NAME_INVALID": "That secret name isn't valid.",
     "SECRET_NOT_FOUND": "No secret is stored under that name.",
-    "MASTER_KEY_CONFLICT": "Two different master keys were found — one in the Keychain and one elsewhere. Coffer will not pick one; keep the key your credentials were stored with and remove the other."
+    "MASTER_KEY_CONFLICT": "Two different master keys were found — one in the Keychain and one elsewhere. Coffer will not pick one; keep the key your credentials were stored with and remove the other.",
+    "SKILL_STAGING_NOT_FOUND": "That staged source is gone — it was added, cancelled or expired. Start again.",
+    "SKILL_SOURCE_UNREACHABLE": "Git could not reach the skill's repository.",
+    "SKILL_UPDATE_CONFLICT": "The skill was edited since its pinned commit. Keep your edits, or take the update and discard them.",
+    "SKILL_NOT_FROM_GIT": "This skill was not added from a Git repository, so it has no source to update from."
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",

@@ -92,7 +92,10 @@ export function SkillUpdateDialog({ skill, open, onOpenChange }: Props) {
   if (error) {
     body = (
       <p role="alert" className="text-sm text-danger">
-        {translateApiError(t, error)}
+        {/* git's own message says what it could not reach; the generic copy would hide it. */}
+        {error instanceof ApiError && error.code === "SKILL_SOURCE_UNREACHABLE"
+          ? error.envelopeMessage
+          : translateApiError(t, error)}
       </p>
     );
   } else if (!preview) {
