@@ -5,7 +5,7 @@ description: How Coffer keeps the operating system out of its foundation — the
 
 # Platform port
 
-Coffer ships for macOS only, but its foundation is not allowed to assume macOS. This page explains how that is arranged: one package in `infrastructure/` is the only code that asks which operating system Coffer runs on, the application reaches it through a small port, and a build gate fails any OS check that appears anywhere else. Read it before writing code whose behaviour differs between operating systems.
+Coffer ships for macOS only, but its foundation is not allowed to assume macOS. This page explains how that is arranged: one package in `infrastructure/` is the only code that asks which operating system Coffer runs on, the application reaches it through a small port, and a build gate fails any OS check that appears anywhere else. Read it before writing code whose behaviour differs between operating systems. The decision and the options weighed are in the ADR [Platform Differences Live Behind One Platform Port](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/platform-differences-live-behind-one-platform-port.md).
 
 ## The problem it solves
 
@@ -99,7 +99,7 @@ The port covers every place that *read* the platform when it was introduced. A f
 - **Symlinks outside skill delivery.** Binary deploy creates and reads the `~/.coffer/bin` symlinks with `os.symlink` / `os.readlink`.
 - **Shell syntax in a written hook.** The Codex memory guard Coffer installs is a POSIX shell command.
 
-Moving these behind the platform package, and then extending the gate to reject the raw primitives (`os.replace`, `os.symlink`, `os.kill`) above `infrastructure/`, is the next step. None of them changes behaviour on macOS, which is why they did not block the port.
+Moving these behind the platform package, and then extending the gate to reject the raw primitives (`os.replace`, `os.symlink`, `os.kill`) above `infrastructure/`, is Part 2 of the ADR. None of them changes behaviour on macOS, which is why they did not block the port.
 
 ## Where it lives in the code
 
