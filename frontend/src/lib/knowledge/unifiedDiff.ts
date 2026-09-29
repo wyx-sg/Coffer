@@ -6,7 +6,7 @@
 // are dropped: the view already names the document. A "\ No newline at end of
 // file" marker is dropped too — it is about bytes, not about the text.
 
-export type DiffRowKind = "hunk" | "context" | "add" | "del";
+type DiffRowKind = "hunk" | "context" | "add" | "del";
 
 /** One row of a rendered diff. */
 export interface DiffRow {

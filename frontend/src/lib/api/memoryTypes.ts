@@ -33,7 +33,6 @@ export type RetiredListOut = Schemas["RetiredListOut"];
 
 /** The exact session-start text each agent receives in a partition's project. */
 export type DeliveredOut = Schemas["DeliveredOut"];
-export type DeliveredTextOut = Schemas["DeliveredTextOut"];
 
 /** Per agent, the last seven days of memory delivery. */
 export type DeliveryOverviewOut = Schemas["DeliveryOverviewOut"];

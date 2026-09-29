@@ -38,10 +38,6 @@ import {
 } from "@/lib/api/queryKeys";
 import { curateToastKey } from "@/lib/hooks/curateToast";
 
-// re-exported for tests that still import the root key from here; import
-// from queryKeys directly in new code
-export { knowledgeKey } from "@/lib/api/queryKeys";
-
 export function useKnowledgeCollections() {
   return useQuery({
     queryKey: knowledgeCollectionsKey,

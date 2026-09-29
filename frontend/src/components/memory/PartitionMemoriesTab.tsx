@@ -28,7 +28,7 @@ import { useCofferModelSet } from "@/lib/hooks/useInternalEngine";
 import { useMemoryNotes, useMemoryRetired, usePartitionFiles } from "@/lib/hooks/useMemory";
 
 /** The search param naming the selected memory. */
-export const MEMORY_PARAM = "memory";
+const MEMORY_PARAM = "memory";
 
 interface Props {
   uid: string;
