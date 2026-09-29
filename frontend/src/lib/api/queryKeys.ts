@@ -211,9 +211,7 @@ export const knowledgeHistoryKey = (path: string) => ["knowledge", "history", pa
 export const knowledgeVersionDiffKey = (path: string, version: string) =>
   ["knowledge", "history", path, "diff", version] as const;
 
-// ---------------------------------------------------------------------------
-// memory — partitions, their memories, what is delivered
-// ---------------------------------------------------------------------------
+// --- memory — partitions, their memories, what is delivered ---------------
 
 export const memoryKey = ["memory"] as const;
 export const memoryPartitionsKey = ["memory", "partitions"] as const;
