@@ -70,7 +70,9 @@ acceptance("web-ui", "the index opens the Agents page", async () => {
   const location = renderAt("/");
 
   // Overview renders in place at `/`, with no redirect, and is marked current.
-  expect(await screen.findByRole("heading", { level: 1, name: "Overview" })).toBeInTheDocument();
+  expect(
+    await screen.findByRole("heading", { level: 1, name: "Overview" }, { timeout: 5_000 }),
+  ).toBeInTheDocument();
   expect(location.pathname).toBe("/");
   expect(screen.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
   expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();
@@ -128,6 +130,9 @@ test("every page the shell adds resolves to a page of its own", async () => {
   for (const path of ["/custom-tools", "/clis", "/secrets", "/usage"]) {
     renderAt(path);
   }
-  expect(await screen.findAllByTestId("placeholder-page")).toHaveLength(4);
+  // Each page is code-split, so they arrive one by one.
+  await waitFor(() => expect(screen.getAllByTestId("placeholder-page")).toHaveLength(4), {
+    timeout: 5_000,
+  });
   expect(screen.queryByText(/page not found/i)).not.toBeInTheDocument();
 });

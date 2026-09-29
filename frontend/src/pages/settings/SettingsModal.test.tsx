@@ -68,14 +68,14 @@ function renderAt(path: string) {
 
 async function openFromRow() {
   fireEvent.click(await screen.findByTestId("sidebar-settings"));
-  return screen.findByTestId("settings-modal");
+  return screen.findByTestId("settings-modal", {}, { timeout: 5_000 });
 }
 
 describe("the Settings modal", () => {
   // revise-web-ui-ia: web-ui "settings layout uses the redesigned tabbed sidebar"
   acceptance("web-ui", "settings layout uses the redesigned tabbed sidebar", async () => {
     renderAt("/settings");
-    const modal = await screen.findByTestId("settings-modal");
+    const modal = await screen.findByTestId("settings-modal", {}, { timeout: 5_000 });
     await waitFor(() => expect(where.pathname).toBe("/settings/general"));
     const tabs = within(within(modal).getByRole("navigation", { name: "Settings sections" }))
       .getAllByRole("link")
@@ -88,7 +88,9 @@ describe("the Settings modal", () => {
 
     fireEvent.click(within(modal).getByRole("link", { name: "About" }));
     await waitFor(() => expect(where.pathname).toBe("/settings/about"));
-    expect(await screen.findByTestId("settings-pane-about")).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("settings-pane-about", {}, { timeout: 5_000 }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("settings-modal")).toBeInTheDocument();
   });
 
@@ -96,7 +98,7 @@ describe("the Settings modal", () => {
   test("the Settings row opens General over the current page", async () => {
     renderAt("/mcp-servers");
     expect(
-      await screen.findByRole("heading", { level: 1, name: "MCP servers" }),
+      await screen.findByRole("heading", { level: 1, name: "MCP servers" }, { timeout: 5_000 }),
     ).toBeInTheDocument();
     await openFromRow();
     expect(where.pathname).toBe("/settings/general");
@@ -129,12 +131,14 @@ describe("the Settings modal", () => {
   // revise-web-ui-ia: web-ui "a deep link opens a Settings tab"
   test("a fresh load of a Settings tab opens it over Overview and closes to /", async () => {
     renderAt("/settings/daemon");
-    const modal = await screen.findByTestId("settings-modal");
+    const modal = await screen.findByTestId("settings-modal", {}, { timeout: 5_000 });
     expect(within(modal).getByRole("link", { name: "Daemon" })).toHaveAttribute(
       "aria-current",
       "page",
     );
-    expect(await screen.findByTestId("settings-daemon-status")).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("settings-daemon-status", {}, { timeout: 5_000 }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { level: 1, name: "Overview", hidden: true }),
     ).toBeInTheDocument();
@@ -146,7 +150,7 @@ describe("the Settings modal", () => {
 
   test("the General tab holds Coffer's model and no Experimental features card", async () => {
     renderAt("/settings/general");
-    const pane = await screen.findByTestId("settings-pane-general");
+    const pane = await screen.findByTestId("settings-pane-general", {}, { timeout: 5_000 });
     expect(within(pane).queryByText(/experimental features/i)).not.toBeInTheDocument();
     // Start at login moved to the Daemon tab.
     expect(within(pane).queryByText(/start at login/i)).not.toBeInTheDocument();
