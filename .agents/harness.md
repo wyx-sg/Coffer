@@ -47,6 +47,8 @@ A hook or gate must stay fast: a slow one trains people to bypass it.
 
 The hooks and settings are pinned by `backend/tests/integration/harness/`, which subprocess the real scripts with synthetic stdin. They run under `make verify-integration`, so the harness tests itself.
 
+The test suite carries one guard of its own: `backend/tests/conftest.py` + `backend/tests/support/real_home_guard.py` — the real-home guard. It redirects `HOME`, strips inherited `COFFER_*` variables, and an audit hook fails any test that touches the real `~/.coffer` / `~/.claude` / `~/.codex`; proven by `backend/tests/integration/isolation/test_real_home_guard.py`. Rules in [`testing.md`](./testing.md) "The Real-Home Guard".
+
 ## Eval harness
 
 Non-deterministic AI behaviour — tool-search ranking and tool routing — is measured under [`evals/`](../evals/README.md): `make eval` (local, deterministic) and `make eval-routing` (needs a local LLM). It is the regression net for prompt / model / catalogue changes; the design is recorded in [Eval Capture and Regression Gate](../docs/decisions/eval-capture-and-regression-gate.md).

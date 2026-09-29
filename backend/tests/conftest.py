@@ -1,24 +1,38 @@
 """Root test configuration.
 
-Redirect every coffer log file away from the developer's real ``~/.coffer``
-before any test imports a module that calls ``configure_logging()`` (e.g.
-importing the HTTP app). ``configure_logging`` honours ``COFFER_LOG_DIR``
-(see ``coffer.infrastructure.logging.setup._log_dir``); without this, a test
-run pollutes the live ``~/.coffer/logs/daemon.log`` and makes it useless for
-debugging the real daemon.
+First, before anything imports ``coffer``: the real-home guard
+(``tests/support/real_home_guard.py``). ``HOME`` is pointed at a throwaway
+directory, every ``COFFER_*`` variable inherited from the developer's shell is
+stripped, and an audit hook refuses — and records — any filesystem, SQLite or
+spawn event under the real home's ``.coffer`` / agent config trees. A test that
+trips it fails in teardown even when the code under test swallowed the
+``PermissionError``. See ``.agents/testing.md`` "The Real-Home Guard".
 
-This is set at import time — not in a fixture — because conftest.py is imported
-before any test module, and some modules call ``configure_logging()`` at import
-or app-construction time. ``setdefault`` lets CI override the location.
+Then the per-root pins below. With ``HOME`` redirected they are no longer the
+only thing between a test and the live vault, but they still give each tree
+its own directory, and the autouse fixtures below make that per test.
+
+These are set at import time — not in a fixture — because conftest.py is
+imported before any test module, and some modules call ``configure_logging()``
+at import or app-construction time.
 """
 
 from __future__ import annotations
 
 import os
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
-import pytest
+from tests.support import real_home_guard
+
+_GUARD = real_home_guard.install(Path(tempfile.mkdtemp(prefix="coffer-test-home-")))
+
+import pytest  # noqa: E402
+
+#: The isolated-HOME builders as fixtures (``isolated_home``, ``two_homes``,
+#: ``claude_code_dir``, ``codex_dir``, ``fake_channel_adapter``).
+pytest_plugins = ["tests.support.fixtures"]
 
 _TEST_LOG_DIR = Path(tempfile.gettempdir()) / "coffer-test-logs"
 os.environ.setdefault("COFFER_LOG_DIR", str(_TEST_LOG_DIR))
@@ -48,6 +62,31 @@ os.environ.setdefault("COFFER_MEMORY_ROOT", str(_TEST_MEMORY_ROOT))
 # hand one test the summaries another test's tree left behind.
 _TEST_AGENT_STATE_ROOT = Path(tempfile.gettempdir()) / "coffer-test-agent-state"
 os.environ.setdefault("COFFER_AGENT_STATE_ROOT", str(_TEST_AGENT_STATE_ROOT))
+
+
+@pytest.fixture(autouse=True)
+def _real_home_guard(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[None]:
+    """Give every test its own ``$HOME`` and fail it if it touched the real one.
+
+    Declared first so it is set up before, and torn down after, every other
+    autouse fixture — their setup and teardown are inside the check. The home
+    comes from ``tmp_path_factory``, not ``tmp_path``, so a test that lists its
+    own ``tmp_path`` finds nothing it did not put there. A test that wants a
+    particular home still sets ``HOME`` itself; its monkeypatch wins.
+    """
+    home = real_home_guard.write_home_skeleton(tmp_path_factory.mktemp("home"))
+    monkeypatch.setenv("HOME", str(home))
+    stray = _GUARD.drain()  # left by collection or a session fixture
+    yield
+    caught = stray + _GUARD.drain()
+    if caught:
+        pytest.fail(
+            "touched the real home (see tests/support/real_home_guard.py):\n  "
+            + "\n  ".join(str(v) for v in caught),
+            pytrace=False,
+        )
 
 
 @pytest.fixture(autouse=True)
@@ -101,3 +140,12 @@ def _no_channel_burst_window(monkeypatch):
 # authorities like ``testserver``. The guard's own tests clear this variable
 # and assert both directions for real.
 os.environ.setdefault("COFFER_ALLOWED_HOSTS", "*")
+
+
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """A violation outside any test (a session fixture's teardown, an import
+    after the last test) still fails the run."""
+    stray = _GUARD.drain()
+    if stray:
+        print("\nreal-home guard: touched outside any test:\n  " + "\n  ".join(map(str, stray)))
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
