@@ -139,12 +139,13 @@ unarchived until that implementation lands.
   stale save, and no curation controls without Coffer's model. Every document has a History tab
   and every pass can be undone as a whole from a cross-collection Recent changes view, on the
   vault's git history. Leftover "disabled collection" wording is removed.
-- A **memory partition** is one view of its memories (the UI's word for notes, 记忆条目), a
-  collapsed Retired group, and a meta line naming the agents each was learned from; the page shows
-  no native paths, agent text, `.raw/`, index or retired files and no file tree.
-- **Memory delivery** lives on each agent's Memory tab — what it receives at session start, how
-  often memory was delivered and how many notes were read in the last seven days, and the hook's
-  state; the Memory page shows no delivery.
+- A **memory partition** has two tabs: Memories (the UI's word for notes, 记忆条目), with a
+  collapsed Retired group and a meta line naming the agents each was learned from and no native
+  paths, agent text, `.raw/`, index or retired files or file tree; and Delivered, the exact
+  session-start text each agent receives there.
+- The **Memory overview** lists each agent's deliveries, memories read and last delivery over seven
+  days. The delivery hook's state is shown only on the agent detail page (Hooks tab and Overview
+  connection block); the agent's Memory tab shows only its native memory stores.
 - A **command palette** (⌘K / Ctrl+K) jumps to any page or object. It carries no action that
   changes state.
 - A sidebar entry carries an **attention dot** while its kind's attention signal is raised; Sync's
@@ -182,8 +183,8 @@ unarchived until that implementation lands.
 - `knowledge`: the manual trigger drains until nothing is pending; the web UI terms, Inbox,
   status line, Add a document and editor; document history and whole-pass undo; no disabled
   collection anywhere.
-- `memory`: a partition's page shows its memories and a Retired group with the learned-from agents,
-  and none of the agents' own sources; provenance stays in the data and CLI.
+- `memory`: a partition's page has Memories (with a Retired group and learned-from agents, none of
+  the agents' own sources) and Delivered tabs; provenance stays in the data and CLI.
 - `internal-engine`: the engine's settings are shown in the Coffer's model section of Settings ›
   General, with a provider-then-model picker and a Test action for the engine and for speech to
   text.

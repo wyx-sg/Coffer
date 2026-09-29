@@ -1133,37 +1133,36 @@ wording is Curate / Curation (整理) throughout.
 - **WHEN** the user opens it in Recent changes, reviews the diffs and confirms Undo this pass
 - **THEN** both documents are back as they were before it, and the timeline shows the undo as a new entry
 
-### Requirement: Show memory delivery on the agent's Memory tab
-What memory gives an agent at session start MUST be shown on that agent's own **Memory** tab and
-nowhere else: the Memory page lists partitions and their notes and shows no delivered text and no
-delivery counts. The agent's Memory tab MUST carry, beside the agent's native memory stores, a
-**Delivery** section with:
+### Requirement: Show memory delivery on the Memory page
+The Memory page MUST show what memory delivery is doing, and the agent detail page MUST show only
+the delivery hook's state:
 
-- **What it receives** — the session-start context composed for a working directory the user picks
-  from the agent's recent projects (spec [memory](../memory/spec.md) "Deliver the index and the notes
-  path at session start"), shown read-only exactly as the agent would receive it;
-- **Deliveries** — how many times memory was delivered to this agent in the last seven days,
-  counted from the delivery-fire audit events (spec [memory](../memory/spec.md) "Audit every delivery
-  fire"), and how many distinct notes its sessions read in that time, counted from the file paths its
-  transcripts record reading, never from their content;
-- **Hook** — whether the delivery hook is installed and current, stale or missing, read-only, with
-  the page header's Connect to Coffer as the way to repair it
-  ([agent-registry](../agent-registry/spec.md) "Show the Coffer connection on the agent pages").
+- The **Memory overview** MUST list, for each agent, its deliveries in the last seven days — counted
+  from the delivery-fire audit events (spec [memory](../memory/spec.md) "Audit every delivery fire")
+  — how many distinct memories its sessions read in that time, counted from the file paths its
+  transcripts record reading, never from their content, and when it was last delivered to. An agent
+  with no delivery in that time reads **not delivered in the last 7 days**, with no hook detail; a
+  count that cannot be computed reads as unavailable rather than zero.
+- A **partition's page** has a **Delivered** tab (see memory "Present a partition as its memories")
+  showing, read-only, the exact session-start text each agent receives in that partition's project
+  (spec [memory](../memory/spec.md) "Deliver the index and the notes path at session start"), with a
+  switch between agents.
+- The delivery hook's state — installed and current, stale, missing, never fired, and Repair — MUST
+  appear only on the agent detail page, on its Hooks tab and in the Overview's Coffer connection
+  block ([agent-registry](../agent-registry/spec.md) "Show the Coffer connection on the agent pages"). The
+  agent's Memory tab shows only the agent's own native memory stores.
 
-A count that cannot be computed MUST read as unavailable rather than zero, and an agent with no
-delivery hook installed MUST say so and show no counts.
-
-#### Scenario: the agent's memory tab shows what it receives and how often
-- **GIVEN** Claude Code with delivery installed, 12 delivery fires in the last seven days, and transcripts recording reads of 5 distinct notes
-- **WHEN** the user opens Claude Code's Memory tab and picks a recent project
-- **THEN** the Delivery section shows the context composed for that project, reads 12 deliveries and 5 notes read in the last 7 days, and shows the hook as installed and current
-
-#### Scenario: an agent without delivery says so
-- **GIVEN** Codex with no delivery hook installed
-- **WHEN** its Memory tab renders
-- **THEN** the Delivery section says delivery is not installed, points to Connect to Coffer in the header, and shows no counts
-
-#### Scenario: the memory page shows no delivery
-- **GIVEN** partitions with notes and agents with delivery installed
+#### Scenario: the memory overview lists deliveries per agent
+- **GIVEN** Claude Code with 12 delivery fires in the last seven days, the last one an hour ago, and transcripts recording reads of 5 distinct memories, and Codex with no delivery in that time
 - **WHEN** the user opens the Memory page
-- **THEN** it lists the partitions and their notes and shows no delivered text and no delivery counts
+- **THEN** Claude Code reads 12 deliveries, 5 memories read and last delivered an hour ago, and Codex reads not delivered in the last 7 days with no hook detail
+
+#### Scenario: a partition's delivered tab shows each agent's session-start text
+- **GIVEN** a partition for the `coffer` repository and both agents connected
+- **WHEN** the user opens the partition's Delivered tab and switches from Claude Code to Codex
+- **THEN** the tab shows, read-only, the exact session-start text each agent receives in that project
+
+#### Scenario: hook state appears only on the agent page
+- **GIVEN** Claude Code's delivery hook stale
+- **WHEN** the user opens the Memory page and then Claude Code's detail page
+- **THEN** the Memory page shows no hook state, Claude Code's Hooks tab and Overview connection block show the hook as stale with Repair, and its Memory tab lists only its own native memory stores

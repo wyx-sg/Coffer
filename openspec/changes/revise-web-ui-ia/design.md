@@ -486,14 +486,17 @@ spec owns the Skills page.
   naming its writer, so the History tab and whole-pass undo read and revert commits; the old
   "nothing is kept of what a pass replaced" and "where vault sync is configured" wording goes. The
   agent named on a curated version comes from the submission's `knowledge_written` audit event.
-- **Memory delivery is an agent's property**, so it is shown on the agent's Memory tab — what it
-  receives at session start, delivery counts and hook state — and the Memory page, which is about
-  the notes, shows none of it. Counts come from the delivery-fire audit events and from the note
-  paths transcripts record reading, never their text.
+- **Memory delivery is shown on the Memory page, hook state on the agent page.** The overview lists
+  each agent's deliveries, memories read and last delivery over seven days, and a partition's
+  Delivered tab shows the exact session-start text each agent receives there — what memory is doing
+  is a question about memory. Whether the hook is installed, current or stale is a question about
+  the agent's configuration, so it lives only on the agent's Hooks tab and Overview connection
+  block, and the agent's Memory tab stays the agent's own stores. Counts come from the
+  delivery-fire audit events and from the note paths transcripts record reading, never their text.
 - **No disabled collection.** Every collection is served to every agent; the remaining "enabled" /
   "disabled" wording in knowledge is removed.
-- **A partition page is its memories.** The UI calls notes *memories* (记忆条目) and shows them as
-  one list with a collapsed Retired group and a meta line of learned-from agents and update time.
+- **A partition page is its memories, plus what it delivers.** The UI calls notes *memories*
+  (记忆条目) and shows them on the Memories tab as one list with a collapsed Retired group and a meta line of learned-from agents and update time.
   The agents' own memory files — native paths, their original text, `.raw/`, `MEMORY.md`,
   `RETIRED.md`, a file tree — are sources, not what the user came to read, so the page leaves them
   out; they stay in provenance, on the REST routes and in the CLI.
