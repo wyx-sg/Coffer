@@ -462,8 +462,11 @@ def test_release_workflow_checksums_cover_both_tiers() -> None:
     assert "artifacts/$archive" in text or "artifacts/coffer-cli" in text, (
         "CLI archive must be written into artifacts/ so SHA256SUMS covers it"
     )
-    assert "artifacts/Coffer-unsigned-" in text, (
+    assert 'cp "$dmg" "artifacts/$name"' in text, (
         "the .dmg must be written into artifacts/ so SHA256SUMS covers it"
+    )
+    assert 'name="Coffer-unsigned-${triple}.dmg"' in text, (
+        "an unsigned .dmg must say so in its name"
     )
     assert "SHA256SUMS" in text, "release.yml must emit a SHA256SUMS file"
 
@@ -493,20 +496,21 @@ def test_release_workflow_does_not_swallow_errors() -> None:
     )
 
 
-def test_release_workflow_does_not_reference_apple_secrets() -> None:
-    """macOS signing/notarization is intentionally not wired. A disabled step
-    that NAMES secrets.APPLE_* still surfaces them in repo-secret audits and
-    security tooling, so the workflow must not reference them at all until a
-    dedicated signed-release workflow is added."""
+def test_release_workflow_names_apple_secrets_only_behind_the_signing_plan() -> None:
+    """Signing is wired, and gated: a step that hands an Apple or updater secret
+    to a command runs only when the plan step found that secret (the rest of
+    the rule is in test_release_signing.py). The removed `secrets.APPLE_ID`
+    (an app-specific password) is not how notarization authenticates here —
+    the App Store Connect API key is."""
     text = _release_yml_text()
-    assert "secrets.APPLE_CERTIFICATE" not in text, (
-        "release.yml must not reference secrets.APPLE_CERTIFICATE"
+    assert "secrets.APPLE_ID " not in text and "secrets.APPLE_ID}" not in text, (
+        "notarization authenticates with the App Store Connect API key, not an Apple ID"
     )
-    assert "secrets.APPLE_ID" not in text, "release.yml must not reference secrets.APPLE_ID"
+    assert "steps.plan.outputs.codesign" in text
 
 
 def test_release_workflow_tells_downloaders_the_build_is_unsigned() -> None:
-    """Until Apple signing is wired, the release must say so.
+    """A release built without a Developer ID must say so.
 
     The `-unsigned` filename suffix went with the .dmg and .app.zip the
     desktop shell produced; a tar.gz of CLI binaries never carried it. The

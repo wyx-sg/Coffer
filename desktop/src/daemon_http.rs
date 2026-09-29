@@ -50,6 +50,24 @@ pub fn post_json(
     )
 }
 
+/// `PUT <path>` with a JSON body.
+pub fn put_json(
+    port: u16,
+    token: &str,
+    path: &str,
+    body: &serde_json::Value,
+    read_timeout: Duration,
+) -> Result<Response, String> {
+    send(
+        port,
+        token,
+        "PUT",
+        path,
+        Some(body.to_string()),
+        read_timeout,
+    )
+}
+
 fn send(
     port: u16,
     token: &str,

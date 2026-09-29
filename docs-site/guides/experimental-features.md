@@ -105,7 +105,7 @@ Some features also withdraw what they placed in front of agents:
 
 - Switching `memory` off removes the memory delivery hook from every agent it was installed in; switching it on installs it into every agent connected to Coffer.
 - Switching `knowledge` off rewrites `coffer-guide` without the knowledge catalogue, and a channel `/kb` replies that knowledge is switched off instead of saving; `/kb` also leaves the channel's help and command menus.
-- Switching `vault_sync` off stops every sync attention mark in the web UI and the desktop app and removes the tray's Sync item. While it is off, the knowledge curation pass treats the vault as a single-machine one.
+- Switching `vault_sync` off stops every sync attention mark in the web UI and the desktop app and takes sync problems out of the menu bar's dot. While it is off, the knowledge curation pass treats the vault as a single-machine one.
 
 ::: tip Nothing is deleted
 Switching a feature off never deletes, moves or rewrites what it holds: collections and their files, memory partitions, a configured sync remote, history. Switch it back on and it resumes from exactly that state. Database migrations run whatever the switches say, so switching a feature on never needs a schema change.

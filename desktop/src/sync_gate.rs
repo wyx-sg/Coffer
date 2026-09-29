@@ -2,11 +2,11 @@
 //! feature (spec experimental-features "Close every surface of a switched-off
 //! feature" and "Withdraw what a switched-off feature put in front of agents").
 //!
-//! While `vault_sync` is off the tray has no Sync entry, and the watcher neither
-//! asks `/api/v1/sync/status` nor marks the tray, badges the Dock or raises a
-//! notification. The feature switches live on the daemon, so the watcher reads
-//! the daemon's unauthenticated status on a short tick and follows it: the entry
-//! comes back and polling resumes on the first tick after it is switched on.
+//! While `vault_sync` is off the watcher neither asks `/api/v1/sync/status` nor
+//! marks the menu bar, badges the Dock or raises a notification. The feature
+//! switches live on the daemon, so the watcher is handed the daemon's status on
+//! a short tick and follows it: polling resumes on the first tick after it is
+//! switched on.
 //!
 //! Everything here is pure — `sync_watch.rs` does the reading and the effects,
 //! the same split `sync_alert.rs` already has with it.
@@ -30,18 +30,9 @@ pub fn parse_vault_sync(raw: &str) -> Option<bool> {
     )
 }
 
-/// What the tray's Sync entry should do on this tick.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MenuChange {
-    Show,
-    Hide,
-    Keep,
-}
-
 /// One tick's decision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TickPlan {
-    pub menu: MenuChange,
     /// Ask `/api/v1/sync/status` this tick.
     pub poll_sync: bool,
     /// Take down a mark that is showing (tray dot, Dock badge) because the
@@ -52,35 +43,23 @@ pub struct TickPlan {
 /// Decide one tick.
 ///
 /// * `vault_sync` — the flag the daemon just reported.
-/// * `item_shown` — whether the Sync entry is in the tray menu now.
 /// * `marked` — whether an attention mark is showing now.
 /// * `since_sync_poll` — time since the last sync poll, `None` if there has
 ///   been none since the feature was (last) switched on. A feature that has just
 ///   come on is therefore polled at once rather than a whole interval later.
 pub fn plan_tick(
     vault_sync: bool,
-    item_shown: bool,
     marked: bool,
     since_sync_poll: Option<Duration>,
     sync_interval: Duration,
 ) -> TickPlan {
     if !vault_sync {
         return TickPlan {
-            menu: if item_shown {
-                MenuChange::Hide
-            } else {
-                MenuChange::Keep
-            },
             poll_sync: false,
             clear_marks: marked,
         };
     }
     TickPlan {
-        menu: if item_shown {
-            MenuChange::Keep
-        } else {
-            MenuChange::Show
-        },
         poll_sync: since_sync_poll.is_none_or(|elapsed| elapsed >= sync_interval),
         clear_marks: false,
     }
@@ -125,38 +104,28 @@ mod tests {
     // --- the tick decision ---
 
     #[test]
-    fn switched_off_hides_the_item_and_never_polls() {
+    fn switched_off_never_polls() {
         for since in [None, Some(Duration::ZERO), Some(TEN_MIN * 10)] {
-            let plan = plan_tick(false, true, false, since, TEN_MIN);
-            assert_eq!(plan.menu, MenuChange::Hide);
-            assert!(!plan.poll_sync);
+            assert!(!plan_tick(false, false, since, TEN_MIN).poll_sync);
         }
-        assert_eq!(
-            plan_tick(false, false, false, None, TEN_MIN).menu,
-            MenuChange::Keep
-        );
     }
 
     #[test]
     fn switched_off_takes_down_a_mark_that_is_showing() {
-        assert!(plan_tick(false, true, true, None, TEN_MIN).clear_marks);
-        assert!(!plan_tick(false, true, false, None, TEN_MIN).clear_marks);
+        assert!(plan_tick(false, true, None, TEN_MIN).clear_marks);
+        assert!(!plan_tick(false, false, None, TEN_MIN).clear_marks);
         // Never while on: that is `sync_alert::next_action`'s call.
-        assert!(!plan_tick(true, true, true, None, TEN_MIN).clear_marks);
+        assert!(!plan_tick(true, true, None, TEN_MIN).clear_marks);
     }
 
     #[test]
-    fn switched_on_shows_the_item_and_polls_at_once() {
-        let plan = plan_tick(true, false, false, None, TEN_MIN);
-        assert_eq!(plan.menu, MenuChange::Show);
-        assert!(plan.poll_sync);
+    fn switched_on_polls_at_once() {
+        assert!(plan_tick(true, false, None, TEN_MIN).poll_sync);
     }
 
     #[test]
     fn while_on_the_sync_poll_keeps_its_own_slow_interval() {
-        let recent = plan_tick(true, true, false, Some(Duration::from_secs(30)), TEN_MIN);
-        assert_eq!(recent.menu, MenuChange::Keep);
-        assert!(!recent.poll_sync);
-        assert!(plan_tick(true, true, false, Some(TEN_MIN), TEN_MIN).poll_sync);
+        assert!(!plan_tick(true, false, Some(Duration::from_secs(30)), TEN_MIN).poll_sync);
+        assert!(plan_tick(true, false, Some(TEN_MIN), TEN_MIN).poll_sync);
     }
 }

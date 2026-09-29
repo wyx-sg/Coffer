@@ -169,7 +169,8 @@ unarchived until that implementation lands.
   through the Tauri updater, against a signed manifest the release workflow publishes on GitHub
   Releases. Settings › About shows the running version, the last check, a Check for updates
   control and, when a newer version exists, Download and restart; an update whose signature does
-  not verify is refused. In a browser About shows the version only.
+  not verify is refused. In a browser About shows the version only. (Built, specified and
+  archived by `add-desktop-tray-and-updater`, which took both update requirements with it.)
 
 ## Capabilities
 

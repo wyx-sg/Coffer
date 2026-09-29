@@ -153,12 +153,20 @@ carry both commands (spec desktop-app "Document clearing the quarantine
 attribute"). Pros: free, and it ships today. Cons: a real first-run hurdle,
 worst on the desktop tier.
 
-#### Option K — Developer ID signing and notarisation
+#### Option K — Developer ID signing and notarisation (built, gated on credentials)
 
-Pros: the app opens on double-click; the right end state. Cons: requires a paid
-Apple Developer account, which does not exist. It is not rejected on merit; it
-is the single highest-value thing that account would buy, and the release job
-has no signing step until then.
+Pros: the app opens on double-click; the right end state, and the precondition
+of the master key's Keychain access group
+([The Master Key Lives in the macOS Keychain](master-key-lives-in-the-macos-keychain.md)).
+Cons: requires a paid Apple Developer account. The release job now carries every
+step — PyInstaller signs the three binaries and each library they collect with
+the Developer ID under the hardened runtime and the `keychain-access-groups`
+entitlement, the access group is stamped into `build_identity.py` and the shell,
+Tauri signs, notarises and staples the app, and the workflow notarises the CLI
+binaries and notarises and staples the `.dmg` — and each step runs only when its
+secrets are present (`scripts/release_plan.py`). Until the owner adds them the
+release is Option J's unsigned build, unchanged. `RELEASING.md` lists what to
+create; the OpenSpec change `add-desktop-tray-and-updater` records the design.
 
 ## Decision
 
@@ -208,5 +216,5 @@ under one `SHA256SUMS`.** Rules that follow:
   user does.
 - A local `make desktop` takes roughly 50 minutes because it freezes all three
   binaries first; the release pays the freeze once for both tiers.
-- Until an Apple Developer ID exists, every install starts with a quarantine
+- Until the Developer ID secrets are added (Option K), every install starts with a quarantine
   command, and the desktop tier is where it hurts most.
