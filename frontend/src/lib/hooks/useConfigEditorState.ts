@@ -57,7 +57,6 @@ export function useConfigEditorState(agentUid: string) {
 
   const activeQuery = selectedChild ? child : file;
   const activeContent = activeQuery.data;
-  const memoryBlock = activeContent?.memory_block === true;
 
   // A file the agent has not created yet reads as empty with `exists: false`.
   // Saving one would create it from the UI, which the allowlist deliberately
@@ -134,7 +133,6 @@ export function useConfigEditorState(agentUid: string) {
     selectChild,
     activeQuery,
     activeContent,
-    memoryBlock,
     readOnlyMissing,
     draft,
     /** True while a selection waits on the discard-changes confirmation. */

@@ -5,7 +5,7 @@ _AgentLookup to keep this tier pure Python with no I/O.
 
 Covers:
   1. list includes kind="directory" entry with files populated and exists semantics
-  2. read_file returns fingerprint + memory_block=True when content contains the marker
+  2. read_file returns the content fingerprint
   3. read_file on a directory key → ConfigFileNotAllowed
   4. write_file with stale fingerprint → ConfigFileStale, store NOT written;
      with matching fingerprint → success
@@ -25,10 +25,7 @@ from datetime import UTC, datetime
 import pytest
 import pytest_asyncio
 
-from coffer.application.agent.config_file_service import (
-    MEMORY_BLOCK_MARKER,
-    AgentConfigFileService,
-)
+from coffer.application.agent.config_file_service import AgentConfigFileService
 from coffer.application.audit_service import AuditService
 from coffer.domain.agent.config_files import DirEntryInfo, FileStat
 from coffer.domain.audit import AuditEventType
@@ -247,34 +244,22 @@ async def test_list_file_entry_has_file_kind(svc, store):
 
 
 # ---------------------------------------------------------------------------
-# Test 2: read_file returns fingerprint + memory_block
+# Test 2: read_file returns fingerprint
 # ---------------------------------------------------------------------------
 
 
-async def test_read_file_returns_fingerprint_and_no_memory_block(svc, store):
+async def test_read_file_returns_fingerprint(svc, store):
     settings_path = _CLAUDE_CONFIG_DIR / "settings.json"
     store._files[settings_path] = '{"theme": "dark"}'
 
     out = await svc.read_file(_CLAUDE_UID, "settings")
     assert out.fingerprint == store.fingerprint('{"theme": "dark"}')
-    assert out.memory_block is False
-
-
-async def test_read_file_detects_memory_block_marker(svc, store):
-    instructions_path = _CLAUDE_CONFIG_DIR / "CLAUDE.md"
-    content = f"# Rules\n\n{MEMORY_BLOCK_MARKER} -->\nsome block\n<!-- end -->"
-    store._files[instructions_path] = content
-
-    out = await svc.read_file(_CLAUDE_UID, "instructions")
-    assert out.memory_block is True
-    assert out.fingerprint == store.fingerprint(content)
 
 
 async def test_read_file_missing_gives_empty_fingerprint(svc, store):
     out = await svc.read_file(_CLAUDE_UID, "settings")
     assert out.exists is False
     assert out.fingerprint == ""
-    assert out.memory_block is False
 
 
 # ---------------------------------------------------------------------------
@@ -344,7 +329,6 @@ async def test_read_child_missing_returns_empty(svc, store):
     assert out.exists is False
     assert out.content == ""
     assert out.fingerprint == ""
-    assert out.memory_block is False
 
 
 async def test_read_child_existing(svc, store):

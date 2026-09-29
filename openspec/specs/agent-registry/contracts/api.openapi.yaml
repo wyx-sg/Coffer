@@ -1051,7 +1051,6 @@ components:
           exists,
           content,
           fingerprint,
-          memory_block,
         ]
       properties:
         key: { type: string }
@@ -1076,12 +1075,6 @@ components:
             Content fingerprint for optimistic-concurrency writes
             (see "Reject stale config-file writes by fingerprint");
             empty string when the file does not exist.
-        memory_block:
-          type: boolean
-          description: >-
-            True when the file still contains the legacy memory-projection block
-            marker (see "Annotate a leftover memory-projection block as safe to
-            delete") — the editor surfaces a notice, never parses the block.
 
     ConfigFileWrite:
       type: object
