@@ -52,6 +52,17 @@ resolved key merged into its environment (`infrastructure/chat/codex_provider.py
 A Codex the user starts from their own shell needs `COFFER_PROVIDER_KEY`
 exported there.
 
+Holding the key in Codex's environment must not hand it to the shell commands
+the agent runs. Codex passes its whole environment to those commands by default
+(`shell_environment_policy`: `inherit = "all"`, and its built-in filter of
+names containing `KEY`, `SECRET` or `TOKEN` is off because
+`ignore_default_excludes` defaults to `true`), so `env` in a turn would print
+the key into the transcript. The projection therefore also adds
+`COFFER_PROVIDER_KEY` to `shell_environment_policy.exclude`, keeping the
+user's own entries, and de-projection removes only that entry. `exclude` is
+used rather than `ignore_default_excludes = false` or `inherit = "core"`,
+because those would change what every other variable the user's commands see.
+
 The key itself stays Fernet ciphertext in the credential store, under an opaque
 ref minted for the connection (`provider/<uuid4>/key`). It travels between
 machines only as ciphertext.
@@ -107,7 +118,8 @@ Claude Code reads the key through an `apiKeyHelper` that names one connection
 by uid and asks the daemon for it. Codex reads it from `COFFER_PROVIDER_KEY`,
 which Coffer injects into every Codex process it spawns and the user exports for
 their own shell. The key exists as ciphertext in the credential store and as
-plaintext only in the helper's stdout or the spawned process's environment.
+plaintext only in the helper's stdout or the spawned process's environment,
+never in the environment of a shell command Codex runs.
 
 A future change must keep these rules:
 

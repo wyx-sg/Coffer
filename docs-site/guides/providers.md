@@ -128,9 +128,12 @@ name = "Coffer (deepseek)"
 base_url = "https://api.deepseek.com"
 wire_api = "responses"
 env_key = "COFFER_PROVIDER_KEY"
+
+[shell_environment_policy]
+exclude = ["COFFER_PROVIDER_KEY"]
 ```
 
-The file is edited with `tomlkit`, so your comments and key order survive. Codex reads the key from the `COFFER_PROVIDER_KEY` environment variable. Coffer sets it for every Codex process it starts itself ([chat](/guides/chat) and [channel](/guides/channels) turns). For Codex runs you start in your own shell, export it there:
+The file is edited with `tomlkit`, so your comments and key order survive. Codex reads the key from the `COFFER_PROVIDER_KEY` environment variable. Coffer sets it for every Codex process it starts itself ([chat](/guides/chat) and [channel](/guides/channels) turns). The `shell_environment_policy.exclude` entry keeps the variable out of the shell commands Codex runs for the agent, so an `env` in a turn cannot print the key; any entries you already had in that list stay, and switching back removes only Coffer's. For Codex runs you start in your own shell, export it there:
 
 ```sh
 export COFFER_PROVIDER_KEY="$(coffer provider key --connection-uid 59ecb631d06a501c936fa5affdace553)"
