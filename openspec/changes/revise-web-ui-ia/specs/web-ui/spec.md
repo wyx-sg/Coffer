@@ -1,7 +1,7 @@
 ## RENAMED Requirements
 
 - FROM: `### Requirement: Keep the sidebar to its eleven entries`
-- TO: `### Requirement: Keep the sidebar to its twelve entries`
+- TO: `### Requirement: Keep the sidebar to its thirteen entries`
 
 - FROM: `### Requirement: Organise Settings into five tabs`
 - TO: `### Requirement: Organise Settings into six tabs`
@@ -36,35 +36,27 @@ of the daemon's state.
 **Migration**: See "Set when the daemon runs on the Daemon tab". The acceptance marker for "the
 general tab sets when the daemon runs" moves to "the settings daemon tab sets when the daemon runs".
 
+### Requirement: Group the sidebar by role
+**Reason**: Three role groups put seven entries under Resources once Secrets arrives, and nine
+once Rules and Sources do; "resource" is the framework's word, not one a user navigates by. The
+sidebar is now grouped by what the user comes to do, in five groups.
+**Migration**: See "Group the sidebar by what the user comes to do". The acceptance marker for
+"the sidebar groups agents, resources and system by role" moves to "the sidebar groups entries by
+what the user comes to do".
+
+### Requirement: Hold one Resources entry per listed resource kind
+**Reason**: There is no Resources group any more; each listed resource kind still has one entry,
+filed under the group that names what the user does with it.
+**Migration**: See "Give each listed resource kind one sidebar entry". The acceptance marker for
+"resources holds one entry per kind with a list" moves to "each listed resource kind has one
+sidebar entry".
+
 ## MODIFIED Requirements
 
-### Requirement: Group the sidebar by role
-The sidebar MUST be grouped by role rather than on one axis: AGENTS for the
-consumers (the agents, and the chat held with one) and RESOURCES for the assets
-those agents draw on, with SYSTEM for the cross-cutting tooling (Activity, Sync
-and Settings), so the navigation stays stable as Coffer grows. Agents are not a
-resource kind and MUST NOT be listed under Resources.
-
-**Overview**, the landing page, MUST sit above the three groups under no heading.
-It summarises all three roles, so filing it under any one of them would misname
-it, and it is the one entry that is not a kind or a tool.
-
-AGENTS holds two entries, and Agents comes first: the agents are the subject,
-and a chat is one thing you do with one of them. The group stays its own even
-though it is the smallest — agents are the one thing in the product that *uses*
-the vault rather than living in it, and collapsing the group would lose that
-distinction to save two lines.
-
-#### Scenario: the sidebar groups agents, resources and system by role
-- **GIVEN** the app shell is rendered
-- **WHEN** the sidebar lists its entries
-- **THEN** Overview comes first, under no heading, and the rest sit under three headings in the order Agents, Resources, System
-- **AND** Agents holds Agents then Chat, Resources holds no agent entry, and System holds Activity, Sync and Settings
-
-### Requirement: Keep the sidebar to its twelve entries
+### Requirement: Keep the sidebar to its thirteen entries
 The sidebar's entries MUST be exactly these, at these routes: one ungrouped entry
-and three groups — twelve today, and no thirteenth. An entry whose experimental
-feature is switched off (spec
+and five groups — thirteen today, and no fourteenth without a spec change. An
+entry whose experimental feature is switched off (spec
 [experimental-features](../experimental-features/spec.md) "Close every surface of a switched-off feature")
 MUST be left out — today Knowledge for `knowledge`, Memory for `memory`, Sync for
 `vault_sync` — and MUST appear on the next render after the feature is switched
@@ -74,15 +66,18 @@ on:
   Overview         /                  — the landing page
  AGENTS
   Agents           /agents            — the consumers (Bot icon)
-  Chat             /chat              — a conversation with one of them
- RESOURCES
+  Model providers  /model-providers   — the endpoints agents' models are served from, and Coffer's own model
+ WORK
+  Chat             /chat              — a conversation with an agent
+  Channels         /channels          — the IM bots agents answer on
+ CAPABILITIES
   MCP servers      /mcp-servers       — the aggregated upstream servers
   Skills           /skills            — what Coffer delivers to agents
+ CONTEXT
   Knowledge        /knowledge         — the collections under ~/.coffer/knowledge/
   Memory           /memory            — the partitions aggregated from the agents' own stores
-  Model providers  /model-providers   — credentialed vendor endpoints, and Coffer's own model
-  Channels         /channels          — the IM transports agents answer on
  SYSTEM
+  Secrets          /secrets           — every stored secret and what uses it
   Activity         /activity          — what changed, what was called, what broke
   Sync             /sync              — converging this vault with a git remote
   Settings         /settings
@@ -95,12 +90,57 @@ on:
 - **WHEN** they navigate to `http://localhost:5173/` in a real browser
 - **THEN** the index renders the Overview page at `/`, with the sidebar and main content area, within 2 seconds
 - **AND** the main content shows the Overview page (no generic error card)
-- **AND** the sidebar lists exactly Coffer's operational surfaces — Overview; Agents, Chat; MCP servers, Skills, Knowledge, Memory, Model providers, Channels; Activity, Sync, Settings — with Overview under no heading and the rest grouped under "Agents", "Resources", and "System" headings, with no other entry
+- **AND** the sidebar lists exactly Coffer's operational surfaces — Overview; Agents, Model providers; Chat, Channels; MCP servers, Skills; Knowledge, Memory; Secrets, Activity, Sync, Settings — with Overview under no heading and the rest grouped under "Agents", "Work", "Capabilities", "Context" and "System" headings, with no other entry
 
 #### Scenario: a switched-off feature leaves the sidebar
 - **GIVEN** `knowledge` and `vault_sync` switched off
 - **WHEN** the app shell is rendered
-- **THEN** the sidebar lists Overview; Agents, Chat; MCP servers, Skills, Memory, Model providers, Channels; Activity, Settings — with no Knowledge and no Sync entry
+- **THEN** the sidebar lists Overview; Agents, Model providers; Chat, Channels; MCP servers, Skills; Memory; Secrets, Activity, Settings — with no Knowledge and no Sync entry
+
+### Requirement: Give every scoped resource kind its own list surface
+Every scoped resource kind MUST have its own list surface, so the navigation and
+each list page carry no kind-specific branch.
+
+#### Scenario: every resource entry opens a list page of its own
+- **GIVEN** the sidebar's entries for resource kinds (see "Give each listed resource kind one sidebar entry")
+- **WHEN** each entry's route is resolved against the app's route table
+- **THEN** each resolves to its own list route rather than to "page not found"
+- **AND** no two entries resolve to the same route
+
+### Requirement: Call a surface by one name everywhere
+A surface MUST carry one name in every place it is named — sidebar, page header,
+welcome panel, command palette and dialogs — because a surface the user reaches
+two ways must not have two names. The names are these, in English and 中文, and
+nothing else:
+
+| English | 中文 |
+| --- | --- |
+| Overview | 总览 |
+| Agents (group and entry) | 智能体 |
+| Model providers | 模型提供商 |
+| Work (group) | 工作 |
+| Chat | 聊天 |
+| Channels | 消息渠道 |
+| Capabilities (group) | 能力 |
+| MCP servers | MCP 服务器 |
+| Skills | 技能 |
+| Context (group) | 上下文 |
+| Knowledge | 知识 |
+| Memory | 记忆 |
+| System (group) | 系统 |
+| Secrets | 密钥 |
+| Activity | 活动 |
+| Sync | 同步 |
+| Settings | 设置 |
+
+In Chinese an agent MUST be called **智能体** everywhere the UI names one —
+headings, page titles, buttons, dialogs and prose — never "Agent" or 代理.
+
+#### Scenario: a surface carries one name in the sidebar and on its page
+- **GIVEN** the UI in English and then in 中文
+- **WHEN** each sidebar entry's label is compared with the title its page shows
+- **THEN** the two are the same words for every surface in both languages
+- **AND** in 中文 the group headings read 智能体, 工作, 能力, 上下文 and 系统, and no zh string names an agent as "Agent"
 
 ### Requirement: Show a self-clearing offline banner
 When an authenticated request fails to connect while the app is open, a
@@ -128,8 +168,10 @@ rather than by how Coffer is built, and MUST open on General:
 - **Features** (`/settings/features`) — which experimental features are switched
   on for this machine (spec
   [experimental-features](../experimental-features/spec.md) "List and switch the features on the Features tab").
-- **Security** (`/settings/security`) — where the master encryption key lives:
-  beside the database, or in the OS keychain.
+- **Security** (`/settings/security`) — what is about this machine only: where
+  the master encryption key lives, beside the database or in the OS keychain.
+  It lists and edits no stored secret; those are on the Secrets page (see
+  "Manage stored secrets on the Secrets page").
 - **Data** (`/settings/data`) — retention policy and manual prune.
 - **Daemon** (`/settings/daemon`) — the daemon's state and the controls a user
   needs for it (see "Show and manage the daemon on Settings → Daemon").
@@ -146,7 +188,81 @@ swaps the right pane without a full page reload.
 - **AND** the settings sidebar shows General, Features, Security, Data, Daemon, and About — exactly those six, in that order — with the current route highlighted
 - **AND** clicking a tab swaps the right pane content without a full page reload
 
+#### Scenario: the security tab keeps only machine-level settings
+- **GIVEN** stored secrets cited by a registered MCP server and a model provider
+- **WHEN** the user opens `/settings/security`
+- **THEN** the tab shows where the master key lives and its move control
+- **AND** it lists no stored secret and offers no control that adds, reveals or deletes one
+
 ## ADDED Requirements
+
+### Requirement: Group the sidebar by what the user comes to do
+The sidebar MUST be grouped by what the user comes to Coffer to do, so that each
+heading names one intent and a new entry has one obvious home. There are five
+groups, under headings in this order:
+
+- **AGENTS** — set up the agents and the models they run on: Agents, then Model
+  providers. Agents come first because they are the subject of the product; a
+  provider is the endpoint and key each agent's model is served from.
+- **WORK** — talk to an agent, directly or through an IM bot: Chat, then
+  Channels.
+- **CAPABILITIES** — give agents things they can do: MCP servers, then Skills.
+- **CONTEXT** — give agents things they know: Knowledge, then Memory.
+- **SYSTEM** — look after Coffer and what every other part shares: Secrets,
+  Activity, Sync, then Settings.
+
+**Overview**, the landing page, MUST sit above the five groups under no heading:
+it summarises all of them, so filing it under one would misname it.
+
+A new entry MUST join the group that names what the user comes to it for, and no
+group may grow past five entries; growth that is more of an existing thing — one
+more agent, channel or custom tool — is a row inside that thing's page, not an
+entry. A group whose every entry is left out (see "Keep the sidebar to its
+thirteen entries") MUST leave its heading out too, so no heading stands over
+nothing. The decision and the options it was weighed against are in
+[The Sidebar Is Grouped by What the Person Comes to Do](../../../docs/decisions/sidebar-grouped-by-what-the-person-comes-to-do.md).
+
+#### Scenario: the sidebar groups entries by what the user comes to do
+- **GIVEN** the app shell is rendered with every experimental feature switched on
+- **WHEN** the sidebar lists its entries
+- **THEN** Overview comes first, under no heading, and the rest sit under five headings in the order Agents, Work, Capabilities, Context, System
+- **AND** Agents holds Agents then Model providers, Work holds Chat then Channels, Capabilities holds MCP servers then Skills, Context holds Knowledge then Memory, and System holds Secrets, Activity, Sync and Settings
+
+#### Scenario: a group with every entry switched off leaves the sidebar
+- **GIVEN** `knowledge` and `memory` both switched off
+- **WHEN** the app shell is rendered
+- **THEN** the sidebar shows no Context heading, and the other four headings and their entries are unchanged
+
+### Requirement: Give each listed resource kind one sidebar entry
+Every resource kind with a list UI MUST have exactly one sidebar entry — today six
+kinds (`mcp_server`, `skill`, `knowledge`, `memory`, `provider`, `channel`), six
+entries — filed by what the user comes to do with it rather than under one
+Resources heading, because "resource" is the framework's storage word, not a
+word a user navigates by:
+
+- **Model providers** is filed under Agents, not Capabilities or Settings: a
+  `provider` is `{protocol, base_url, credential_ref}`, the endpoint and key an
+  agent's model is served from, and the connection and model are chosen per
+  agent on that agent's page (spec
+  [provider-switching](../provider-switching/spec.md) "Offer every connection operation on REST, CLI and web").
+- **Channels** is filed under Work, beside Chat and not merged into it: Chat is
+  where a person holds conversations every day, a channel is an IM bot set up
+  once and revisited rarely, and the conversations a channel carries are already
+  listed on the Chat page (spec [chat](../chat/spec.md) "Show every conversation on the Chat page").
+- **MCP servers** and **Skills** are filed under Capabilities; **Knowledge** and
+  **Memory** under Context.
+
+Agents are stored as resources of kind `agent` but are the consumers of the
+others, so the Agents entry heads the Agents group and no agent is listed on a
+Capabilities or Context page. **Secrets** is not a resource kind — it is the
+credential store every kind cites into — and sits under System (see "Manage
+stored secrets on the Secrets page").
+
+#### Scenario: each listed resource kind has one sidebar entry
+- **GIVEN** the app shell is rendered with every experimental feature switched on
+- **WHEN** the entries for resource kinds are read
+- **THEN** MCP servers, Skills, Knowledge, Memory, Model providers and Channels each appear exactly once, under Capabilities, Capabilities, Context, Context, Agents and Work respectively
+- **AND** no heading reads "Resources"
 
 ### Requirement: Open the app on Overview
 The app's index (`/`) MUST render the Overview page, the landing page, in place
@@ -395,6 +511,57 @@ show an empty panel.
 - **GIVEN** the palette open
 - **WHEN** the user types a query no page or object matches
 - **THEN** the palette says there are no results
+
+### Requirement: Manage stored secrets on the Secrets page
+The Secrets page (`/secrets`, under the sidebar's System group) MUST be the one
+page in the web UI that lists and manages stored secrets. A secret is shared
+infrastructure data — one reference can be cited by MCP servers, model
+providers, channels and skills at once (spec
+[credentials](../credentials/spec.md) "Address a secret by an opaque reference") —
+so it gets a page of its own rather than a section of any one kind's page, and
+it is not a Settings tab, because it holds data the user manages rather than a
+preference. A secret field inside a resource's own dialog stays there: a secret
+is still entered where the thing that needs it is configured.
+
+The page MUST carry:
+
+- **List** — every secret the store reports, by its reference, with whether the
+  store holds it, so a reference cited but missing reads as missing (spec
+  [credentials](../credentials/spec.md) "List every cited reference with its presence").
+- **Used by** — for each secret, what cites it, by kind and current name, each
+  opening that thing's page; a secret nothing cites is marked unused.
+- **Add and replace** — store a new secret, or replace the value of one that
+  exists, without the value ever being shown back.
+- **Reveal** — show one value behind an explicit action, which is an audited
+  read (spec [credentials](../credentials/spec.md) "Audit every read of a secret value").
+- **Delete** — refused while the secret is cited: the control MUST say what still
+  uses it, naming each citer as the delete refusal does (spec
+  [credentials](../credentials/spec.md) "Refuse to delete a credential still in use"), and
+  the row MUST stay.
+- **Migration assistant** — the entry point that moves plaintext secret files into
+  the store, shown once that assistant ships.
+
+This requirement fixes the page's place and its parts. What the store enumerates
+beyond cited references, how each operation behaves, and the migration
+assistant's steps are the credentials capability's, specified with it.
+
+#### Scenario: the secrets page lists each secret with what uses it
+- **GIVEN** a registered MCP server citing a stored reference, and a model provider citing a reference the store does not hold
+- **WHEN** the user opens `/secrets`
+- **THEN** both references are listed, the first as present and the second as missing
+- **AND** each row names its citer by kind and current name, and choosing it opens that resource's page
+
+#### Scenario: a secret in use cannot be deleted from the secrets page
+- **GIVEN** a stored secret cited by a registered channel
+- **WHEN** the user tries to delete it from the Secrets page
+- **THEN** the delete is refused with the channel named as what still uses it
+- **AND** the secret's row is still listed
+
+#### Scenario: revealing a secret is an explicit, audited read
+- **GIVEN** a stored secret listed on the Secrets page
+- **WHEN** the page renders, and then the user chooses Reveal on that row
+- **THEN** no value is shown until Reveal is chosen
+- **AND** the reveal records a `credential_read` audit entry carrying the reference only
 
 ### Requirement: Mark a sidebar entry whose kind needs attention
 A sidebar entry MUST carry a dot while the attention signal of the kind or tool
