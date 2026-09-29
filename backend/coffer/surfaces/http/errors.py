@@ -61,8 +61,10 @@ _STATUS: dict[str, int] = {
     "UNAUTHENTICATED": 401,
     "DAEMON_NOT_READY": 503,
     # Emitted by the host_guard middleware, not by a CofferError: a request
-    # whose Host header does not name this daemon's loopback authority.
-    "HOST_NOT_LOOPBACK": 421,
+    # whose Host does not name this daemon's loopback address and port, or
+    # whose Origin is not one of Coffer's own.
+    "HOST_NOT_ALLOWED": 403,
+    "ORIGIN_NOT_ALLOWED": 403,
     "BAD_REQUEST": 400,
     # A paging cursor that does not decode, or names another list or other
     # filters (spec resource-framework "Page growing lists by an opaque cursor").

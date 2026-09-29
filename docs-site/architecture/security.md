@@ -1,6 +1,6 @@
 ---
 title: Security model
-description: Coffer's threat model and the mechanisms behind it — loopback binding and the Host check, the per-start API token, the envelope-encrypted credential store, the SSRF guard, agent identity, channel owner pairing, what reaches logs and audit, and how sync carries secrets.
+description: Coffer's threat model and the mechanisms behind it — loopback binding and the Host and Origin checks, the per-start API token, the envelope-encrypted credential store, the SSRF guard, agent identity, channel owner pairing, what reaches logs and audit, and how sync carries secrets.
 ---
 
 # Security model
@@ -16,7 +16,7 @@ Coffer is a **single-user tool on one machine**. There is one owner, no accounts
 | Threat | Defence |
 | --- | --- |
 | A host on the network reaching the daemon. | The daemon binds `127.0.0.1` only. The OS refuses remote connections before they reach Coffer. |
-| A web page in your browser reaching the daemon — including through DNS rebinding. | Every request must carry the API token, and every request whose `Host` header is not a loopback authority is refused. |
+| A web page in your browser reaching the daemon — including through DNS rebinding. | Every request whose `Host` is not the daemon's own loopback address and port is refused, and so is every request whose `Origin` is not one of Coffer's own. Every management call must also carry the API token. |
 | Another user account on the same machine. | `daemon.json`, `daemon-config.json` and `master.key` are mode `0600`. |
 | Secrets leaking through ordinary artefacts: config files, logs, the audit trail, the sync remote, screenshots of a URL. | Secrets exist at rest only as Fernet ciphertext. Configs hold refs. Audit records refs, never values. Sync carries ciphertext only, and only when you opt in. The token is never put in a URL. |
 | An offline copy of `~/.coffer/` (a stolen backup, a synced folder). | Only in keychain mode: the master key then lives in the OS keychain, so the copied database is ciphertext without its key. |
@@ -46,7 +46,7 @@ flowchart LR
     CLIENTS["CLI, web UI, desktop"]
     DJ["daemon.json 0600"]
     subgraph daemon["coffer-daemon on 127.0.0.1"]
-      GUARD["Host check and token"]
+      GUARD["Host and Origin checks, token"]
       CORE["Services"]
       STORE[("Ciphertext store")]
     end
@@ -58,7 +58,7 @@ flowchart LR
     GIT["Your git remote"]
   end
   REMOTE -.->|"refused by loopback bind"| GUARD
-  WEBPAGE -.->|"refused by Host check"| GUARD
+  WEBPAGE -.->|"refused by Host and Origin checks"| GUARD
   CLIENTS -->|token from| DJ
   AGENTS -->|token from| DJ
   CLIENTS --> GUARD
@@ -75,18 +75,48 @@ flowchart LR
 
 The daemon binds `127.0.0.1` and nothing else ([`infrastructure/daemon/port_alloc.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/port_alloc.py)). Uvicorn is handed the pre-bound socket rather than a host and port, so nothing downstream can widen the bind. It is the only socket Coffer listens on: Telegram is long-polled from inside the daemon, and each SeaTalk channel holds one outbound websocket connection. No channel needs a public URL, a tunnel or an inbound port.
 
-## The Host check
+## The Host and Origin checks
 
-Binding to loopback stops remote hosts. It does not stop a browser. A page on `evil.example` whose DNS name the attacker re-points at `127.0.0.1` is, to the browser, still same-origin with `evil.example`, so CORS never applies and the page can read the response body. Because the daemon puts its API token into the web UI's `index.html` (below), one `fetch("/")` from such a page would take the whole vault.
+Binding to loopback stops remote hosts. It does not stop a browser, because any page you have open can send requests to `127.0.0.1`. Coffer runs two checks on every request before any route sees it. They cover the REST API, the `/mcp` endpoint, the `/api/v1/events` stream, websockets, the status probe and the served web UI. The daemon has one listener and every surface is on it, so there is no path that skips the checks. This follows the MCP specification, which says an HTTP server must validate `Origin` on every connection. The same gap caused CVE-2025-49596 in the MCP Inspector, CVE-2024-28224 in Ollama and TS-2022-004/005 in Tailscale.
 
-The defence is the `Host` header, which DNS rebinding does not change: a rebound request still says `Host: evil.example`. [`host_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/host_guard.py) refuses every HTTP and websocket request whose `Host` is not `localhost` or a loopback IP literal (`127.0.0.1`, `::1`, with or without a port) — including a request with no `Host` at all — with:
+### Host: DNS rebinding
+
+Suppose an attacker controls `evil.example` and re-points its DNS name at `127.0.0.1`. To the browser, the page is still same-origin with `evil.example`, so CORS never applies and the page can read the response body. The daemon puts its API token into the web UI's `index.html` (see below), so one `fetch("/")` from that page would take the whole vault.
+
+DNS rebinding does not change the `Host` header. A rebound request still says `Host: evil.example:8000`. So the daemon accepts a request only when `Host` names `127.0.0.1`, `localhost` or `[::1]` **and** the port the request arrived on. It refuses anything else, including a request with no `Host` and a loopback name on another port:
 
 ```text
-HTTP/1.1 421 Misdirected Request
-{"error": {"code": "HOST_NOT_LOOPBACK", "message": "Coffer only answers requests addressed to its loopback address; this one named evil.example:8000.", "details": null}}
+HTTP/1.1 403 Forbidden
+{"error": {"code": "HOST_NOT_ALLOWED", "message": "Coffer only answers requests addressed to 127.0.0.1:8000 or localhost:8000; this one named evil.example:8000.", "details": null}}
 ```
 
-The guard is raw ASGI middleware (it does not buffer bodies, which would break the long-lived `/mcp` streams) and sits outside CORS in the middleware stack, so a rebound request is refused before CORS can bless it. `COFFER_ALLOWED_HOSTS` (comma-separated, or `*`) adds authorities; the backend test suite sets it because it drives the app in-process. A real deployment needs nothing there.
+### Origin: requests from other sites
+
+A page on another site can still *send* a request to the right address even though it cannot read the answer: a form post, an `EventSource`, or a `fetch` in `no-cors` mode. The token already makes such a request fail. The Origin check makes it fail without relying on the token. A request that carries an `Origin` header gets through only if the origin is one of Coffer's own:
+
+| Origin | When it is allowed |
+| --- | --- |
+| `http://127.0.0.1:<port>`, `http://localhost:<port>`, `http://[::1]:<port>` | Always. This is the web UI the daemon serves, opened in a browser tab. |
+| `tauri://localhost`, `http://tauri.localhost` | By default. This is the desktop app, which loads the UI from its own origin. |
+| `http://localhost:5173`, `http://127.0.0.1:5173` | Only with `COFFER_DEV_CORS=1`. This is the Vite dev server. |
+| Any origin listed in `COFFER_CORS_ORIGINS` | Only when that variable is set. The list replaces the desktop and Vite entries. |
+
+Every other origin, including `null`, gets `403 ORIGIN_NOT_ALLOWED`. The check happens before the route runs, so it applies even when the request carries the right token.
+
+A request with **no** `Origin` goes on to the token check. That is how the CLI, the shim, an agent's MCP client and `curl` send requests. Browsers are the only clients that send `Origin`, and a non-browser client can put whatever it likes there anyway.
+
+The daemon logs each distinct refused `Host` or `Origin` once, as `http.request_refused`. A page that retries in a loop cannot flood the log.
+
+### Allowing a development origin
+
+You only need this when you serve the UI yourself instead of opening it from the daemon or the desktop app.
+
+- **The Vite dev server on port 5173.** Start the daemon with `COFFER_DEV_CORS=1`. `make dev` does this for you.
+- **Any other origin**, such as Vite on a spare port: set `COFFER_CORS_ORIGINS` to a comma-separated list of exact origins before you start the daemon, for example `COFFER_CORS_ORIGINS=http://localhost:5174,http://127.0.0.1:5174`. The list replaces the desktop and Vite entries, so include those too if you still need them. The daemon's own origins are always allowed.
+
+Both variables are read when the daemon starts, so restart it after you change them. Never put a site you do not control on the list: any page on a listed origin can call the daemon.
+
+`COFFER_ALLOWED_HOSTS` (comma-separated hostnames, or `*`) adds names that the Host check accepts. It never relaxes the Origin check. The backend test suite sets it because it drives the app in-process with made-up hostnames. A real installation does not need it.
 
 ## The API token
 
@@ -108,13 +138,13 @@ The web UI needs the token too, and a URL is the wrong channel: it ends up in br
 - The page persists nothing: reload after a daemon restart and it is authenticated against the new daemon.
 - `coffer open` carries no credential. It reads the daemon's port from `daemon.json` and opens the browser there.
 
-The token in the page is exactly what makes the [Host check](#the-host-check) mandatory; neither exists without the other.
+The token in the page is exactly what makes the [Host check](#host-dns-rebinding) mandatory; neither exists without the other.
 
 The desktop shell loads the same frontend as a local asset that nobody served, so there is no `index.html` to inject into. It supplies the same two globals over a Tauri IPC command before first render instead. The Vite dev server does the same from `daemon.json` during development. Each host is a credential *supplier*; the page reads one pair of globals either way.
 
 ### CORS
 
-CORS is not Coffer's security boundary — the token is — but the allowlist is kept tight. The browser-served UI is same-origin with the API and needs nothing. The desktop shell's page origin (`tauri://localhost`, or `http://tauri.localhost` on other platforms) is allowed by default, because its API calls to `http://127.0.0.1:<port>` are cross-origin. `COFFER_DEV_CORS=1` adds the Vite dev origins `http://localhost:5173` and `http://127.0.0.1:5173`; `COFFER_CORS_ORIGINS` replaces the list outright. `allow_credentials` is always false, so no cookie is ever attached; every request still needs the token.
+CORS grants exactly the cross-origin entries of the [Origin table](#origin-requests-from-other-sites): the desktop app's origins by default, and the development origins when you opt in. The browser-served UI is same-origin with the API and needs no CORS. CORS never uses a wildcard, and `allow_credentials` is always false, so no cookie is ever attached. CORS and the Origin check read the same list, so they cannot disagree.
 
 ## The credential store
 
@@ -225,7 +255,7 @@ See [Vault sync](/architecture/vault-sync) for the full protocol.
 | Path | Contents |
 | --- | --- |
 | [`surfaces/http/auth.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/auth.py) | Token check. |
-| [`surfaces/http/host_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/host_guard.py) | Loopback `Host` check. |
+| [`surfaces/http/host_guard.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/host_guard.py) | `Host` and `Origin` checks. |
 | [`surfaces/http/cors.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/cors.py), [`middleware.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/middleware.py) | CORS allowlist and middleware order. |
 | [`surfaces/http/webui.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/webui.py) | Serving the UI with the injected token. |
 | [`infrastructure/daemon/bootstrap.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/bootstrap.py), [`atomic_write.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/daemon/atomic_write.py) | Token minting, `daemon.json`, `0600` writes. |

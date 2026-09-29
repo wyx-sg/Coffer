@@ -38,7 +38,8 @@ give the status each code is actually sent with.
 | --- | --- | --- | --- |
 | `UNAUTHENTICATED` | 401 | The `X-Coffer-Token` header is missing or wrong. | Read the current token from `~/.coffer/daemon.json`; it changes on every daemon start and on `coffer daemon rotate-token`. |
 | `DAEMON_NOT_READY` | 503 | The daemon has no active token yet; it is still starting. | Retry after a moment. |
-| `HOST_NOT_LOOPBACK` | 421 | The request's `Host` header does not name a loopback address. Defends against DNS rebinding. | Call `127.0.0.1` or `localhost` directly, not through a proxy or another hostname. |
+| `HOST_NOT_ALLOWED` | 403 | The request's `Host` header does not name `127.0.0.1`, `localhost` or `[::1]` with the daemon's port. Defends against DNS rebinding. | Call `127.0.0.1:<port>` or `localhost:<port>` directly, not through a proxy or another hostname. |
+| `ORIGIN_NOT_ALLOWED` | 403 | The request carries an `Origin` that is not one of Coffer's own: the daemon's web origin, the desktop app, or an opted-in dev origin. Defends against requests from other sites. | Open the UI from the daemon or the desktop app. To serve it from a dev origin, start the daemon with `COFFER_DEV_CORS=1` or list the origin in `COFFER_CORS_ORIGINS`. |
 | `BAD_REQUEST` | 400 | A route rejected the request (for example an invalid `X-Coffer-Actor` value or malformed JSON on `/mcp`). | Read `message`; fix the request. |
 | `CURSOR_INVALID` | 400 | A `cursor` sent to a paged list (the audit log, the MCP invocation log, an agent's transcript sessions, the chat conversations) does not decode, or was issued for another list or with other filters. | Drop `cursor` to read the first page again, or send the `next_cursor` the same list and filters returned. |
 | `NOT_FOUND` | 404 | No such route or object, raised by a route rather than a domain error. | Check the path against the [REST API reference](/reference/rest-api). |

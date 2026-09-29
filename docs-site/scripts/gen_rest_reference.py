@@ -80,10 +80,12 @@ curl -s -H "X-Coffer-Token: $TOKEN" http://127.0.0.1:8000/api/v1/resources
 
 `coffer daemon rotate-token` replaces the token and rewrites `daemon.json`.
 
-::: warning Loopback only
-The daemon refuses any request whose `Host` header does not name a loopback address
-(`127.0.0.1`, `localhost`, `::1`) with `421 HOST_NOT_LOOPBACK`. This defends against DNS
-rebinding; see the [security model](/architecture/security).
+::: warning Loopback only, Coffer's own origins only
+The daemon refuses any request whose `Host` header does not name `127.0.0.1`, `localhost`
+or `[::1]` with the daemon's port (`403 HOST_NOT_ALLOWED`), and any request carrying an
+`Origin` that is not one of Coffer's own (`403 ORIGIN_NOT_ALLOWED`). A request with no
+`Origin`, as the CLI and agents send, goes on to the token check. This defends against DNS
+rebinding and cross-site requests; see the [security model](/architecture/security).
 :::
 
 ## Errors

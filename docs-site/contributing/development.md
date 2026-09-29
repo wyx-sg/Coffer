@@ -94,7 +94,7 @@ The source daemon also serves the built UI at its own origin when `frontend/dist
 | Variable | Effect |
 | --- | --- |
 | `COFFER_PORT_RANGE_START`, `COFFER_PORT_RANGE_END` | Bind the first free port in this range instead of the configured fixed port (default 8000) |
-| `COFFER_DEV_CORS=1` | Allow the Vite origins `http://localhost:5173` and `http://127.0.0.1:5173`, plus the desktop shell's origins |
+| `COFFER_DEV_CORS=1` | Allow the Vite origins `http://localhost:5173` and `http://127.0.0.1:5173`, plus the desktop shell's origins. Without it the daemon refuses requests from those origins with `403 ORIGIN_NOT_ALLOWED` |
 | `COFFER_CORS_ORIGINS` | Comma-separated list that replaces the CORS allowlist entirely, shell origins included. Use it when your UI runs on any other origin |
 | `COFFER_DB_URL` | SQLAlchemy URL of the database (default `sqlite+aiosqlite:///~/.coffer/coffer.db`) |
 | `COFFER_KNOWLEDGE_ROOT`, `COFFER_MEMORY_ROOT`, `COFFER_AGENT_STATE_ROOT` | Move the knowledge tree, the memory tree or the agent-state cache |

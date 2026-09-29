@@ -21,7 +21,8 @@ an environment variable to; and the shell carries no HTTP-proxy plugin, so the
 WebView really does make these requests itself.
 
 Allowing that origin widens nothing, because CORS is not this daemon's security
-boundary — the token is. The daemon binds loopback only, ``allow_credentials``
+boundary — the token and the Host/Origin guard
+(:mod:`coffer.surfaces.http.host_guard`) are. The daemon binds loopback only, ``allow_credentials``
 is False so no cookie is ever attached, and a request without a valid
 ``X-Coffer-Token`` is refused whatever origin it claims. ``tauri://localhost``
 is the origin of *every* Tauri app, so another one on this machine could send a
@@ -66,7 +67,15 @@ _DEV_ORIGINS: tuple[str, ...] = (
 )
 
 
-def _resolve_origins() -> list[str]:
+def cross_origin_allowlist() -> list[str]:
+    """The origins, other than the daemon's own, that may call it from a page.
+
+    One list, read by two consumers so they cannot disagree: this module's CORS
+    answer, and the Origin check in :mod:`coffer.surfaces.http.host_guard`,
+    which refuses a request from any origin that is neither the daemon's own
+    nor on this list. Re-read on every call, so a test can change the
+    environment between apps.
+    """
     explicit = os.environ.get("COFFER_CORS_ORIGINS")
     if explicit:
         return [o.strip() for o in explicit.split(",") if o.strip()]
@@ -79,7 +88,7 @@ def _resolve_origins() -> list[str]:
 def install(app: FastAPI) -> None:
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=_resolve_origins(),
+        allow_origins=cross_origin_allowlist(),
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["X-Coffer-Token", "X-Coffer-Actor", "Content-Type", "Accept"],

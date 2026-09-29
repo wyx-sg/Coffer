@@ -100,7 +100,7 @@ Every HTTP request gets a trace id before anything else runs. `surfaces/http/tra
 
 Coffer's own CLI and MCP shim send no `X-Coffer-Trace`, so each of their requests gets a fresh id. The header is there for a client that wants several calls to read as one story in the log.
 
-The trace middleware is outermost in the stack — outside the loopback host guard and CORS — so even a request refused with `421 HOST_NOT_LOOPBACK` carries a trace id that matches the log record explaining the refusal. See [Security model](/architecture/security) for the host guard.
+The trace middleware is outermost in the stack — outside the Host and Origin guard and CORS — so even a request refused with `403 HOST_NOT_ALLOWED` or `403 ORIGIN_NOT_ALLOWED` carries a trace id that matches the log record explaining the refusal. See [Security model](/architecture/security) for the guard.
 
 ```mermaid
 sequenceDiagram

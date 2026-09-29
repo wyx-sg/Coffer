@@ -163,7 +163,7 @@ Playwright starts two web servers:
 - **Vite** on port 5173, with `VITE_COFFER_BASE_URL=http://127.0.0.1:18000/api/v1`. The Vite server is never reused, because a leftover `make dev` Vite would point at the wrong daemon.
 
 ::: warning Changing the ports
-The daemon's development CORS allowlist is fixed to `http://localhost:5173` and `http://127.0.0.1:5173`. If you serve the UI from any other port, also set `COFFER_CORS_ORIGINS` to that origin. It replaces the allowlist entirely. Without it, every browser request fails with "Failed to fetch" and the `web` specs fail even though nothing is broken.
+The daemon's development CORS allowlist is fixed to `http://localhost:5173` and `http://127.0.0.1:5173`. If you serve the UI from any other port, also set `COFFER_CORS_ORIGINS` to that origin. It replaces the allowlist entirely. Without it, the daemon refuses every browser request with `403 ORIGIN_NOT_ALLOWED`, the page reports "Failed to fetch", and the `web` specs fail even though nothing is broken.
 :::
 
 On a CI failure, the `e2e` job uploads the Playwright report and traces, plus the isolated daemon's log directory and `daemon.json`, as workflow artifacts.
