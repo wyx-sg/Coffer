@@ -207,14 +207,33 @@ No test may touch the real user's home. `backend/tests/conftest.py` installs `te
   - `claude_code_dir`, `codex_dir` / `fake_agent_dir(home, AgentType.X, config_dir=None, files=None)` — agent config tree laid out from the descriptor; `.write(key, text)`, `.add_skill(name)`, `.home_env()`.
   - `fake_channel_adapter` / `tests.support.channel.FakeChannelAdapter` — recording IM transport (re-exported by `integration/channel/conftest.py`).
 
+## Running in Parallel
+
+The backend unit and integration tiers run on **pytest-xdist**: `make verify-unit` and `make verify-integration` pass `-n $(PYTEST_WORKERS) --dist loadgroup`, and `PYTEST_WORKERS` defaults to `auto` (one worker per core). The contract and benchmark tiers stay serial — they are small, and a benchmark measured under contention measures the contention.
+
+- **Serial escape hatch.** `PYTEST_WORKERS=0 make verify-integration` runs the tier in one process — for `pdb`, `-s` output that interleaves sanely, or bisecting an order-dependent failure. `PYTEST_WORKERS=4` pins the count. `PYTEST_ARGS="..."` is appended to the pytest command line (`PYTEST_ARGS="-k sync -x"`). Running pytest by hand without `-n` is serial too.
+- **What each worker gets.** Every worker is its own pytest process, so it imports the root conftest and installs its own real-home guard: its own throwaway `HOME`, its own scratch root (`coffer-test-run-*`, holding the run-wide `COFFER_LOG_DIR` and the per-root defaults), its own `tmp_path_factory` base (`popen-gwN`). The controller's `COFFER_TEST_REAL_HOME` tells each worker what the real home is, so its tripwire still guards it even though the worker starts with the controller's fake `HOME`. Subprocesses a worker spawns inherit that worker's isolated `HOME`, exactly as in a serial run.
+- **Writing a parallel-safe test.** Nothing a test writes may have a name another process could pick: build paths from `tmp_path`, get ports from `tests.fixtures.net.free_port()` (never a literal), and never write into the repo tree (copy the file into `tmp_path`, as `test_stamp_channel.py` does). Module-level state is per worker, so a singleton cannot leak across workers — but it still leaks across the tests one worker runs, so reset it in a fixture as before.
+- **When isolation is impossible.** Mark the tests that share the resource with the same group, and xdist runs the whole group on one worker, in order:
+
+  ```python
+  pytestmark = pytest.mark.xdist_group(name="<the shared resource>")
+  ```
+
+  Use it for a resource the code under test fixes and the test cannot redirect. No test needs it today — every port, directory and log already moves per worker. Reach for it last: a group is a serial island, and the tier is only as fast as its largest one. `--dist loadgroup` is what makes the marker count; a plain `-n auto` ignores it.
+- **Timeouts.** Under `-n auto` a test shares the machine with a worker per core, so a tight `@pytest.mark.timeout` or a wall-clock assertion can fail from load alone. Make the test cheaper (a smaller tree, a fake clock, a condition to wait on instead of a sleep) before widening a budget.
+
+CI shards the integration tier as well — see [CI Jobs](#ci-jobs).
+
 ## Make Targets
 
 ```bash
 make verify              # fast path: lint + unit + integration + contract + acceptance audit
 make verify-all          # verify + e2e (full suite)
 
-make verify-unit         # unit-purity guardrail + unit tier
-make verify-integration  # integration tier only
+make verify-unit         # unit-purity guardrail + unit tier (xdist, PYTEST_WORKERS=auto)
+make verify-integration  # integration tier only (xdist, PYTEST_WORKERS=auto)
+make test-durations      # re-measure backend/.test_durations (CI shard balance)
 make verify-contract     # contract tier only
 make verify-benchmark    # the benchmark-marked tests (excluded from verify)
 make verify-e2e          # e2e tier only (Playwright: web + mcp projects)
@@ -261,8 +280,8 @@ Two consequences worth internalising:
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | `make verify`             | `lint` → `verify-unit` → `verify-integration` → `verify-contract` → `verify-acceptance`. The "pre-PR" gate.                                                                                 | Before every push and PR. CI runs the same tiers in parallel.               |
 | `make verify-all`         | `verify` plus `verify-e2e`.                                                                                                                                                                  | Before merging anything that touches a surface (web UI, HTTP, CLI, shim).   |
-| `make verify-unit`        | `scripts/check_unit_purity.py` (AST-scans for forbidden I/O imports), then `pytest backend/tests/unit`, then `vitest run src` in `frontend/` when its `node_modules` is present.             | Tight TDD loop on pure domain code.                                         |
-| `make verify-integration` | `pytest backend/tests/integration`.                                                                                                                                                           | After touching application services, SQLAlchemy repos, HTTP routes, or CLI plumbing. |
+| `make verify-unit`        | `scripts/check_unit_purity.py` (AST-scans for forbidden I/O imports), then `pytest -n auto backend/tests/unit`, then `vitest run src` in `frontend/` when its `node_modules` is present.             | Tight TDD loop on pure domain code.                                         |
+| `make verify-integration` | `pytest -n auto backend/tests/integration`.                                                                                                                                                         | After touching application services, SQLAlchemy repos, HTTP routes, or CLI plumbing. |
 | `make verify-contract`    | `pytest backend/tests/contract`.                                                                                                                                                              | After editing `openspec/specs/*/contracts/api.openapi.yaml` or Pydantic API schemas. |
 | `make verify-benchmark`   | `COFFER_RUN_BENCHMARKS=1 pytest backend/tests -m benchmark` — the perf-budget tests, which `make verify` deliberately excludes.                                                               | After touching the gateway hot path or any code a perf budget covers.       |
 | `make verify-e2e`         | `cd e2e && playwright test` — **both** projects: `web` (Chromium over the served UI, `e2e/web/specs/*.spec.ts`) and `mcp` (`e2e/mcp/specs/*.spec.ts`, a real MCP client through the shim to the daemon and upstream servers). | After touching a page, or the daemon ↔ shim ↔ MCP-client boundary.      |
@@ -270,18 +289,26 @@ Two consequences worth internalising:
 
 ## CI Jobs
 
-`.github/workflows/verify.yml` runs **eight** jobs in parallel; all must pass to merge:
+`.github/workflows/verify.yml` runs its jobs in parallel; the required checks on `main` are `lint`, `test-unit`, `test-integration`, `test-contract`, `audit-acceptance`, `secrets-scan` (plus the PR-title check `conventional-title`):
 
-| Job           | What                                                                                                                       |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `lint`        | `make lint` — every static gate above, frontend included (it installs Node + `npm ci`)                                     |
-| `unit`        | `make verify-unit` (purity check + backend pytest + frontend vitest)                                                       |
-| `integration` | `make verify-integration` (installs `ripgrep`, which curation's candidate selection uses)                                  |
-| `benchmark`   | `make verify-benchmark` — the **only** place the benchmark-marked perf-budget tests execute, so a budget can't go unchecked while its acceptance marker reports green |
-| `acceptance`  | `openspec validate --all --strict` (needs the root `npm ci`), then `python3 scripts/audit_acceptance.py`                    |
-| `secrets`     | `gitleaks` over the full history (`fetch-depth: 0`) — a committed secret fails the PR even if the final tree is clean       |
-| `contract`    | `make verify-contract`                                                                                                     |
-| `e2e`         | `make verify-e2e` (installs Chromium; runs the `web` and `mcp` projects)                                                    |
+| Job                               | What                                                                                                                       |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `changes`                         | Classifies the pull request with `scripts/ci_change_scope.py`: `code=false` when every changed file is prose no test reads (Markdown outside `openspec/`, `.agents/`, `.claude/`, `backend/`, `frontend/`, `e2e/`, `evals/`; anything under `docs/` or `docs-site/` except `docs-site/public/`; never the root `README.md`). Pushes are always `code=true`. |
+| `lint`                            | `make lint` — every static gate above, frontend included (it installs Node + `npm ci`). Always runs.                       |
+| `test-unit`                       | `make verify-unit` (purity check + backend pytest on xdist + frontend vitest)                                              |
+| `test-integration (N/4)`          | Four shards of `make verify-integration`, each picking its quarter with pytest-split (`--splits 4 --group N --splitting-algorithm least_duration`) balanced by the committed `backend/.test_durations`, and each running that quarter on xdist across the runner's cores. Installs `ripgrep`. |
+| `test-integration`                | The required check: succeeds only when all four shards succeeded, or when they were skipped because the change is `code=false`. |
+| `test-benchmark`                  | `make verify-benchmark` — the **only** place the benchmark-marked perf-budget tests execute, so a budget can't go unchecked while its acceptance marker reports green |
+| `audit-acceptance`                | `openspec validate --all --strict` (needs the root `npm ci`), then `python3 scripts/audit_acceptance.py`. Always runs.      |
+| `secrets-scan`                    | `gitleaks` over the full history (`fetch-depth: 0`) — a committed secret fails the PR even if the final tree is clean. Always runs. |
+| `test-contract`                   | `make verify-contract`                                                                                                     |
+| `test-e2e`                        | `make verify-e2e` (installs Chromium; runs the `web` and `mcp` projects)                                                    |
+
+The test jobs are skipped only on an explicit `code=false`: if `changes` itself fails they run anyway. A job skipped by its condition reports success, which is how a docs-only PR still shows every required check green.
+
+**Shard balance.** A test missing from `backend/.test_durations` is weighed at the average, so a stale file only unbalances the shards — it never drops a test. When one shard runs clearly longer than the others, run `make test-durations` (serial, ~15 min) and commit the file. Changing the shard count means editing both the `shard` matrix and `--splits`.
+
+`.github/workflows/ci.yml` runs one full `make verify` on every push to `main` and `feature/**`; it inherits the xdist default from the Makefile.
 
 ## When a Tier is Empty
 

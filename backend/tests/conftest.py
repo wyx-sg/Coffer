@@ -26,7 +26,13 @@ from pathlib import Path
 
 from tests.support import real_home_guard
 
-_GUARD = real_home_guard.install(Path(tempfile.mkdtemp(prefix="coffer-test-home-")))
+#: This process's own scratch root. Everything the run needs outside a test's
+#: ``tmp_path`` — the throwaway ``HOME`` and the four per-root defaults below —
+#: lives under it, so two pytest processes (xdist workers, a nested pytest, a
+#: second session's run) never share a directory or a log file.
+_RUN_ROOT = Path(tempfile.mkdtemp(prefix="coffer-test-run-"))
+
+_GUARD = real_home_guard.install(_RUN_ROOT / "home")
 
 import pytest  # noqa: E402
 
@@ -34,7 +40,7 @@ import pytest  # noqa: E402
 #: ``claude_code_dir``, ``codex_dir``, ``fake_channel_adapter``).
 pytest_plugins = ["tests.support.fixtures"]
 
-_TEST_LOG_DIR = Path(tempfile.gettempdir()) / "coffer-test-logs"
+_TEST_LOG_DIR = _RUN_ROOT / "logs"
 os.environ.setdefault("COFFER_LOG_DIR", str(_TEST_LOG_DIR))
 
 # Same reason, and a far worse failure mode: ``paths.knowledge_root()`` falls
@@ -44,14 +50,14 @@ os.environ.setdefault("COFFER_LOG_DIR", str(_TEST_LOG_DIR))
 # writing a log line. Pinned at import time so no test can reach the live tree
 # by forgetting a fixture; a test that wants its own tree overrides it per-test
 # with monkeypatch, which takes precedence over this default.
-_TEST_KNOWLEDGE_ROOT = Path(tempfile.gettempdir()) / "coffer-test-knowledge"
+_TEST_KNOWLEDGE_ROOT = _RUN_ROOT / "knowledge"
 os.environ.setdefault("COFFER_KNOWLEDGE_ROOT", str(_TEST_KNOWLEDGE_ROOT))
 
 # Same failure mode again, one layer over: ``paths.memory_root()`` (spec
 # memory) falls back to ``$HOME/.coffer/memory`` when ``COFFER_MEMORY_ROOT``
 # is unset, and that tree is a developer's real aggregated memory — a test
 # that forgets to pin this would delete and rewrite it, not just pollute a log.
-_TEST_MEMORY_ROOT = Path(tempfile.gettempdir()) / "coffer-test-memory"
+_TEST_MEMORY_ROOT = _RUN_ROOT / "memory"
 os.environ.setdefault("COFFER_MEMORY_ROOT", str(_TEST_MEMORY_ROOT))
 
 # And once more for the agent layer's own derived state (the transcript
@@ -60,7 +66,7 @@ os.environ.setdefault("COFFER_MEMORY_ROOT", str(_TEST_MEMORY_ROOT))
 # only costs a slow listing — but a test run has no business writing into the
 # developer's ``~/.coffer`` at all, and a sidecar shared between tests would
 # hand one test the summaries another test's tree left behind.
-_TEST_AGENT_STATE_ROOT = Path(tempfile.gettempdir()) / "coffer-test-agent-state"
+_TEST_AGENT_STATE_ROOT = _RUN_ROOT / "agent-state"
 os.environ.setdefault("COFFER_AGENT_STATE_ROOT", str(_TEST_AGENT_STATE_ROOT))
 
 

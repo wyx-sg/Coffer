@@ -14,7 +14,7 @@ The harness around this repo is a stack, and each layer has one home:
 | Feedback      | One command that says whether the tree is good                                                 | `make verify` and the test tiers ([`testing.md`](./testing.md)), pre-commit, the CI workflows                                                   |
 | Eval          | A regression net for non-deterministic behaviour that exact-match tests cannot pin             | `evals/`, `make eval`, `.github/workflows/evals.yml` — see [Eval harness](#eval-harness) below                                                  |
 
-A hook or gate must stay fast: a slow one trains people to bypass it.
+A hook or gate must stay fast: a slow one trains people to bypass it. That is why the backend test tiers run on xdist workers locally and the integration tier runs as four duration-balanced shards in CI ([`testing.md` "Running in Parallel"](./testing.md#running-in-parallel), [CI Jobs](./testing.md#ci-jobs)), and why a docs-only pull request skips the test jobs while the static gates still run.
 
 ## What is wired (`.claude/`)
 
