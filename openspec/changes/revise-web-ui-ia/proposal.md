@@ -139,6 +139,9 @@ unarchived until that implementation lands.
   stale save, and no curation controls without Coffer's model. Every document has a History tab
   and every pass can be undone as a whole from a cross-collection Recent changes view, on the
   vault's git history. Leftover "disabled collection" wording is removed.
+- A **memory partition** is one view of its memories (the UI's word for notes, 记忆条目), a
+  collapsed Retired group, and a meta line naming the agents each was learned from; the page shows
+  no native paths, agent text, `.raw/`, index or retired files and no file tree.
 - **Memory delivery** lives on each agent's Memory tab — what it receives at session start, how
   often memory was delivered and how many notes were read in the last seven days, and the hook's
   state; the Memory page shows no delivery.
@@ -179,6 +182,8 @@ unarchived until that implementation lands.
 - `knowledge`: the manual trigger drains until nothing is pending; the web UI terms, Inbox,
   status line, Add a document and editor; document history and whole-pass undo; no disabled
   collection anywhere.
+- `memory`: a partition's page shows its memories and a Retired group with the learned-from agents,
+  and none of the agents' own sources; provenance stays in the data and CLI.
 - `internal-engine`: the engine's settings are shown in the Coffer's model section of Settings ›
   General, with a provider-then-model picker and a Test action for the engine and for speech to
   text.

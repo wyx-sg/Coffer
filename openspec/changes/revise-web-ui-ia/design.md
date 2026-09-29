@@ -492,3 +492,8 @@ spec owns the Skills page.
   paths transcripts record reading, never their text.
 - **No disabled collection.** Every collection is served to every agent; the remaining "enabled" /
   "disabled" wording in knowledge is removed.
+- **A partition page is its memories.** The UI calls notes *memories* (记忆条目) and shows them as
+  one list with a collapsed Retired group and a meta line of learned-from agents and update time.
+  The agents' own memory files — native paths, their original text, `.raw/`, `MEMORY.md`,
+  `RETIRED.md`, a file tree — are sources, not what the user came to read, so the page leaves them
+  out; they stay in provenance, on the REST routes and in the CLI.
