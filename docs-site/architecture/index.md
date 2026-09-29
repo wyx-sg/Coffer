@@ -176,6 +176,7 @@ The rest of the section is organised from the foundations outward.
 - [Design principles](/architecture/design-principles) — the rules the codebase keeps, each with its rationale and what it rules out.
 - [Resource framework](/architecture/resource-framework) — the one abstraction every managed thing shares: identity, lifecycle, audit and reach.
 - [Layering and code layout](/architecture/layering) — the four layers, the import contracts that enforce them, and where code goes.
+- [Platform port](/architecture/platform) — the one package that knows the host OS, the port the application asks through, and the gate that keeps OS checks there.
 
 **Runtime** covers the processes and how requests move through them.
 

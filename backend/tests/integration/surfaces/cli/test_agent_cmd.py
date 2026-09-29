@@ -53,6 +53,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
+from coffer.infrastructure.platform import HostPlatform
 from coffer.surfaces.cli.main import app as cli_app
 from coffer.surfaces.http import errors as err_handlers
 from coffer.surfaces.http.agent_dependencies import (
@@ -86,7 +87,7 @@ def agent_cli_daemon(tmp_path, monkeypatch):
     audit = AuditService(SqlAlchemyAuditRepo(sm))
     kinds = {"agent": make_agent_kind(on_delete=None)}
     resource_svc = ResourceService(kinds=kinds, repo=SqlAlchemyResourceRepo(sm), audit=audit)
-    agent_svc = AgentService(resource_service=resource_svc, audit=audit)
+    agent_svc = AgentService(platform=HostPlatform(), resource_service=resource_svc, audit=audit)
     detect_svc = AutoDetectService(agent_service=agent_svc)
 
     app = FastAPI()

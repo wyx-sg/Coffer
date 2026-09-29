@@ -14,11 +14,11 @@ from __future__ import annotations
 import contextlib
 import os
 import pathlib
-import sys
 from collections.abc import Awaitable, Callable
 
 from coffer.application.agent.config_file_service import ConfigFileStorePort
 from coffer.application.audit_service import AuditService
+from coffer.application.platform_port import PlatformPort, PrivilegedPaths
 from coffer.application.resource_service import ResourceService
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.agent.types import AgentType
@@ -31,85 +31,68 @@ from coffer.domain.errors import (
 )
 from coffer.domain.resource import Resource
 
-# Privileged path defence. Each entry is matched at component boundary (the
-# entry itself or entry + os.sep) — so "/var" rejects "/var/run/x" but NOT
-# "/var-tmp/x". Resolves before matching so symlinks can't sneak past.
-_PRIVILEGED_PREFIXES_POSIX = (
-    "/etc",
-    "/bin",
-    "/sbin",
-    "/usr",
-    "/var",
-    "/sys",
-    "/proc",
-    "/root",
-    "/boot",
-    "/dev",
-    "/System",
-    "/Library/Application Support/Apple",
-)
-# Carve-outs INSIDE a privileged prefix that should still be usable. macOS's
-# user temp area lives under ``/var/folders/<hash>`` (resolved from the
-# /private firmlink); tests and ad-hoc tooling routinely place skills there.
-# Anything below one of these prefixes is treated as non-privileged.
-_PRIVILEGED_CARVE_OUTS_POSIX = ("/var/folders/",)
-_PRIVILEGED_PREFIXES_WIN = (
-    "C:\\Windows",
-    "C:\\Program Files",
-    "C:\\Program Files (x86)",
-)
+# Privileged path defence. Which locations are the OS's own is the host's
+# answer (``PlatformPort.privileged_paths``); the matching lives here. Each
+# prefix is matched at component boundary (the entry itself or entry +
+# separator) — so "/var" rejects "/var/run/x" but NOT "/var-tmp/x". Resolves
+# before matching so symlinks can't sneak past.
 
 
-def _is_privileged(s: str, prefixes: tuple[str, ...]) -> bool:
-    sep = "\\" if sys.platform == "win32" else os.sep
+def _is_privileged(s: str, rules: PrivilegedPaths) -> bool:
     # Carve-outs take precedence — they MUST be considered safe even if they
     # nominally live under a privileged prefix (e.g. macOS /var/folders).
-    if sys.platform != "win32" and any(s.startswith(c) for c in _PRIVILEGED_CARVE_OUTS_POSIX):
+    if any(s.startswith(c) for c in rules.carve_outs):
         return False
-    return any(s == pfx or s.startswith(pfx + sep) for pfx in prefixes)
+    return any(s == pfx or s.startswith(pfx + rules.separator) for pfx in rules.prefixes)
 
 
-def _strip_macos_private(s: str) -> str:
-    """On macOS several system roots are reached via the /private firmlink
-    (``/etc`` → ``/private/etc``, ``/var`` → ``/private/var``). When we
-    compare resolved paths against our prefix list we strip a leading
-    ``/private`` so that the symlink-traversal attack surface collapses to
-    the same prefix set we already maintain.
+def _strip_firmlink(s: str, rules: PrivilegedPaths) -> str:
+    """Several system roots are reached via a firmlink (macOS: ``/etc`` →
+    ``/private/etc``, ``/var`` → ``/private/var``). When we compare resolved
+    paths against our prefix list we strip a leading firmlink root so that the
+    symlink-traversal attack surface collapses to the same prefix set we
+    already maintain. A no-op where the host has no firmlink root.
     """
-    if sys.platform != "darwin":
+    root = rules.firmlink_root
+    if root is None:
         return s
-    if s == "/private":
+    if s == root:
         return "/"
-    if s.startswith("/private/"):
-        return s[len("/private") :]
+    if s.startswith(root + "/"):
+        return s[len(root) :]
     return s
 
 
-def assert_not_privileged(path: pathlib.Path) -> None:
+def assert_not_privileged(path: pathlib.Path, rules: PrivilegedPaths) -> None:
     """Raise PrivilegedPath if ``path`` lies in a privileged system location.
 
     Creates nothing, so callers run it before creating anything under the path.
-    On macOS some system roots are accessed via /private/<root>, so we strip
-    that prefix and test both the unresolved-but-expanded path and the fully
-    resolved path against the prefix set using component-boundary matching (so
-    "/var" rejects "/var/run/x" but not "/var-tmp/x").
+    Where some system roots are accessed via a firmlink (macOS /private/<root>),
+    that prefix is stripped, and both the unresolved-but-expanded path and the
+    fully resolved path are tested against the prefix set using
+    component-boundary matching (so "/var" rejects "/var/run/x" but not
+    "/var-tmp/x").
     """
     resolved = path.expanduser().resolve()
     unresolved = str(path.expanduser())
     s = str(resolved)
-    prefixes = _PRIVILEGED_PREFIXES_WIN if sys.platform == "win32" else _PRIVILEGED_PREFIXES_POSIX
-    candidates = (s, unresolved, _strip_macos_private(s), _strip_macos_private(unresolved))
-    if any(_is_privileged(c, prefixes) for c in candidates):
+    candidates = (
+        s,
+        unresolved,
+        _strip_firmlink(s, rules),
+        _strip_firmlink(unresolved, rules),
+    )
+    if any(_is_privileged(c, rules) for c in candidates):
         raise PrivilegedPath(s)
 
 
-def assert_skill_dir_usable(path: pathlib.Path) -> None:
+def assert_skill_dir_usable(path: pathlib.Path, rules: PrivilegedPaths) -> None:
     """Raise SkillDirNotWritable / PrivilegedPath if the path can't host skills.
 
     Allowed: existing directory, writable by current user, not in a privileged
     system location.
     """
-    assert_not_privileged(path)
+    assert_not_privileged(path, rules)
     resolved = path.expanduser().resolve()
     s = str(resolved)
     # Existence + writability. "Validate the config directory at registration" requires
@@ -124,6 +107,34 @@ def assert_skill_dir_usable(path: pathlib.Path) -> None:
         raise SkillDirNotWritable(s, "not_writable")
 
 
+def ensure_skill_dir(
+    config_dir: pathlib.Path, skill_dir: pathlib.Path, rules: PrivilegedPaths
+) -> None:
+    """Create the skill-delivery subpath under an EXISTING config dir, then
+    assert it's usable.
+
+    The agent's config dir (``~/.claude``, ``~/.codex``, …) must already
+    exist — we refuse to ``mkdir -p`` a mistyped config location (e.g.
+    ``/Usrs/me/.claude``) into being, which would silently deliver skills to
+    a directory the agent never reads. The Coffer-owned skill subpath under
+    it (``skills``) IS auto-created, including intermediate components.
+    A privileged skill dir is refused before the ``mkdir``, so a rejection
+    leaves nothing behind. ``mkdir`` failures are swallowed —
+    ``assert_skill_dir_usable`` surfaces the precise reason (not-writable /
+    not-a-directory).
+    """
+    if not config_dir.is_dir():
+        raise SkillDirNotWritable(str(config_dir), "directory_missing")
+    # Refuse a privileged location BEFORE creating anything in it (spec
+    # agent-registry "Validate the config directory at registration").
+    assert_not_privileged(skill_dir, rules)
+    with contextlib.suppress(OSError):
+        # parents=True creates nested subpaths but never the config_dir
+        # itself — that's guarded above.
+        skill_dir.mkdir(parents=True, exist_ok=True)
+    assert_skill_dir_usable(skill_dir, rules)
+
+
 class AgentService:
     """Agent-kind lifecycle on top of ResourceService."""
 
@@ -132,12 +143,16 @@ class AgentService:
         *,
         resource_service: ResourceService,
         audit: AuditService,
+        platform: PlatformPort,
         on_config_dir_changed: Callable[[str], Awaitable[None]] | None = None,
         reconcile_skill_delivery: Callable[[str], Awaitable[None]] | None = None,
         config_file_store: ConfigFileStorePort | None = None,
     ) -> None:
         self._rs = resource_service
         self._audit = audit
+        # The host's answers to OS questions — here, which paths are system
+        # locations a skill dir must never be in.
+        self._platform = platform
         # Atomic config-file store (write_text_atomic keeps a .bak). Optional so
         # existing call sites and unit fakes need not supply one.
         self._config_file_store = config_file_store
@@ -196,31 +211,8 @@ class AgentService:
             await self._reconcile_skill_delivery(registered.uid)
         return registered
 
-    @staticmethod
-    def _ensure_skill_dir(config_dir: pathlib.Path, skill_dir: pathlib.Path) -> None:
-        """Create the skill-delivery subpath under an EXISTING config dir, then
-        assert it's usable.
-
-        The agent's config dir (``~/.claude``, ``~/.codex``, …) must already
-        exist — we refuse to ``mkdir -p`` a mistyped config location (e.g.
-        ``/Usrs/me/.claude``) into being, which would silently deliver skills to
-        a directory the agent never reads. The Coffer-owned skill subpath under
-        it (``skills``) IS auto-created, including intermediate components.
-        A privileged skill dir is refused before the ``mkdir``, so a rejection
-        leaves nothing behind. ``mkdir`` failures are swallowed —
-        ``assert_skill_dir_usable`` surfaces the precise reason (not-writable /
-        not-a-directory).
-        """
-        if not config_dir.is_dir():
-            raise SkillDirNotWritable(str(config_dir), "directory_missing")
-        # Refuse a privileged location BEFORE creating anything in it (spec
-        # agent-registry "Validate the config directory at registration").
-        assert_not_privileged(skill_dir)
-        with contextlib.suppress(OSError):
-            # parents=True creates nested subpaths but never the config_dir
-            # itself — that's guarded above.
-            skill_dir.mkdir(parents=True, exist_ok=True)
-        assert_skill_dir_usable(skill_dir)
+    def _ensure_skill_dir(self, config_dir: pathlib.Path, skill_dir: pathlib.Path) -> None:
+        ensure_skill_dir(config_dir, skill_dir, self._platform.privileged_paths())
 
     async def _assert_config_dir_free(self, cfg: AgentConfig, *, exclude_uid: str | None) -> None:
         """One agent per resolved config dir (spec agent-registry "Allow one agent

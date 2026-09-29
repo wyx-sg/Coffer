@@ -48,11 +48,11 @@ import logging
 import os
 import plistlib
 import subprocess
-import sys
 from pathlib import Path
 
 from coffer.infrastructure.daemon.spawn import daemon_spawn_command
 from coffer.infrastructure.logging.files import log_dir
+from coffer.infrastructure.platform.process import has_launchd
 
 _logger = logging.getLogger(__name__)
 
@@ -68,7 +68,7 @@ class ServiceUnsupported(RuntimeError):  # noqa: N818
 
 def is_supported() -> bool:
     """launchd is macOS's, and this agent is written for it alone."""
-    return sys.platform == "darwin"
+    return has_launchd()
 
 
 def plist_path() -> Path:

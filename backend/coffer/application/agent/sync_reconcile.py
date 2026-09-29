@@ -23,7 +23,8 @@ import pathlib
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Protocol
 
-from coffer.application.agent.service import AgentService
+from coffer.application.agent.service import AgentService, ensure_skill_dir
+from coffer.application.platform_port import PlatformPort
 from coffer.domain.agent.config import AgentConfig
 from coffer.domain.errors import AgentConfigDirMissing, ConfigValidationError
 
@@ -37,6 +38,9 @@ class AgentImportGate:
     """Implements ``application.sync.ports.ImportGate`` structurally."""
 
     kind = "agent"
+
+    def __init__(self, platform: PlatformPort) -> None:
+        self._platform = platform
 
     async def validate(self, config: Mapping[str, object]) -> None:
         try:
@@ -53,9 +57,10 @@ class AgentImportGate:
         if not await asyncio.to_thread(config_dir.is_dir):
             raise AgentConfigDirMissing(str(config_dir))
         await asyncio.to_thread(
-            AgentService._ensure_skill_dir,
+            ensure_skill_dir,
             cfg.resolved_config_dir(),
             cfg.resolved_skill_dir(),
+            self._platform.privileged_paths(),
         )
 
 

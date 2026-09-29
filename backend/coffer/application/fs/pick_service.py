@@ -15,18 +15,18 @@ Every dialog returns the same three outcomes so the caller can react correctly:
   * ``available=True, path=None`` — the dialog opened and the user cancelled.
   * ``available=True, path="…"``  — the user chose an absolute path.
 
-Safety: the picker is invoked with an **argument vector** (never a shell string);
-on macOS the start dir and suggested name are escaped into AppleScript string
-literals.
+Safety: the picker is invoked with an **argument vector** (never a shell string).
+Which argv, per OS, is the host's answer (``PlatformPort.folder_picker_command``,
+which escapes the start dir into an AppleScript literal on macOS).
 """
 
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
-import sys
 from dataclasses import dataclass
+
+from coffer.application.platform_port import PlatformPort
 
 
 @dataclass(frozen=True)
@@ -45,8 +45,11 @@ class FsPickService:
     deliberately withholds absolute paths, and registering an agent needs one.
     """
 
+    def __init__(self, platform: PlatformPort) -> None:
+        self._platform = platform
+
     def pick_folder(self, start: str | None = None) -> PickResult:
-        return _run_dialog(_folder_cmd(_usable_start(start)))
+        return _run_dialog(self._platform.folder_picker_command(_usable_start(start)))
 
 
 def _usable_start(start: str | None) -> str | None:
@@ -79,34 +82,3 @@ def _run_dialog(cmd: list[str] | None) -> PickResult:
         return PickResult(available=True, path=picked or None)
     # A non-zero exit from a present dialog tool means the user cancelled.
     return PickResult(available=True, path=None)
-
-
-def _applescript_str(value: str) -> str:
-    """Quote a Python string as an AppleScript string literal (escaped)."""
-    esc = value.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{esc}"'
-
-
-def _applescript_posix_file(path: str) -> str:
-    """An AppleScript ``POSIX file`` reference for use as a default location."""
-    return f"(POSIX file {_applescript_str(path)})"
-
-
-def _folder_cmd(start: str | None) -> list[str] | None:
-    """The native folder-dialog argv for this host, or None if none is available."""
-    if sys.platform == "darwin":
-        location = f" default location {_applescript_posix_file(start)}" if start else ""
-        script = f'POSIX path of (choose folder with prompt "Select a folder"{location})'
-        return ["osascript", "-e", script]
-    if sys.platform == "win32":
-        # No simple argv-only native dialog; caller falls back to the in-app browser.
-        return None
-    # Linux / other: prefer zenity, then kdialog.
-    if shutil.which("zenity"):
-        cmd = ["zenity", "--file-selection", "--directory", "--title=Select a folder"]
-        if start:
-            cmd.append(f"--filename={start.rstrip('/')}/")
-        return cmd
-    if shutil.which("kdialog"):
-        return ["kdialog", "--getexistingdirectory", start or ""]
-    return None

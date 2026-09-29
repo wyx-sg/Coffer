@@ -14,10 +14,10 @@ state, and whose keys meant nothing to the person reading them.
 from __future__ import annotations
 
 import dataclasses
-import platform
 import socket
 from datetime import date
 
+from coffer.application.platform_port import PlatformPort
 from coffer.application.resource_service import ResourceService
 from coffer.application.sync.ports import BundlePort
 from coffer.domain.audit import AuditEventType
@@ -48,6 +48,7 @@ class MachineRegistry:
         coffer_version: str,
         resources: ResourceService,
         key_fingerprint: str | None,
+        platform: PlatformPort,
     ) -> None:
         self._machine_id = machine_id
         self._machine_name = machine_name
@@ -55,6 +56,7 @@ class MachineRegistry:
         self._version = coffer_version
         self._resources = resources
         self._fingerprint = key_fingerprint
+        self._platform = platform
 
     @property
     def machine_id(self) -> str:
@@ -87,7 +89,7 @@ class MachineRegistry:
         return MachineDescriptor(
             machine_id=self._machine_id,
             name=self._machine_name,
-            os=f"{platform.system()} {platform.release()}".strip(),
+            os=self._platform.os_label(),
             hostname=socket.gethostname(),
             coffer_version=self._version,
             key_fingerprint=self._fingerprint,

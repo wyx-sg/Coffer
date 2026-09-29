@@ -27,6 +27,7 @@ from coffer.application.agent.sync_reconcile import AgentImportGate, AgentSideEf
 from coffer.application.agent.transcript_service import AgentTranscriptService
 from coffer.application.audit_service import AuditService
 from coffer.application.builtin_tools import BuiltinToolRegistry
+from coffer.application.platform_port import PlatformPort
 from coffer.application.resource_service import ResourceService
 from coffer.application.skill.boot_reconcile import SkillDriftBootHeal
 from coffer.application.skill.builtin_seed import BuiltinSkillSeed
@@ -109,6 +110,7 @@ def wire_agent_and_skill_kinds(
     builtin_tools: BuiltinToolRegistry,
     credential_store: EncryptedCredentialStore,
     sync: SyncContributions,
+    platform: PlatformPort,
 ) -> AgentSkillWiring:
     """Wire the agent + skill kinds (specs agent-registry and skill-manager) into a running app.
 
@@ -183,6 +185,7 @@ def wire_agent_and_skill_kinds(
     agent_svc = AgentService(
         resource_service=resource_svc,
         audit=audit,
+        platform=platform,
         on_config_dir_changed=_agent_on_config_dir_changed,
         reconcile_skill_delivery=_agent_reconcile_skill_delivery,
         config_file_store=config_file_store,
@@ -266,7 +269,7 @@ def wire_agent_and_skill_kinds(
     # agent is installed (gate → quarantine otherwise), and imported rows
     # re-apply their on-disk side-effects (skill
     # delivery) after every sync import. start_sync reads these registries.
-    sync.import_gates.append(AgentImportGate())
+    sync.import_gates.append(AgentImportGate(platform))
     sync.post_import_hooks.append(
         AgentSideEffectsReconcile(
             agent_svc,

@@ -102,3 +102,12 @@ class SyncEnginePort(Protocol):
         expected_master: pathlib.Path,
         link_mode: LinkMode | None,
     ) -> Any: ...
+
+    def infer_link_mode(self, link: pathlib.Path) -> LinkMode:
+        """Best-effort: what kind of link is actually on disk at ``link``?
+
+        Used when a target is already correctly linked but no binding row
+        recorded the mode, so a junction / copy-fallback isn't mislabelled
+        SYMLINK.
+        """
+        ...

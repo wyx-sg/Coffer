@@ -13,7 +13,8 @@ from types import SimpleNamespace
 import pytest
 from starlette.testclient import TestClient
 
-from coffer.application.fs import editor_service, open_service, pick_service
+from coffer.application.fs import open_service, pick_service
+from coffer.infrastructure.platform import desktop
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
 
@@ -168,7 +169,7 @@ def test_fs_editors_lists_detected_editors(tmp_path, monkeypatch):
     """GET /fs/editors returns the GUI editors detected on this machine."""
     monkeypatch.setattr("sys.platform", "linux")
     on_path = {"code": "/usr/bin/code", "zed": "/usr/bin/zed"}
-    monkeypatch.setattr(editor_service.shutil, "which", lambda cmd: on_path.get(cmd))
+    monkeypatch.setattr(desktop.shutil, "which", lambda cmd: on_path.get(cmd))
     app = _app(tmp_path, monkeypatch, 59648)
     with _client(app) as c:
         r = c.get("/api/v1/fs/editors")
@@ -181,7 +182,7 @@ def test_fs_editors_lists_detected_editors(tmp_path, monkeypatch):
 def test_fs_editors_empty_when_none_installed(tmp_path, monkeypatch):
     """No editor on PATH → an empty list (the UI falls back to system default)."""
     monkeypatch.setattr("sys.platform", "linux")
-    monkeypatch.setattr(editor_service.shutil, "which", lambda cmd: None)
+    monkeypatch.setattr(desktop.shutil, "which", lambda cmd: None)
     app = _app(tmp_path, monkeypatch, 59649)
     with _client(app) as c:
         r = c.get("/api/v1/fs/editors")
@@ -255,7 +256,7 @@ def test_fs_pick_folder_reports_unavailable_when_the_host_has_no_dialog(tmp_path
     knows to fall back to the in-app folder browser rather than assume the
     user cancelled."""
     monkeypatch.setattr("sys.platform", "linux")
-    monkeypatch.setattr(pick_service.shutil, "which", lambda cmd: None)
+    monkeypatch.setattr(desktop.shutil, "which", lambda cmd: None)
     app = _app(tmp_path, monkeypatch, 59652)
     with _client(app) as c:
         r = c.post("/api/v1/fs/pick-folder", json={})

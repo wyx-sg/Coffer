@@ -13,7 +13,6 @@ import pathlib
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from coffer.application.skill.lifecycle_ops import infer_link_mode
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import TargetConflict
 from coffer.domain.scope import is_active
@@ -70,7 +69,7 @@ async def enable_skill_for_agent(
                 enabled=True,
                 last_linked_at=datetime.now(tz=UTC),
                 last_link_path=str(link_path),
-                link_mode=prior_mode or infer_link_mode(link_path),
+                link_mode=prior_mode or service._sync.infer_link_mode(link_path),
             )
             return binding
         if not force:

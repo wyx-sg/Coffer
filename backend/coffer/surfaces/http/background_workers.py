@@ -30,6 +30,7 @@ from coffer.application.internal_engine_config_service import InternalEngineConf
 from coffer.application.knowledge.curate import CurationPass
 from coffer.application.knowledge.service import KnowledgeService
 from coffer.application.memory.service import MemoryService
+from coffer.application.platform_port import PlatformPort
 from coffer.application.resource_service import ResourceService
 from coffer.application.retention_service import RetentionService
 from coffer.application.retention_worker import RetentionWorker
@@ -83,6 +84,7 @@ def start_background_workers(
     master_key: MasterKeyManager,
     sync_contributions: SyncContributions,
     features: FeatureService,
+    platform: PlatformPort,
 ) -> BackgroundWorkers:
     retention_worker = RetentionWorker(retention_svc, prune_logs=prune_log_dir)
     retention_task = asyncio.create_task(retention_worker.run())
@@ -104,6 +106,7 @@ def start_background_workers(
         # kind's service, is what answers for it.
         models=internal_connection,
         credential_resolver=credential_resolver,
+        platform=platform,
     )
     # Every experimental feature's pass reads its switch at the top of each
     # round and skips it while off (spec experimental-features); the sync

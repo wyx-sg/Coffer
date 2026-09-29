@@ -11,7 +11,6 @@ from __future__ import annotations
 import contextlib
 import logging
 import pathlib
-import sys
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -20,7 +19,6 @@ from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import CofferError, ResourceAlreadyExists, ResourceProtected
 from coffer.domain.resource import Resource
 from coffer.domain.scope import is_active
-from coffer.domain.skill.binding import LinkMode
 from coffer.domain.skill.config import SkillConfig
 from coffer.domain.skill.source import LocalImportSource
 from coffer.domain.skill.validator import ValidationOk
@@ -29,27 +27,6 @@ if TYPE_CHECKING:
     from coffer.application.skill.service import SkillService
 
 logger = logging.getLogger(__name__)
-
-
-def infer_link_mode(link: pathlib.Path) -> LinkMode:
-    """Best-effort: what kind of link is actually on disk at `link`?
-
-    Used when a target is already correctly linked but no prior binding row
-    recorded the mode, so a junction/copy-fallback isn't mislabelled SYMLINK.
-    Stdlib-only (no infrastructure import — Contract 2).
-    """
-    if link.is_symlink():
-        return LinkMode.SYMLINK
-    if sys.platform == "win32" and link.is_dir():
-        import os
-
-        try:
-            attr = getattr(os.lstat(link), "st_file_attributes", 0)
-        except OSError:
-            attr = 0
-        # FILE_ATTRIBUTE_REPARSE_POINT (0x400) marks a junction.
-        return LinkMode.JUNCTION if attr & 0x400 else LinkMode.COPY_FALLBACK
-    return LinkMode.COPY_FALLBACK
 
 
 def _refuse_overwriting_a_builtin(existing: list[Resource], name: str) -> None:
@@ -246,7 +223,7 @@ async def relink_agent_skills(*, service: SkillService, agent_uid: str, actor: s
                     # prior partial run) — adopt it without re-linking, and
                     # record the binding so verify doesn't report a false
                     # MISSING_LINK against the now-removed old path.
-                    mode = b.link_mode or infer_link_mode(new_link)
+                    mode = b.link_mode or service._sync.infer_link_mode(new_link)
                 else:
                     # FOREIGN content occupies the new path. Never clobber it,
                     # and never claim it as our link: recording a real link_mode

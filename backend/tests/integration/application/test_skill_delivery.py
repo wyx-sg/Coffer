@@ -40,6 +40,7 @@ from coffer.infrastructure.persistence.repos import (
     SqlAlchemyAuditRepo,
     SqlAlchemyResourceRepo,
 )
+from coffer.infrastructure.platform import HostPlatform
 from coffer.infrastructure.skill.master_store import MasterStore
 from coffer.infrastructure.skill.persistence import SkillBindingRepo
 from coffer.infrastructure.skill.sync_engine import SyncEngine
@@ -100,6 +101,7 @@ async def _setup(tmp_path: pathlib.Path, *, reconcile_hooks: bool = True):
             await _reconcile(row.uid)
 
     agent_svc = AgentService(
+        platform=HostPlatform(),
         resource_service=rs,
         audit=audit,
         on_config_dir_changed=skill_svc.relink_for_agent,
