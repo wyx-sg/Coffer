@@ -259,6 +259,16 @@ binds, the current repository's lines are kept in preference to `global`'s,
 the oldest are dropped, and the payload says how many were dropped and which
 directory holds them.
 
+### A prompt's delivery
+
+For a substantive prompt ("Retrieve the notes a prompt names"): one header line,
+then up to three notes of the session's repository partition and `global` that
+score at or above the relevance floor and that the session has not been given,
+each as `- (<absolute note path>) the user's standing rule is: <title> — <description>`
+for a `feedback` note and `… a fact they recorded: …` otherwise. At most 1,500
+UTF-8 bytes. The ranking index is held in the daemon's memory and rebuilt when a
+partition's `notes/` changes.
+
 ## Settings this layer reads
 
 Its two unattended passes are switched and timed from the shared
@@ -283,14 +293,24 @@ back empty, which is the truth rather than a lost record.
 
 ## Delivery state
 
-Per-agent delivery is **one entry in that agent's own settings file** — not a
-row here. Coffer's entry is identified by a marker embedded as the argument of
-a leading no-op shell command, so detection never depends on `argv[0]`:
+Per-agent delivery is **four entries in that agent's own settings file** — not a
+row here. Each of Coffer's entries is identified by a marker embedded as the
+argument of a leading no-op shell command, so detection never depends on
+`argv[0]`, and every entry runs the same command,
+`<abs coffer> memory hook --agent-uid <uid> --cwd "$PWD"`, which reads the event
+from stdin:
 
-| Agent type | File | Event | Guard |
+| Event | Matcher | Timeout | Answers with |
 |---|---|---|---|
-| Claude Code | `settings.json` | `SessionStart`, matcher `startup\|resume\|clear\|compact` — Claude Code's own matcher vocabulary for that event | none needed |
-| Codex | `hooks.json` | `SessionStart`, the same matcher; the command asks for the event's JSON `additionalContext` | none needed; Codex runs it only once the user has approved it in `/hooks`, and Coffer reads that approval from `config.toml`'s `[hooks.state]` without writing it |
+| `SessionStart` | `startup\|resume\|clear\|compact` | 10 s | the bounded index, as `additionalContext` |
+| `UserPromptSubmit` | — | 5 s | the prompt's retrieved notes, as `additionalContext` |
+| `PreToolUse` | `Bash` | 5 s | a `deny` with the note as reason, once per trigger per session |
+| `PostToolUse` | `Bash` | 5 s | the note as `additionalContext`, once per trigger per session |
+
+| Agent type | File | Approval |
+|---|---|---|
+| Claude Code | `settings.json` | none; Claude Code runs every hook in its settings |
+| Codex | `hooks.json` | Codex runs each entry only once the user has approved it in `/hooks`; Coffer reads every entry's approval from `config.toml`'s `[hooks.state]` without writing it |
 
 The hook is one part — `memory_hook` — of the agent's Coffer connection
 (spec agent-registry "Connect an agent to Coffer in one action"), and its state
@@ -298,6 +318,36 @@ is reported there as installed or not, with the installed command. It has **no
 last-fired timestamp**, on purpose: a fire is an event, not a property, so every
 fire is one `memory_delivery_fired` audit row and "has it ever run" is read on
 the vault-wide audit surface ("Audit every delivery fire").
+
+### The session ledger
+
+What each session was already given — the notes retrieved for it and the
+triggers that already held a command — is kept per `session_id` in the daemon's
+memory, bounded to the 2,048 most recent sessions. It is not persisted: a
+daemon restart forgets it.
+
+## Trigger
+
+An authored guard on a known trap, one Markdown file per trigger in the vault:
+`~/.coffer/vault/memory-triggers/<id>.md` (`$COFFER_MEMORY_TRIGGERS_ROOT`
+overrides the directory). Not under the memory root, because a person wrote it,
+so a rebuild of the derived tree keeps it (spec memory "Keep triggers in the
+vault, armed only by a person").
+
+| Field (frontmatter) | Meaning |
+|---|---|
+| `id` | the file's stem: the note's slug and six hex characters |
+| `note` | `<partition>/<slug>` — the note whose substance is the reason |
+| `kind` | `block` (deny the matching command once per session) or `context` (add the note after a command whose output matches) |
+| `command` | regex over each executing shell segment, `program args`; required for `block` |
+| `unless` | regex over the whole command; a match keeps the trigger quiet |
+| `error` | regex over a command's output; required for `context` |
+| `proposed_by` | `distil` for a proposal, empty when a person wrote it |
+| `armed_by`, `armed_at` | who armed it and when; empty while it is only a proposal |
+| `created` | when the file was first written |
+
+The body below the frontmatter is optional free text, shown as the reason when
+the note itself no longer exists.
 
 ## Audit events
 
@@ -311,7 +361,11 @@ every kind shares.
 | `memory_distilled` | a distil pass completes — scheduled, or as part of an Update memory action — with its merge / open / retire / kept-nothing counts and whether a model was used |
 | `memory_delivery_installed` | the hook is installed for an agent — by connecting it, or by switching `memory` on while it is connected |
 | `memory_delivery_removed` | the hook is removed from an agent — by disconnecting it, or by switching `memory` off |
-| `memory_delivery_fired` | an installed hook fires ("Audit every delivery fire") |
+| `memory_delivery_fired` | an installed hook fires and delivers — its `details` name the `moment` (`session_start`, `prompt`, `guard`, `error`), the `session_id`, the `notes` it carried and, for a trigger, the `trigger`; never their text ("Audit every delivery fire") |
+| `memory_trigger_added` | a person writes a trigger, armed as it is written |
+| `memory_trigger_proposed` | distil proposes a trigger, unarmed |
+| `memory_trigger_armed` / `memory_trigger_disarmed` | a person arms or disarms a trigger |
+| `memory_trigger_deleted` | a trigger's file is deleted |
 
 A recall records the usual `mcp_invocations` row and nothing about its query
 or its results ("Audit every lifecycle act").

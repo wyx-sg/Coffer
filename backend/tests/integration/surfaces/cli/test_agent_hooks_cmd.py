@@ -11,11 +11,22 @@ import pytest
 from starlette.testclient import TestClient
 from typer.testing import CliRunner
 
+from coffer.domain.memory.delivery import (
+    POST_TOOL_USE,
+    PRE_TOOL_USE,
+    SESSION_MATCHER,
+    SESSION_START,
+    SHELL_TOOL_MATCHER,
+    USER_PROMPT_SUBMIT,
+)
 from coffer.surfaces.cli.main import app as cli_app
 
 from ._real_app import boot, extract_json
 
 _runner = CliRunner()
+
+#: The events Coffer's hook sits on, as the listing spells them.
+_EVENTS = "PostToolUse,PreToolUse,SessionStart,UserPromptSubmit"
 
 
 @pytest.fixture
@@ -39,7 +50,7 @@ def test_the_cli_lists_hooks_and_coffers_health(daemon: TestClient) -> None:
     plain = _runner.invoke(cli_app, ["agent", "hooks", "claude-code"], env={"COLUMNS": "250"})
     assert plain.exit_code == 0, plain.output
     assert "PreToolUse [Bash]  (user)  lint.sh" in plain.output
-    assert "coffer hook: missing on SessionStart, last fired never" in plain.output
+    assert f"coffer hook: missing on {_EVENTS}, last fired never" in plain.output
 
     as_json = _runner.invoke(cli_app, ["agent", "hooks", "claude-code", "--json"])
     assert as_json.exit_code == 0, as_json.output
@@ -64,19 +75,28 @@ def test_the_cli_says_when_codex_has_not_approved_coffers_hook(
     assert created.status_code == 201, created.text
     uid = created.json()["uid"]
     expected = daemon.get(f"/agents/{uid}/hooks").json()["coffer_hook"]["expected_command"]
-    assert expected.endswith("--hook-event SessionStart")
+    assert " memory hook " in expected
     assert expected.split()[2].startswith("/"), "the CLI is called by absolute path"
-    entry = {
-        "matcher": "startup|resume|clear|compact",
-        "hooks": [{"type": "command", "command": expected, "timeout": 10}],
+
+    def entry(matcher: str | None, timeout: int) -> dict[str, object]:
+        group: dict[str, object] = {
+            "hooks": [{"type": "command", "command": expected, "timeout": timeout}]
+        }
+        if matcher is not None:
+            group["matcher"] = matcher
+        return group
+
+    hooks = {
+        SESSION_START: [entry(SESSION_MATCHER, 10)],
+        USER_PROMPT_SUBMIT: [entry(None, 5)],
+        PRE_TOOL_USE: [entry(SHELL_TOOL_MATCHER, 5)],
+        POST_TOOL_USE: [entry(SHELL_TOOL_MATCHER, 5)],
     }
-    (codex / "hooks.json").write_text(json.dumps({"hooks": {"SessionStart": [entry]}}))
+    (codex / "hooks.json").write_text(json.dumps({"hooks": hooks}))
 
     plain = _runner.invoke(cli_app, ["agent", "hooks", "codex"], env={"COLUMNS": "250"})
     assert plain.exit_code == 0, plain.output
-    assert "coffer hook: current on SessionStart, trust untrusted, last fired never" in (
-        plain.output
-    )
+    assert f"coffer hook: current on {_EVENTS}, trust untrusted, last fired never" in (plain.output)
     assert "run /hooks there and trust it" in plain.output
 
     body = extract_json(_runner.invoke(cli_app, ["agent", "hooks", "codex", "--json"]).output)

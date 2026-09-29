@@ -29,7 +29,7 @@ and ``context.py`` states it as the promise it relies on.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 
 from coffer.application.audit_service import AuditService
 from coffer.application.engine_ports import LlmCompletionPort, ModelSelectorPort
@@ -49,6 +49,7 @@ from coffer.application.memory.partition_row import (
     placement_of,
     summary_of,
 )
+from coffer.application.memory.triggers import TriggerDraft
 from coffer.application.resource_service import ResourceService
 from coffer.domain.audit import AuditEventType
 from coffer.domain.memory.note import Note
@@ -56,6 +57,10 @@ from coffer.domain.memory.reader import MemoryReader
 from coffer.infrastructure.memory import store
 
 KIND_MEMORY = "memory"
+
+
+#: Files one proposed trigger; the trigger service's ``propose``.
+TriggerProposer = Callable[[TriggerDraft], Awaitable[object]]
 
 
 class MemoryService:
@@ -94,6 +99,12 @@ class MemoryService:
         self._completion = completion
         self._models = model_selector
         self._credential_resolver = credential_resolver
+        self._propose_trigger: TriggerProposer | None = None
+
+    def set_trigger_proposer(self, proposer: TriggerProposer) -> None:
+        """Where a distil pass hands the triggers it proposes: the trigger
+        service, which files each one unarmed."""
+        self._propose_trigger = proposer
 
     # ----------------------------------------------------------------- #
     # Aggregation                                                        #
@@ -212,6 +223,16 @@ class MemoryService:
             credential_resolver=self._credential_resolver,
             read_timeout=self._read_timeout,
         )
+        if self._propose_trigger is not None:
+            for p in result.proposals:
+                draft = TriggerDraft(
+                    note=f"{row.name}/{p.slug}",
+                    kind=p.kind,
+                    command=p.command,
+                    unless=p.unless,
+                    error=p.error,
+                )
+                await self._propose_trigger(draft)
         await self._audit.record(
             AuditEventType.MEMORY_DISTILLED.value,
             resource=row,

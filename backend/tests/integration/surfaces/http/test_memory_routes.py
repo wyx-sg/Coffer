@@ -688,7 +688,7 @@ def test_connect_status_and_record_fired_round_trip(client) -> None:
     # The uid goes INTO the installed command, so the entry keeps naming this
     # agent however the user relabels it — the whole reason delivery is keyed
     # on an identity rather than on a label.
-    assert f"coffer memory context --agent-uid {cc_uid}" in installed["detail"]
+    assert f"coffer memory hook --agent-uid {cc_uid}" in installed["detail"]
 
     audit = client.get("/api/v1/audit").json()
     assert any(e["event_type"] == "memory_delivery_installed" for e in audit["entries"])

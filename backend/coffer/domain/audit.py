@@ -73,6 +73,12 @@ class AuditEventType(StrEnum):
     MEMORY_DELIVERY_INSTALLED = "memory_delivery_installed"
     MEMORY_DELIVERY_REMOVED = "memory_delivery_removed"
     MEMORY_DISTILLED = "memory_distilled"
+    # spec memory "Keep triggers in the vault, armed only by a person"
+    MEMORY_TRIGGER_ADDED = "memory_trigger_added"
+    MEMORY_TRIGGER_PROPOSED = "memory_trigger_proposed"
+    MEMORY_TRIGGER_ARMED = "memory_trigger_armed"
+    MEMORY_TRIGGER_DISARMED = "memory_trigger_disarmed"
+    MEMORY_TRIGGER_DELETED = "memory_trigger_deleted"
     # spec channels
     CHANNEL_PAIRING_ISSUED = "channel_pairing_issued"
     CHANNEL_PAIRED = "channel_paired"

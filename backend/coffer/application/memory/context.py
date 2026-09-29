@@ -209,6 +209,12 @@ def _resolve_cwd_partition(partitions: Sequence[PartitionView], cwd: str) -> str
     return best_name or GLOBAL_PARTITION
 
 
+def resolve_cwd_partition(partitions: Sequence[PartitionView], cwd: str) -> str:
+    """The partition a session opened in ``cwd`` is about — the same answer
+    session start gives, for prompt-time retrieval and the guard."""
+    return _resolve_cwd_partition(partitions, cwd)
+
+
 def _repository_of(partitions: Sequence[PartitionView], name: str) -> str:
     for summary in partitions:
         if summary.name == name:
@@ -379,4 +385,5 @@ __all__ = [
     "MemoryPort",
     "PartitionView",
     "compose_context",
+    "resolve_cwd_partition",
 ]

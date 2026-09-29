@@ -1,25 +1,25 @@
-"""Codex's session-start hook adapter.
+"""Codex's memory hook adapter.
 
-Codex (0.155 and later) has a `SessionStart` event, with the same
-`startup|resume|clear|compact` sources as Claude Code, and its hook input
-carries the session's id. Coffer installs on it. SessionStart fires once per
-session by definition, so the command needs no once-per-session guard. The
-guard an older build wrapped around a `UserPromptSubmit` hook was keyed on
-`$PPID`, and under Codex Desktop and the IDE hosts every session of one
-`codex app-server` shares that parent pid, so only the first session of each
-app-server would have been served.
+Codex (0.155 and later) runs `SessionStart`, `UserPromptSubmit`, `PreToolUse`
+and `PostToolUse` hooks with the same stdin shape as Claude Code — the shell
+tool arrives as `tool_name: "Bash"` with `tool_input.command` — and its hook
+input carries the session's id. Coffer installs one entry on each, all running
+the same `coffer memory hook` command. Anything once-per-session is keyed on
+that `session_id`, never on a process id: under Codex Desktop and the IDE hosts
+every session of one `codex app-server` shares a parent pid, so the `$PPID`
+guard an older build used let only the first session of each app-server fire.
 
-Three things make the hook actually run and actually arrive:
+Three things make the hooks actually run and actually arrive:
 
-* **JSON output.** The CLI is asked for `--hook-event SessionStart`, which
-  prints `{"hookSpecificOutput": {"hookEventName": "SessionStart",
-  "additionalContext": <text>}}`, the shape Codex documents for this event.
-  Codex hands `additionalContext` to the model as a developer message. Past
-  2,500 tokens (UTF-8 bytes / 4) it keeps only the head and the tail, so the
-  payload is bounded under that (`domain.memory.delivery.DELIVERY_CEILING_BYTES`).
+* **JSON output.** Every event prints `{"hookSpecificOutput": {...}}`: Codex
+  ignores plain stdout on the tool events, hands `additionalContext` to the
+  model as a developer message, and honours `permissionDecision: "deny"`,
+  showing the model "Command blocked by PreToolUse hook: <reason>". Past 2,500
+  tokens (UTF-8 bytes / 4) it keeps only the head and the tail of a context, so
+  every payload is bounded under that (`domain.memory.delivery.DELIVERY_CEILING_BYTES`).
 * **An absolute CLI path.** Codex runs hooks under `/bin/zsh` without the
   user's rc files, so `~/.coffer/bin` is not on the hook's `PATH`.
-* **Trust.** Codex runs a non-managed hook only once the user has reviewed it.
+* **Trust.** Codex runs a non-managed hook only once the user has reviewed it, entry by entry.
   It records trust in `config.toml` under
   `[hooks.state."<hooks.json path>:<event>:<group>:<handler>"].trusted_hash`,
   against a hash of the hook's normalised definition, and silently skips a
@@ -49,12 +49,10 @@ from typing import Any
 from coffer.domain.hook_trust import HookTrust
 from coffer.domain.memory import delivery
 
-EVENT = "SessionStart"
+EVENT = delivery.events_label(delivery.DELIVERY_EVENTS)
 CONFIG_KEY = "hooks"
 #: Where Codex keeps its trust records.
 TRUST_CONFIG_KEY = "config"
-MATCHER = "startup|resume|clear|compact"
-TIMEOUT_SECONDS = 10
 
 #: Codex's defaults, which its normalisation writes into the hashed identity:
 #: `codex-rs/hooks/src/engine/discovery.rs` (`normalize_command_hook`) and
@@ -122,16 +120,10 @@ class CodexDelivery:
     trust_config_key: str | None = TRUST_CONFIG_KEY
 
     def command_for(self, agent_uid: str) -> str:
-        return delivery.hook_command(agent_uid, cli=self.cli, hook_event=self.event)
+        return delivery.entry_command(agent_uid, cli=self.cli)
 
     def install(self, text: str, agent_uid: str) -> str:
-        return delivery.install_entry(
-            text,
-            event=self.event,
-            command=self.command_for(agent_uid),
-            matcher=MATCHER,
-            timeout=TIMEOUT_SECONDS,
-        )
+        return delivery.install_entries(text, delivery.delivery_entries(agent_uid, cli=self.cli))
 
     def remove(self, text: str) -> str:
         return delivery.remove_entry(text)
@@ -142,15 +134,24 @@ class CodexDelivery:
     def find(self, text: str) -> delivery.InstalledHook | None:
         return delivery.find_installed(text)
 
+    def find_all(self, text: str) -> list[delivery.InstalledHook]:
+        return delivery.find_all_installed(text)
+
     def is_coffer_command(self, command: str) -> bool:
         return delivery.is_marked(command)
 
     def trust(self, hooks_text: str, trust_text: str | None, hooks_path: str) -> HookTrust:
+        """Whether Codex will run **every** one of Coffer's entries.
+
+        Codex records trust per entry, so four entries are four approvals; the
+        answer is the first entry's that is not trusted, in file order, and
+        ``TRUSTED`` only when all are.
+        """
         try:
-            hook = delivery.find_installed(hooks_text)
+            hooks = delivery.find_all_installed(hooks_text)
         except delivery.MalformedDeliveryConfig:
             return HookTrust.UNKNOWN
-        if hook is None:
+        if not hooks:
             return HookTrust.UNTRUSTED
         try:
             config = tomllib.loads(trust_text or "")
@@ -158,17 +159,25 @@ class CodexDelivery:
             return HookTrust.UNKNOWN
         hooks_table = config.get("hooks")
         states = hooks_table.get("state") if isinstance(hooks_table, dict) else None
-        state = states.get(trust_key(hooks_path, hook)) if isinstance(states, dict) else None
-        if not isinstance(state, dict):
-            return HookTrust.UNTRUSTED
-        if state.get("enabled") is False:
-            return HookTrust.DISABLED
-        trusted = state.get("trusted_hash")
-        if not isinstance(trusted, str):
-            return HookTrust.UNTRUSTED
-        if trusted == current_hash(hook):
-            return HookTrust.TRUSTED
-        return HookTrust.MODIFIED
+        for hook in hooks:
+            verdict = _entry_trust(states, hooks_path, hook)
+            if verdict is not HookTrust.TRUSTED:
+                return verdict
+        return HookTrust.TRUSTED
+
+
+def _entry_trust(states: Any, hooks_path: str, hook: delivery.InstalledHook) -> HookTrust:
+    state = states.get(trust_key(hooks_path, hook)) if isinstance(states, dict) else None
+    if not isinstance(state, dict):
+        return HookTrust.UNTRUSTED
+    if state.get("enabled") is False:
+        return HookTrust.DISABLED
+    trusted = state.get("trusted_hash")
+    if not isinstance(trusted, str):
+        return HookTrust.UNTRUSTED
+    if trusted == current_hash(hook):
+        return HookTrust.TRUSTED
+    return HookTrust.MODIFIED
 
 
 ADAPTER = CodexDelivery()

@@ -21,13 +21,21 @@ from coffer.domain.agent.config_files import FileStat
 from coffer.domain.agent.types import AgentType
 from coffer.domain.audit import AuditEventType
 from coffer.domain.errors import ResourceNotFound
-from coffer.domain.memory.delivery import MARKER, MalformedDeliveryConfig
+from coffer.domain.memory.delivery import (
+    DELIVERY_EVENTS,
+    MARKER,
+    MalformedDeliveryConfig,
+    events_label,
+)
 from coffer.domain.resource import Resource
 from tests.support.facets import agent_catalog
 
 pytestmark = pytest.mark.asyncio
 
 _NOW = datetime(2026, 1, 1, tzinfo=UTC)
+
+#: The events every installed hook sits on, as a status spells them.
+_ALL_EVENTS = events_label(DELIVERY_EVENTS)
 
 _CLAUDE_CONFIG_DIR = pathlib.Path("/fake/home/.claude")
 _CODEX_CONFIG_DIR = pathlib.Path("/fake/home/.codex")
@@ -160,13 +168,15 @@ async def test_install_adds_one_marker_scoped_entry_to_an_empty_config(
     status = await svc.install(_CC_UID, actor="tester")
 
     assert status.installed is True
-    assert status.event == "SessionStart"
+    assert status.event == _ALL_EVENTS
     assert MARKER in status.command
 
     written = json.loads(store._files[_CC_SETTINGS_PATH])
-    entries = written["hooks"]["SessionStart"]
-    assert len(entries) == 1
-    assert entries[0]["hooks"][0]["command"] == status.command
+    assert set(written["hooks"]) == set(DELIVERY_EVENTS)
+    for event in DELIVERY_EVENTS:
+        entries = written["hooks"][event]
+        assert len(entries) == 1
+        assert entries[0]["hooks"][0]["command"] == status.command
 
 
 @pytest.mark.acceptance(spec="memory", scenario="hook installation is marker-scoped and removable")
@@ -175,7 +185,8 @@ async def test_install_is_idempotent(svc: DeliveryService, store: FakeStore) -> 
     await svc.install(_CC_UID, actor="tester")
 
     written = json.loads(store._files[_CC_SETTINGS_PATH])
-    assert len(written["hooks"]["SessionStart"]) == 1
+    for event in DELIVERY_EVENTS:
+        assert len(written["hooks"][event]) == 1
 
 
 @pytest.mark.acceptance(spec="memory", scenario="hook installation is marker-scoped and removable")
@@ -205,10 +216,13 @@ async def test_install_into_a_config_holding_foreign_hooks_leaves_them_untouched
     written = json.loads(store._files[_CC_SETTINGS_PATH])
     assert written["env"] == {}
     assert written["theme"] == "dark"
-    assert written["hooks"]["UserPromptSubmit"] == foreign["hooks"]["UserPromptSubmit"]
-    assert written["hooks"]["PreToolUse"] == foreign["hooks"]["PreToolUse"]
+    # Foreign entries stay first and unchanged; Coffer's one is appended after.
+    for event in ("UserPromptSubmit", "PreToolUse"):
+        assert written["hooks"][event][:-1] == foreign["hooks"][event]
+        assert MARKER in written["hooks"][event][-1]["hooks"][0]["command"]
     assert written["hooks"]["Stop"] == foreign["hooks"]["Stop"]
     assert len(written["hooks"]["SessionStart"]) == 1
+    assert len(written["hooks"]["PostToolUse"]) == 1
 
 
 @pytest.mark.acceptance(spec="memory", scenario="hook installation is marker-scoped and removable")
@@ -249,14 +263,13 @@ async def test_install_records_an_audit_event_with_the_actor(
 async def test_install_for_codex_writes_a_session_start_entry_into_hooks_json(
     svc: DeliveryService, store: FakeStore
 ) -> None:
-    """Codex is delivered into its own file, on SessionStart, as JSON.
+    """Codex is delivered into its own file, on all four events, as JSON.
 
-    Three things are per-agent-type, and all three have to hold at once or
-    Codex never runs the hook or never shows its output: the file is
-    ``<config_dir>/hooks.json`` (not Claude Code's ``settings.json``), the
-    event is ``SessionStart`` (once per session, so no guard — the old
-    ``$PPID`` guard let only the first session of a shared app-server fire),
-    and the CLI is asked for the event's JSON ``additionalContext``.
+    The file is ``<config_dir>/hooks.json`` (not Claude Code's
+    ``settings.json``); session start is its own event (once per session, so
+    no guard — the old ``$PPID`` guard let only the first session of a shared
+    app-server fire); and every entry runs ``coffer memory hook``, which reads
+    the event from stdin and prints that event's JSON ``hookSpecificOutput``.
     """
     status = await svc.install(_CODEX_UID, actor="tester")
 
@@ -264,14 +277,17 @@ async def test_install_for_codex_writes_a_session_start_entry_into_hooks_json(
     assert _CC_SETTINGS_PATH not in store._files
 
     written = json.loads(store._files[_CODEX_HOOKS_PATH])
-    assert set(written["hooks"]) == {"SessionStart"}
-    entries = written["hooks"]["SessionStart"]
-    assert len(entries) == 1
-    command = entries[0]["hooks"][0]["command"]
-    assert command == status.command
-    assert MARKER in command
-    assert command.endswith("--hook-event SessionStart")
-    assert "$PPID" not in command
+    assert set(written["hooks"]) == set(DELIVERY_EVENTS)
+    assert written["hooks"]["SessionStart"][0]["matcher"] == "startup|resume|clear|compact"
+    for event in DELIVERY_EVENTS:
+        entries = written["hooks"][event]
+        assert len(entries) == 1
+        command = entries[0]["hooks"][0]["command"]
+        assert command == status.command
+    assert MARKER in status.command
+    assert " memory hook " in status.command
+    assert "--hook-event" not in status.command
+    assert "$PPID" not in status.command
 
 
 async def test_status_never_writes(svc: DeliveryService, store: FakeStore) -> None:
@@ -336,14 +352,14 @@ async def test_status_reports_not_installed_for_a_fresh_agent(svc: DeliveryServi
     assert status.agent_uid == _CC_UID
     # The label travels beside the identity so a surface has something to show.
     assert status.agent_name == "cc"
-    assert status.event == "SessionStart"
+    assert status.event == _ALL_EVENTS
 
 
 async def test_status_reports_installed_after_install(svc: DeliveryService) -> None:
     await svc.install(_CODEX_UID, actor="tester")
     status = await svc.status(_CODEX_UID)
     assert status.installed is True
-    assert status.event == "SessionStart"
+    assert status.event == _ALL_EVENTS
 
 
 async def test_supports_exactly_the_types_with_a_hook_adapter(svc: DeliveryService) -> None:

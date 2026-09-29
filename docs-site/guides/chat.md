@@ -207,7 +207,7 @@ On top of the agent's own system prompt, Coffer appends, in this order:
 2. For a turn from a channel, while the `memory` feature is on: the [memory](/guides/memory#in-channel-turns) index for the conversation's working directory and `global`, and where the notes are.
 3. On every turn: the note naming the model Coffer put the agent on.
 
-A turn you send from the Conversations page gets no memory append; the agent receives memory through its own session-start hook, when the agent is connected to Coffer.
+A turn you send from the Conversations page gets no memory append; the agent receives memory through Coffer's memory hook in its own settings, when the agent is connected to Coffer.
 
 ::: danger Full permissions
 Chat runs Claude Code with `bypassPermissions` and Codex with `approvalPolicy: never` and `sandbox: danger-full-access`. Coffer does not ask you to approve individual tool calls. Pairing a channel to your own account is the gate for turns that come from IM; see [Channels](/guides/channels#security).

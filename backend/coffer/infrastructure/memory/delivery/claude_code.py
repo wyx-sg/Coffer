@@ -1,22 +1,22 @@
-"""Claude Code's session-start hook adapter.
+"""Claude Code's memory hook adapter.
 
-Claude Code's own `hooks.SessionStart` matcher vocabulary is a `|`-joined set
-of the *sources* that start a session: a fresh launch (`startup`), `/resume`,
-`/clear`, and an auto-`compact`. Coffer installs against all four so its
-context lands however the session began — the same choice the removed
-injection layer made (see `git show 22dfcc3a^:.../hook_install.py`).
+Coffer installs one entry on each of four events in `~/.claude/settings.json`
+(the allowlisted `"settings"` key — `domain.agent.allowlists._claude_code_files`),
+the same file a developer's own `env`, `permissions` and hand-wired hooks live
+in: `SessionStart` (matched on every source that starts a session —
+`startup|resume|clear|compact`), `UserPromptSubmit`, and `PreToolUse` /
+`PostToolUse` matched on the `Bash` tool. Every entry runs the same
+`coffer memory hook` command, which reads the event from stdin and prints the
+event's JSON `hookSpecificOutput` (`domain.memory.hook_output`).
 
-Lives in `~/.claude/settings.json` (the allowlisted `"settings"` key —
-`domain.agent.allowlists._claude_code_files`), the same file a developer's
-own `env`, `permissions`, and any hand-wired hooks (e.g. skynet-cli's
-`UserPromptSubmit`/`PreToolUse`/`Stop` entries) already live in.
-
-The hook prints the index as plain stdout, which Claude Code adds to the
-session's context whole up to about 10,000 characters (the payload is bounded
-under that, `domain.memory.delivery.DELIVERY_CEILING_BYTES`). Claude Code runs
-every hook in its settings; there is no trust step, so `trust` always answers
-`NOT_REQUIRED`. The CLI is still called by absolute path: Claude Code started
-from the Dock or an IDE does not inherit the login shell's `PATH`.
+Claude Code keeps a hook's output inline up to about 10,000 characters; the
+session-start payload is bounded under that
+(`domain.memory.delivery.DELIVERY_CEILING_BYTES`). Its `PreToolUse`
+`additionalContext` arrives only after the command ran, which is why the guard
+denies instead. Claude Code runs every hook in its settings; there is no trust
+step, so `trust` always answers `NOT_REQUIRED`. The CLI is still called by
+absolute path: Claude Code started from the Dock or an IDE does not inherit the
+login shell's `PATH`.
 """
 
 from __future__ import annotations
@@ -26,14 +26,8 @@ from dataclasses import dataclass
 from coffer.domain.hook_trust import HookTrust
 from coffer.domain.memory import delivery
 
-EVENT = "SessionStart"
+EVENT = delivery.events_label(delivery.DELIVERY_EVENTS)
 CONFIG_KEY = "settings"
-MATCHER = "startup|resume|clear|compact"
-#: Generous enough that a slow first `coffer memory context` call never
-#: blocks the session from starting; short enough a hung daemon doesn't hang
-#: the terminal either. Not part of the marker — a future retune is not a
-#: reinstall.
-TIMEOUT_SECONDS = 10
 
 
 @dataclass(frozen=True)
@@ -51,16 +45,10 @@ class ClaudeCodeDelivery:
     trust_config_key: str | None = None
 
     def command_for(self, agent_uid: str) -> str:
-        return delivery.hook_command(agent_uid, cli=self.cli)
+        return delivery.entry_command(agent_uid, cli=self.cli)
 
     def install(self, text: str, agent_uid: str) -> str:
-        return delivery.install_entry(
-            text,
-            event=self.event,
-            command=self.command_for(agent_uid),
-            matcher=MATCHER,
-            timeout=TIMEOUT_SECONDS,
-        )
+        return delivery.install_entries(text, delivery.delivery_entries(agent_uid, cli=self.cli))
 
     def remove(self, text: str) -> str:
         return delivery.remove_entry(text)
@@ -70,6 +58,9 @@ class ClaudeCodeDelivery:
 
     def find(self, text: str) -> delivery.InstalledHook | None:
         return delivery.find_installed(text)
+
+    def find_all(self, text: str) -> list[delivery.InstalledHook]:
+        return delivery.find_all_installed(text)
 
     def is_coffer_command(self, command: str) -> bool:
         return delivery.is_marked(command)

@@ -58,6 +58,81 @@ paths:
       summary: Context
       tags:
       - memory
+  /api/v1/memory/deliveries:
+    get:
+      operationId: deliveries_api_v1_memory_deliveries_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryOverviewOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Deliveries
+      tags:
+      - memory
+  /api/v1/memory/hook:
+    post:
+      description: Answer one hook fire; every fire that delivers something is audited.
+      operationId: hook_fire_api_v1_memory_hook_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HookFireIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HookFireOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Hook Fire
+      tags:
+      - memory
   /api/v1/memory/partitions:
     get:
       operationId: list_partitions_api_v1_memory_partitions_get
@@ -90,6 +165,46 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: List Partitions
+      tags:
+      - memory
+  /api/v1/memory/partitions/{uid}/delivered:
+    get:
+      operationId: delivered_api_v1_memory_partitions__uid__delivered_get
+      parameters:
+      - in: path
+        name: uid
+        required: true
+        schema:
+          title: Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveredOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Delivered
       tags:
       - memory
   /api/v1/memory/partitions/{uid}/files:
@@ -386,8 +501,276 @@ paths:
       summary: Sync
       tags:
       - memory
+  /api/v1/memory/triggers:
+    get:
+      operationId: list_triggers_api_v1_memory_triggers_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerListOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: List Triggers
+      tags:
+      - memory
+    post:
+      operationId: add_trigger_api_v1_memory_triggers_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TriggerIn'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Add Trigger
+      tags:
+      - memory
+  /api/v1/memory/triggers/{trigger_id}:
+    delete:
+      operationId: delete_trigger_api_v1_memory_triggers__trigger_id__delete
+      parameters:
+      - in: path
+        name: trigger_id
+        required: true
+        schema:
+          title: Trigger Id
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Delete Trigger
+      tags:
+      - memory
+  /api/v1/memory/triggers/{trigger_id}/arm:
+    post:
+      operationId: arm_trigger_api_v1_memory_triggers__trigger_id__arm_post
+      parameters:
+      - in: path
+        name: trigger_id
+        required: true
+        schema:
+          title: Trigger Id
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Arm Trigger
+      tags:
+      - memory
+  /api/v1/memory/triggers/{trigger_id}/disarm:
+    post:
+      operationId: disarm_trigger_api_v1_memory_triggers__trigger_id__disarm_post
+      parameters:
+      - in: path
+        name: trigger_id
+        required: true
+        schema:
+          title: Trigger Id
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Disarm Trigger
+      tags:
+      - memory
 components:
   schemas:
+    AgentDeliveryStatsOut:
+      properties:
+        agent_name:
+          title: Agent Name
+          type: string
+        agent_type:
+          title: Agent Type
+          type: string
+        agent_uid:
+          title: Agent Uid
+          type: string
+        by_moment:
+          additionalProperties:
+            type: integer
+          title: By Moment
+          type: object
+        deliveries:
+          title: Deliveries
+          type: integer
+        last_delivered_at:
+          anyOf:
+          - format: date-time
+            type: string
+          - type: 'null'
+          title: Last Delivered At
+        notes_read:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Notes Read
+        notes_read_status:
+          enum:
+          - available
+          - unavailable
+          title: Notes Read Status
+          type: string
+      required:
+      - agent_uid
+      - agent_name
+      - agent_type
+      - deliveries
+      - by_moment
+      - last_delivered_at
+      - notes_read
+      - notes_read_status
+      title: AgentDeliveryStatsOut
+      type: object
     AggregationResultOut:
       description: |-
         What one Update memory action did: its aggregation pass, then which
@@ -495,6 +878,61 @@ components:
           title: Record Fired
           type: boolean
       title: ContextQuery
+      type: object
+    DeliveredOut:
+      properties:
+        agents:
+          items:
+            $ref: '#/components/schemas/DeliveredTextOut'
+          title: Agents
+          type: array
+        partition:
+          title: Partition
+          type: string
+      required:
+      - partition
+      - agents
+      title: DeliveredOut
+      type: object
+    DeliveredTextOut:
+      properties:
+        agent_name:
+          title: Agent Name
+          type: string
+        agent_type:
+          title: Agent Type
+          type: string
+        agent_uid:
+          title: Agent Uid
+          type: string
+        event:
+          title: Event
+          type: string
+        text:
+          title: Text
+          type: string
+      required:
+      - agent_uid
+      - agent_name
+      - agent_type
+      - event
+      - text
+      title: DeliveredTextOut
+      type: object
+    DeliveryOverviewOut:
+      properties:
+        agents:
+          items:
+            $ref: '#/components/schemas/AgentDeliveryStatsOut'
+          title: Agents
+          type: array
+        window_days:
+          title: Window Days
+          type: integer
+      required:
+      - window_days
+      - agents
+      title: DeliveryOverviewOut
       type: object
     ErrorDetail:
       properties:
@@ -629,6 +1067,61 @@ components:
       required:
       - root
       title: FileTreeOut
+      type: object
+    HookFireIn:
+      description: |-
+        One fire of Coffer's memory hook, as ``coffer memory hook`` relays the
+        agent's own hook input.
+      properties:
+        agent_uid:
+          title: Agent Uid
+          type: string
+        command:
+          default: ''
+          title: Command
+          type: string
+        cwd:
+          default: ''
+          title: Cwd
+          type: string
+        event:
+          title: Event
+          type: string
+        output:
+          default: ''
+          title: Output
+          type: string
+        prompt:
+          default: ''
+          title: Prompt
+          type: string
+        session_id:
+          default: ''
+          title: Session Id
+          type: string
+        tool_name:
+          default: ''
+          title: Tool Name
+          type: string
+      required:
+      - agent_uid
+      - event
+      title: HookFireIn
+      type: object
+    HookFireOut:
+      description: |-
+        What the hook prints: the event's JSON, or nothing when ``output`` is
+        null.
+      properties:
+        output:
+          anyOf:
+          - additionalProperties: true
+            type: object
+          - type: 'null'
+          title: Output
+      required:
+      - output
+      title: HookFireOut
       type: object
     NoteListOut:
       properties:
@@ -877,4 +1370,105 @@ components:
       - replaced_by
       - retired_at
       title: RetiredNoteOut
+      type: object
+    TriggerIn:
+      description: A trigger a person writes; it is armed by them as it is written.
+      properties:
+        body:
+          default: ''
+          title: Body
+          type: string
+        command:
+          default: ''
+          title: Command
+          type: string
+        error:
+          default: ''
+          title: Error
+          type: string
+        kind:
+          default: block
+          enum:
+          - block
+          - context
+          title: Kind
+          type: string
+        note:
+          title: Note
+          type: string
+        unless:
+          default: ''
+          title: Unless
+          type: string
+      required:
+      - note
+      title: TriggerIn
+      type: object
+    TriggerListOut:
+      properties:
+        triggers:
+          items:
+            $ref: '#/components/schemas/TriggerOut'
+          title: Triggers
+          type: array
+      required:
+      - triggers
+      title: TriggerListOut
+      type: object
+    TriggerOut:
+      properties:
+        armed:
+          title: Armed
+          type: boolean
+        armed_at:
+          title: Armed At
+          type: string
+        armed_by:
+          title: Armed By
+          type: string
+        body:
+          title: Body
+          type: string
+        command:
+          title: Command
+          type: string
+        created:
+          title: Created
+          type: string
+        error:
+          title: Error
+          type: string
+        id:
+          title: Id
+          type: string
+        kind:
+          title: Kind
+          type: string
+        note:
+          title: Note
+          type: string
+        path:
+          title: Path
+          type: string
+        proposed_by:
+          title: Proposed By
+          type: string
+        unless:
+          title: Unless
+          type: string
+      required:
+      - id
+      - note
+      - kind
+      - command
+      - unless
+      - error
+      - armed
+      - armed_by
+      - armed_at
+      - proposed_by
+      - created
+      - body
+      - path
+      title: TriggerOut
       type: object

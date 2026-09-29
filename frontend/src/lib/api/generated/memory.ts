@@ -32,6 +32,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/memory/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Deliveries */
+        get: operations["deliveries_api_v1_memory_deliveries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/hook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hook Fire
+         * @description Answer one hook fire; every fire that delivers something is audited.
+         */
+        post: operations["hook_fire_api_v1_memory_hook_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/memory/partitions": {
         parameters: {
             query?: never;
@@ -41,6 +78,23 @@ export interface paths {
         };
         /** List Partitions */
         get: operations["list_partitions_api_v1_memory_partitions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/partitions/{uid}/delivered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Delivered */
+        get: operations["delivered_api_v1_memory_partitions__uid__delivered_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -197,10 +251,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/memory/triggers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Triggers */
+        get: operations["list_triggers_api_v1_memory_triggers_get"];
+        put?: never;
+        /** Add Trigger */
+        post: operations["add_trigger_api_v1_memory_triggers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/triggers/{trigger_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Trigger */
+        delete: operations["delete_trigger_api_v1_memory_triggers__trigger_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/triggers/{trigger_id}/arm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Arm Trigger */
+        post: operations["arm_trigger_api_v1_memory_triggers__trigger_id__arm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/triggers/{trigger_id}/disarm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disarm Trigger */
+        post: operations["disarm_trigger_api_v1_memory_triggers__trigger_id__disarm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AgentDeliveryStatsOut */
+        AgentDeliveryStatsOut: {
+            /** Agent Name */
+            agent_name: string;
+            /** Agent Type */
+            agent_type: string;
+            /** Agent Uid */
+            agent_uid: string;
+            /** By Moment */
+            by_moment: {
+                [key: string]: number;
+            };
+            /** Deliveries */
+            deliveries: number;
+            /** Last Delivered At */
+            last_delivered_at: string | null;
+            /** Notes Read */
+            notes_read: number | null;
+            /**
+             * Notes Read Status
+             * @enum {string}
+             */
+            notes_read_status: "available" | "unavailable";
+        };
         /**
          * AggregationResultOut
          * @description What one Update memory action did: its aggregation pass, then which
@@ -272,6 +419,33 @@ export interface components {
              * @default false
              */
             record_fired?: boolean;
+        };
+        /** DeliveredOut */
+        DeliveredOut: {
+            /** Agents */
+            agents: components["schemas"]["DeliveredTextOut"][];
+            /** Partition */
+            partition: string;
+        };
+        /** DeliveredTextOut */
+        DeliveredTextOut: {
+            /** Agent Name */
+            agent_name: string;
+            /** Agent Type */
+            agent_type: string;
+            /** Agent Uid */
+            agent_uid: string;
+            /** Event */
+            event: string;
+            /** Text */
+            text: string;
+        };
+        /** DeliveryOverviewOut */
+        DeliveryOverviewOut: {
+            /** Agents */
+            agents: components["schemas"]["AgentDeliveryStatsOut"][];
+            /** Window Days */
+            window_days: number;
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -359,6 +533,58 @@ export interface components {
         /** FileTreeOut */
         FileTreeOut: {
             root: components["schemas"]["FileNodeOut"];
+        };
+        /**
+         * HookFireIn
+         * @description One fire of Coffer's memory hook, as ``coffer memory hook`` relays the
+         *     agent's own hook input.
+         */
+        HookFireIn: {
+            /** Agent Uid */
+            agent_uid: string;
+            /**
+             * Command
+             * @default
+             */
+            command?: string;
+            /**
+             * Cwd
+             * @default
+             */
+            cwd?: string;
+            /** Event */
+            event: string;
+            /**
+             * Output
+             * @default
+             */
+            output?: string;
+            /**
+             * Prompt
+             * @default
+             */
+            prompt?: string;
+            /**
+             * Session Id
+             * @default
+             */
+            session_id?: string;
+            /**
+             * Tool Name
+             * @default
+             */
+            tool_name?: string;
+        };
+        /**
+         * HookFireOut
+         * @description What the hook prints: the event's JSON, or nothing when ``output`` is
+         *     null.
+         */
+        HookFireOut: {
+            /** Output */
+            output: {
+                [key: string]: unknown;
+            } | null;
         };
         /** NoteListOut */
         NoteListOut: {
@@ -504,6 +730,74 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * TriggerIn
+         * @description A trigger a person writes; it is armed by them as it is written.
+         */
+        TriggerIn: {
+            /**
+             * Body
+             * @default
+             */
+            body?: string;
+            /**
+             * Command
+             * @default
+             */
+            command?: string;
+            /**
+             * Error
+             * @default
+             */
+            error?: string;
+            /**
+             * Kind
+             * @default block
+             * @enum {string}
+             */
+            kind?: "block" | "context";
+            /** Note */
+            note: string;
+            /**
+             * Unless
+             * @default
+             */
+            unless?: string;
+        };
+        /** TriggerListOut */
+        TriggerListOut: {
+            /** Triggers */
+            triggers: components["schemas"]["TriggerOut"][];
+        };
+        /** TriggerOut */
+        TriggerOut: {
+            /** Armed */
+            armed: boolean;
+            /** Armed At */
+            armed_at: string;
+            /** Armed By */
+            armed_by: string;
+            /** Body */
+            body: string;
+            /** Command */
+            command: string;
+            /** Created */
+            created: string;
+            /** Error */
+            error: string;
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Note */
+            note: string;
+            /** Path */
+            path: string;
+            /** Proposed By */
+            proposed_by: string;
+            /** Unless */
+            unless: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -557,6 +851,90 @@ export interface operations {
             };
         };
     };
+    deliveries_api_v1_memory_deliveries_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryOverviewOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    hook_fire_api_v1_memory_hook_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HookFireIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HookFireOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_partitions_api_v1_memory_partitions_get: {
         parameters: {
             query?: never;
@@ -575,6 +953,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PartitionListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delivered_api_v1_memory_partitions__uid__delivered_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveredOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -829,6 +1249,218 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AggregationResultOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_triggers_api_v1_memory_triggers_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriggerListOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    add_trigger_api_v1_memory_triggers_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TriggerIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriggerOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_trigger_api_v1_memory_triggers__trigger_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    arm_trigger_api_v1_memory_triggers__trigger_id__arm_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriggerOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    disarm_trigger_api_v1_memory_triggers__trigger_id__disarm_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                trigger_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TriggerOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
