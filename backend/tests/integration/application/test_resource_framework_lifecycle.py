@@ -103,7 +103,9 @@ async def test_generic_create_refuses_a_kind_that_owns_its_creation(tmp_path):
     tree = get_command(cli_app).commands  # type: ignore[attr-defined]
     memory = set(tree["memory"].commands)
     assert "add" not in memory
-    assert {"list", "show", "edit", "rm", "enable", "disable"} <= memory
+    # Nor a switch: a partition cannot be disabled (every one reaches every agent).
+    assert {"list", "show", "edit", "rm"} <= memory
+    assert not {"enable", "disable"} & memory
     assert "add" in set(tree["mcp"].commands)
 
 
