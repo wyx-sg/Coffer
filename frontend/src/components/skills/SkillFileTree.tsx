@@ -82,7 +82,6 @@ export function SkillFileBrowser({
 
       {/* Right: content of the selected file. */}
       <div className={FILE_PANE_COLUMN}>
-
         {selectedPath ? (
           renderFile(selectedPath)
         ) : (
@@ -120,7 +119,7 @@ function TreeNode({
           onClick={() => setExpanded((v) => !v)}
           style={indent}
           aria-expanded={expanded}
-          className="flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm transition-colors hover:bg-secondary hover:text-foreground"
+          className="flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm transition-colors hover:bg-surface-hover hover:text-text"
         >
           {expanded ? (
             <ChevronDown className="size-3.5 shrink-0 opacity-70" />
@@ -160,8 +159,8 @@ function TreeNode({
         className={cn(
           "flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm transition-colors",
           selectedPath === node.path
-            ? "bg-primary/10 text-primary"
-            : "hover:bg-secondary hover:text-foreground",
+            ? "bg-surface-selected text-text"
+            : "hover:bg-surface-hover hover:text-text",
         )}
       >
         <span className="size-3.5 shrink-0" />

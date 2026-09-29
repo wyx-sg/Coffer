@@ -146,7 +146,7 @@ export function CapabilityList(props: Props) {
                       maxHeight="20rem"
                       lineNumbers={false}
                       ariaLabel={t("mcp.capabilities.schemaLabel")}
-                      className="bg-muted/30"
+                      className="bg-surface-sunken"
                     />
                   </div>
                 ) : (

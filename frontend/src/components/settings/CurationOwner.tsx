@@ -103,7 +103,7 @@ export function CurationOwner({ ownerId }: Props) {
       data-testid="curation-owner"
       className={cn(
         "mt-3 space-y-2 rounded-md border px-3 py-2",
-        fault ? "border-destructive/40 bg-destructive/10" : "border-border bg-muted/30",
+        fault ? "border-destructive/40 bg-destructive/10" : "border-border bg-surface-sunken",
       )}
     >
       <p className="text-xs">

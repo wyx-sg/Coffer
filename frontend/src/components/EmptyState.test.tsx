@@ -26,3 +26,23 @@ describe("EmptyState", () => {
     expect(screen.getByRole("button", { name: "New collection" })).toBeInTheDocument();
   });
 });
+
+describe("EmptyState tones", () => {
+  test("an error tones the tile and keeps both actions", () => {
+    const { container } = render(
+      <EmptyState
+        icon={Library}
+        tone="error"
+        title="Couldn't load MCP servers"
+        action={<button type="button">Retry</button>}
+        secondaryAction={<button type="button">Open daemon log</button>}
+      />,
+    );
+    expect(container.querySelector('[data-tone="error"]')).toHaveClass(
+      "bg-danger-soft",
+      "text-danger",
+    );
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open daemon log" })).toBeInTheDocument();
+  });
+});

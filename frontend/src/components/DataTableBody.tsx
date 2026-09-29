@@ -146,7 +146,7 @@ export function DataRows<T>({
             </TableRow>
             {expandable && isOpen ? (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={colCount} className="bg-muted/20 p-0">
+                <TableCell colSpan={colCount} className="bg-surface-sunken p-0">
                   {getRowDetail!(row)}
                 </TableCell>
               </TableRow>

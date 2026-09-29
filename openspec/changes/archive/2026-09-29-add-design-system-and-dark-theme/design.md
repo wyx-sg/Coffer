@@ -77,6 +77,13 @@ white) SVGs byte for byte as supplied. The colour gate scans `.ts`, `.tsx` and
 C mark is drawn in markup from the Brand board's path with `currentColor` and the
 accent token, so it themes like any other component.
 
+### Geometry follows the boards, not a restatement of them
+
+The spec states behaviour and leaves geometry to the Foundations boards. Where
+a value written down while building differed from the board, the board wins —
+for example the change preview's diff rows are 18px as drawn, not the 20px an
+earlier note restated.
+
 ### The screenshot baseline has its own daemon
 
 The visual project runs from `e2e/playwright.visual.config.ts` against a fresh

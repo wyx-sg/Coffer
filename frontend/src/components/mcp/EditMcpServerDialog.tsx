@@ -84,7 +84,7 @@ export function EditMcpServerDialog({ resource }: Props) {
           <Pencil className="mr-1.5 size-3.5" /> {t("mcp.server.edit")}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("mcp.edit.title")}</DialogTitle>
           <DialogDescription>{t("mcp.edit.subtitle")}</DialogDescription>

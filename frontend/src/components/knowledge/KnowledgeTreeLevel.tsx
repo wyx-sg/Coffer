@@ -4,7 +4,7 @@
 // rows are deliberately the same rows the skill Files tab draws
 // (`SkillFileTree`): chevron, folder / open-folder or file icon, one truncated
 // line, a depth-proportional indent instead of a rail, and the selected file
-// tinted `bg-primary/10`. Two file browsers that behave the same should look
+// filled `bg-surface-selected`. Two file browsers that behave the same should look
 // the same, so a reader who has opened one has already learned the other.
 //
 // What is NOT copied is the fetch. A skill's whole folder arrives in a single
@@ -98,7 +98,7 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, onSelect, emptyL
               onClick={() => toggle(dir.path)}
               aria-expanded={open}
               style={indentOf(depth)}
-              className="flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm transition-colors hover:bg-secondary hover:text-foreground"
+              className="flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm transition-colors hover:bg-surface-hover hover:text-text"
             >
               {open ? (
                 <ChevronDown className="size-3.5 shrink-0 opacity-70" />
@@ -144,8 +144,8 @@ export function KnowledgeTreeLevel({ path, depth, selectedPath, onSelect, emptyL
             className={cn(
               "flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm transition-colors",
               selectedPath === file.path
-                ? "bg-primary/10 text-primary"
-                : "hover:bg-secondary hover:text-foreground",
+                ? "bg-surface-selected text-text"
+                : "hover:bg-surface-hover hover:text-text",
               file.inbox && selectedPath !== file.path && "text-muted-foreground",
             )}
           >

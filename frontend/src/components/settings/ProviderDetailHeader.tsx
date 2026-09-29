@@ -118,7 +118,7 @@ export function ProviderDetailHeader({
         }
       />
       <Dialog open={editOpen} onOpenChange={(open) => !open && closeEdit()}>
-        <DialogContent className="max-w-md">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>{t("settings.connections.editTitle")}</DialogTitle>
           </DialogHeader>

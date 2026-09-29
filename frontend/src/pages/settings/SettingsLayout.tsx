@@ -48,13 +48,7 @@ const ABOUT_ITEM: Item = {
 
 export function SettingsLayout() {
   const { t } = useTranslation();
-  const items: Item[] = [
-    GENERAL_ITEM,
-    ENGINE_ITEM,
-    DATA_ITEM,
-      SECURITY_ITEM,
-    ABOUT_ITEM,
-  ];
+  const items: Item[] = [GENERAL_ITEM, ENGINE_ITEM, DATA_ITEM, SECURITY_ITEM, ABOUT_ITEM];
 
   return (
     <div className="space-y-8">
@@ -70,8 +64,8 @@ export function SettingsLayout() {
                   cn(
                     "flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                     isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-foreground/80 hover:bg-secondary hover:text-foreground",
+                      ? "bg-surface-selected text-text"
+                      : "text-text-muted hover:bg-surface-hover hover:text-text",
                   )
                 }
               >

@@ -124,7 +124,7 @@ export function FileEditor(props: FileEditorProps) {
           aria-label={props.ariaLabel}
           rows={Math.max(16, props.value.split("\n").length + 2)}
           className={cn(
-            "w-full rounded-md border bg-background p-3 font-mono text-xs leading-relaxed outline-none focus-visible:ring-1 focus-visible:ring-ring",
+            "w-full rounded-lg border border-border bg-code p-3 font-mono text-xs leading-[1.6] text-text outline-none transition-colors duration-fast focus-visible:border-accent focus-visible:ring-[3px] focus-visible:ring-accent-soft",
             props.fill ? "min-h-0 flex-1 resize-none" : "min-h-96 resize-y",
           )}
           value={props.value}

@@ -59,7 +59,7 @@ export function SearchInput({
           type="button"
           onClick={() => onChange("")}
           aria-label={t("common.clear")}
-          className="absolute right-1.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          className="absolute right-1.5 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-text"
         >
           <X className="size-4" />
         </button>

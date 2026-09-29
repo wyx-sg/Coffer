@@ -47,7 +47,7 @@ export function AgentCandidateList({ candidates, selected, onToggle }: Props) {
       {candidates.map((c) =>
         isAddableCandidate(c) ? (
           <li key={c.config_dir}>
-            <label className="flex cursor-pointer items-center gap-3 rounded-md border bg-card/60 px-3 py-2 text-sm">
+            <label className="flex cursor-pointer items-center gap-3 rounded-md border bg-surface-raised px-3 py-2 text-sm">
               <Checkbox
                 checked={selected.has(c.config_dir)}
                 onChange={() => onToggle(c.config_dir)}
@@ -58,7 +58,7 @@ export function AgentCandidateList({ candidates, selected, onToggle }: Props) {
         ) : (
           <li
             key={c.config_dir}
-            className="flex items-center gap-3 rounded-md border bg-card/60 px-3 py-2 text-sm text-muted-foreground"
+            className="flex items-center gap-3 rounded-md border bg-surface-raised px-3 py-2 text-sm text-muted-foreground"
           >
             <CandidateLabel c={c} />
             {c.state === "config_only" ? (

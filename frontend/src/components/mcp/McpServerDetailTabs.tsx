@@ -95,7 +95,9 @@ export function McpServerDetailTabs({
       <TabsContent value="overview" className="pt-6">
         <Card className="paper-card">
           <CardHeader>
-            <CardTitle className="font-serif text-lg">{t("mcp.server.overview.config")}</CardTitle>
+            <CardTitle className="text-sm font-semibold">
+              {t("mcp.server.overview.config")}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <dl className="grid gap-3 text-sm sm:grid-cols-[minmax(8rem,auto)_1fr]">
@@ -135,7 +137,7 @@ export function McpServerDetailTabs({
                 language="json"
                 maxHeight="24rem"
                 ariaLabel={t("mcp.server.overview.rawConfig")}
-                className="mt-2 bg-secondary/50"
+                className="mt-2 bg-surface-sunken"
               />
             </details>
           </CardContent>

@@ -10,10 +10,10 @@ import { Card, CardContent } from "@/components/ui/card";
 export function SkillWelcomePanel({ onAddSkill }: { onAddSkill: () => void }) {
   const { t } = useTranslation();
   return (
-    <Card className="paper-card border-primary/20 bg-gradient-to-br from-card to-accent/40">
+    <Card className="paper-card border-primary/20 bg-accent-soft">
       <CardContent className="space-y-6 py-10">
         <div className="space-y-2">
-          <h2 className="text-2xl">{t("skills.welcome.title")}</h2>
+          <h2 className="text-lg font-bold">{t("skills.welcome.title")}</h2>
           <p className="max-w-prose text-sm leading-relaxed text-foreground/80">
             {t("skills.welcome.body")}
           </p>
@@ -42,7 +42,7 @@ export function SkillWelcomePanel({ onAddSkill }: { onAddSkill: () => void }) {
 
 function WelcomeFeature({ title, body }: { title: string; body: string }) {
   return (
-    <li className="rounded-lg border border-border/60 bg-card/70 p-3 leading-relaxed">
+    <li className="rounded-lg border border-border-subtle bg-surface-raised p-3 leading-relaxed">
       <div className="mb-1 font-medium text-foreground">{title}</div>
       <div className="text-xs text-muted-foreground">{body}</div>
     </li>

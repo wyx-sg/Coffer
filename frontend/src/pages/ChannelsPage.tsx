@@ -44,9 +44,7 @@ export function ChannelsPage() {
       {error ? (
         <Card className="paper-card border-destructive/40">
           <CardHeader>
-            <CardTitle className="font-serif text-destructive">
-              {t("channels.loadFailed")}
-            </CardTitle>
+            <CardTitle className="text-destructive">{t("channels.loadFailed")}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">{translateApiError(t, error)}</p>

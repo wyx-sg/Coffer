@@ -137,7 +137,7 @@ export function AgentHooksTab({ agent }: { agent: AgentOut }) {
         ) : (
           groups.map(([event, rows]) => (
             <Card key={event} className="overflow-hidden">
-              <h3 className="border-b bg-muted/40 px-4 py-2 font-mono text-sm font-medium">
+              <h3 className="border-b bg-surface-sunken px-4 py-2 font-mono text-sm font-medium">
                 {event}
               </h3>
               <ul className="divide-y" aria-label={event}>

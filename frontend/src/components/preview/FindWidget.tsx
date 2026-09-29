@@ -51,7 +51,7 @@ export const FindWidget = forwardRef<HTMLInputElement, FindWidgetProps>(function
   return (
     <div
       className={cn(
-        "absolute right-2 top-2 z-10 flex items-center gap-1 rounded-md border border-border bg-card p-1 shadow-md",
+        "absolute right-2 top-2 z-10 flex items-center gap-1 rounded-md bg-surface-raised p-1 shadow-overlay",
         className,
       )}
       role="search"
@@ -84,7 +84,7 @@ export const FindWidget = forwardRef<HTMLInputElement, FindWidgetProps>(function
         aria-label={t("preview.find.caseSensitive")}
         aria-pressed={caseSensitive}
         className={cn(
-          "flex size-7 items-center justify-center rounded-sm hover:bg-muted",
+          "flex size-7 items-center justify-center rounded-sm hover:bg-surface-hover",
           caseSensitive ? "bg-muted text-foreground" : "text-muted-foreground",
         )}
       >
@@ -95,7 +95,7 @@ export const FindWidget = forwardRef<HTMLInputElement, FindWidgetProps>(function
         onClick={onPrev}
         disabled={count === 0}
         aria-label={t("preview.find.prev")}
-        className="flex size-7 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+        className="flex size-7 items-center justify-center rounded-sm text-muted-foreground hover:bg-surface-hover disabled:opacity-40 disabled:hover:bg-transparent"
       >
         <ArrowUp className="size-4" />
       </button>
@@ -104,7 +104,7 @@ export const FindWidget = forwardRef<HTMLInputElement, FindWidgetProps>(function
         onClick={onNext}
         disabled={count === 0}
         aria-label={t("preview.find.next")}
-        className="flex size-7 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+        className="flex size-7 items-center justify-center rounded-sm text-muted-foreground hover:bg-surface-hover disabled:opacity-40 disabled:hover:bg-transparent"
       >
         <ArrowDown className="size-4" />
       </button>
@@ -112,7 +112,7 @@ export const FindWidget = forwardRef<HTMLInputElement, FindWidgetProps>(function
         type="button"
         onClick={onClose}
         aria-label={t("preview.find.close")}
-        className="flex size-7 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted"
+        className="flex size-7 items-center justify-center rounded-sm text-muted-foreground hover:bg-surface-hover"
       >
         <X className="size-4" />
       </button>

@@ -7,12 +7,13 @@
 import { useState } from "react";
 import { Link, Outlet } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { Boxes, Globe, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Globe, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
+import { CofferLogo } from "./brand/CofferLogo";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { DaemonOfflineBanner } from "./DaemonOfflineBanner";
 import { FloatingBanners } from "./FloatingBanners";
@@ -67,7 +68,7 @@ export function Layout() {
         </FloatingBanners>
         <aside
           className={cn(
-            "flex shrink-0 flex-col border-r border-border bg-card/50 transition-[width] duration-200",
+            "flex shrink-0 flex-col border-r border-border bg-surface-sidebar transition-[width] duration-200",
             collapsed ? "w-16" : "w-64",
           )}
           aria-label={t("nav.aria.primary")}
@@ -80,16 +81,10 @@ export function Layout() {
           >
             <Link
               to="/"
-              className="flex items-center gap-2 text-base font-serif tracking-tight"
+              className="flex items-center rounded-item text-text"
               aria-label={collapsed ? "Coffer" : undefined}
             >
-              <span
-                className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground shadow-sm"
-                aria-hidden
-              >
-                <Boxes className="size-4" strokeWidth={2.25} />
-              </span>
-              {!collapsed ? <span className="text-foreground">Coffer</span> : null}
+              <CofferLogo size={22} markOnly={collapsed} />
             </Link>
             {/* Expanding is only possible at md+; narrower viewports are
                 always the icon rail, so the toggle is hidden there. */}

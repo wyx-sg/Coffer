@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
 import { acceptance } from "@/test/acceptance";
+import indexHtml from "../../index.html?raw";
 import { Layout } from "./Layout";
 
 vi.mock("./DaemonOfflineBanner", () => ({ DaemonOfflineBanner: () => null }));
@@ -103,4 +104,26 @@ acceptance("web-ui", "the collapsed sidebar stays collapsed after a reload", () 
   // Expanding is remembered the same way.
   renderShell();
   expect(screen.getByText("Coffer")).toBeInTheDocument();
+});
+
+acceptance("web-ui", "the sidebar carries the Coffer mark", () => {
+  // Expanded: the mark with the wordmark, inside the home link.
+  const expanded = renderShell();
+  const home = screen.getByText("Coffer").closest("a");
+  expect(home).toHaveAttribute("href", "/");
+  expect(home?.querySelector("[data-coffer-mark]")).not.toBeNull();
+  expect(home).toHaveAccessibleName("Coffer");
+  fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
+  expanded.unmount();
+
+  // Collapsed: the mark alone, still labelled "Coffer".
+  renderShell();
+  const rail = screen.getByRole("link", { name: "Coffer" });
+  expect(rail.querySelector("[data-coffer-mark]")).not.toBeNull();
+
+  // The document declares the Coffer mark as its icon.
+  const doc = new DOMParser().parseFromString(indexHtml, "text/html");
+  const icon = doc.querySelector('link[rel="icon"]');
+  expect(icon?.getAttribute("href")).toBe("/favicon.svg");
+  expect(icon?.getAttribute("type")).toBe("image/svg+xml");
 });

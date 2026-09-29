@@ -95,8 +95,8 @@ export function ConversationListItem({
       className={cn(
         "group flex items-center gap-1 rounded-md pr-1 text-sm transition-colors",
         isActive
-          ? "bg-primary/10 text-primary"
-          : "text-foreground/80 hover:bg-secondary hover:text-foreground",
+          ? "bg-surface-selected text-text"
+          : "text-text-muted hover:bg-surface-hover hover:text-text",
       )}
     >
       <button

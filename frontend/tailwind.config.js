@@ -128,6 +128,17 @@ export default {
         knob: "var(--shadow-knob)",
         focus: "var(--shadow-focus)",
       },
+      // Skeleton shimmer: a soft highlight sweeps each placeholder, starting
+      // only after 300ms of waiting (reduced motion stops it, index.css).
+      keyframes: {
+        shimmer: {
+          from: { backgroundPosition: "200% 0" },
+          to: { backgroundPosition: "-200% 0" },
+        },
+      },
+      animation: {
+        shimmer: "shimmer 1200ms linear 300ms infinite",
+      },
       transitionDuration: {
         fast: "120ms",
         base: "180ms",

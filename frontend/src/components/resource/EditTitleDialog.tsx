@@ -57,7 +57,7 @@ export function EditTitleDialog({ kind, resource, fixedNameHint }: Props) {
           <Pencil className="mr-1.5 size-3.5" /> {t("resources.titleField.dialogTitle")}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("resources.titleField.dialogTitle")}</DialogTitle>
           <DialogDescription>{t("resources.titleField.dialogSubtitle")}</DialogDescription>

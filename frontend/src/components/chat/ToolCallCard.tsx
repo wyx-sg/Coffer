@@ -22,13 +22,13 @@ export function ToolCallCard({ toolUse, toolResult }: Props) {
     <div
       className={cn(
         "my-1 rounded-md border text-xs",
-        isError ? "border-destructive/40 bg-destructive/5" : "border-border bg-muted/40",
+        isError ? "border-destructive/40 bg-destructive/5" : "border-border bg-surface-sunken",
       )}
     >
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left font-medium transition-colors hover:bg-muted/60"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left font-medium transition-colors hover:bg-surface-hover"
         aria-expanded={expanded}
         aria-label={t("chat.toolCard.toggleAria", { name: toolUse.tool_name })}
       >

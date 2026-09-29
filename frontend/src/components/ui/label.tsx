@@ -1,3 +1,5 @@
+// src/components/ui/label.tsx
+// The field label: 12/550 in the primary ink, with an optional required mark.
 import * as React from "react";
 import * as LabelPrimitive from "@radix-ui/react-label";
 import { cva, type VariantProps } from "class-variance-authority";
@@ -7,7 +9,7 @@ import { cn } from "@/lib/utils";
 // an optional field. The mark is a pseudo-element, so the label's text — and
 // with it the field's accessible name — stays just the word.
 const labelVariants = cva(
-  "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
+  "text-xs font-label text-text peer-disabled:cursor-not-allowed peer-disabled:opacity-field-disabled",
   {
     variants: {
       required: {

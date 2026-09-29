@@ -1,4 +1,5 @@
 // frontend/src/components/reach/AgentPicker.tsx
+// The agent checklist of ReachControl's panel (Foundations-Reach "Checklist row").
 //
 // The agent list under "only selected agents" in ReachControl's panel — split
 // out to keep that file inside its size tier, and because it is one coherent
@@ -21,15 +22,13 @@
 // agent" a tick IS the narrowing (one click from where the user already is),
 // and under "Disabled" it is the plainest statement that the selection survived
 // the disable and will come back with it.
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useTranslation } from "react-i18next";
 
-/** One agent the list can offer: what a tick WRITES, and what it READS as. */
-interface PickableAgent {
-  uid: string;
-  name: string;
-}
+import { AgentBadge } from "@/components/agent/AgentBadge";
+import { sortAgents } from "@/components/agent/agentOrder";
+import { WARNING_CLASS, type PickableAgent } from "@/components/reach/reachState";
+import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 
 interface Props {
   /** Agents registered on this machine — the pick-list's vocabulary. */
@@ -44,9 +43,6 @@ interface Props {
   className?: string;
 }
 
-const WARNING_CLASS =
-  "rounded-md border border-status-warn/40 bg-status-warn/5 px-3 py-2 text-xs text-status-warn";
-
 export function AgentPicker({ registered, selected, dormant, busy, onToggle, className }: Props) {
   const { t } = useTranslation();
   const known = new Set(registered.map((a) => a.uid));
@@ -54,39 +50,62 @@ export function AgentPicker({ registered, selected, dormant, busy, onToggle, cla
   // the uid itself: there is no name to show, and hiding the row would display
   // a scope narrower than the one stored.
   const rows: (PickableAgent & { known: boolean })[] = [
-    ...registered.map((a) => ({ ...a, known: true })),
-    ...selected.filter((uid) => !known.has(uid)).map((uid) => ({ uid, name: uid, known: false })),
+    ...sortAgents(registered).map((a) => ({ ...a, known: true })),
+    ...selected
+      .filter((uid) => !known.has(uid))
+      .map((uid) => ({ uid, name: uid, type: "", installed: true, known: false })),
   ];
 
+  const stateWord = (agent: (typeof rows)[number]) => {
+    if (!agent.known) return t("scope.unknownAgent");
+    return agent.installed ? null : t("agentBadge.state.not-installed");
+  };
+
   return (
-    <div className={className} data-testid="scope-agent-axis">
+    <div className={cn("space-y-2", className)} data-testid="scope-agent-axis">
       {dormant ? <p className={WARNING_CLASS}>{t("scope.dormant")}</p> : null}
 
       {rows.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{t("scope.noAgents")}</p>
+        <p className="px-2 text-xs text-text-muted">{t("scope.noAgents")}</p>
       ) : (
-        <div className="space-y-1.5">
-          {rows.map((agent) => (
-            <label
-              key={agent.uid}
-              // React keys on the identity; the test id stays the NAME, as it
-              // always was, because that is what a test (and a reader of the
-              // DOM) recognises a row by and a uid would make every such
-              // assertion unreadable. An unresolved uid labels its own row, so
-              // the attribute is still unique either way.
-              data-testid={`scope-agent-${agent.name}`}
-              className="flex w-full cursor-pointer items-center gap-2 rounded-md border border-border/60 p-2 text-sm"
-            >
-              <Checkbox
-                checked={selected.includes(agent.uid)}
-                disabled={busy}
-                aria-label={agent.name}
-                onChange={(e) => onToggle(agent.uid, e.target.checked)}
-              />
-              <span className="min-w-0 flex-1 font-medium">{agent.name}</span>
-              {agent.known ? null : <Badge variant="outline">{t("scope.unknownAgent")}</Badge>}
-            </label>
-          ))}
+        <div>
+          {rows.map((agent) => {
+            const word = stateWord(agent);
+            return (
+              <label
+                key={agent.uid}
+                // React keys on the identity; the test id stays the NAME, as it
+                // always was, because that is what a test (and a reader of the
+                // DOM) recognises a row by and a uid would make every such
+                // assertion unreadable. An unresolved uid labels its own row, so
+                // the attribute is still unique either way.
+                data-testid={`scope-agent-${agent.name}`}
+                className="flex min-h-8 w-full cursor-pointer items-center gap-2 rounded-item px-2 transition-colors duration-fast hover:bg-surface-hover"
+              >
+                <Checkbox
+                  checked={selected.includes(agent.uid)}
+                  disabled={busy}
+                  aria-label={agent.name}
+                  onChange={(e) => onToggle(agent.uid, e.target.checked)}
+                />
+                {/* The name beside it is the visible text, so the badge is
+                    decoration here — the checkbox is already named. */}
+                <span aria-hidden className="inline-flex">
+                  <AgentBadge
+                    type={agent.type}
+                    name={agent.name}
+                    size="md"
+                    tooltip={false}
+                    state={agent.installed ? undefined : "not-installed"}
+                  />
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm font-normal text-text">
+                  {agent.name}
+                </span>
+                {word ? <span className="shrink-0 text-xs text-text-muted">{word}</span> : null}
+              </label>
+            );
+          })}
         </div>
       )}
     </div>

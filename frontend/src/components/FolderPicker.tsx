@@ -88,7 +88,7 @@ function FolderBrowserDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("folderPicker.title")}</DialogTitle>
           <DialogDescription>{t("folderPicker.subtitle")}</DialogDescription>
@@ -118,9 +118,7 @@ function FolderBrowserDialog({
             ) : browse.isError ? (
               <p className="p-4 text-sm text-destructive">{translateApiError(t, browse.error)}</p>
             ) : (data?.entries.length ?? 0) === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground">
-                {t("folderPicker.emptyDir")}
-              </p>
+              <p className="p-4 text-sm text-muted-foreground">{t("folderPicker.emptyDir")}</p>
             ) : (
               <ul>
                 {data!.entries.map((e) => (
@@ -128,7 +126,7 @@ function FolderBrowserDialog({
                     <button
                       type="button"
                       onClick={() => setPath(e.path)}
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent"
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
                     >
                       <Folder className="size-4 shrink-0 text-muted-foreground" />
                       <span className="truncate">{e.name}</span>

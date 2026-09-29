@@ -1,18 +1,26 @@
+// src/components/ui/badge.tsx
+// The Foundations "chip": a 20px label for a kind, a scope or a toned state.
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
+// Variants → chip looks:
+//   `secondary` neutral chip (the common case: transport, scope, counts)
+//   `default`   accent chip (accent-soft fill, accent text)
+//   `outline`   hairline chip on the raised surface
+//   `destructive` / `success` / `warning`  toned chip: *-soft fill + status colour
+// Colour is for state only — a label that is not a state belongs on `secondary`.
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors",
+  "inline-flex h-5 shrink-0 items-center gap-1 whitespace-nowrap rounded-sm border px-[7px] text-2xs font-label",
   {
     variants: {
       variant: {
-        default: "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
-        secondary:
-          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        destructive:
-          "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
-        outline: "text-foreground",
+        default: "border-transparent bg-accent-soft text-accent-text",
+        secondary: "border-transparent bg-chip text-text-muted",
+        destructive: "border-transparent bg-danger-soft text-danger",
+        success: "border-transparent bg-success-soft text-success",
+        warning: "border-transparent bg-warning-soft text-warning",
+        outline: "border-border bg-surface-raised text-text-muted",
       },
     },
     defaultVariants: {

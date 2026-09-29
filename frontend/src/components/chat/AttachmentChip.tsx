@@ -61,7 +61,7 @@ export function AttachmentChip({ name, detail, mime, state, error, onRemove }: P
           type="button"
           onClick={onRemove}
           aria-label={t("chat.attachments.remove", { name: label })}
-          className="-mr-0.5 shrink-0 rounded-sm p-0.5 hover:bg-accent hover:text-accent-foreground"
+          className="-mr-0.5 shrink-0 rounded-sm p-0.5 hover:bg-surface-hover hover:text-text"
         >
           <X className="size-3" aria-hidden />
         </button>

@@ -12,14 +12,10 @@ import remarkGfm from "remark-gfm";
 import type { Components } from "react-markdown";
 
 const components: Components = {
-  h1: (props) => (
-    <h2 className="mb-3 mt-5 font-serif text-2xl tracking-tight first:mt-0" {...props} />
-  ),
-  h2: (props) => (
-    <h3 className="mb-2 mt-5 font-serif text-xl tracking-tight first:mt-0" {...props} />
-  ),
-  h3: (props) => <h4 className="mb-2 mt-4 text-lg font-medium first:mt-0" {...props} />,
-  h4: (props) => <h5 className="mb-1.5 mt-3 font-medium first:mt-0" {...props} />,
+  h1: (props) => <h2 className="mb-3 mt-5 text-xl font-bold first:mt-0" {...props} />,
+  h2: (props) => <h3 className="mb-2 mt-5 text-lg font-bold first:mt-0" {...props} />,
+  h3: (props) => <h4 className="mb-2 mt-4 text-md font-semibold first:mt-0" {...props} />,
+  h4: (props) => <h5 className="mb-1.5 mt-3 font-semibold first:mt-0" {...props} />,
   h5: (props) => <h6 className="mb-1.5 mt-3 font-medium first:mt-0" {...props} />,
   h6: (props) => <h6 className="mb-1.5 mt-3 font-medium first:mt-0" {...props} />,
   p: (props) => <p className="my-2.5 leading-relaxed" {...props} />,
@@ -28,7 +24,7 @@ const components: Components = {
   li: (props) => <li className="leading-relaxed" {...props} />,
   a: (props) => (
     <a
-      className="text-primary underline underline-offset-2"
+      className="text-accent-text underline underline-offset-2"
       target="_blank"
       rel="noreferrer"
       {...props}
@@ -41,18 +37,18 @@ const components: Components = {
   code: ({ className, children, ...props }) => {
     const inline = !String(className ?? "").includes("language-");
     return inline ? (
-      <code className="rounded-sm bg-secondary px-1.5 py-0.5 font-mono text-sm" {...props}>
+      <code className="rounded-xs bg-chip px-1.5 py-0.5 font-mono text-xs" {...props}>
         {children}
       </code>
     ) : (
-      <code className={`${className ?? ""} font-mono text-sm`} {...props}>
+      <code className={`${className ?? ""} font-mono text-xs leading-[1.6]`} {...props}>
         {children}
       </code>
     );
   },
   pre: (props) => (
     <pre
-      className="my-3 overflow-auto rounded-md border border-border bg-secondary/40 p-3"
+      className="my-3 overflow-auto rounded-lg border border-border-subtle bg-code px-3.5 py-3"
       {...props}
     />
   ),
@@ -63,7 +59,7 @@ const components: Components = {
   ),
   th: (props) => (
     <th
-      className="border border-border bg-secondary/50 px-3 py-1.5 text-left font-medium"
+      className="border border-border bg-surface-sunken px-3 py-1.5 text-left font-label"
       {...props}
     />
   ),

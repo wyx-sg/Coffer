@@ -26,7 +26,10 @@ vi.mock("@/lib/hooks/useEditors", () => ({
   }),
 }));
 
-afterEach(() => localStorage.clear());
+afterEach(() => {
+  localStorage.clear();
+  delete document.documentElement.dataset.theme;
+});
 
 const STORE_KEY = "coffer.preferredEditor";
 
@@ -48,10 +51,10 @@ describe("GeneralSettings", () => {
     );
   });
 
-  test("both controls are the same Select — no native <select> on the page", () => {
+  test("every control is the same Select — no native <select> on the page", () => {
     render(<GeneralSettings />);
     expect(document.querySelectorAll("select")).toHaveLength(0);
-    expect(screen.getAllByRole("combobox")).toHaveLength(2);
+    expect(screen.getAllByRole("combobox")).toHaveLength(3);
   });
 });
 
@@ -138,4 +141,26 @@ acceptance("web-ui", "the default page size seeds every list table", () => {
   expect(localStorage.getItem("coffer.pageSize")).toBe("10");
   expect(screen.getByText("row-9")).toBeInTheDocument();
   expect(screen.queryByText("row-10")).not.toBeInTheDocument();
+});
+
+acceptance("web-ui", "the General tab offers the theme choice", () => {
+  localStorage.setItem("coffer.theme", "light");
+  render(<GeneralSettings />);
+
+  // One choice, with the current preference chosen.
+  const themeSelect = screen.getByRole("combobox", { name: /^theme$/i });
+  expect(themeSelect).toHaveTextContent("Light");
+  fireEvent.keyDown(themeSelect, { key: "ArrowDown" });
+  expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+    "System",
+    "Light",
+    "Dark",
+  ]);
+
+  // Picking one applies it at once — there is no Save button.
+  fireEvent.click(screen.getByRole("option", { name: "Dark" }));
+  expect(document.documentElement.dataset.theme).toBe("dark");
+  expect(localStorage.getItem("coffer.theme")).toBe("dark");
+  expect(themeSelect).toHaveTextContent("Dark");
+  expect(screen.queryByRole("button", { name: /save/i })).toBeNull();
 });

@@ -23,7 +23,7 @@ export function RawLog({ record }: Props) {
         language="json"
         maxHeight="24rem"
         ariaLabel={t("common.rawLog")}
-        className="bg-secondary/50"
+        className="bg-surface-sunken"
       />
     </div>
   );

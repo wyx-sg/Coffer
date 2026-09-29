@@ -103,7 +103,7 @@ export function AgentEditForm(props: {
         if (!next) props.onClose();
       }}
     >
-      <DialogContent className="max-w-lg">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{t("agents.editTitle")}</DialogTitle>
           <DialogDescription>{t("agents.editSubtitle")}</DialogDescription>

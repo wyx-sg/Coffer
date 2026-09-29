@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { Check, ChevronsUpDown, Search } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { fieldClass } from "@/components/ui/field-classes";
 
 export interface ComboboxOption {
   value: string;
@@ -94,33 +95,32 @@ export function Combobox({
         onClick={() => setOpen((current) => !current)}
         {...aria}
         className={cn(
-          "flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm",
-          "focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
-          "aria-[invalid=true]:border-destructive",
+          fieldClass,
+          "flex h-control-md items-center justify-between gap-2 py-0 pl-2.5 pr-2 text-left",
         )}
       >
-        <span className={cn("truncate", selected === undefined && "text-muted-foreground")}>
+        <span className={cn("truncate", selected === undefined && "text-text-subtle")}>
           {selected?.label ?? placeholder}
         </span>
-        <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" aria-hidden />
+        <ChevronsUpDown className="size-[13px] shrink-0 text-text-subtle" aria-hidden />
       </button>
 
       {open ? (
-        <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-md">
-          <div className="flex items-center gap-2 border-b border-border px-3">
-            <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <div className="absolute z-menu mt-1 w-full min-w-[180px] overflow-hidden rounded-xl bg-surface-raised text-text shadow-overlay animate-in fade-in-0 zoom-in-[.98] duration-base ease-out">
+          <div className="flex items-center gap-2 border-b border-border-subtle px-2.5">
+            <Search className="size-3.5 shrink-0 text-text-subtle" aria-hidden />
             <input
               autoFocus
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder={t("common.search")}
               aria-label={t("common.search")}
-              className="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              className="h-control-md w-full bg-transparent text-sm text-text caret-accent outline-none placeholder:text-text-subtle"
             />
           </div>
           <div role="listbox" className="max-h-60 overflow-y-auto p-1">
             {shown.length === 0 ? (
-              <p className="px-2 py-3 text-center text-sm text-muted-foreground">{emptyMessage}</p>
+              <p className="px-2 py-3 text-center text-sm text-text-muted">{emptyMessage}</p>
             ) : (
               shown.map((option) => (
                 <button
@@ -132,11 +132,11 @@ export function Combobox({
                     onChange(option.value);
                     dismiss();
                   }}
-                  className="flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-secondary focus-visible:bg-secondary focus-visible:outline-none"
+                  className="flex min-h-control-md w-full items-start gap-2 rounded-item px-2 py-[5.5px] text-left text-sm font-normal text-text hover:bg-surface-hover focus-visible:bg-surface-hover focus-visible:outline-none"
                 >
                   <Check
                     className={cn(
-                      "mt-0.5 size-4 shrink-0",
+                      "mt-[2.5px] size-3.5 shrink-0 text-accent",
                       option.value === value ? "opacity-100" : "opacity-0",
                     )}
                     aria-hidden
@@ -144,9 +144,7 @@ export function Combobox({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate">{option.label}</span>
                     {option.hint ? (
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {option.hint}
-                      </span>
+                      <span className="block truncate text-xs text-text-subtle">{option.hint}</span>
                     ) : null}
                   </span>
                 </button>

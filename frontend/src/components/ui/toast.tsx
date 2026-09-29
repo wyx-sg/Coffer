@@ -1,4 +1,4 @@
-// frontend/src/components/ui/toast.tsx
+// src/components/ui/toast.tsx
 // A minimal, dependency-free toast/notification system. There was no toast or
 // notification surface before, so failed mutations (delete / enable-disable /
 // bulk / install) reverted or got stuck silently. This provides:
@@ -120,10 +120,11 @@ const VARIANT_ICON: Record<ToastVariant, typeof Info> = {
   info: Info,
 };
 
-const VARIANT_CLS: Record<ToastVariant, string> = {
-  error: "border-destructive/40 bg-card text-destructive",
-  success: "border-primary/40 bg-card text-foreground",
-  info: "border-border bg-card text-foreground",
+// Icon carries the status; the card itself is the same raised surface for every variant.
+const VARIANT_ICON_CLS: Record<ToastVariant, string> = {
+  error: "text-danger",
+  success: "text-success",
+  info: "text-accent-text",
 };
 
 function Toaster({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: number) => void }) {
@@ -131,7 +132,7 @@ function Toaster({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: n
   if (toasts.length === 0) return null;
   return (
     <div
-      className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-full max-w-sm flex-col gap-2"
+      className="pointer-events-none fixed bottom-6 right-6 z-toast flex max-w-[calc(100vw-3rem)] flex-col items-end gap-2"
       aria-live="polite"
     >
       {toasts.map((tn) => {
@@ -141,16 +142,16 @@ function Toaster({ toasts, onDismiss }: { toasts: ToastItem[]; onDismiss: (id: n
             key={tn.id}
             role={tn.variant === "error" ? "alert" : "status"}
             className={cn(
-              "pointer-events-auto flex items-start gap-3 rounded-md border px-4 py-3 text-sm shadow-md",
-              VARIANT_CLS[tn.variant],
+              "pointer-events-auto flex min-w-[280px] max-w-[420px] items-center gap-2.5 rounded-xl bg-surface-raised px-3.5 py-2.5 text-sm text-text shadow-overlay",
+              "animate-in fade-in-0 slide-in-from-bottom-2 duration-slow ease-out",
             )}
           >
-            <Icon className="mt-0.5 size-4 shrink-0" />
+            <Icon className={cn("size-[15px] shrink-0", VARIANT_ICON_CLS[tn.variant])} />
             <span className="flex-1 break-words">{tn.message}</span>
             <button
               type="button"
               onClick={() => onDismiss(tn.id)}
-              className="-mr-1 -mt-1 rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+              className="-mr-1.5 ml-1 inline-flex size-6 shrink-0 items-center justify-center rounded-item text-text-subtle transition-colors duration-fast hover:bg-surface-hover hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
               aria-label={t("common.dismiss")}
             >
               <X className="size-3.5" />

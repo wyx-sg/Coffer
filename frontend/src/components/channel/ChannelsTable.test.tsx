@@ -209,10 +209,10 @@ describe("ChannelsTable", () => {
 
     const badges = screen.getAllByTestId("channel-health-badge");
     expect(badges).toHaveLength(2);
-    expect(screen.getByText("Running")).toHaveClass("text-status-ok");
+    expect(screen.getByText("Running")).toHaveClass("text-success");
     // Stopped is attention, not "unknown": the same warn tone the detail
     // page's Status card uses.
-    expect(screen.getByText("Stopped")).toHaveClass("text-status-warn");
+    expect(screen.getByText("Stopped")).toHaveClass("text-warning");
   });
 
   test("the toolbar offers the shared three-state reach filter", () => {
@@ -330,7 +330,7 @@ describe("ChannelsTable", () => {
 
     const picker = machinePicker();
     expect(picker).toHaveTextContent(/unknown machine \(machine-gone\)/i);
-    expect(picker.className).toContain("text-destructive");
+    expect(picker.className).toContain("text-danger");
   });
 
   test("an unbound channel says so, and the state is not offered as a choice", () => {
@@ -340,7 +340,7 @@ describe("ChannelsTable", () => {
     const picker = machinePicker();
     expect(picker).toHaveTextContent(/not bound/i);
     // Warn, not error: nothing is broken, nothing has been chosen yet.
-    expect(picker.className).toContain("status-warn");
+    expect(picker.className).toContain("text-warning");
 
     // jsdom has no PointerEvent, so open the Radix listbox from the keyboard.
     fireEvent.keyDown(picker, { key: "ArrowDown" });

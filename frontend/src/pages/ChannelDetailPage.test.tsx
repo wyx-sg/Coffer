@@ -397,7 +397,7 @@ describe("ChannelDetailPage", () => {
     );
     // The same warn tone the list's health badge uses for a stopped adapter —
     // not the brand colour, not muted.
-    expect(screen.getByText("Stopped")).toHaveClass("text-status-warn");
+    expect(screen.getByText("Stopped")).toHaveClass("text-warning");
   });
 
   test("a missing channel heads the page with the failure, never with a uid", () => {

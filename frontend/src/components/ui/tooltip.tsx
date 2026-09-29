@@ -1,4 +1,5 @@
-// src/components/ui/tooltip.tsx — shadcn-style Tooltip over @radix-ui/react-tooltip.
+// src/components/ui/tooltip.tsx
+// Tooltip over @radix-ui/react-tooltip: a small inverted label that names a control.
 // Mount ONE TooltipProvider high in the tree (Layout does); Tooltip /
 // TooltipTrigger / TooltipContent compose per call site.
 import * as React from "react";
@@ -18,8 +19,11 @@ const TooltipContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 overflow-hidden rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md",
-        "animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        // Inverted chip: ink fill, page-colour text (so it flips in dark). No
+        // border, no arrow — the 6px offset says where it points. One line is
+        // 24 high; longer copy wraps at 240 with a 1.45 line height.
+        "z-tooltip min-h-6 max-w-[240px] rounded-item bg-text px-2 py-1.5 text-xs font-medium leading-[1.45] text-surface",
+        "animate-in fade-in-0 duration-fast ease-out data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:duration-fast data-[state=closed]:ease-in",
         className,
       )}
       {...props}

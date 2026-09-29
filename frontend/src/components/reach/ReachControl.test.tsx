@@ -256,8 +256,8 @@ describe("the panel says reach is machine-local", () => {
     seed();
     mount("restricted", { initialScope: only([CLAUDE]) });
     openPanel();
-    expect(screen.getByTestId("reach-machine-local").className).toContain("text-muted-foreground");
-    expect(screen.getByTestId("reach-machine-local").className).not.toContain("status-warn");
+    expect(screen.getByTestId("reach-machine-local").className).toContain("text-text-muted");
+    expect(screen.getByTestId("reach-machine-local").className).not.toContain("text-warning");
   });
 });
 
@@ -438,7 +438,7 @@ describe("the panel stages the choice, then commits once on close", () => {
     seed();
     mount("restricted", { initialScope: only([CLAUDE]), note: "Inactive here" });
     expect(trigger()).toHaveAttribute("title", "Inactive here");
-    expect(trigger().className).toContain("status-warn");
+    expect(trigger().className).toContain("text-warning");
     openPanel();
     expect(screen.getByText("Inactive here")).toBeInTheDocument();
   });
@@ -446,7 +446,7 @@ describe("the panel stages the choice, then commits once on close", () => {
   test("without a note the button is not coloured", () => {
     seed();
     mount("restricted", { initialScope: only([CLAUDE]) });
-    expect(trigger().className).not.toContain("status-warn");
+    expect(trigger().className).not.toContain("text-warning");
   });
 
   test("the bulk mount is labelled on the button, so it is distinguishable from a row's", () => {
@@ -554,5 +554,30 @@ describe("reach conventions (web-ui)", () => {
     closePanel();
     expect(h.onRestricted).toHaveBeenCalledOnce();
     expect(h.onRestricted).toHaveBeenCalledWith(only([CLAUDE, CODEX]));
+  });
+
+  acceptance("web-ui", "a reach narrowed to chosen agents shows their badges", () => {
+    seed([
+      { uid: CLAUDE, name: "Claude Code", type: "claude_code" },
+      { uid: CODEX, name: "Codex", type: "codex" },
+    ] as unknown as { uid: string; name: string }[]);
+    mount("restricted", { initialScope: only([CLAUDE]) });
+
+    // The label is unchanged — it is still the button's whole name — and the
+    // chosen agent's badge sits beside it as decoration.
+    expect(trigger()).toHaveAccessibleName("1 agent");
+    expect(trigger()).toHaveTextContent(/^1 agent$/);
+    const marks = trigger().querySelectorAll("[data-agent-mark]");
+    expect(marks).toHaveLength(1);
+    expect(marks[0]).toHaveAttribute("data-agent-mark", "claude-spark");
+
+    // The panel lists every agent by its badge and its name.
+    openPanel();
+    const claudeRow = screen.getByTestId("scope-agent-Claude Code");
+    expect(claudeRow.querySelector('[data-agent-mark="claude-spark"]')).not.toBeNull();
+    expect(within(claudeRow).getByText("Claude Code")).toBeInTheDocument();
+    const codexRow = screen.getByTestId("scope-agent-Codex");
+    expect(codexRow.querySelector('[data-agent-mark="openai-blossom"]')).not.toBeNull();
+    expect(within(codexRow).getByText("Codex")).toBeInTheDocument();
   });
 });

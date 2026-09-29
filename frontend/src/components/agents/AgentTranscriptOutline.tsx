@@ -80,7 +80,7 @@ export function AgentTranscriptOutline({
             <li key={entry.index}>
               <button
                 type="button"
-                className="w-full truncate rounded px-2 py-1 text-left text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                className="w-full truncate rounded px-2 py-1 text-left text-xs text-muted-foreground hover:bg-surface-hover hover:text-text"
                 title={entry.label}
                 onClick={() => {
                   // `block: "start"` puts the chosen turn at the top of the
