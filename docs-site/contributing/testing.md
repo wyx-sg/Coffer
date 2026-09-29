@@ -60,6 +60,14 @@ Prefer the real thing whenever it is fast enough:
 
 Mock only what is **non-local** (an external HTTP service, an LLM API), **non-deterministic** in a way the test cares about (the clock, randomness), or, as a last resort, **slow**. A test that needs to mock something slow is often in the wrong tier.
 
+### Tests run in parallel
+
+The backend unit and integration tiers spread their tests across one worker process per core, which turns the integration tier from the slowest step of a local verify into one of the quicker ones. Each worker is a complete, separate test run: it gets its own throwaway home, its own scratch directory and its own temporary folders, so the protections described below hold in every worker exactly as they do in a single process.
+
+When you need one process — to step through a test in a debugger, to read output that is not interleaved, or to chase a failure that depends on test order — set the worker count to zero and the tier runs serially.
+
+For a test to be safe alongside others, nothing it creates may have a name another process could choose too. Build files inside the test's own temporary directory, ask the operating system for a free port instead of writing one down, and never write into the checkout itself. When a test depends on something the code under test fixes and the test cannot move, mark it as belonging to a named group: every test in a group runs on the same worker, one after another. Use this last, because each group is a small serial island inside the parallel run.
+
 ### Tests never touch your real home
 
 Nearly everything Coffer keeps on disk lives under your home directory: the vault with its database, notes and logs, and the configuration of the coding agents that Coffer connects to. A test that forgets to point one of those somewhere else does not fail. It quietly runs against your real data.
@@ -203,7 +211,7 @@ The pre-commit hooks from `make hooks` add fast checks at commit time: trailing 
 
 | Workflow | Trigger | What it runs |
 | --- | --- | --- |
-| `verify.yml` | Pull requests to `main`, pushes to `main` | Eight parallel jobs, all required: `lint`, `test-unit`, `test-integration`, `test-benchmark`, `audit-acceptance`, `secrets-scan` (gitleaks over the full history), `test-contract`, `test-e2e` |
+| `verify.yml` | Pull requests to `main`, pushes to `main` | Parallel jobs: `lint`, `test-unit`, `test-integration`, `test-benchmark`, `audit-acceptance`, `secrets-scan` (gitleaks over the full history), `test-contract`, `test-e2e`. The integration tier is split into four shards that run side by side, balanced by how long each test took last time it was measured, with one final check that passes only when every shard passed. A pull request that changes only documentation no test reads skips the test jobs; the gates that check documentation still run, and the skipped checks count as passed |
 | `ci.yml` | Pushes to `main` and `feature/**`, weekly schedule | One `make verify` job. The scheduled run is the **latest-deps canary**: it installs with `uv sync --upgrade` instead of the lockfile, so an upstream release that breaks Coffer shows up on a schedule |
 | `pr-title.yml` | Pull request opened or edited | The title against `.commitlintrc.yaml` |
 | `desktop.yml` | Changes to `desktop/**` or the `Makefile` | `make desktop-lint` and `make desktop-test` |

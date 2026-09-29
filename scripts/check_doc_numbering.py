@@ -62,13 +62,18 @@ INDEX_ROW = re.compile(r"^\|\s*\[[^\]]+\]\(([^)]+\.md)\)")
 EXCLUDED_PREFIXES = ("docs-site/node_modules/", "frontend/node_modules/")
 #: This file names the retired patterns on purpose, in the docstring above.
 SELF = "scripts/check_doc_numbering.py"
+#: Generated test-duration record (`make test-durations`): its keys are test ids,
+#: which quote the retired forms because the gates' own tests feed them in.
+GENERATED = frozenset({"backend/.test_durations"})
 
 
 def tracked_files() -> list[str]:
     out = subprocess.run(
         ["git", "ls-files"], cwd=REPO_ROOT, capture_output=True, text=True, check=True
     ).stdout.split()
-    return [f for f in out if not f.startswith(EXCLUDED_PREFIXES) and f != SELF]
+    return [
+        f for f in out if not f.startswith(EXCLUDED_PREFIXES) and f != SELF and f not in GENERATED
+    ]
 
 
 def adr_files() -> list[Path]:

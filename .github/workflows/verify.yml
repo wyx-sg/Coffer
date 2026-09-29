@@ -21,6 +21,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Which kind of change this is. A pull request that only touches prose no test
+  # reads (scripts/ci_change_scope.py has the exact rule) skips the backend and
+  # frontend test jobs; lint, the acceptance audit and the secrets scan — the
+  # gates that check prose — always run. A skipped job reports success, so the
+  # required checks still go green. Pushes always run everything, and so does a
+  # run where this job itself failed: the test jobs skip only on an explicit
+  # `code=false`, never on a missing answer.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.scope.outputs.code }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+      - id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            git diff --name-only "$BASE...HEAD" | python3 scripts/ci_change_scope.py >> "$GITHUB_OUTPUT"
+          fi
+          cat "$GITHUB_OUTPUT"
+
   lint:
     name: lint
     runs-on: ubuntu-latest
@@ -50,6 +78,8 @@ jobs:
 
   unit:
     name: test-unit
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -75,9 +105,21 @@ jobs:
       - name: make verify-unit
         run: make verify-unit
 
-  integration:
-    name: test-integration
+  # The integration tier is the long pole (~3400 tests, many spawning git), so
+  # it runs as four shards in parallel, each on xdist across the runner's cores.
+  # pytest-split balances the shards by the per-test durations committed in
+  # backend/.test_durations (refresh with `make test-durations`; a test missing
+  # from it is weighed at the average, so a stale file only unbalances, never
+  # drops a test). Adding a shard means bumping both `shard` and `--splits`.
+  integration-shard:
+    name: test-integration (${{ matrix.shard }}/4)
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
@@ -101,11 +143,34 @@ jobs:
       - name: Install frontend
         working-directory: frontend
         run: npm ci
-      - name: make verify-integration
-        run: make verify-integration
+      - name: make verify-integration (shard ${{ matrix.shard }}/4)
+        run: >-
+          make verify-integration
+          PYTEST_ARGS="--splits 4 --group ${{ matrix.shard }}
+          --splitting-algorithm least_duration
+          --durations-path backend/.test_durations"
+
+  # The required check. It passes only when every shard passed — or when the
+  # shards were skipped because the change is docs-only (`code=false`).
+  integration:
+    name: test-integration
+    needs: [changes, integration-shard]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: all shards passed
+        env:
+          CODE: ${{ needs.changes.outputs.code }}
+          CHANGES: ${{ needs.changes.result }}
+          SHARDS: ${{ needs.integration-shard.result }}
+        run: |
+          echo "changes=$CHANGES code=$CODE shards=$SHARDS"
+          if [ "$CODE" = "false" ]; then [ "$SHARDS" = "skipped" ]; else [ "$SHARDS" = "success" ]; fi
 
   benchmark:
     name: test-benchmark
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -165,6 +230,8 @@ jobs:
 
   contract:
     name: test-contract
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -194,6 +261,8 @@ jobs:
 
   e2e:
     name: test-e2e
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1

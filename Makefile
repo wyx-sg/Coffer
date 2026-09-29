@@ -3,9 +3,21 @@ PY := $(or $(and $(wildcard $(_VENV_PY)),$(_VENV_PY)),python3)
 BACKEND := backend
 FRONTEND := frontend
 
+# Backend pytest runs on pytest-xdist workers. PYTEST_WORKERS is xdist's `-n`:
+# `auto` (default) = one worker per core, a number pins it, and `0` runs the
+# tier serially in this process (the escape hatch for debugging with pdb or
+# bisecting an order-dependent failure). `--dist loadgroup` keeps every test
+# marked `@pytest.mark.xdist_group(name=...)` on one worker; see
+# .agents/testing.md "Running in Parallel". PYTEST_ARGS is passed through
+# untouched — CI uses it to pick one duration-balanced shard (pytest-split).
+PYTEST_WORKERS ?= auto
+PYTEST_ARGS ?=
+PYTEST_XDIST := -n $(PYTEST_WORKERS) --dist loadgroup
+
 .PHONY: help install install-e2e-browsers hooks \
 	verify verify-all \
 	verify-unit verify-integration verify-contract verify-e2e verify-acceptance openspec-validate verify-benchmark \
+	test-durations \
 	coverage lock \
 	eval eval-routing eval-curate \
 	bundle-binaries \
@@ -28,6 +40,8 @@ help:
 	@echo "  make verify-e2e            e2e tier only (Playwright: web + mcp projects)"
 	@echo "  make verify-acceptance     openspec validate + audit scenarios vs test markers"
 	@echo "  make verify-benchmark      gateway-overhead budget benchmark (COFFER_RUN_BENCHMARKS=1)"
+	@echo "  make test-durations        re-measure backend/.test_durations (CI's integration shard balance)"
+	@echo "  PYTEST_WORKERS=0 make ...  run a backend tier serially (default: auto = one xdist worker per core)"
 	@echo "  make lint                  ruff + mypy + eslint + tsc + knip + import-linter + file/response_model checks"
 	@echo "  make format                ruff format + prettier"
 	@echo "  make coverage              pytest --cov + vitest --coverage (no threshold gates yet)"
@@ -153,7 +167,7 @@ lint:
 verify-unit:
 	$(PY) scripts/check_unit_purity.py
 	@if [ -d $(BACKEND)/tests/unit ]; then \
-		$(PY) -m pytest $(BACKEND)/tests/unit; \
+		$(PY) -m pytest $(PYTEST_XDIST) $(PYTEST_ARGS) $(BACKEND)/tests/unit; \
 	else \
 		echo "verify-unit: $(BACKEND)/tests/unit/ does not exist yet — skipping backend"; \
 	fi
@@ -171,10 +185,19 @@ verify-unit:
 # it left behind could only ever print its own skip message.
 verify-integration:
 	@if [ -d $(BACKEND)/tests/integration ]; then \
-		$(PY) -m pytest $(BACKEND)/tests/integration; \
+		$(PY) -m pytest $(PYTEST_XDIST) $(PYTEST_ARGS) $(BACKEND)/tests/integration; \
 	else \
 		echo "verify-integration: $(BACKEND)/tests/integration/ does not exist yet — skipping backend"; \
 	fi
+
+# Re-measure the per-test durations CI's integration shards are balanced by
+# (pytest-split, .github/workflows/verify.yml). Serial on purpose: under xdist
+# the numbers include contention, and the durations plugin records on the
+# controller's reporter, which only a serial run is sure to own. Rewrites the
+# file from scratch, so deleted tests drop out. Re-run when shards drift apart.
+test-durations:
+	$(PY) -m pytest -n 0 -q $(BACKEND)/tests/integration \
+		--store-durations --clean-durations --durations-path $(BACKEND)/.test_durations
 
 verify-benchmark:
 	COFFER_RUN_BENCHMARKS=1 $(PY) -m pytest $(BACKEND)/tests -m benchmark

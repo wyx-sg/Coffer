@@ -15,6 +15,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import textwrap
 import uuid
 
@@ -119,6 +120,16 @@ def test_a_spawned_process_inherits_the_isolated_home() -> None:
     ).stdout.strip()
     assert out == os.environ["HOME"]
     assert out not in _guard().homes
+
+
+def test_the_run_wide_log_dir_belongs_to_this_process_alone() -> None:
+    """Under xdist every worker is its own pytest process. The log dir is the
+    one pin no fixture narrows per test, so it must sit in this process's
+    scratch root — not in a fixed ``/tmp`` name every worker (and every other
+    session's run) appends to and rotates at once."""
+    run_root = pathlib.Path(os.environ["COFFER_LOG_DIR"]).parent
+    assert run_root.name.startswith("coffer-test-run-")
+    assert run_root.parent == pathlib.Path(tempfile.gettempdir())
 
 
 @pytest.mark.parametrize("env_home", [None, "real"])
