@@ -41,6 +41,21 @@ class KnowledgeFileNotFound(KnowledgeError):  # noqa: N818
         self.path = path
 
 
+class KnowledgeFileConflict(KnowledgeError):  # noqa: N818
+    """A document changed on disk after the editor read it.
+
+    Spec knowledge "Save a document edited in the web UI". The save is refused
+    and the file left as it is: a person's editor or a curation pass wrote it
+    in between, and overwriting that silently would lose their change.
+    """
+
+    code = "KNOWLEDGE_FILE_CONFLICT"
+
+    def __init__(self, path: str) -> None:
+        super().__init__(f"knowledge file changed since it was read: {path!r}")
+        self.path = path
+
+
 class UnsafeKnowledgePath(KnowledgeError):  # noqa: N818
     """A path that escapes the knowledge root, names a hidden entry, or cannot
     name a document.

@@ -141,13 +141,6 @@ describe("the button says what the reach is", () => {
     expect(trigger()).toHaveTextContent(/set reach/i);
   });
 
-  test("a kind with no scope reads as enabled or disabled, and nothing else", () => {
-    seed();
-    mount("everywhere", { supportsScope: false });
-    expect(trigger()).toHaveTextContent(/^enabled/i);
-    expect(trigger()).not.toHaveTextContent(/agent/i);
-  });
-
   test("a write in flight makes the button inert", () => {
     seed();
     mount("everywhere", { busy: true });
@@ -172,16 +165,6 @@ describe("the panel offers the states as choices", () => {
     for (const label of [/^disabled$/i, /every agent/i, /only selected agents/i]) {
       expect(choice(label)).not.toBeChecked();
     }
-  });
-
-  test("a kind with no scope offers two choices and no agent list", () => {
-    seed();
-    const h = mount("everywhere", { supportsScope: false });
-    openPanel();
-    expect(screen.getAllByRole("radio")).toHaveLength(2);
-    expect(screen.queryByTestId("scope-agent-axis")).not.toBeInTheDocument();
-    fireEvent.click(choice(/^enabled$/i));
-    expect(h.onEverywhere).toHaveBeenCalledOnce();
   });
 
   test("every choice is inert while a write is in flight", () => {
@@ -251,13 +234,6 @@ describe("the panel says reach is machine-local", () => {
     const line = screen.getByTestId("reach-machine-local");
     expect(line).toHaveTextContent(/this machine only/i);
     expect(line).toHaveTextContent(/not synced/i);
-  });
-
-  test("a kind with no scope gets the line too", () => {
-    seed();
-    mount("everywhere", { supportsScope: false });
-    openPanel();
-    expect(screen.getByTestId("reach-machine-local")).toHaveTextContent(/not synced/i);
   });
 
   test("the button carries no tooltip for it: the line is visible text in the panel", () => {
@@ -518,31 +494,25 @@ describe("reach conventions (web-ui)", () => {
   });
 
   acceptance("web-ui", "the reach panel offers the reach states as one choice", () => {
+    // GIVEN a resource of a scoped kind, currently reaching every agent.
     seed();
-    const scoped = render(
-      <ReachControl mode="restricted" initialScope={only([CLAUDE])} {...handlers()} />,
-    );
+    render(<ReachControl mode="everywhere" {...handlers()} />);
+    // WHEN its reach panel is opened
     openPanel();
+    // THEN it offers the three reach states, with the current one chosen.
     const radios = screen.getAllByRole("radio");
     expect(radios.map((r) => r.closest("label")?.textContent)).toEqual([
       expect.stringMatching(/^disabled$/i),
       expect.stringMatching(/every agent/i),
       expect.stringMatching(/only selected agents/i),
     ]);
-    // One choice: exactly the live state is chosen.
     expect(radios.filter((r) => (r as HTMLInputElement).checked)).toHaveLength(1);
+    expect(choice(/every agent/i)).toBeChecked();
+    // AND choosing Only selected agents shows the agents to pick from.
+    fireEvent.click(choice(/only selected agents/i));
     expect(choice(/only selected agents/i)).toBeChecked();
-    expect(screen.getByTestId("scope-agent-axis")).toBeInTheDocument();
-    closePanel();
-    scoped.unmount();
-
-    render(<ReachControl mode="everywhere" supportsScope={false} {...handlers()} />);
-    openPanel();
-    expect(screen.getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual([
-      expect.stringMatching(/^disabled$/i),
-      expect.stringMatching(/^enabled$/i),
-    ]);
-    expect(screen.queryByTestId("scope-agent-axis")).not.toBeInTheDocument();
+    const axis = screen.getByTestId("scope-agent-axis");
+    expect(within(axis).getAllByRole("checkbox")).toHaveLength(AGENTS.length);
   });
 
   acceptance("web-ui", "the reach filter offers the panel's states under the reach name", () => {

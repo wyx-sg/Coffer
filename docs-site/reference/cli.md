@@ -1573,6 +1573,21 @@ Print a document.
 | `PATH` | argument | text | required | File path under the knowledge root |
 | `--json` | option | flag |  |  |
 
+### knowledge save
+
+```sh
+coffer knowledge save [OPTIONS] PATH BODY_FILE
+```
+
+Replace a document's body, keeping its frontmatter.
+
+Reads the document first and saves with the fingerprint that read carried, so a file changed in between is refused rather than overwritten (spec knowledge "Save a document edited in the web UI").
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `PATH` | argument | text | required | Document path, e.g. payments/gateway.md |
+| `BODY_FILE` | argument | text | required | File holding the new body, or - for stdin |
+
 ### knowledge write
 
 ```sh
@@ -1704,7 +1719,7 @@ coffer memory ls [OPTIONS] PARTITION
 
 List a partition's own directory as a tree.
 
-The whole tree rather than one level, unlike `coffer knowledge ls`: a partition is two levels deep by construction (`MEMORY.md`, `RETIRED.md`, a `notes/` folder and a hidden `.raw/`), so stopping at the root would never show a note. `.raw/` is marked `derived` — it is what was read out of the agents, verbatim, and it is the distil pass's input rather than its output.
+The whole tree rather than one level, unlike `coffer knowledge ls`: a partition is two levels deep by construction (`MEMORY.md`, `RETIRED.md` and a `notes/` folder), so stopping at the root would never show a note. The hidden `.raw/` of verbatim agent input is not listed.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1733,7 +1748,9 @@ Read-only: everything under ~/.coffer/memory/ is derived, so there is no matchin
 coffer memory sync [OPTIONS]
 ```
 
-Run aggregation: read every registered agent's native memory.
+Update memory: read every registered agent's native memory, then distil.
+
+Every partition left holding undistilled entries is distilled in the same call; one whose distil pass is already running is reported as skipped.
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |

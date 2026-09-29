@@ -192,6 +192,9 @@ def test_sync_then_partitions_notes_and_one_note(memory_cli_daemon):
     result = json.loads(_extract_json(synced.output))
     assert result["entries_written"] == 2
     assert result["failures"] == []
+    # "Update memory in one action": the same call distilled what it read.
+    assert sorted(result["distilled"]) == ["coffer", "global"]
+    assert result["skipped"] == []
 
     listed = _runner.invoke(cli_app, ["memory", "partitions", "--json"])
     assert listed.exit_code == 0, listed.output
@@ -201,9 +204,11 @@ def test_sync_then_partitions_notes_and_one_note(memory_cli_daemon):
     assert project["repository_path"] == str(repository.resolve())
     assert project["unresolvable"] is False
 
+    # A second, hand-started pass finds nothing new: the update already opened
+    # the note.
     distilled = _runner.invoke(cli_app, ["memory", "distil", project["name"]])
     assert distilled.exit_code == 0, distilled.output
-    assert json.loads(_extract_json(distilled.output))["opened"] == 1
+    assert json.loads(_extract_json(distilled.output))["opened"] == 0
 
     notes = _runner.invoke(cli_app, ["memory", "notes", project["name"], "--json"])
     assert notes.exit_code == 0, notes.output
@@ -309,11 +314,18 @@ def test_distil_of_an_unknown_partition_exits_not_found(memory_cli_daemon):
 def test_distil_without_an_internal_connection_reports_the_mechanical_pass(memory_cli_daemon):
     """Per "Distil mechanically with no internal connection": thinner, not
     absent — the verb still returns a real pass, and says a model was not used
-    rather than pretending one was."""
+    rather than pretending one was.
+
+    ``sync`` already ran the mechanical pass over ``global`` ("Update memory in
+    one action"), which is what opened its note; the hand-started pass after it
+    finds nothing new and still reports honestly."""
     tmp_path = memory_cli_daemon
     _register_cc_via_http()
     _seed_repository(tmp_path)
-    _runner.invoke(cli_app, ["memory", "sync", "--json"])
+    synced = _runner.invoke(cli_app, ["memory", "sync", "--json"])
+    assert "global" in json.loads(_extract_json(synced.output))["distilled"]
+    notes = _runner.invoke(cli_app, ["memory", "notes", "global", "--json"])
+    assert len(json.loads(_extract_json(notes.output))["notes"]) == 1
 
     distilled = _runner.invoke(cli_app, ["memory", "distil", "global"])
 
@@ -322,7 +334,7 @@ def test_distil_without_an_internal_connection_reports_the_mechanical_pass(memor
     assert result == {
         "partition": "global",
         "merged": 0,
-        "opened": 1,
+        "opened": 0,
         "retired": 0,
         "dropped": 0,
         "model_used": False,
@@ -481,13 +493,10 @@ def test_ls_walks_a_partitions_own_directory(memory_cli_daemon):
     root = json.loads(_extract_json(listed.output))["root"]
     assert root["path"] == ""
     children = {child["name"]: child for child in root["children"]}
-    assert set(children) == {"MEMORY.md", "notes", ".raw"}
+    # `.raw/` is not listed ("Cover memory management on REST and the CLI").
+    assert set(children) == {"MEMORY.md", "notes"}
     assert children["notes"]["type"] == "dir"
     assert "notes/python-lockfile.md" in {c["path"] for c in children["notes"]["children"]}
-    # `.raw/` is reachable and flagged as the verbatim input ("Keep raw entries
-    # verbatim and hidden", "Present partitions as a table and a file tree").
-    assert children[".raw"]["derived"] is True
-    assert children["notes"]["derived"] is False
 
 
 def test_ls_renders_the_whole_tree_as_a_table_by_default(memory_cli_daemon):
@@ -501,7 +510,7 @@ def test_ls_renders_the_whole_tree_as_a_table_by_default(memory_cli_daemon):
     assert listed.exit_code == 0, listed.output
     flat = listed.output.replace("\n", "")
     assert "notes/python-lockfile.md" in flat
-    assert "(derived)" in flat  # `.raw/` is named as the input it is
+    assert ".raw" not in flat
 
 
 def test_read_prints_one_file_from_a_partition(memory_cli_daemon):

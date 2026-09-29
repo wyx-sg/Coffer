@@ -150,6 +150,16 @@ def undistilled(
     return tuple(e for e in raw_store.list_raw_entries(partition) if e.entry_id not in accounted)
 
 
+def has_undistilled(partition: str) -> bool:
+    """Whether ``partition`` holds raw entries no pass has decided anything about.
+
+    What "Update memory in one action" distils after aggregating: a partition
+    this answers False for would get nothing from a pass but a rewritten index.
+    Reads only, like :func:`undistilled`.
+    """
+    return bool(undistilled(partition, store.list_notes(partition), store.read_retired(partition)))
+
+
 SOURCES_GONE_REASON = (
     "Every raw entry this note was built from is gone from this partition's `.raw/` — "
     "the agent no longer holds it, or it is now filed into another partition."
@@ -368,6 +378,7 @@ __all__ = [
     "SOURCES_GONE_REASON",
     "DistilResult",
     "distil_partition",
+    "has_undistilled",
     "retire_sourceless",
     "undistilled",
 ]

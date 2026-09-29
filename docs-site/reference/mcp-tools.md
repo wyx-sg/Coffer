@@ -75,7 +75,7 @@ Gated by the `knowledge` feature. Guide: [Knowledge](/guides/knowledge).
 | `description` | string | yes | One line saying what this answers. Curation reads it first when deciding where the material belongs. |
 | `body` | string | no | The Markdown content. |
 
-Every enabled collection is writable by every agent. Empty or whitespace-only values for a
+Every collection is writable by every agent. Empty or whitespace-only values for a
 required property fail with `ValueError: 'title' must be a non-empty string` (and so on).
 A collection that does not exist fails with a message that lists the collections you may
 write to.
@@ -133,7 +133,7 @@ Locates notes in Coffer's memory, the notes distilled from what the developer's 
 learned. It answers with each note's absolute file path, title and one-line description;
 the agent reads the file itself for the body. Matching is literal and case-insensitive,
 over each note's title, description, body and search terms, so a distinctive word or phrase works and
-a whole question does not. Recall spans every enabled memory partition.
+a whole question does not. Recall spans every memory partition.
 
 Gated by the `memory` feature. Guide: [Memory](/guides/memory).
 

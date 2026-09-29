@@ -8,13 +8,14 @@ verbatim, under each partition's hidden ``.raw/`` (``aggregate.py``).
 agents are registered, which partitions have a Resource row, which repository
 each row records, and the audit event that says a pass happened.
 
-**A partition carries no per-agent reach (see "Serve every enabled partition to every
-agent"), and the read path here has no ``agent`` parameter to narrow by.** It used to: a
-new partition was scoped to the agents it had been aggregated from, which on a real
-vault meant ``coffer`` was scoped to ``claude-code`` alone and Codex got no project
-memory at all, while the ``account*`` partitions were scoped to ``codex`` and Claude
-Code got nothing from them. Memory aggregated from several agents exists so each of them
-can read what the others learned, so ``enabled`` is now the only gate — see ``kind.py``.
+**A partition carries no per-agent reach and no enabled switch (see "Serve every
+partition to every agent"), and the read path here has no ``agent`` parameter to narrow
+by.** It used to: a new partition was scoped to the agents it had been aggregated from,
+which on a real vault meant ``coffer`` was scoped to ``claude-code`` alone and Codex got
+no project memory at all, while the ``account*`` partitions were scoped to ``codex`` and
+Claude Code got nothing from them. Memory aggregated from several agents exists so each
+of them can read what the others learned, so every partition is served — see
+``kind.py``.
 
 Everything it hands back it reads **from disk at call time**, and that is structural
 rather than stylistic. A note has no status any more: a retirement takes the file out of
@@ -292,8 +293,7 @@ class MemoryService:
 
     async def list_partitions(self) -> list[PartitionSummary]:
         """Every partition, counted from ``notes/`` — the management view (see "Present
-        partitions as a table and a file tree"), which includes the disabled ones the
-        read path below skips."""
+        partitions as a table and a file tree")."""
         rows = await self._resources.list(kind=KIND_MEMORY)
         return [_summary_of(row, _placement_of(row)) for row in sorted(rows, key=lambda r: r.name)]
 
@@ -303,25 +303,19 @@ class MemoryService:
         No caller identity, because there is nothing to decide with one: a
         note is a file, and the payload composed at session start hands the
         agent the directory's absolute path anyway. Whether the partition is
-        served at all is ``enabled_partitions`` below.
+        served at all is ``served_partitions`` below.
         """
         return store.list_notes(partition)
 
-    async def enabled_partitions(self) -> list[str]:
-        """The partitions Coffer serves — every enabled one, to every agent
-        (see "Serve every enabled partition to every agent").
+    async def served_partitions(self) -> list[str]:
+        """The partitions Coffer serves — every one, to every agent (see "Serve
+        every partition to every agent").
 
-        ``enabled`` is the whole gate, and that is the point: it is a switch
-        the developer sets, not a default derived from which agent happened to
-        contribute first. Mirrors ``KnowledgeService``'s own read path.
-
-        It gates what *Coffer* serves and nothing more. A note is a file, and a disabled
-        partition is one nothing points the agent at — not a directory the agent is
-        prevented from opening. "Serve every enabled partition to every agent" asks the
-        layer to say so wherever it presents the flag rather than let it be read as a
-        filesystem boundary it is not.
+        There is no gate: the kind declares no enabled switch and no reach, so
+        every registered partition is delivered and recalled. A partition leaves
+        this list only by being deleted.
         """
-        rows = await self._resources.list(kind=KIND_MEMORY, enabled=True)
+        rows = await self._resources.list(kind=KIND_MEMORY)
         return sorted(r.name for r in rows)
 
     # ----------------------------------------------------------------- #

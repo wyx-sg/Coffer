@@ -365,7 +365,7 @@ async def _current_card(
         # ask either — a collection carries no per-agent reach, so this is the
         # same whole-catalogue question `/save` itself asks (spec channels
         # "Save a sent document into a collection").
-        known = await commands._collections.enabled_collections()
+        known = await commands._collections.collection_names()
         return collection_card(choices=known, page=page) if known else None
     if kind not in ("model", "effort"):
         return None

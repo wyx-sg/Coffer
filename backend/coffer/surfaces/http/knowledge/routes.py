@@ -1,32 +1,34 @@
 """``/api/v1/knowledge/*`` — the human's side of the knowledge directory.
 
 Create a collection, list them, walk one level of a collection, read a
-document, submit material, upload a document, delete a document, trigger
-curation (spec knowledge "Cover collection management on REST and the CLI").
-Deleting a collection goes through the
+document, save an edited document's body, submit material, upload a document,
+delete a document, trigger curation (spec knowledge "Cover knowledge
+management on REST and the CLI"). Deleting a collection goes through the
 kind-agnostic Resource route, since collection lifecycle is a Resource concern.
 
-Two properties shape every handler below.
+Three properties shape every handler below.
 
 **Nothing here retrieves.** There is no ``search`` and no ``grep``: the layer
 keeps no index and exposes no retrieval anywhere, so the person reads through
 ``tree``/``file`` and an agent reads the files itself at the paths its
-delivered skill carries ("Expose exactly one knowledge tool", invariant 4). The
-one input beside a tree on the web page narrows the names already on screen,
-client-side ("Present a collection as one tree in the web UI").
+delivered skill carries ("Expose exactly one knowledge tool", invariant 4).
+``tree`` and ``file`` also show a collection's ``.inbox`` — read-only — so a
+person can see what waits to be merged ("Hide dot-prefixed entries except the
+inbox").
 
-**New knowledge arrives as material, never as a file write.** ``POST
-/material`` and ``/upload`` both submit to the collection's inbox, and a pass
-merges what is new into the documents ("Submit every entrance's input as
-material"). A person edits a document in
-their own editor, reached from the page's open-in-editor action; there is no
-write-a-document route, because that edit is live on the very next read.
+**New knowledge arrives as material; a person's edit arrives as a body.**
+``POST /material`` and ``/upload`` both submit to the collection's inbox, and a
+pass merges what is new into the documents ("Submit every entrance's input as
+material"). ``PUT /file`` is the one route that writes a document, and only
+the body of one a person already has open: it keeps the frontmatter and
+refuses a stale fingerprint ("Save a document edited in the web UI"). Editing
+in their own editor, from the page's open-in-editor action, remains the other
+way, live on the very next read.
 
 **No handler here takes an agent, and neither does the service.** A collection
-carries no per-agent reach: every enabled one is served to every agent and to
-the person who owns the vault, so there is nothing for a caller identity to
-narrow. ``enabled`` is the whole of the gate, and it is the registry's, applied
-the same way on every surface.
+carries no per-agent reach and no enabled switch: every one is served to every
+agent and to the person who owns the vault ("Serve every collection to every
+agent"), so there is nothing for a caller identity to narrow.
 
 **A collection is addressed by uid; a file is addressed by path.** ``curate``
 names the collection Resource's immutable uid, because a pass takes minutes and
@@ -73,6 +75,7 @@ from coffer.surfaces.http.knowledge.schemas import (
     CurationRequest,
     DirectoryOut,
     FileOut,
+    FileSave,
     FileSummaryOut,
     IngestedDocumentOut,
     MaterialIn,
@@ -153,6 +156,22 @@ async def read_file(
     # reads"), which is what the
     # page's open-in-editor and reveal actions hand back to the daemon.
     return _file_out(await svc.read(path))
+
+
+@router.put("/file", response_model=FileOut)
+async def save_file(
+    body: FileSave,
+    svc: KnowledgeService = Depends(get_knowledge_service),  # noqa: B008
+    actor: str = Depends(_actor_kind),
+) -> FileOut:
+    # A person's edit from the page's editor ("Save a document edited in the
+    # web UI"): the body is replaced, the frontmatter kept, and a stale
+    # fingerprint is a 409 that leaves the file alone. Like ``delete_file``,
+    # an inbox item is refused by the path guard before anything is read.
+    saved = await svc.save_document(
+        body.path, body.body, expected_fingerprint=body.expected_fingerprint, actor=actor
+    )
+    return _file_out(saved)
 
 
 @router.post("/material", response_model=SubmissionOut, status_code=status.HTTP_201_CREATED)

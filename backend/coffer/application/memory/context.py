@@ -20,13 +20,13 @@ Three things this module is deliberately narrow about:
 
 * **It never resolves a cwd's partition from scratch, and it has no caller
   identity to resolve anything against.** :class:`MemoryPort` below is the
-  narrow slice of ``MemoryService`` this needs — the enabled partitions, a
+  narrow slice of ``MemoryService`` this needs — the served partitions, a
   partition's notes, the partition list — so a unit test can fake it with no
   database at all, and the production composition root hands in the real
   service unchanged (structural typing: the Protocol is not a base class
   ``MemoryService`` has to inherit from). There is deliberately no ``agent``
-  among those: every enabled partition is composed for every agent (see "Serve every
-  enabled partition to every agent"), because memory aggregated from several agents
+  among those: every partition is composed for every agent (see "Serve every
+  partition to every agent"), because memory aggregated from several agents
   exists so each of them can read what the others learned.
 * **It reads the notes as the distil pass left them.** There is no second
   judgement on top: no hide, no pin, no status. A retired note is not
@@ -106,7 +106,7 @@ class MemoryPort(Protocol):
     previous design went on serving 11 dead facts.
     """
 
-    async def enabled_partitions(self) -> Sequence[str]: ...
+    async def served_partitions(self) -> Sequence[str]: ...
 
     async def list_notes(self, partition: str) -> Sequence[Note]: ...
 
@@ -261,7 +261,7 @@ async def compose_context(
     A channel turn appends this only when it is non-empty, and an
     empty memory header is worse than none.
     """
-    served = set(await memory.enabled_partitions())
+    served = set(await memory.served_partitions())
     partitions = await memory.list_partitions()
     project_partition = _resolve_cwd_partition(partitions, cwd)
 

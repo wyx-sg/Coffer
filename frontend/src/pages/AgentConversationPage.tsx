@@ -20,11 +20,13 @@ import { useTranslation } from "react-i18next";
 import { AgentTranscriptOutline } from "@/components/agents/AgentTranscriptOutline";
 import { AgentTranscriptView } from "@/components/agents/AgentTranscriptView";
 import { FileActions } from "@/components/FileActions";
+import { FILE_PANE_GRID, useFillToBottom } from "@/components/filePane";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { translateApiError } from "@/lib/api/errors";
 import { TRANSCRIPT_TURNS_PAGE_SIZE, useTranscriptSession } from "@/lib/hooks/useAgentTranscripts";
+import { cn } from "@/lib/utils";
 
 export function AgentConversationPage() {
   const { t } = useTranslation();
@@ -32,6 +34,7 @@ export function AgentConversationPage() {
   const sourcePath = useSearchParams()[0].get("path") ?? "";
   const [offset, setOffset] = useState(0);
   const { data, isPending, error } = useTranscriptSession(uid, sourcePath, offset);
+  const fill = useFillToBottom();
 
   const back = {
     to: `/agents/${encodeURIComponent(uid)}?tab=conversations`,
@@ -100,8 +103,13 @@ export function AgentConversationPage() {
       {/* Contents on the left, the conversation in its own frame on the right
           — the same two-pane shape every other detail surface here uses. The
           outline indexes the loaded window, which is what the header's turn
-          range already says the reader is looking at. */}
-      <div className="grid gap-4 md:grid-cols-[18rem_1fr]">
+          range already says the reader is looking at. Both reach the bottom
+          of the window, above the pager (components/filePane.ts). */}
+      <div
+        ref={fill.ref}
+        style={fill.style}
+        className={cn(FILE_PANE_GRID, "md:grid-cols-[18rem_minmax(0,1fr)]")}
+      >
         <AgentTranscriptOutline messages={data.messages} />
         <AgentTranscriptView messages={data.messages} />
       </div>

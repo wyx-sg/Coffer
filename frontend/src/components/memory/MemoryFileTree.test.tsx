@@ -1,16 +1,13 @@
 // frontend/src/components/memory/MemoryFileTree.test.tsx
 //
 // The partition browser's contract is narrow and worth pinning: the tree shows
-// the folder as it is — `MEMORY.md`, `notes/`, `RETIRED.md` and `.raw/` —
-// picking a file previews it, and the preview never offers a way to write,
-// because Coffer's own passes own these bytes and an Edit button here would
-// promise something the next pass would take back.
-//
-// The one asymmetry the tree draws is the one that would mislead if left
-// implicit: `.raw/` is the agents' own words, the INPUT the notes were
-// distilled from, so it is reachable but marked and closed rather than offered
-// as something to read (see "Present partitions as a table and a file tree"). Only the network
-// boundary (the hooks) is mocked, per agents/frontend.md §8.
+// the folder as the server lists it — `MEMORY.md`, `notes/`, `RETIRED.md`, and
+// no `.raw/` — picking a file previews it with its frontmatter shown as
+// metadata rather than as body text, and the preview never offers a way to
+// write, because Coffer's own passes own these bytes and an Edit button here
+// would promise something the next pass would take back (see "Present
+// partitions as a table and a file tree"). Only the network boundary (the
+// hooks) is mocked, per agents/frontend.md §8.
 import { describe, expect, test, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
@@ -18,7 +15,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { MemoryFileTree } from "@/components/memory/MemoryFileTree";
 import { acceptance } from "@/test/acceptance";
 import type { MemoryFileContentOut, MemoryFileNode } from "@/lib/api/memoryTypes";
-import { isDerivedInput } from "@/lib/memory/derived";
 
 vi.mock("@/lib/hooks/useMemory", () => ({
   usePartitionFiles: vi.fn(),
@@ -42,11 +38,6 @@ function file(name: string, path: string): MemoryFileNode {
     abs_path: `${BASE}/${path}`,
     folder_abs_path: `${BASE}/${path}`.replace(/\/[^/]+$/, ""),
     type: "file",
-    // What the daemon sends: `.raw/` and everything under it is input, not
-    // Coffer's own writing. The fixture derives it the way the server does
-    // rather than hard-coding false, so a `.raw/` file in a test is marked
-    // for the same reason it is marked in production.
-    derived: isDerivedInput(path),
     size: 42,
     truncated: false,
     children: null,
@@ -60,7 +51,6 @@ function dir(name: string, path: string, children: MemoryFileNode[]): MemoryFile
     abs_path: `${BASE}/${path}`,
     folder_abs_path: BASE,
     type: "dir",
-    derived: isDerivedInput(path),
     size: null,
     truncated: false,
     children,
@@ -75,13 +65,11 @@ const ROOT: MemoryFileNode = {
   folder_abs_path: "/Users/dev/.coffer/memory",
   type: "dir",
   size: null,
-  derived: false,
   truncated: false,
   children: [
     file("MEMORY.md", "MEMORY.md"),
     dir("notes", "notes", [file("worktree-development.md", "notes/worktree-development.md")]),
     file("RETIRED.md", "RETIRED.md"),
-    dir(".raw", ".raw", [file("3f2a91c4de55b071.md", ".raw/3f2a91c4de55b071.md")]),
   ],
 };
 
@@ -119,7 +107,7 @@ function renderTree() {
 }
 
 describe("MemoryFileTree", () => {
-  test("shows the partition's four parts and asks for a file before previewing one", () => {
+  test("shows the partition's three parts and asks for a file before previewing one", () => {
     stubTree(ROOT);
     stubContent({});
 
@@ -129,7 +117,6 @@ describe("MemoryFileTree", () => {
     expect(screen.getByRole("button", { name: /MEMORY\.md/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^notes$/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /RETIRED\.md/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /\.raw/ })).toBeInTheDocument();
     expect(screen.getByText(/select a file to view/i)).toBeInTheDocument();
   });
 
@@ -145,38 +132,6 @@ describe("MemoryFileTree", () => {
     // FileActions offers real open/reveal on both surfaces (daemon-backed on web).
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
-    // Coffer's own writing carries no caution — only `.raw/` does.
-    expect(screen.queryByTestId("memory-derived-notice")).toBeNull();
-  });
-
-  test("`.raw/` is marked as derived input and does not open itself", () => {
-    stubTree(ROOT);
-    stubContent({});
-
-    renderTree();
-
-    expect(screen.getByTestId("memory-derived-badge")).toHaveTextContent(/derived input/i);
-    // Closed: the agents' own words must not be the first thing in front of a
-    // reader who came for Coffer's notes.
-    expect(screen.getByRole("button", { name: /\.raw/ })).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("button", { name: /3f2a91c4de55b071\.md/ })).toBeNull();
-  });
-
-  test("a file opened out of `.raw/` says what it is before its content", () => {
-    stubTree(ROOT);
-    stubContent({ content: "the agent's own words" });
-
-    renderTree();
-    fireEvent.click(screen.getByRole("button", { name: /\.raw/ }));
-    fireEvent.click(screen.getByRole("button", { name: /3f2a91c4de55b071\.md/ }));
-
-    expect(contentMock).toHaveBeenCalledWith(PARTITION_UID, ".raw/3f2a91c4de55b071.md");
-    const notice = screen.getByTestId("memory-derived-notice");
-    expect(notice).toHaveTextContent(/derived input/i);
-    expect(notice).toHaveTextContent(/not Coffer's own writing/i);
-    // Still readable, and still openable in a real editor — marked, not hidden.
-    expect(screen.getByText(/the agent's own words/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
   });
 
   test("the preview is read-only — Coffer's own passes own these files", () => {
@@ -215,17 +170,26 @@ describe("MemoryFileTree", () => {
   });
 
   acceptance("memory", "browse a partition as a file tree with a read-only preview", () => {
-    // The partition page's half: a tree over the partition's own files beside
-    // a read-only preview that opens and reveals, with no per-note action.
+    // The partition page's half: a tree over the partition's own files — no
+    // `.raw/` — beside a read-only preview that opens and reveals, shows the
+    // note's frontmatter as metadata rather than body, and has no per-note
+    // action.
     stubTree(ROOT);
-    stubContent({ content: "# Worktrees\n\nalways develop in one" });
+    stubContent({
+      content:
+        "---\ntitle: Worktrees\norigins:\n  - claude_code\n---\n# Worktrees\n\nalways develop in one",
+    });
 
     renderTree();
     expect(screen.getByRole("button", { name: /MEMORY\.md/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^notes$/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /\.raw/ })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /worktree-development\.md/ }));
 
     expect(screen.getByRole("heading", { name: "Worktrees" })).toBeInTheDocument();
+    const meta = screen.getByTestId("markdown-frontmatter");
+    expect(meta).toHaveTextContent("origins");
+    expect(screen.queryByText(/origins:/)).toBeNull();
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^edit$/i })).toBeNull();

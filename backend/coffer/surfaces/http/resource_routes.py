@@ -33,7 +33,9 @@ router = APIRouter(
 )
 
 
-def _to_out(r: Resource) -> ResourceOut:
+def _to_out(r: Resource, svc: ResourceService) -> ResourceOut:
+    """Wire shape of one row. ``svc`` answers what the row's KIND declares
+    (``toggleable``), which the row itself does not carry."""
     return ResourceOut(
         uid=r.uid,
         kind=r.kind,
@@ -42,6 +44,7 @@ def _to_out(r: Resource) -> ResourceOut:
         config=r.config,
         scope=ScopeOut.of(r.scope),
         enabled=r.enabled,
+        toggleable=svc.toggleable(r.kind),
         created_at=r.created_at,
         updated_at=r.updated_at,
     )
@@ -75,7 +78,7 @@ async def list_resources(
     rs = [r for r in await svc.list(kind=kind) if kind_enabled(r.kind)]
     if name is not None:
         rs = [r for r in rs if r.name == name]
-    return ResourceListOut(resources=[_to_out(r) for r in rs])
+    return ResourceListOut(resources=[_to_out(r, svc) for r in rs])
 
 
 @router.post(
@@ -96,7 +99,7 @@ async def register_resource(
         description=body.description,
         actor=actor,
     )
-    return _to_out(r)
+    return _to_out(r, svc)
 
 
 @router.get("/{uid}", response_model=ResourceOut)
@@ -104,7 +107,7 @@ async def get_resource(
     uid: str,
     svc: ResourceService = Depends(get_resource_service),  # noqa: B008
 ) -> ResourceOut:
-    return _to_out(await _reachable(svc, uid))
+    return _to_out(await _reachable(svc, uid), svc)
 
 
 @router.patch("/{uid}", response_model=ResourceOut)
@@ -155,7 +158,7 @@ async def update_resource(
     # moved the thing the caller was about to retry against.
     if body.name is not None:
         r = await svc.rename(uid, body.name, actor=actor)
-    return _to_out(r)
+    return _to_out(r, svc)
 
 
 @router.delete("/{uid}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
@@ -176,7 +179,7 @@ async def enable_resource(
     actor: str = Depends(_actor),
 ) -> ResourceOut:
     await _reachable(svc, uid)
-    return _to_out(await svc.set_enabled(uid, enabled=True, actor=actor))
+    return _to_out(await svc.set_enabled(uid, enabled=True, actor=actor), svc)
 
 
 @router.post("/{uid}/disable", response_model=ResourceOut)
@@ -186,7 +189,7 @@ async def disable_resource(
     actor: str = Depends(_actor),
 ) -> ResourceOut:
     await _reachable(svc, uid)
-    return _to_out(await svc.set_enabled(uid, enabled=False, actor=actor))
+    return _to_out(await svc.set_enabled(uid, enabled=False, actor=actor), svc)
 
 
 @router.get("/{uid}/scope", response_model=ResourceScopeOut)
@@ -210,4 +213,4 @@ async def update_resource_scope(
     # (ResourceService.update_scope, ADR: per-agent-resource-scope).
     await _reachable(svc, uid)
     scope = body.scope.to_domain() if body.scope is not None else None
-    return _to_out(await svc.update_scope(uid, scope, actor=actor))
+    return _to_out(await svc.update_scope(uid, scope, actor=actor), svc)

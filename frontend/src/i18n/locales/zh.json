@@ -318,6 +318,7 @@
       "credential_set": "已存储凭据",
       "internal_engine_model_set": "设置了内部引擎使用的模型",
       "knowledge_deleted": "从 {{resource}} 删除了一篇笔记",
+      "knowledge_edited": "编辑了 {{resource}} 中的一篇文档",
       "knowledge_written": "向 {{resource}} 写入了一篇笔记",
       "master_key_exported": "导出了主密钥",
       "master_key_imported": "导入了一把主密钥",
@@ -735,6 +736,7 @@
     "KNOWLEDGE_COLLECTION_EXISTS": "同名知识集合已存在",
     "KNOWLEDGE_COLLECTION_NOT_FOUND": "未找到该知识集合",
     "KNOWLEDGE_ERROR": "知识层拒绝了该操作",
+    "KNOWLEDGE_FILE_CONFLICT": "打开后该文档已在磁盘上被修改——请放弃编辑并重新加载以查看新版本",
     "KNOWLEDGE_FILE_NOT_FOUND": "未找到该知识文件",
     "KNOWLEDGE_PATH_UNSAFE": "该路径不在知识集合范围内",
     "KNOWLEDGE_UPLOAD_TOO_LARGE": "文件过大，无法上传。上限为 20 MB。",
@@ -764,6 +766,7 @@
     "PROVIDER_PROTOCOL_LOCKED_WHILE_ACTIVE": "该连接正在启用中，无法更改协议格式——请先让相关 agent 切回自带登录，再修改协议，然后重新启用",
     "RESOURCE_ALREADY_EXISTS": "同名资源已存在",
     "RESOURCE_NOT_FOUND": "资源未找到",
+    "RESOURCE_NOT_TOGGLEABLE": "此类资源始终启用，无法启用或停用",
     "RESOURCE_PROTECTED": "该资源由 Coffer 管理，无法删除",
     "SCOPE_INVALID": "该资源类型不支持此生效范围设置",
     "SHIM_NOT_FOUND": "找不到 coffer-mcp-shim 二进制。请安装 Coffer 使 shim 位于 PATH 上，或设置 COFFER_MCP_SHIM_PATH。",
@@ -1114,7 +1117,7 @@
   },
   "knowledge": {
     "title": "知识",
-    "subtitle": "每个集合是一个 Markdown 文档文件夹，由你和 Coffer 共同编写。新材料由提炼并入这些文档；Agent 用自己的工具读，只有你启用的集合才会告诉它们。",
+    "subtitle": "每个集合是一个 Markdown 文档文件夹，由你和 Coffer 共同编写。新材料由提炼并入这些文档，Agent 用自己的工具读取每个集合。",
     "add": "新建集合",
     "loadFailed": "加载集合失败",
     "searchPlaceholder": "搜索集合…",
@@ -1126,8 +1129,6 @@
       "pending": "待并入"
     },
     "detail": {
-      "noMatches": "没有匹配。",
-      "filterPlaceholder": "按名称筛选…",
       "emptyFolder": "这里还没有内容",
       "selectAFile": "选择一个文件来阅读",
       "deleteFile": "删除文档",
@@ -1147,10 +1148,11 @@
       },
       "curatedAt": "上次提炼于 {{when}}",
       "notCuratedYet": "尚未提炼",
+      "inboxFolder": "待并入",
+      "inboxReadOnly": "等待并入集合，并入后会从这里消失。",
+      "editorLabel": "编辑 {{path}}",
       "treeLabel": "本集合的文档",
-      "empty": "还没有文档——上传一份，或者把 Markdown 文件直接放进这个文件夹。",
-      "pending_one": "{{count}} 份新材料正在并入文档。",
-      "pending_other": "{{count}} 份新材料正在并入文档。"
+      "empty": "还没有文档——上传一份，或者把 Markdown 文件直接放进这个文件夹。"
     },
     "welcome": {
       "title": "把 Agent 知道的一切放在一处",
@@ -1189,12 +1191,13 @@
   "memory": {
     "title": "记忆",
     "subtitle": "汇总你的 Agent 已经学到的内容——读取它们自己的原生记忆（Claude Code 按项目记录的笔记、Codex 的任务分组），提炼成 Coffer 自己的笔记：一个主题一个文件，按仓库归档，外加一个关于你本人（而非某个项目）的全局分区。Coffer 从不写回 Agent 自己的记忆。它会自己定时重读；按钮只是让它立刻跑一次。",
-    "readFromAgents": "读取 Agent 记忆",
-    "reading": "读取中…",
-    "syncDone": "已读取 {{partitions}} 个分区，共 {{count}} 条原始条目。",
+    "update": "更新记忆",
+    "updating": "更新中…",
+    "updateHint": "读取每个 Agent 最新的记忆，再把新增内容提炼进 Coffer 的笔记。",
+    "syncDone": "读到 {{count}} 条新条目，更新了 {{partitions}} 个分区。",
     "syncFailures": "{{count}} 个来源解析失败——详见活动页面。",
     "loadFailed": "加载分区失败",
-    "empty": "还没有分区。点「读取 Agent 记忆」，把 Agent 已经掌握的内容导入进来。",
+    "empty": "还没有分区。点「更新记忆」，把 Agent 已经掌握的内容导入进来。",
     "searchPlaceholder": "搜索分区…",
     "cols": {
       "name": "分区",
@@ -1223,14 +1226,7 @@
       "tree": "文件",
       "selectFile": "选择一个文件查看。",
       "binary": "二进制文件（{{size}} 字节）",
-      "truncated": "内容已截断——只显示文件开头。",
-      "derivedBadge": "派生输入",
-      "derivedHint": "这是派生输入，不是 Coffer 自己写的内容：它们是 Coffer 原样读到的 Agent 自己的措辞，保留下来是为了在笔记读着不对时能回溯核对。Coffer 自己的笔记在 notes/ 下，索引是 MEMORY.md。"
-    },
-    "detail": {
-      "distil": "提炼",
-      "distilHint": "把该分区新增的原始条目提炼进 Coffer 自己的笔记——并入已有笔记、新开一篇，或退役到 RETIRED.md——并重写索引。",
-      "distilDone": "提炼已完成。"
+      "truncated": "内容已截断——只显示文件开头。"
     },
     "welcome": {
       "title": "还没有提炼出任何东西",
@@ -1509,7 +1505,6 @@
     "machineLocal": "生效范围只在本机设置——它不参与同步，你用的每台机器都要各自设置。",
     "choicesLabel": "生效范围",
     "setReach": "设置生效范围…",
-    "setStatus": "设置状态…",
     "everywhere": "所有 Agent",
     "restricted": "只限选中的",
     "agentCount_one": "{{count}} 个 Agent",

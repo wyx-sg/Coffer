@@ -11,6 +11,7 @@
 import { useTranslation } from "react-i18next";
 
 import { FileActions } from "@/components/FileActions";
+import { FILE_PANE_BODY } from "@/components/filePane";
 import { CodeView } from "@/components/preview/CodeView";
 import { FindableMarkdown } from "@/components/preview/FindableMarkdown";
 import { SkillFileBrowser } from "@/components/skills/SkillFileTree";
@@ -62,7 +63,7 @@ function UnmanagedSkillFileViewer({
 
   const absPath = content.data?.abs_path;
   const header = (
-    <div className="space-y-2">
+    <div className="shrink-0 space-y-2">
       <span className="block truncate font-mono text-xs text-muted-foreground">{path}</span>
       {absPath ? <FileActions filePath={absPath} /> : null}
     </div>
@@ -70,9 +71,9 @@ function UnmanagedSkillFileViewer({
 
   if (content.data?.binary) {
     return (
-      <div className="space-y-2">
+      <div className={FILE_PANE_BODY}>
         {header}
-        <div className="flex h-80 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
+        <div className="flex min-h-0 flex-1 items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
           {t("skills.files.binary", { size: content.data.size })}
         </div>
       </div>
@@ -81,17 +82,17 @@ function UnmanagedSkillFileViewer({
 
   const text = content.data?.content ?? "";
   return (
-    <div className="space-y-2">
+    <div className={FILE_PANE_BODY}>
       {header}
       {isMarkdown(path) ? (
-        <FindableMarkdown className="max-h-[60vh] overflow-auto rounded-md border bg-background p-3">
+        <FindableMarkdown fill className="rounded-md border bg-background p-3">
           {text}
         </FindableMarkdown>
       ) : (
-        <CodeView value={text} filename={path} maxHeight="60vh" className="bg-background" />
+        <CodeView value={text} filename={path} fill className="bg-background" />
       )}
       {content.data?.truncated ? (
-        <p className="text-xs text-muted-foreground">{t("skills.files.truncated")}</p>
+        <p className="shrink-0 text-xs text-muted-foreground">{t("skills.files.truncated")}</p>
       ) : null}
     </div>
   );

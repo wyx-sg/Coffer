@@ -51,6 +51,10 @@ class DirectoryOut(BaseModel):
     path: str
     name: str
     file_count: int
+    #: True for the collection's ``.inbox`` and what waits in it — material a
+    #: person may read but not edit or delete ("Hide dot-prefixed entries
+    #: except the inbox").
+    inbox: bool = False
 
 
 class FileSummaryOut(BaseModel):
@@ -59,6 +63,10 @@ class FileSummaryOut(BaseModel):
     description: str
     actor: str
     updated_at: str
+    #: True for the collection's ``.inbox`` and what waits in it — material a
+    #: person may read but not edit or delete ("Hide dot-prefixed entries
+    #: except the inbox").
+    inbox: bool = False
 
 
 class TreeOut(BaseModel):
@@ -83,6 +91,26 @@ class FileOut(BaseModel):
     #: has ("Settle an item only after its pass completes"). A document edited
     #: since is what the sweep comes back for.
     curated_at: str = ""
+    #: sha256 hex of the file's bytes as read; hand it back as
+    #: ``expected_fingerprint`` to save an edit ("Save a document edited in the
+    #: web UI").
+    fingerprint: str
+    #: True for the collection's ``.inbox`` and what waits in it — material a
+    #: person may read but not edit or delete ("Hide dot-prefixed entries
+    #: except the inbox").
+    inbox: bool = False
+
+
+class FileSave(BaseModel):
+    """A document's new body, from the web UI's editor ("Save a document edited
+    in the web UI"). The frontmatter is kept as it is on disk."""
+
+    #: Knowledge-root-relative document path, name-led like every path here.
+    path: str = Field(min_length=1)
+    body: str
+    #: The ``fingerprint`` the editor's read carried. A file changed since is
+    #: refused with 409 ``KNOWLEDGE_FILE_CONFLICT``.
+    expected_fingerprint: str = Field(min_length=1)
 
 
 class MaterialIn(BaseModel):

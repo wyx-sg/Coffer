@@ -232,32 +232,36 @@ def test_disabling_the_guide_is_allowed_and_reclaims_the_copy(home) -> None:  # 
     assert _master(home).is_file()
 
 
-@pytest.mark.acceptance(
-    spec="knowledge", scenario="a disabled collection is absent from every agent's skill"
-)
-def test_disabling_a_collection_rewrites_the_guide_at_once(home) -> None:  # type: ignore[no-untyped-def]
-    """``enabled`` is this kind's only switch, and it has to reach the file.
+@pytest.mark.acceptance(spec="knowledge", scenario="every collection is in every agent's skill")
+def test_every_collection_is_in_the_guide_whatever_its_row_says(home) -> None:  # type: ignore[no-untyped-def]
+    """No collection can be switched off, so none leaves the catalogue.
 
-    The catalogue lives in a rendered skill, so switching a collection off
-    changes nothing an agent can see until that file is rewritten. Waiting for
-    the next boot would leave the agent reading a catalogue its owner had
-    already changed — and one master serves every agent, so it changes for all
-    of them at once.
+    A row an earlier version stored disabled is written straight into the
+    database — the migration that enables such rows is its own test — and the
+    next boot's render must still name it: the knowledge layer no longer reads
+    ``enabled`` at all. The generic resource route then refuses to disable
+    either collection and the master does not move (spec knowledge "Serve every
+    collection to every agent").
     """
     with _client() as client:
         shopee = _seed_collection(client, "shopee", "Shopee's account system.")
-        _seed_collection(client, "personal", "Things that are nobody else's business.")
+        personal = _seed_collection(client, "personal", "Things that are nobody else's business.")
+    with sqlite3.connect(home / "c.db") as conn:
+        conn.execute(
+            "UPDATE resources SET enabled = 0 WHERE kind = 'knowledge' AND name = 'shopee'"
+        )
+        conn.commit()
 
-        assert "Shopee's account system" in _master(home).read_text(encoding="utf-8")
-
-        resp = client.post(f"/api/v1/resources/{shopee}/disable")
-        assert resp.status_code == 200, resp.text
-
+    with _client() as client:
         text = _master(home).read_text(encoding="utf-8")
+        assert "Shopee's account system" in text
+        assert "nobody else's business" in text
 
-    assert "Shopee's account system" not in text
-    assert "shopee" not in text
-    assert "nobody else's business" in text
+        for uid in (shopee, personal):
+            resp = client.post(f"/api/v1/resources/{uid}/disable")
+            assert resp.status_code == 409, resp.text
+            assert resp.json()["error"]["code"] == "RESOURCE_NOT_TOGGLEABLE"
+        assert _master(home).read_text(encoding="utf-8") == text
 
 
 @pytest.mark.acceptance(

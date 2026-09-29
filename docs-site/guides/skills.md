@@ -329,17 +329,17 @@ Coffer ships one skill of its own, `coffer-guide`. It is the manual an agent rea
 
 - Coffer's own MCP tools and when to reach for each.
 - That tools hidden from the agent's tool list are still callable through `coffer__search_tools`.
-- When [Knowledge](/guides/knowledge) is switched on: where the knowledge root is, how to read it with the agent's own file tools, how to add to it with `coffer__write`, and a catalogue of every document in every enabled collection, with its path, title and description.
+- When [Knowledge](/guides/knowledge) is switched on: where the knowledge root is, how to read it with the agent's own file tools, how to add to it with `coffer__write`, and a catalogue of every document in every collection, with its path, title and description.
 - When [Memory](/guides/memory) is switched on: that Coffer reads the agent's memory and never writes it, and how `coffer__recall` locates Coffer's notes.
 - That no Coffer tool waits on a human approval.
 
-Its frontmatter description names Coffer's tools and the subjects of your enabled collections (taken from each collection's `README.md`), so the model has something concrete to match against. The description stays within 1024 characters; if the collections do not fit, whole subjects are dropped from the end.
+Its frontmatter description names Coffer's tools and the subjects of your collections (taken from each collection's `README.md`), so the model has something concrete to match against. The description stays within 1024 characters; if the collections do not fit, whole subjects are dropped from the end.
 
 In every other respect it is an ordinary skill. It lives at `~/.coffer/skills/coffer-guide/`, appears on the **Skills** page with a **Built-in** badge, and is delivered, reached, verified and repaired exactly like an imported skill.
 
 ### It is regenerated, so edits do not survive
 
-Coffer rewrites `coffer-guide` from the running build at every daemon start and whenever the knowledge catalogue changes (after a curation pass, when a collection is created, deleted, enabled or disabled, and on each curation sweep so hand-added documents are picked up). A rewrite is skipped when the content is already identical. Because of this:
+Coffer rewrites `coffer-guide` from the running build at every daemon start and whenever the knowledge catalogue changes (after a curation pass, when a collection is created or deleted, and on each curation sweep so hand-added documents are picked up). A rewrite is skipped when the content is already identical. Because of this:
 
 - Its files are read-only in the web UI, and `coffer skill write` refuses it.
 - Any edit you make on disk is replaced at the next rewrite.

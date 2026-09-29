@@ -51,7 +51,7 @@ Reference: [Files and directories](/reference/filesystem). Architecture: [Persis
 
 ## Resource and kind
 
-Everything you manage in Coffer is a **resource**, and every resource has a **kind**. There are seven kinds: `mcp_server`, `agent`, `skill`, `knowledge`, `memory`, `channel` and `provider`. Every kind shares one lifecycle: create, update, enable or disable, rename, delete, with each change audited. What a resource *does* is up to its kind. The kind-agnostic commands (`coffer resource list`, `enable`, `disable`, `rename`, `delete`) work on any kind.
+Everything you manage in Coffer is a **resource**, and every resource has a **kind**. There are seven kinds: `mcp_server`, `agent`, `skill`, `knowledge`, `memory`, `channel` and `provider`. Every kind shares one lifecycle: create, update, enable or disable, rename, delete, with each change audited (knowledge collections and memory partitions cannot be disabled). What a resource *does* is up to its kind. The kind-agnostic commands (`coffer resource list`, `enable`, `disable`, `rename`, `delete`) work on any kind.
 
 Architecture: [Resource framework](/architecture/resource-framework).
 
@@ -65,10 +65,10 @@ Architecture: [Resource framework](/architecture/resource-framework).
 
 A resource's **reach** decides where it takes effect. Reach has two parts:
 
-- **`enabled`**: the on/off switch every resource has.
+- **`enabled`**: the on/off switch. Knowledge collections and memory partitions have none: they are always on.
 - **scope**: an optional allow-list of agents. No scope means every agent, `--agents a,b` means only those agents, and an empty list means none.
 
-Scope applies to MCP servers (which agents see the server's tools), skills (which agents receive the skill), providers (which agents' config a switch writes into) and channels (which agents the channel may drive). Knowledge collections and memory partitions have `enabled` only. Reach is **machine-local**: it is set on the machine it applies to and never syncs, so each of your machines decides reach for itself.
+Scope applies to MCP servers (which agents see the server's tools), skills (which agents receive the skill), providers (which agents' config a switch writes into) and channels (which agents the channel may drive). Knowledge collections and memory partitions have neither: each is served to every agent, and only the `knowledge` or `memory` experimental feature switches the whole layer. Reach is **machine-local**: it is set on the machine it applies to and never syncs, so each of your machines decides reach for itself.
 
 Set scope with `coffer scope set <kind> <name> --agents <names>`, or from the **Reach** control on the resource's page in the web UI. Guide: [MCP servers](/guides/mcp-servers), [Skills](/guides/skills). Architecture: [Resource framework](/architecture/resource-framework).
 

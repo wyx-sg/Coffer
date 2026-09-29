@@ -30,7 +30,7 @@ from coffer.domain.errors import ResourceNotFound
 from coffer.domain.knowledge.entry import Pending
 from coffer.domain.knowledge.errors import UnsafeKnowledgePath
 from coffer.domain.resource import Resource
-from coffer.infrastructure.knowledge import catalogue, fs, paths
+from coffer.infrastructure.knowledge import catalogue, fs, inbox, paths
 
 
 class _Resources:
@@ -150,7 +150,7 @@ def _material(
     title: str = "Session facts", body: str = "`account.session` owns login state"
 ) -> str:
     """New material in the inbox — what an upload or ``coffer__write`` leaves."""
-    return fs.submit_material("shopee", title=title, description="d", body=body, actor="user")
+    return inbox.submit_material("shopee", title=title, description="d", body=body, actor="user")
 
 
 def _document(title: str, body: str = "b", description: str = "d") -> str:
@@ -190,7 +190,7 @@ async def test_no_model_promotes_the_inbox_as_it_stands(knowledge_root) -> None:
 
     assert outcome["status"] == "no_model"
     assert sorted(outcome["promoted"]) == ["shopee/gateway.md", "shopee/session-facts.md"]
-    assert fs.inbox_items("shopee") == ()
+    assert inbox.inbox_items("shopee") == ()
     # Promoted as it stood, and stamped: nothing is going to curate it, so an
     # unstamped document would only be handed back by every sweep.
     promoted = fs.read_file("shopee/session-facts.md")
@@ -251,7 +251,7 @@ async def test_oversized_material_is_promoted_as_it_stands(knowledge_root) -> No
     promoted = fs.read_file("shopee/huge-dump.md")
     assert promoted.body.strip() == body
     assert promoted.curated_at != ""
-    assert fs.inbox_items("shopee") == ()
+    assert inbox.inbox_items("shopee") == ()
     assert _pending_count() == 0
     assert pending_items("shopee") == ()
 
@@ -304,7 +304,7 @@ async def test_a_loop_that_raises_leaves_the_material_owed(knowledge_root) -> No
 
     outcome = await _run(_Boom())  # type: ignore[arg-type]
     assert outcome["status"] == "failed"
-    assert fs.inbox_items("shopee") == (name,)
+    assert inbox.inbox_items("shopee") == (name,)
 
 
 class _CutOffLoop(_Loop):
@@ -342,7 +342,7 @@ async def test_a_pass_cut_off_by_the_recursion_limit_reports_it_and_leaves_the_m
     # The write that landed stays, but the item is still owed: the next sweep
     # hands it back rather than treating the material as absorbed.
     assert _documents() == ["shopee/session.md"]
-    assert fs.inbox_items("shopee") == (name,)
+    assert inbox.inbox_items("shopee") == (name,)
     assert pending_items("shopee") == (Pending(material=name),)
 
 
@@ -397,7 +397,7 @@ async def test_a_pass_merges_material_and_empties_the_inbox(knowledge_root) -> N
     assert _documents() == ["shopee/session.md"]
     # The item the pass absorbed left the inbox; the one it was not handed is
     # still owed.
-    assert fs.inbox_items("shopee") == (other,)
+    assert inbox.inbox_items("shopee") == (other,)
     # What the pass wrote is stamped, so the sweep does not hand the pass its
     # own output back as an "edit".
     assert fs.read_file("shopee/session.md").curated_at != ""
@@ -810,13 +810,13 @@ async def test_material_cut_off_three_times_running_is_promoted_and_reported(
     second = await pass_(_service(), _SHOPEE_UID)
     assert [first["status"], second["status"]] == ["truncated", "truncated"]
     assert [first["gave_up"], second["gave_up"]] == [False, False]
-    assert fs.inbox_items("shopee") == (name,)
+    assert inbox.inbox_items("shopee") == (name,)
 
     third = await pass_(_service(), _SHOPEE_UID)
     assert third["status"] == "truncated"
     assert third["gave_up"] is True
     assert third["promoted"] == ["shopee/huge.md"]
-    assert fs.inbox_items("shopee") == ()
+    assert inbox.inbox_items("shopee") == ()
     promoted = fs.read_file("shopee/huge.md")
     assert promoted.body.strip() == "every fact in the huge upload"
     assert promoted.curated_at != ""
@@ -915,7 +915,7 @@ def test_shelving_material_that_has_since_gone_promotes_nothing(knowledge_root) 
     from coffer.application.knowledge.curate_settle import shelve_oversized
 
     name = _material(title="Gone soon", body="x")
-    fs.discard_material("shopee", name)
+    inbox.discard_material("shopee", name)
 
     assert shelve_oversized("shopee", Pending(material=name)) == {"promoted": []}
     assert _documents() == []

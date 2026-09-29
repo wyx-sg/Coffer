@@ -51,7 +51,7 @@ collection, never reverting it.
   is made where the mistake is and is live on the next read. Duplication,
   drift and contradictions get resolved rather than piling up.
 - **Cons.** It rewrites the only copy, unattended. Material waits until a pass
-  runs, and an agent cannot read the inbox. A bad merge is repaired by editing
+  runs, and no agent tool reads the inbox (a person can see it in the web UI). A bad merge is repaired by editing
   the document, not by re-running from a pristine source. An upload's original
   is not kept.
 - **Why it wins.** It is the only option that lets both a person and a model
@@ -141,7 +141,9 @@ reverted.**
   `markitdown`, plus plain text and CSV) and a channel's `/save` all write into
   `.inbox/`. Neither an upload's original bytes nor its extracted text is kept
   as a file: once the knowledge is merged the carrier has nothing left to say.
-  The inbox is the one hidden directory Coffer writes, and no surface lists it.
+  The inbox is the one hidden directory Coffer writes. The web UI's tree and
+  the read route list and read it for a person, so what is waiting can be
+  seen; nothing but curation writes or deletes it.
 - **No model, no waiting.** With no internal model configured, material is
   promoted on the spot to a document at the collection root, as it stands, and
   a pass promotes whatever is already in the inbox (`no_model`). Merging is the
@@ -220,7 +222,7 @@ reverted.**
   the only map.
 - **Every outcome is a status, not an error.** The curation route answers 200
   with `ok`, `no_model`, `up_to_date`, `too_large`, `truncated` or `failed`,
-  404 for an unknown or disabled collection and 409 while a pass runs.
+  404 for an unknown collection and 409 while a pass runs.
 - **Enforcement.** Spec knowledge "Submit every entrance's input as material",
   spec knowledge "Curate through a fenced four-tool pass",
   spec knowledge "Assemble a pass from a bounded context",

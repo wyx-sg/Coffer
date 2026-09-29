@@ -43,9 +43,6 @@ export interface ReachTarget {
 
 interface Props {
   rows: ReachTarget[];
-  /** `false` for a kind with no scope: the panel collapses to
-   *  Disabled/Enabled and the choices write only the `enabled` flag. */
-  supportsScope?: boolean;
   /** The kind's own list key, invalidated alongside ["resources"] and
    *  ["scope"] once the batch settles (e.g. ["skills"], ["providers"]). */
   invalidate?: QueryKey[];
@@ -53,7 +50,7 @@ interface Props {
   onDone: () => void;
 }
 
-export function BulkReachActions({ rows, supportsScope = true, invalidate = [], onDone }: Props) {
+export function BulkReachActions({ rows, invalidate = [], onDone }: Props) {
   const { t } = useTranslation();
   const bulk = useBulkMutate({
     invalidate: [resourcesKey, scopeKey, agentsKey, ...invalidate],
@@ -69,7 +66,7 @@ export function BulkReachActions({ rows, supportsScope = true, invalidate = [], 
   const goEnabled = (scope: Scope | null) =>
     void runAll(async (r) => {
       await resourcesApi.enable(r.uid);
-      if (supportsScope) await scopeApi.put(r.uid, scope);
+      await scopeApi.put(r.uid, scope);
     });
 
   // There is no "current one": the selection can hold rows in all three states,
@@ -79,7 +76,6 @@ export function BulkReachActions({ rows, supportsScope = true, invalidate = [], 
   return (
     <ReachControl
       mode={mode}
-      supportsScope={supportsScope}
       busy={bulk.isPending}
       initialScope={null}
       testId="bulk-reach-control"

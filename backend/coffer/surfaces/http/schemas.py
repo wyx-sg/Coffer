@@ -73,6 +73,10 @@ class ResourceOut(BaseModel):
     # is True may set it. See GET/PUT .../scope below.
     scope: ScopeOut | None = None
     enabled: bool
+    #: Whether the kind has an enabled switch at all (``Kind.toggleable``).
+    #: False for ``knowledge`` and ``memory``, whose enable/disable is refused
+    #: with ``RESOURCE_NOT_TOGGLEABLE``, so a surface leaves the switch out.
+    toggleable: bool
     created_at: datetime
     updated_at: datetime
 

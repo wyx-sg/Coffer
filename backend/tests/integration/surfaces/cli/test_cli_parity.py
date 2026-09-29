@@ -128,7 +128,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "cat",
         "write",
     },
-    # Exactly the list in spec knowledge "Cover collection management on REST and the
+    # Exactly the list in spec knowledge "Cover knowledge management on REST and the
     # CLI" and nothing beyond it. `grep` and `search` are gone with the retrieval
     # surface (spec knowledge "Expose exactly one knowledge tool") — the corpus is
     # plain Markdown under ~/.coffer/knowledge/, so a person's own grep beats
@@ -141,6 +141,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "delete",
         "ls",
         "read",
+        "save",
         "upload",
         "write",
     },

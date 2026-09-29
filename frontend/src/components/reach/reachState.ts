@@ -46,13 +46,8 @@ export function reachModeName(t: TFunction, mode: ReachMode): string {
  * "everywhere" — reading it as a restriction would check a radio that the
  * button above it contradicts, and count a list of nobody.
  */
-export function liveMode(
-  mode: ReachMode | null,
-  supportsScope: boolean,
-  scope: Scope | null,
-): ReachMode | null {
-  const restrictedToEveryone =
-    mode === "restricted" && supportsScope && (scope?.agents ?? null) === null;
+export function liveMode(mode: ReachMode | null, scope: Scope | null): ReachMode | null {
+  const restrictedToEveryone = mode === "restricted" && (scope?.agents ?? null) === null;
   return restrictedToEveryone ? "everywhere" : mode;
 }
 
@@ -60,28 +55,18 @@ export function liveMode(
  * The button's text: the state, said plainly.
  *
  * `null` names no state — the bulk bar, where a mixed selection has no single
- * reach — so it names the action instead, and which action that is depends on
- * what the kind can express: "set reach" for a kind with agents to choose
- * between, "set status" for one where the only choice is on or off. Naming the
- * first for a `knowledge` or `memory` selection would offer a panel with no
- * agent list in it. Where the control has a row in hand it can be more
- * specific than `reachModeName` and count the agents; the states it cannot
- * count it names through that function, so the button and the filter option
- * for one state can never read differently.
+ * reach — so it names the action instead: "Set reach…". Where the control has
+ * a row in hand it can be more specific than `reachModeName` and count the
+ * agents; the states it cannot count it names through that function, so the
+ * button and the filter option for one state can never read differently.
  *
  * An empty agent list is reported as its own thing, never as "Disabled": the
  * user did not switch that resource off, its list currently names nobody, and
  * those are different states with different ways back.
  */
-export function reachLabel(
-  t: TFunction,
-  live: ReachMode | null,
-  supportsScope: boolean,
-  scope: Scope | null,
-): string {
-  if (live === null) return t(supportsScope ? "scope.setReach" : "scope.setStatus");
+export function reachLabel(t: TFunction, live: ReachMode | null, scope: Scope | null): string {
+  if (live === null) return t("scope.setReach");
   if (live === "disabled") return reachModeName(t, "disabled");
-  if (!supportsScope) return t("common.enabled");
   if (live === "everywhere") return reachModeName(t, "everywhere");
   const agents = scope?.agents ?? [];
   if (agents.length === 0) return t("scope.noneSelected");

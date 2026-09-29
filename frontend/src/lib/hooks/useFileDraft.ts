@@ -1,6 +1,6 @@
-// frontend/src/lib/hooks/useFileDraft.ts — specs agent-registry / skill-manager.
-// Draft state for an in-app file editor, shared by the agent config-file pane
-// and the skill master-file pane. Both edit a file that ALSO lives on the
+// frontend/src/lib/hooks/useFileDraft.ts — specs agent-registry / skill-manager / knowledge.
+// Draft state for an in-app file editor, shared by the agent config-file pane,
+// the skill master-file pane and the knowledge document pane. Both edit a file that ALSO lives on the
 // user's disk and is edited there, so both need the same three things: a draft
 // separate from the loaded content, an explicit save, and a conflict the user
 // can act on rather than a silent overwrite.
@@ -33,7 +33,9 @@ export interface FileDraftOptions {
 function isStaleConflict(error: unknown): boolean {
   return (
     error instanceof ApiError &&
-    (error.code === "CONFIG_FILE_STALE" || error.code === "SKILL_FILE_STALE")
+    (error.code === "CONFIG_FILE_STALE" ||
+      error.code === "SKILL_FILE_STALE" ||
+      error.code === "KNOWLEDGE_FILE_CONFLICT")
   );
 }
 

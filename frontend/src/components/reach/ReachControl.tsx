@@ -13,13 +13,9 @@
 // One button states the answer; the panel is where it is changed (the older
 // three-buttons-per-row design spent three controls on two states).
 //
-// Three surfaces render this exact choice and must never drift apart:
-// ScopeControl (one resource, in a row or a detail header), BulkReachActions
-// (the same choice over a whole selection), and the two-choice fallback for
-// kinds that declare no scope (`supportsScope={false}`) — this same button over
-// Disabled / Enabled and no agent list. One button there too, not a pair, so a
-// status column reads the same whatever the kind, and so that kind's users also
-// meet the machine-local line a bare pair could only put in a tooltip.
+// Two surfaces render this exact choice and must never drift apart:
+// ScopeControl (one resource, in a row or a detail header) and BulkReachActions
+// (the same choice over a whole selection).
 //
 // DISABLED IS A CHOICE, NEVER AN INFERENCE. It is an intent with its own
 // endpoint, its own audit events and its own kind-level hook, and disabling
@@ -73,9 +69,6 @@ interface Props {
   /** The live state the button reports; `null` marks "no single state" — the
    *  bulk bar, where a mixed selection has no current reach to name. */
   mode: ReachMode | null;
-  /** `false` collapses the panel to Disabled/Enabled for a kind that declares
-   *  no scope. */
-  supportsScope?: boolean;
   /** Renders the button and every choice inert while a write is in flight. */
   busy?: boolean;
   /** Seeds the pick-list and is the scope the button counts; `null` is
@@ -96,7 +89,6 @@ interface Props {
 
 export function ReachControl({
   mode,
-  supportsScope = true,
   busy = false,
   initialScope = null,
   note,
@@ -124,7 +116,7 @@ export function ReachControl({
   // reads as (the name). Both, because a scope stores one and a person reads
   // the other.
   const registered = (agentsData ?? []).map((a) => ({ uid: a.uid, name: a.name }));
-  const live = liveMode(mode, supportsScope, initialScope);
+  const live = liveMode(mode, initialScope);
   // What reads as chosen: the staged choice, else the live state — `null` for
   // an untouched bulk panel, whose selection has no single reach.
   const picked = choice ?? live;
@@ -185,7 +177,7 @@ export function ReachControl({
             title={note}
             className={cn("gap-1.5 font-normal", note && "text-status-warn")}
           >
-            {reachLabel(t, live, supportsScope, initialScope)}
+            {reachLabel(t, live, initialScope)}
             <ChevronDown className="size-3.5" aria-hidden />
           </Button>
         </PopoverTrigger>
@@ -203,45 +195,37 @@ export function ReachControl({
 
           <div role="radiogroup" aria-label={t("scope.choicesLabel")} className="space-y-2">
             {choiceRow("disabled", t("common.disabled"), () => finish("disabled", staged))}
-            {supportsScope ? (
-              <>
-                {choiceRow("everywhere", t("scope.everywhere"), () => finish("everywhere", staged))}
-                {/* The one choice that leaves the panel open: it is asking a
-                    question. Starting empty is also what keeps `{agents: null}`
-                    out of `onRestricted`. */}
-                {choiceRow("restricted", t("scope.restricted"), () => {
-                  setChoice("restricted");
-                  setDraft({ agents: staged.agents ?? [] });
-                })}
+            {choiceRow("everywhere", t("scope.everywhere"), () => finish("everywhere", staged))}
+            {/* The one choice that leaves the panel open: it is asking a
+                question. Starting empty is also what keeps `{agents: null}`
+                out of `onRestricted`. */}
+            {choiceRow("restricted", t("scope.restricted"), () => {
+              setChoice("restricted");
+              setDraft({ agents: staged.agents ?? [] });
+            })}
 
-                <AgentPicker
-                  className="space-y-2 pl-6"
-                  registered={registered}
-                  selected={selected}
-                  dormant={picked === "restricted" && selected.length === 0}
-                  busy={busy}
-                  onToggle={toggle}
-                />
-                {/* The one choice that stays open needs an explicit way out:
-                    Done commits the staged list exactly as closing does. */}
-                {picked === "restricted" ? (
-                  <div className="flex justify-end pl-6">
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() => finish("restricted", staged)}
-                    >
-                      {t("common.done")}
-                    </Button>
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              // Two states only, and "enabled" is the everywhere intent under
-              // the only name that means anything with no scope to narrow.
-              choiceRow("everywhere", t("common.enabled"), () => finish("everywhere", staged))
-            )}
+            <AgentPicker
+              className="space-y-2 pl-6"
+              registered={registered}
+              selected={selected}
+              dormant={picked === "restricted" && selected.length === 0}
+              busy={busy}
+              onToggle={toggle}
+            />
+            {/* The one choice that stays open needs an explicit way out:
+                Done commits the staged list exactly as closing does. */}
+            {picked === "restricted" ? (
+              <div className="flex justify-end pl-6">
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => finish("restricted", staged)}
+                >
+                  {t("common.done")}
+                </Button>
+              </div>
+            ) : null}
           </div>
         </PopoverContent>
       </Popover>

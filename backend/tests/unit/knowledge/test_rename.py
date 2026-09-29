@@ -24,7 +24,7 @@ from coffer.application.knowledge.kind import make_knowledge_kind
 from coffer.application.knowledge.service import KIND_KNOWLEDGE, KnowledgeService
 from coffer.domain.errors import ResourceAlreadyExists
 from coffer.domain.resource import Kind, Resource
-from coffer.infrastructure.knowledge import fs, paths
+from coffer.infrastructure.knowledge import fs, inbox, paths
 
 
 class _Resources:
@@ -83,7 +83,7 @@ def collection() -> Resource:
         description="Which service issues a login token.",
         body="account.session.",
     )
-    fs.submit_material(row.name, title="Waiting", description="d", body="not merged yet")
+    inbox.submit_material(row.name, title="Waiting", description="d", body="not merged yet")
     return row
 
 
@@ -135,7 +135,7 @@ async def test_the_files_inside_are_still_readable_under_the_new_name(
         moved = old_path.replace("shopee/", "account/", 1)
         assert fs.read_file(moved).body == body
     assert paths.readme_path("account").read_text(encoding="utf-8").startswith("# shopee")
-    assert fs.read_material("account", "waiting.md").body.strip() == "not merged yet"
+    assert inbox.read_material("account", "waiting.md").body.strip() == "not merged yet"
 
 
 def _walk(relpath: str) -> tuple:
@@ -159,7 +159,7 @@ async def test_a_collection_the_service_can_reach_is_the_renamed_one(
 
     await _rename(collection, "account")
 
-    assert await service.enabled_collections() == ["account"]
+    assert await service.collection_names() == ["account"]
     [level] = [await service.list_level("account")]
     assert [f.path for f in level.files] == ["account/session-facts.md"]
 

@@ -12,7 +12,7 @@ unattributed. There is no name fallback anywhere here (ADR
 resource-identity-is-an-immutable-uid).
 
 **Nothing here is filtered by who is asking.** A partition carries no per-agent
-reach ("Serve every enabled partition to every agent"): every enabled
+reach and no enabled switch ("Serve every partition to every agent"): every
 partition is served to every agent, so ``POST
 /context`` composes the same payload whoever fired it. The agent uid identifies
 the caller for the audit log and decides nothing about the content.
