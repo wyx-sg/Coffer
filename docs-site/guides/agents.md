@@ -217,8 +217,6 @@ Reading a file that does not exist returns empty content and does not create it.
 Every read returns a fingerprint of the content. The editor and `coffer agent config edit` send it back with the save, and if the file changed on disk in the meantime — the agent itself rewrote it, or you saved it elsewhere — the write is refused with `CONFIG_FILE_STALE` (exit code 5 on the CLI) and the file is left as it is. Re-open and save again.
 :::
 
-If a `CLAUDE.md` or `AGENTS.md` contains a Coffer-written memory block, the editor marks it as a leftover that is safe to delete. Coffer delivers memory through a hook, not through these files (see [Memory](/guides/memory#how-agents-receive-memory)).
-
 ## Manage the agent's own MCP entries
 
 Agents often carry MCP servers configured directly in their own files. The **MCP servers** tab shows both groups: **Via Coffer gateway** (what Coffer serves) and **Direct servers** (entries in the agent's files, labelled with the file they came from).

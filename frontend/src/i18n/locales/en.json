@@ -927,7 +927,6 @@
       "notCreated": "not created",
       "editorLabel": "Contents of {{key}}",
       "selectFile": "Select a file to view.",
-      "memoryBlockNotice": "This file contains a legacy Coffer memory block (the native-projection feature was removed) — it is no longer used and is safe to delete.",
       "directoryHint": "This is a directory — select a file inside it, or create a new one.",
       "emptyDir": "No files yet.",
       "desc": {

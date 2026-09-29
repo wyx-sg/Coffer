@@ -3,8 +3,7 @@
 // default so a pane opened to LOOK at an agent's real configuration cannot be
 // changed by a stray keystroke — plus a FileActions bar that takes the file to
 // the user's own editor instead. Directory-backed config keys expand into child
-// files that open the same way, and a Coffer memory-projection block renders an
-// info annotation.
+// files that open the same way.
 //
 // The editor is given the agent's `uid` — every config-file read and write is
 // addressed by it — and renders no part of the agent, so that is all it takes.
@@ -69,7 +68,7 @@ const DIR = {
 
 afterEach(() => vi.clearAllMocks());
 
-function stubFile(content: string, extra: Record<string, unknown> = {}) {
+function stubFile(content: string) {
   fileMock.mockReturnValue({
     data: {
       key: "settings",
@@ -78,7 +77,6 @@ function stubFile(content: string, extra: Record<string, unknown> = {}) {
       content,
       path: "/home/u/.claude/settings.json",
       folder_path: "/home/u/.claude",
-      ...extra,
     },
     isPending: false,
   } as unknown as ReturnType<typeof useAgentConfigFile>);
@@ -211,17 +209,6 @@ describe("AgentConfigFilesEditor", () => {
     expect(document.querySelector(".cm-content")?.textContent).toContain("hello child");
     expect(document.querySelector(".cm-content")?.getAttribute("contenteditable")).toBe("false");
     expect(screen.getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
-  });
-
-  test("memory_block content renders the legacy-memory-block annotation", () => {
-    stubFiles();
-    stubFile("# CLAUDE.md", { memory_block: true });
-    stubChild(undefined);
-
-    renderEditor(<AgentConfigFilesEditor uid="u-cc" />);
-    openSettings();
-
-    expect(screen.getByText(/legacy Coffer memory block/i)).toBeInTheDocument();
   });
 
   test("switching files while the draft is dirty asks first; cancel keeps the edit", () => {
