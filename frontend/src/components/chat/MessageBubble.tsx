@@ -6,6 +6,8 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { ContentBlock, Message } from "@/lib/api/chat";
 import type { LiveMessage } from "@/lib/hooks/useChatTurn";
+import { messageText } from "@/lib/chat/mirror";
+import { HelpTip } from "@/components/HelpTip";
 import { AttachmentChip } from "./AttachmentChip";
 import { ToolCallCard } from "./ToolCallCard";
 import { MarkdownContent } from "./MarkdownContent";
@@ -13,6 +15,9 @@ import { MarkdownContent } from "./MarkdownContent";
 interface Props {
   message?: Message;
   live?: LiveMessage;
+  /** For a user message the conversation's channel has not received yet: the
+   *  platform's name (spec chat "Show where a reply will also be sent"). */
+  undeliveredTo?: string;
 }
 
 type Segment =
@@ -43,24 +48,17 @@ function buildSegments(blocks: ContentBlock[]): Segment[] {
   return segments;
 }
 
-function extractText(blocks: ContentBlock[]): string {
-  return blocks
-    .filter((b) => b.type === "text" && b.text)
-    .map((b) => b.text)
-    .join("");
-}
-
 function attachmentBlocks(blocks: ContentBlock[]): ContentBlock[] {
   return blocks.filter((b) => b.type === "attachment");
 }
 
-function MessageBubbleImpl({ message, live }: Props) {
+function MessageBubbleImpl({ message, live, undeliveredTo }: Props) {
   const { t } = useTranslation();
   const isUser = message ? message.role === "user" : false;
   const isLive = live !== undefined;
 
   if (isUser && message) {
-    const text = extractText(message.content);
+    const text = messageText(message.content);
     const attachments = attachmentBlocks(message.content);
     return (
       <div className="flex flex-col items-end gap-1">
@@ -79,6 +77,14 @@ function MessageBubbleImpl({ message, live }: Props) {
                 mime={a.mime}
               />
             ))}
+          </div>
+        )}
+        {undeliveredTo && (
+          <div className="flex items-center gap-0.5 text-xs text-muted-foreground">
+            <span>{t("chat.mirror.notDelivered", { platform: undeliveredTo })}</span>
+            <HelpTip>
+              <p className="text-sm">{t("chat.mirror.notDeliveredHelp")}</p>
+            </HelpTip>
           </div>
         )}
       </div>

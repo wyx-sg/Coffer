@@ -1,11 +1,11 @@
-"""`/save`: the phone forwards a document into a knowledge collection.
+"""`/kb`: the phone forwards a document into a knowledge collection.
 
 See spec channels "Save a sent document into a collection".
 
-The trigger is a plain TEXT `/save [collection]`, sent as its own message
+The trigger is a plain TEXT `/kb [collection]`, sent as its own message
 after the document — never a caption. A caption starting with "/" alongside an
 attachment is already a normal message, not a command (see ``inbound.py``);
-`/save` does not carve out an exception to that, so it stays an ordinary
+`/kb` does not carve out an exception to that, so it stays an ordinary
 follow-up command like every other one, acting on the most recently received
 attachment in this (channel, chat, thread) — the channel's own memory of "what
 was just sent here", never a second copy of the bytes (those still live only
@@ -15,7 +15,7 @@ the ingest service).
 The collection is always confirmed: a name that is both typed AND an existing
 collection is used outright (the owner already confirmed it by typing it);
 anything else falls back to a selection card, reusing the same mechanism
-`/agent`/`/model` already render — never a second one.
+`/model`/`/dir` already render — never a second one.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ async def _send_document(
     env: ChannelEnv, adapter: FakeChannelAdapter, attachment: InboundAttachment, **kw: Any
 ) -> None:
     """Send the document and let its own (ordinary, unrelated) turn finish, so
-    the background drain task never outlives the test — `/save` itself does
+    the background drain task never outlives the test — `/kb` itself does
     not depend on this turn: the pending document is recorded synchronously,
     before the turn is even queued."""
     await env.processor.on_message(inbound("tg", "owner", "", attachments=[attachment], **kw))
@@ -71,7 +71,7 @@ async def test_named_existing_collection_saves_directly(env: ChannelEnv, tmp_pat
     attachment = _attach(tmp_path)
 
     await _send_document(env, adapter, attachment, sender_id="owner-1")
-    await env.processor.on_message(inbound("tg", "owner", "/save research", sender_id="owner-1"))
+    await env.processor.on_message(inbound("tg", "owner", "/kb research", sender_id="owner-1"))
 
     assert len(env.ingest.calls) == 1
     call = env.ingest.calls[0]
@@ -79,7 +79,7 @@ async def test_named_existing_collection_saves_directly(env: ChannelEnv, tmp_pat
     assert call["filename"] == "note.txt"
     assert call["data"] == b"hello world"
     # "user", not the thread's agent: the person forwarded the document, and
-    # no agent identity is threaded through `/save` at all — a collection is
+    # no agent identity is threaded through `/kb` at all — a collection is
     # not narrowed per agent, so there is nothing for one to decide.
     assert call["actor"] == "user"
     # The confirmation names the title, the collection, and the path — never a
@@ -97,7 +97,7 @@ async def test_a_save_that_waits_to_be_merged_says_so(env: ChannelEnv, tmp_path:
     attachment = _attach(tmp_path)
 
     await _send_document(env, adapter, attachment, sender_id="owner-1")
-    await env.processor.on_message(inbound("tg", "owner", "/save research", sender_id="owner-1"))
+    await env.processor.on_message(inbound("tg", "owner", "/kb research", sender_id="owner-1"))
 
     assert len(env.ingest.calls) == 1
     [confirmation] = [text for _chat, text in adapter.sent if "note.txt" in text]
@@ -108,7 +108,7 @@ async def test_a_save_that_waits_to_be_merged_says_so(env: ChannelEnv, tmp_path:
 
 async def test_non_owner_message_stores_nothing(env: ChannelEnv, tmp_path: Any) -> None:
     """The owner gate is reused, not re-implemented: an attachment AND a
-    `/save` from a chat-id match but sender-id mismatch are both refused
+    `/kb` from a chat-id match but sender-id mismatch are both refused
     silently — nothing is cached, nothing is ingested, nothing is said."""
     _resource, adapter = await env.paired_channel(sender_id="owner-1")
     attachment = _attach(tmp_path)
@@ -116,7 +116,7 @@ async def test_non_owner_message_stores_nothing(env: ChannelEnv, tmp_path: Any) 
     await env.processor.on_message(
         inbound("tg", "owner", "", attachments=[attachment], sender_id="intruder")
     )
-    await env.processor.on_message(inbound("tg", "owner", "/save", sender_id="intruder"))
+    await env.processor.on_message(inbound("tg", "owner", "/kb", sender_id="intruder"))
 
     assert env.ingest.calls == []
     assert adapter.sent == []
@@ -126,7 +126,7 @@ async def test_non_owner_message_stores_nothing(env: ChannelEnv, tmp_path: Any) 
 async def test_save_with_nothing_pending_is_refused(env: ChannelEnv) -> None:
     await env.paired_channel(sender_id="owner-1")
 
-    await env.processor.on_message(inbound("tg", "owner", "/save", sender_id="owner-1"))
+    await env.processor.on_message(inbound("tg", "owner", "/kb", sender_id="owner-1"))
 
     assert env.ingest.calls == []
 
@@ -142,7 +142,7 @@ async def test_unnamed_save_offers_a_card_even_for_a_single_collection(
     attachment = _attach(tmp_path)
 
     await _send_document(env, adapter, attachment, sender_id="owner-1")
-    await env.processor.on_message(inbound("tg", "owner", "/save", sender_id="owner-1"))
+    await env.processor.on_message(inbound("tg", "owner", "/kb", sender_id="owner-1"))
 
     assert env.ingest.calls == []
     assert len(adapter.cards) == 1
@@ -158,7 +158,7 @@ async def test_unknown_named_collection_falls_back_to_a_card(
     attachment = _attach(tmp_path)
 
     await _send_document(env, adapter, attachment, sender_id="owner-1")
-    await env.processor.on_message(inbound("tg", "owner", "/save nope", sender_id="owner-1"))
+    await env.processor.on_message(inbound("tg", "owner", "/kb nope", sender_id="owner-1"))
 
     assert env.ingest.calls == []
     assert len(adapter.cards) == 1
@@ -173,7 +173,7 @@ async def test_unnamed_save_without_buttons_lists_collections_as_text(
     attachment = _attach(tmp_path)
 
     await _send_document(env, adapter, attachment, sender_id="owner-1")
-    await env.processor.on_message(inbound("tg", "owner", "/save", sender_id="owner-1"))
+    await env.processor.on_message(inbound("tg", "owner", "/kb", sender_id="owner-1"))
 
     assert env.ingest.calls == []
     assert adapter.cards == []
@@ -186,7 +186,7 @@ async def test_no_collections_yet_says_so(env: ChannelEnv, tmp_path: Any) -> Non
     attachment = _attach(tmp_path)
 
     await _send_document(env, adapter, attachment, sender_id="owner-1")
-    await env.processor.on_message(inbound("tg", "owner", "/save", sender_id="owner-1"))
+    await env.processor.on_message(inbound("tg", "owner", "/kb", sender_id="owner-1"))
 
     assert env.ingest.calls == []
     assert any("No collections yet" in text for _chat, text in adapter.sent)
@@ -200,7 +200,7 @@ async def test_collection_card_tap_saves_the_pending_document(
     attachment = _attach(tmp_path, name="scan.pdf", body=b"%PDF-fake")
 
     await _send_document(env, adapter, attachment, sender_id="owner-1")
-    await env.processor.on_message(inbound("tg", "owner", "/save", sender_id="owner-1"))
+    await env.processor.on_message(inbound("tg", "owner", "/kb", sender_id="owner-1"))
     assert len(adapter.cards) == 1
 
     await env.processor.on_callback(
@@ -229,7 +229,7 @@ async def test_a_conversion_failure_is_reported_in_one_line_and_consumes_the_pen
     attachment = _attach(tmp_path, name="virus.exe", body=b"MZ")
 
     await _send_document(env, adapter, attachment, sender_id="owner-1")
-    await env.processor.on_message(inbound("tg", "owner", "/save research", sender_id="owner-1"))
+    await env.processor.on_message(inbound("tg", "owner", "/kb research", sender_id="owner-1"))
 
     assert len(env.ingest.calls) == 1
     [reason] = [text for _chat, text in adapter.sent if "virus.exe" in text]
@@ -238,17 +238,20 @@ async def test_a_conversion_failure_is_reported_in_one_line_and_consumes_the_pen
 
     # Nothing left pending — the same failing bytes are not silently retried.
     env.ingest.fails_with = None
-    await env.processor.on_message(inbound("tg", "owner", "/save research", sender_id="owner-1"))
-    assert len(env.ingest.calls) == 1  # unchanged: /save had nothing to act on
+    await env.processor.on_message(inbound("tg", "owner", "/kb research", sender_id="owner-1"))
+    assert len(env.ingest.calls) == 1  # unchanged: /kb had nothing to act on
 
 
-async def test_help_lists_save(env: ChannelEnv) -> None:
+async def test_help_lists_kb_only_while_knowledge_is_on(env: ChannelEnv) -> None:
     _resource, adapter = await env.paired_channel(sender_id="owner-1")
 
     await env.processor.on_message(inbound("tg", "owner", "/help", sender_id="owner-1"))
+    env.processor._commands._knowledge_enabled = lambda: False
+    await env.processor.on_message(inbound("tg", "owner", "/help", sender_id="owner-1"))
 
-    [help_text] = [text for _chat, text in adapter.sent]
-    assert "/save" in help_text
+    [on, off] = [text for _chat, text in adapter.sent]
+    assert "/kb" in on
+    assert "/kb" not in off
 
 
 @pytest.mark.acceptance(
@@ -257,7 +260,7 @@ async def test_help_lists_save(env: ChannelEnv) -> None:
 async def test_a_save_while_knowledge_is_off_says_so_and_saves_nothing(
     env: ChannelEnv, tmp_path: Any
 ) -> None:
-    """Both entrances: the typed `/save <name>` and a collection card tapped
+    """Both entrances: the typed `/kb <name>` and a collection card tapped
     after the switch. Neither reaches the ingest service, and the reply names
     the switch rather than a missing collection."""
     from coffer.application.channel.document_save import KNOWLEDGE_OFF
@@ -268,13 +271,13 @@ async def test_a_save_while_knowledge_is_off_says_so_and_saves_nothing(
     env.processor._commands._knowledge_enabled = lambda: knowledge["on"]
 
     await _send_document(env, adapter, _attach(tmp_path), sender_id="owner-1")
-    await env.processor.on_message(inbound("tg", "owner", "/save research", sender_id="owner-1"))
+    await env.processor.on_message(inbound("tg", "owner", "/kb research", sender_id="owner-1"))
 
     assert env.ingest.calls == []
     assert adapter.texts()[-1] == KNOWLEDGE_OFF
     assert "knowledge" in KNOWLEDGE_OFF.lower() and "switched off" in KNOWLEDGE_OFF
 
-    # The pending document is kept: switched back on, the same /save saves it.
+    # The pending document is kept: switched back on, the same /kb saves it.
     knowledge["on"] = True
-    await env.processor.on_message(inbound("tg", "owner", "/save research", sender_id="owner-1"))
+    await env.processor.on_message(inbound("tg", "owner", "/kb research", sender_id="owner-1"))
     assert len(env.ingest.calls) == 1

@@ -1,8 +1,10 @@
-"""Interactive selection cards for /agent and /model.
+"""Owner-gated cards: choices (/model, /dir, /resume, /kb) and actions
+(the ``cmd:`` buttons of /status and /help).
 
-When a channel ``supports_buttons``, the no-arg command renders a selection
-card; a tap is owner-gated and routed to the same switch the text command
-performs. Text-only channels keep today's behavior (covered in test_routing).
+See spec channels "Offer choices and actions as owner-gated cards". When a
+channel ``supports_buttons`` the no-arg command renders a card; a tap is
+owner-gated and routed to the same function the typed command calls.
+Text-only channels get the text answer.
 """
 
 from __future__ import annotations
@@ -55,42 +57,38 @@ async def _card_channel(
     return resource, adapter
 
 
-# -- /agent card ---------------------------------------------------------------
+# -- action buttons ------------------------------------------------------------
 
 
-async def test_agent_no_arg_renders_a_card_when_supported(env: ChannelEnv) -> None:
-    env.add_agent("codex")
-    _resource, adapter = await _card_channel(env)
-
-    await env.processor.on_message(inbound("tg", "owner", "/agent"))
-
-    assert len(adapter.cards) == 1
-    _chat, _text, buttons = adapter.cards[0]
-    assert [b.value for b in buttons] == ["agent:builtin", "agent:codex"]
-    # The current agent (the channel default, builtin) is marked.
-    assert any(b.label.endswith("✓") for b in buttons)
-
-
-@pytest.mark.acceptance(spec="channels", scenario="a selection-card tap switches the agent")
-async def test_agent_card_tap_switches_and_sticks(env: ChannelEnv) -> None:
-    env.add_agent("codex", reply="codex-here")
-    resource, _adapter = await _card_channel(env)
-
-    await env.processor.on_callback(tap_event("tg", "owner", "agent:codex"))
-    await wait_until(lambda: True)
-
-    assert await env.thread_preferred_agent(resource) == "codex"
-    conv = await env.chat.get_conversation(await env.active_conversation(resource))
-    assert conv.agent_key == "codex"
-
-
-async def test_agent_card_tap_rejects_unknown_key(env: ChannelEnv) -> None:
+@pytest.mark.acceptance(spec="channels", scenario="a command button runs the command it names")
+async def test_a_command_button_runs_the_command_it_names(env: ChannelEnv) -> None:
     resource, adapter = await _card_channel(env)
 
-    await env.processor.on_callback(tap_event("tg", "owner", "agent:ghost"))
+    await env.processor.on_callback(tap_event("tg", "owner", "cmd:new"))
 
-    assert any("ghost" in t for t in adapter.texts())
-    assert await env.thread_preferred_agent(resource) is None  # unchanged
+    assert await env.active_conversation(resource) is not None
+    assert adapter.texts()[-1].startswith("🆕 New conversation · ")
+
+    await env.processor.on_callback(tap_event("tg", "owner", "cmd:status"))
+
+    _chat, text, buttons = adapter.cards[-1]
+    assert "Agent: Coffer Assistant" in text
+    assert [b.value for b in buttons] == [
+        "cmd:stop",
+        "cmd:new",
+        "cmd:model",
+        "cmd:resume",
+        "cmd:dir",
+    ]
+
+
+async def test_a_command_button_naming_no_command_does_nothing(env: ChannelEnv) -> None:
+    resource, adapter = await _card_channel(env)
+
+    await env.processor.on_callback(tap_event("tg", "owner", "cmd:agent"))
+
+    assert adapter.sent == []
+    assert await env.active_conversation(resource) is None
 
 
 # -- /model card ---------------------------------------------------------------
@@ -151,15 +149,15 @@ async def test_a_refused_model_card_falls_back_to_the_text_reply(env: ChannelEnv
     assert any("Model:" in t for t in adapter.texts())
 
 
-async def test_a_refused_agent_card_falls_back_to_the_text_reply(env: ChannelEnv) -> None:
-    env.add_agent("codex")
+async def test_a_refused_status_card_falls_back_to_the_text_reply(env: ChannelEnv) -> None:
     _resource, adapter = await _card_channel(env)
     _refuse_cards(adapter)
 
-    await env.processor.on_message(inbound("tg", "owner", "/agent"))
+    await env.processor.on_message(inbound("tg", "owner", "/status"))
 
     assert adapter.cards == []
-    assert any("Available:" in t for t in adapter.texts())
+    [text] = adapter.texts()
+    assert text.startswith("No conversation yet\nAgent: Coffer Assistant")
 
 
 async def test_model_card_tap_sets_next_turn_model(env: ChannelEnv) -> None:
@@ -177,18 +175,19 @@ async def test_model_card_tap_sets_next_turn_model(env: ChannelEnv) -> None:
 
 @pytest.mark.acceptance(spec="channels", scenario="a non-owner selection-card tap is ignored")
 async def test_non_owner_tap_is_ignored(env: ChannelEnv) -> None:
-    env.add_agent("codex")
-    resource, _adapter = await _card_channel(env, sender_id="owner-1")
+    resource, adapter = await _card_channel(env, sender_id="owner-1")
 
-    # Right chat, wrong member — the tap must not flip the owner's agent.
-    await env.processor.on_callback(tap_event("tg", "owner", "agent:codex", sender_id="intruder-9"))
+    # Right chat, wrong member — the tap must not touch the owner's settings.
+    await env.processor.on_callback(tap_event("tg", "owner", "model:opus", sender_id="intruder-9"))
+    await env.processor.on_callback(tap_event("tg", "owner", "cmd:new", sender_id="intruder-9"))
 
-    assert await env.thread_preferred_agent(resource) is None
+    assert await env.active_conversation(resource) is None
+    assert adapter.sent == []
 
 
 async def test_tap_from_unbound_channel_is_ignored(env: ChannelEnv) -> None:
     # No binding registered for this channel name → silently dropped, no crash.
-    await env.processor.on_callback(tap_event("ghost", "owner", "agent:codex"))
+    await env.processor.on_callback(tap_event("ghost", "owner", "cmd:new"))
 
 
 # -- group card taps ("Route group selection-card taps back to the group") ----
@@ -209,28 +208,10 @@ async def _group_card_channel(
 @pytest.mark.acceptance(
     spec="channels", scenario="a group selection-card tap replies in the group/thread"
 )
-async def test_owner_group_card_tap_switches_and_replies_in_the_thread(env: ChannelEnv) -> None:
-    """The owner tapping an /agent card in a group switches the agent for THAT
-    group/thread and the "switched" confirmation is routed back into the group
-    thread the tap came from — never a DM."""
-    env.add_agent("codex", reply="codex-here")
-    resource, adapter = await _group_card_channel(env)
-
-    await env.processor.on_callback(
-        tap_event(
-            "tg", "grp-1", "agent:codex", sender_id="owner-1", chat_kind="group", thread_id="th-1"
-        )
-    )
-    await wait_until(lambda: any("Switched to agent" in t for t in adapter.texts()))
-
-    assert await env.thread_preferred_agent(resource, "grp-1", "th-1") == "codex"
-    match = next(r for r in adapter.sent_routed if "Switched to agent" in r[1])
-    chat_id, _text, thread_id, chat_kind = match
-    assert (chat_id, thread_id, chat_kind) == ("grp-1", "th-1", "group")
-
-
 async def test_owner_group_model_card_tap_replies_in_the_thread(env: ChannelEnv) -> None:
-    """The parametric /model switch is likewise routed into the group thread."""
+    """The owner tapping a /model card in a group thread sets the model for THAT
+    thread, and the confirmation is routed back into the group thread the tap
+    came from — never a DM."""
     resource, adapter = await _group_card_channel(env)
 
     await env.processor.on_callback(
@@ -254,22 +235,21 @@ async def test_owner_group_model_card_tap_replies_in_the_thread(env: ChannelEnv)
 
 async def test_non_owner_group_card_tap_is_refused_and_routed(env: ChannelEnv) -> None:
     """A non-owner tapping a group card gets a refusal routed into the group
-    thread and never flips the owner's agent."""
-    env.add_agent("codex")
+    thread and never touches the owner's settings."""
     resource, adapter = await _group_card_channel(env)
 
     await env.processor.on_callback(
         tap_event(
             "tg",
             "grp-1",
-            "agent:codex",
+            "model:opus",
             sender_id="intruder-9",
             chat_kind="group",
             thread_id="th-1",
         )
     )
 
-    assert await env.thread_preferred_agent(resource, "grp-1", "th-1") is None
+    assert await env.active_conversation(resource, "grp-1", "th-1") is None
     assert len(adapter.sent_routed) == 1
     chat_id, text, thread_id, chat_kind = adapter.sent_routed[0]
     assert (chat_id, thread_id, chat_kind) == ("grp-1", "th-1", "group")
@@ -277,16 +257,14 @@ async def test_non_owner_group_card_tap_is_refused_and_routed(env: ChannelEnv) -
 
 
 async def test_dm_card_tap_still_replies_in_the_dm(env: ChannelEnv) -> None:
-    """DM regression: a direct card tap still switches and replies as a DM
-    (chat_kind="direct", no thread), unaffected by the group routing."""
-    env.add_agent("codex", reply="codex-here")
+    """DM regression: a direct card tap still replies as a DM (chat_kind="direct",
+    no thread), unaffected by the group routing."""
     resource, adapter = await _card_channel(env, sender_id="owner-1")
 
-    await env.processor.on_callback(tap_event("tg", "owner", "agent:codex", sender_id="owner-1"))
-    await wait_until(lambda: any("Switched to agent" in t for t in adapter.texts()))
+    await env.processor.on_callback(tap_event("tg", "owner", "cmd:new", sender_id="owner-1"))
 
-    assert await env.thread_preferred_agent(resource) == "codex"
-    match = next(r for r in adapter.sent_routed if "Switched to agent" in r[1])
+    assert await env.active_conversation(resource) is not None
+    match = next(r for r in adapter.sent_routed if "New conversation" in r[1])
     chat_id, _text, thread_id, chat_kind = match
     assert (chat_id, thread_id, chat_kind) == ("owner", "", "direct")
 
@@ -301,39 +279,37 @@ async def test_tapping_a_card_rewrites_it_with_the_new_choice(env: ChannelEnv) -
     """A card that keeps offering the option the user just took is worse than no
     card: tapping it again looks like it should do something and does nothing.
     After the switch lands, the card is rewritten with the tick moved."""
-    env.add_agent("codex")
+    env.model_suggestions.add("builtin", ["opus", "sonnet"])
     _resource, adapter = await _card_channel(env)
-    adapter.card_updates.clear()
 
     await env.processor.on_callback(
-        tap_event("tg", "owner", "agent:codex", platform_message_id="card-1")
+        tap_event("tg", "owner", "model:sonnet", platform_message_id="card-1")
     )
 
     await wait_until(lambda: len(adapter.card_updates) == 1)
     chat_id, message_id, text, buttons, title = adapter.card_updates[0]
     assert (chat_id, message_id) == ("owner", "card-1")
-    assert title == "Agent"
-    assert "codex" in text
-    # Exactly one option is ticked, and it is the one just chosen (buttons carry
-    # the display name; the value carries the key).
+    assert title == "Model"
+    assert "Current model: sonnet" in text
+    # Exactly one option is ticked, and it is the one just chosen.
     ticked = [b.value for b in buttons if b.label.endswith("✓")]
-    assert ticked == ["agent:codex"], f"the tick should follow the switch, got {ticked}"
+    assert ticked == ["model:sonnet"], f"the tick should follow the switch, got {ticked}"
 
 
 async def test_a_card_is_not_rewritten_when_the_transport_cannot(env: ChannelEnv) -> None:
     """``supports_card_update`` is the gate: a transport without it must not be
     called, and the switch still succeeds."""
-    env.add_agent("codex")
+    env.model_suggestions.add("builtin", ["opus", "sonnet"])
     resource = await env.register_channel("tg")
     # supports_card_update defaults off — the transport simply cannot.
     adapter = env.bind(resource, FakeChannelAdapter(supports_buttons=True))
     await env.pair(resource, "owner")
 
     await env.processor.on_callback(
-        tap_event("tg", "owner", "agent:codex", platform_message_id="card-1")
+        tap_event("tg", "owner", "model:sonnet", platform_message_id="card-1")
     )
 
-    await wait_until(lambda: any("codex" in text for _chat, text in adapter.sent))
+    await wait_until(lambda: any("sonnet" in text for _chat, text in adapter.sent))
     assert adapter.card_updates == []
 
 
@@ -341,7 +317,7 @@ async def test_a_failed_card_rewrite_does_not_break_the_switch(env: ChannelEnv) 
     """Cosmetic by design: the card may have aged past SeaTalk's 7-day update
     window, or the platform may rate-limit us. The switch already happened and
     was confirmed in chat, so a failed rewrite is logged and dropped."""
-    env.add_agent("codex")
+    env.model_suggestions.add("builtin", ["opus", "sonnet"])
     _resource, adapter = await _card_channel(env)
 
     async def boom(*_args: object, **_kwargs: object) -> None:
@@ -350,10 +326,10 @@ async def test_a_failed_card_rewrite_does_not_break_the_switch(env: ChannelEnv) 
     adapter.update_card = boom  # type: ignore[method-assign]
 
     await env.processor.on_callback(
-        tap_event("tg", "owner", "agent:codex", platform_message_id="card-1")
+        tap_event("tg", "owner", "model:sonnet", platform_message_id="card-1")
     )
 
-    await wait_until(lambda: any("codex" in text for _chat, text in adapter.sent))
+    await wait_until(lambda: any("sonnet" in text for _chat, text in adapter.sent))
 
 
 # -- Prev/Next turns the page inside the one card -------------------------------
@@ -439,27 +415,9 @@ async def test_a_page_turn_changes_no_model(env: ChannelEnv) -> None:
     )
     await wait_until(lambda: len(adapter.card_updates) == 1)
 
-    cfg = await env.chat.get_agent_config(await env.active_conversation(resource))
-    assert cfg.model is None
+    # Nothing was chosen, so nothing was opened or pinned.
+    assert await env.active_conversation(resource) is None
     assert not any("Model set to" in t for t in adapter.texts())
-
-
-async def test_a_page_turn_changes_no_agent(env: ChannelEnv) -> None:
-    """The same rule on the other card — pagination is not a model special case."""
-    for i in range(20):
-        env.add_agent(f"agent{i}")
-    resource, adapter = await _card_channel(env)
-
-    await env.processor.on_callback(
-        tap_event("tg", "owner", "page:agent:1", platform_message_id="card-1")
-    )
-    await wait_until(lambda: len(adapter.card_updates) == 1)
-
-    assert await env.thread_preferred_agent(resource) is None
-    assert not any("Switched to agent" in t for t in adapter.texts())
-    _chat, _mid, _text, buttons, title = adapter.card_updates[0]
-    assert title == "Agent"
-    assert [b.value for b in buttons if is_page_turn(b.value)] == ["page:agent:0", "page:agent:2"]
 
 
 async def test_the_tick_travels_to_the_page_holding_the_current_model(env: ChannelEnv) -> None:
@@ -568,12 +526,13 @@ async def test_a_page_turn_refused_every_way_still_answers_in_text(env: ChannelE
 async def test_a_malformed_navigation_tap_changes_nothing(env: ChannelEnv) -> None:
     """A value that only looks like navigation must not fall through to the
     code path that applies a choice."""
-    env.add_agent("codex")
     resource, adapter = await _card_channel(env)
 
-    await env.processor.on_callback(
-        tap_event("tg", "owner", "page:ghost:1", platform_message_id="card-1")
-    )
+    for value in ("page:ghost:1", "page:agent:1", "page:model:x"):
+        await env.processor.on_callback(
+            tap_event("tg", "owner", value, platform_message_id="card-1")
+        )
 
-    assert await env.thread_preferred_agent(resource) is None
+    assert await env.active_conversation(resource) is None
     assert adapter.card_updates == []
+    assert adapter.sent == []

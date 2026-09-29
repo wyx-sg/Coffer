@@ -13,7 +13,7 @@ files as the only copy. That leaves a question the tree itself cannot answer:
 **what happens when new knowledge arrives?** It arrives from four entrances — an
 agent calling `coffer__write`, the CLI's `coffer knowledge write` (route
 `POST /api/v1/knowledge/material`), a document uploaded on the Knowledge page,
-and a document sent to a channel and saved with `/save` — and from a fifth,
+and a document sent to a channel and saved with `/kb` — and from a fifth,
 unannounced one: a person or an agent editing a document directly.
 
 Three measured facts constrain the answer:
@@ -138,7 +138,7 @@ reverted.**
 
 - **Every entrance submits material.** `coffer__write`, `coffer knowledge
   write` / `POST /api/v1/knowledge/material`, an upload (converted to Markdown by
-  `markitdown`, plus plain text and CSV) and a channel's `/save` all write into
+  `markitdown`, plus plain text and CSV) and a channel's `/kb` all write into
   `.inbox/`. Neither an upload's original bytes nor its extracted text is kept
   as a file: once the knowledge is merged the carrier has nothing left to say.
   The inbox is the one hidden directory Coffer writes. The web UI's tree and

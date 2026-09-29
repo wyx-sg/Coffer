@@ -1,4 +1,5 @@
 // frontend/src/lib/hooks/useConversations.ts — TanStack Query bindings for conversations.
+import { useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -8,7 +9,9 @@ import {
   type AgentConfigOut,
   type Conversation,
   type ConversationCreate,
+  type Message,
 } from "@/lib/api/chat";
+import { platformName, undeliveredMessageIds } from "@/lib/chat/mirror";
 import {
   agentConfigKey,
   archivedConversationsKey,
@@ -50,6 +53,26 @@ export function useConversation(id: string) {
     queryFn: () => chatApi.getConversation(id),
     enabled: !!id,
   });
+}
+
+/**
+ * Where a reply typed in this conversation also goes (spec chat "Show where a
+ * reply will also be sent"): the mirror (null for a web conversation), and for
+ * a message id the platform its channel has not received that message on yet.
+ * The listing the page opens a conversation from leaves the mirror out, so a
+ * channel conversation reads it from its own GET — the key the send path
+ * invalidates when a reply is left pending.
+ */
+export function useChannelMirror(conversation: Conversation, messages: Message[]) {
+  const bound = conversation.channel_binding !== null;
+  const detail = useConversation(bound ? conversation.id : "");
+  const mirror = bound
+    ? (detail.data?.channel_binding?.mirror ?? conversation.channel_binding?.mirror ?? null)
+    : null;
+  const owed = useMemo(() => undeliveredMessageIds(mirror, messages), [mirror, messages]);
+  const notDeliveredTo = (messageId: string) =>
+    mirror && owed.has(messageId) ? platformName(mirror.platform) : undefined;
+  return { mirror, notDeliveredTo };
 }
 
 /**

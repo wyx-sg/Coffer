@@ -246,6 +246,9 @@ class ChannelBinding:
     # channel whose scope is empty is never bound at all: the runtime treats it
     # as dormant. So a binding that exists has already passed that gate.
     agent_scope: Scope | None = None
+    # The directories `/dir` may switch into (spec channels "Choose the working
+    # directory from chat"), from the channel config; empty admits none.
+    directories: tuple[str, ...] = ()
 
 
 class AgentCatalogPort(Protocol):
@@ -260,14 +263,14 @@ class AgentCatalogPort(Protocol):
 
 
 class ModelSuggestionPort(Protocol):
-    """Best-effort quick-picks for a managed agent's ``/model`` and ``/effort``
+    """Best-effort quick-picks for a managed agent's ``/model`` (model and effort steps)
     selection cards, mirroring the web pickers the two sit beside.
 
     Two questions, because the choice has two halves and only the first is
     always asked: WHICH model the agent runs, and — for an agent whose models
     take one — how hard that model thinks. Empty answers are ordinary: no
     catalogue to offer means the card falls back to the free-text path, and no
-    levels means the agent has no such setting and `/effort` says so rather than
+    levels means the agent has no such setting and `/model` says so rather than
     rendering an empty card."""
 
     async def suggest(self, agent_key: str) -> list[str]: ...

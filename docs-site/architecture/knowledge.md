@@ -96,12 +96,12 @@ Every entrance submits **material** into the collection's inbox. None of them wr
 | `coffer__write` | MCP builtin tool, called by an agent |
 | `coffer knowledge write`, `POST /api/v1/knowledge/material` | CLI and REST |
 | `coffer knowledge upload`, `POST /api/v1/knowledge/upload`, the Knowledge page | Upload, converted to Markdown first |
-| `/save <collection>` after an attachment | A paired [channel](/architecture/chat) owner |
+| `/kb <collection>` after an attachment | A paired [channel](/architecture/chat) owner |
 
 ```mermaid
 flowchart TD
   W["coffer__write / CLI / REST"] --> S["KnowledgeService.submit"]
-  U["Upload or channel /save"] --> C["Convert to Markdown"]
+  U["Upload or channel /kb"] --> C["Convert to Markdown"]
   C --> D["Describe: model or opening prose"]
   D --> S
   S --> I[".inbox/ item"]

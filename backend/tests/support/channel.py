@@ -154,7 +154,7 @@ class FakeChannelAdapter:
         # finishes the message in place and leaves the caller nothing to send.
         self.live_text_finalizes = False
         # (chat_id, mark, body, thread_id) for every ``open_thread`` the core
-        # asked for ("Open parallel conversations in a direct chat"), and the
+        # asked for ("Open parallel conversations beside a direct chat"), and the
         # scripted refusal a transport with no threads available raises.
         self.opened_threads: list[tuple[str, str, str, str]] = []
         self.open_thread_fails_with: Exception | None = None

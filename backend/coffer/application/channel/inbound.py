@@ -9,7 +9,8 @@ service + turn orchestrator), exactly like the web UI: agents cannot tell a
 channel turn from a UI turn, and a new agent provider is reachable from every
 channel with no code here changing. Slash-command handling lives in
 ``commands``, conversation creation in ``conversation_ops``, running a
-queued turn end-to-end in ``turn_driver``, and the two inbound callbacks that
+queued turn end-to-end in ``turn_driver``, deciding what is a command in
+``inbound_commands``, and the two inbound callbacks that
 never drive a turn (a card tap, a chat-lifecycle event) in ``inbound_events``.
 """
 
@@ -18,17 +19,14 @@ from __future__ import annotations
 import contextlib
 import logging
 from collections.abc import Callable, Sequence
-from datetime import UTC, datetime
 
 from coffer.application.audit_service import AuditService
-from coffer.application.channel.commands import HELP_TEXT, ChannelCommands
-from coffer.application.channel.ephemeral import (
-    private_send,
-    safe_send,
-    target_for_command,
-)
+from coffer.application.channel.commands import ChannelCommands
+from coffer.application.channel.ephemeral import safe_send
 from coffer.application.channel.inbound_burst import BurstPart, InboundBurst, window_for
+from coffer.application.channel.inbound_commands import route_slash
 from coffer.application.channel.inbound_events import InboundEvents
+from coffer.application.channel.inbound_gate import group_peer
 from coffer.application.channel.pairing import PairingManager, claim_pairing
 from coffer.application.channel.parallel_threads import resolve_conversation_thread_id
 from coffer.application.channel.ports import (
@@ -38,7 +36,6 @@ from coffer.application.channel.ports import (
 )
 from coffer.application.channel.save_ports import CollectionCatalogPort, IngestPort
 from coffer.application.channel.store_ports import (
-    ChannelPeer,
     ChannelPeerRepoPort,
     ChannelThreadConversationRepoPort,
 )
@@ -106,6 +103,7 @@ class InboundProcessor:
             ingest=ingest,
             knowledge_enabled=knowledge_enabled,
             running_in=self._running_in,
+            running_in_chat=self._running_in_chat,
         )
         self._turn_driver = TurnDriver(
             peers=peers,
@@ -166,6 +164,11 @@ class InboundProcessor:
     def binding(self, name: str) -> ChannelBinding | None:
         return self._bindings.get(name)
 
+    @property
+    def turn_driver(self) -> TurnDriver:
+        """What renders a turn into a chat — also for a web-queued turn."""
+        return self._turn_driver
+
     def shutdown(self) -> None:
         for name in list(self._bindings):
             self.unbind(name)
@@ -178,53 +181,9 @@ class InboundProcessor:
         if binding is None:
             return
         if msg.chat_kind == "group":
-            if binding.require_mention and not msg.addressed:
-                # Un-addressed group chatter (no @mention/reply-to-bot) is
-                # never a turn — a bot must not speak up uninvited in a group
-                # it merely sits in. With ``require_mention`` off the channel
-                # lets un-addressed group messages through this gate (still
-                # owner-gated by the sender_id checks below).
-                return
-            if binding.ignore_other_mentions and msg.mentions_others:
-                # "Configure when the bot answers in a group": a group message that
-                # @mentions another user is aimed at a human — drop it silently (no
-                # reply), before the owner gate, so a bot in a busy group never butts in
-                # regardless of who sent it.
-                return
-            owner = await self._peers.owner_sender_id(binding.resource.id)
-            if owner is None:
-                # The channel has never been paired (no DM/group has a known
-                # owner sender id yet) — a group @mention cannot bootstrap
-                # pairing; only the paired DM/pairing-code flow can.
-                return
-            if not msg.sender_id or msg.sender_id != owner:
-                # A group chat is shared, unlike a DM's 1:1 chat_id match — an
-                # empty sender_id here (the transport failed to supply one)
-                # must never fall through as "assume it's the owner": that
-                # would let any member without a resolvable sender_id drive
-                # turns on the owner's agent. Refuse whenever ownership can't
-                # be proven, not just when it is provably wrong.
-                await safe_send(
-                    binding,
-                    msg.chat_id,
-                    "🚫 Not authorized — only this channel's owner can use me here.",
-                    thread_id=msg.thread_id,
-                    chat_kind="group",
-                )
-                return
-            peer = await self._peers.get_by_chat(binding.resource.id, msg.chat_id)
+            peer = await group_peer(self._peers, binding, msg)
             if peer is None:
-                # First @mention from the owner in this group/thread — record
-                # a peer row for it so future turns (and /commands) resolve a
-                # conversation scoped to this chat, not the owner's DM.
-                peer = ChannelPeer(
-                    resource_id=binding.resource.id,
-                    chat_id=msg.chat_id,
-                    display_name=msg.sender_display,
-                    paired_at=datetime.now(tz=UTC),
-                    sender_id=owner,
-                )
-                await self._peers.upsert(peer)
+                return
         else:
             peer = await self._peers.get_by_chat(binding.resource.id, msg.chat_id)
             if peer is None:
@@ -252,19 +211,29 @@ class InboundProcessor:
         # in, and from this message's own files.
         title_hint = conversation_title_hint(text, attachments)
         if attachments:
-            # Remember it (owner-gated already) for a `/save` that follows (spec channels
+            # Remember it (owner-gated already) for a `/kb` that follows (spec channels
             # "Save a sent document into a collection") — never the thread-history files
             # folded in below. One slot, first file only: the ingest service takes one
             # file per call (spec knowledge "Bound uploads and leave nothing behind on failure").
             session = self._session(binding.resource.name, peer.chat_id, conv_thread)
             session.pending_document = attachments[0]
-        # A slash command is text-only (a "/" caption on a file is a message), decided on
-        # the message's OWN text before any thread history is folded in.
-        is_command = text.startswith("/") and not attachments
-        if not is_command:
-            # The thread it landed in and the message it quotes ground the turn
-            # (see "Ground a turn in the message it quotes").
-            text, attachments = await fold_turn_context(binding, msg, text, attachments)
+        # A command (or a near miss of one) is decided on the message's OWN text,
+        # before any thread history is folded in (see ``inbound_commands``).
+        if await route_slash(
+            commands=self._commands,
+            burst=self._burst,
+            session=self._session,
+            binding=binding,
+            peer=peer,
+            msg=msg,
+            text=text,
+            has_attachments=bool(attachments),
+            conversation_thread_id=conv_thread,
+        ):
+            return
+        # The thread it landed in and the message it quotes ground the turn
+        # (see "Ground a turn in the message it quotes").
+        text, attachments = await fold_turn_context(binding, msg, text, attachments)
         if not text and not attachments:
             # An empty envelope with nothing downloadable (a sticker, a location,
             # a media type the transport does not extract) — and no thread
@@ -275,26 +244,6 @@ class InboundProcessor:
                 "⚠️ Unsupported message — send text, a photo, or a file.",
                 thread_id=msg.thread_id,
                 chat_kind=msg.chat_kind,
-            )
-            return
-        if is_command:
-            # Whatever this chat/thread holds runs first; `/stop` drops it instead.
-            key = (binding.resource.name, peer.chat_id, msg.thread_id)
-            if text.split()[0].lower() == "/stop":
-                await self._burst.drop(key)
-            else:
-                await self._burst.flush(key)
-            await self._commands.handle(
-                binding,
-                peer,
-                text,
-                self._session(binding.resource.name, peer.chat_id, conv_thread),
-                # A command answer is the asker's business, not the room's (see
-                # "Keep non-answer chatter private in a group").
-                private_send(safe_send, target_for_command(msg, text)),
-                chat_kind=msg.chat_kind,
-                thread_id=msg.thread_id,
-                conversation_thread_id=conv_thread,
             )
             return
         # "Open every turn with its message origin": provenance (platform, chat, thread,
@@ -382,15 +331,25 @@ class InboundProcessor:
         await safe_send(
             binding,
             msg.chat_id,
-            f"✅ Paired. This chat now controls Coffer channel "
-            f"'{binding.resource.name}'.\n\n{HELP_TEXT}",
+            f"✅ Paired. This chat now controls Coffer channel '{binding.resource.name}'.",
         )
+        # Then the commands, once, as a card where the transport has buttons
+        # (spec channels "Offer the commands as a help card").
+        await self._commands.send_help(binding, peer, safe_send)
 
     # -- helpers ---------------------------------------------------------------
 
     def _running_in(self, channel: str, chat_id: str, thread_id: str) -> str | None:
         session = self._sessions.get((channel, chat_id, thread_id))
         return session.running_conversation_id if session is not None else None
+
+    def _running_in_chat(self, channel: str, chat_id: str) -> list[str]:
+        """Every conversation rendering a turn anywhere in one chat."""
+        return [
+            session.running_conversation_id
+            for key, session in self._sessions.items()
+            if key[0] == channel and key[1] == chat_id and session.running_conversation_id
+        ]
 
     def _session(self, channel: str, chat_id: str, thread_id: str) -> _Session:
         key = (channel, chat_id, thread_id)

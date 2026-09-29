@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import Any, Protocol
 
 
 @dataclass(frozen=True)
@@ -114,6 +114,17 @@ class ChannelThreadConversation:
     # its mark ``🧵#N title`` is built from. ``None`` on every other row.
     parallel_ordinal: int | None = None
     parallel_title: str | None = None
+    #: "direct" or "group" — which of the platform's send paths reaches this
+    #: thread. ``None`` on a row written before it was recorded; set again by
+    #: the next message that arrives there.
+    chat_kind: str | None = None
+    #: The thread's other sticky settings (spec channels "Keep a chat's settings
+    #: across its conversations"): the model, the reasoning effort and the
+    #: working directory a fresh conversation here opens with. ``None`` means
+    #: the agent's own default (model, effort) or the channel's (directory).
+    preferred_model: str | None = None
+    preferred_effort: str | None = None
+    preferred_cwd: str | None = None
 
     @property
     def parallel_mark(self) -> str | None:
@@ -121,6 +132,30 @@ class ChannelThreadConversation:
         if self.parallel_ordinal is None:
             return None
         return parallel_mark(self.parallel_ordinal, self.parallel_title or "")
+
+
+class _Keep:
+    """The "leave this setting as it is" marker for ``set_preferences``."""
+
+    def __repr__(self) -> str:
+        return "KEEP"
+
+
+#: Passed for a setting ``set_preferences`` must not touch (``None`` clears it).
+KEEP: Any = _Keep()
+
+
+@dataclass(frozen=True)
+class ChannelThreadLocation:
+    """Where a conversation a channel opened lives: the chat and thread that
+    opened it, and which send path reaches them (one ``channel_thread_history``
+    row)."""
+
+    resource_id: int
+    chat_id: str
+    thread_id: str
+    chat_kind: str | None
+    opened_at: datetime
 
 
 def parallel_mark(ordinal: int, title: str) -> str:
@@ -155,10 +190,56 @@ class ChannelThreadConversationRepoPort(Protocol):
         untouched (creating the row if this thread has none yet)."""
         ...
 
+    async def set_preferences(
+        self,
+        resource_id: int,
+        chat_id: str,
+        thread_id: str,
+        *,
+        agent: str | None = KEEP,
+        model: str | None = KEEP,
+        effort: str | None = KEEP,
+        cwd: str | None = KEEP,
+    ) -> None:
+        """Upsert the thread's sticky settings: each one passed is written
+        (``None`` clears it), each left at ``KEEP`` is untouched."""
+        ...
+
+    async def note_chat_kind(
+        self, resource_id: int, chat_id: str, thread_id: str, chat_kind: str
+    ) -> None:
+        """Record which send path reaches this thread (upserting the row), so a
+        reply typed on the web can be mirrored into it."""
+        ...
+
+    async def record_history(
+        self,
+        resource_id: int,
+        chat_id: str,
+        thread_id: str,
+        conversation_id: str,
+        chat_kind: str | None,
+    ) -> None:
+        """Remember that ``conversation_id`` was opened for this thread (spec
+        channels "Resume an earlier conversation from chat"). Idempotent."""
+        ...
+
+    async def history(
+        self, resource_id: int, chat_id: str, thread_id: str, *, limit: int = 20
+    ) -> list[str]:
+        """The conversations this thread opened, newest first."""
+        ...
+
+    async def locate(self, conversation_id: str) -> ChannelThreadLocation | None:
+        """Which chat and thread opened ``conversation_id``, or ``None`` when no
+        channel did (spec chat "Mirror a web reply into the channel it came
+        from")."""
+        ...
+
     async def next_parallel_ordinal(self, resource_id: int, chat_id: str) -> int:
         """The number the chat's next parallel thread gets: ``max + 1`` over the
         chat's rows, so a number is never reused after a conversation is replaced
-        (see "Open parallel conversations in a direct chat"). Read before the
+        (see "Open parallel conversations beside a direct chat"). Read before the
         thread exists, because the thread's root message carries its mark."""
         ...
 
@@ -174,3 +255,46 @@ class ChannelThreadConversationRepoPort(Protocol):
     ) -> list[ChannelThreadConversation]:
         """The chat's parallel threads, newest (highest ordinal) first."""
         ...
+
+
+@dataclass(frozen=True)
+class OutboxEntry:
+    """One message waiting to reach a chat (one ``channel_outbox`` row): a reply
+    typed on the web (``kind="reply"``) or the agent's answer to it, collected
+    while the channel could not send (``kind="answer"``)."""
+
+    id: int
+    resource_id: int
+    chat_id: str
+    thread_id: str
+    chat_kind: str
+    conversation_id: str
+    kind: str
+    text: str
+    created_at: datetime
+
+
+class ChannelOutboxRepoPort(Protocol):
+    """Messages Coffer still owes a chat (spec chat "Mirror a web reply into the
+    channel it came from"): kept until the channel can send them, then marked
+    delivered — never dropped because a send failed."""
+
+    async def add(
+        self,
+        *,
+        resource_id: int,
+        chat_id: str,
+        thread_id: str,
+        chat_kind: str,
+        conversation_id: str,
+        kind: str,
+        text: str,
+    ) -> int: ...
+
+    async def pending(self, resource_id: int) -> list[OutboxEntry]:
+        """The channel's undelivered messages, oldest first."""
+        ...
+
+    async def pending_for_conversation(self, conversation_id: str) -> list[OutboxEntry]: ...
+
+    async def mark_delivered(self, entry_id: int) -> None: ...

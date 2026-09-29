@@ -56,7 +56,7 @@ class InboundEvents:
     #: Looks up (creating if absent) the session for one ``(channel, chat, thread)`` —
     #: the same registry ``InboundProcessor``/``TurnDriver`` share. A card tap needs it
     #: only for a ``collection:`` choice (spec channels "Save a sent document into a
-    #: collection"): the pending document a `/save` tap saves lives there.
+    #: collection"): the pending document a `/kb` tap saves lives there.
     session: SessionAccessor
 
     async def on_callback(

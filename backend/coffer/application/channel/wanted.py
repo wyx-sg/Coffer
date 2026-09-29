@@ -60,7 +60,7 @@ class Routing:
     running adapter meet. Above it — the channel's ``default_agent``, its
     ``scope``, every validator in ``kind.py`` — an agent is named by its uid,
     because those are references to an agent resource and a reference has to
-    survive the owner renaming it. Below it — ``/agent``'s listing and card,
+    survive the owner renaming it. Below it — ``/new <agent>``'s listing and validation,
     the sticky ``preferred_agent`` column, ``conversation_spec``, the turn's own
     routing — an agent is named by the key the turn platform dispatches on,
     because that is the vocabulary the platform, and the user typing
@@ -134,7 +134,7 @@ class Gate:
     _foreign: dict[str, object] = field(default_factory=dict)
     #: What each channel the last pass found live routes to, keyed by name.
     #: Read back by the runtime, which stamps it onto the binding at start — so
-    #: a scope edit reaches `/agent` within one tick rather than at the next
+    #: a scope edit reaches `/new <agent>` within one tick rather than at the next
     #: daemon restart.
     routing: dict[str, Routing] = field(default_factory=dict)
 

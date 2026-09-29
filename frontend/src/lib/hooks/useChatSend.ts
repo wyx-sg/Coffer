@@ -6,9 +6,9 @@
 import { useCallback, type Dispatch, type RefObject, type SetStateAction } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { chatApi, type Message } from "@/lib/api/chat";
+import { chatApi, type Message, type SendMessageAck } from "@/lib/api/chat";
 import { ApiError } from "@/lib/api/errors";
-import { conversationsKey, messagesKey } from "@/lib/api/queryKeys";
+import { conversationKey, conversationsKey, messagesKey } from "@/lib/api/queryKeys";
 import { type EchoAttachment, type PendingEcho, createEcho } from "@/lib/chat/echoes";
 
 interface Options {
@@ -34,7 +34,7 @@ export function useChatSend({
   // refusal is surfaced as `error` and remembered as a refusal — its message
   // never ran, so the banner offers no Retry of it.
   const post = useCallback(
-    async (request: () => Promise<{ queued: boolean }>, echo: PendingEcho | null) => {
+    async (request: () => Promise<SendMessageAck>, echo: PendingEcho | null) => {
       setError(null);
       if (echo) setEchoes((prev) => [...prev, echo]);
       const dropEcho = () => {
@@ -43,7 +43,14 @@ export function useChatSend({
       try {
         // Queued behind a turn this client did not know about: no row exists
         // yet and the queue chip owns the message until its turn starts.
-        if ((await request()).queued) dropEcho();
+        const ack = await request();
+        if (ack.queued) dropEcho();
+        // The channel could not take the reply yet: refetch the conversation so
+        // its mirror lists it as undelivered (spec chat "Show where a reply will
+        // also be sent"). A "sent" reply changes nothing the page shows.
+        if (ack.mirror === "pending") {
+          void qc.invalidateQueries({ queryKey: conversationKey(conversationId) });
+        }
         return true;
       } catch (err) {
         const wrapped = err instanceof Error ? err : new ApiError("INTERNAL_ERROR", String(err));

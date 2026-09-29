@@ -1,16 +1,15 @@
 // components/chat/MessageThread.tsx
-// Scrollable list of messages + echoed just-sent prompts + live streaming
-// message. Follows the stream only while the user sits at the bottom (a "Jump
-// to latest" pill brings them back — useFollowScroll), restarts at the bottom
-// whenever another conversation opens, and on a failed turn swaps the
-// in-progress bubble for the error banner with a Retry that re-sends the
-// message that failed, attachments included. Which persisted rows render is decided by
-// useMessageThread (lib/chat/threadView); the echoes are the turn hook's.
+// Messages + echoed just-sent prompts + the live message. Follows the stream
+// only while the user sits at the bottom (useFollowScroll's "Jump to latest"),
+// restarts at the bottom per conversation, and on a failed turn swaps the live
+// bubble for the error banner with a Retry of the failed message. Rows are
+// chosen by useMessageThread (lib/chat/threadView); the echoes are the turn hook's.
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowDown } from "lucide-react";
 import { useMessageThread } from "@/lib/hooks/useMessageThread";
 import { useFollowScroll } from "@/lib/hooks/useFollowScroll";
+import { useChannelMirror } from "@/lib/hooks/useConversations";
 import { describeTurnError } from "@/lib/chat/turnErrors";
 import { retryTargetFor } from "@/lib/chat/threadView";
 import type { LiveMessage, PendingEcho } from "@/lib/hooks/useChatTurn";
@@ -18,6 +17,7 @@ import { type EchoAttachment, echoAsMessage } from "@/lib/chat/echoes";
 import type { Conversation } from "@/lib/api/chat";
 import { Button } from "@/components/ui/button";
 import { AgentModelBar } from "./AgentModelBar";
+import { ChannelMirrorHint } from "./ChannelMirrorHint";
 import { ChatErrorBanner } from "./ChatErrorBanner";
 import { MessageBubble } from "./MessageBubble";
 import { Composer, type ComposerHandle } from "./Composer";
@@ -109,6 +109,8 @@ export function MessageThread({
   const { find, inputRef, onKeyDown } = useDomFind(scrollRef);
 
   const { messages, isPending, error } = useMessageThread(conversation.id, liveMessage, turnError);
+  // Where a reply also goes, and which ones its channel has not received yet.
+  const { mirror, notDeliveredTo } = useChannelMirror(conversation, messages);
   const isEmpty = messages.length === 0 && pendingEchoes.length === 0 && !liveMessage;
   // A failed turn is never "thinking": freeze the live bubble so only the
   // banner reports the state, and keep whatever text already streamed.
@@ -159,7 +161,7 @@ export function MessageThread({
 
           <div className="space-y-3">
             {messages.map((msg) => (
-              <MessageBubble key={msg.id} message={msg} />
+              <MessageBubble key={msg.id} message={msg} undeliveredTo={notDeliveredTo(msg.id)} />
             ))}
             {pendingEchoes.map((echo) => (
               <MessageBubble key={echo.id} message={echoAsMessage(echo, conversation.id)} />
@@ -230,6 +232,7 @@ export function MessageThread({
             onEdit={handleEditPending}
             onRemove={(idx) => onSetPending?.(pending.filter((_, i) => i !== idx))}
           />
+          {mirror && <ChannelMirrorHint mirror={mirror} />}
           {/* The composer is NEVER disabled by streaming: a message sent during a
               turn queues server-side. */}
           <Composer

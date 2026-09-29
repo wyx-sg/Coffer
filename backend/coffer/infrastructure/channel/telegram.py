@@ -75,8 +75,10 @@ class TelegramAdapter:
         base_url: str = "https://api.telegram.org",
         poll_timeout: int = _POLL_TIMEOUT_SECONDS,
         media_dir: pathlib.Path | None = None,
+        knowledge_enabled: bool = True,
     ) -> None:
         self._name = channel_name
+        self._knowledge_enabled = knowledge_enabled  # /kb is in the menus only while on
         self._base = f"{base_url}/bot{bot_token}"
         # File downloads use {base}/file/bot{token}/{path}, not {base}/bot{token}/{method}.
         self._file_base = f"{base_url}/file/bot{bot_token}"
@@ -138,7 +140,8 @@ class TelegramAdapter:
         # and the reconciler is waiting on start() — against an unreachable API
         # they would hold up the channel for a minute to change nothing.
         self._profile_task = asyncio.create_task(
-            register_profile(self._call), name=f"telegram-profile:{self._name}"
+            register_profile(self._call, knowledge_enabled=self._knowledge_enabled),
+            name=f"telegram-profile:{self._name}",
         )
         self._task = asyncio.create_task(self._poll_loop(), name=f"telegram-poll:{self._name}")
 
@@ -330,14 +333,10 @@ class TelegramAdapter:
         where it exists: nothing is delivered, so nothing has to be deleted
         afterwards, and it carries the stop control routed back here.
 
-        Two things send a turn back to the older mechanism — one sent message,
-        rewritten in place. A Bot API server that has never heard of drafts is
-        the obvious one. The other is a group: ``sendMessageDraft`` addresses
-        "the target private chat" and has no group form, so a group turn would
-        spend a refused round trip per snapshot and show no progress at all.
-        Keeping the stop control out of groups is a second reason to prefer the
-        DM-only split: the stop update names no sender, so a button any member
-        could press is a button Coffer could not owner-gate.
+        Two things send a turn back to one sent message rewritten in place: a
+        Bot API server that has never heard of drafts, and a group —
+        ``sendMessageDraft`` addresses "the target private chat" only, and its
+        stop update names no sender, so a group's button could not be owner-gated.
         """
         if chat_kind != "group" and self._features.message_drafts.available:
             return TelegramDraftLiveText(

@@ -76,6 +76,12 @@ class InboundMessage:
     # sender and the bot can see it); it is the handle that lets the bot answer
     # privately in a group without being an administrator ("Keep non-answer
     # chatter private in a group")
+    # True when a group message was sent in the group's MAIN chat on a platform
+    # whose every main-chat @mention roots a fresh thread (SeaTalk): ``thread_id``
+    # is then that new thread, and a command sent there configures the group's
+    # defaults instead of a thread nobody will continue (spec channels "Set a
+    # group's defaults from its main chat"). False everywhere else.
+    group_main: bool = False
 
 
 @dataclass(frozen=True)

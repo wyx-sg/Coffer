@@ -103,6 +103,12 @@ _PROVIDERS: list[_Provider] = [
     *_pairs(cred_comp, "_credential_store", "_master_key_manager"),
 ]
 
+# Providers a surface works without: the getter answers ``None`` while unset
+# instead of raising. The chat routes mirror a web reply into its channel only
+# when the channel kind has published its mirror (spec chat "Mirror a web reply
+# into the channel it came from").
+_OPTIONAL_PROVIDERS: list[_Provider] = [*_pairs(chat_deps, "_channel_mirror")]
+
 _MODULES: list[ModuleType] = sorted(
     {mod for mod, _a, _g, _s in _PROVIDERS}, key=lambda m: m.__name__
 )
@@ -124,7 +130,7 @@ def _reset_globals(monkeypatch):
     monkeypatch.setattr restores the original module-level value automatically,
     so a test that sets a provider can't leak into the next test.
     """
-    for mod, attr, _getter, _setter in _PROVIDERS:
+    for mod, attr, _getter, _setter in [*_PROVIDERS, *_OPTIONAL_PROVIDERS]:
         monkeypatch.setattr(mod, attr, None)
     yield
 
@@ -146,6 +152,19 @@ def test_setter_then_getter_returns_value(mod, attr, getter, setter, _reset_glob
     assert getattr(mod, attr) is sentinel
 
 
+@pytest.mark.parametrize(
+    ("mod", "attr", "getter", "setter"),
+    _OPTIONAL_PROVIDERS,
+    ids=[_id(mod, attr) for mod, attr, _g, _s in _OPTIONAL_PROVIDERS],
+)
+def test_optional_getter_is_none_when_unset(mod, attr, getter, setter, _reset_globals):
+    assert getter() is None
+    sentinel = object()
+    setter(sentinel)
+    assert getter() is sentinel
+    assert getattr(mod, attr) is sentinel
+
+
 @pytest.mark.parametrize("mod", _MODULES, ids=[m.__name__ for m in _MODULES])
 def test_every_setter_in_the_module_is_enumerated(mod):
     """A ``set_*`` added to any DI module must be added to ``_PROVIDERS`` too,
@@ -155,7 +174,7 @@ def test_every_setter_in_the_module_is_enumerated(mod):
         for name, obj in inspect.getmembers(mod, inspect.isfunction)
         if name.startswith("set_") and obj.__module__ == mod.__name__
     }
-    enumerated = {attr for m, attr, _g, _s in _PROVIDERS if m is mod}
+    enumerated = {attr for m, attr, _g, _s in [*_PROVIDERS, *_OPTIONAL_PROVIDERS] if m is mod}
     assert declared == enumerated, (
         f"{mod.__name__}: setters {sorted(declared - enumerated)} are not enumerated; "
         f"enumerated {sorted(enumerated - declared)} have no setter"

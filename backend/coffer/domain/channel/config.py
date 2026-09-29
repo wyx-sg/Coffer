@@ -74,6 +74,12 @@ class _CommonChannelFields(BaseModel):
     # no text, before the held burst runs. 0 runs every message as its own turn.
     wait_after_text_seconds: float = Field(default=1.5, ge=0, le=60)
     wait_after_forward_seconds: float = Field(default=5.0, ge=0, le=60)
+    # The working directories `/dir` may switch a conversation into (spec
+    # channels "Choose the working directory from chat"): absolute paths, each
+    # also admitting the directories beneath it. Empty means the channel's
+    # default directory is the only one — a chat cannot point an agent at an
+    # arbitrary folder on this machine.
+    directories: list[str] = Field(default_factory=list, max_length=32)
     # NOTE: a channel curates no MODELS. A new conversation opens on the bound
     # agent's own CLI default and ``/model`` offers that agent's whole
     # catalogue, refusing nothing — picking a model is the agent's business,
@@ -103,6 +109,19 @@ class _CommonChannelFields(BaseModel):
     # them" — the rival-consumer failure this field exists to prevent. The
     # surfaces show an unbound channel as unbound and bind it in one click.
     runs_on: str | None = Field(default=None, max_length=64)
+
+    @field_validator("directories")
+    @classmethod
+    def _absolute_directories(cls, v: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for raw in v:
+            path = raw.strip()
+            if not path.startswith("/") or len(path) > 1024:
+                raise ValueError(f"directories must be absolute paths; got {raw!r}")
+            path = path.rstrip("/") or "/"
+            if path not in cleaned:
+                cleaned.append(path)
+        return cleaned
 
 
 class TelegramChannelConfig(_CommonChannelFields):

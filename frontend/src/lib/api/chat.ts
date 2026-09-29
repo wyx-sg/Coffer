@@ -38,6 +38,17 @@ export type MessageListOut = Schemas["MessageListOut"];
 /** `archived_at` is null for an active conversation; `channel_binding` null for a web one. */
 export type Conversation = Schemas["ConversationOut"];
 
+/**
+ * Where a reply typed here also goes, for a channel conversation (spec chat
+ * "Show where a reply will also be sent"). Filled only by the single-conversation
+ * GET; the listing leaves `channel_binding.mirror` null.
+ */
+export type ChannelMirror = Schemas["ChannelMirrorOut"];
+
+/** A send's answer: `queued` behind a running turn, and what became of the
+ *  reply in the conversation's channel (`mirror`, null for a web conversation). */
+export type SendMessageAck = Schemas["SendMessageAck"];
+
 export type ConversationListOut = Schemas["ConversationListOut"];
 
 /** One page of the listing: its rows and the cursor for the next (null last). */
@@ -129,7 +140,7 @@ export const chatApi = {
   // its events arrive over the GET /events subscription, not this response.
   // `attachmentIds` are uploads from `uploadAttachment`, in attach order.
   sendMessage: (conversationId: string, text: string, attachmentIds: string[] = []) =>
-    call<{ queued: boolean }>(`/chat/conversations/${conversationId}/messages`, {
+    call<SendMessageAck>(`/chat/conversations/${conversationId}/messages`, {
       method: "POST",
       body: attachmentIds.length > 0 ? { text, attachment_ids: attachmentIds } : { text },
     }),
@@ -137,10 +148,9 @@ export const chatApi = {
   // Send a persisted user message again (Retry). The daemon rebuilds it from its
   // row, attachments included; a file swept since is 410 ATTACHMENT_EXPIRED.
   resendMessage: (conversationId: string, messageId: string) =>
-    call<{ queued: boolean }>(
-      `/chat/conversations/${conversationId}/messages/${messageId}/resend`,
-      { method: "POST" },
-    ),
+    call<SendMessageAck>(`/chat/conversations/${conversationId}/messages/${messageId}/resend`, {
+      method: "POST",
+    }),
 
   // Upload one file for a later send. Not tied to a conversation, so a draft
   // can attach before its conversation exists. `signal` cancels it (the

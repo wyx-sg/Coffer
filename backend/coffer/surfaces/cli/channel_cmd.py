@@ -18,11 +18,14 @@ import typer
 
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli._channel_options import (
+    _DIRS,
     _IGNORE_OTHER_MENTIONS,
+    _NO_DIRS,
     _REQUIRE_MENTION,
     _WAIT_AFTER_FORWARD,
     _WAIT_AFTER_TEXT,
     _settings,
+    directories,
     edit_option,
     settings_config,
 )
@@ -91,6 +94,7 @@ def add(
     ignore_other_mentions: bool | None = _IGNORE_OTHER_MENTIONS,
     wait_after_text: float | None = _WAIT_AFTER_TEXT,
     wait_after_forward: float | None = _WAIT_AFTER_FORWARD,
+    dirs: list[str] | None = _DIRS,
     title: str | None = typer.Option(None, "--title", help="Display title (≤80 chars)"),
     description: str | None = typer.Option(None, "--description"),
 ) -> None:
@@ -116,6 +120,9 @@ def add(
     config.update(
         _settings(require_mention, ignore_other_mentions, wait_after_text, wait_after_forward)
     )
+    allowed = directories(dirs, False)
+    if allowed:
+        config["directories"] = allowed
     if agent_config is not None:
         try:
             config["default_agent_config"] = _json.loads(agent_config)
@@ -216,6 +223,8 @@ def show(
         f"gating:   require_mention={'on' if config.get('require_mention', True) else 'off'}"
         f"  ignore_other_mentions={'on' if config.get('ignore_other_mentions') else 'off'}"
     )
+    for path in config.get("directories") or []:
+        typer.echo(f"dir:      {path}")
     for key in sorted(k for k in config if k.endswith("_ref")):
         typer.echo(f"secret:   {key} = {config[key]}")
     typer.echo(f"enabled:  {body['enabled']}    running: {body['running']}")
@@ -333,12 +342,17 @@ _CHANNEL = KindVerbs(
             edit_option("ignore_other_mentions", _IGNORE_OTHER_MENTIONS),
             edit_option("wait_after_text", _WAIT_AFTER_TEXT, float | None),
             edit_option("wait_after_forward", _WAIT_AFTER_FORWARD, float | None),
+            edit_option("dirs", _DIRS, list[str] | None),
+            edit_option("no_dirs", _NO_DIRS, bool),
         ),
         to_config=settings_config,
     ),
     help={
         "list": "List registered channels.",
-        "edit": "Change a channel's name, title, description, group gating or quiet windows.",
+        "edit": (
+            "Change a channel's name, title, description, group gating, quiet windows "
+            "or `/dir` directories."
+        ),
         "rm": "Remove a channel and its pairings.",
         "enable": "Enable a channel (its adapter starts on the machine it is bound to).",
         "disable": "Disable a channel (its adapter stops).",

@@ -67,7 +67,17 @@ class ChannelRuntime:
         materialize: Callable[[dict[str, str]], Awaitable[dict[str, str]]] | None = None,
         interval_seconds: float = _DEFAULT_INTERVAL_SECONDS,
         machine_id: Callable[[], Awaitable[str]] | None = None,
+        knowledge_enabled: Callable[[], bool] = lambda: True,
+        on_tick: Callable[[ChannelBinding], Awaitable[None]] | None = None,
     ) -> None:
+        # Handed each running channel's binding after every tick: the outbox
+        # flush of spec chat "Mirror a web reply into the channel it came from".
+        self._on_tick = on_tick
+        # Part of every binding's hash: a bot's command menu offers `/kb` only
+        # while knowledge is on, so switching the feature rebuilds the adapter,
+        # which registers its menu again (spec channels/telegram "Register
+        # command menus per chat scope and language").
+        self._knowledge_enabled = knowledge_enabled
         self._resources = resources
         self._factory = adapter_factory
         self._processor = processor
@@ -172,6 +182,21 @@ class ChannelRuntime:
         except Exception:
             # The reconciler must outlive any single bad tick.
             _logger.exception("channel.runtime.tick_failed")
+        await self._after_tick()
+
+    async def _after_tick(self) -> None:
+        """Run the tick hook for each running channel; a hook that fails is
+        logged and never breaks the tick or the next channel's turn."""
+        if self._on_tick is None:
+            return
+        for name in list(self._running):
+            binding = self._processor.binding(name)
+            if binding is None or self._stop.is_set():
+                continue
+            try:
+                await self._on_tick(binding)
+            except Exception:
+                _logger.exception("channel.runtime.tick_hook_failed", extra={"channel": name})
 
     async def local_machine_id(self) -> str | None:
         """This machine's id, or ``None`` when no provider is wired.
@@ -248,6 +273,7 @@ class ChannelRuntime:
                 wait_after_text_seconds=parsed.wait_after_text_seconds,
                 wait_after_forward_seconds=parsed.wait_after_forward_seconds,
                 agent_scope=routing.agent_scope,
+                directories=tuple(parsed.directories),
             )
         )
         self._running[name] = _Running(
@@ -274,12 +300,16 @@ class ChannelRuntime:
         """What a running channel is compared against to decide whether to
         rebuild it. The routing is part of it, not just config: the routing
         rides the binding, so a scope edit must rebind the channel the same way
-        a config edit does — otherwise `/agent` would keep offering the old set
+        a config edit does — otherwise `/new <agent>` would keep accepting the old set
         until the daemon restarted. Renaming the AGENT a channel drives now
         changes neither (the row holds its uid), which is the point."""
         routing = self._gate.routing.get(name)
         return json.dumps(
-            {"config": resource.config, "routing": routing.to_json() if routing else None},
+            {
+                "config": resource.config,
+                "routing": routing.to_json() if routing else None,
+                "knowledge": self._knowledge_enabled(),
+            },
             sort_keys=True,
             default=str,
         )

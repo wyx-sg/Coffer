@@ -8,13 +8,24 @@ what already arrived on the update itself.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Any
 
 from coffer.domain.channel.envelopes import InboundAttachment, InboundMessage
 from coffer.domain.channel.rich_content import ForwardedItem, flatten_forwarded, quote_prefix
 
-__all__ = ["addressed_and_text", "build_inbound_message", "is_group", "prepend_context"]
+__all__ = [
+    "addressed_and_text",
+    "build_inbound_message",
+    "command_target",
+    "is_group",
+    "prepend_context",
+]
+
+#: ``/cmd@botname`` — the form Telegram's own menu inserts in a group, and the
+#: one a member types to pick one bot out of several.
+_ADDRESSED_COMMAND = re.compile(r"^(/[A-Za-z0-9_]+)@([A-Za-z0-9_]+)$")
 
 
 def _utf16_span(text: str, offset: int, length: int) -> str:
@@ -138,6 +149,35 @@ def _strip_span(text: str, offset: int, length: int) -> str:
     return (before + after).strip()
 
 
+def command_target(
+    message: dict[str, Any], text: str, *, bot_username: str | None
+) -> tuple[bool, str] | None:
+    """Whether a leading ``/cmd@name`` names this bot, and ``text`` with it
+    normalised to ``/cmd`` (spec channels/telegram "Treat a command addressed
+    to this bot by name as the command").
+
+    ``None`` when the message does not open with such a command — Telegram
+    marks one with a ``bot_command`` entity at offset 0, whose length is in
+    UTF-16 units. For another bot's command the text is returned unchanged:
+    it was never ours to rewrite. The name is matched case-insensitively, as
+    Telegram matches usernames.
+    """
+    for ent in message.get("entities") or message.get("caption_entities") or []:
+        if not isinstance(ent, dict) or ent.get("type") != "bot_command":
+            continue
+        length = ent.get("length")
+        if ent.get("offset") != 0 or not isinstance(length, int):
+            continue
+        match = _ADDRESSED_COMMAND.match(_utf16_span(text, 0, length))
+        if match is None:
+            return None
+        if not bot_username or match.group(2).casefold() != bot_username.casefold():
+            return False, text
+        _, after = _utf16_cut(text, 0, length)
+        return True, f"{match.group(1)}{after}"
+    return None
+
+
 def _forward_sender_name(message: dict[str, Any]) -> str:
     """Best-effort display name for a forwarded message's original sender,
     across both the modern ``forward_origin`` shape and the pre-Bot-API-7
@@ -214,13 +254,21 @@ def build_inbound_message(
     raw_text = str(message.get("text") or message.get("caption") or "")
     addressed, raw = (True, raw_text)
     mentions_other = False
+    named = command_target(message, raw_text, bot_username=bot_username)
     if group:
-        addressed, raw = addressed_and_text(
-            message, raw_text, bot_id=bot_id, bot_username=bot_username
-        )
         mentions_other = _mentions_other(
             message, raw_text, bot_id=bot_id, bot_username=bot_username
         )
+        if named is not None:
+            # ``/cmd@name`` says who it is for, over any reply or @mention: ours
+            # is addressed whatever require_mention says, another bot's is not.
+            addressed, raw = named
+        else:
+            addressed, raw = addressed_and_text(
+                message, raw_text, bot_id=bot_id, bot_username=bot_username
+            )
+    elif named is not None:
+        raw = named[1]
     text = prepend_context(message, raw)
     if notes:
         # An attachment that could not be fetched is stated in the turn text, so the answer can

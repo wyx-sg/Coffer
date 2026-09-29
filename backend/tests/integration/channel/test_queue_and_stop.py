@@ -64,7 +64,9 @@ async def test_new_command_switches_to_a_fresh_conversation(env: ChannelEnv) -> 
 
     await env.processor.on_message(inbound("tg", "owner", "/new"))
 
-    assert "🆕 Started a fresh conversation." in adapter.texts()
+    assert "🆕 New conversation · Coffer Assistant · default model · default directory" in (
+        adapter.texts()
+    )
     fresh = await env.active_conversation(resource)
     assert fresh is not None
     assert fresh != old_conversation

@@ -19,7 +19,7 @@ import sqlite3
 from alembic import command
 from alembic.config import Config as AlembicConfig
 
-HEAD_REVISION = "0107"
+HEAD_REVISION = "0108"
 
 # Tables that should exist once the full migration chain has been applied.
 # The agent kind (spec agent-registry) needs no table of its own — agents
@@ -207,6 +207,11 @@ EXPECTED_TABLES = {
     "chat_messages",
     "channel_peers",
     "channel_thread_conversations",
+    # 0108: every conversation a chat thread opened, and what a channel still
+    # owes a chat (spec channels "Resume an earlier conversation from chat",
+    # spec chat "Mirror a web reply into the channel it came from").
+    "channel_thread_history",
+    "channel_outbox",
     "sync_remotes",
     "sync_convergence_state",
     "sync_held_paths",
@@ -241,6 +246,9 @@ PRE_MERGE_TABLES = (
         "workflow_events",
         "workflow_node_attempts",
         "workflow_approvals",
+        # 0108 created these.
+        "channel_thread_history",
+        "channel_outbox",
     }
 ) | {
     # 0066 drops these at head; every revision below it still has them, and

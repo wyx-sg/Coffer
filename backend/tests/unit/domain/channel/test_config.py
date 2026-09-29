@@ -216,6 +216,7 @@ def test_root_model_round_trips_flat_dict():
         "ignore_other_mentions": False,
         "wait_after_text_seconds": 1.5,
         "wait_after_forward_seconds": 5.0,
+        "directories": [],
         "runs_on": None,
     }
 
@@ -231,6 +232,7 @@ def test_root_model_round_trips_seatalk_dict():
         "ignore_other_mentions": False,
         "wait_after_text_seconds": 1.5,
         "wait_after_forward_seconds": 5.0,
+        "directories": [],
         "runs_on": None,
     }
 
@@ -252,4 +254,21 @@ def test_root_model_applies_raw_secret_rejection():
     with pytest.raises(ValidationError, match="looks like a raw secret"):
         ChannelConfigModel.model_validate(
             {**TELEGRAM_CONFIG, "bot_token_ref": "123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
+        )
+
+
+def test_directories_are_absolute_trimmed_and_deduplicated() -> None:
+    from coffer.domain.channel.config import parse_channel_config
+
+    parsed = parse_channel_config(
+        {
+            "channel_type": "telegram",
+            "bot_token_ref": "tg/token",
+            "directories": ["/a/", "/a", " /b "],
+        }
+    )
+    assert parsed.directories == ["/a", "/b"]
+    with pytest.raises(ValueError, match="absolute"):
+        parse_channel_config(
+            {"channel_type": "telegram", "bot_token_ref": "tg/token", "directories": ["rel/path"]}
         )

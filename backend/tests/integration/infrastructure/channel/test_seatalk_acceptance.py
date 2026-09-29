@@ -301,6 +301,49 @@ async def test_a_quoting_dm_and_group_message_keep_the_quoted_id(
     assert paths == []
 
 
+# -- group main chat ---------------------------------------------------------------
+
+
+def _group_mention(event_id: str, message_id: str, thread_id: str) -> dict[str, Any]:
+    message: dict[str, Any] = {
+        "message_id": message_id,
+        "sender": {"seatalk_id": "st-1", "employee_code": "emp-1"},
+        "tag": "text",
+        "text": {
+            "plain_text": "@Bot /model opus",
+            "mentioned_list": [{"username": "Bot", "seatalk_id": "bot-1"}],
+        },
+    }
+    if thread_id:
+        message["thread_id"] = thread_id
+    return {
+        "event_id": event_id,
+        "event_type": "new_mentioned_message_received_from_group_chat",
+        "timestamp": 1718000000,
+        "event": {"group_id": "gid-1", "message": message},
+    }
+
+
+@pytest.mark.acceptance(
+    spec="channels/seatalk", scenario="a main-chat @mention is marked as group main"
+)
+async def test_a_main_chat_mention_is_marked_as_group_main(fake_seatalk: FakeSeaTalk) -> None:
+    adapter = make_seatalk_adapter(fake_seatalk)
+    recorder = RecordingCallbacks()
+    await adapter.start(recorder.as_callbacks())
+    try:
+        await adapter.handle_event(_group_mention("ev-main", "gm-9", ""))
+        await adapter.handle_event(_group_mention("ev-thread", "gm-10", "t-1"))
+    finally:
+        await adapter.stop()
+
+    main, threaded = recorder.messages
+    # The main-chat mention roots its thread at itself — and says it came from the main chat.
+    assert (main.thread_id, main.group_main) == ("gm-9", True)
+    assert (threaded.thread_id, threaded.group_main) == ("t-1", False)
+    assert main.text == threaded.text == "/model opus"
+
+
 # -- lifecycle -------------------------------------------------------------------
 
 

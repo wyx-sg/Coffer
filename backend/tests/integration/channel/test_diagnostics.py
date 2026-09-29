@@ -126,7 +126,7 @@ async def test_a_group_status_answers_the_asker_alone(env: ChannelEnv) -> None:
         )
     )
 
-    assert any("Conversation:" in text for _chat, text in adapter.sent)
+    assert any("Agent:" in text for _chat, text in adapter.sent)
     target = adapter.sent_ephemeral[-1]
     assert target is not None
     assert (target.receiver_id, target.ephemeral_message_id) == ("4242", "77")
@@ -156,7 +156,7 @@ async def test_a_group_selection_card_is_not_delivered_privately(env: ChannelEnv
     """Cards are excluded on purpose from "Keep non-answer chatter private in a group".
 
     A card is the one surface that must be REWRITTEN after it is used ("Offer
-    command choices as owner-gated selection cards"), and Telegram rewrites an
+    choices and actions as owner-gated cards"), and Telegram rewrites an
     ephemeral message through a different address space (`receiver_user_id` +
     `ephemeral_message_id`) with an edit it documents as not guaranteed to
     arrive. A card that cannot be reliably rewritten keeps offering the option
@@ -167,8 +167,18 @@ async def test_a_group_selection_card_is_not_delivered_privately(env: ChannelEnv
     adapter = env.bind(resource, FakeChannelAdapter(supports_buttons=True))
     await env.pair(resource, "-100group", sender_id="4242")
 
+    # Two `/new`s give the group an earlier conversation, so `/resume` renders a card.
+    for eid in ("75", "76"):
+        await env.processor.on_message(
+            inbound(
+                "tg", "-100group", "/new", chat_kind="group", sender_id="4242", ephemeral_id=eid
+            )
+        )
+    adapter.sent_ephemeral.clear()
     await env.processor.on_message(
-        inbound("tg", "-100group", "/agent", chat_kind="group", sender_id="4242", ephemeral_id="77")
+        inbound(
+            "tg", "-100group", "/resume", chat_kind="group", sender_id="4242", ephemeral_id="77"
+        )
     )
 
     assert adapter.cards, "the card path must be the one exercised here"
@@ -183,11 +193,13 @@ async def test_a_group_command_falling_back_to_text_is_still_private(
     env: ChannelEnv,
 ) -> None:
     # The card is the exception, not the command: a transport with no buttons
-    # answers /agent in text, and that text is the asker's business.
+    # answers /status in text, and that text is the asker's business.
     _resource, adapter = await env.paired_channel(chat_id="-100group", sender_id="4242")
 
     await env.processor.on_message(
-        inbound("tg", "-100group", "/agent", chat_kind="group", sender_id="4242", ephemeral_id="77")
+        inbound(
+            "tg", "-100group", "/status", chat_kind="group", sender_id="4242", ephemeral_id="77"
+        )
     )
 
     assert not adapter.cards  # no button support, so the text path ran

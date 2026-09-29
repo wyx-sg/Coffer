@@ -1,5 +1,9 @@
 """Channel-kind ORM model + repo (channel_peers).
 
+The thread tables live in ``thread_persistence`` and the outbox in
+``outbox_persistence`` (this file's size budget); both are re-exported here so
+``persistence`` stays the one import that registers every channel table.
+
 Registers against the shared ``Base.metadata``. Per Contract 5 this module
 must not import from any other kind module.
 """
@@ -8,7 +12,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy import (
     TIMESTAMP,
@@ -16,16 +19,14 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
-    Text,
     UniqueConstraint,
     delete,
-    func,
     select,
 )
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.orm import Mapped, mapped_column
 
-from coffer.application.channel.store_ports import ChannelPeer, ChannelThreadConversation
+from coffer.application.channel.store_ports import ChannelPeer
 from coffer.infrastructure.persistence.base import Base
 
 
@@ -46,38 +47,6 @@ class ChannelPeerModel(Base):
     __table_args__ = (
         UniqueConstraint("resource_id", "chat_id", name="uq_channel_peers_resource_chat"),
         Index("idx_channel_peers_resource", "resource_id"),
-    )
-
-
-class ChannelThreadConversationModel(Base):
-    __tablename__ = "channel_thread_conversations"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    resource_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("resources.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    chat_id: Mapped[str] = mapped_column(String, nullable=False)
-    # "" is the DM (or a group's main chat); each group thread is its own row.
-    thread_id: Mapped[str] = mapped_column(String, nullable=False, default="")
-    active_conversation_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    preferred_agent: Mapped[str | None] = mapped_column(String, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
-    # A parallel thread `/thread` opened carries its number within the chat and
-    # its title (see "Open parallel conversations in a direct chat"); NULL on
-    # every other row.
-    parallel_ordinal: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    parallel_title: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    __table_args__ = (
-        UniqueConstraint(
-            "resource_id",
-            "chat_id",
-            "thread_id",
-            name="uq_channel_thread_conv_resource_chat_thread",
-        ),
-        Index("idx_channel_thread_conv_resource", "resource_id"),
     )
 
 
@@ -210,152 +179,24 @@ class ChannelPeerRepo:
             await session.commit()
 
 
-def _thread_to_domain(row: ChannelThreadConversationModel) -> ChannelThreadConversation:
-    return ChannelThreadConversation(
-        resource_id=row.resource_id,
-        chat_id=row.chat_id,
-        thread_id=row.thread_id,
-        active_conversation_id=row.active_conversation_id,
-        preferred_agent=row.preferred_agent,
-        updated_at=_tz(row.updated_at),
-        parallel_ordinal=row.parallel_ordinal,
-        parallel_title=row.parallel_title,
-    )
+# Re-exported at the end so the models above are defined first; importing this
+# module registers every channel table on ``Base.metadata``.
+from coffer.infrastructure.channel.outbox_persistence import (  # noqa: E402
+    ChannelOutboxModel,
+    ChannelOutboxRepo,
+)
+from coffer.infrastructure.channel.thread_persistence import (  # noqa: E402
+    ChannelThreadConversationModel,
+    ChannelThreadConversationRepo,
+    ChannelThreadHistoryModel,
+)
 
-
-class ChannelThreadConversationRepo:
-    """SQLAlchemy implementation of ``ChannelThreadConversationRepoPort``.
-
-    See "Key conversation identity by channel, chat and thread".
-
-    Conversation identity is keyed by ``(resource_id, chat_id, thread_id)`` so
-    each group thread (and the DM, ``thread_id=""``) drives its own conversation
-    with its own turn lock. ``set_active_conversation`` and ``set_preferred_agent``
-    each upsert one field of the row, leaving the other untouched — a thread's
-    sticky agent survives opening a fresh conversation and vice versa.
-    """
-
-    def __init__(self, session_maker: async_sessionmaker) -> None:  # type: ignore[type-arg]
-        self._sm = session_maker
-
-    async def get(
-        self, resource_id: int, chat_id: str, thread_id: str
-    ) -> ChannelThreadConversation | None:
-        async with self._sm() as session:
-            row = (
-                await session.execute(
-                    select(ChannelThreadConversationModel).where(
-                        ChannelThreadConversationModel.resource_id == resource_id,
-                        ChannelThreadConversationModel.chat_id == chat_id,
-                        ChannelThreadConversationModel.thread_id == thread_id,
-                    )
-                )
-            ).scalar_one_or_none()
-            return _thread_to_domain(row) if row is not None else None
-
-    async def set_active_conversation(
-        self, resource_id: int, chat_id: str, thread_id: str, conversation_id: str | None
-    ) -> None:
-        async with self._sm() as session:
-            row = await self._row_for_update(session, resource_id, chat_id, thread_id)
-            if row is None:
-                session.add(
-                    ChannelThreadConversationModel(
-                        resource_id=resource_id,
-                        chat_id=chat_id,
-                        thread_id=thread_id,
-                        active_conversation_id=conversation_id,
-                        preferred_agent=None,
-                        updated_at=datetime.now(tz=UTC),
-                    )
-                )
-            else:
-                row.active_conversation_id = conversation_id
-                row.updated_at = datetime.now(tz=UTC)
-            await session.commit()
-
-    async def set_preferred_agent(
-        self, resource_id: int, chat_id: str, thread_id: str, preferred_agent: str | None
-    ) -> None:
-        async with self._sm() as session:
-            row = await self._row_for_update(session, resource_id, chat_id, thread_id)
-            if row is None:
-                session.add(
-                    ChannelThreadConversationModel(
-                        resource_id=resource_id,
-                        chat_id=chat_id,
-                        thread_id=thread_id,
-                        active_conversation_id=None,
-                        preferred_agent=preferred_agent,
-                        updated_at=datetime.now(tz=UTC),
-                    )
-                )
-            else:
-                row.preferred_agent = preferred_agent
-                row.updated_at = datetime.now(tz=UTC)
-            await session.commit()
-
-    async def next_parallel_ordinal(self, resource_id: int, chat_id: str) -> int:
-        # Over every row of the chat, not only live ones: a number stays taken
-        # after its conversation is replaced, so a mark never names two threads.
-        async with self._sm() as session:
-            highest = (
-                await session.execute(
-                    select(func.max(ChannelThreadConversationModel.parallel_ordinal)).where(
-                        ChannelThreadConversationModel.resource_id == resource_id,
-                        ChannelThreadConversationModel.chat_id == chat_id,
-                    )
-                )
-            ).scalar_one_or_none()
-            return int(highest or 0) + 1
-
-    async def open_parallel(
-        self, resource_id: int, chat_id: str, thread_id: str, ordinal: int, title: str
-    ) -> None:
-        async with self._sm() as session:
-            row = await self._row_for_update(session, resource_id, chat_id, thread_id)
-            if row is None:
-                row = ChannelThreadConversationModel(
-                    resource_id=resource_id,
-                    chat_id=chat_id,
-                    thread_id=thread_id,
-                    active_conversation_id=None,
-                    preferred_agent=None,
-                )
-                session.add(row)
-            row.parallel_ordinal = ordinal
-            row.parallel_title = title
-            row.updated_at = datetime.now(tz=UTC)
-            await session.commit()
-
-    async def list_parallel(
-        self, resource_id: int, chat_id: str
-    ) -> list[ChannelThreadConversation]:
-        async with self._sm() as session:
-            rows = (
-                await session.execute(
-                    select(ChannelThreadConversationModel)
-                    .where(
-                        ChannelThreadConversationModel.resource_id == resource_id,
-                        ChannelThreadConversationModel.chat_id == chat_id,
-                        ChannelThreadConversationModel.parallel_ordinal.is_not(None),
-                    )
-                    .order_by(ChannelThreadConversationModel.parallel_ordinal.desc())
-                )
-            ).scalars()
-            return [_thread_to_domain(row) for row in rows]
-
-    @staticmethod
-    async def _row_for_update(
-        session: Any, resource_id: int, chat_id: str, thread_id: str
-    ) -> ChannelThreadConversationModel | None:
-        row: ChannelThreadConversationModel | None = (
-            await session.execute(
-                select(ChannelThreadConversationModel).where(
-                    ChannelThreadConversationModel.resource_id == resource_id,
-                    ChannelThreadConversationModel.chat_id == chat_id,
-                    ChannelThreadConversationModel.thread_id == thread_id,
-                )
-            )
-        ).scalar_one_or_none()
-        return row
+__all__ = [
+    "ChannelOutboxModel",
+    "ChannelOutboxRepo",
+    "ChannelPeerModel",
+    "ChannelPeerRepo",
+    "ChannelThreadConversationModel",
+    "ChannelThreadConversationRepo",
+    "ChannelThreadHistoryModel",
+]

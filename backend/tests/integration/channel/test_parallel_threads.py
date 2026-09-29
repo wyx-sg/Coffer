@@ -1,5 +1,6 @@
-"""Parallel conversations in a direct chat, and which conversation a direct-chat
-thread belongs to (spec channels "Open parallel conversations in a direct chat",
+"""Parallel conversations beside a direct chat, and which conversation a
+direct-chat thread belongs to (spec channels "Open parallel conversations beside
+a direct chat",
 "Key conversation identity by channel, chat and thread").
 
 The transport is the recording fake; everything above it — the processor, the
@@ -17,7 +18,6 @@ import pytest
 
 from coffer.application.channel.parallel_threads import (
     GROUP_ANSWER,
-    NO_PARALLEL_THREADS,
     THREAD_BODY,
 )
 from coffer.domain.channel.errors import ParallelThreadUnavailable
@@ -25,7 +25,6 @@ from coffer.domain.chat.message import TextBlock
 from coffer.domain.resource import Resource
 
 from .conftest import (
-    DEFAULT_AGENT_KEY,
     ChannelEnv,
     FakeChannelAdapter,
     inbound,
@@ -122,11 +121,11 @@ async def test_status_inside_a_parallel_thread_names_its_mark(env: ChannelEnv) -
     status = _answers_in(adapter, "t1")[-1]
     assert status.splitlines()[0] == "🧵#1 deploy check"
     parallel = await env.active_conversation(resource, "owner", "t1")
-    assert f"Conversation: {parallel}" in status
+    assert parallel is not None and parallel not in status  # names, never ids
 
     # The direct chat's own /status carries no mark.
     await env.processor.on_message(inbound("tg", "owner", "/status"))
-    assert adapter.texts()[-1].startswith("Conversation: ")
+    assert adapter.texts()[-1].startswith("No conversation yet\n")
 
 
 async def test_thread_in_a_group_opens_nothing(env: ChannelEnv) -> None:
@@ -154,40 +153,40 @@ async def test_thread_that_cannot_be_opened_says_why_and_records_nothing(
     assert await env.threads.list_parallel(resource.id, "owner") == []
 
 
-@pytest.mark.acceptance(spec="channels", scenario="/threads counts and lists the parallel threads")
-async def test_threads_counts_and_lists_the_parallel_threads(env: ChannelEnv) -> None:
+@pytest.mark.acceptance(
+    spec="channels", scenario="/status in a direct chat lists its parallel threads"
+)
+async def test_status_in_a_direct_chat_lists_its_parallel_threads(env: ChannelEnv) -> None:
     env.add_agent("codex")
     _resource, adapter = await _seatalk_shaped(env)
-    await env.processor.on_message(inbound("tg", "owner", "/threads"))
-    assert adapter.texts()[-1] == NO_PARALLEL_THREADS
+    await env.processor.on_message(inbound("tg", "owner", "/status"))
+    assert "parallel" not in adapter.texts()[-1]
 
     await env.processor.on_message(inbound("tg", "owner", "/thread deploy check"))
     await env.processor.on_message(inbound("tg", "owner", "/thread write docs"))
     # The second thread runs another agent; the first one runs a turn.
-    await env.processor.on_message(inbound("tg", "owner", "/agent codex", thread_id="t2"))
+    await env.processor.on_message(inbound("tg", "owner", "/new codex", thread_id="t2"))
     gated = GatedAdapter()
     env.provider.adapter = gated
     await env.processor.on_message(inbound("tg", "owner", "long job", thread_id="t1"))
     await asyncio.wait_for(gated.entered.wait(), timeout=5.0)
 
-    await env.processor.on_message(inbound("tg", "owner", "/threads"))
-    assert adapter.texts()[-1].splitlines() == [
+    await env.processor.on_message(inbound("tg", "owner", "/status"))
+    assert adapter.texts()[-1].splitlines()[-3:] == [
         "2 parallel conversations:",
-        "🧵#2 write docs — codex — idle",
-        f"🧵#1 deploy check — {DEFAULT_AGENT_KEY} — running",
+        "🧵#2 write docs — Codex — idle",
+        "🧵#1 deploy check — Coffer Assistant — running",
     ]
 
-    # A message behind the running turn shows as waiting once the turn is gone.
+    # A message behind the running turn shows as queued once the turn is gone.
     await env.processor.on_message(inbound("tg", "owner", "next", thread_id="t1"))
     await env.processor.on_message(inbound("tg", "owner", "/stop", thread_id="t1"))
     await wait_until(
         lambda: env.processor._running_in("tg", "owner", "t1") is None,
         message="the stopped turn never cleared its session",
     )
-    await env.processor.on_message(inbound("tg", "owner", "/threads"))
-    assert adapter.texts()[-1].splitlines()[-1] == (
-        f"🧵#1 deploy check — {DEFAULT_AGENT_KEY} — 1 waiting"
-    )
+    await env.processor.on_message(inbound("tg", "owner", "/status"))
+    assert adapter.texts()[-1].splitlines()[-1] == "🧵#1 deploy check — Coffer Assistant — 1 queued"
     gated.release.set()
 
 
@@ -222,16 +221,16 @@ async def test_commands_and_taps_in_a_casual_thread_act_on_the_direct_chat(
 ) -> None:
     env.add_agent("codex")
     resource, adapter = await _seatalk_shaped(env, supports_buttons=True)
-    await env.processor.on_message(inbound("tg", "owner", "/agent codex", thread_id="m-root"))
+    await env.processor.on_message(inbound("tg", "owner", "/new codex", thread_id="m-root"))
     assert await env.thread_preferred_agent(resource) == "codex"
     assert await env.thread_preferred_agent(resource, "owner", "m-root") is None
-    assert _answers_in(adapter, "m-root")[-1] == "🔀 Switched to agent 'codex'."
+    assert _answers_in(adapter, "m-root")[-1].startswith("🆕 New conversation · Codex")
+    first = await env.active_conversation(resource)
 
-    await env.processor.on_callback(
-        tap_event("tg", "owner", f"agent:{DEFAULT_AGENT_KEY}", thread_id="m-other")
-    )
-    assert await env.thread_preferred_agent(resource) == DEFAULT_AGENT_KEY
-    assert _answers_in(adapter, "m-other")[-1] == f"🔀 Switched to agent '{DEFAULT_AGENT_KEY}'."
+    await env.processor.on_callback(tap_event("tg", "owner", "cmd:new", thread_id="m-other"))
+    assert await env.active_conversation(resource) not in (None, first)
+    assert await env.active_conversation(resource, "owner", "m-other") is None
+    assert _answers_in(adapter, "m-other")[-1].startswith("🆕 New conversation · Codex")
 
 
 async def test_stop_from_a_casual_thread_stops_the_direct_chats_turn(env: ChannelEnv) -> None:
