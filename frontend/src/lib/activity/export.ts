@@ -24,7 +24,7 @@ import {
 } from "./records";
 
 /** The most records one export writes. */
-export const EXPORT_CAP = 10_000;
+const EXPORT_CAP = 10_000;
 
 async function readAll(spec: SourceParams): Promise<ActivityRecord[]> {
   if (spec.source === "daemon") {

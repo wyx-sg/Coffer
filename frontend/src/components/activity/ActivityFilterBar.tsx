@@ -1,4 +1,4 @@
-// src/pages/activity/ActivityFilterBar.tsx — the filters of the visible Activity tab, as pills plus a free-text box.
+// src/components/activity/ActivityFilterBar.tsx — the filters of the visible Activity tab, as pills plus a free-text box.
 //
 // Every tab filters by time range and free text; each adds the filters its
 // records afford (spec web-ui "Filter each Activity tab and expand any row"):
@@ -11,7 +11,8 @@ import { useTranslation } from "react-i18next";
 import { AgentBadge } from "@/components/agent/AgentBadge";
 import { SearchInput } from "@/components/SearchInput";
 import { TimeRangePicker } from "@/components/TimeRangePicker";
-import { CHANGE_KINDS, type ActivityFilters, type ActivityTab } from "@/lib/activity/records";
+import { type ActivityTab } from "@/lib/activity/records";
+import { CHANGE_KINDS, type ActivityFilters } from "@/lib/activity/filters";
 import { cn } from "@/lib/utils";
 import { FilterPill, type PillGroup } from "./FilterPill";
 
@@ -24,14 +25,14 @@ const CALL_STATUSES = ["ok", "error", "timeout", "denied"] as const;
 const LEVELS = ["", "info", "warning", "error"] as const;
 
 /** @ui-only An agent as the who filter lists it. */
-export interface AgentOption {
+interface AgentOption {
   uid: string;
   type: string;
   name: string;
 }
 
 /** @ui-only An MCP server as the server filter lists it. */
-export interface ServerOption {
+interface ServerOption {
   uid: string;
   label: string;
 }

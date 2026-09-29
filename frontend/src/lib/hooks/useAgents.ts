@@ -23,7 +23,6 @@ import {
   agentPluginKey,
   agentPluginsKey,
   agentsKey,
-  agentTypesKey,
   agentUnmanagedSkillsKey,
   resourcesByKindKey,
   skillsKey,
@@ -87,16 +86,6 @@ export function useRemoveAgent() {
       qc.invalidateQueries({ queryKey: agentsKey });
     },
     onError,
-  });
-}
-
-// Every supported agent type with its detection state, registered or not —
-// the Overview's first-run panel lists one row per type.
-export function useAgentTypes(enabled = true) {
-  return useQuery({
-    queryKey: agentTypesKey,
-    queryFn: async () => (await agentsApi.types()).types,
-    enabled,
   });
 }
 

@@ -3,7 +3,7 @@
 // Pure functions shared by the list, the drawer and their tests.
 import type { TFunction } from "i18next";
 
-import type { Invocation } from "./records";
+import type { AuditEntry, Invocation } from "./records";
 
 function pad(n: number, width = 2): string {
   return String(n).padStart(width, "0");
@@ -49,4 +49,28 @@ export function dayLabel(t: TFunction, at: string | null, now: Date, locale: str
   if (days === 0) return t("activity.day.today", { date });
   if (days === 1) return t("activity.day.yesterday", { date });
   return date;
+}
+
+/** The route a change's resource lives at, when it has a page of its own. */
+export function changeLink(entry: AuditEntry): { to: string; name: string } | null {
+  const name = entry.resource_name;
+  if (!name) return null;
+  switch (entry.resource_kind) {
+    case "mcp_server":
+      return { to: `/mcp-servers/${encodeURIComponent(name)}`, name };
+    case "skill":
+      return { to: `/skills/${encodeURIComponent(name)}`, name };
+    case "agent":
+      return { to: "/agents", name };
+    case "provider":
+      return { to: "/model-providers", name };
+    case "channel":
+      return { to: "/channels", name };
+    case "knowledge":
+      return { to: "/knowledge", name };
+    case "memory":
+      return { to: "/memory", name };
+    default:
+      return null;
+  }
 }

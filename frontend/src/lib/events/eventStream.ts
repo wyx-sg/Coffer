@@ -15,7 +15,7 @@
 import { getCofferBaseUrl, getCofferToken } from "@/lib/auth";
 import type { components } from "@/lib/api/types";
 
-export type ChangeEvent = components["schemas"]["ChangeEventOut"];
+type ChangeEvent = components["schemas"]["ChangeEventOut"];
 
 /** @ui-only What the reader hands its listener: a parsed event, or a word about the connection. */
 export type StreamMessage =

@@ -1,4 +1,4 @@
-// src/pages/activity/activityCells.tsx — how one Activity record reads in a row: its time, icon, sentence, who and duration.
+// src/components/activity/activityCells.tsx — how one Activity record reads in a row: its time, icon, sentence, who and duration.
 //
 // Shared by the list and the drawer so a record says the same thing in both.
 // Logs are tabular, so rows stay dense: times and identifiers in mono, a

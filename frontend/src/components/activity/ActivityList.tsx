@@ -1,4 +1,4 @@
-// src/pages/activity/ActivityList.tsx — the visible tab's records as a dense table, grouped by day, each row opening its detail.
+// src/components/activity/ActivityList.tsx — the visible tab's records as a dense table, grouped by day, each row opening its detail.
 //
 // One table component, four column sets: the Everything and Changes tabs say
 // what happened and who did it; MCP calls name the agent, the server and tool,

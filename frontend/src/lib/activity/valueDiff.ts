@@ -18,7 +18,7 @@ const MAX_LINES = 600;
 /** Unchanged lines kept around each change. */
 const CONTEXT = 2;
 
-export function prettyValue(value: unknown): string {
+function prettyValue(value: unknown): string {
   return JSON.stringify(value ?? null, null, 2);
 }
 

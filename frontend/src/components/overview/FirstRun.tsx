@@ -13,7 +13,7 @@ import { sortAgents } from "@/components/agent/agentOrder";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { translateApiError } from "@/lib/api/errors";
-import { useAgentTypes } from "@/lib/hooks/useAgents";
+import { useAgentTypes } from "@/lib/hooks/useAgentTypes";
 import { useFeatureEnabled } from "@/lib/hooks/useFeatures";
 import { NAV_ENTRIES } from "@/lib/navigation";
 

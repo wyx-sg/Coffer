@@ -1,4 +1,4 @@
-// src/pages/activity/FilterPill.tsx — one Activity filter as a pill ("Agent: Any") that opens a list of choices.
+// src/components/activity/FilterPill.tsx — one Activity filter as a pill ("Agent: Any") that opens a list of choices.
 //
 // Activity's filters are pills with popovers (design 6.1): the pill names the
 // filter and its current choice, and the popover lists the choices in groups,
@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 
 /** @ui-only One choice in a pill's list. */
-export interface PillOption {
+interface PillOption {
   value: string;
   label: ReactNode;
 }

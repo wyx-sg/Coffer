@@ -31,11 +31,11 @@ import {
 } from "@/lib/activity/records";
 
 /** Rows per "Load older". */
-export const PAGE_SIZE = 200;
+const PAGE_SIZE = 200;
 /** Rows the head re-reads; more new rows than this between two polls is a gap. */
 const HEAD_SIZE = 50;
 /** How often the head is re-read. */
-export const HEAD_POLL_MS = 5_000;
+const HEAD_POLL_MS = 5_000;
 
 interface Page {
   records: ActivityRecord[];

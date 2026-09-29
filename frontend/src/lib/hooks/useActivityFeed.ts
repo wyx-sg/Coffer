@@ -16,17 +16,19 @@ import type { TFunction } from "i18next";
 
 import type { SourceParams } from "@/lib/api/activity";
 import {
-  matchesFilters,
   mergeNewestFirst,
   recordLogger,
   recordTimeMs,
-  sourcesFor,
-  type ActivityFilters,
   type ActivityRecord,
   type ActivitySource,
   type ActivityTab,
-  type FilterContext,
 } from "@/lib/activity/records";
+import {
+  matchesFilters,
+  sourcesFor,
+  type ActivityFilters,
+  type FilterContext,
+} from "@/lib/activity/filters";
 import { resolveTimeWindow } from "@/lib/timeRange";
 import {
   useActivityCount,
@@ -43,10 +45,10 @@ function isCallStatus(value: string): value is CallStatus {
 }
 
 /** The Everything tab shows the daemon's warnings and errors, not its chatter. */
-export const EVERYTHING_DAEMON_FLOOR = "warning";
+const EVERYTHING_DAEMON_FLOOR = "warning";
 
 /** Each log's server-side filters for a tab. */
-export function sourceParams(
+function sourceParams(
   source: ActivitySource,
   tab: ActivityTab,
   f: ActivityFilters,

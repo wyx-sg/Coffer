@@ -4,22 +4,24 @@ import type { TFunction } from "i18next";
 
 import i18next from "@/i18n";
 import {
-  DEFAULT_FILTERS,
-  filtersNarrow,
   fromAudit,
   fromCall,
   fromDaemonTail,
-  matchesFilters,
   mergeNewestFirst,
   recordSeverity,
-  sourcesFor,
   formatDuration,
-  type ActivityFilters,
   type AuditEntry,
   type DaemonLogRecord,
-  type FilterContext,
   type Invocation,
 } from "./records";
+import {
+  DEFAULT_FILTERS,
+  filtersNarrow,
+  matchesFilters,
+  sourcesFor,
+  type ActivityFilters,
+  type FilterContext,
+} from "./filters";
 
 const t = i18next.t.bind(i18next) as TFunction;
 

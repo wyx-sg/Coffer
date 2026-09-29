@@ -1,4 +1,4 @@
-// src/pages/activity/ActivityMenu.tsx — the page's ⋯ menu: "Export filtered records…" as JSON or CSV.
+// src/components/activity/ActivityMenu.tsx — the page's ⋯ menu: "Export filtered records…" as JSON or CSV.
 //
 // The page header carries no export button of its own (spec web-ui "Export
 // the filtered Activity records from the overflow menu"): the export lives

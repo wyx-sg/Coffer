@@ -3,11 +3,13 @@
 // A tile's number comes from its own list; whether it is healthy comes from
 // the attention items of its kinds — one source per fact, so a tile can never
 // say "All answering" beside a "Needs you" row about the same server.
+import type { TFunction } from "i18next";
+
 import type { FeatureKey } from "@/lib/hooks/useFeatures";
 import type { AttentionItem } from "@/lib/hooks/useAttention";
 import type { StatusTone } from "@/components/status/statusTone";
 
-export type AreaId =
+type AreaId =
   | "agents"
   | "providers"
   | "mcpServers"
@@ -86,4 +88,22 @@ export function deliveredAgentCount(
   skills: readonly { bindings: readonly { agent_uid: string }[] }[],
 ): number {
   return new Set(skills.flatMap((s) => s.bindings.map((b) => b.agent_uid))).size;
+}
+
+/** The tile's status word from the attention items of its kinds; none while unknown or empty. */
+export function tileStatus(
+  t: TFunction,
+  area: Area,
+  items: readonly AttentionItem[] | undefined,
+  hasObjects: boolean,
+): { tone: StatusTone; text: string } | null {
+  if (!items || !hasObjects) return null;
+  const status = areaStatus(areaProblems(items, area.kinds));
+  if (status.tone === "err") {
+    return { tone: "err", text: t("overview.health.failing", { count: status.count }) };
+  }
+  if (status.tone === "warn") {
+    return { tone: "warn", text: t(`overview.health.${area.id}.warn`, { count: status.count }) };
+  }
+  return { tone: "ok", text: t(`overview.health.${area.id}.ok`) };
 }
