@@ -92,8 +92,8 @@ as the sidebar.
 An entry whose feature is off is left out of the sidebar, its routes render the feature notice,
 and — new — its pages and objects are left out of the command palette. The registry, the order of
 decision (pin, setting, channel) and the gates are those of
-[experimental-features](../../specs/experimental-features/spec.md). Only the place a feature is
-switched moves, from Settings → General to Settings → Features, and the notice links there. The
+[experimental-features](../../specs/experimental-features/spec.md). The notice says the feature
+is off and links to no Settings tab, because Settings no longer lists features (decision 4). The
 spec text names today's mapping (Knowledge, Memory, Sync); a change that adds a feature to the
 registry adds its entry to that mapping and nothing else.
 
@@ -119,7 +119,7 @@ year and, with Usage in 1.0, would already fill System to five, the ceiling the 
 background location: opening it from a page keeps that page mounted underneath, and closing it
 (close control, Escape, click outside, or Back) returns to that page's route. A fresh load of a
 Settings route, with no page underneath, renders the modal over Overview and closes to `/`. Deep
-links (the feature notice's `/settings/features`, the footer's `/settings/daemon`) and the
+links (the footer's `/settings/daemon`) and the
 palette's Settings tabs therefore all open the same modal. This routing is the cost of the modal:
 a Settings page was one route per tab, a modal over a background location needs the router to
 carry the page underneath. *Rejected:* a modal with no route, which would break every deep link
@@ -129,15 +129,15 @@ cannot have.
 | Tab | Route | Holds |
 | --- | --- | --- |
 | General | `/settings/general` | Default page size, preferred external editor |
-| Features | `/settings/features` | Experimental features card |
 | Security | `/settings/security` | Master-key location (machine-level items only) |
 | Data | `/settings/data` | Retention per log table, clear expired data |
 | Daemon | `/settings/daemon` | Status, restart, port, Start at login, token rotation |
 | About | `/settings/about` | Version, license, source, update check (desktop shell) |
 
-- **Features gets its own tab** because it is a per-machine product decision rather than a display
-  preference, and the rebuild's release channel starts with more features off; a card buried in
-  General was the one place the user had to look to learn why a page was missing.
+- **No Features tab.** At 1.0 every experimental feature graduates and its switch code is
+  deleted, so a Features tab would be empty; the Experimental features card leaves General with
+  nothing in its place. *Rejected:* a Features tab kept for later flags, which is the empty
+  placeholder the sidebar rules already refuse.
 - **Start at login moves to Daemon.** It is the one daemon setting, and the Daemon tab is where a
   user looks for why the daemon was or was not running. *Rejected:* leaving it on General beside
   the display preferences, which splits the daemon across two tabs.

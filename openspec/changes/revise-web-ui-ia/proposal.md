@@ -26,8 +26,9 @@ Eight decisions change that architecture:
 - **The daemon made visible.** Hiding the daemon left a user unable to tell "healthy" from "not
   yet known", or to see which build and port are answering and whether it starts at login, without
   a terminal. The daemon's state becomes visible at all times; starting it stays automatic.
-- **Settings regrouped, and out of the sidebar.** Experimental features get their own tab, the
-  daemon gets one, and Coffer's own model moves beside the providers it is chosen from. Settings
+- **Settings regrouped, and out of the sidebar.** The daemon gets its own tab, the Experimental
+  features card leaves with the switches it held (every flag graduates at 1.0), and Coffer's own
+  model moves beside the providers it is chosen from. Settings
   is machine-level and visited rarely, so it leaves the sidebar for a modal opened from a gear in
   the sidebar footer or with ⌘,, still addressable at `/settings/<tab>`.
 - **Updates found by the app.** A desktop user learns of a new version only by downloading a new
@@ -64,9 +65,9 @@ unarchived until that implementation lands.
   and ⌘, / Ctrl+, open it as a large modal over the current page. Each tab keeps its route
   (`/settings/<tab>`), so deep links, the palette and other pages' links open the modal over the
   page underneath, and closing it returns there.
-- Settings has six tabs: **General, Features, Security, Data, Daemon, About**. Experimental
-  features move from General to Features; the Start at login card moves from General to Daemon;
-  Security holds machine-level items only.
+- Settings has five tabs: **General, Security, Data, Daemon, About**. The Experimental features
+  card leaves General and no tab replaces it; the Start at login card moves from General to
+  Daemon; Security holds machine-level items only.
 - **Coffer's model** leaves Settings and becomes a tab of the Model providers page
   (`/model-providers?tab=coffer-model`); `/settings/engine` redirects there.
 - The sidebar footer shows the daemon's state (connecting, running with its port, stopping,
@@ -93,7 +94,7 @@ unarchived until that implementation lands.
 - `web-ui`: the sidebar entry set and its five intent groups (Overview, Secrets and Usage added,
   Settings moved to a footer gear and a route-addressable modal), the update check on Settings ›
   About, one
-  name per surface with the zh glossary, the Secrets page, landing on Overview, six Settings
+  name per surface with the zh glossary, the Secrets page, landing on Overview, five Settings
   tabs with Security machine-level only, Coffer's model beside Model providers, the daemon footer and Settings → Daemon, the command
   palette, sidebar attention dots; the daemon-invisibility requirement is removed and daemon
   shutdown alone stays CLI-only.
@@ -103,8 +104,9 @@ unarchived until that implementation lands.
   Daemon, and a restart chosen there is the same restart; the shell checks for and installs
   signed updates, a third sanctioned host affordance rendered on Settings › About. The Purpose
   section's "auto-update is out of scope" is reversed with it.
-- `experimental-features`: features are switched on Settings → Features, and a switched-off
-  feature's notice links there and its pages and objects leave the command palette.
+- `experimental-features`: the web UI's Experimental features card is removed and the switch
+  requirement no longer names a Settings page; a switched-off feature's notice says it is off, and
+  its pages and objects leave the command palette.
 - `internal-engine`: the engine's settings are shown on the Coffer's model tab of Model providers
   instead of in Settings.
 - `agent-registry`: the Agents entry heads the Agents group; the agent detail page's six tabs,
@@ -119,7 +121,8 @@ unarchived until that implementation lands.
 - Frontend: `components/Layout.tsx`, `components/SidebarNav.tsx` (replaced), a new Secrets page,
   the agent detail page's tab set (`pages/AgentDetailPage.tsx` and `components/agents/*`), a new sidebar footer
   and command palette, `router.tsx` (index route, `/settings/*` tabs, `/settings/engine` redirect,
-  Model providers tabs), `pages/settings/*` (Features and Daemon tabs, residency card moved),
+  Model providers tabs), `pages/settings/*` (Daemon tab, residency card moved, Experimental
+  features card deleted),
   `pages/ModelProvidersPage.tsx`, the attention-dot hook generalised from `useSyncAttention`, i18n
   strings in both locales.
 - Desktop: the Tauri updater plugin with its public key in the bundle configuration, a

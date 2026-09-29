@@ -3,9 +3,6 @@
 - FROM: `### Requirement: Keep the sidebar to its eleven entries`
 - TO: `### Requirement: Keep the sidebar to its thirteen entries`
 
-- FROM: `### Requirement: Organise Settings into five tabs`
-- TO: `### Requirement: Organise Settings into six tabs`
-
 ## REMOVED Requirements
 
 ### Requirement: Keep the daemon out of the user's view
@@ -164,16 +161,13 @@ two MUST agree: the footer never reads as running while the banner is shown.
 - **AND** the shell footer reads as offline for as long as the banner is shown
 - **AND** the banner disappears automatically once the daemon becomes reachable again, without a manual page reload
 
-### Requirement: Organise Settings into six tabs
+### Requirement: Organise Settings into five tabs
 Settings — the modal of "Open Settings as a modal from the sidebar footer" —
-MUST carry exactly six tabs, in this order, grouped by what they manage rather
+MUST carry exactly five tabs, in this order, grouped by what they manage rather
 than by how Coffer is built, and MUST open on General:
 
 - **General** (`/settings/general`) — display preferences: the default page size
   and the preferred external editor.
-- **Features** (`/settings/features`) — which experimental features are switched
-  on for this machine (spec
-  [experimental-features](../experimental-features/spec.md) "List and switch the features on the Features tab").
 - **Security** (`/settings/security`) — what is about this machine only: where
   the master encryption key lives, beside the database or in the OS keychain.
   It lists and edits no stored secret; those are on the Secrets page (see
@@ -193,7 +187,7 @@ modal.
 - **GIVEN** the user navigates to `/settings`
 - **WHEN** the route resolves
 - **THEN** the Settings modal opens on the General tab
-- **AND** the modal's tab list shows General, Features, Security, Data, Daemon, and About — exactly those six, in that order — with the current route highlighted
+- **AND** the modal's tab list shows General, Security, Data, Daemon, and About — exactly those five, in that order — with the current route highlighted
 - **AND** clicking a tab swaps the right pane content without a full page reload and the modal stays open
 
 #### Scenario: the security tab keeps only machine-level settings
@@ -627,10 +621,10 @@ beside the pages used every day, the convention of desktop applications' own
 preferences windows.
 
 The modal MUST stay addressable by route: each tab is `/settings/<tab>`
-(General, Features, Security, Data, Daemon, About — see "Organise Settings into
-six tabs"), and while it is open the address bar and history carry that route,
-so a deep link, a reload, a link from another page (such as the feature notice's
-link to `/settings/features`) or the palette opens the modal on that tab.
+(General, Security, Data, Daemon, About — see "Organise Settings into five
+tabs"), and while it is open the address bar and history carry that route,
+so a deep link, a reload, a link from another page (such as the footer's link
+to `/settings/daemon`) or the palette opens the modal on that tab.
 Opening it from a page MUST keep that page rendered underneath, unchanged.
 Closing it — the close control, Escape, or a click outside it — MUST return to
 the page underneath at that page's own route. A deep link opened with no page
@@ -662,8 +656,8 @@ close it and return to the page underneath.
 
 #### Scenario: the palette opens a Settings tab over the current page
 - **GIVEN** the user on `/skills`
-- **WHEN** they open the palette, type "features" and press Enter
-- **THEN** the Settings modal opens on its Features tab at `/settings/features`, with the Skills page underneath
+- **WHEN** they open the palette, type "data" and press Enter
+- **THEN** the Settings modal opens on its Data tab at `/settings/data`, with the Skills page underneath
 
 ### Requirement: Check for and install updates on Settings › About
 In the desktop shell, the About tab MUST show the version running, when updates

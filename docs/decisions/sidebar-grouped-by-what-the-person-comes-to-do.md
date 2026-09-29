@@ -176,7 +176,7 @@ Secrets | Activity | Usage | Sync).
 | (entries) | 6 | 6, with up to 4 tabs each |
 
 Pros: the shortest possible sidebar; growth adds tabs, never entries. Cons: it puts tabs inside
-tabs — Activity already has three, Settings six, Model providers two, and every detail page its
+tabs — Activity already has three, Settings five, Model providers two, and every detail page its
 own — so the user reads two tab strips to find one table, and an address becomes
 `/system?tab=activity&view=calls`. A tab strip hides its siblings behind a click where a
 sidebar shows them; attention dots would need a second rendering on tabs; and Chat is a
@@ -220,8 +220,8 @@ machine (where the master key lives), so a user never looks for a token among di
 preferences. A secret field in a resource's own dialog stays where it is: a secret is still
 entered where the thing that needs it is configured.
 
-**Settings is a modal, not an entry.** Settings is opened rarely — to switch a feature, check
-the daemon, move the master key, see the version — and what it holds is about this machine, not
+**Settings is a modal, not an entry.** Settings is opened rarely — to check
+the daemon, move the master key, set retention, see the version — and what it holds is about this machine, not
 about the vault's agents, capabilities or context. A sidebar row is the most visible place the
 product has; spending one on a page opened a few times a year puts it beside pages used every
 day, and with Usage in 1.0 it would fill System to five, the ceiling, before anything else
@@ -234,7 +234,7 @@ addressable, so each tab keeps `/settings/<tab>`, a deep link or the command pal
 over the page the user is on, a fresh load opens it over Overview, and closing returns to the
 page underneath — the router has to carry a background location, where a page needed one route
 per tab. A modal with no route would have been cheaper and would break every deep link, from
-the feature notice's link to Settings › Features to the footer's link to Settings › Daemon.
+the footer's link to Settings › Daemon to the palette's Settings tabs.
 
 ## Decision
 

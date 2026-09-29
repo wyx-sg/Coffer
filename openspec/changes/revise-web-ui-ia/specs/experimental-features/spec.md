@@ -1,16 +1,22 @@
+## RENAMED Requirements
+
+- FROM: `### Requirement: Switch a feature from the settings page or the command line`
+- TO: `### Requirement: Switch a feature from the command line`
+
 ## REMOVED Requirements
 
 ### Requirement: List and switch the features on the General tab
-**Reason**: Experimental features move from Settings → General to a Settings → Features tab of
-their own.
-**Migration**: See "List and switch the features on the Features tab". The acceptance marker for
-"the general tab switches a feature" moves to "the features tab switches a feature".
+**Reason**: At 1.0 every experimental feature graduates and its switch is deleted, so Settings
+carries no Experimental features card: the General tab holds display preferences only, and no
+Settings tab lists features.
+**Migration**: None in the web UI. The acceptance marker for "the general tab switches a feature"
+is deleted with this requirement.
 
 ## MODIFIED Requirements
 
-### Requirement: Switch a feature from the settings page or the command line
-A feature MUST be switchable from Settings → Features, from
-`coffer config set feature.<key> on|off`, and from
+### Requirement: Switch a feature from the command line
+A feature MUST be switchable from
+`coffer config set feature.<key> on|off` and from
 `PUT /api/v1/daemon/features/{key}`. `coffer config unset feature.<key>` MUST
 remove the machine's own setting, so the feature returns to its channel
 default. `coffer config list feature.` MUST list every registered feature with
@@ -38,7 +44,7 @@ commands, including `coffer path knowledge` for `knowledge` and
 `coffer path memory` for `memory`, MUST print one line naming
 `coffer config set feature.<key> on` and exit 1; its sidebar entry MUST be
 absent, its pages and objects MUST be absent from the command palette, and its
-pages MUST show a notice that links to Settings → Features; its
+pages MUST show a notice that says the feature is switched off; its
 background passes MUST skip their rounds. A resource whose kind the feature
 owns — `knowledge` owns the `knowledge` kind, `memory` the `memory` kind — MUST
 be out of reach of the kind-agnostic resource routes too: a route naming such a
@@ -79,21 +85,7 @@ curation owner machine or on a held or conflicted sync round.
 - **WHEN** the curation worker asks whether it may run
 - **THEN** it may
 
-#### Scenario: a switched-off feature's page points at the Features tab
+#### Scenario: a switched-off feature's page says it is switched off
 - **GIVEN** `memory` off
 - **WHEN** the user follows a link to `/memory`
-- **THEN** the page shows a notice that memory is switched off, with a link to `/settings/features`
-
-## ADDED Requirements
-
-### Requirement: List and switch the features on the Features tab
-Settings → Features MUST carry an Experimental features card listing every
-registered feature with a switch, the current state, and whether a pin or the
-channel decided it. A pinned feature's switch MUST be disabled. A switch MUST
-move at once and settle on what the daemon answers; a failed write MUST put it
-back and show the error beside it.
-
-#### Scenario: the features tab switches a feature
-- **GIVEN** the daemon reports `knowledge` off and unpinned
-- **WHEN** the user turns its switch on in Settings → Features
-- **THEN** one request switches `knowledge` on and the Knowledge sidebar entry appears without a reload
+- **THEN** the page shows a notice that memory is switched off, in place of the page
