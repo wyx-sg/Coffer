@@ -105,6 +105,10 @@ REMOVED: tuple[tuple[str, str], ...] = (
     ("coffer sync rollback", "coffer sync restore"),
     ("coffer sync remote show", "coffer sync status"),
     ("coffer sync machine remove", "coffer sync machine rm"),
+    # Removed by the OpenSpec change add-secret-boundary: no command hands out
+    # the master key (spec credentials "Return no plaintext on any route,
+    # command or tool").
+    ("coffer sync key export", "export a key backup in the Coffer desktop app"),
     ("coffer__recall", "grep the memory root (coffer path memory)"),
     ("coffer__diagnose", "coffer log audit|mcp|daemon, coffer path logs"),
 )

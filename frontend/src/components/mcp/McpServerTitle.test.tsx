@@ -44,6 +44,7 @@ const server = (over: Partial<ResourceOut> = {}): ResourceOut => ({
   title: null,
   enabled: true,
   toggleable: true,
+  secrets_readable_by_local_processes: false,
   scope: null,
   description: "Search",
   config: { transport: { type: "stdio", command: "npx" } },

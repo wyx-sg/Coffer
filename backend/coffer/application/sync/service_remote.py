@@ -21,6 +21,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from coffer.domain.credential_errors import SecretBindingPending
 from coffer.domain.error_base import CofferError
 from coffer.domain.sync.backup import DEFAULT_WORKTREE, BackupRemote, worktree_conflict
 from coffer.domain.sync.errors import BackupRemoteInvalid
@@ -78,8 +79,18 @@ class RemoteMixin:
         async with self._lock:
             mirror = self._mirror_factory(worktree)
             try:
+                token = await self._token(remote)
+            except SecretBindingPending:
+                # An existing push token pointed at a URL it was never approved
+                # for (spec vault-sync "Hold a push token pointed at a new URL
+                # until approved"): the remote is kept, unproven, so the
+                # approval has a destination to name, and no round sends the
+                # token until a person approves it in the desktop app.
+                await self._remotes.set(remote)
+                raise
+            try:
                 await mirror.ensure_repo(remote_url=remote.url, branch=remote.branch)
-                await mirror.fetch(token=await self._token(remote))
+                await mirror.fetch(token=token)
             except CofferError as e:
                 # The adapter has already redacted the push credential out of
                 # the message, and this one is never audited.

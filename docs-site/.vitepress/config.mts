@@ -26,6 +26,7 @@ const guides = [
       { text: 'MCP servers', link: '/guides/mcp-servers' },
       { text: 'Model providers', link: '/guides/providers' },
       { text: 'Credentials', link: '/guides/credentials' },
+      { text: 'Secrets', link: '/guides/secrets' },
     ],
   },
   {

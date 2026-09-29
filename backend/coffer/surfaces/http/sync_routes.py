@@ -11,9 +11,11 @@ machine calls ``/adopt``, an offline medium is a ``file://`` remote, and a
 hand-carried copy is a ``git clone`` of the working tree.
 
 The master key never travels inside the repository — moving it is a separate,
-deliberate act. ``/key/export`` hands its material back over the token-guarded
-loopback API and the caller decides where it lands; the daemon never writes to
-a path a caller named, because a browser has no path to give it.
+deliberate act, and no route here returns it: a backup is written only by the
+desktop app's presence-gated export (``/api/v1/credentials/presence/
+master-key-export``, spec credentials "Release plaintext only to a present
+human in the desktop app"). ``/key/import`` takes key material in — a caller
+that supplies a key already has it.
 
 Remote shapes carry ``credential_ref`` and never the push credential itself, so
 a remote can be rendered in a browser, logged, or pasted into a bug report with
@@ -43,7 +45,6 @@ from coffer.surfaces.http.sync_schemas import (
     KeyFingerprintOut,
     KeyImportOut,
     KeyMaterialIn,
-    KeyMaterialOut,
     MachineListOut,
     MachineOut,
     MachineRemovedOut,
@@ -357,11 +358,6 @@ async def retire_machine(machine_id: str) -> MachineRemovedOut:
 @router.get("/key/fingerprint", response_model=KeyFingerprintOut)
 async def key_fingerprint() -> KeyFingerprintOut:
     return KeyFingerprintOut(fingerprint=get_sync_service().key_fingerprint())
-
-
-@router.post("/key/export", response_model=KeyMaterialOut)
-async def export_key() -> KeyMaterialOut:
-    return KeyMaterialOut(material=await get_sync_service().export_key())
 
 
 @router.post("/key/import", response_model=KeyImportOut)

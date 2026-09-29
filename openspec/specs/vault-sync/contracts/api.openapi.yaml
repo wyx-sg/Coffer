@@ -141,40 +141,6 @@ paths:
       summary: Preview Join
       tags:
       - sync
-  /api/v1/sync/key/export:
-    post:
-      operationId: export_key_api_v1_sync_key_export_post
-      parameters:
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KeyMaterialOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Export Key
-      tags:
-      - sync
   /api/v1/sync/key/fingerprint:
     get:
       operationId: key_fingerprint_api_v1_sync_key_fingerprint_get
@@ -961,15 +927,6 @@ components:
       required:
       - material
       title: KeyMaterialIn
-      type: object
-    KeyMaterialOut:
-      properties:
-        material:
-          title: Material
-          type: string
-      required:
-      - material
-      title: KeyMaterialOut
       type: object
     MachineListOut:
       properties:

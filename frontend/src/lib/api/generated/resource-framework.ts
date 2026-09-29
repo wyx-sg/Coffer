@@ -652,6 +652,11 @@ export interface components {
             /** Name */
             name: string;
             scope: components["schemas"]["ScopeOut"] | null;
+            /**
+             * Secrets Readable By Local Processes
+             * @default false
+             */
+            secrets_readable_by_local_processes: boolean;
             /** Title */
             title: string | null;
             /** Toggleable */

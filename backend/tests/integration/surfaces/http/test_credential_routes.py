@@ -18,6 +18,7 @@ from coffer.surfaces.http.dependencies import (
     get_audit_service,
     get_resource_service,
 )
+from tests.support.secret_boundary import install_boundary
 
 
 class _FakeCredentialStore:
@@ -40,6 +41,20 @@ class _FakeCredentialStore:
 
     def remove(self, ref: str) -> bool:
         return self.store.pop(ref, None) is not None
+
+    # The slice of the store the secret boundary reads (``SealedValueStorePort``).
+    def created_at(self, ref: str) -> datetime | None:
+        return datetime.now(tz=UTC) if ref in self.store else None
+
+    def seal(self, value: str) -> bytes:
+        return value.encode()[::-1]
+
+    def unseal(self, token: bytes) -> str:
+        return token[::-1].decode()
+
+    def list_refs(self) -> list[tuple[str, str, str]]:
+        now = datetime.now(tz=UTC).isoformat()
+        return [(ref, now, now) for ref in sorted(self.store)]
 
 
 class _FakeAuditRepo:
@@ -103,6 +118,7 @@ def _build_app(
     app.dependency_overrides[get_audit_service] = lambda: audit_svc
     resources = resources or _FakeResourceService()
     app.dependency_overrides[get_resource_service] = lambda: resources
+    install_boundary(fake)
     set_active_token("test-token")
     return app
 
@@ -161,50 +177,6 @@ async def test_exists_requires_token() -> None:
     transport = ASGITransport(_build_app(fake))
     async with AsyncClient(transport=transport, base_url="http://t") as c:
         r = await c.get("/api/v1/credentials/x/exists")
-        assert r.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_get_returns_value_and_audits_the_read() -> None:
-    fake = _FakeCredentialStore()
-    fake.store["github.GITHUB_TOKEN"] = "ghp_secret"
-    audit_repo = _FakeAuditRepo()
-    transport = ASGITransport(_build_app(fake, audit_repo))
-    async with AsyncClient(
-        transport=transport,
-        base_url="http://t",
-        headers={"X-Coffer-Token": "test-token"},
-    ) as c:
-        r = await c.get("/api/v1/credentials/github.GITHUB_TOKEN")
-        assert r.status_code == 200
-        assert r.json() == {"value": "ghp_secret"}
-    # The read is audited (ref only — value never in the audit row).
-    read_events = [e for e in audit_repo.entries if e.event_type == "credential_read"]
-    assert len(read_events) == 1
-    assert read_events[0].details == {"ref": "github.GITHUB_TOKEN"}
-    assert "ghp_secret" not in str(read_events[0].details)
-
-
-@pytest.mark.asyncio
-async def test_get_missing_ref_returns_404() -> None:
-    fake = _FakeCredentialStore()
-    transport = ASGITransport(_build_app(fake))
-    async with AsyncClient(
-        transport=transport,
-        base_url="http://t",
-        headers={"X-Coffer-Token": "test-token"},
-    ) as c:
-        r = await c.get("/api/v1/credentials/absent.REF")
-        assert r.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_get_requires_token() -> None:
-    fake = _FakeCredentialStore()
-    fake.store["x"] = "y"
-    transport = ASGITransport(_build_app(fake))
-    async with AsyncClient(transport=transport, base_url="http://t") as c:
-        r = await c.get("/api/v1/credentials/x")
         assert r.status_code == 401
 
 
@@ -330,7 +302,8 @@ async def test_list_reports_every_cited_ref_with_its_presence() -> None:
         r = await c.get("/api/v1/credentials")
     assert r.status_code == 200
     body = r.json()
-    assert body == {
+    keys = ("ref", "present", "cited_by")
+    assert {"refs": [{k: row[k] for k in keys} for row in body["refs"]]} == {
         "refs": [
             {
                 "ref": "mcp/github/token",
@@ -388,9 +361,10 @@ async def test_slash_separated_refs_round_trip() -> None:
         r = await c.get(f"/api/v1/credentials/{ref}/exists")
         assert r.status_code == 200
         assert r.json() == {"present": True}
+        # No route answers the value itself.
         r = await c.get(f"/api/v1/credentials/{ref}")
-        assert r.status_code == 200
-        assert r.json() == {"value": "123:abc"}
+        assert r.status_code in (404, 405)
+        assert "123:abc" not in r.text
         r = await c.delete(f"/api/v1/credentials/{ref}")
         assert r.status_code == 204
     assert ref not in fake.store
@@ -429,7 +403,7 @@ async def test_empty_value_is_rejected() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_and_exists_read_the_store_off_the_loop_thread() -> None:
+async def test_exists_reads_the_store_off_the_loop_thread() -> None:
     """A store read opens its own SQLite connection and can wait on the write
     lock; the routes must run it in a worker thread, not on the loop."""
     import threading
@@ -454,9 +428,7 @@ async def test_get_and_exists_read_the_store_off_the_loop_thread() -> None:
     app = _build_app(fake)
     headers = {"X-Coffer-Token": "test-token"}
     async with AsyncClient(transport=ASGITransport(app), base_url="http://t") as c:
-        got = await c.get("/api/v1/credentials/svc/key", headers=headers)
         present = await c.get("/api/v1/credentials/svc/key/exists", headers=headers)
-    assert got.status_code == 200 and got.json()["value"] == "v"
     assert present.status_code == 200
-    assert len(fake.seen) == 2
+    assert len(fake.seen) == 1
     assert all(ident != loop_thread for ident in fake.seen)

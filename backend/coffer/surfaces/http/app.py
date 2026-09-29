@@ -67,7 +67,7 @@ from coffer.surfaces.http.chat_wiring import wire_chat
 from coffer.surfaces.http.credential_composition import (
     init_credential_store,
     make_credential_resolver,
-    run_legacy_keychain_migration,
+    run_credential_startup,
 )
 from coffer.surfaces.http.curation_wiring import wire_curation
 from coffer.surfaces.http.daemon_identity import publish_daemon_identity
@@ -252,9 +252,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         app, resource_svc, audit, sm, credential_store, chat, kinds.knowledge, sync_contributions
     )
 
-    # One-time move of legacy OS-keychain secrets into the encrypted store
-    # (best-effort; see credential_composition for the mechanics).
-    await run_legacy_keychain_migration(app.state.kinds, sm, credential_store, audit)
+    # Legacy keychain move + one-time adoption of the secret bindings in use.
+    await run_credential_startup(app.state.kinds, sm, credential_store, audit, resource_svc)
 
     # An agent's Coffer connection spans two kinds (the gateway entry is the
     # agent kind's, the memory hook the memory kind's), so it is composed here.

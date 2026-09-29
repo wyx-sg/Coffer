@@ -278,10 +278,6 @@ class KeyMaterialIn(BaseModel):
     material: str
 
 
-class KeyMaterialOut(BaseModel):
-    material: str
-
-
 class KeyImportOut(BaseModel):
     locked_refs: list[str]
 

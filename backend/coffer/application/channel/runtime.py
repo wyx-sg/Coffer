@@ -32,6 +32,7 @@ from coffer.application.channel.runtime_supervision import (
     FAILURE_RETRY_SECONDS,
     Desired,
     Latch,
+    MaterializeFn,
     reconcile_websockets,
 )
 from coffer.application.channel.supervision_ports import WebSocketControllerPort
@@ -64,7 +65,7 @@ class ChannelRuntime:
         processor: InboundProcessor,
         pairing: PairingManager,
         websockets: WebSocketControllerPort | None = None,
-        materialize: Callable[[dict[str, str]], Awaitable[dict[str, str]]] | None = None,
+        materialize: MaterializeFn | None = None,
         interval_seconds: float = _DEFAULT_INTERVAL_SECONDS,
         machine_id: Callable[[], Awaitable[str]] | None = None,
         knowledge_enabled: Callable[[], bool] = lambda: True,

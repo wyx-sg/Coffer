@@ -18,6 +18,7 @@ import { LanguageSwitcher } from "./LanguageSwitcher";
 import { DaemonOfflineBanner } from "./DaemonOfflineBanner";
 import { FloatingBanners } from "./FloatingBanners";
 import { SidebarNav } from "./SidebarNav";
+import { PendingApprovalsSheet } from "./credentials/PendingApprovalsSheet";
 
 const COLLAPSE_KEY = "coffer.nav.collapsed";
 // Tailwind's `md` breakpoint — the width at which the sidebar may expand.
@@ -66,6 +67,9 @@ export function Layout() {
         <FloatingBanners>
           <DaemonOfflineBanner />
         </FloatingBanners>
+        {/* Once for the whole app: a secret change waiting for a present
+            human is answered wherever the user is, not on one page. */}
+        <PendingApprovalsSheet />
         <aside
           className={cn(
             "flex shrink-0 flex-col border-r border-border bg-surface-sidebar transition-[width] duration-200",

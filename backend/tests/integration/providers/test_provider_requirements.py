@@ -19,6 +19,7 @@ from starlette.testclient import TestClient
 from coffer.domain.audit import AuditEventType
 from coffer.surfaces.http.app import create_app
 from coffer.surfaces.http.auth import set_active_token
+from coffer.surfaces.http.credential_composition import get_credential_store
 from tests.fixtures.keyring import install_in_memory_keyring
 
 TOKEN = "test-token-provider-requirements"
@@ -115,7 +116,8 @@ def test_rotate_a_connections_secret_without_changing_its_ref(env: pathlib.Path)
         assert "sk-after-rotation" not in r.text
 
         assert c.get(f"/api/v1/providers/{uid}").json()["credential_ref"] == ref
-        assert c.get(f"/api/v1/credentials/{ref}").json()["value"] == "sk-after-rotation"
+        # No credential route returns a value; read the daemon's own store.
+        assert get_credential_store().get(ref) == "sk-after-rotation"
         assert c.get(f"/api/v1/providers/{uid}/key").json()["value"] == "sk-after-rotation"
 
 

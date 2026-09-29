@@ -56,6 +56,8 @@ Three rules shape everything below:
 
    The remote is probed before it is stored, so a typo or a token that cannot push fails here rather than an hour later. Re-running `remote set` changes only the options you pass; everything else keeps its stored value.
 
+   A token you stored a moment ago for this remote is used at once. Pointing a token that already pushes somewhere at a **different** URL is sending a secret somewhere new, so the remote is not saved until you approve it in the desktop app: the command prints `waiting for approval in the Coffer app` and exits `9`, or waits with `--wait`. See [Secrets → Approvals](/guides/secrets#approvals).
+
 3. Join it. Joining is always explicit, even on the first machine:
 
    ```sh
@@ -91,21 +93,17 @@ If a returning machine's recorded commit is no longer in the remote's history, `
 
 ## Move the master key
 
-Only needed when the remote carries credentials. On a machine that has the key:
-
-```sh
-coffer sync key export ~/coffer-master.key      # written with mode 0600
-```
+Only needed when the remote carries credentials. On a machine that has the key, open the **desktop app** and back the key up: pick a folder, confirm with Touch ID or your login password, and the app writes `coffer-master-key-<fingerprint>.key` there with mode `0600`. No command, route or browser page exports the key, because an agent could run it; see [Secrets → The master key and its backup](/guides/secrets#the-master-key-and-its-backup).
 
 Carry the file over a channel you trust (a password manager, `scp`, a USB stick), never through the sync repository. On the other machine:
 
 ```sh
-coffer sync key import ~/coffer-master.key
+coffer sync key import ~/coffer-master-key-<fingerprint>.key
 coffer sync key fingerprint                     # compare with the other machine
-rm ~/coffer-master.key
+rm ~/coffer-master-key-<fingerprint>.key
 ```
 
-On the web, the **Master key** card on **Setup** offers **Export key** (a browser download) and **Import key** (a file picker).
+Importing is open to every surface — the file already holds the key — and the **Master key** card on **Setup** offers **Import key** (a file picker) as well. Importing a different key keeps the previous one as a backup beside it.
 
 Without the key, sync still works, but credentials that arrived are reported as locked on each round (`credential locked: <ref>`), and the resources that need them cannot start until you import the key. The machine table flags a machine whose key differs from this one's.
 

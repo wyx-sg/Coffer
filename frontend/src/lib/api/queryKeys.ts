@@ -235,6 +235,14 @@ export const agentConfigKey = (conversationId: string) =>
 export const messagesKey = (conversationId: string) => ["messages", conversationId] as const;
 
 // ---------------------------------------------------------------------------
+// credentials — the secret boundary's approvals
+// ---------------------------------------------------------------------------
+
+export const credentialsKey = ["credentials"] as const;
+/** The approvals still waiting for a present human. */
+export const pendingApprovalsKey = ["credentials", "approvals", "pending"] as const;
+
+// ---------------------------------------------------------------------------
 // settings — daemon-side settings the Settings pages edit
 // ---------------------------------------------------------------------------
 

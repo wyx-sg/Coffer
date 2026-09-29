@@ -77,13 +77,21 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # Neither offers `agent`: a detected agent is registered with `agent add`,
     # which its scan row names, and nothing of Coffer's put it there to discard.
     "scan": set(),
+    # `coffer run [--secret …] -- cmd`: one command, standalone secrets set
+    # only in the child's environment (spec credentials "Resolve standalone
+    # secrets into one child with coffer run").
+    "run": set(),
     "adopt": {"skill", "mcp"},
     "discard": {"skill", "mcp"},
     # `test` re-queries capabilities, then reports health; `cap` toggles one
     # tool, prompt or resource (spec mcp-gateway).
     "mcp": {*_LIFECYCLE, "add", "scope", "test", "cap"},
     "mcp cap": {"list", "enable", "disable"},
-    "credentials": {"set", "get", "list", "rm"},
+    # `get` checks presence only; no command prints a value (spec credentials
+    # "Return no plaintext on any route, command or tool"). `approvals` and
+    # `reject` are the terminal's half of the approvals the desktop app
+    # approves; `scan` and `import` move plaintext secret files into the store.
+    "credentials": {"set", "get", "list", "rm", "approvals", "reject", "scan", "import"},
     # No `scope`: an agent is not reached by agents. `connect`/`disconnect`
     # are its Coffer connection — the gateway entry and the memory hook as one
     # action (spec agent-registry "Connect an agent to Coffer in one action"),
@@ -146,7 +154,10 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
         "restore",
         "status",
     },
-    "sync key": {"export", "import", "fingerprint"},
+    # No `export`: a key backup is written only by the desktop app, behind a
+    # presence check (spec credentials "Release plaintext only to a present
+    # human in the desktop app").
+    "sync key": {"import", "fingerprint"},
     # The unified reconciler's read models (spec resource-framework "Converge
     # what Coffer writes outside its database with one reconciler"): `list` is
     # GET /reconcile/plan, `repair` is POST /reconcile/apply.
@@ -167,6 +178,7 @@ _OPTION_ONLY_GROUPS: dict[str, set[str]] = {
     # unmanaged skill (spec skill-manager "Preview an unmanaged skill read-only").
     "scan": {"--agent", "--ref", "--source", "--json"},
     "attention": {"--json"},
+    "run": {"--secret", "--env-file", "--no-masking"},
     # A name, a title and a description are edited on every kind (design D1).
     "knowledge edit": {"--name", "--title"},
     # The model an agent answers with is a FIELD of the agent, bound by the
@@ -210,6 +222,9 @@ _CONFIG_KEYS: dict[str, str] = {
     "transcribe.provider": "POST /providers/{uid}/transcribe-default",
     "transcribe.model": "PUT /internal-engine-config/transcribe-model",
     "credentials.storage": "PUT /settings/credentials",
+    # Turning it off waits for the Coffer app (spec credentials "Turn the
+    # protection off only through the desktop app").
+    "secrets.require_approval": "PUT /settings/secret-boundary",
     "feature.<key>": "PUT /daemon/features/{key}",
     "retention.<table>": "PATCH /retention/policies/{table_name}",
 }

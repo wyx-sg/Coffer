@@ -440,7 +440,13 @@
       "sync_run": "执行了一轮收敛",
       "token_rotated": "已轮换访问令牌",
       "daemon_residency_updated": "守护进程常驻设置已变更",
-      "knowledge_curated": "整理了 {{resource}}：把新材料并入了其中的文档"
+      "knowledge_curated": "整理了 {{resource}}：把新材料并入了其中的文档",
+      "credential_revealed": "在 Coffer 应用中查看了密钥",
+      "secret_resolved": "将密钥发送到了使用它的地方",
+      "secret_approval_requested": "请求批准一项密钥改动",
+      "secret_approval_approved": "批准了一项密钥改动",
+      "secret_approval_rejected": "拒绝了一项密钥改动",
+      "secret_imported": "导入了密钥"
     },
     "capType": {
       "tool": "工具",
@@ -891,7 +897,15 @@
     "ATTACHMENT_TYPE_UNSUPPORTED": "不支持此文件类型。请添加图片、文档、音频或文本文件。",
     "ATTACHMENT_NOT_FOUND": "某个附件已不可用，请重新添加。",
     "ATTACHMENT_EXPIRED": "这条消息携带的文件已超过 30 天被清理，无法重新发送。请重新添加文件后发送新消息。",
-    "MESSAGE_NOT_FOUND": "该消息已不在此对话中。"
+    "MESSAGE_NOT_FOUND": "该消息已不在此对话中。",
+    "SECRET_BINDING_PENDING": "该密钥需在 Coffer 应用中批准后才会发送到这里。",
+    "APPROVAL_PENDING": "此改动正在等待在 Coffer 应用中批准。",
+    "PRESENCE_GRANT_INVALID": "无法验证这次批准，请在 Coffer 应用中重试。",
+    "APPROVAL_NOT_FOUND": "该审批已不存在。",
+    "APPROVAL_NOT_PENDING": "该审批已被处理。",
+    "SECRET_NAME_INVALID": "密钥名称无效。",
+    "SECRET_NOT_FOUND": "没有以该名称存储的密钥。",
+    "MASTER_KEY_CONFLICT": "发现了两把不同的主密钥（一把在钥匙串中，另一把在别处）。Coffer 不会替你选择：请保留加密凭据时所用的那把，删除另一把。"
   },
   "pagination": {
     "summary": "第 {{page}} / {{pageCount}} 页 · 共 {{total}} 条",
@@ -1748,10 +1762,12 @@
       "import": "导入主密钥",
       "importConfirmTitle": "替换本机主密钥？",
       "importConfirmBody": "只有新密钥与当前密钥相同，用当前密钥加密的凭据才仍可读。",
-      "exported": "主密钥已下载为 {{name}}",
+      "exported": "备份已写入 {{path}}（指纹 {{fingerprint}}）",
       "imported": "主密钥已导入——本机现在可以解密它同步到的凭据。",
       "importedLocked": "主密钥已导入，但仍有 {{count}} 个凭据引用无法用它解密。",
-      "fileEmpty": "该文件为空——请选择从另一台机器导出的主密钥文件。"
+      "fileEmpty": "该文件为空——请选择从另一台机器导出的主密钥文件。",
+      "exportInApp": "在 Coffer 应用中导出",
+      "exportInAppHint": "导出主密钥需要 Touch ID 或登录密码，因此只能在 Coffer 桌面应用中进行。应用会写出备份文件并显示其位置。"
     },
     "machines": {
       "title": "机器",
@@ -1880,6 +1896,29 @@
     "title": "同步",
     "toast": {
       "roundDone": "本轮已完成：{{status}}（+{{added}} ~{{modified}} −{{deleted}}）"
+    }
+  },
+  "credentials": {
+    "savedAwaitingApproval": "已保存。新密钥在 Coffer 应用中批准后生效。",
+    "presence": {
+      "openInApp": "在 Coffer 应用中打开"
+    },
+    "approvals": {
+      "title_one": "{{count}} 项改动等待批准",
+      "title_other": "{{count}} 项改动等待批准",
+      "hintShell": "批准时需要 Touch ID 或登录密码。",
+      "hintBrowser": "请在 Coffer 桌面应用中批准；这里可以拒绝。",
+      "requestedBy": "请求方",
+      "secret": "密钥",
+      "destination": "发送到",
+      "target": "目标",
+      "approve": "批准",
+      "reject": "拒绝",
+      "op": {
+        "bind": "新的使用处",
+        "replace_value": "新的值",
+        "disable_protection": "关闭保护"
+      }
     }
   }
 }

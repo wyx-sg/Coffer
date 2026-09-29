@@ -46,9 +46,26 @@ def _to_out(r: Resource, svc: ResourceService) -> ResourceOut:
         scope=ScopeOut.of(r.scope),
         enabled=r.enabled,
         toggleable=svc.toggleable(r.kind),
+        secrets_readable_by_local_processes=_env_carries_secrets(r),
         created_at=r.created_at,
         updated_at=r.updated_at,
     )
+
+
+def _env_carries_secrets(r: Resource) -> bool:
+    """A process Coffer spawns with a secret in its initial environment.
+
+    Any process of the same user reads that environment (``ps eww``), from
+    inside an agent's sandbox too, so the UI labels such a resource "readable
+    by other processes on this Mac" (spec mcp-gateway "Mark a stdio server
+    whose environment carries a secret"). Read off the stored shape rather than
+    through the MCP kind's model, which this kind-agnostic route does not
+    import: a ``stdio`` transport citing any credential ref.
+    """
+    transport = r.config.get("transport") if isinstance(r.config, dict) else None
+    if not isinstance(transport, dict) or transport.get("type") != "stdio":
+        return False
+    return bool(transport.get("credential_refs"))
 
 
 _actor = get_actor

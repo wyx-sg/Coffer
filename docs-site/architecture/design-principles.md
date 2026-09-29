@@ -40,7 +40,7 @@ Coffer is a **custodian, not an owner**. It holds your assets on your machine, h
 **The bounded exception.** Coffer can converge the vault with a git remote *you* own, so your own machines hold one vault rather than several. The exception holds only while three conditions all hold:
 
 1. **The remote is a rendezvous, never a system of record.** Every machine's local vault stays authoritative and complete, so the remote can be deleted and rebuilt from any one machine.
-2. **Secrets travel as ciphertext only.** The master key leaves a machine only through an explicit out-of-band transfer (`coffer sync key export` / `import`).
+2. **Secrets travel as ciphertext only.** The master key leaves a machine only through an explicit out-of-band transfer: a key backup the desktop app writes behind a presence check, installed on the other machine with `coffer sync key import`.
 3. **It is off by default** and pointed only at a repository you configure.
 
 Convergence is bidirectional but only under the sync spec's safety rules: git's three-way merge arbitrates, what is applied is a diff against the last state this vault provably held, and a round that would delete more than its configured share stops and asks.

@@ -100,11 +100,19 @@ class ScopeInvalidError(CofferError):
 # credential-store error family: re-exported from coffer.domain.credential_errors
 # (split for the file-size limit) so the coffer.domain.errors.X import paths keep working.
 from coffer.domain.credential_errors import (  # noqa: E402, I001
+    ApprovalNotFound as ApprovalNotFound,
+    ApprovalNotPending as ApprovalNotPending,
+    ApprovalPending as ApprovalPending,
     CredentialInUse as CredentialInUse,
     CredentialLocked as CredentialLocked,
     CredentialMissing as CredentialMissing,
     CredentialUnreadable as CredentialUnreadable,
+    MasterKeyConflict as MasterKeyConflict,
     MasterKeyMissing as MasterKeyMissing,
+    PresenceGrantInvalid as PresenceGrantInvalid,
+    SecretBindingPending as SecretBindingPending,
+    SecretNameInvalid as SecretNameInvalid,
+    SecretNotFound as SecretNotFound,
 )
 
 

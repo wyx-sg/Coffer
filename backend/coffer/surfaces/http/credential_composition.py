@@ -23,6 +23,8 @@ from coffer.application.audit_service import AuditService
 from coffer.application.credential_migration import (
     migrate_legacy_keychain,
 )
+from coffer.application.resource_service import ResourceService
+from coffer.domain.audit import AuditEventType
 from coffer.domain.credential_errors import CredentialLocked, MasterKeyMissing
 from coffer.domain.errors import CredentialMissing
 from coffer.domain.resource import Kind
@@ -30,6 +32,14 @@ from coffer.infrastructure.credentials.encrypted_store import EncryptedCredentia
 from coffer.infrastructure.credentials.keyring_adapter import KeyringAdapter
 from coffer.infrastructure.credentials.master_key import MasterKeyManager
 from coffer.infrastructure.persistence.repos import SqlAlchemyResourceRepo
+from coffer.surfaces.http.secret_boundary_wiring import (
+    adopt_existing_bindings,
+    init_secret_boundary,
+    make_master_key_manager,
+)
+from coffer.surfaces.http.secret_boundary_wiring import (
+    boundary_resolver as boundary_resolver,
+)
 
 _credential_store: EncryptedCredentialStore | None = None
 
@@ -95,9 +105,9 @@ async def init_credential_store(engine: AsyncEngine, db_path: pathlib.Path) -> C
     credentials table is empty — otherwise existing ciphertext would be
     silently undecryptable, so we fail loudly instead.
     """
-    master_key_manager = MasterKeyManager(
-        key_path=db_path.parent / "master.key", keyring=KeyringAdapter()
-    )
+    # The key's home is chosen by how this build was made (a signed release's
+    # Keychain access group, or the development file / legacy keychain pair).
+    master_key_manager = make_master_key_manager(db_path)
     async with engine.connect() as conn:
         ciphertext_rows = (
             await conn.execute(_sa_text("SELECT COUNT(*) FROM credentials"))
@@ -126,10 +136,46 @@ async def init_credential_store(engine: AsyncEngine, db_path: pathlib.Path) -> C
         raise MasterKeyMissing(str(db_path.parent / "master.key")) from e
     set_credential_store(credential_store)
     set_master_key_manager(master_key_manager)
+    # The approval gate and the presence grants, before any consumer of a
+    # secret is built (every one gets ``boundary_resolver``).
+    init_secret_boundary(db_path, credential_store, master_key_manager)
     return CredentialWiring(store=credential_store, master_key=master_key_manager)
 
 
 _logger = logging.getLogger(__name__)
+
+
+async def run_credential_startup(
+    kinds: dict[str, Kind],
+    sm: async_sessionmaker[AsyncSession],
+    credential_store: EncryptedCredentialStore,
+    audit: AuditService,
+    resources: ResourceService,
+) -> None:
+    """The credential steps that need every kind registered, once per start.
+
+    The legacy keychain move below, the audit of a master key the signed build
+    moved into its Keychain access group, and the one-time adoption of every
+    secret binding in use before the secret boundary existed — so upgrading
+    stops nothing that already worked (spec credentials "Hold a secret for a
+    new destination until a person approves it").
+    """
+    await run_legacy_keychain_migration(kinds, sm, credential_store, audit)
+    manager = get_master_key_manager()
+    if manager.migrated_from is not None:
+        await audit.record(
+            AuditEventType.MASTER_KEY_RELOCATED.value,
+            actor="system",
+            details={"from": manager.migrated_from, "to": "keychain_access_group"},
+        )
+    try:
+        adopted = await adopt_existing_bindings(resources, audit)
+        if adopted:
+            _logger.info("secret_boundary.adopted", extra={"bindings": adopted})
+    except Exception:
+        # Not adopting leaves the marker unset, so the next start tries again;
+        # meanwhile a binding with no approval waits, which is the safe side.
+        _logger.exception("secret_boundary.adoption_failed")
 
 
 async def run_legacy_keychain_migration(

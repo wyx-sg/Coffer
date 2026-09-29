@@ -11,9 +11,12 @@ import { throwApiError } from "@/lib/api/errors";
 
 import type { ChannelEditPlan } from "./schema";
 
-async function writeSecret(ref: string, value: string): Promise<void> {
-  const { error } = await getApiClient().POST("/credentials", { body: { ref, value } });
+/** Write one secret. True when the daemon answered 202: the new value replaces
+ *  one in use, so it is stored sealed and waits for approval in the Coffer app. */
+async function writeSecret(ref: string, value: string): Promise<boolean> {
+  const { data, error } = await getApiClient().POST("/credentials", { body: { ref, value } });
   if (error) throwApiError(error, "INTERNAL_ERROR", "credential write failed");
+  return data?.approval !== undefined;
 }
 
 async function patchConfig(
@@ -32,17 +35,19 @@ async function patchConfig(
 /**
  * Rotate the changed secrets, then PATCH the config. Returns the uid it wrote
  * and the name to say it wrote — the caller needs both, and they are no longer
- * the same string. Secrets-first matches registration: a config that references
- * a ref whose value just changed must see the new value, never a stale one.
+ * the same string — and whether a rotated secret now waits for approval in the
+ * Coffer app. Secrets-first matches registration: a config that references a
+ * ref whose value just changed must see the new value, never a stale one.
  */
 export async function applyChannelEdit(
   plan: ChannelEditPlan,
-): Promise<{ uid: string; name: string }> {
+): Promise<{ uid: string; name: string; awaitingApproval: boolean }> {
+  let awaitingApproval = false;
   for (const s of plan.secrets) {
-    await writeSecret(s.ref, s.value);
+    if (await writeSecret(s.ref, s.value)) awaitingApproval = true;
   }
   await patchConfig(plan.uid, plan.config, plan.title);
-  return { uid: plan.uid, name: plan.name };
+  return { uid: plan.uid, name: plan.name, awaitingApproval };
 }
 
 /** Mutable edit-form inputs by channel type (secrets blank = "leave as-is"). */

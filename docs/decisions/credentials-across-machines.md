@@ -49,11 +49,15 @@ not parse leaves the conflict unsettled rather than guessed.
 
 **The master key.** It is never written into the repository
 (spec vault-sync "Never write the master key into the repository"). A user
-carries it once per machine, out of band: `coffer sync key export <file>`
-writes it to a `0600` file, `coffer sync key import <file>` installs it, and
+carries it once per machine, out of band: a key backup is written to a `0600`
+file, `coffer sync key import <file>` installs it, and
 `coffer sync key fingerprint` prints a 12-character SHA-256 prefix to compare
-(`surfaces/cli/sync_machine_cmd.py`; `/api/v1/sync/key/export`, `/import`,
-`/fingerprint`). Export and import are audited (`master_key_exported`,
+(`surfaces/cli/sync_machine_cmd.py`; `/api/v1/sync/key/import`,
+`/fingerprint`). The backup was first written by `coffer sync key export` and
+`/api/v1/sync/key/export`; since 2026-09-30 only the desktop app writes it,
+behind a presence check (`/api/v1/credentials/presence/master-key-export`), and
+both are removed — an agent could run them
+([Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)). Export and import are audited (`master_key_exported`,
 `master_key_imported`). An import that would replace a different key first
 copies the old one to a timestamped `master.key.bak-*` sibling, because the
 file being replaced may be the only copy that opens existing ciphertext. Each
@@ -183,7 +187,8 @@ pinned git configuration does not affect.
 Secrets cross machines only as Fernet ciphertext, only on a remote configured
 to carry them, and two ciphertexts for one ref are ordered by their cleartext
 encryption time. The master key never enters the repository; the user moves it
-with `coffer sync key export|import`, compares with `fingerprint`, and an
+with a key backup (written by the desktop app since 2026-09-30) and
+`coffer sync key import`, compares with `fingerprint`, and an
 import never overwrites a different key without keeping a `master.key.bak-*`.
 The push token reaches git only through a per-invocation credential helper
 reading an environment variable, with the user's global and system git

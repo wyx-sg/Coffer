@@ -440,7 +440,13 @@
       "sync_run": "Ran a converge round",
       "token_rotated": "Access token rotated",
       "daemon_residency_updated": "Daemon residency changed",
-      "knowledge_curated": "Curated {{resource}}: merged new material into its documents"
+      "knowledge_curated": "Curated {{resource}}: merged new material into its documents",
+      "credential_revealed": "Revealed a secret in the Coffer app",
+      "secret_resolved": "Sent a secret to where it is used",
+      "secret_approval_requested": "Asked for approval of a secret change",
+      "secret_approval_approved": "Approved a secret change",
+      "secret_approval_rejected": "Rejected a secret change",
+      "secret_imported": "Imported secrets"
     },
     "capType": {
       "tool": "tool",
@@ -891,7 +897,15 @@
     "ATTACHMENT_TYPE_UNSUPPORTED": "This file type can't be attached. Attach an image, a document, audio, or a text file.",
     "ATTACHMENT_NOT_FOUND": "An attached file is no longer available. Attach it again.",
     "ATTACHMENT_EXPIRED": "A file this message carried was deleted after 30 days, so it can't be sent again. Attach the file again and send a new message.",
-    "MESSAGE_NOT_FOUND": "That message is no longer in this conversation."
+    "MESSAGE_NOT_FOUND": "That message is no longer in this conversation.",
+    "SECRET_BINDING_PENDING": "That secret is waiting for approval in the Coffer app before it is sent here.",
+    "APPROVAL_PENDING": "This change is waiting for approval in the Coffer app.",
+    "PRESENCE_GRANT_INVALID": "The approval could not be verified. Try again from the Coffer app.",
+    "APPROVAL_NOT_FOUND": "That approval no longer exists.",
+    "APPROVAL_NOT_PENDING": "That approval has already been answered.",
+    "SECRET_NAME_INVALID": "That secret name isn't valid.",
+    "SECRET_NOT_FOUND": "No secret is stored under that name.",
+    "MASTER_KEY_CONFLICT": "Two different master keys were found — one in the Keychain and one elsewhere. Coffer will not pick one; keep the key your credentials were stored with and remove the other."
   },
   "pagination": {
     "summary": "Page {{page}} of {{pageCount}} · {{total}} total",
@@ -1748,10 +1762,12 @@
       "import": "Import key",
       "importConfirmTitle": "Replace this machine's master key?",
       "importConfirmBody": "Credentials stored with the current key stay readable only if the new key is the same one.",
-      "exported": "Key downloaded as {{name}}",
+      "exported": "Backup written to {{path}} (fingerprint {{fingerprint}})",
       "imported": "Key imported — this machine now decrypts the credentials it syncs.",
       "importedLocked": "Key imported, but {{count}} credential reference still cannot be decrypted with it.",
-      "fileEmpty": "That file is empty — pick the key file exported from the other machine."
+      "fileEmpty": "That file is empty — pick the key file exported from the other machine.",
+      "exportInApp": "Open in Coffer app to export",
+      "exportInAppHint": "Exporting the master key asks for Touch ID or your login password, so it is only available in the Coffer desktop app. The app writes the backup file and shows where it went."
     },
     "machines": {
       "title": "Machines",
@@ -1880,6 +1896,29 @@
     "title": "Sync",
     "toast": {
       "roundDone": "Round finished: {{status}} (+{{added}} ~{{modified}} −{{deleted}})"
+    }
+  },
+  "credentials": {
+    "savedAwaitingApproval": "Saved. The new secret takes effect once it is approved in the Coffer app.",
+    "presence": {
+      "openInApp": "Open in Coffer app"
+    },
+    "approvals": {
+      "title_one": "{{count}} change waiting for approval",
+      "title_other": "{{count}} changes waiting for approval",
+      "hintShell": "Approving asks for Touch ID or your login password.",
+      "hintBrowser": "Approve in the Coffer desktop app. You can reject here.",
+      "requestedBy": "Requested by",
+      "secret": "Secret",
+      "destination": "Sent to",
+      "target": "Target",
+      "approve": "Approve",
+      "reject": "Reject",
+      "op": {
+        "bind": "New use",
+        "replace_value": "New value",
+        "disable_protection": "Turn off protection"
+      }
     }
   }
 }

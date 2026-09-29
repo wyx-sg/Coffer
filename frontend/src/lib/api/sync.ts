@@ -16,9 +16,10 @@
 // Nothing here ever carries the push credential or the master key into a
 // stored shape: a remote names its credential by REFERENCE, which the daemon
 // resolves at push time and nowhere else, so a fully configured remote is safe
-// to render in a browser. The key routes are the one exception and they are
-// deliberately transient — the material crosses the loopback origin in a
-// request body and the page hands it straight to a download or a file input.
+// to render in a browser. No route here returns the master key: a backup is
+// written by the desktop shell after a presence check (`@/lib/tauri`). Import
+// is the one transient exception — the material the user picked crosses the
+// loopback origin in a request body, into the daemon, never back out.
 import { call, enc } from "@/lib/api/call";
 import type { components } from "@/lib/api/generated/vault-sync";
 
@@ -128,7 +129,6 @@ export const syncApi = {
     call<MachineRemoved>(`/sync/machines/${enc(machineId)}`, { method: "DELETE" }),
 
   keyFingerprint: () => call<{ fingerprint: string | null }>("/sync/key/fingerprint"),
-  exportKey: () => call<{ material: string }>("/sync/key/export", { method: "POST" }),
   importKey: (material: string) =>
     call<{ locked_refs: string[] }>("/sync/key/import", { method: "POST", body: { material } }),
 };

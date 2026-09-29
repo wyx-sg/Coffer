@@ -13,6 +13,9 @@ vi.mock("./DaemonOfflineBanner", () => ({ DaemonOfflineBanner: () => null }));
 // Both floating banners are tested where they live; here they would only put a
 // live /sync/status fetch behind every shell assertion.
 vi.mock("./SyncAttentionBanner", () => ({ SyncAttentionBanner: () => null }));
+// Tested where it lives; here it would only put an approvals poll behind every
+// shell assertion.
+vi.mock("./credentials/PendingApprovalsSheet", () => ({ PendingApprovalsSheet: () => null }));
 
 function installMatchMedia(matches: boolean) {
   Object.defineProperty(window, "matchMedia", {

@@ -92,6 +92,37 @@ class EncryptedCredentialStore:
             cur = conn.execute("DELETE FROM credentials WHERE ref = ?", (ref,))
             return cur.rowcount > 0
 
+    def created_at(self, ref: str) -> datetime | None:
+        """When ``ref`` was first stored, or None when it is not stored."""
+        with closing(self._connect()) as conn:
+            row = conn.execute(
+                "SELECT created_at FROM credentials WHERE ref = ?", (ref,)
+            ).fetchone()
+        return datetime.fromisoformat(row[0]) if row else None
+
+    def list_refs(self) -> list[tuple[str, str, str]]:
+        """Every stored ref with its creation and update time, never a value.
+
+        The enumeration the Secrets page and ``coffer credentials list`` need to
+        show a stored secret nothing cites (ADR
+        standalone-secrets-are-named-references-injected-into-one-child).
+        """
+        with closing(self._connect()) as conn:
+            rows = conn.execute(
+                "SELECT ref, created_at, updated_at FROM credentials ORDER BY ref"
+            ).fetchall()
+        return [(str(r[0]), str(r[1]), str(r[2])) for r in rows]
+
+    def seal(self, value: str) -> bytes:
+        """Encrypt a value that is not stored yet — a replacement awaiting approval."""
+        return self._fernet.encrypt(value.encode())
+
+    def unseal(self, token: bytes) -> str:
+        try:
+            return self._fernet.decrypt(token).decode()
+        except InvalidToken as e:
+            raise CredentialUnreadable("<pending replacement>") from e
+
     def count(self) -> int:
         with closing(self._connect()) as conn:
             return int(conn.execute("SELECT COUNT(*) FROM credentials").fetchone()[0])

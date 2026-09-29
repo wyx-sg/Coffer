@@ -3,7 +3,7 @@
 **Status**: Proposed
 **Date**: 2026-09-30
 **Deciders**: Yuxing Wu
-**Related**: [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [Names Visible to Agents Are Fixed; Every Resource Carries an Editable Title](names-visible-to-agents-are-fixed.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [principles](../../docs-site/architecture/principles.md) (Credentials; "Not a firewall or security boundary"; an amendment to both is proposed separately), research note [credentials and secrets](../research/credentials-secrets.md), spec credentials "Address a secret by an opaque reference", spec credentials "Audit every read of a secret value", spec credentials "List every cited reference with its presence", spec credentials "Route every credential command through the daemon", spec credentials "Release unshared references when a resource is deleted", spec credentials "Hold plaintext only in memory at the moment of use"
+**Related**: [Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md), [Resources Cite Secrets by Opaque Reference, Resolved Only at the Moment of Use](credential-references.md), [Envelope-Encrypted Credential Store](envelope-encrypted-credential-store.md), [Credentials Cross Machines Only as Ciphertext; the Master Key and the Push Token Never Enter the Repository](credentials-across-machines.md), [Names Visible to Agents Are Fixed; Every Resource Carries an Editable Title](names-visible-to-agents-are-fixed.md), [Provider Keys Never Land in an Agent's Native Config](provider-keys-never-land-in-native-config.md), [Managed Agents Run With Full Permissions; Owner Pairing Is the Gate](managed-agents-run-with-full-permissions.md), [A Per-Start Token, Handed to the Page by Whoever Hosts It, Behind a Loopback Host Guard](daemon-auth-and-origin-guard.md), [Audit Every Change With Its Actor, Log Invocations Without Payloads, Prune Per Table](audit-and-retention.md), [Storage Is Five Classes by Nature; Whether a Class Syncs Is Policy](storage-is-five-classes-by-nature.md), [The Master Key Lives in a Keychain Access Group Only Coffer's Signed Binaries Can Read; Secrets Stay Envelope-Encrypted in the Vault](master-key-lives-in-the-macos-keychain.md), [Sync Only Pulls and Pushes the Vault Repository; a Clean Merge Is Applied, Any Conflict Stops for the Person](sync-applies-clean-merges-and-stops-on-any-conflict.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](every-vault-write-is-a-validated-commit-naming-its-writer.md), [Platform Differences Live Behind One Platform Port; Only macOS Ships](platform-differences-live-behind-one-platform-port.md), [Per-Agent Resource Scope Is One Framework Allow-List, Enforced by Each Kind](per-agent-resource-scope.md), [principles](../../docs-site/architecture/principles.md) (Credentials; "Not a firewall or security boundary"; an amendment to both is proposed separately), research note [credentials and secrets](../research/credentials-secrets.md), spec credentials "Address a secret by an opaque reference", spec credentials "Resolve standalone secrets into one child with coffer run", spec credentials "List every stored and cited secret with what uses it", spec credentials "Move plaintext secret files into the store", spec credentials "Route every credential command through the daemon", spec credentials "Release unshared references when a resource is deleted", spec credentials "Hold plaintext only in memory at the moment of use"
 
 ## Context
 
@@ -107,12 +107,12 @@ and the initial environment of any same-user process is readable with `ps eww`
   because a standalone secret's citers are mostly files Coffer does not parse.
   Deleting a standalone secret is refused while a resource cites it, as today,
   and warned about while a skill in the master store mentions its URI.
-- **`coffer run [--secret NAME[=VAR]]… [--env-file FILE] -- cmd args…`.** The
+- **`coffer run [--secret NAME|ENV=NAME]… [--env-file FILE] [--no-masking] -- cmd args…`.** The
   CLI asks the daemon to resolve every `--secret`, every `coffer://secret/`
   value in `--env-file`, and every `coffer://secret/` value already present in
   its own environment (the pattern `op run` uses). It then starts `cmd` with
   those values set **only in the child's environment**; the calling shell, the
-  agent that typed the command and its other children never hold them. `VAR`
+  agent that typed the command and its other children never hold them. `ENV`
   defaults to the name upper-cased with `-` and `.` as `_`. Exit status and
   signals pass through.
 - **Output masking — accidental-leak defence only.** The child's stdout and
@@ -158,9 +158,10 @@ and the initial environment of any same-user process is readable with `ps eww`
   binaries, and a missing scanner refuses the commit rather than skipping the
   gate. It is the same tool the repository's own CI runs over its full
   history (`.github/workflows/verify.yml:161`).
-- **Migration of plaintext secret files.** `coffer secret import` reads
+- **Migration of plaintext secret files.** `coffer credentials scan` reads
   `~/.coffer/secrets/*.env` (`KEY=VALUE` lines) and `*.json` (a flat map of
-  strings), proposes one name per entry (`<file stem>.<key>`), and on
+  strings), proposes one name per entry (`<file stem>.<key>`), and
+  `coffer credentials import`, on
   confirmation stores each value — the daemon decrypts what it stored and
   compares it with what it received in the same call, returning only whether
   they match — rewrites the file with `coffer://secret/<name>` in place of each value,
@@ -323,3 +324,37 @@ Rules a future change must respect:
   gitleaks binary in the distribution; tests for masking across a chunk
   boundary, for a value never appearing in the parent's environment, and for
   a commit refusing when the scanner is missing.
+
+## Implementation notes (2026-09-30)
+
+What shipped with the change that built the secret boundary (OpenSpec change
+`add-secret-boundary`), where it differs from the text above, and what is not
+built yet:
+
+- **Spellings.** The command is `coffer run [--secret NAME|ENV=NAME]…
+  [--env-file FILE] [--no-masking] -- cmd args…`: the variable comes first in
+  `ENV=NAME`, as in an env file. The migration is two commands of the
+  existing group, `coffer credentials scan` (report findings, never values) and
+  `coffer credentials import [--id]… [--dry-run]`, rather than a new
+  `coffer secret` group. The scan also reads every text file of the skill
+  master store (assignments whose name says password, secret, token or key,
+  and well-known token shapes), not only `~/.coffer/secrets/`.
+- **The resolve route answers standalone names only.** `coffer run` asks
+  `POST /api/v1/credentials/secrets/resolve`, which returns values for
+  `secret/<name>` refs and refuses everything else, so a resource's minted ref
+  is never answerable there. It records one `secret_resolved` row per name.
+- **Deleting a cited standalone secret is refused**, not warned about, while a
+  skill in the master store cites its URI (`CREDENTIAL_IN_USE`, naming the
+  skill), as it is while a resource cites it.
+- **Replacing a standalone secret's value** waits for an approval in the
+  desktop app, as replacing any value in use does
+  ([Agents May Configure Coffer; Only a Present Human Sees a Secret's Plaintext or Sends It Somewhere New](only-a-present-human-sees-a-secret-or-sends-it-somewhere-new.md)).
+- **Not built yet:**
+  - the gitleaks scan before every vault commit, and shipping the scanner with
+    the frozen binaries;
+  - the pseudo-terminal: the child's output is piped through the masking filter,
+    and a tool that needs a real terminal is run with `--no-masking`;
+  - `credential_resolved` audit rows for resolves at a resource's moment of use
+    (`mcp_spawn`, `channel_start`, `sync_push`, `provider_key`); only
+    `coffer run`'s resolves are audited today;
+  - the `requires.secrets` frontmatter as a second source of skill citations.
