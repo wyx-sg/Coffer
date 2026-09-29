@@ -93,22 +93,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/providers/active-key/{wire}": {
+    "/api/v1/providers/detect-local": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Active Provider Key
-         * @description Back-compat: the decrypted key of the connection active for ``wire``'s
-         *     agent (legacy ``--wire`` helper). 404 when none. New projections use
-         *     ``GET /{uid}/key`` instead, which names the connection directly.
-         */
-        get: operations["active_provider_key_api_v1_providers_active_key__wire__get"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Detect Local
+         * @description Which local model runtime answers where (spec provider-switching
+         *     "Detect a local model runtime without changing it"). Read-only probes of
+         *     loopback addresses only; nothing is pulled or loaded. A non-loopback URL
+         *     is refused as 422.
+         */
+        post: operations["detect_local_api_v1_providers_detect_local_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -208,36 +209,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/providers/{uid}/key": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Connection Key
-         * @description The decrypted key of a SPECIFIC connection — what Claude Code's projected
-         *     ``apiKeyHelper`` (``coffer provider key --connection-uid <uid>``) fetches, so
-         *     the agent always reads exactly the activated connection's key (no wire+active
-         *     mismatch).
-         *
-         *     The helper cites the UID rather than the name for the reason this kind has
-         *     no rename route any more: what Coffer writes into another tool's config file
-         *     has to survive the user relabelling the connection, and only the uid does
-         *     (ADR resource-identity-is-an-immutable-uid). 404 when the connection is
-         *     absent, or reaches no agent — disabled, scoped to no agent, or keyless
-         *     (ollama): ``NO_ACTIVE_PROVIDER``, as the wire form answers.
-         */
-        get: operations["connection_key_api_v1_providers__uid__key_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/providers/{uid}/transcribe-default": {
         parameters: {
             query?: never;
@@ -264,6 +235,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/proxy/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proxy Status
+         * @description The supervised proxy's state, as the daemon last saw it.
+         */
+        get: operations["proxy_status_api_v1_proxy_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy/tokens/{agent_uid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proxy Token
+         * @description The agent's local proxy token, minted on first ask. 404 for an agent
+         *     this machine does not have, so a stale helper fails closed.
+         */
+        get: operations["proxy_token_api_v1_proxy_tokens__agent_uid__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/proxy/tokens/{agent_uid}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate Proxy Token
+         * @description Replace the agent's token; the old one is refused from the next push,
+         *     which happens before this answers.
+         */
+        post: operations["rotate_proxy_token_api_v1_proxy_tokens__agent_uid__rotate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -282,18 +315,6 @@ export interface components {
             skipped: string[];
         };
         /**
-         * ActiveKeyOut
-         * @description The decrypted API key of the active profile for a wire format.
-         *
-         *     Served over the local token-protected daemon API for Claude Code's
-         *     ``apiKeyHelper`` (same exposure as the existing credential-GET route). Not
-         *     audited — ``apiKeyHelper`` polls it frequently.
-         */
-        ActiveKeyOut: {
-            /** Value */
-            value: string;
-        };
-        /**
          * AgentType
          * @description Supported agent products.
          * @enum {string}
@@ -309,6 +330,19 @@ export interface components {
             deprojected: string[];
             /** Previous */
             previous: string | null;
+        };
+        /**
+         * DetectLocalIn
+         * @description Probe one loopback URL, or — with none — each runtime's default port.
+         */
+        DetectLocalIn: {
+            /** Base Url */
+            base_url?: string | null;
+        };
+        /** DetectLocalOut */
+        DetectLocalOut: {
+            /** Found */
+            found: components["schemas"]["LocalRuntimeOut"][];
         };
         /** DetectProtocolIn */
         DetectProtocolIn: {
@@ -356,6 +390,34 @@ export interface components {
             /** Secret Value */
             secret_value?: string | null;
         };
+        /** LocalModelOut */
+        LocalModelOut: {
+            /** Context Window */
+            context_window: number | null;
+            /** Id */
+            id: string;
+            /** Tools */
+            tools: boolean | null;
+        };
+        /**
+         * LocalRuntime
+         * @description What detection found at a local connection's endpoint.
+         */
+        LocalRuntime: {
+            runtime: components["schemas"]["Runtime"];
+            /** Version */
+            version?: string | null;
+            /** Wires */
+            wires?: string[];
+        };
+        /** LocalRuntimeOut */
+        LocalRuntimeOut: {
+            /** Base Url */
+            base_url: string;
+            /** Models */
+            models: components["schemas"]["LocalModelOut"][];
+            runtime: components["schemas"]["LocalRuntime"];
+        };
         /**
          * Modality
          * @description The kind of output a model produces.
@@ -393,6 +455,7 @@ export interface components {
             credential_ref?: string | null;
             /** Description */
             description?: string | null;
+            local_runtime?: components["schemas"]["LocalRuntime"] | null;
             /** Models */
             models?: components["schemas"]["ProviderModel"][] | null;
             /** Name */
@@ -492,6 +555,7 @@ export interface components {
             internal_default: boolean;
             /** Is Active */
             is_active: boolean;
+            local_runtime: components["schemas"]["LocalRuntime"] | null;
             /** Models */
             models: components["schemas"]["ProviderModel"][];
             /** Name */
@@ -540,6 +604,42 @@ export interface components {
             /** Secret Value */
             secret_value?: string | null;
         };
+        /** ProxyStatusOut */
+        ProxyStatusOut: {
+            /** Last Error */
+            last_error: string | null;
+            /** Pid */
+            pid: number | null;
+            /** Port */
+            port: number;
+            /** Restarts */
+            restarts: number;
+            /** Revision */
+            revision: number | null;
+            /** Running */
+            running: boolean;
+            /** Version */
+            version: string | null;
+        };
+        /** ProxyTokenOut */
+        ProxyTokenOut: {
+            /** Agent Uid */
+            agent_uid: string;
+            /** Token */
+            token: string;
+        };
+        /** ProxyTokenRotatedOut */
+        ProxyTokenRotatedOut: {
+            /** Agent Uid */
+            agent_uid: string;
+            /** Rotated */
+            rotated: boolean;
+        };
+        /**
+         * Runtime
+         * @enum {string}
+         */
+        Runtime: "ollama" | "lmstudio" | "vllm" | "llama_server";
         /** TestConnectionIn */
         TestConnectionIn: {
             /** Base Url */
@@ -793,18 +893,20 @@ export interface operations {
             };
         };
     };
-    active_provider_key_api_v1_providers_active_key__wire__get: {
+    detect_local_api_v1_providers_detect_local_post: {
         parameters: {
             query?: never;
             header?: {
                 "x-coffer-token"?: string | null;
             };
-            path: {
-                wire: components["schemas"]["Protocol"];
-            };
+            path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DetectLocalIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -812,7 +914,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ActiveKeyOut"];
+                    "application/json": components["schemas"]["DetectLocalOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -1094,11 +1196,12 @@ export interface operations {
             };
         };
     };
-    connection_key_api_v1_providers__uid__key_get: {
+    set_transcribe_default_provider_api_v1_providers__uid__transcribe_default_post: {
         parameters: {
             query?: never;
             header?: {
                 "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
             };
             path: {
                 uid: string;
@@ -1113,7 +1216,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ActiveKeyOut"];
+                    "application/json": components["schemas"]["ProviderOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -1136,15 +1239,54 @@ export interface operations {
             };
         };
     };
-    set_transcribe_default_provider_api_v1_providers__uid__transcribe_default_post: {
+    proxy_status_api_v1_proxy_status_get: {
         parameters: {
             query?: never;
             header?: {
                 "x-coffer-token"?: string | null;
-                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyStatusOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    proxy_token_api_v1_proxy_tokens__agent_uid__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
             };
             path: {
-                uid: string;
+                agent_uid: string;
             };
             cookie?: never;
         };
@@ -1156,7 +1298,49 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProviderOut"];
+                    "application/json": components["schemas"]["ProxyTokenOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rotate_proxy_token_api_v1_proxy_tokens__agent_uid__rotate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                agent_uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProxyTokenRotatedOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */

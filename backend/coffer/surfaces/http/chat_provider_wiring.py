@@ -15,12 +15,10 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 from coffer.application.agent.answering import AgentLister, answering_agent_config
+from coffer.application.chat.ports import QuotaObserver
 from coffer.application.chat.registry import AgentProviderRegistry
 from coffer.application.engine.resolve import resolve_transcribe_connection
 from coffer.domain.agent.facets import AgentCatalog
-from coffer.domain.agent.types import AgentType
-from coffer.domain.errors import CredentialMissing
-from coffer.domain.provider.errors import NoActiveProvider
 from coffer.infrastructure.chat.adapter_support import (
     ChannelNoteResolver,
     MemoryContextComposer,
@@ -69,6 +67,7 @@ def build_agent_provider_registry(
     credential_resolver: Callable[[str], str] | None = None,
     compose_memory_context: MemoryContextComposer | None = None,
     resolve_channel: ChannelNoteResolver | None = None,
+    observe_quota: QuotaObserver | None = None,
 ) -> AgentProviderRegistry:
     """Construct and populate the agent-provider registry.
 
@@ -97,6 +96,12 @@ def build_agent_provider_registry(
     (``memory_wiring.memory_context_composer``) and hands it through
     ``wire_chat``. ``None`` means no memory append at all, not a header with
     nothing under it.
+
+    ``observe_quota`` receives each driven agent's official subscription-quota
+    report — Claude Code's ``rate_limit_event``, Codex's
+    ``account/rateLimits/updated`` (ADR usage-is-metered-at-the-proxy-and-
+    subscriptions-show-only-official-quota); the composition root binds the
+    usage kind's quota service. ``None`` means the reports are dropped.
     """
     registry = AgentProviderRegistry()
 
@@ -126,26 +131,6 @@ def build_agent_provider_registry(
         ids: list[str] = await get_agent_model_catalogue().suggest(agent_key)
         return ids
 
-    # Codex reads Coffer's projected key from the COFFER_PROVIDER_KEY env var
-    # (config.toml env_key). Resolve the connection active FOR that agent per turn —
-    # keyed by agent, not wire, so an openai-compatible gateway routed to it
-    # resolves correctly — and inject it into the subprocess env; with no active
-    # connection it stays None so the agent uses its own login (the
-    # provider-switching env_key seam). Lazy per turn by design: it runs at
-    # request time, so the provider kind's getter is the right seam.
-    def _key_resolver(agent_key: str) -> Callable[[], Awaitable[str | None]]:
-        async def _resolve() -> str | None:
-            try:
-                # Assign to a typed local so mypy narrows the service's Any return.
-                key: str = await get_provider_service().resolve_active_key_for_agent(
-                    AgentType(agent_key)
-                )
-                return key
-            except (NoActiveProvider, CredentialMissing):
-                return None
-
-        return _resolve
-
     deps = DriverDeps(
         conversations=conv_repo,
         list_models=_list_models,
@@ -153,7 +138,7 @@ def build_agent_provider_registry(
         compose_memory_context=compose_memory_context,
         resolve_channel=resolve_channel,
         resolve_home_env=agent_home_env_resolver,
-        resolve_key=_key_resolver,
+        observe_quota=observe_quota,
     )
     # Every agent with a driver facet, in agent-type order.
     for driver in agent_catalog.drivers():

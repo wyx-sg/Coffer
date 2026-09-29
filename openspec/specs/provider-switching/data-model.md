@@ -140,8 +140,9 @@ is preserved, and the projection tests assert exactly this set.
 
 | Managed key path | Source |
 |---|---|
-| `apiKeyHelper` | `"<absolute path to coffer> provider key --connection-uid <uid>"` (shell-quoted; the bare `coffer` when no CLI is found) — the connection's immutable uid, so the line survives a rename |
-| `env.ANTHROPIC_BASE_URL` | the connection's `base_url` |
+| `apiKeyHelper` | `"<absolute path to coffer> proxy token --agent-uid <agent uid>"` (shell-quoted; the bare `coffer` when no CLI is found) — prints the agent's local proxy token, never a provider key |
+| `env.ANTHROPIC_BASE_URL` | the local model proxy's Anthropic route, `http://127.0.0.1:<proxy port>/anthropic` |
+| `env.NO_PROXY` | gains `127.0.0.1,localhost`, appended to the user's own entries; de-projection takes back only that appended pair |
 | `model` | the AGENT binding's `model`; left untouched when unbound, removed on de-projection only while it still equals the binding |
 | `effortLevel` | the binding's `effort`; same rule |
 | `env.ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU,FABLE}_MODEL` | the binding's `tier_models`, else Coffer's suggestion (`suggest_tier_models`); an unpinned tier is removed |
@@ -149,7 +150,8 @@ is preserved, and the projection tests assert exactly this set.
 | `env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS` / `env.CLAUDE_CODE_MAX_CONTEXT_TOKENS` | a local runtime only: `"1"` and the chosen model's recorded window |
 
 Every write deletes `env.ANTHROPIC_MODEL` and `env.ANTHROPIC_SMALL_FAST_MODEL`,
-which earlier builds wrote.
+which earlier builds wrote. A `provider key` helper an earlier build wrote is
+still recognised as Coffer's, so de-projection removes it.
 
 `ANTHROPIC_API_KEY` is never written — it would override the helper.
 De-projection removes an `apiKeyHelper` only when it starts with
@@ -163,9 +165,10 @@ De-projection removes an `apiKeyHelper` only when it starts with
 | `model_provider` | `"coffer"` |
 | `model_catalog_json` | the absolute path of the Coffer-owned catalogue, written only while the connection curates `text` models; dropped otherwise |
 | `model_providers.coffer.name` | `f"Coffer ({name})"` — deliberately the readable label, since nothing resolves it; it goes cosmetically stale after a rename until the next projection |
-| `model_providers.coffer.base_url` | the connection's `base_url` |
+| `model_providers.coffer.base_url` | the local model proxy's Responses route, `http://127.0.0.1:<proxy port>/openai/v1` |
 | `model_providers.coffer.wire_api` | the agent binding's `wire_api`, defaulting to `"responses"` |
-| `model_providers.coffer.env_key` | `"COFFER_PROVIDER_KEY"` |
+| `model_providers.coffer.supports_websockets` / `requires_openai_auth` | `false` / `false` |
+| `model_providers.coffer.auth` | `{command = "<absolute path to coffer>", args = ["proxy", "token", "--agent-uid", "<agent uid>"]}` |
 | `model_reasoning_effort` | the binding's `effort`, only when the chosen curated model records that level |
 
 Each catalogue entry carries `context_window`, `max_context_window` and
@@ -383,3 +386,26 @@ copies, and the Codex model catalogue.
   while the single global speech-to-text default rests on the operation alone
   (see "Keep an independent speech-to-text default").
 - All HTTP routes are loopback-only, gated by `X-Coffer-Token`.
+
+### Local model proxy state (`domain/model_proxy/state.py`)
+
+What the daemon pushes the proxy over its control route, replaced wholesale on
+every push: `ProxyState {revision, agents: [ProxyAgent {agent_uid, agent_type,
+token_sha256}], routes: [ProxyRoute {agent_uid, wire, members: [ProxyMember
+{connection_uid, connection_name, upstream_root, auth, key, models, local}]}]}`.
+`key` is held only in the proxy's memory and never shown by `repr`. The
+per-agent tokens live in the credential store under `proxy-token/<agent_uid>`
+(machine-local; vault sync skips them). `~/.coffer/proxy.json` (mode `0600`)
+holds `{port, pid, started_at, version, control_token}`.
+
+### Local runtime (`ProviderConfig.local_runtime`)
+
+`LocalRuntime {runtime: ollama | lmstudio | vllm | llama_server, version,
+wires: [anthropic | openai]}` — what detection found; set only on a connection
+whose `base_url` is loopback, and it makes `credential_ref` optional. Omitted
+from the stored document when unset.
+
+### Curated-model facts
+
+`CuratedModel` gains `context_window`, `effort_levels` and `default_effort`,
+each omitted from the stored document while unknown.

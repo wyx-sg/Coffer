@@ -46,7 +46,6 @@ check. Nothing in a real deployment should need it.
 
 from __future__ import annotations
 
-import ipaddress
 import logging
 import os
 
@@ -55,12 +54,10 @@ from fastapi.responses import JSONResponse
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from coffer.infrastructure.net import loopback_authority
 from coffer.surfaces.http import cors, daemon_routes
 
 _logger = logging.getLogger(__name__)
-
-#: Hostnames that are loopback but are not IP literals.
-_LOOPBACK_NAMES: frozenset[str] = frozenset({"localhost"})
 
 #: The web-origin spellings of this daemon's own loopback address, before the
 #: port is appended.
@@ -85,65 +82,15 @@ def _allowed_extra() -> tuple[str, ...]:
     return tuple(part.strip().lower() for part in raw.split(",") if part.strip())
 
 
-def _split_authority(authority: str) -> tuple[str, int | None] | None:
-    """``(hostname, port)`` of a ``Host`` header; port None when absent.
-
-    None when the value is not a well-formed authority. Handles
-    ``127.0.0.1:8000``, ``[::1]:8000``, ``[::1]`` and ``localhost``.
-    """
-    value = authority.strip()
-    if not value:
-        return None
-    if value.startswith("["):
-        close = value.find("]")
-        if close < 0:
-            return None
-        host, rest = value[1:close], value[close + 1 :]
-        if not rest:
-            return host, None
-        if not rest.startswith(":") or not rest[1:].isdigit():
-            return None
-        return host, int(rest[1:])
-    if value.count(":") > 1:
-        # A bare IPv6 literal is not a valid Host header (RFC 3986 brackets it).
-        return None
-    head, sep, tail = value.rpartition(":")
-    if not sep:
-        return value, None
-    if not head or not tail.isdigit():
-        return None
-    return head, int(tail)
-
-
-def _is_loopback_hostname(hostname: str) -> bool:
-    lowered = hostname.lower()
-    if lowered in _LOOPBACK_NAMES:
-        return True
-    try:
-        return ipaddress.ip_address(lowered).is_loopback
-    except ValueError:
-        return False
-
-
 def is_allowed_host(authority: str | None, port: int) -> bool:
     """Whether ``authority`` names this machine's loopback address on ``port``.
 
-    A ``Host`` without a port means the scheme's default (80), so it matches
-    only a daemon listening there. ``COFFER_ALLOWED_HOSTS`` adds hostnames;
-    ``*`` accepts anything.
+    The predicate itself is shared with the model proxy
+    (:func:`coffer.infrastructure.net.loopback_authority.is_allowed_host`);
+    what is the daemon's own is the ``COFFER_ALLOWED_HOSTS`` escape hatch, which
+    adds hostnames (``*`` accepts anything).
     """
-    extra = _allowed_extra()
-    if "*" in extra:
-        return True
-    if authority is None:
-        return False
-    parts = _split_authority(authority)
-    if parts is None:
-        return False
-    hostname, given_port = parts
-    if (given_port if given_port is not None else 80) != port:
-        return False
-    return _is_loopback_hostname(hostname) or hostname.lower() in extra
+    return loopback_authority.is_allowed_host(authority, port, _allowed_extra())
 
 
 def own_origins(port: int) -> list[str]:

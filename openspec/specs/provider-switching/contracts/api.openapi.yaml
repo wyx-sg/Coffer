@@ -220,19 +220,15 @@ paths:
       summary: Create Provider
       tags:
       - providers
-  /api/v1/providers/active-key/{wire}:
-    get:
+  /api/v1/providers/detect-local:
+    post:
       description: |-
-        Back-compat: the decrypted key of the connection active for ``wire``'s
-        agent (legacy ``--wire`` helper). 404 when none. New projections use
-        ``GET /{uid}/key`` instead, which names the connection directly.
-      operationId: active_provider_key_api_v1_providers_active_key__wire__get
+        Which local model runtime answers where (spec provider-switching
+        "Detect a local model runtime without changing it"). Read-only probes of
+        loopback addresses only; nothing is pulled or loaded. A non-loopback URL
+        is refused as 422.
+      operationId: detect_local_api_v1_providers_detect_local_post
       parameters:
-      - in: path
-        name: wire
-        required: true
-        schema:
-          $ref: '#/components/schemas/Protocol'
       - in: header
         name: x-coffer-token
         required: false
@@ -241,12 +237,18 @@ paths:
           - type: string
           - type: 'null'
           title: X-Coffer-Token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DetectLocalIn'
+        required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActiveKeyOut'
+                $ref: '#/components/schemas/DetectLocalOut'
           description: Successful Response
         '422':
           content:
@@ -260,7 +262,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
-      summary: Active Provider Key
+      summary: Detect Local
       tags:
       - providers
   /api/v1/providers/use-builtin/{agent_type}:
@@ -555,58 +557,6 @@ paths:
       summary: Set Internal Default Provider
       tags:
       - providers
-  /api/v1/providers/{uid}/key:
-    get:
-      description: |-
-        The decrypted key of a SPECIFIC connection — what Claude Code's projected
-        ``apiKeyHelper`` (``coffer provider key --connection-uid <uid>``) fetches, so
-        the agent always reads exactly the activated connection's key (no wire+active
-        mismatch).
-
-        The helper cites the UID rather than the name for the reason this kind has
-        no rename route any more: what Coffer writes into another tool's config file
-        has to survive the user relabelling the connection, and only the uid does
-        (ADR resource-identity-is-an-immutable-uid). 404 when the connection is
-        absent, or reaches no agent — disabled, scoped to no agent, or keyless
-        (ollama): ``NO_ACTIVE_PROVIDER``, as the wire form answers.
-      operationId: connection_key_api_v1_providers__uid__key_get
-      parameters:
-      - in: path
-        name: uid
-        required: true
-        schema:
-          title: Uid
-          type: string
-      - in: header
-        name: x-coffer-token
-        required: false
-        schema:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: X-Coffer-Token
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActiveKeyOut'
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
-        default:
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-          description: Any other error, as Coffer's error envelope.
-      summary: Connection Key
-      tags:
-      - providers
   /api/v1/providers/{uid}/transcribe-default:
     post:
       description: |-
@@ -663,6 +613,127 @@ paths:
       summary: Set Transcribe Default Provider
       tags:
       - providers
+  /api/v1/proxy/status:
+    get:
+      description: The supervised proxy's state, as the daemon last saw it.
+      operationId: proxy_status_api_v1_proxy_status_get
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyStatusOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Proxy Status
+      tags:
+      - proxy
+  /api/v1/proxy/tokens/{agent_uid}:
+    get:
+      description: |-
+        The agent's local proxy token, minted on first ask. 404 for an agent
+        this machine does not have, so a stale helper fails closed.
+      operationId: proxy_token_api_v1_proxy_tokens__agent_uid__get
+      parameters:
+      - in: path
+        name: agent_uid
+        required: true
+        schema:
+          title: Agent Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyTokenOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Proxy Token
+      tags:
+      - proxy
+  /api/v1/proxy/tokens/{agent_uid}/rotate:
+    post:
+      description: |-
+        Replace the agent's token; the old one is refused from the next push,
+        which happens before this answers.
+      operationId: rotate_proxy_token_api_v1_proxy_tokens__agent_uid__rotate_post
+      parameters:
+      - in: path
+        name: agent_uid
+        required: true
+        schema:
+          title: Agent Uid
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProxyTokenRotatedOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Rotate Proxy Token
+      tags:
+      - proxy
 components:
   schemas:
     ActivateOut:
@@ -689,21 +760,6 @@ components:
       - projected
       - skipped
       title: ActivateOut
-      type: object
-    ActiveKeyOut:
-      description: |-
-        The decrypted API key of the active profile for a wire format.
-
-        Served over the local token-protected daemon API for Claude Code's
-        ``apiKeyHelper`` (same exposure as the existing credential-GET route). Not
-        audited — ``apiKeyHelper`` polls it frequently.
-      properties:
-        value:
-          title: Value
-          type: string
-      required:
-      - value
-      title: ActiveKeyOut
       type: object
     AgentType:
       description: Supported agent products.
@@ -732,6 +788,27 @@ components:
       - deprojected
       - previous
       title: DeactivateOut
+      type: object
+    DetectLocalIn:
+      description: Probe one loopback URL, or — with none — each runtime's default port.
+      properties:
+        base_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Base Url
+      title: DetectLocalIn
+      type: object
+    DetectLocalOut:
+      properties:
+        found:
+          items:
+            $ref: '#/components/schemas/LocalRuntimeOut'
+          title: Found
+          type: array
+      required:
+      - found
+      title: DetectLocalOut
       type: object
     DetectProtocolIn:
       properties:
@@ -815,6 +892,65 @@ components:
       - provider
       title: ListModelsIn
       type: object
+    LocalModelOut:
+      properties:
+        context_window:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Context Window
+        id:
+          title: Id
+          type: string
+        tools:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Tools
+      required:
+      - id
+      - context_window
+      - tools
+      title: LocalModelOut
+      type: object
+    LocalRuntime:
+      additionalProperties: false
+      description: What detection found at a local connection's endpoint.
+      properties:
+        runtime:
+          $ref: '#/components/schemas/Runtime'
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+        wires:
+          items:
+            type: string
+          title: Wires
+          type: array
+      required:
+      - runtime
+      title: LocalRuntime
+      type: object
+    LocalRuntimeOut:
+      properties:
+        base_url:
+          title: Base Url
+          type: string
+        models:
+          items:
+            $ref: '#/components/schemas/LocalModelOut'
+          title: Models
+          type: array
+        runtime:
+          $ref: '#/components/schemas/LocalRuntime'
+      required:
+      - base_url
+      - runtime
+      - models
+      title: LocalRuntimeOut
+      type: object
     Modality:
       description: The kind of output a model produces.
       enum:
@@ -867,6 +1003,10 @@ components:
           - type: string
           - type: 'null'
           title: Description
+        local_runtime:
+          anyOf:
+          - $ref: '#/components/schemas/LocalRuntime'
+          - type: 'null'
         models:
           anyOf:
           - items:
@@ -1025,6 +1165,10 @@ components:
         is_active:
           title: Is Active
           type: boolean
+        local_runtime:
+          anyOf:
+          - $ref: '#/components/schemas/LocalRuntime'
+          - type: 'null'
         models:
           items:
             $ref: '#/components/schemas/ProviderModel'
@@ -1065,6 +1209,7 @@ components:
       - enabled
       - description
       - created_at
+      - local_runtime
       - updated_at
       title: ProviderOut
       type: object
@@ -1117,6 +1262,81 @@ components:
           title: Secret Value
       title: ProviderPatch
       type: object
+    ProxyStatusOut:
+      properties:
+        last_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Error
+        pid:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Pid
+        port:
+          title: Port
+          type: integer
+        restarts:
+          title: Restarts
+          type: integer
+        revision:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Revision
+        running:
+          title: Running
+          type: boolean
+        version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Version
+      required:
+      - running
+      - pid
+      - port
+      - version
+      - restarts
+      - last_error
+      - revision
+      title: ProxyStatusOut
+      type: object
+    ProxyTokenOut:
+      properties:
+        agent_uid:
+          title: Agent Uid
+          type: string
+        token:
+          title: Token
+          type: string
+      required:
+      - agent_uid
+      - token
+      title: ProxyTokenOut
+      type: object
+    ProxyTokenRotatedOut:
+      properties:
+        agent_uid:
+          title: Agent Uid
+          type: string
+        rotated:
+          title: Rotated
+          type: boolean
+      required:
+      - agent_uid
+      - rotated
+      title: ProxyTokenRotatedOut
+      type: object
+    Runtime:
+      enum:
+      - ollama
+      - lmstudio
+      - vllm
+      - llama_server
+      title: Runtime
+      type: string
     TestConnectionIn:
       properties:
         base_url:

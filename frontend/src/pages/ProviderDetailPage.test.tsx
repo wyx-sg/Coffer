@@ -136,6 +136,7 @@ const makeProvider = (overrides?: Partial<Provider>): Provider => ({
   protocol: "openai",
   base_url: "https://gw/v1",
   credential_ref: "provider/acme/key",
+  local_runtime: null,
   compatible_agents: ["codex"],
   is_active: false,
   title: null,

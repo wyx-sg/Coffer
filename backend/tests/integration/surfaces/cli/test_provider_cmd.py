@@ -24,8 +24,10 @@ from typer.testing import CliRunner
 from coffer.application.agent.kind import make_agent_kind
 from coffer.application.audit_service import AuditService
 from coffer.application.provider.kind import make_provider_kind
+from coffer.application.provider.proxy_tokens import ProxyTokenService
 from coffer.application.provider.service import ProviderService
 from coffer.application.resource_service import ResourceService
+from coffer.domain.model_proxy.state import ProxyState
 from coffer.infrastructure.agent.config_file_store import ConfigFileStore
 from coffer.infrastructure.persistence.base import Base
 from coffer.infrastructure.persistence.engine import (
@@ -40,6 +42,8 @@ from coffer.surfaces.http.auth import set_active_token
 from coffer.surfaces.http.dependencies import get_resource_service
 from coffer.surfaces.http.provider_dependencies import get_provider_service
 from coffer.surfaces.http.provider_routes import router as provider_router
+from coffer.surfaces.http.proxy_dependencies import ProxyFacade, set_proxy_facade
+from coffer.surfaces.http.proxy_routes import router as proxy_router
 from coffer.surfaces.http.resource_routes import router as resource_router
 from tests.support.facets import agent_catalog
 
@@ -129,6 +133,27 @@ def provider_daemon(tmp_path, monkeypatch):
     # goes through the framework's shared resource route, so the CLI test app
     # must serve it too.
     app.include_router(resource_router)
+    app.include_router(proxy_router)
+    tokens = ProxyTokenService(store)
+
+    async def _noop() -> None:
+        return None
+
+    async def _agent_exists(agent_uid: str) -> bool:
+        return any(a.uid == agent_uid for a in await resources.list(kind="agent"))
+
+    async def _state() -> ProxyState:
+        return ProxyState()
+
+    set_proxy_facade(
+        ProxyFacade(
+            tokens=tokens,
+            status=lambda: {},
+            refresh=_noop,
+            agent_exists=_agent_exists,
+            state=_state,
+        )
+    )
     app.dependency_overrides[get_provider_service] = lambda: provider_svc
     # One override serves two readers: the CLI resolves the name a user typed
     # through ``/resources``, and the provider routes read the agent rows a
@@ -145,6 +170,7 @@ def provider_daemon(tmp_path, monkeypatch):
     monkeypatch.setattr(_cli_client, "client_or_exit", lambda: (fake_client, object()))
     yield audit
     set_active_token(None)
+    set_proxy_facade(None)
 
 
 def _add(name: str = "acme", *extra: str, protocol: str = "anthropic") -> None:
@@ -216,7 +242,7 @@ def test_cli_add_takes_a_title_and_description(provider_daemon):
     assert shown["description"] == "the EU one"
 
 
-def test_cli_key_by_connection_and_scope(provider_daemon):
+def test_cli_scope_retargets_a_connection(provider_daemon):
     # An openai gateway re-targeted at Claude Code: which agents a connection
     # reaches is the framework's per-agent scope (ADR per-agent-resource-scope),
     # set with the group's own `scope` verb.
@@ -233,46 +259,6 @@ def test_cli_key_by_connection_and_scope(provider_daemon):
     assert "claude-code" in narrowed.output
     reach = _runner.invoke(cli_app, ["provider", "scope", "agnes", "--json"])
     assert json.loads(reach.output)["scope"] == {"agents": ["claude-code"]}
-
-    # --connection-uid prints exactly that connection's key. It takes the UID,
-    # not a name, because its caller is the `apiKeyHelper` line Coffer wrote
-    # into the agent's own config file (ADR resource-identity-is-an-immutable-uid).
-    uid = _show("agnes")["uid"]
-    key = _runner.invoke(cli_app, ["provider", "key", "--connection-uid", uid])
-    assert key.exit_code == 0, key.output
-    assert key.output.strip() == "sk-x"
-
-    # No selector → usage error.
-    assert _runner.invoke(cli_app, ["provider", "key"]).exit_code == 6
-
-
-@pytest.mark.acceptance(
-    spec="provider-switching",
-    scenario="a disabled or unreached connection's uid helper resolves no key",
-)
-def test_cli_key_by_connection_uid_refuses_a_disabled_connection(provider_daemon):
-    """The projected ``apiKeyHelper`` line keeps calling this after the user
-    disables the connection; it must then fail loudly rather than hand the
-    agent the key (spec provider-switching "Resolve a key for exactly one
-    connection")."""
-    _add("acme")
-    uid = _show("acme")["uid"]
-    live = _runner.invoke(cli_app, ["provider", "key", "--connection-uid", uid])
-    assert live.exit_code == 0, live.output
-    assert live.output.strip() == "sk-x"
-
-    off = _runner.invoke(cli_app, ["provider", "disable", "acme"])
-    assert off.exit_code == 0, off.output
-
-    key = _runner.invoke(cli_app, ["provider", "key", "--connection-uid", uid])
-    assert key.exit_code == 4, key.output
-    assert "sk-x" not in key.output
-    assert f"no key for connection {uid!r}" in key.output
-    assert "disabled" in key.output
-
-    on = _runner.invoke(cli_app, ["provider", "enable", "acme"])
-    assert on.exit_code == 0, on.output
-    assert _runner.invoke(cli_app, ["provider", "key", "--connection-uid", uid]).exit_code == 0
 
 
 @pytest.mark.acceptance(
@@ -318,7 +304,7 @@ def test_cli_builtin_rejects_what_is_not_an_agent_type(provider_daemon):
 
 def test_cli_removed_provider_commands_are_gone(provider_daemon):
     """The defaults are `coffer config` keys and the revert is `builtin` now."""
-    for gone in ("use-builtin", "internal-default", "transcribe-default", "rename"):
+    for gone in ("use-builtin", "internal-default", "transcribe-default", "rename", "key"):
         r = _runner.invoke(cli_app, ["provider", gone, "--help"])
         assert r.exit_code != 0, gone
         assert "No such command" in r.output
@@ -345,8 +331,6 @@ def test_cli_edit_rotates_the_key_in_place(provider_daemon):
     assert rotated.exit_code == 0, rotated.output
     after = _show("acme")
     assert after["config"]["credential_ref"] == before["config"]["credential_ref"]
-    key = _runner.invoke(cli_app, ["provider", "key", "--connection-uid", after["uid"]])
-    assert key.output.strip() == "sk-new"
 
 
 @pytest.mark.acceptance(
@@ -404,8 +388,6 @@ def test_cli_edit_name_renames_the_same_connection(provider_daemon):
     after = _show("acme-eu")
     assert after["uid"] == before["uid"]
     assert after["config"]["credential_ref"] == before["config"]["credential_ref"]
-    key = _runner.invoke(cli_app, ["provider", "key", "--connection-uid", after["uid"]])
-    assert key.output.strip() == "sk-x"
 
     entries = asyncio.run(audit.query(event_type="resource_renamed"))
     assert [(e.details["from"], e.details["to"]) for e in entries] == [("acme", "acme-eu")]
@@ -445,9 +427,9 @@ def test_cli_rm_removes_the_connection(provider_daemon):
 
 @pytest.mark.acceptance(
     spec="provider-switching",
-    scenario="the key command refuses a call naming neither a connection nor a wire",
+    scenario="the token command prints a local token, never a provider key",
 )
-def test_cli_key_refuses_a_call_naming_neither_selector(provider_daemon):
+def test_cli_proxy_token_prints_a_local_token(provider_daemon):
     added = _runner.invoke(
         cli_app,
         [
@@ -464,9 +446,19 @@ def test_cli_key_refuses_a_call_naming_neither_selector(provider_daemon):
     )
     assert added.exit_code == 0, added.output
     assert _runner.invoke(cli_app, ["provider", "switch", "acme"]).exit_code == 0
+    client, _ = _cli_client.client_or_exit()
+    rows = client.get("/resources", params={"kind": "agent", "name": "claude-code"}).json()
+    agent = rows["resources"][0]
 
-    r = _runner.invoke(cli_app, ["provider", "key"])
-
-    assert r.exit_code == 6, r.output
+    r = _runner.invoke(cli_app, ["proxy", "token", "--agent-uid", agent["uid"]])
+    assert r.exit_code == 0, r.output
+    token = r.output.strip()
+    assert token.startswith("cfr_") and len(token) > 40
     assert "sk-never-printed" not in r.output
-    assert "sk-never-printed" not in (r.stderr or "")
+    # The same token every time, until it is rotated.
+    again = _runner.invoke(cli_app, ["proxy", "token", "--agent-uid", agent["uid"]])
+    assert again.output.strip() == token
+
+    missing = _runner.invoke(cli_app, ["proxy", "token", "--agent-uid", "0" * 32])
+    assert missing.exit_code == 4
+    assert missing.stdout == ""

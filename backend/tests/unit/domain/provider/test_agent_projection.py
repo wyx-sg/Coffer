@@ -7,6 +7,8 @@ import json
 import pathlib
 import tomllib
 
+import pytest
+
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.agent_projection import (
     PROVIDER_PROJECTIONS,
@@ -107,6 +109,10 @@ def test_codex_writes_effort_only_for_a_model_with_levels() -> None:
     assert "model_reasoning_effort" not in tomllib.loads(facet.apply("", bare, _CFG).text)
 
 
+@pytest.mark.acceptance(
+    spec="provider-switching",
+    scenario="a local connection sets Claude Code's compatibility key",
+)
 def test_a_local_connection_sets_claude_codes_compatibility_keys() -> None:
     req = ProviderProjectionRequest(
         **{

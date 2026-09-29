@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from coffer.domain.agent.types import AgentType
 from coffer.domain.provider.config import Protocol
+from coffer.domain.provider.local_runtime import LocalRuntime
 from coffer.domain.provider.modality import Modality
 
 
@@ -60,6 +61,9 @@ class ProviderCreate(BaseModel):
     secret_value: str | None = Field(default=None, max_length=8192)
     models: list[ProviderModel] | None = None
     description: str | None = None
+    #: What ``POST /providers/detect-local`` found at a loopback endpoint; set,
+    #: the connection is a local runtime and may carry no key.
+    local_runtime: LocalRuntime | None = None
 
 
 class ProviderPatch(BaseModel):
@@ -133,6 +137,8 @@ class ProviderOut(BaseModel):
     enabled: bool
     description: str | None
     created_at: datetime
+    #: The local runtime this connection points at, or ``None`` for a remote one.
+    local_runtime: LocalRuntime | None = None
     updated_at: datetime
 
 
@@ -155,17 +161,6 @@ class DeactivateOut(BaseModel):
     agent_type: AgentType
     deprojected: list[str]
     previous: str | None = None
-
-
-class ActiveKeyOut(BaseModel):
-    """The decrypted API key of the active profile for a wire format.
-
-    Served over the local token-protected daemon API for Claude Code's
-    ``apiKeyHelper`` (same exposure as the existing credential-GET route). Not
-    audited — ``apiKeyHelper`` polls it frequently.
-    """
-
-    value: str
 
 
 # ---------------------------------------------------------------------------
@@ -216,3 +211,27 @@ class ProviderModelsOut(BaseModel):
 
     models: list[ProviderModel]
     message: str = ""
+
+
+class DetectLocalIn(BaseModel):
+    """Probe one loopback URL, or — with none — each runtime's default port."""
+
+    base_url: str | None = None
+
+
+class LocalModelOut(BaseModel):
+    id: str
+    #: The window the runtime serves the model with; ``None`` when it does not say.
+    context_window: int | None = None
+    #: Whether the runtime says the model can call tools; ``None`` when unknown.
+    tools: bool | None = None
+
+
+class LocalRuntimeOut(BaseModel):
+    base_url: str
+    runtime: LocalRuntime
+    models: list[LocalModelOut]
+
+
+class DetectLocalOut(BaseModel):
+    found: list[LocalRuntimeOut]

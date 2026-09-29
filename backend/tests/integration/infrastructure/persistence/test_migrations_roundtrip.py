@@ -192,7 +192,7 @@ HEAD_REVISION = "0110"
 # 0105 is DATA-only: it sets ``enabled = 1`` on every ``knowledge`` and
 # ``memory`` row, whose kinds no longer carry a switch. 0106 adds the nullable
 # ``resources.title`` column and 0107 the ``resources.rev`` revision — no new
-# table.
+# table. 0109 is DATA-only (an agent's fast model becomes its Haiku tier).
 EXPECTED_TABLES = {
     "resources",
     "audit_log",

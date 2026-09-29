@@ -72,6 +72,7 @@ function makeConn(over: Partial<Provider> = {}): Provider {
     protocol: "anthropic" as Provider["protocol"],
     base_url: "https://api.anthropic.com",
     credential_ref: "ref",
+    local_runtime: null,
     is_active: true,
     title: null,
     internal_default: false,

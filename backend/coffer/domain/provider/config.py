@@ -47,6 +47,7 @@ from pydantic import (
     model_validator,
 )
 
+from coffer.domain.provider.local_runtime import LocalRuntime
 from coffer.domain.provider.modality import Modality
 
 # Same ref grammar the credential store accepts (slash-namespaced segments).
@@ -124,6 +125,20 @@ class Protocol(StrEnum):
     UNKNOWN = "unknown"
 
 
+def is_loopback_url(url: str) -> bool:
+    """Whether ``url`` names this machine (``localhost`` or a loopback IP)."""
+    import ipaddress
+    from urllib.parse import urlparse
+
+    host = (urlparse(url if "://" in url else f"http://{url}").hostname or "").lower()
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def starts_dormant(protocol: str) -> bool:
     """Whether a connection on ``protocol`` is CREATED scoped to no agent.
 
@@ -181,6 +196,20 @@ class ProviderConfig(BaseModel):
     # nothing marked here means Coffer transcribes nothing and hands the agent
     # the audio file untouched.
     transcribe_default: bool = False
+    # Set when the endpoint is a model runtime on this machine (Ollama, LM
+    # Studio, vLLM, llama-server): what detection found there. Such a
+    # connection carries no key and is reached through the model proxy like
+    # any other (spec provider-switching "Configure a local model connection").
+    local_runtime: LocalRuntime | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_runtime(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        """A connection that is no local runtime carries no ``local_runtime``
+        key at all, so every existing document keeps its shape."""
+        data: dict[str, Any] = handler(self)
+        if data.get("local_runtime") is None:
+            data.pop("local_runtime", None)
+        return data
 
     @field_validator("base_url")
     @classmethod
@@ -230,14 +259,22 @@ class ProviderConfig(BaseModel):
     @model_validator(mode="after")
     def _credential_matches_protocol(self) -> ProviderConfig:
         """anthropic/openai/unknown connections require a ``credential_ref``
-        ; an ollama-protocol connection (Coffer's own engine, no key) must not
-        carry one."""
+        unless they are a local runtime, whose key is optional (LM Studio,
+        vLLM and llama-server can be started with one); an ollama-protocol
+        connection (Coffer's own engine, no key) must not carry one."""
         if self.protocol is Protocol.OLLAMA:
             if self.credential_ref is not None:
                 raise ValueError("ollama connection must not carry a credential_ref")
-        elif not self.credential_ref:
+        elif not self.credential_ref and self.local_runtime is None:
             raise ValueError(f"{self.protocol.value} connection requires a credential_ref")
+        if self.local_runtime is not None and not is_loopback_url(self.base_url):
+            raise ValueError("a local runtime connection must point at this machine (loopback)")
         return self
+
+    @property
+    def is_local(self) -> bool:
+        """A model runtime on this machine."""
+        return self.local_runtime is not None
 
     def model_ids(self, modality: Modality | None = None) -> list[str]:
         """The curated ids, in the user's order, optionally of ONE modality.

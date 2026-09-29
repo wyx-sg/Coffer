@@ -56,6 +56,9 @@ def test_home_is_redirected_away_from_the_real_one() -> None:
         "COFFER_MEMORY_ROOT",
         "COFFER_AGENT_STATE_ROOT",
         "COFFER_ALLOWED_HOSTS",
+        # The root conftest keeps the app from spawning the model proxy in
+        # every test that boots it.
+        "COFFER_MODEL_PROXY",
         real_home_guard.REAL_HOME_ENV,
     }
     leaked = {

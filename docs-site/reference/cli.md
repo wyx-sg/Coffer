@@ -52,6 +52,7 @@ coffer [OPTIONS] COMMAND [ARGS]...
 | [`coffer knowledge`](#coffer-knowledge) | Manage Coffer's knowledge collections, the Markdown under ~/.coffer/knowledge/&lt;collection&gt;/ (`coffer path knowledge` prints it). |
 | [`coffer memory`](#coffer-memory) | Browse and manage Coffer's memory layer |
 | [`coffer provider`](#coffer-provider) | Manage LLM connections and switch agents onto them |
+| [`coffer proxy`](#coffer-proxy) | Inspect the local model proxy and its per-agent tokens |
 | [`coffer sync`](#coffer-sync) | Keep this vault converged with a git remote you own |
 | [`coffer drift`](#coffer-drift) | See and repair drift between Coffer and the agents' own files |
 
@@ -1637,6 +1638,8 @@ coffer provider add [OPTIONS] NAME
 
 Create an LLM connection.
 
+With --local the base URL must be a loopback address; Coffer detects the runtime there read-only (nothing is pulled or loaded) and records the wires it serves and each model's served context window.
+
 For anthropic/openai/unknown supply exactly one of --secret / --credential-ref; an ollama connection needs neither. The new connection starts on the wire's own default reach; route it to specific agents (e.g. an openai gateway to Claude Code) with `coffer provider scope <name> --agents claude-code`. The model is chosen at the point of use, not on the connection.
 
 | Name | Kind | Type | Default | Description |
@@ -1648,6 +1651,7 @@ For anthropic/openai/unknown supply exactly one of --secret / --credential-ref; 
 | `--credential-ref` | option | text |  | Reuse an existing credential ref instead of --secret |
 | `--title` | option | text |  | Display title (≤80 chars) |
 | `--description` | option | text |  |  |
+| `--local` | option | flag |  | A model runtime on this machine (Ollama, LM Studio, vLLM, llama-server): detect it, curate its tool-capable models, no key needed |
 
 ### provider edit
 
@@ -1750,24 +1754,64 @@ Removes Coffer's projection from the native config and clears the active connect
 | --- | --- | --- | --- | --- |
 | `AGENT_TYPE` | argument | text | required | Agent type: claude_code \| codex |
 
-### provider key
+### provider detect-local
 
 ```sh
-coffer provider key [OPTIONS]
+coffer provider detect-local [OPTIONS]
 ```
 
-Print a connection's API key for Claude Code's apiKeyHelper.
-
-Coffer writes this call into the agent's own config file when it switches the agent onto a connection; you rarely run it yourself. It takes the connection's uid, not its name, so renaming the connection keeps it working.
-
---wire is the legacy form, which resolves whichever connection is active for that wire's agent instead of naming one.
-
-Exits 4 with nothing on stdout when the daemon resolves no key — for --connection-uid that includes a connection the user disabled or scoped to no agent, so the agent's helper fails instead of reading a stale key.
+Find local model runtimes (read-only: nothing is pulled or loaded).
 
 | Name | Kind | Type | Default | Description |
 | --- | --- | --- | --- | --- |
-| `--connection-uid` | option | text |  | Print this specific connection's key (the projected helper) |
-| `--wire` | option | text |  | Back-compat: print the key active for a wire (anthropic \| openai) |
+| `--base-url` | option | text |  | A loopback URL to probe; default: each runtime's default port |
+| `--json` | option | flag |  | Machine-readable output |
+
+## coffer proxy
+
+```sh
+coffer proxy [OPTIONS] COMMAND [ARGS]...
+```
+
+Inspect the local model proxy and its per-agent tokens
+
+### proxy token
+
+```sh
+coffer proxy token [OPTIONS]
+```
+
+Print an agent's local proxy token (what its key helper runs).
+
+The token unlocks only this machine's loopback model proxy; it is never a provider key. Exits 4 with nothing on stdout for an agent this machine does not have, so a stale helper fails instead of printing a token.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--agent-uid` | option | text | required | The agent whose token to print |
+
+### proxy rotate
+
+```sh
+coffer proxy rotate [OPTIONS] REF
+```
+
+Replace an agent's local proxy token; the old one stops working at once.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `REF` | argument | text | required | Agent name or uid |
+
+### proxy status
+
+```sh
+coffer proxy status [OPTIONS]
+```
+
+Show whether the model proxy is running, where, and how often it restarted.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `--json` | option | flag |  | Machine-readable output |
 
 ## coffer sync
 

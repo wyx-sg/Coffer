@@ -92,7 +92,9 @@ def test_patch_refuses_to_move_the_wire_of_a_live_connection(tmp_path, monkeypat
         uid = _create(c)
         assert c.post(f"/api/v1/providers/{uid}/activate").status_code == 200
         projected = (cfg / "settings.json").read_text()
-        assert json.loads(projected)["env"]["ANTHROPIC_BASE_URL"] == "https://gw/anthropic"
+        assert json.loads(projected)["env"]["ANTHROPIC_BASE_URL"] == (
+            "http://127.0.0.1:8001/anthropic"
+        )
 
         bad = c.patch(f"/api/v1/providers/{uid}", json={"protocol": "openai"})
         assert bad.status_code == 409, bad.text

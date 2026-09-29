@@ -122,6 +122,9 @@ async def shutdown(running: Running) -> None:
     await best_effort("mcp_session_reaper", running.reaper_task)
     # Drain the buffered invocation writer before tearing down sessions.
     await best_effort("invocation_repo", running.kinds.mcp.invocation_repo.stop())
+    # Stops supervising only: the proxy process outlives the daemon, so the
+    # agents' in-flight model streams survive a daemon restart or upgrade.
+    await best_effort("model_proxy", running.kinds.provider.proxy.stop())
     # Dispose MCP supervisors (best-effort). The process-wide supervisor is IN
     # this registry now — it has to be, or the kind's delete and rename hooks
     # cannot reach the upstreams it holds — so the loop covers it and the

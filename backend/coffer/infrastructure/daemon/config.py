@@ -23,6 +23,7 @@ import socket
 from pathlib import Path
 from typing import Any
 
+from coffer.domain.model_proxy.state import DEFAULT_PROXY_PORT as _DEFAULT_PROXY_PORT
 from coffer.infrastructure.daemon.atomic_write import write_json_0600
 
 _logger = logging.getLogger(__name__)
@@ -169,6 +170,64 @@ def write_fixed_port(port: int | None) -> None:
     if port is not None:
         validate_port(port)
     _merge(port=port)
+
+
+# --- model proxy port -------------------------------------------------------
+#
+# The local model proxy (ADR api-key-providers-are-reached-through-a-separate-
+# local-model-proxy) binds its own fixed loopback port, for the same reason the
+# daemon does: the value is written into Claude Code's and Codex's own config
+# files (``ANTHROPIC_BASE_URL``, ``[model_providers.coffer] base_url``), so a
+# port that moved on its own would silently disconnect every agent. It lives in
+# this file because the proxy is spawned before — and survives — any daemon
+# that could answer from the database.
+
+#: The port the model proxy binds when the user has configured nothing — one
+#: number, in the vocabulary the projection that writes it into the agents'
+#: files also reads.
+DEFAULT_PROXY_PORT = _DEFAULT_PROXY_PORT
+
+
+def read_proxy_port() -> int | None:
+    """The proxy port the user pinned, or ``None`` to mean :data:`DEFAULT_PROXY_PORT`.
+
+    Same reading as :func:`read_fixed_port`: an absent, unreadable or
+    nonsensical value is "no usable instruction", whose safe reading is the
+    default — never some other port.
+    """
+    payload = _read_raw()
+    if payload is None:
+        return None
+    port = payload.get("proxy_port")
+    if port is None:
+        return None
+    if not isinstance(port, int) or isinstance(port, bool):
+        _logger.warning("daemon config proxy_port %r is not an integer; ignoring it", port)
+        return None
+    try:
+        return validate_port(port)
+    except InvalidPort as exc:
+        _logger.warning("daemon config proxy_port: %s; ignoring it", exc)
+        return None
+
+
+def effective_proxy_port() -> int:
+    """The port the model proxy binds at its next start — the one answer the
+    proxy's own bind, the daemon's supervisor and every projected agent config
+    share."""
+    fixed = read_proxy_port()
+    return DEFAULT_PROXY_PORT if fixed is None else fixed
+
+
+def write_proxy_port(port: int | None) -> None:
+    """Pin the proxy's port, or clear the setting with ``None``.
+
+    Takes effect when the proxy next starts; agents' configs are re-projected
+    with the new value by whoever calls this.
+    """
+    if port is not None:
+        validate_port(port)
+    _merge(proxy_port=port)
 
 
 # --- machine identity -------------------------------------------------------

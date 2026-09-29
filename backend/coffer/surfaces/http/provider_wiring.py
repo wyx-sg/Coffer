@@ -31,6 +31,11 @@ from coffer.surfaces.http.engine_config_composition import (
     internal_default_model_guard,
     internal_engine_connection,
 )
+from coffer.surfaces.http.model_proxy_wiring import (
+    ModelProxyWiring,
+    proxy_root_now,
+    wire_model_proxy,
+)
 from coffer.surfaces.http.provider_dependencies import set_provider_service
 from coffer.surfaces.http.sync_contributions import SyncContributions
 
@@ -44,6 +49,8 @@ class ProviderWiring:
 
     service: ProviderService
     internal_connection: InternalEngineConnection
+    #: The supervised local model proxy every agent on a connection calls.
+    proxy: ModelProxyWiring
 
 
 def wire_provider_kind(
@@ -76,6 +83,9 @@ def wire_provider_kind(
         engine=internal_default_model_guard(),
         # A switch is several writes; no reconcile pass judges it half done.
         hold=reconciler.hold,
+        # The agents are pointed at the local model proxy, on the port
+        # daemon-config.json names at the moment of each projection.
+        proxy_root=proxy_root_now,
     )
     set_provider_service(provider_svc)
 
@@ -90,13 +100,16 @@ def wire_provider_kind(
         ProviderProjectionTarget(
             providers=provider_svc,
             agents=agent_service,
-            projector=ProviderProjector(ConfigFileStore(), agents=agent_catalog),
+            projector=ProviderProjector(
+                ConfigFileStore(), agents=agent_catalog, proxy_root=proxy_root_now
+            ),
             store=ConfigFileStore(),
             deactivate=provider_svc.deactivate,
         )
     )
     return ProviderWiring(
         service=provider_svc,
+        proxy=wire_model_proxy(provider_svc, credential_store, reconciler),
         # Tied here because this is where both halves exist: the engine's rule
         # (application.engine) and the kind that knows which row is flagged.
         internal_connection=internal_engine_connection(provider_svc),

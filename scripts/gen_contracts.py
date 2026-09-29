@@ -64,6 +64,7 @@ OWNERS: tuple[tuple[str, str], ...] = (
     ("/api/v1/memory", "memory"),
     ("/api/v1/models", "provider-switching"),
     ("/api/v1/providers", "provider-switching"),
+    ("/api/v1/proxy", "provider-switching"),
     ("/api/v1/reconcile", "resource-framework"),
     ("/api/v1/resources", "resource-framework"),
     ("/api/v1/resources/mcp_server", "mcp-gateway"),

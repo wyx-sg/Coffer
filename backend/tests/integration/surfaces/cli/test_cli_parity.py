@@ -144,7 +144,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # `builtin` reverts a wire to the agent's own login; the two flags a
     # connection can carry are the keys `engine.provider` and
     # `transcribe.provider`, not commands here.
-    "provider": {*_LIFECYCLE, "add", "scope", "switch", "builtin", "key"},
+    "provider": {*_LIFECYCLE, "add", "scope", "switch", "builtin", "detect-local"},
     # `restore` with no `--at` undoes the last applied round; `status`
     # includes the remote (spec vault-sync).
     "sync": {
@@ -167,6 +167,11 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     "drift": {"list", "repair"},
     # GET /attention: the Overview's "needs you" list — a single command.
     "attention": set(),
+    # The local model proxy (spec provider-switching "Authenticate each agent
+    # to the proxy with its own local token"): `token` is GET
+    # /proxy/tokens/{uid} — what both agents' projected config runs — `rotate`
+    # is POST /proxy/tokens/{uid}/rotate, `status` is GET /proxy/status.
+    "proxy": {"token", "rotate", "status"},
     "sync machine": {"list", "rename", "rm"},
     "sync remote": {"set", "clear", "pause", "resume"},
 }
@@ -365,7 +370,7 @@ def api_routes(tmp_path_factory: pytest.TempPathFactory) -> Iterator[set[str]]:
 def test_cli_covers_every_visual_operation():
     """The CLI's command tree is exactly the reviewed table above.
 
-    The oracle names all seventeen top-level commands the composition root
+    The oracle names all eighteen top-level commands the composition root
     registers plus their nested groups, and this asserts exact equality
     against the live tree — in both directions. A new UI operation cannot
     ship a CLI counterpart without it appearing here for a reviewer to see,

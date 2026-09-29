@@ -9,6 +9,7 @@ import tomllib
 import pytest
 
 from coffer.domain.connection import CODEX_ENV_KEY
+from coffer.domain.provider.codex_projection import CodexAuthCommand
 from coffer.domain.provider.projection import (
     CODEX_PROVIDER_ID,
     anthropic_api_key_helper,
@@ -222,6 +223,29 @@ def test_remove_codex_empty_and_idempotent() -> None:
     spec="provider-switching",
     scenario="the projected key is hidden from the agent's shell commands",
 )
+def test_the_proxy_form_names_no_key_and_drops_an_earlier_exclude() -> None:
+    """Codex fetches its local proxy token through the ``auth`` command, so no
+    key rides its environment and the exclusion an earlier build added goes."""
+    earlier = '[shell_environment_policy]\nexclude = ["AWS_*", "COFFER_PROVIDER_KEY"]\n'
+    out = apply_codex_provider(
+        earlier,
+        base_url="http://127.0.0.1:8001/openai/v1",
+        model="m",
+        wire_api="responses",
+        display_name="x",
+        auth=CodexAuthCommand("/opt/coffer", ("proxy", "token", "--agent-uid", "a1")),
+    )
+    doc = tomllib.loads(out)
+    block = doc["model_providers"][CODEX_PROVIDER_ID]
+    assert "env_key" not in block
+    assert block["auth"] == {
+        "command": "/opt/coffer",
+        "args": ["proxy", "token", "--agent-uid", "a1"],
+    }
+    assert block["supports_websockets"] is False and block["requires_openai_auth"] is False
+    assert doc["shell_environment_policy"] == {"exclude": ["AWS_*"]}
+
+
 def test_codex_excludes_the_key_from_shell_commands() -> None:
     doc = tomllib.loads(
         apply_codex_provider("", base_url="u", model="m", wire_api="responses", display_name="x")
@@ -241,10 +265,6 @@ def test_codex_exclude_keeps_the_users_policy_and_adds_the_key_once() -> None:
     assert policy == {"inherit": "core", "exclude": ["AWS_*", CODEX_ENV_KEY]}
 
 
-@pytest.mark.acceptance(
-    spec="provider-switching",
-    scenario="the projected key is hidden from the agent's shell commands",
-)
 def test_remove_codex_drops_only_its_own_exclude_entry() -> None:
     projected = apply_codex_provider(
         '[shell_environment_policy]\nexclude = ["AWS_*"]\n',

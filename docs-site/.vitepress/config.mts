@@ -85,6 +85,7 @@ const architecture = [
     items: [
       { text: 'Daemon and processes', link: '/architecture/daemon' },
       { text: 'MCP gateway', link: '/architecture/mcp-gateway' },
+      { text: 'Model proxy', link: '/architecture/model-proxy' },
       { text: 'Chat and turns', link: '/architecture/chat' },
       { text: 'Event stream', link: '/architecture/event-stream' },
       { text: 'Persistence', link: '/architecture/persistence' },
