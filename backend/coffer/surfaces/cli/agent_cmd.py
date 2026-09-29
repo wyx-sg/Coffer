@@ -30,8 +30,8 @@ from rich.table import Table
 from coffer.surfaces.cli import _client as _cli_client
 from coffer.surfaces.cli import agent_config_cmd as _config
 from coffer.surfaces.cli import agent_models_cmd as _models
+from coffer.surfaces.cli import agent_plugin_cmd as _plugins
 from coffer.surfaces.cli import agent_transcript_cmd as _transcripts
-from coffer.surfaces.cli import agent_workspace_cmd as _workspace
 from coffer.surfaces.cli._kind_verbs import (
     KindVerbs,
     check_title_arg,
@@ -304,6 +304,6 @@ def disconnect(ctx: typer.Context, ref: str = _NAME) -> None:
 # --- sibling modules (backend file-size cap) ---------------------------------
 
 _config.attach(app)
-_workspace.attach(app)
+_plugins.attach(app)
 _transcripts.attach(app)
 _models.attach(app)

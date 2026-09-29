@@ -968,7 +968,7 @@ coffer agent plugin [OPTIONS] COMMAND [ARGS]...
 
 View and manage an agent's installed plugins
 
-Subcommands: `list`, `enable`, `disable`, `rm`.
+Subcommands: `list`, `show`, `enable`, `disable`, `rm`.
 
 ### agent plugin list
 
@@ -982,6 +982,20 @@ List the agent's installed plugins and known marketplaces.
 | --- | --- | --- | --- | --- |
 | `NAME` | argument | text | required | Agent name |
 | `--json` | option | flag |  | JSON output for scripts |
+
+### agent plugin show
+
+```sh
+coffer agent plugin show [OPTIONS] NAME PLUGIN_ID
+```
+
+Show one plugin: its metadata, install dir and everything it contributes.
+
+| Name | Kind | Type | Default | Description |
+| --- | --- | --- | --- | --- |
+| `NAME` | argument | text | required | Agent name |
+| `PLUGIN_ID` | argument | text | required | Plugin id (name@marketplace) |
+| `--json` | option | flag |  | JSON output |
 
 ### agent plugin enable
 

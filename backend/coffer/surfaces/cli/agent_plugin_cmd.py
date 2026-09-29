@@ -1,4 +1,4 @@
-"""``coffer agent plugin list|enable|disable|rm`` — an agent's installed plugins.
+"""``coffer agent plugin list|show|enable|disable|rm`` — an agent's installed plugins.
 
 Part of spec agent-registry "Expose every agent operation through REST, CLI and
 the Agents page"; ``rm`` is the uninstall of "Uninstall a plugin by the type's
@@ -71,6 +71,48 @@ def plugin_list(
     for m in data["marketplaces"]:
         src = " ".join(s for s in (m["source_type"], m["source"]) if s)
         typer.echo(f"marketplace: {m['name']}" + (f" ({src})" if src else ""))
+
+
+@plugin_app.command("show")
+def plugin_show(
+    ctx: typer.Context,
+    name: str = _AGENT,
+    plugin_id: str = _PLUGIN,
+    output_json: bool = typer.Option(False, "--json", help="JSON output"),
+) -> None:
+    """Show one plugin: its metadata, install dir and everything it contributes."""
+    verbose = verbose_of(ctx)
+    c, _info = _cli_client.client_or_exit()
+    with c:
+        uid = resolve_ref(c, "agent", name, verbose=verbose)["uid"]
+        r = c.get(f"/agents/{uid}/plugins/{plugin_id}")
+        _not_found_exit(r)
+        _cli_client.check(r, verbose=verbose)
+    data = r.json()
+    if output_json:
+        typer.echo(_json.dumps(data, indent=2))
+        return
+    p = data["plugin"]
+    src = data["marketplace_source"]
+    typer.echo(f"{p['id']}  {'enabled' if p['enabled'] else 'disabled'}")
+    for label, value in (
+        ("version", p["version"]),
+        ("author", p["author"]),
+        ("description", p["description"]),
+        ("homepage", p["homepage"]),
+        ("marketplace", p["marketplace"] + (f" ({src})" if src else "")),
+        ("installed at", data["install_path"]),
+    ):
+        if value:
+            typer.echo(f"{label}: {value}")
+    for key in ("skills", "commands", "agents"):
+        for comp in data[key]:
+            desc = f" — {comp['description']}" if comp["description"] else ""
+            typer.echo(f"{key[:-1]}: {comp['name']}{desc}")
+    for event in data["hooks"]:
+        typer.echo(f"hook: {event}")
+    for server in data["mcp_servers"]:
+        typer.echo(f"mcp server: {server}")
 
 
 def _plugin_set_enabled(ctx: typer.Context, name: str, plugin_id: str, enabled: bool) -> None:

@@ -19,6 +19,7 @@ import {
   agentMcpEntriesKey,
   agentMcpEntryKey,
   agentMcpInstallKey,
+  agentPluginKey,
   agentPluginsKey,
   agentsKey,
   agentUnmanagedSkillsKey,
@@ -191,6 +192,14 @@ export function useAgentPlugins(uid: string) {
     queryKey: agentPluginsKey(uid),
     queryFn: () => agentsApi.plugins(uid),
     enabled: !!uid,
+  });
+}
+
+export function useAgentPlugin(uid: string, id: string) {
+  return useQuery({
+    queryKey: agentPluginKey(uid, id),
+    queryFn: () => agentsApi.plugin(uid, id),
+    enabled: !!uid && !!id,
   });
 }
 

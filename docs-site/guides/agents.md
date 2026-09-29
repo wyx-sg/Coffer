@@ -247,10 +247,23 @@ When the entry's environment or headers carry a non-empty value under a secret-l
 
 ## Plugins
 
-The **Plugins** tab lists installed plugins as `<name>@<marketplace>`, with their enabled state, marketplace, version, author, and the skills, commands and MCP servers each plugin bundles. A plugin whose cache directory is gone is marked **Cache missing**; Coffer does not try to repair it.
+The **Plugins** tab lists installed plugins with their marketplace (and the marketplace's source), enabled state and an uninstall action. A plugin whose cache directory is gone is marked **Cache missing**; Coffer does not try to repair it.
+
+Click a plugin's name to open its detail page. It shows the plugin's `<name>@<marketplace>` id, version, author, description and homepage, the marketplace it came from, and the directory it is installed in, with **Open in editor** and **Reveal** buttons. Below that it lists everything the plugin contributes, read from its package's default locations:
+
+| Contents | Read from |
+| --- | --- |
+| Skills, with their descriptions | `skills/<name>/SKILL.md` |
+| Commands, with their descriptions | `commands/*.md` |
+| Subagents, with their descriptions | `agents/*.md` |
+| Hook events | `hooks/hooks.json` |
+| MCP servers | `.mcp.json` |
+
+The page header has the same enabled switch and **Uninstall** as the tab. After an uninstall, and from its back link, the page returns to the agent's Plugins tab. The page only reads the plugin's files; it changes nothing.
 
 ```sh
 coffer agent plugin list claude-code
+coffer agent plugin show claude-code formatter@acme
 coffer agent plugin disable claude-code formatter@acme
 coffer agent plugin enable claude-code formatter@acme
 coffer agent plugin rm codex formatter@acme

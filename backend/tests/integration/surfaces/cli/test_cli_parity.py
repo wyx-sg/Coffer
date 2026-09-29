@@ -101,7 +101,7 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # Writes to the agent's own config files; reading them is `path agent
     # <name> config` (see _FILE_BACKED_ROUTES).
     "agent config": {"edit", "rm"},
-    "agent plugin": {"list", "enable", "disable", "rm"},
+    "agent plugin": {"list", "show", "enable", "disable", "rm"},
     # `edit` carries the group-gating switches; `pair`, `bind` and `notify`
     # are the channel's own acts (spec channels).
     "channel": {*_LIFECYCLE, "add", "scope", "pair", "bind", "notify"},

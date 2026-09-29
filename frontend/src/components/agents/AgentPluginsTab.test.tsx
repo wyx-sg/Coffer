@@ -7,6 +7,7 @@
 //   - codex agent shows Uninstall button + confirm dialog → api call
 //   - claude_code agent hides Uninstall + shows hint text
 //   - parse_errors surface as an Alert banner
+//   - a plugin's name links to its detail page; rows do not expand
 //   - en/zh key parity for agents.workspace.pluginsTab
 //
 // Toggle and uninstall are addressed to the agent's `uid`, so the fixtures
@@ -16,8 +17,10 @@ import type { PropsWithChildren } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
 import { AgentPluginsTab } from "./AgentPluginsTab";
+import { acceptance } from "@/test/acceptance";
 import type { AgentOut, PluginsResponse } from "@/lib/api/agents";
 import en from "@/i18n/locales/en.json";
 import zh from "@/i18n/locales/zh.json";
@@ -86,10 +89,28 @@ function stub(overrides: Partial<PluginsResponse> = {}) {
   api.uninstallPlugin.mockResolvedValue(undefined);
 }
 
+// Where a followed link landed, and the state it carried — the detail page
+// itself is covered by AgentPluginPage.test.tsx.
+function Landed() {
+  const loc = useLocation();
+  return (
+    <div data-testid="landed" data-state={JSON.stringify(loc.state)}>
+      {loc.pathname}
+    </div>
+  );
+}
+
 function renderTab(agent: AgentOut = CODEX_AGENT) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const Wrapper = ({ children }: PropsWithChildren) => (
-    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={[`/agents/${agent.uid}?tab=plugins`]}>
+        <Routes>
+          <Route path="/agents/:uid" element={children} />
+          <Route path="/agents/:uid/plugins/:pluginId" element={<Landed />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
   );
   return render(<AgentPluginsTab agent={agent} />, { wrapper: Wrapper });
 }
@@ -230,36 +251,27 @@ describe("AgentPluginsTab", () => {
     expect(await screen.findByText(/no plugins installed/i)).toBeInTheDocument();
   });
 
-  test("expanding a plugin row reveals its description and bundled components", async () => {
-    const PLUGIN_DETAIL = {
-      id: "npm:@scope/plugin-d",
-      name: "plugin-d",
-      marketplace: "npm",
-      enabled: true,
-      cache_present: true,
-      version: "1.2.3",
-      description: "Does detailed things",
-      author: "Ada",
-      homepage: "https://example/d",
-      skills: ["alpha", "beta"],
-      commands: ["doit"],
-      mcp_servers: [],
-    };
-    stub({ items: [PLUGIN_DETAIL], marketplaces: [MARKETPLACES[0]] });
+  acceptance("agent-registry", "open a plugin's detail page from the Plugins tab", async () => {
+    // The Plugins-tab half of the scenario: rows no longer expand, and the
+    // plugin's name is the way to its detail page, carrying this tab as the
+    // page's return target. The page half is in AgentPluginPage.test.tsx.
+    stub({ items: [{ ...PLUGIN_A, description: "Does detailed things" }] });
     renderTab();
 
-    // Detail stays hidden until the row is expanded.
-    expect(await screen.findByText("plugin-d")).toBeInTheDocument();
+    const link = await screen.findByRole("link", { name: "plugin-a" });
+    // No row carries an expand state, and no inline detail is rendered.
+    expect(document.querySelector("tr[aria-expanded]")).toBeNull();
     expect(screen.queryByText("Does detailed things")).not.toBeInTheDocument();
 
-    // Clicking the row expands the inline detail panel.
-    fireEvent.click(screen.getByText("plugin-d"));
-
-    expect(screen.getByText("Does detailed things")).toBeInTheDocument();
-    expect(screen.getByText("alpha")).toBeInTheDocument();
-    expect(screen.getByText("beta")).toBeInTheDocument();
-    expect(screen.getByText("doit")).toBeInTheDocument();
-    expect(screen.getByText(/1\.2\.3/)).toBeInTheDocument();
+    fireEvent.click(link);
+    const landed = await screen.findByTestId("landed");
+    expect(landed).toHaveTextContent(
+      `/agents/${CODEX_AGENT.uid}/plugins/${encodeURIComponent(PLUGIN_A.id)}`,
+    );
+    expect(JSON.parse(landed.dataset.state ?? "null")).toEqual({
+      backTo: `/agents/${CODEX_AGENT.uid}?tab=plugins`,
+      backLabel: en.agents.workspace.plugins,
+    });
   });
 
   test("en and zh locales carry the same agents.workspace.pluginsTab keys", () => {

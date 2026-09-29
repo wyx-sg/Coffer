@@ -349,7 +349,21 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Read one of the agent's plugins in detail
+         * @description Read-only (see "Read one installed plugin's detail read-only"). Returns
+         *     the plugin's listing row, its marketplace's source, the directory its
+         *     package was read from, whether in-app uninstall can run now, and
+         *     everything the package contributes from its default locations — skills
+         *     (`skills/<name>/SKILL.md`) and commands (`commands/*.md`) and subagents
+         *     (`agents/*.md`) with their frontmatter descriptions, the hook events
+         *     `hooks/hooks.json` registers, and the MCP servers `.mcp.json` bundles.
+         *     A plugin whose cache directory is missing has `install_path: null` and
+         *     empty contents. Backs the plugin detail page reached from the agent's
+         *     Plugins tab. An id the listing does not report is 404
+         *     (`PLUGIN_NOT_FOUND`); nothing is written and nothing is audited.
+         */
+        get: operations["getAgentPlugin"];
         put?: never;
         post?: never;
         /**
@@ -854,6 +868,33 @@ export interface components {
             commands?: string[];
             /** @description Names of MCP servers the plugin bundles (its `.mcp.json`). */
             mcp_servers?: string[];
+        };
+        /** @description One skill, command or subagent a plugin contributes. */
+        PluginComponent: {
+            name: string;
+            /** @description From the component file's YAML frontmatter, when it has one. */
+            description?: string | null;
+        };
+        /** @description One plugin's detail page — derived at read time, never stored. */
+        PluginDetail: {
+            plugin: components["schemas"]["Plugin"];
+            marketplace_source_type: string | null;
+            /** @description Where the plugin's marketplace comes from (e.g. `owner/repo`). */
+            marketplace_source: string | null;
+            /** @description The directory the plugin's package was read from; null when no install directory is recorded or it is missing on disk. */
+            install_path: string | null;
+            /** @description Same flag as the listing's — whether in-app uninstall can run now. */
+            can_uninstall: boolean;
+            /** @description The package's `skills/<name>/` folders, described by `SKILL.md`. */
+            skills: components["schemas"]["PluginComponent"][];
+            /** @description The package's `commands/*.md` slash commands. */
+            commands: components["schemas"]["PluginComponent"][];
+            /** @description The package's `agents/*.md` subagents. */
+            agents: components["schemas"]["PluginComponent"][];
+            /** @description Hook event names `hooks/hooks.json` registers handlers for. */
+            hooks: string[];
+            /** @description MCP server names the package's `.mcp.json` bundles. */
+            mcp_servers: string[];
         };
         Marketplace: {
             name: string;
@@ -1529,6 +1570,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginsOut"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getAgentPlugin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The agent Resource's immutable identity. */
+                uid: string;
+                /** @description Plugin identifier as the listing reports it (`<name>@<marketplace>`). */
+                plugin_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginDetail"];
                 };
             };
             401: components["responses"]["Unauthorized"];

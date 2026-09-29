@@ -53,6 +53,9 @@ export const agentMcpEntriesKey = (uid: string) => ["agents", uid, "mcp-entries"
 export const agentMcpEntryKey = (uid: string, entry: string, source: string) =>
   ["agents", uid, "mcp-entries", entry, source] as const;
 export const agentPluginsKey = (uid: string) => ["agents", uid, "plugins"] as const;
+/** One plugin's detail — under the listing's key, so a toggle or uninstall that
+ *  invalidates the listing refreshes the detail page too. */
+export const agentPluginKey = (uid: string, id: string) => ["agents", uid, "plugins", id] as const;
 export const agentUnmanagedSkillsKey = (uid: string) =>
   ["agents", uid, "unmanaged-skills"] as const;
 /** One unmanaged folder's preview — nested under the list key, so adopting or

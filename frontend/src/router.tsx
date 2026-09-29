@@ -98,6 +98,12 @@ export const routes: RouteObject[] = [
         path: "agents/:uid/mcp-servers/:entry",
         element: lazyPage(() => import("./pages/AgentMcpEntryPage"), "AgentMcpEntryPage"),
       },
+      // A plugin, reached from the agent's Plugins tab. Its id
+      // (`<name>@<marketplace>`) is URL-encoded into one path segment.
+      {
+        path: "agents/:uid/plugins/:pluginId",
+        element: lazyPage(() => import("./pages/AgentPluginPage"), "AgentPluginPage"),
+      },
       { path: "channels", element: <ChannelsPage /> },
       {
         path: "channels/:uid",
