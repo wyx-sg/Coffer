@@ -11,7 +11,6 @@ import pathlib
 
 import pytest
 
-from coffer.application.agent.config_file_service import MEMORY_BLOCK_MARKER
 from coffer.domain.agent.types import AgentType
 
 pytestmark = pytest.mark.asyncio
@@ -69,26 +68,3 @@ async def test_subagents_entry_lists_top_level_and_nested_files(
     assert entry.kind == "directory"
     assert entry.path == str(agents_dir)
     assert sorted(child.relpath for child in entry.files) == ["reviewer.md", "team/planner.md"]
-
-
-@pytest.mark.acceptance(
-    spec="agent-registry", scenario="annotate a leftover memory block in the instructions file"
-)
-async def test_legacy_memory_block_is_reported_on_read(agent_bundle, tmp_path, monkeypatch):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    agent = await _register_claude(agent_bundle, tmp_path)
-    instructions = tmp_path / ".claude" / "CLAUDE.md"
-
-    instructions.write_text("# Rules\n\nbe terse\n", encoding="utf-8")
-    clean = await agent_bundle.config_files.read_file(agent.uid, "instructions")
-    assert clean.memory_block is False
-
-    instructions.write_text(
-        f"# Rules\n\n{MEMORY_BLOCK_MARKER}:start -->\nold facts\n<!-- coffer:memory:end -->\n",
-        encoding="utf-8",
-    )
-    before = instructions.read_bytes()
-    leftover = await agent_bundle.config_files.read_file(agent.uid, "instructions")
-    assert leftover.memory_block is True
-    # Detection only: the read neither rewrites nor strips the block.
-    assert instructions.read_bytes() == before

@@ -1,8 +1,10 @@
 // frontend/src/components/FileEditor.test.tsx
 // The two guard rails around editing a real on-disk file: a dirty draft is not
-// thrown away on one click, and a save that lands is announced.
+// thrown away on one click, and a save that lands is announced. Given a file
+// path, the open / reveal actions share the one action row with Edit / Save /
+// Cancel.
 import { describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 
 import { FileEditor, type FileEditorProps } from "./FileEditor";
 import { ToastProvider } from "@/components/ui/toast";
@@ -27,6 +29,37 @@ function baseProps(overrides: Partial<FileEditorProps> = {}): FileEditorProps {
 }
 
 describe("FileEditor", () => {
+  test("with a file path, open and reveal share the action row with Edit, placed before it", () => {
+    render(<FileEditor {...baseProps({ editing: false })} filePath="/home/u/notes.md" />);
+    const labels = within(screen.getByTestId("file-editor-actions"))
+      .getAllByRole("button")
+      .map((b) => b.textContent);
+    expect(labels).toHaveLength(3);
+    expect(labels[0]).toMatch(/open in editor/i);
+    expect(labels[1]).toMatch(/reveal/i);
+    expect(labels[2]).toMatch(/^edit$/i);
+  });
+
+  test("in edit mode the same row carries open and reveal plus Cancel and Save", () => {
+    render(<FileEditor {...baseProps()} filePath="/home/u/notes.md" />);
+    const labels = within(screen.getByTestId("file-editor-actions"))
+      .getAllByRole("button")
+      .map((b) => b.textContent);
+    expect(labels).toHaveLength(4);
+    expect(labels[0]).toMatch(/open in editor/i);
+    expect(labels[1]).toMatch(/reveal/i);
+    expect(labels.slice(2)).toEqual(["Cancel", "Save"]);
+  });
+
+  test("without a file path the row holds only the editor's own controls", () => {
+    render(<FileEditor {...baseProps({ editing: false })} />);
+    expect(
+      within(screen.getByTestId("file-editor-actions"))
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Edit"]);
+  });
+
   test("Cancel on a clean draft leaves edit mode at once", () => {
     const props = baseProps();
     render(<FileEditor {...props} />);

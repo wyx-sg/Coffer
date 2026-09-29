@@ -278,7 +278,7 @@ allowlist via a `ConfigFileStorePort`.
 | Method                                                                                            | Purpose                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list_files(uid) -> list[ConfigFileInfo]`                                                        | For each `ConfigFileSpec` of the agent's type, return key, display name, path, containing-folder `folder_path` (backs the read-only UI's open/reveal), format, `kind`, `exists`, and (when present) size + mtime. Directory entries additionally carry `files` (recursive `.md` listing as `DirEntryInfo` rows).                                                                         |
-| `read_file(uid, key) -> ConfigFileContent`                                                       | Resolve `spec_for(type, key)`; return content + `path` + `folder_path` + format + `exists` + `fingerprint` + `memory_block` (the `path`/`folder_path` pair backs open-in-external-editor / reveal). Missing file → empty content, `exists=False`, `fingerprint=""`, no file created.                                                                                                   |
+| `read_file(uid, key) -> ConfigFileContent`                                                       | Resolve `spec_for(type, key)`; return content + `path` + `folder_path` + format + `exists` + `fingerprint` (the `path`/`folder_path` pair backs open-in-external-editor / reveal). Missing file → empty content, `exists=False`, `fingerprint=""`, no file created.                                                                                                   |
 | `write_file(uid, key, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo`           | Resolve `spec_for(type, key)`; `validate_content(format, content)` (malformed json/toml → `ConfigFileFormatInvalid` → 422, file unchanged); when `expected_fingerprint` is supplied, reject with `ConfigFileStale` (→ 409) if the on-disk content changed since the read ("Reject stale config-file writes by fingerprint"); `store.write_text_atomic` (atomic + `.bak`); record `agent_config_file_written`; return the refreshed `ConfigFileInfo`. |
 | `read_child(uid, key, relpath) -> ConfigFileContent`                                             | `validate_child_relpath`, then read one child of a directory entry; same shape as `read_file`.                                                                                                                                                                                                                                                                                                             |
 | `write_child(uid, key, relpath, content, *, expected_fingerprint=None, actor) -> ConfigFileInfo` | Create-on-write save of one child file; same validation / staleness / atomic-write / audit machinery as `write_file`.                                                                                                                                                                                                                                                                             |
@@ -287,15 +287,6 @@ allowlist via a `ConfigFileStorePort`.
 `ConfigFileContent.fingerprint` is a content fingerprint used for
 optimistic-concurrency writes (see "Reject stale config-file writes by
 fingerprint") — reads return it, writes carry it back.
-`ConfigFileContent.memory_block` is true when the text still contains the
-**legacy** memory-projection block marker (see "Annotate a leftover
-memory-projection block as safe to delete"). Nothing writes that block any more
-— native projection was retired ([Aggregate Agent Memory, Never Write
-It](../../../docs/decisions/aggregate-agent-memory-never-write-it.md); spec
-memory "Reintroduce no retired mechanism" forbids reintroducing it) and
-migration `0024` dropped the `projection_bindings` table behind it — so the flag
-exists only so the editor can annotate a leftover block as safe to delete. It is
-never parsed.
 
 ### `AgentMcpService` (`application/agent/mcp_service.py`)
 

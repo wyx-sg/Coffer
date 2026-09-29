@@ -97,7 +97,6 @@ def test_list_and_read_config_file(tmp_path, monkeypatch):
             "exists": False,
             "content": "",
             "fingerprint": "",
-            "memory_block": False,
         }
 
         # Read an existing file -> current content, exists true, sha256 fingerprint.
@@ -108,7 +107,6 @@ def test_list_and_read_config_file(tmp_path, monkeypatch):
         assert r.json()["exists"] is True
         assert r.json()["content"] == '{"theme": "dark"}'
         assert r.json()["fingerprint"] == hashlib.sha256(b'{"theme": "dark"}').hexdigest()
-        assert r.json()["memory_block"] is False
         assert r.json()["path"] == str(settings_path)
         assert r.json()["folder_path"] == str(claude_dir)
 

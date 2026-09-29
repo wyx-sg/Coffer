@@ -2,11 +2,11 @@
 // The right-hand pane reads by default and edits behind an explicit Edit: no
 // textarea until the user asks for one, so a pane opened to LOOK at an agent's
 // real configuration cannot be changed by a stray keystroke. It also shows the
-// path plus an optional one-line description, and renders the FileActions bar
-// so the user can open the file in their own editor instead (daemon-backed
-// open/reveal).
+// path plus an optional one-line description, and renders the FileActions
+// (daemon-backed open/reveal) on the same row as Edit / Save / Cancel so the
+// user can open the file in their own editor instead.
 import { describe, expect, test, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { ConfigEditorPane, type ConfigEditorPaneProps } from "./ConfigEditorPane";
 
 type Draft = ConfigEditorPaneProps["draft"];
@@ -36,7 +36,6 @@ function baseProps(overrides: Partial<ConfigEditorPaneProps> = {}): ConfigEditor
     editorKey: "settings",
     content: "{}",
     loading: false,
-    memoryBlock: false,
     draft: draftStub(),
     readOnlyMissing: false,
     ...overrides,
@@ -135,8 +134,34 @@ describe("ConfigEditorPane", () => {
     expect(screen.queryByText("What this file is for.")).not.toBeInTheDocument();
   });
 
-  test("renders the legacy-memory-block annotation when memoryBlock is set", () => {
-    render(<ConfigEditorPane {...baseProps({ memoryBlock: true })} />);
-    expect(screen.getByText(/legacy Coffer memory block/i)).toBeInTheDocument();
+  test("open, reveal and Edit sit on one row, file actions first", () => {
+    render(<ConfigEditorPane {...baseProps()} />);
+    const row = screen.getByTestId("file-editor-actions");
+    const labels = within(row)
+      .getAllByRole("button")
+      .map((b) => b.textContent);
+    expect(labels).toHaveLength(3);
+    expect(labels[0]).toMatch(/open in editor/i);
+    expect(labels[1]).toMatch(/reveal/i);
+    expect(labels[2]).toMatch(/^edit$/i);
+  });
+
+  test("while editing, the file actions share the row with Cancel and Save", () => {
+    render(<ConfigEditorPane {...baseProps({ draft: draftStub({ editing: true }) })} />);
+    const row = screen.getByTestId("file-editor-actions");
+    expect(within(row).getByRole("button", { name: /open in editor/i })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: /reveal/i })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: /^cancel$/i })).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: /^save$/i })).toBeInTheDocument();
+  });
+
+  test("a file with no on-disk path shows only the editor's own control", () => {
+    render(<ConfigEditorPane {...baseProps({ filePath: undefined })} />);
+    const row = screen.getByTestId("file-editor-actions");
+    expect(
+      within(row)
+        .getAllByRole("button")
+        .map((b) => b.textContent),
+    ).toEqual(["Edit"]);
   });
 });
