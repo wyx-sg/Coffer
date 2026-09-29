@@ -60,7 +60,7 @@ give the status each code is actually sent with.
 | `SCOPE_INVALID` | 422 | A reach (activation scope) payload is invalid, or the kind has no reach. | Send an agent allow-list, or use the kind's `scope` command (for example `coffer skill scope <name> --agents a,b`) on a kind that supports it. See [reach](/architecture/resource-framework#reach). |
 | `RESOURCE_PROTECTED` | 409 | The resource is managed by Coffer itself (for example a skill Coffer generates) and cannot be taken over or deleted. | Leave it; Coffer maintains it. |
 | `RESOURCE_NOT_TOGGLEABLE` | 409 | The resource's kind cannot be enabled or disabled: every knowledge collection and memory partition is always served. | Delete the resource if it should no longer be served. |
-| `UPKEEP_ALREADY_RUNNING` | 409 | A knowledge curation pass is already running for this collection. | Wait for the running pass; the UI shows it. |
+| `UPKEEP_ALREADY_RUNNING` | 409 | A knowledge curation run is already going for this collection. | Wait for the running run to finish; `coffer daemon status` and the UI show it. |
 | `UNKNOWN_PRUNABLE_TABLE` | 404 | A retention request named a table that has no retention policy. | List valid tables with `coffer config list retention.`. |
 
 ## Credentials
@@ -126,12 +126,16 @@ give the status each code is actually sent with.
 | `KNOWLEDGE_COLLECTION_NOT_FOUND` | 404 | No collection by that name is visible to the caller. | List collections with `coffer knowledge list`. |
 | `KNOWLEDGE_COLLECTION_EXISTS` | 409 | A collection with that name already exists. | Choose another name. |
 | `KNOWLEDGE_FILE_NOT_FOUND` | 404 | No document at that path. | Browse the collection's directory, which `coffer path knowledge <collection>` names. |
-| `KNOWLEDGE_FILE_CONFLICT` | 409 | The document changed on disk after you read it, so your save was refused. | Reload the document and reapply your edit. |
+| `KNOWLEDGE_FILE_CONFLICT` | 409 | The document changed on disk after you read it, so your save was refused and the file left as it is. `details` carry `saved: false` and the document as it is now (`current_body`, `current_fingerprint`). | Compare with the current text, then save again with the new fingerprint. |
 | `KNOWLEDGE_PATH_UNSAFE` | 400 | The path escapes the knowledge root, names a hidden entry, or cannot name a document. | Use a relative path to a Markdown document inside the collection. |
 | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 | The upload exceeds the size limit named in the message. | Split the document or upload a smaller file. |
 | `INGEST_REJECTED` | 400 | The upload cannot be converted. `details.reason` is `unsupported_type`, `scanned_pdf` (a PDF with no text layer) or `empty_conversion`; `details.doc_type` names the type. | Convert to a supported format; run OCR on a scanned PDF. |
 | `KNOWLEDGE_TOPIC_REFERENCES_FILE` | 400 | A curated document refers to another knowledge file by its file name. | Name the subject instead of the file. |
 | `KNOWLEDGE_CURATION_BOUND` | 400 | A curation pass tried to write more files than one pass may. | Submit smaller material. |
+| `KNOWLEDGE_HISTORY_UNAVAILABLE` | 503 | Knowledge history is not recorded on this machine, usually because git is not installed. Writes still work. | Install git; history starts with the next write. |
+| `KNOWLEDGE_VERSION_NOT_FOUND` | 404 | No version by that id in the knowledge history, or none for that document. | List versions with `coffer knowledge history <path>` or `coffer knowledge changes`. |
+| `KNOWLEDGE_NOT_A_PASS` | 400 | Only a curation pass can be undone, and this version is another kind of change. | Restore the document's earlier version with `coffer knowledge restore`. |
+| `KNOWLEDGE_UNDO_CONFLICT` | 409 | A later change touched one of the pass's documents, named in the message, so the undo was refused and nothing was written. | Edit or restore that document instead. |
 | `KNOWLEDGE_ERROR` | 400 | Any other knowledge-layer refusal. | Read `message`. |
 | `ENGINE_UNAVAILABLE` | 503 | A binary or converter the operation needs (ripgrep, or a document converter backend) is unavailable. | Reinstall Coffer; the bundled binaries include them. |
 | `GREP_PATTERN_INVALID` | 400 | ripgrep rejected a pattern. | Fix the pattern. |

@@ -8,6 +8,161 @@ info:
 servers:
 - url: http://127.0.0.1:8000
 paths:
+  /api/v1/knowledge/changes:
+    get:
+      description: |-
+        Recent changes across every collection (or one, by its name), newest
+        first, with the items still waiting in each inbox.
+      operationId: recent_changes_api_v1_knowledge_changes_get
+      parameters:
+      - in: query
+        name: collection
+        required: false
+        schema:
+          anyOf:
+          - minLength: 1
+            type: string
+          - type: 'null'
+          title: Collection
+      - in: query
+        name: limit
+        required: false
+        schema:
+          default: 50
+          maximum: 200
+          minimum: 1
+          title: Limit
+          type: integer
+      - in: query
+        name: cursor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Cursor
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangesOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Recent Changes
+      tags:
+      - knowledge
+  /api/v1/knowledge/changes/{version}:
+    get:
+      description: 'One change in full: every document it touched, with its diff.'
+      operationId: change_detail_api_v1_knowledge_changes__version__get
+      parameters:
+      - in: path
+        name: version
+        required: true
+        schema:
+          title: Version
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeDetailOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Change Detail
+      tags:
+      - knowledge
+  /api/v1/knowledge/changes/{version}/undo:
+    post:
+      description: |-
+        Undo a curation pass as a whole. 409 ``KNOWLEDGE_UNDO_CONFLICT`` names
+        the document a later change would lose; nothing is written then.
+      operationId: undo_pass_api_v1_knowledge_changes__version__undo_post
+      parameters:
+      - in: path
+        name: version
+        required: true
+        schema:
+          title: Version
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Undo Pass
+      tags:
+      - knowledge
   /api/v1/knowledge/collections:
     get:
       operationId: list_collections_api_v1_knowledge_collections_get
@@ -91,6 +246,19 @@ paths:
       - knowledge
   /api/v1/knowledge/collections/{uid}/curate:
     post:
+      description: |-
+        Curate now: a pass per pending item until none is left, or one pass over
+        the document named ("Run curation on a sweep and on demand").
+
+        The collection is named by its uid; the run resolves the row itself, so an
+        unknown uid is the same 404 every route here gives. Two guards, in this
+        order on purpose. The registry claim is about THIS collection and is held
+        for the whole run: a second trigger while it runs is refused (409
+        ``UPKEEP_ALREADY_RUNNING``) rather than queued ("Run one pass per collection
+        at a time"), and it is keyed on the uid the sweep claims too. The
+        vault-write lock is about the whole vault and is taken per pass, so a sync
+        round is not held off for the minutes a run can take ("Never overlap
+        curation with a sync round").
       operationId: curate_api_v1_knowledge_collections__uid__curate_post
       parameters:
       - in: path
@@ -128,7 +296,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CurationOut'
+                $ref: '#/components/schemas/CurationRunOut'
           description: Successful Response
         '422':
           content:
@@ -275,6 +443,146 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Any other error, as Coffer's error envelope.
       summary: Save File
+      tags:
+      - knowledge
+  /api/v1/knowledge/history:
+    get:
+      description: A document's versions, newest first, each with its writer and time.
+      operationId: document_history_api_v1_knowledge_history_get
+      parameters:
+      - in: query
+        name: path
+        required: true
+        schema:
+          minLength: 1
+          title: Path
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentHistoryOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Document History
+      tags:
+      - knowledge
+  /api/v1/knowledge/history/diff:
+    get:
+      description: What one version did to the document.
+      operationId: version_diff_api_v1_knowledge_history_diff_get
+      parameters:
+      - in: query
+        name: path
+        required: true
+        schema:
+          minLength: 1
+          title: Path
+          type: string
+      - in: query
+        name: version
+        required: true
+        schema:
+          minLength: 4
+          title: Version
+          type: string
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VersionDiffOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Version Diff
+      tags:
+      - knowledge
+  /api/v1/knowledge/history/restore:
+    post:
+      description: Put one version of a document back, as a new change naming the user.
+      operationId: restore_version_api_v1_knowledge_history_restore_post
+      parameters:
+      - in: header
+        name: x-coffer-token
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Token
+      - in: header
+        name: x-coffer-actor
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Coffer-Actor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRestoreIn'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileOut'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back.
+        default:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Any other error, as Coffer's error envelope.
+      summary: Restore Version
       tags:
       - knowledge
   /api/v1/knowledge/material:
@@ -430,6 +738,135 @@ components:
       - collection
       title: Body_upload_api_v1_knowledge_upload_post
       type: object
+    ChangeDetailOut:
+      description: 'One change in full: every document it touched, each with its diff.'
+      properties:
+        change:
+          $ref: '#/components/schemas/ChangeOut'
+        diffs:
+          items:
+            $ref: '#/components/schemas/DocumentDiffOut'
+          title: Diffs
+          type: array
+      required:
+      - change
+      - diffs
+      title: ChangeDetailOut
+      type: object
+    ChangeOut:
+      description: 'One change to knowledge: one commit naming its writer.'
+      properties:
+        actor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: The audit actor of the operation.
+          title: Actor
+        agent:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: The agent that wrote it (writer `agent`), or for a curation pass who submitted the item it curated — an agent's name, or `user`.
+          title: Agent
+        collections:
+          description: The collections the change touched.
+          items:
+            type: string
+          title: Collections
+          type: array
+        documents:
+          items:
+            $ref: '#/components/schemas/DocumentChangeOut'
+          title: Documents
+          type: array
+        item:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: The item a curation pass curated.
+          title: Item
+        operation:
+          description: '`pass`, `save`, `delete`, `promote`, `submit`, `restore`, `undo`, `edit`, `sync`, `create`, `rename`, `remove` or `baseline`. Only a `pass` can be undone.'
+          title: Operation
+          type: string
+        restored_from:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Restored From
+        status:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: A curation pass's outcome status.
+          title: Status
+        summary:
+          title: Summary
+          type: string
+        time:
+          format: date-time
+          title: Time
+          type: string
+        undoes:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Undoes
+        version:
+          description: The change's id (its commit), what diff, restore and undo take.
+          title: Version
+          type: string
+        writer:
+          description: '`user` a person; `agent` an agent whose material became a document on arrival; `curation` Coffer''s curation pass; `sync` another machine''s change; `disk` an edit made outside Coffer (a person''s editor, an agent''s file tools).'
+          enum:
+          - user
+          - agent
+          - curation
+          - sync
+          - disk
+          title: Writer
+          type: string
+      required:
+      - version
+      - time
+      - writer
+      - operation
+      - summary
+      - actor
+      - agent
+      - collections
+      - item
+      - status
+      - restored_from
+      - undoes
+      - documents
+      title: ChangeOut
+      type: object
+    ChangesOut:
+      description: Recent changes across collections, newest first, with the items still waiting.
+      properties:
+        changes:
+          items:
+            $ref: '#/components/schemas/ChangeOut'
+          title: Changes
+          type: array
+        next_cursor:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Pass back as `cursor` for the next page; null on the last.
+          title: Next Cursor
+        waiting:
+          items:
+            $ref: '#/components/schemas/WaitingItemOut'
+          title: Waiting
+          type: array
+      required:
+      - changes
+      - waiting
+      - next_cursor
+      title: ChangesOut
+      type: object
     CollectionCreate:
       properties:
         description:
@@ -575,6 +1012,37 @@ components:
           title: Document
       title: CurationRequest
       type: object
+    CurationRunOut:
+      description: |-
+        What Curate now did: every pass it ran, in order (spec knowledge "Report
+        every pass outcome as a status").
+      properties:
+        collection:
+          title: Collection
+          type: string
+        passes:
+          items:
+            $ref: '#/components/schemas/CurationOut'
+          title: Passes
+          type: array
+        status:
+          enum:
+          - ok
+          - failed
+          - no_model
+          - up_to_date
+          title: Status
+          type: string
+        total:
+          title: Total
+          type: integer
+      required:
+      - collection
+      - status
+      - total
+      - passes
+      title: CurationRunOut
+      type: object
     DirectoryOut:
       properties:
         file_count:
@@ -596,6 +1064,96 @@ components:
       - file_count
       - inbox
       title: DirectoryOut
+      type: object
+    DocumentChangeOut:
+      description: One document a change touched.
+      properties:
+        added:
+          description: Lines added.
+          title: Added
+          type: integer
+        path:
+          description: Knowledge-root-relative document path.
+          title: Path
+          type: string
+        removed:
+          description: Lines removed.
+          title: Removed
+          type: integer
+        status:
+          enum:
+          - added
+          - modified
+          - removed
+          title: Status
+          type: string
+      required:
+      - path
+      - status
+      - added
+      - removed
+      title: DocumentChangeOut
+      type: object
+    DocumentDiffOut:
+      description: What one change did to one document, as a unified diff.
+      properties:
+        added:
+          title: Added
+          type: integer
+        diff:
+          description: A unified diff; empty when the change made no textual change.
+          title: Diff
+          type: string
+        path:
+          title: Path
+          type: string
+        removed:
+          title: Removed
+          type: integer
+        status:
+          enum:
+          - added
+          - modified
+          - removed
+          title: Status
+          type: string
+      required:
+      - path
+      - status
+      - diff
+      - added
+      - removed
+      title: DocumentDiffOut
+      type: object
+    DocumentHistoryOut:
+      description: A document's versions, newest first.
+      properties:
+        path:
+          title: Path
+          type: string
+        versions:
+          items:
+            $ref: '#/components/schemas/DocumentVersionOut'
+          title: Versions
+          type: array
+      required:
+      - path
+      - versions
+      title: DocumentHistoryOut
+      type: object
+    DocumentVersionOut:
+      description: 'One version of a document: the change that made it.'
+      properties:
+        change:
+          $ref: '#/components/schemas/ChangeOut'
+        removed:
+          description: True when this change removed the document.
+          title: Removed
+          type: boolean
+      required:
+      - change
+      - removed
+      title: DocumentVersionOut
       type: object
     ErrorDetail:
       properties:
@@ -841,4 +1399,84 @@ components:
       - directories
       - files
       title: TreeOut
+      type: object
+    VersionDiffOut:
+      description: One version's diff of one document.
+      properties:
+        added:
+          title: Added
+          type: integer
+        diff:
+          description: A unified diff; empty when the change made no textual change.
+          title: Diff
+          type: string
+        path:
+          title: Path
+          type: string
+        removed:
+          title: Removed
+          type: integer
+        status:
+          enum:
+          - added
+          - modified
+          - removed
+          title: Status
+          type: string
+        version:
+          title: Version
+          type: string
+      required:
+      - path
+      - status
+      - diff
+      - added
+      - removed
+      - version
+      title: VersionDiffOut
+      type: object
+    VersionRestoreIn:
+      description: Put one version of a document back, as a new change.
+      properties:
+        path:
+          description: Knowledge-root-relative document path.
+          minLength: 1
+          title: Path
+          type: string
+        version:
+          description: The version to restore.
+          minLength: 4
+          title: Version
+          type: string
+      required:
+      - path
+      - version
+      title: VersionRestoreIn
+      type: object
+    WaitingItemOut:
+      description: An item waiting in a collection's inbox — not a change yet.
+      properties:
+        collection:
+          title: Collection
+          type: string
+        path:
+          title: Path
+          type: string
+        submitted_at:
+          title: Submitted At
+          type: string
+        submitted_by:
+          description: The agent that submitted it, or `user`.
+          title: Submitted By
+          type: string
+        title:
+          title: Title
+          type: string
+      required:
+      - collection
+      - path
+      - title
+      - submitted_by
+      - submitted_at
+      title: WaitingItemOut
       type: object

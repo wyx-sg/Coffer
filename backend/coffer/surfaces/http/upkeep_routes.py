@@ -51,6 +51,15 @@ class UpkeepRunOut(BaseModel):
     kind: str = Field(description="The kind whose pass this is: `memory` or `knowledge`.")
     name: str = Field(description="The partition or collection being rewritten.")
     started_at: datetime = Field(description="When this daemon started the pass.")
+    done: int | None = Field(
+        default=None,
+        description="For a run that works through several items one pass at a time "
+        "(knowledge's Curate now): the passes finished so far. Null for a single pass.",
+    )
+    total: int | None = Field(
+        default=None,
+        description="For such a run: how many items were pending when it started.",
+    )
 
 
 class UpkeepRunListOut(BaseModel):
@@ -63,7 +72,13 @@ class UpkeepRunListOut(BaseModel):
 async def list_runs() -> UpkeepRunListOut:
     return UpkeepRunListOut(
         runs=[
-            UpkeepRunOut(kind=run.kind, name=run.name, started_at=run.started_at)
+            UpkeepRunOut(
+                kind=run.kind,
+                name=run.name,
+                started_at=run.started_at,
+                done=run.done,
+                total=run.total,
+            )
             for run in UPKEEP_RUNS.list_running()
             if kind_enabled(run.kind)
         ]

@@ -4,6 +4,68 @@
  */
 
 export interface paths {
+    "/api/v1/knowledge/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent Changes
+         * @description Recent changes across every collection (or one, by its name), newest
+         *     first, with the items still waiting in each inbox.
+         */
+        get: operations["recent_changes_api_v1_knowledge_changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/changes/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Change Detail
+         * @description One change in full: every document it touched, with its diff.
+         */
+        get: operations["change_detail_api_v1_knowledge_changes__version__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/changes/{version}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Pass
+         * @description Undo a curation pass as a whole. 409 ``KNOWLEDGE_UNDO_CONFLICT`` names
+         *     the document a later change would lose; nothing is written then.
+         */
+        post: operations["undo_pass_api_v1_knowledge_changes__version__undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge/collections": {
         parameters: {
             query?: never;
@@ -31,7 +93,21 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Curate */
+        /**
+         * Curate
+         * @description Curate now: a pass per pending item until none is left, or one pass over
+         *     the document named ("Run curation on a sweep and on demand").
+         *
+         *     The collection is named by its uid; the run resolves the row itself, so an
+         *     unknown uid is the same 404 every route here gives. Two guards, in this
+         *     order on purpose. The registry claim is about THIS collection and is held
+         *     for the whole run: a second trigger while it runs is refused (409
+         *     ``UPKEEP_ALREADY_RUNNING``) rather than queued ("Run one pass per collection
+         *     at a time"), and it is keyed on the uid the sweep claims too. The
+         *     vault-write lock is about the whole vault and is taken per pass, so a sync
+         *     round is not held off for the minutes a run can take ("Never overlap
+         *     curation with a sync round").
+         */
         post: operations["curate_api_v1_knowledge_collections__uid__curate_post"];
         delete?: never;
         options?: never;
@@ -53,6 +129,66 @@ export interface paths {
         post?: never;
         /** Delete File */
         delete: operations["delete_file_api_v1_knowledge_file_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Document History
+         * @description A document's versions, newest first, each with its writer and time.
+         */
+        get: operations["document_history_api_v1_knowledge_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/history/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Version Diff
+         * @description What one version did to the document.
+         */
+        get: operations["version_diff_api_v1_knowledge_history_diff_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/history/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Version
+         * @description Put one version of a document back, as a new change naming the user.
+         */
+        post: operations["restore_version_api_v1_knowledge_history_restore_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -119,6 +255,90 @@ export interface components {
             collection: string;
             /** File */
             file: string;
+        };
+        /**
+         * ChangeDetailOut
+         * @description One change in full: every document it touched, each with its diff.
+         */
+        ChangeDetailOut: {
+            change: components["schemas"]["ChangeOut"];
+            /** Diffs */
+            diffs: components["schemas"]["DocumentDiffOut"][];
+        };
+        /**
+         * ChangeOut
+         * @description One change to knowledge: one commit naming its writer.
+         */
+        ChangeOut: {
+            /**
+             * Actor
+             * @description The audit actor of the operation.
+             */
+            actor: string | null;
+            /**
+             * Agent
+             * @description The agent that wrote it (writer `agent`), or for a curation pass who submitted the item it curated — an agent's name, or `user`.
+             */
+            agent: string | null;
+            /**
+             * Collections
+             * @description The collections the change touched.
+             */
+            collections: string[];
+            /** Documents */
+            documents: components["schemas"]["DocumentChangeOut"][];
+            /**
+             * Item
+             * @description The item a curation pass curated.
+             */
+            item: string | null;
+            /**
+             * Operation
+             * @description `pass`, `save`, `delete`, `promote`, `submit`, `restore`, `undo`, `edit`, `sync`, `create`, `rename`, `remove` or `baseline`. Only a `pass` can be undone.
+             */
+            operation: string;
+            /** Restored From */
+            restored_from: string | null;
+            /**
+             * Status
+             * @description A curation pass's outcome status.
+             */
+            status: string | null;
+            /** Summary */
+            summary: string;
+            /**
+             * Time
+             * Format: date-time
+             */
+            time: string;
+            /** Undoes */
+            undoes: string | null;
+            /**
+             * Version
+             * @description The change's id (its commit), what diff, restore and undo take.
+             */
+            version: string;
+            /**
+             * Writer
+             * @description `user` a person; `agent` an agent whose material became a document on arrival; `curation` Coffer's curation pass; `sync` another machine's change; `disk` an edit made outside Coffer (a person's editor, an agent's file tools).
+             * @enum {string}
+             */
+            writer: "user" | "agent" | "curation" | "sync" | "disk";
+        };
+        /**
+         * ChangesOut
+         * @description Recent changes across collections, newest first, with the items still waiting.
+         */
+        ChangesOut: {
+            /** Changes */
+            changes: components["schemas"]["ChangeOut"][];
+            /**
+             * Next Cursor
+             * @description Pass back as `cursor` for the next page; null on the last.
+             */
+            next_cursor: string | null;
+            /** Waiting */
+            waiting: components["schemas"]["WaitingItemOut"][];
         };
         /** CollectionCreate */
         CollectionCreate: {
@@ -220,6 +440,24 @@ export interface components {
             /** Document */
             document?: string | null;
         };
+        /**
+         * CurationRunOut
+         * @description What Curate now did: every pass it ran, in order (spec knowledge "Report
+         *     every pass outcome as a status").
+         */
+        CurationRunOut: {
+            /** Collection */
+            collection: string;
+            /** Passes */
+            passes: components["schemas"]["CurationOut"][];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "failed" | "no_model" | "up_to_date";
+            /** Total */
+            total: number;
+        };
         /** DirectoryOut */
         DirectoryOut: {
             /** File Count */
@@ -233,6 +471,76 @@ export interface components {
             name: string;
             /** Path */
             path: string;
+        };
+        /**
+         * DocumentChangeOut
+         * @description One document a change touched.
+         */
+        DocumentChangeOut: {
+            /**
+             * Added
+             * @description Lines added.
+             */
+            added: number;
+            /**
+             * Path
+             * @description Knowledge-root-relative document path.
+             */
+            path: string;
+            /**
+             * Removed
+             * @description Lines removed.
+             */
+            removed: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "added" | "modified" | "removed";
+        };
+        /**
+         * DocumentDiffOut
+         * @description What one change did to one document, as a unified diff.
+         */
+        DocumentDiffOut: {
+            /** Added */
+            added: number;
+            /**
+             * Diff
+             * @description A unified diff; empty when the change made no textual change.
+             */
+            diff: string;
+            /** Path */
+            path: string;
+            /** Removed */
+            removed: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "added" | "modified" | "removed";
+        };
+        /**
+         * DocumentHistoryOut
+         * @description A document's versions, newest first.
+         */
+        DocumentHistoryOut: {
+            /** Path */
+            path: string;
+            /** Versions */
+            versions: components["schemas"]["DocumentVersionOut"][];
+        };
+        /**
+         * DocumentVersionOut
+         * @description One version of a document: the change that made it.
+         */
+        DocumentVersionOut: {
+            change: components["schemas"]["ChangeOut"];
+            /**
+             * Removed
+             * @description True when this change removed the document.
+             */
+            removed: boolean;
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -381,6 +689,65 @@ export interface components {
             /** Path */
             path: string;
         };
+        /**
+         * VersionDiffOut
+         * @description One version's diff of one document.
+         */
+        VersionDiffOut: {
+            /** Added */
+            added: number;
+            /**
+             * Diff
+             * @description A unified diff; empty when the change made no textual change.
+             */
+            diff: string;
+            /** Path */
+            path: string;
+            /** Removed */
+            removed: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "added" | "modified" | "removed";
+            /** Version */
+            version: string;
+        };
+        /**
+         * VersionRestoreIn
+         * @description Put one version of a document back, as a new change.
+         */
+        VersionRestoreIn: {
+            /**
+             * Path
+             * @description Knowledge-root-relative document path.
+             */
+            path: string;
+            /**
+             * Version
+             * @description The version to restore.
+             */
+            version: string;
+        };
+        /**
+         * WaitingItemOut
+         * @description An item waiting in a collection's inbox — not a change yet.
+         */
+        WaitingItemOut: {
+            /** Collection */
+            collection: string;
+            /** Path */
+            path: string;
+            /** Submitted At */
+            submitted_at: string;
+            /**
+             * Submitted By
+             * @description The agent that submitted it, or `user`.
+             */
+            submitted_by: string;
+            /** Title */
+            title: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -390,6 +757,135 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    recent_changes_api_v1_knowledge_changes_get: {
+        parameters: {
+            query?: {
+                collection?: string | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangesOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    change_detail_api_v1_knowledge_changes__version__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path: {
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeDetailOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    undo_pass_api_v1_knowledge_changes__version__undo_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path: {
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_collections_api_v1_knowledge_collections_get: {
         parameters: {
             query?: never;
@@ -499,7 +995,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CurationOut"];
+                    "application/json": components["schemas"]["CurationRunOut"];
                 };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
@@ -629,6 +1125,136 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    document_history_api_v1_knowledge_history_get: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentHistoryOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    version_diff_api_v1_knowledge_history_diff_get: {
+        parameters: {
+            query: {
+                path: string;
+                version: string;
+            };
+            header?: {
+                "x-coffer-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionDiffOut"];
+                };
+            };
+            /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Any other error, as Coffer's error envelope. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_version_api_v1_knowledge_history_restore_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-coffer-token"?: string | null;
+                "x-coffer-actor"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionRestoreIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileOut"];
+                };
             };
             /** @description The request failed validation (`CONFIG_INVALID`); the submitted values are not echoed back. */
             422: {

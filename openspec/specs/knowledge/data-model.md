@@ -39,11 +39,12 @@ agent"): the kind is non-toggleable, and its `enabled` column is always true.
 │   ├── account/                    # nesting chosen by a person or by curation
 │   │   └── login-sessions.md
 │   ├── gateway-routing.md          # a document: read by agents, edited by people and curation
-│   └── .inbox/                     # hidden: material waiting to be merged
-│       └── q3-review.md            # an upload's extracted text, deleted once merged
-└── coffer/
-    ├── README.md
-    └── release-process.md
+│   └── .inbox/                     # hidden: items waiting to be curated
+│       └── q3-review.md            # an upload's extracted text, deleted once curated
+├── coffer/
+│   ├── README.md
+│   └── release-process.md
+└── .git/                           # hidden: the knowledge history, one commit per write
 ```
 
 - `~/.coffer/knowledge/` is the root; `$COFFER_KNOWLEDGE_ROOT` overrides it for
@@ -267,8 +268,8 @@ trail — not a switch and not a reach.
 
 **Every collection is served to every agent** (see "Serve every collection to
 every agent"). The kind declares itself non-toggleable, so the generic
-enable/disable route refuses it and a migration enabled every row an earlier
-version stored disabled; the layer does not read `enabled` at all. Every
+enable/disable route refuses it; the layer does not read `enabled` at all, and
+the sweep lists every registered collection. Every
 registered collection's name, description, catalogue and paths appear in the
 rendered `coffer-guide` skill every agent reads, and `coffer__write` refuses only
 a write naming a collection that does not exist, answering with the ones that
@@ -292,6 +293,50 @@ under `~/.coffer/knowledge/`, which is why neither a per-agent reach nor an
 enabled switch is offered: an allow-list that withholds a path from a reader
 already holding the root withholds nothing at all.
 
+## The history
+
+Every accepted write to a collection is one commit, naming its writer, in a git
+repository at `<knowledge root>/.git` (see "Keep every document's history and
+undo a pass as a whole"). It is the knowledge root's own until the vault is one
+repository (ADR every-vault-write-is-a-validated-commit-naming-its-writer), and
+is shaped to fold into it as a history import under `knowledge/`. It is created
+on first use with one baseline commit of whatever the root already holds. Like
+every dot-prefixed entry it is in no listing, count or catalogue, and vault sync
+never mirrors a `.git` directory. `.git/info/exclude` ignores every hidden entry
+except `.inbox/`, so a submission is a commit and the text a pass consumed stays
+in history after the inbox file is deleted.
+
+There is still no table and no index: the history is git's, read back through
+`git log` when a surface asks, and a machine with no git keeps every write
+working and records nothing.
+
+**One commit per operation.** A person's save, delete, restore or undo; material
+promoted on arrival; a collection created, renamed or removed; one curation pass
+(everything it wrote, retired, stamped and settled). Before any of them, whatever
+changed in the tree that no open operation owns is committed first as an edit on
+disk, so a person's own editor is never counted as Coffer's; the sweep and every
+history read do the same. Paths vault sync applied are committed as sync.
+
+**Trailers.** Each commit's message is a summary line and these trailers, the
+names the ADR gives, so the history reads the same after it folds into the
+vault's:
+
+| Trailer | Value |
+| --- | --- |
+| `Coffer-Writer` | `user`, `agent`, `curation`, `sync` or `disk` |
+| `Coffer-Operation` | `save`, `delete`, `submit`, `promote`, `pass`, `restore`, `undo`, `edit`, `sync`, `create`, `rename`, `remove`, `baseline` |
+| `Coffer-Actor` | the audit actor of the operation |
+| `Coffer-Agent` | an agent writer's name; for a pass, who submitted the item — from its `knowledge_written` event, which names the inbox `item` |
+| `Coffer-Collection` | the collection's name |
+| `Coffer-Item` | the item a pass curated (an inbox path or a document) |
+| `Coffer-Status` | the pass's outcome status |
+| `Coffer-Restored-From`, `Coffer-Undoes` | the commit a restore or an undo reverses to |
+
+The value objects a surface reads back — `Change`, `DocumentChange`,
+`DocumentVersion`, `DocumentDiff`, `ChangeDetail`, `WaitingItem`,
+`ChangesPage` — are in `backend/coffer/domain/knowledge/history.py`. A change's
+`version` is its commit id.
+
 ## Errors
 
 The failure modes are a directory's, plus curation's two, plus the ones its one
@@ -308,11 +353,18 @@ holds the first group:
 | `UploadTooLarge` | `KNOWLEDGE_UPLOAD_TOO_LARGE` | 413 |
 | `TopicReferencesFile` | `KNOWLEDGE_TOPIC_REFERENCES_FILE` | 400 |
 | `CurationBoundExceeded` | `KNOWLEDGE_CURATION_BOUND` | 400 |
+| `KnowledgeHistoryUnavailable` | `KNOWLEDGE_HISTORY_UNAVAILABLE` | 503 |
+| `KnowledgeVersionNotFound` | `KNOWLEDGE_VERSION_NOT_FOUND` | 404 |
+| `KnowledgeNotAPass` | `KNOWLEDGE_NOT_A_PASS` | 400 |
+| `KnowledgeUndoConflict` | `KNOWLEDGE_UNDO_CONFLICT` | 409 |
 | `KnowledgeError` (base) | `KNOWLEDGE_ERROR` | 400 |
 
 `KNOWLEDGE_COLLECTION_NOT_FOUND` answers a name no registered collection holds.
 `KNOWLEDGE_FILE_CONFLICT` answers a save whose `expected_fingerprint` no longer
-matches the file's bytes; the file is left untouched. A uid-addressed route given a uid no resource answers to gives the generic
+matches the file's bytes; the file is left untouched, and `details` carries
+`saved: false` with the document's `current_body` and `current_fingerprint`.
+`KNOWLEDGE_UNDO_CONFLICT` names, in `details.document`, the document a later
+commit changed, and `details.later_version` that commit. A uid-addressed route given a uid no resource answers to gives the generic
 `RESOURCE_NOT_FOUND` (404) instead.
 
 `UnsafeKnowledgePath` carries the document rule as well as the traversal one,
@@ -359,9 +411,12 @@ they are Coffer's own bookkeeping. `coffer__write` records one `mcp_invocations`
 row (tool, actor, duration, outcome — never arguments, never content) and every
 submission — from the tool, the CLI, the REST route, an upload or a channel —
 records one `KNOWLEDGE_WRITTEN` `audit_log` event naming the caller, with the
-document path when it was promoted and `pending` when it waits (see "Submit
+inbox `item` it wrote, the document path when it was promoted and `pending`
+when it waits (see "Submit
 material through coffer__write"); a save from the web UI records
-`KNOWLEDGE_EDITED` with the path; a delete records `KNOWLEDGE_DELETED`. A
+`KNOWLEDGE_EDITED` with the path, and so do a restore (with `restored_from`)
+and an undo (with `undo` and its `documents`); a delete records
+`KNOWLEDGE_DELETED`. A
 completed curation pass records `KNOWLEDGE_CURATED` with the item, the model and
 its counts.
 

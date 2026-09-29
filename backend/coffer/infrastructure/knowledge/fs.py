@@ -215,9 +215,32 @@ def save_body(relpath: str, body: str, *, expected_fingerprint: str) -> Knowledg
         raise UnsafeKnowledgePath(relpath, "only a Markdown document can be edited")
     raw = path.read_bytes()
     if fingerprint(raw) != expected_fingerprint:
-        raise KnowledgeFileConflict(relpath)
+        # The refusal carries the document as it is now, so the editor can
+        # Reload, Compare or Copy the person's text without a second save over it.
+        _, current = split_frontmatter(decode(raw))
+        raise KnowledgeFileConflict(
+            relpath, current_body=current, current_fingerprint=fingerprint(raw)
+        )
     atomic_write(path, replace_body(decode(raw), body))
     return read_file(relpath)
+
+
+def write_bytes(relpath: str, raw: bytes, *, align_to_stamp: bool = False) -> None:
+    """Put a document's exact bytes back — a restored version, an undone pass.
+
+    ``align_to_stamp`` sets the file's mtime to the ``coffer_curated_at`` stamp
+    the bytes carry, so a document put back exactly as curation last left it is
+    not mistaken by the sweep for a person's edit (an undo); without it the
+    write is a fresh edit the sweep carries outward (a restore).
+    """
+    paths.require_document(relpath)
+    path = paths.resolve(relpath)
+    atomic_write(path, decode(raw))
+    if align_to_stamp:
+        fm, _ = split_frontmatter(decode(raw))
+        stamp = str(fm.get(CURATED_AT_KEY) or "")
+        if stamp:
+            _align_mtime(path, stamp)
 
 
 def delete_file(relpath: str) -> None:

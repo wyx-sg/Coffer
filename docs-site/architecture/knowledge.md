@@ -1,11 +1,11 @@
 ---
 title: Knowledge
-description: How Coffer's knowledge layer works — a directory of Markdown files, an inbox of material, a bounded curation pass, and a generated skill that hands agents the catalogue.
+description: How Coffer's knowledge layer works — a directory of Markdown files, an inbox of material, bounded curation passes, a git history of every write, and a generated skill that hands agents the catalogue.
 ---
 
 # Knowledge
 
-This page explains how Coffer's knowledge layer is built: why it is plain files with no index, how new material becomes documents through the curation pass, how the catalogue reaches agents through the `coffer-guide` skill, and how it coexists with vault sync. It is for engineers who want the mechanism and the reasoning. For day-to-day use, see the [Knowledge guide](/guides/knowledge).
+This page explains how Coffer's knowledge layer is built: why it is plain files with no index, how new material becomes documents through curation, how every write is kept as a version you can restore or undo, how the catalogue reaches agents through the `coffer-guide` skill, and how it coexists with vault sync. It is for engineers who want the mechanism and the reasoning. For day-to-day use, see the [Knowledge guide](/guides/knowledge).
 
 ::: info Experimental feature
 Knowledge is an [experimental feature](/guides/experimental-features) (`knowledge`). It is off by default on the stable channel and on for development builds. Switching it off hides its routes, its builtin tool and its section of the guide skill. It keeps every file.
@@ -29,7 +29,8 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
 | No index of any kind: no table, no FTS, no vectors, no cache. | Nothing derived can disagree with the files. There is nothing to rebuild or reconcile. |
 | A file's path is its identity. | A readable slug is what a person sees in a file manager and what an agent sees in a grep result. |
 | Metadata lives in YAML frontmatter. | Only the file is visible to every writer: people, agents and Coffer. |
-| New knowledge arrives as material in a hidden `.inbox/` and is merged by a curation pass. | A collection grows by integration rather than by adding one file per upload. |
+| New knowledge arrives as material in a hidden `.inbox/` and a curation pass folds it into the documents. | A collection grows by integration rather than by adding one file per upload. |
+| Every accepted write is one git commit naming its writer. | Curation rewrites the only copy unattended. A history of who changed what makes every change inspectable, every version restorable and every pass reversible. |
 | A person's edit is never reverted. The pass carries it outward. | People and Coffer's model co-author one tree. The rule protects the person, not a separate directory. |
 | No document may name another knowledge file. This is enforced at the write. | Paths move as the corpus is reorganised. The catalogue resolves subjects to paths, and the catalogue is generated. |
 | No retrieval tool. The catalogue rides in Coffer's own skill. | Agents read files with the tools they already use. The layer's job is to put the right absolute paths in front of the model. |
@@ -40,12 +41,13 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
 
 ```text
 ~/.coffer/knowledge/
+├── .git/                         # the history of every write (hidden)
 ├── payments/                     # one collection = one knowledge Resource
 │   ├── README.md                 # the collection's own description
 │   ├── session-ownership.md      # a document
 │   ├── infra/
 │   │   └── cache.md              # nesting is allowed and means nothing
-│   └── .inbox/                   # material waiting to be merged (hidden)
+│   └── .inbox/                   # material waiting to be curated (hidden)
 │       └── rate-limit-change.md
 └── personal/
     └── ...
@@ -54,7 +56,7 @@ Knowledge is also distinct from [memory](/architecture/memory). Knowledge is abo
 - **A collection** is a top-level directory and one row of kind `knowledge` in the kind-agnostic `resources` table. You create it deliberately, with `coffer knowledge add`, `POST /api/v1/knowledge/collections` or the web UI. Reads, writes and working directories never provision one, and nothing derives a boundary from an agent's cwd. The knowledge layer adds no table to `coffer.db`.
 - **The README** sits at the collection root. Its first paragraph is the collection's description. It is read from disk on every listing and is never stored in the database, because a copy in a row would be wrong the first time a person edited the file. The README is never listed as a document, counted or curated.
 - **Nesting** is chosen by whoever files a document, a person or curation. Coffer assigns folders no meaning.
-- **Hidden entries** (dot-prefixed) are excluded from every document count and from the catalogue. Coffer writes exactly one: `.inbox/`. The tree route lists a collection root's `.inbox/` as a directory and the read route reads its items, so a person can see what is waiting; no other hidden entry is listed or readable, and no surface writes or deletes an inbox item (`inbox_parts` in `infrastructure/knowledge/paths.py`).
+- **Hidden entries** (dot-prefixed) are excluded from every document count and from the catalogue. Inside a collection Coffer writes exactly one: `.inbox/`. At the knowledge root it keeps `.git/`, the history (see [History](#history)). The tree route lists a collection root's `.inbox/` as a directory and the read route reads its items, so a person can see what is waiting; no other hidden entry is listed or readable, and no surface writes or deletes an inbox item (`inbox_parts` in `infrastructure/knowledge/paths.py`).
 
 ### Path as identity
 
@@ -97,6 +99,9 @@ Every entrance submits **material** into the collection's inbox. None of them wr
 | `coffer knowledge write`, `POST /api/v1/knowledge/material` | CLI and REST |
 | `coffer knowledge upload`, `POST /api/v1/knowledge/upload`, the Knowledge page | Upload, converted to Markdown first |
 | `/kb <collection>` after an attachment | A paired [channel](/architecture/chat) owner |
+| **Add a document** on the Knowledge page | The web UI, through `POST /api/v1/knowledge/material` with the actor `user` |
+
+There is no route that creates a document at a path. A person adding a document goes through the inbox like an agent does, so the same curation decides where it belongs.
 
 ```mermaid
 flowchart TD
@@ -107,7 +112,7 @@ flowchart TD
   S --> I[".inbox/ item"]
   S -->|"no internal model"| P["Promote as it stands"]
   I --> Q{"Pass completes?"}
-  Q -->|"ok"| M["Merged into documents, item deleted"]
+  Q -->|"ok"| M["Curated into documents, item deleted"]
   Q -->|"failed or truncated"| I
   Q -->|"too large or third cut-off"| P
   P --> DOC["Document at collection root, stamped"]
@@ -121,10 +126,10 @@ flowchart TD
 
 The answer says what happened to the material:
 
-- `pending`, with no path, when it waits in the inbox. An inbox address disappears once the material is merged, so Coffer does not report it.
-- `written`, with a document path, when there is no internal model to merge it. In that case the material is **promoted** on the spot: it becomes a document at the collection root, as it stands, stamped as curated. Knowledge must not wait in a hidden directory for a model connection nobody configured.
+- `pending`, with no path, when it waits in the inbox. An inbox address disappears once the material is curated, so Coffer does not report it.
+- `written`, with a document path, when there is no internal model to curate it. In that case the material is **promoted** on the spot: it becomes a document at the collection root, as it stands, stamped as curated. Knowledge must not wait in a hidden directory for a model connection nobody configured.
 
-`coffer__write` takes `collection`, `title`, `description` and an optional `body`. It takes no path, folder or lane. The gateway injects the calling agent from the session's handshake identity. See [MCP gateway](/architecture/mcp-gateway). A write that names an unknown collection is refused with the list of collections that exist. That is exactly what the agent's own delivered skill already lists, and it turns a dead end into a correction.
+`coffer__write` takes `collection`, `title`, `description` and an optional `body`. It takes no path, folder or lane. The gateway injects the calling agent from the session's handshake identity. See [MCP gateway](/architecture/mcp-gateway). A write is refused only when it names an unknown collection, and the refusal lists the collections that exist. That is exactly what the agent's own delivered skill already lists, and it turns a dead end into a correction.
 
 ### Uploads
 
@@ -135,7 +140,7 @@ The answer says what happened to the material:
 3. **Describes it.** The description comes from the internal model when one is configured and answers in time. Otherwise it is the document's first prose paragraph, and failing that its title. The description is never empty, because it is what the catalogue shows an agent.
 4. **Submits the Markdown as material** with `actor: user`.
 
-Neither the original bytes nor the extracted text is kept as a file. The upload carries its knowledge, and once the knowledge is merged the carrier has nothing left to say. The trade-off is that a bad conversion cannot be redone from a copy Coffer kept. You re-upload from your own copy.
+Neither the original bytes nor the extracted text is kept as a file. The upload carries its knowledge, and once the knowledge is curated the carrier has nothing left to say. The trade-off is that a bad conversion cannot be redone from a copy Coffer kept. You re-upload from your own copy.
 
 `markitdown` is imported lazily. An import-linter contract confines it to the knowledge converters and the channel's document extraction.
 
@@ -143,11 +148,11 @@ Neither the original bytes nor the extracted text is kept as a file. The upload 
 
 Writing, editing or deleting a document directly, in your editor or with an agent's own file tools, is a complete way to change knowledge; `coffer path knowledge [<collection>]` prints the directory, and the CLI has no command of its own for reading or deleting a document. No import or registration step is needed, and the change is live on the next read. The sweep notices the edit by modification time and carries it into the rest of the collection. Deleting a document is a person's action on the REST, CLI and web surfaces. No agent-facing tool deletes anything.
 
-The web UI can also edit a document in place. `PUT /api/v1/knowledge/file` replaces a document's **body** and keeps its frontmatter (`KnowledgeService.save_document`, `fs.save_body`). The read route carries a fingerprint of the file, and the save must send back the one the editor loaded: a file that changed on disk since, whether by a person's own editor or a curation pass, is refused with `KNOWLEDGE_FILE_CONFLICT` (409) and left untouched. The route serves the web UI's editor; from the command line a document is edited on disk like any other file. The save stamps nothing, so the file's new modification time makes the sweep treat it as a person's edit, exactly like one made in an editor. An inbox item, the README and any path outside a document are refused. Each save records one `knowledge_edited` audit event.
+The web UI can also edit a document in place. `PUT /api/v1/knowledge/file` replaces a document's **body** and keeps its frontmatter (`KnowledgeService.save_document`, `fs.save_body`). The read route carries a fingerprint of the file, and the save must send back the one the editor loaded: a file that changed on disk since, whether by a person's own editor or a curation pass, is refused with `KNOWLEDGE_FILE_CONFLICT` (409) and left untouched. The refusal carries `saved: false` and the document as it is on disk now, its body and its fingerprint, so the editor can offer Reload, Compare and Copy my text without a second save over the file; saving the person's text again needs the new fingerprint. The route serves the web UI's editor; from the command line a document is edited on disk like any other file. The save stamps nothing, so the file's new modification time makes the sweep treat it as a person's edit, exactly like one made in an editor. An inbox item, the README and any path outside a document are refused. Each save records one `knowledge_edited` audit event and is one commit naming the user (see [History](#history)). An edit made in an editor or with an agent's file tools is committed too, as an edit on disk.
 
 ## The curation pass
 
-Curation turns material into knowledge and carries an edit in one document through to the rest. It is a bounded agentic loop that runs on Coffer's internal model connection (see `coffer config set engine.model`). It is implemented in `application/knowledge/curate.py` and driven by a LangGraph ReAct loop in `infrastructure/llm/agentic_reorg.py`. The knowledge package reaches the loop only through the `AgenticCurationPort` protocol, so it never imports LangChain.
+Curation turns material into knowledge and carries an edit in one document through to the rest. A **pass** curates one item; a **run** drains a collection by running passes one after another. It is a bounded agentic loop that runs on Coffer's internal model connection (see `coffer config set engine.model`). It is implemented in `application/knowledge/curate.py` and driven by a LangGraph ReAct loop in `infrastructure/llm/agentic_reorg.py`. The knowledge package reaches the loop only through the `AgenticCurationPort` protocol, so it never imports LangChain.
 
 ### What a pass sees
 
@@ -239,13 +244,13 @@ sequenceDiagram
 
 ### Settling an item
 
-An item is settled only after its pass completes. Merged material is deleted from the inbox. An edited document is stamped with `coffer_curated_at`, and nothing else in it changes. A pass that raises, or that the recursion limit cuts off, leaves the item as it was, so a later sweep retries it rather than losing it.
+An item is settled only after its pass completes. Curated material is deleted from the inbox; its text stays in the history, because the inbox is tracked there. The whole pass, its writes and the settling together, is one commit (see [History](#history)). An edited document is stamped with `coffer_curated_at`, and nothing else in it changes. A pass that raises, or that the recursion limit cuts off, leaves the item as it was, so a later sweep retries it rather than losing it.
 
 **The stamp is the watermark.** `fs.edited_documents` compares each document's modification time with its own `coffer_curated_at`. A document with no stamp, or whose mtime is newer than its stamp, is owed a pass. There is no state file and no table. When Coffer writes a stamp, it also sets the file's mtime to the stamp (`_align_mtime`), so the stamping itself does not count as an edit. Every document curation writes is stamped as it is written, so a pass's own output is not handed back as an edit. Any later edit by a person moves the mtime past the stamp again.
 
 ### Outcomes
 
-Every outcome is a `status`, and `POST /api/v1/knowledge/collections/{uid}/curate` answers 200 for all of them:
+Every pass outcome is a `status`, and `POST /api/v1/knowledge/collections/{uid}/curate` answers 200 for all of them (see [Manual runs](#manual-runs) for how a run reports its passes):
 
 | Status | Meaning |
 | --- | --- |
@@ -256,9 +261,9 @@ Every outcome is a `status`, and `POST /api/v1/knowledge/collections/{uid}/curat
 | `truncated` | The recursion limit cut the pass off. Its writes stay and the item stays owed. On the third consecutive cut-off of the same item, `gave_up` is `true` and the item is promoted or stamped. |
 | `failed` | The loop raised. The item is unchanged. |
 
-The route answers 404 for an unknown collection and 409 `UPKEEP_ALREADY_RUNNING` while a pass over the same collection is in flight. Consecutive cut-offs are counted in memory (`TruncationLedger` in `curate_settle.py`), so nothing is written into the synced tree to hold the count. A restart resets it, which costs at most three passes per item per restart.
+The route answers 404 for an unknown collection and 409 `UPKEEP_ALREADY_RUNNING` while a run over the same collection is in flight. Consecutive cut-offs are counted in memory (`TruncationLedger` in `curate_settle.py`), so nothing is written into the synced tree to hold the count. A restart resets it, which costs at most three passes per item per restart.
 
-Every pass that ran, cut off or not, records one `knowledge_curated` audit event. Curation has no review step, so the audit log is where a person sees that something rewrote the corpus.
+Every pass that ran, cut off or not, records one `knowledge_curated` audit event. Curation has no review step, so the history and the audit log are where a person sees that something rewrote the corpus, and a pass they disagree with can be undone as a whole.
 
 ## The sweep
 
@@ -268,7 +273,8 @@ Every pass that ran, cut off or not, records one `knowledge_curated` audit event
 stateDiagram-v2
   [*] --> Waiting: start, 60 s start delay
   Waiting --> Refresh: tick
-  Refresh --> Gate: re-render coffer-guide
+  Refresh --> Record: re-render coffer-guide
+  Record --> Gate: commit edits on disk
   Gate --> Waiting: off, not owner, or round held
   Gate --> Locked: may run
   Locked --> Draining: vault-write lock taken
@@ -279,33 +285,91 @@ stateDiagram-v2
 On each tick the worker does the following:
 
 1. **Re-renders the guide skill**, before and regardless of the gate. Creating or deleting a collection changes what every agent is told, even on a machine where curation is off or that is not the owner. A render that produces the same bytes writes nothing.
-2. **Checks the gate** (`curation_may_run`). The `knowledge` feature must be on, `auto_curate_enabled` must be on (the default), and `curate_owner_machine_id` must name this machine or be unset. With the `vault_sync` feature on, the pass also does not run while a converge round is waiting on the user for a held deletion or an unresolved conflict. With `vault_sync` off, only the pass's own switch is read, because a single-machine vault has nobody to duplicate its work.
-3. **Takes the vault-write lock**, the same `asyncio.Lock` a converge round holds. See [Locking with sync](#locking-with-sync).
-4. **Drains each collection**, identified by uid. Pending items are all inbox material, oldest first, then edited documents, oldest first. The worker claims the collection in the in-process upkeep-run registry and skips it if a manual pass holds it. It re-reads the pending list inside the claim, pushes items cut off last time behind the rest, and runs at most five passes (`MAX_PASSES_PER_SWEEP`). `no_model` or `failed` ends that collection's sweep. `truncated` does not, so one stubborn item cannot starve the rest.
-5. **Waits for the next tick.** The interval defaults to one hour; the Curate button runs a pass at once when something is wanted sooner. It is re-read while the wait runs, so a change made with `coffer config set engine.upkeep.curate.interval` or in Settings applies within a slice rather than after a wait committed at boot.
+2. **Records edits on disk.** Anything changed in the tree since Coffer's last commit, such as a person's editor or an agent's file tools, is committed as an edit on disk, whether or not the gate lets curation run, so the history stays current.
+3. **Checks the gate** (`curation_may_run`). The `knowledge` feature must be on, `auto_curate_enabled` must be on (the default), and `curate_owner_machine_id` must name this machine or be unset. With the `vault_sync` feature on, the pass also does not run while a converge round is waiting on the user for a held deletion or an unresolved conflict. With `vault_sync` off, only the pass's own switch is read, because a single-machine vault has nobody to duplicate its work.
+4. **Takes the vault-write lock**, the same `asyncio.Lock` a converge round holds. See [Locking with sync](#locking-with-sync).
+5. **Works through each collection**, identified by uid; every collection is listed. Pending items are all inbox material, oldest first, then edited documents, oldest first. The worker claims the collection in the in-process upkeep-run registry and skips it if a manual run holds it. It re-reads the pending list inside the claim, pushes items cut off last time behind the rest, and runs at most five passes (`MAX_PASSES_PER_SWEEP`). `no_model` or `failed` ends that collection's sweep. `truncated` does not, so one stubborn item cannot starve the rest.
+6. **Waits for the next tick.** The interval defaults to one hour; a manual run drains a collection at once when something is wanted sooner. It is re-read while the wait runs, so a change made with `coffer config set engine.upkeep.curate.interval` or in Settings applies within a slice rather than after a wait committed at boot.
 
 A failed sweep is logged and never ends the loop. Shutdown cancels the task without waiting on a pass. The watermark makes a sweep idempotent, so the next boot picks up whatever was left.
 
 ### The owner machine
 
-A pass rewrites synced content unattended. If two machines curated the same corpus, each would merge the same material into a *different* document. Git would merge both additions cleanly, and the vault would hold the same knowledge twice with no conflict reported. So curation runs on one machine only.
+A pass rewrites synced content unattended. If two machines curated the same corpus, each would fold the same material into a *different* document. Git would merge both additions cleanly, and the vault would hold the same knowledge twice with no conflict reported. So curation runs on one machine only.
 
 `auto_curate_enabled` and `curate_owner_machine_id` live in `internal_engine_config`, and the sweep reads both on every tick. No owner means a single-machine vault, where "here" is the only answer. An owner naming a machine the registry does not know stops curation everywhere. That is the safe direction: no curation costs waiting material, while curation everywhere costs silent duplication. You can inspect and change the owner with `coffer config get|set|unset engine.curate_owner`.
 
-### Manual passes
+### Manual runs
 
-`coffer knowledge curate` and the Knowledge page's curate action call the same `CurationPass` object the worker uses. The route claims the collection first, so a second request is refused immediately with 409 rather than blocking. It then takes the vault-write lock. Without a named document, the pass takes the oldest pending item.
+`coffer knowledge curate <collection>` and the Knowledge page's **Curate** action call the same `CurationPass` object the worker uses, through a drain (`application/knowledge/curate_drain.py`). The route claims the collection first, so a second request is refused immediately with 409 `UPKEEP_ALREADY_RUNNING` rather than blocking.
+
+A run reads the pending list **once**: inbox items oldest first, then documents edited out of band. It then runs one pass per item, one at a time, each still bounded to eight writes, until nothing that was pending is left. It takes the vault-write lock for each pass rather than for the whole run, so a converge round can interleave between passes. Items that arrive during the run wait for the next run or sweep, which keeps *m* in "n of m" fixed.
+
+| Pass outcome | What the run does |
+| --- | --- |
+| `ok`, `too_large`, `truncated` | Goes on to the next item. A truncated item stays pending. |
+| `failed` | Stops. The rest stay pending for the next run or sweep. |
+| `no_model` | Stops. That one pass has promoted the whole inbox. |
+
+The answer lists every pass's outcome in order, with the run's own `status` (`ok`, `failed`, `no_model` or `up_to_date` when nothing was pending) and `total`. While the run is in flight its progress is readable on `GET /api/v1/upkeep/runs`, where each run carries `done` and `total`, and after each pass a `change` event naming the kind `knowledge` and the collection's uid is published on the daemon's event stream, so an open page refreshes as the corpus moves. The CLI prints `curating… n of m done` to stderr while it waits on a terminal, then one line per pass and a summary.
+
+Given `--document <path>` (or a document in the request body), a run is exactly one pass over that document; anything else pending stays pending.
 
 ## Locking with sync
 
-A curation pass and a [vault sync](/architecture/vault-sync) converge round both write the vault. An export taken halfway through a rewrite is a torn snapshot that git would read as a deliberate change. So both take the one lock owned by the converge service. `sync_wiring.py` hands it to the knowledge surface (`set_vault_write_lock`) for the manual route, and `start_curation_worker` passes it to the worker. On a vault with no sync wired, there is nothing to interleave with and no lock is taken.
+A curation pass and a [vault sync](/architecture/vault-sync) converge round both write the vault. An export taken halfway through a rewrite is a torn snapshot that git would read as a deliberate change. So both take the one lock owned by the converge service. `sync_wiring.py` hands it to the knowledge surface (`set_vault_write_lock`) for the manual route, which takes it once per pass, and `start_curation_worker` passes it to the worker. On a vault with no sync wired, there is nothing to interleave with and no lock is taken.
 
 Two locks are in play, at different scopes:
 
 | Lock | Scope | Collision it prevents |
 | --- | --- | --- |
-| Upkeep-run claim (`application/upkeep_runs.py`) | One collection, in-process | A manual pass and the sweep over the same collection |
+| Upkeep-run claim (`application/upkeep_runs.py`) | One collection, in-process | A manual run and the sweep over the same collection |
 | Vault-write lock (the converge service's lock) | The whole vault | A pass and a converge round |
+
+## History
+
+Every accepted write to a collection is one git commit naming its **writer**, following the decision that every vault write is a validated commit naming its writer. A document's history is therefore a list of versions, each with a writer, a time and a diff, and a curation pass is a single change that can be inspected and undone.
+
+### Writers
+
+| Writer | What it covers |
+| --- | --- |
+| `user` | A person's save, delete, restore or undo, and collection create, rename and remove. |
+| `agent` | An agent's submission promoted on arrival because no model is set, naming the agent. |
+| `curation` | One commit per pass, naming the item it curated and who submitted that item: the agent, taken from the item's `knowledge_written` audit event, or `user`. |
+| `sync` | Paths that vault sync applied. |
+| `disk` | Anything else found changed in the tree: a person's own editor, an agent's own file tools. |
+
+Changes made outside Coffer are never counted as Coffer's. Before each of its own commits, Coffer first commits whatever else changed as **Edited on disk**, and it does the same at every sweep tick and before every history read. A curation pass holds its commit open while it runs; the documents it has touched are its own meanwhile, and an edit-on-disk commit leaves them alone.
+
+Submissions waiting in the inbox are commits as well, because the inbox is tracked: once a pass consumes an item, its text is still recoverable from the history. Those commits are not shown as changes, since material that has not been curated has not changed any document yet.
+
+### Where it lives
+
+Until the vault itself becomes one git repository, the history is a repository of the knowledge root's own, `~/.coffer/knowledge/.git`. It is created on first use with a baseline commit, "History starts here", holding the tree as it was. It is hidden like every dot-entry, vault sync never mirrors it, and its `.git/info/exclude` ignores every hidden entry except `.inbox/`.
+
+It is shaped to fold into the vault's repository later as a history import under `knowledge/`: one commit per operation, paths relative to the knowledge root, and the same trailers the decision names (`Coffer-Writer`, `Coffer-Operation`, `Coffer-Actor`, `Coffer-Agent`, `Coffer-Collection`, `Coffer-Item`, `Coffer-Status`, `Coffer-Restored-From`, `Coffer-Undoes`). Git runs with the user's global and system configuration pinned to `/dev/null`, so a personal hook, signing rule or alias cannot change what is recorded.
+
+History never gets in the way of a write. On a machine without git, every write still works and is simply not recorded, and the history routes answer 503 `KNOWLEDGE_HISTORY_UNAVAILABLE`.
+
+### Reading and restoring a document
+
+A document's versions are listed newest first with their writer and time, and each version's diff can be read (`GET /api/v1/knowledge/history`, `.../history/diff`; `coffer knowledge history <path> [--version V]`). Restoring a version (`POST /api/v1/knowledge/history/restore`; `coffer knowledge restore <path> <version>`) writes that version's bytes back as a new commit naming the user; the history before it stays intact. The restored file gets a fresh modification time, so the sweep carries it outward like any other edit. A deleted document is restored the same way, from the version before its deletion.
+
+### Recent changes
+
+`GET /api/v1/knowledge/changes` (`coffer knowledge changes [--in <collection>]`) is one feed of changes across every collection, or one, newest first and paged by an opaque cursor. Each change carries its writer, its time, its collections and, for each document it touched, whether the document was added, modified or removed with its line counts. Inbox-only commits are left out of the feed; the items still waiting in each inbox are returned beside it with their title, who submitted them and when. One change can be read in full, with each document's diff (`GET /api/v1/knowledge/changes/{version}`; `coffer knowledge changes <version>`), so a pass can be inspected before it is undone.
+
+### Undoing a pass
+
+A curation pass is undone as a whole (`POST /api/v1/knowledge/changes/{version}/undo`; `coffer knowledge undo <version>`):
+
+- Every document the pass wrote or retired goes back to its exact bytes before the pass, and documents it created are removed, as one new commit naming the user.
+- Each restored file's modification time is aligned to the curation stamp it carries, so the sweep does not read the undo as an edit and redo the pass.
+- The item the pass consumed is not put back in the inbox. Its text stays in the history.
+- When any later commit touched one of the pass's documents, the undo is refused with 409 `KNOWLEDGE_UNDO_CONFLICT` naming that document, and nothing is written. Overwriting a later change would lose it.
+
+Only a pass can be undone this way (400 `KNOWLEDGE_NOT_A_PASS` otherwise); any single version is restored instead. An unknown version answers 404 `KNOWLEDGE_VERSION_NOT_FOUND`.
 
 ## The coffer-guide skill
 
@@ -350,8 +414,9 @@ Coffer embeds nothing. It has no vector store, no embedding model and no FTS ind
 
 ## Trade-offs
 
-- **Curation rewrites the only copy.** There is no pristine lane to rebuild from. The safeguards are: a person's edit is never reverted, the eight-write limit, one pass per collection, an audit event per pass, and, where vault sync is configured, the vault's git history. A bad merge is repaired by editing the document.
-- **Material waits until a pass runs.** An agent cannot read the inbox. The one-minute sweep and promotion when no model is configured keep the wait short.
+- **Curation rewrites documents unattended.** There is no review step before a pass writes. The safeguards are: a person's edit is never reverted, the eight-write limit, one pass per collection at a time, an audit event per pass, and the history: every pass is one change that can be read in full and undone as a whole, and any document can be restored to any version. An undo refuses to overwrite a later change, so a pass that others have built on is repaired by editing or restoring a document instead.
+- **Material waits until a pass runs.** An agent cannot read the inbox. The hourly sweep, manual runs, and promotion when no model is configured keep the wait short.
+- **The history grows with every write.** Nothing prunes it. It sits beside the documents and holds text that curation has since folded away or that was deleted.
 - **User content can leave the machine.** The internal model connection is the one place it does. Curation and an upload's generated description are the only things this layer sends there.
 - **Nothing here is access control.** An agent with shell tools can read any file under the knowledge root. Every collection is named to every agent; the only way to keep a collection from agents is to delete it or switch the `knowledge` feature off.
 - **Losing read tools loses read telemetry.** `mcp_invocations` records writes only. The agents' own transcripts are the retroactive measure of reads.
@@ -368,18 +433,20 @@ Coffer embeds nothing. It has no vector store, no embedding model and no FTS ind
 | [`application/knowledge/curate_tools.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/curate_tools.py) | The four fenced tools, write limit, reference check, retire rule |
 | [`application/knowledge/curate_settle.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/curate_settle.py) | Pending items, settle, promote, give up, truncation ledger |
 | [`application/knowledge/curate_prompt.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/curate_prompt.py) | The system rules |
+| [`application/knowledge/curate_drain.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/curate_drain.py) | A manual run: passes one at a time until nothing that was pending is left, with progress |
 | [`application/knowledge/curate_worker.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/curate_worker.py) | The interval sweep |
+| [`application/knowledge/recording.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/recording.py), [`history_service.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/history_service.py) | One commit per write naming its writer; history reads, restore, recent changes, undo |
 | [`application/knowledge/guide_render.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/application/knowledge/guide_render.py), [`skill_assets/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/application/knowledge/skill_assets) | `coffer-guide` text |
-| [`infrastructure/knowledge/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/knowledge) | `paths.py`, `fs.py`, `frontmatter.py`, `naming.py`, `catalogue.py`, `grep.py`, `grep_fallback.py`, `converters/` |
+| [`infrastructure/knowledge/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/infrastructure/knowledge) | `paths.py`, `fs.py`, `frontmatter.py`, `naming.py`, `catalogue.py`, `grep.py`, `grep_fallback.py`, `history.py` and `history_git.py` (the history repository), `converters/` |
 | [`infrastructure/llm/agentic_reorg.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/infrastructure/llm/agentic_reorg.py) | The LangGraph loop behind `AgenticCurationPort` |
 | [`surfaces/http/curation_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/curation_wiring.py) | Pass construction, owner gate, worker start |
 | [`surfaces/http/guide_wiring.py`](https://github.com/wyx-sg/Coffer/blob/main/backend/coffer/surfaces/http/guide_wiring.py) | Renderer to skill-seed join |
-| [`surfaces/http/knowledge/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/surfaces/http/knowledge) | `/api/v1/knowledge` routes, vault-write lock provider |
+| [`surfaces/http/knowledge/`](https://github.com/wyx-sg/Coffer/tree/main/backend/coffer/surfaces/http/knowledge) | `/api/v1/knowledge` routes, history routes, vault-write lock provider |
 
 All paths are under `backend/coffer/`.
 
 ## Related
 
 - Spec: [knowledge](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/knowledge/spec.md), [internal-engine](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/internal-engine/spec.md), [skill-manager](https://github.com/wyx-sg/Coffer/blob/main/openspec/specs/skill-manager/spec.md)
-- Decisions: [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md), [Coffer Ships Its Own Skill](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md), [Principles → Governance](/architecture/principles#governance), [Knowledge Is a Directory of Markdown Files, Not an Index](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md)
+- Decisions: [Knowledge Is Plain Files](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md), [Every Vault Write Is One Validated, Compare-and-Swap Commit That Names Its Writer](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/every-vault-write-is-a-validated-commit-naming-its-writer.md), [Coffer Ships Its Own Skill](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/coffer-ships-its-own-skill.md), [Principles → Governance](/architecture/principles#governance), [Knowledge Is a Directory of Markdown Files, Not an Index](https://github.com/wyx-sg/Coffer/blob/main/docs/decisions/knowledge-is-plain-files.md)
 - Pages: [Knowledge guide](/guides/knowledge), [Memory](/architecture/memory), [Vault sync](/architecture/vault-sync), [MCP gateway](/architecture/mcp-gateway), [Resource framework](/architecture/resource-framework), [MCP tools reference](/reference/mcp-tools)

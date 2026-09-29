@@ -35,6 +35,11 @@ def _inbox_item(collection: str, name: str) -> pathlib.Path:
     return paths.inbox_dir(collection) / name
 
 
+def inbox_path(collection: str, name: str) -> str:
+    """An inbox item's knowledge-root-relative path — what its history records."""
+    return f"{collection}/{paths.INBOX_DIR_NAME}/{name}"
+
+
 def submit_material(
     collection: str,
     *,

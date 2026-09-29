@@ -119,7 +119,20 @@ _EXPECTED_GROUPS: dict[str, set[str]] = {
     # `path knowledge`. A collection
     # has no `scope` and no switch (spec knowledge "Serve every collection to
     # every agent"), so no `enable`/`disable`.
-    "knowledge": {*_LIFECYCLE - _SWITCH, "add", "write", "upload", "curate"},
+    # `history`, `restore`, `changes` and `undo` read and reverse a
+    # collection's git history (spec knowledge "Keep every document's history
+    # and undo a pass as a whole", "Follow knowledge changes across collections").
+    "knowledge": {
+        *_LIFECYCLE - _SWITCH,
+        "add",
+        "write",
+        "upload",
+        "curate",
+        "history",
+        "restore",
+        "changes",
+        "undo",
+    },
     # No `add`: partitions are provisioned only by aggregation. `sync` updates
     # memory — aggregation, then a distil pass over every partition that
     # gained entries (spec memory "Update memory in one action"). `context` is

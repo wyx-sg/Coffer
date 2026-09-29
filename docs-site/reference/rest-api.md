@@ -101,7 +101,7 @@ to move the agent to another config directory, `PATCH` it instead. See
 
 ## Routes
 
-The daemon mounts 171 operations in 22 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
+The daemon mounts 177 operations in 22 groups. Groups follow the order the daemon registers its routers in; paths are relative to the host root.
 
 | Group | Operations |
 | --- | --- |
@@ -120,7 +120,7 @@ The daemon mounts 171 operations in 22 groups. Groups follow the order the daemo
 | [fs](#fs) | 5 |
 | [skills](#skills) | 9 |
 | [mcp](#mcp) | 10 |
-| [knowledge](#knowledge) | 9 |
+| [knowledge](#knowledge) | 15 |
 | [memory](#memory) | 8 |
 | [agent-providers](#agent-providers) | 2 |
 | [models](#models) | 3 |
@@ -341,8 +341,14 @@ Routes under this feature's prefix answer `404 FEATURE_DISABLED` while `knowledg
 | `PUT` | `/api/v1/knowledge/file` | Save File |
 | `DELETE` | `/api/v1/knowledge/file` | Delete File |
 | `POST` | `/api/v1/knowledge/material` | Submit Material |
-| `POST` | `/api/v1/knowledge/collections/{uid}/curate` | Curate |
+| `POST` | `/api/v1/knowledge/collections/{uid}/curate` | Curate now: a pass per pending item until none is left, or one pass over the document named ("Run curation on a sweep and on demand"). |
 | `POST` | `/api/v1/knowledge/upload` | Upload |
+| `GET` | `/api/v1/knowledge/history` | A document's versions, newest first, each with its writer and time. |
+| `GET` | `/api/v1/knowledge/history/diff` | What one version did to the document. |
+| `POST` | `/api/v1/knowledge/history/restore` | Put one version of a document back, as a new change naming the user. |
+| `GET` | `/api/v1/knowledge/changes` | Recent changes across every collection (or one, by its name), newest first, with the items still waiting in each inbox. |
+| `GET` | `/api/v1/knowledge/changes/{version}` | One change in full: every document it touched, with its diff. |
+| `POST` | `/api/v1/knowledge/changes/{version}/undo` | Undo a curation pass as a whole. |
 
 ### memory
 

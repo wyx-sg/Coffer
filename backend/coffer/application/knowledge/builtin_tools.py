@@ -77,14 +77,14 @@ def _submitted(submission: Submission) -> dict[str, Any]:
         return {
             **_payload(submission.document),
             "status": "written",
-            "note": "Filed as a document of its own: no internal model is configured to merge it.",
+            "note": "Filed as a document of its own: Coffer's model is not set to curate it.",
         }
     return {
         "collection": submission.collection,
         "title": submission.title,
         "status": "pending",
         "note": (
-            "Queued as new material. Coffer's curation pass merges it into this "
+            "Queued as an item. Coffer's curation folds it into this "
             "collection's documents shortly."
         ),
     }
@@ -134,8 +134,8 @@ def register_knowledge_builtin_tools(
                 "Record something durable about this user's working environment "
                 "into Coffer's knowledge — a fact about a service, a convention "
                 "they follow, a decision and its reason, a trap and how to avoid "
-                "it. What you write is new material: Coffer's own model merges "
-                "it into the collection's documents, "
+                "it. What you write is an item that Coffer's curation folds "
+                "into the collection's documents, "
                 "deduplicating against what is already there, so write the fact "
                 "plainly and do not worry about where it belongs or whether it "
                 "repeats something. Not for what is already in the repository in "
